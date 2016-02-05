@@ -30,15 +30,14 @@ typedef struct ShardInterval
 	CitusNodeTag type;
 	Oid relationId;
 	char storageType;
-	Oid valueTypeId;	/* min/max value datum's typeId */
-	int valueTypeLen;	/* min/max value datum's typelen */
-	bool valueByVal;	/* min/max value datum's byval */
+	Oid valueTypeId;    /* min/max value datum's typeId */
+	int valueTypeLen;   /* min/max value datum's typelen */
+	bool valueByVal;    /* min/max value datum's byval */
 	bool minValueExists;
 	bool maxValueExists;
-	Datum minValue;		/* a shard's typed min value datum */
-	Datum maxValue;		/* a shard's typed max value datum */
+	Datum minValue;     /* a shard's typed min value datum */
+	Datum maxValue;     /* a shard's typed max value datum */
 	uint64 shardId;
-
 } ShardInterval;
 
 
@@ -46,13 +45,12 @@ typedef struct ShardInterval
 typedef struct ShardPlacement
 {
 	CitusNodeTag type;
-	Oid tupleOid;		/* unique oid that implies this row's insertion order */
+	Oid tupleOid;       /* unique oid that implies this row's insertion order */
 	uint64 shardId;
 	uint64 shardLength;
 	RelayFileState shardState;
 	char *nodeName;
 	uint32 nodePort;
-
 } ShardPlacement;
 
 

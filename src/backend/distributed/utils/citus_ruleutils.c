@@ -186,7 +186,7 @@ AppendOptionListToString(StringInfo stringBuffer, List *optionList)
 
 		foreach(optionCell, optionList)
 		{
-			DefElem *option = (DefElem*) lfirst(optionCell);
+			DefElem *option = (DefElem *) lfirst(optionCell);
 			char *optionName = option->defname;
 			char *optionValue = defGetString(option);
 
@@ -219,7 +219,7 @@ pg_get_tableschemadef_string(Oid tableRelationId)
 	char relationKind = 0;
 	TupleDesc tupleDescriptor = NULL;
 	TupleConstr *tupleConstraints = NULL;
-	int  attributeIndex = 0;
+	int attributeIndex = 0;
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
 	AttrNumber constraintIndex = 0;
@@ -447,21 +447,35 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 				switch (attributeForm->attstorage)
 				{
 					case 'p':
+					{
 						storageName = "PLAIN";
 						break;
+					}
+
 					case 'e':
+					{
 						storageName = "EXTERNAL";
 						break;
+					}
+
 					case 'm':
+					{
 						storageName = "MAIN";
 						break;
+					}
+
 					case 'x':
+					{
 						storageName = "EXTENDED";
 						break;
+					}
+
 					default:
+					{
 						ereport(ERROR, (errmsg("unrecognized storage type: %c",
 											   attributeForm->attstorage)));
 						break;
+					}
 				}
 
 				appendStringInfo(&statement, "ALTER COLUMN %s ",

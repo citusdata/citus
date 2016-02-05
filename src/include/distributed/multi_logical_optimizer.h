@@ -44,7 +44,7 @@
  *
  * Please note that the order of values in this enumeration is tied to the order
  * of elements in the following AggregateNames array. This order needs to be
- * preserved. 
+ * preserved.
  */
 typedef enum
 {
@@ -55,7 +55,6 @@ typedef enum
 	AGGREGATE_SUM = 4,
 	AGGREGATE_COUNT = 5,
 	AGGREGATE_ARRAY_AGG = 6
-
 } AggregateType;
 
 
@@ -69,7 +68,6 @@ typedef enum
 	PUSH_DOWN_VALID = 1,
 	PUSH_DOWN_NOT_VALID = 2,
 	PUSH_DOWN_SPECIAL_CONDITIONS = 3
-
 } PushDownStatus;
 
 
@@ -82,7 +80,6 @@ typedef enum
 	PULL_UP_INVALID_FIRST = 0,
 	PULL_UP_VALID = 1,
 	PULL_UP_NOT_VALID = 2
-
 } PullUpStatus;
 
 
@@ -97,8 +94,10 @@ typedef enum
  * Please note that the order of elements in this array is tied to the order of
  * values in the preceding AggregateType enum. This order needs to be preserved.
  */
-static const char * const AggregateNames[] = { "invalid", "avg", "min", "max", 
-											   "sum", "count", "array_agg" };
+static const char *const AggregateNames[] = {
+	"invalid", "avg", "min", "max", "sum",
+	"count", "array_agg"
+};
 
 
 /* Config variable managed via guc.c */

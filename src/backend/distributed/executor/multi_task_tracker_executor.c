@@ -38,10 +38,9 @@ int MaxAssignTaskBatchSize = 64; /* maximum number of tasks to assign per round 
 /* TaskMapKey is used as a key in task hash */
 typedef struct TaskMapKey
 {
-        TaskType taskType;
-        uint64 jobId;
-        uint32 taskId;
-
+	TaskType taskType;
+	uint64 jobId;
+	uint32 taskId;
 } TaskMapKey;
 
 
@@ -51,9 +50,8 @@ typedef struct TaskMapKey
  */
 typedef struct TaskMapEntry
 {
-        TaskMapKey key;
-        Task *task;
-
+	TaskMapKey key;
+	Task *task;
 } TaskMapEntry;
 
 
@@ -83,7 +81,8 @@ static TaskTracker * TrackerHashLookup(HTAB *trackerHash, const char *nodeName,
 static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
 										  TaskTracker *sourceTaskTracker,
 										  Task *task, TaskExecution *taskExecution);
-static TransmitExecStatus ManageTransmitExecution(TaskTracker *transmitTracker, Task *task,
+static TransmitExecStatus ManageTransmitExecution(TaskTracker *transmitTracker,
+												  Task *task,
 												  TaskExecution *taskExecution);
 static bool TaskExecutionsCompleted(List *taskList);
 static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
@@ -194,8 +193,8 @@ MultiTaskTrackerExecute(Job *job)
 	TrackerHashConnect(transmitTrackerHash);
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
-	while ( !(allTasksCompleted || taskFailed || taskTransmitFailed ||
-			  clusterFailed || QueryCancelPending) )
+	while (!(allTasksCompleted || taskFailed || taskTransmitFailed ||
+			 clusterFailed || QueryCancelPending))
 	{
 		TaskTracker *taskTracker = NULL;
 		TaskTracker *transmitTracker = NULL;
@@ -493,8 +492,8 @@ TaskAndExecutionList(List *jobTaskList)
 			 */
 			if (!dependendTaskInHash)
 			{
-					dependendTaskInHash = TaskHashEnter(taskHash, dependendTask);
-					taskQueue = lappend(taskQueue, dependendTaskInHash);
+				dependendTaskInHash = TaskHashEnter(taskHash, dependendTask);
+				taskQueue = lappend(taskQueue, dependendTaskInHash);
 			}
 
 			/* update dependedTaskList element to the one which is in the hash */
@@ -557,7 +556,7 @@ TaskHashEnter(HTAB *taskHash, Task *task)
 	if (handleFound)
 	{
 		ereport(ERROR, (errmsg("multiple entries for task: \"%d:%ld:%d\"",
-						task->taskType, task->jobId, task->taskId)));
+							   task->taskType, task->jobId, task->taskId)));
 	}
 
 	/* save the pointer to the original task in the hash */
@@ -820,82 +819,84 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 {
 	switch (taskTracker->trackerStatus)
 	{
-	case TRACKER_CONNECT_START:
-	{
-		char *nodeName = taskTracker->workerName;
-		uint32 nodePort = taskTracker->workerPort;
-		char *nodeDatabase = get_database_name(MyDatabaseId);
-
-		int32 connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase);
-		if (connectionId != INVALID_CONNECTION_ID)
+		case TRACKER_CONNECT_START:
 		{
-			taskTracker->connectionId = connectionId;
-			taskTracker->trackerStatus = TRACKER_CONNECT_POLL;
-		}
-		else
-		{
-			taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
-		}
+			char *nodeName = taskTracker->workerName;
+			uint32 nodePort = taskTracker->workerPort;
+			char *nodeDatabase = get_database_name(MyDatabaseId);
 
-		break;
-	}
-
-	case TRACKER_CONNECT_POLL:
-	{
-		int32 connectionId = taskTracker->connectionId;
-
-		ConnectStatus pollStatus = MultiClientConnectPoll(connectionId);
-		if (pollStatus == CLIENT_CONNECTION_READY)
-		{
-			taskTracker->trackerStatus = TRACKER_CONNECTED;
-		}
-		else if (pollStatus == CLIENT_CONNECTION_BUSY)
-		{
-			taskTracker->trackerStatus = TRACKER_CONNECT_POLL;
-		}
-		else if (pollStatus == CLIENT_CONNECTION_BAD)
-		{
-			taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
-
-			MultiClientDisconnect(connectionId);
-			taskTracker->connectionId = INVALID_CONNECTION_ID;
-		}
-
-		/* now check if we have been trying to connect for too long */
-		taskTracker->connectPollCount++;
-		if (pollStatus == CLIENT_CONNECTION_BUSY)
-		{
-			uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
-			uint32 currentCount = taskTracker->connectPollCount;
-			if (currentCount >= maxCount)
+			int32 connectionId = MultiClientConnectStart(nodeName, nodePort,
+														 nodeDatabase);
+			if (connectionId != INVALID_CONNECTION_ID)
 			{
-				ereport(WARNING, (errmsg("could not establish asynchronous connection "
-										 "after %u ms", REMOTE_NODE_CONNECT_TIMEOUT)));
+				taskTracker->connectionId = connectionId;
+				taskTracker->trackerStatus = TRACKER_CONNECT_POLL;
+			}
+			else
+			{
+				taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
+			}
 
+			break;
+		}
+
+		case TRACKER_CONNECT_POLL:
+		{
+			int32 connectionId = taskTracker->connectionId;
+
+			ConnectStatus pollStatus = MultiClientConnectPoll(connectionId);
+			if (pollStatus == CLIENT_CONNECTION_READY)
+			{
+				taskTracker->trackerStatus = TRACKER_CONNECTED;
+			}
+			else if (pollStatus == CLIENT_CONNECTION_BUSY)
+			{
+				taskTracker->trackerStatus = TRACKER_CONNECT_POLL;
+			}
+			else if (pollStatus == CLIENT_CONNECTION_BAD)
+			{
 				taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
 
 				MultiClientDisconnect(connectionId);
 				taskTracker->connectionId = INVALID_CONNECTION_ID;
 			}
+
+			/* now check if we have been trying to connect for too long */
+			taskTracker->connectPollCount++;
+			if (pollStatus == CLIENT_CONNECTION_BUSY)
+			{
+				uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
+				uint32 currentCount = taskTracker->connectPollCount;
+				if (currentCount >= maxCount)
+				{
+					ereport(WARNING, (errmsg("could not establish asynchronous "
+											 "connection after %u ms",
+											 REMOTE_NODE_CONNECT_TIMEOUT)));
+
+					taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
+
+					MultiClientDisconnect(connectionId);
+					taskTracker->connectionId = INVALID_CONNECTION_ID;
+				}
+			}
+
+			break;
 		}
 
-		break;
-	}
+		case TRACKER_CONNECTED:
+		case TRACKER_CONNECTION_FAILED:
+		{
+			/* if connected or failed to connect in previous pass, reset poll count */
+			taskTracker->connectPollCount = 0;
+			break;
+		}
 
-	case TRACKER_CONNECTED:
-	case TRACKER_CONNECTION_FAILED:
-	{
-		/* if connected or failed to connect in previous pass, reset poll count */
-		taskTracker->connectPollCount = 0;
-		break;
-	}
-
-	default:
-	{
-		int trackerStatus = (int) taskTracker->trackerStatus;
-		ereport(FATAL, (errmsg("invalid task tracker status: %d", trackerStatus)));
-		break;
-	}
+		default:
+		{
+			int trackerStatus = (int) taskTracker->trackerStatus;
+			ereport(FATAL, (errmsg("invalid task tracker status: %d", trackerStatus)));
+			break;
+		}
 	}
 
 	return taskTracker->trackerStatus;
@@ -1008,213 +1009,214 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 
 	switch (currentExecutionStatus)
 	{
-	case EXEC_TASK_UNASSIGNED:
-	{
-		bool taskExecutionsCompleted = true;
-		TaskType taskType = TASK_TYPE_INVALID_FIRST;
-
-		bool trackerHealthy = TrackerHealthy(taskTracker);
-		if (!trackerHealthy)
+		case EXEC_TASK_UNASSIGNED:
 		{
-			nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
-			break;
-		}
+			bool taskExecutionsCompleted = true;
+			TaskType taskType = TASK_TYPE_INVALID_FIRST;
 
-		/*
-		 * We first retrieve this task's downstream dependencies, and then check
-		 * if these dependencies' executions have completed.
-		 */
-		taskExecutionsCompleted = TaskExecutionsCompleted(task->dependedTaskList);
-		if (!taskExecutionsCompleted)
-		{
-			nextExecutionStatus = EXEC_TASK_UNASSIGNED;
-			break;
-		}
-
-		/* if map fetch task, create query string from completed map task */
-		taskType = task->taskType;
-		if (taskType == MAP_OUTPUT_FETCH_TASK)
-		{
-			StringInfo mapFetchTaskQueryString = NULL;
-			Task *mapTask = (Task *) linitial(task->dependedTaskList);
-			TaskExecution *mapTaskExecution = mapTask->taskExecution;
-
-			mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
-			task->queryString = mapFetchTaskQueryString->data;
-			taskExecution->querySourceNodeIndex = mapTaskExecution->currentNodeIndex;
-		}
-
-		/*
-		 * We finally queue this task for execution. Note that we queue sql and
-		 * other tasks slightly differently.
-		 */
-		if (taskType == SQL_TASK)
-		{
-			TrackerQueueSqlTask(taskTracker, task);
-		}
-		else
-		{
-			TrackerQueueTask(taskTracker, task);
-		}
-
-		nextExecutionStatus = EXEC_TASK_QUEUED;
-		break;
-	}
-
-	case EXEC_TASK_QUEUED:
-	{
-		TaskStatus remoteTaskStatus = TASK_STATUS_INVALID_FIRST;
-
-		bool trackerHealthy = TrackerHealthy(taskTracker);
-		if (!trackerHealthy)
-		{
-			nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
-			break;
-		}
-
-		remoteTaskStatus = TrackerTaskStatus(taskTracker, task);
-		if (remoteTaskStatus == TASK_SUCCEEDED)
-		{
-			nextExecutionStatus = EXEC_TASK_DONE;
-		}
-		else if (remoteTaskStatus == TASK_CLIENT_SIDE_ASSIGN_FAILED ||
-				 remoteTaskStatus == TASK_CLIENT_SIDE_STATUS_FAILED)
-		{
-			nextExecutionStatus = EXEC_TASK_TRACKER_RETRY;
-		}
-		else if (remoteTaskStatus == TASK_PERMANENTLY_FAILED)
-		{
-			/*
-			 * If a map output fetch task failed, we assume the problem lies with
-			 * the map task (and the source task tracker it runs on). Otherwise,
-			 * we assume the task tracker crashed, and fail over to the next task
-			 * tracker.
-			 */
-			if (task->taskType == MAP_OUTPUT_FETCH_TASK)
+			bool trackerHealthy = TrackerHealthy(taskTracker);
+			if (!trackerHealthy)
 			{
-				nextExecutionStatus = EXEC_SOURCE_TASK_TRACKER_RETRY;
+				nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
+				break;
+			}
+
+			/*
+			 * We first retrieve this task's downstream dependencies, and then check
+			 * if these dependencies' executions have completed.
+			 */
+			taskExecutionsCompleted = TaskExecutionsCompleted(task->dependedTaskList);
+			if (!taskExecutionsCompleted)
+			{
+				nextExecutionStatus = EXEC_TASK_UNASSIGNED;
+				break;
+			}
+
+			/* if map fetch task, create query string from completed map task */
+			taskType = task->taskType;
+			if (taskType == MAP_OUTPUT_FETCH_TASK)
+			{
+				StringInfo mapFetchTaskQueryString = NULL;
+				Task *mapTask = (Task *) linitial(task->dependedTaskList);
+				TaskExecution *mapTaskExecution = mapTask->taskExecution;
+
+				mapFetchTaskQueryString = MapFetchTaskQueryString(task, mapTask);
+				task->queryString = mapFetchTaskQueryString->data;
+				taskExecution->querySourceNodeIndex = mapTaskExecution->currentNodeIndex;
+			}
+
+			/*
+			 * We finally queue this task for execution. Note that we queue sql and
+			 * other tasks slightly differently.
+			 */
+			if (taskType == SQL_TASK)
+			{
+				TrackerQueueSqlTask(taskTracker, task);
+			}
+			else
+			{
+				TrackerQueueTask(taskTracker, task);
+			}
+
+			nextExecutionStatus = EXEC_TASK_QUEUED;
+			break;
+		}
+
+		case EXEC_TASK_QUEUED:
+		{
+			TaskStatus remoteTaskStatus = TASK_STATUS_INVALID_FIRST;
+
+			bool trackerHealthy = TrackerHealthy(taskTracker);
+			if (!trackerHealthy)
+			{
+				nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
+				break;
+			}
+
+			remoteTaskStatus = TrackerTaskStatus(taskTracker, task);
+			if (remoteTaskStatus == TASK_SUCCEEDED)
+			{
+				nextExecutionStatus = EXEC_TASK_DONE;
+			}
+			else if (remoteTaskStatus == TASK_CLIENT_SIDE_ASSIGN_FAILED ||
+					 remoteTaskStatus == TASK_CLIENT_SIDE_STATUS_FAILED)
+			{
+				nextExecutionStatus = EXEC_TASK_TRACKER_RETRY;
+			}
+			else if (remoteTaskStatus == TASK_PERMANENTLY_FAILED)
+			{
+				/*
+				 * If a map output fetch task failed, we assume the problem lies with
+				 * the map task (and the source task tracker it runs on). Otherwise,
+				 * we assume the task tracker crashed, and fail over to the next task
+				 * tracker.
+				 */
+				if (task->taskType == MAP_OUTPUT_FETCH_TASK)
+				{
+					nextExecutionStatus = EXEC_SOURCE_TASK_TRACKER_RETRY;
+				}
+				else
+				{
+					nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
+				}
+			}
+			else
+			{
+				/* assume task is still in progress */
+				nextExecutionStatus = EXEC_TASK_QUEUED;
+			}
+
+			break;
+		}
+
+		case EXEC_TASK_TRACKER_RETRY:
+		{
+			bool trackerHealthy = false;
+			bool trackerConnectionUp = false;
+
+			/*
+			 * This case statement usually handles connection related issues. Some
+			 * edge cases however, like a user sending a SIGTERM to the worker node,
+			 * keep the connection open but disallow task assignments. We therefore
+			 * need to track those as intermittent tracker failures here.
+			 */
+			trackerConnectionUp = TrackerConnectionUp(taskTracker);
+			if (trackerConnectionUp)
+			{
+				taskTracker->trackerFailureCount++;
+			}
+
+			trackerHealthy = TrackerHealthy(taskTracker);
+			if (trackerHealthy)
+			{
+				TaskStatus remoteTaskStatus = TrackerTaskStatus(taskTracker, task);
+				if (remoteTaskStatus == TASK_CLIENT_SIDE_ASSIGN_FAILED)
+				{
+					nextExecutionStatus = EXEC_TASK_UNASSIGNED;
+				}
+				else if (remoteTaskStatus == TASK_CLIENT_SIDE_STATUS_FAILED)
+				{
+					nextExecutionStatus = EXEC_TASK_QUEUED;
+				}
 			}
 			else
 			{
 				nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
 			}
-		}
-		else
-		{
-			/* assume task is still in progress */
-			nextExecutionStatus = EXEC_TASK_QUEUED;
+
+			break;
 		}
 
-		break;
-	}
-
-	case EXEC_TASK_TRACKER_RETRY:
-	{
-		bool trackerHealthy = false;
-		bool trackerConnectionUp = false;
-
-		/*
-		 * This case statement usually handles connection related issues. Some
-		 * edge cases however, like a user sending a SIGTERM to the worker node,
-		 * keep the connection open but disallow task assignments. We therefore
-		 * need to track those as intermittent tracker failures here.
-		 */
-		trackerConnectionUp = TrackerConnectionUp(taskTracker);
-		if (trackerConnectionUp)
+		case EXEC_SOURCE_TASK_TRACKER_RETRY:
 		{
-			taskTracker->trackerFailureCount++;
-		}
+			Task *mapTask = (Task *) linitial(task->dependedTaskList);
+			TaskExecution *mapTaskExecution = mapTask->taskExecution;
+			uint32 sourceNodeIndex = mapTaskExecution->currentNodeIndex;
 
-		trackerHealthy = TrackerHealthy(taskTracker);
-		if (trackerHealthy)
-		{
-			TaskStatus remoteTaskStatus = TrackerTaskStatus(taskTracker, task);
-			if (remoteTaskStatus == TASK_CLIENT_SIDE_ASSIGN_FAILED)
+			bool sourceTrackerHealthy = false;
+			Assert(sourceTaskTracker != NULL);
+			Assert(task->taskType == MAP_OUTPUT_FETCH_TASK);
+
+			/*
+			 * As this map fetch task was running, another map fetch that depends on
+			 * another map task might have failed. We would have then reassigned the
+			 * map task and potentially other map tasks in its constraint group. So
+			 * this map fetch's source node might have changed underneath us. If it
+			 * did, we don't want to record a failure for the new source tracker.
+			 */
+			if (taskExecution->querySourceNodeIndex == sourceNodeIndex)
 			{
+				bool sourceTrackerConnectionUp = TrackerConnectionUp(sourceTaskTracker);
+				if (sourceTrackerConnectionUp)
+				{
+					sourceTaskTracker->trackerFailureCount++;
+				}
+			}
+
+			sourceTrackerHealthy = TrackerHealthy(sourceTaskTracker);
+			if (sourceTrackerHealthy)
+			{
+				/*
+				 * We change our status to unassigned. In that status, we queue an
+				 * "update map fetch task" on the task tracker, and retry fetching
+				 * the map task's output from the same source node.
+				 */
 				nextExecutionStatus = EXEC_TASK_UNASSIGNED;
 			}
-			else if (remoteTaskStatus == TASK_CLIENT_SIDE_STATUS_FAILED)
+			else
 			{
-				nextExecutionStatus = EXEC_TASK_QUEUED;
+				nextExecutionStatus = EXEC_SOURCE_TASK_TRACKER_FAILED;
 			}
-		}
-		else
-		{
-			nextExecutionStatus = EXEC_TASK_TRACKER_FAILED;
+
+			break;
 		}
 
-		break;
-	}
-
-	case EXEC_SOURCE_TASK_TRACKER_RETRY:
-	{
-		Task *mapTask = (Task *) linitial(task->dependedTaskList);
-		TaskExecution *mapTaskExecution = mapTask->taskExecution;
-		uint32 sourceNodeIndex = mapTaskExecution->currentNodeIndex;
-
-		bool sourceTrackerHealthy = false;
-		Assert(sourceTaskTracker != NULL);
-		Assert(task->taskType == MAP_OUTPUT_FETCH_TASK);
-
-		/*
-		 * As this map fetch task was running, another map fetch that depends on
-		 * another map task might have failed. We would have then reassigned the
-		 * map task and potentially other map tasks in its constraint group. So
-		 * this map fetch's source node might have changed underneath us. If it
-		 * did, we don't want to record a failure for the new source tracker.
-		 */
-		if (taskExecution->querySourceNodeIndex == sourceNodeIndex)
-		{
-			bool sourceTrackerConnectionUp = TrackerConnectionUp(sourceTaskTracker);
-			if (sourceTrackerConnectionUp)
-			{
-				sourceTaskTracker->trackerFailureCount++;
-			}
-		}
-
-		sourceTrackerHealthy = TrackerHealthy(sourceTaskTracker);
-		if (sourceTrackerHealthy)
+		case EXEC_TASK_TRACKER_FAILED:
+		case EXEC_SOURCE_TASK_TRACKER_FAILED:
 		{
 			/*
-			 * We change our status to unassigned. In that status, we queue an
-			 * "update map fetch task" on the task tracker, and retry fetching
-			 * the map task's output from the same source node.
+			 * These two cases exist to signal to the caller that we failed. In both
+			 * cases, the caller is responsible for reassigning task(s) and running
+			 * the appropriate recovery logic.
 			 */
 			nextExecutionStatus = EXEC_TASK_UNASSIGNED;
+			break;
 		}
-		else
+
+		case EXEC_TASK_DONE:
 		{
-			nextExecutionStatus = EXEC_SOURCE_TASK_TRACKER_FAILED;
+			/* we are done with this task's execution */
+			nextExecutionStatus = EXEC_TASK_DONE;
+			break;
 		}
 
-		break;
-	}
-
-	case EXEC_TASK_TRACKER_FAILED:
-	case EXEC_SOURCE_TASK_TRACKER_FAILED:
-	{
-		/*
-		 * These two cases exist to signal to the caller that we failed. In both
-		 * cases, the caller is responsible for reassigning task(s) and running
-		 * the appropriate recovery logic.
-		 */
-		nextExecutionStatus = EXEC_TASK_UNASSIGNED;
-		break;
-	}
-
-	case EXEC_TASK_DONE:
-	{
-		/* we are done with this task's execution */
-		nextExecutionStatus = EXEC_TASK_DONE;
-		break;
-	}
-
-	default:
-	{
-		/* we fatal here to avoid leaking client-side resources */
-		ereport(FATAL, (errmsg("invalid execution status: %d", currentExecutionStatus)));
-		break;
-	}
+		default:
+		{
+			/* we fatal here to avoid leaking client-side resources */
+			ereport(FATAL, (errmsg("invalid execution status: %d",
+								   currentExecutionStatus)));
+			break;
+		}
 	}
 
 	/* update task execution's status for most recent task tracker */
@@ -1247,225 +1249,227 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 
 	switch (currentTransmitStatus)
 	{
-	case EXEC_TRANSMIT_UNASSIGNED:
-	{
-		TaskExecStatus *taskStatusArray = taskExecution->taskStatusArray;
-		TaskExecStatus currentExecutionStatus = taskStatusArray[currentNodeIndex];
-		bool trackerHealthy = false;
-
-		/* if top level task's in progress, nothing to do */
-		if (currentExecutionStatus != EXEC_TASK_DONE)
+		case EXEC_TRANSMIT_UNASSIGNED:
 		{
-			nextTransmitStatus = EXEC_TRANSMIT_UNASSIGNED;
-			break;
-		}
+			TaskExecStatus *taskStatusArray = taskExecution->taskStatusArray;
+			TaskExecStatus currentExecutionStatus = taskStatusArray[currentNodeIndex];
+			bool trackerHealthy = false;
 
-		trackerHealthy = TrackerHealthy(transmitTracker);
-		if (!trackerHealthy)
-		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
-			break;
-		}
+			/* if top level task's in progress, nothing to do */
+			if (currentExecutionStatus != EXEC_TASK_DONE)
+			{
+				nextTransmitStatus = EXEC_TRANSMIT_UNASSIGNED;
+				break;
+			}
 
-		TrackerQueueFileTransmit(transmitTracker, task);
-		nextTransmitStatus = EXEC_TRANSMIT_QUEUED;
-		break;
-	}
+			trackerHealthy = TrackerHealthy(transmitTracker);
+			if (!trackerHealthy)
+			{
+				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
+				break;
+			}
 
-	case EXEC_TRANSMIT_QUEUED:
-	{
-		QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-		int32 connectionId = INVALID_CONNECTION_ID;
-		TaskStatus taskStatus = TASK_STATUS_INVALID_FIRST;
-
-		bool trackerHealthy = TrackerHealthy(transmitTracker);
-		if (!trackerHealthy)
-		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
-			break;
-		}
-
-		taskStatus = TrackerTaskStatus(transmitTracker, task);
-		if (taskStatus == TASK_FILE_TRANSMIT_QUEUED)
-		{
-			/* remain in queued status until tracker assigns this task */
+			TrackerQueueFileTransmit(transmitTracker, task);
 			nextTransmitStatus = EXEC_TRANSMIT_QUEUED;
 			break;
 		}
-		else if (taskStatus == TASK_CLIENT_SIDE_TRANSMIT_FAILED)
+
+		case EXEC_TRANSMIT_QUEUED:
 		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
-			break;
-		}
+			QueryStatus queryStatus = CLIENT_INVALID_QUERY;
+			int32 connectionId = INVALID_CONNECTION_ID;
+			TaskStatus taskStatus = TASK_STATUS_INVALID_FIRST;
 
-		/* the open connection belongs to this task */
-		connectionId = TransmitTrackerConnectionId(transmitTracker, task);
-		Assert(connectionId != INVALID_CONNECTION_ID);
-		Assert(taskStatus == TASK_ASSIGNED);
-
-		/* start copy protocol */
-		queryStatus = MultiClientQueryStatus(connectionId);
-		if (queryStatus == CLIENT_QUERY_COPY)
-		{
-			StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
-			StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
-
-			char *filename = taskFilename->data;
-			int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-			int fileMode = (S_IRUSR | S_IWUSR);
-
-			int32 fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
-			if (fileDescriptor >= 0)
+			bool trackerHealthy = TrackerHealthy(transmitTracker);
+			if (!trackerHealthy)
 			{
-				/*
-				 * All files inside the job directory get automatically cleaned
-				 * up on transaction commit or abort.
-				 */
-				fileDescriptorArray[currentNodeIndex] = fileDescriptor;
-				nextTransmitStatus = EXEC_TRANSMIT_COPYING;
+				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
+				break;
+			}
+
+			taskStatus = TrackerTaskStatus(transmitTracker, task);
+			if (taskStatus == TASK_FILE_TRANSMIT_QUEUED)
+			{
+				/* remain in queued status until tracker assigns this task */
+				nextTransmitStatus = EXEC_TRANSMIT_QUEUED;
+				break;
+			}
+			else if (taskStatus == TASK_CLIENT_SIDE_TRANSMIT_FAILED)
+			{
+				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+				break;
+			}
+
+			/* the open connection belongs to this task */
+			connectionId = TransmitTrackerConnectionId(transmitTracker, task);
+			Assert(connectionId != INVALID_CONNECTION_ID);
+			Assert(taskStatus == TASK_ASSIGNED);
+
+			/* start copy protocol */
+			queryStatus = MultiClientQueryStatus(connectionId);
+			if (queryStatus == CLIENT_QUERY_COPY)
+			{
+				StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
+				StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
+
+				char *filename = taskFilename->data;
+				int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
+				int fileMode = (S_IRUSR | S_IWUSR);
+
+				int32 fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
+				if (fileDescriptor >= 0)
+				{
+					/*
+					 * All files inside the job directory get automatically cleaned
+					 * up on transaction commit or abort.
+					 */
+					fileDescriptorArray[currentNodeIndex] = fileDescriptor;
+					nextTransmitStatus = EXEC_TRANSMIT_COPYING;
+				}
+				else
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not open file \"%s\": %m",
+											 filename)));
+
+					nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+				}
 			}
 			else
 			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not open file \"%s\": %m", filename)));
-
 				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
 			}
-		}
-		else
-		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+
+			/*
+			 * We use task tracker logic to manage file transmits as well, but that
+			 * abstraction starts to leak after we drop into the copy protocol. To
+			 * make our task tracker logic work, we need to "void" the tracker's
+			 * connection if the transmit task failed in here.
+			 */
+			if (nextTransmitStatus == EXEC_TRANSMIT_TRACKER_RETRY)
+			{
+				transmitTracker->connectionBusy = false;
+				transmitTracker->connectionBusyOnTask = NULL;
+			}
+
+			break;
 		}
 
-		/*
-		 * We use task tracker logic to manage file transmits as well, but that
-		 * abstraction starts to leak after we drop into the copy protocol. To
-		 * make our task tracker logic work, we need to "void" the tracker's
-		 * connection if the transmit task failed in here.
-		 */
-		if (nextTransmitStatus == EXEC_TRANSMIT_TRACKER_RETRY)
+		case EXEC_TRANSMIT_COPYING:
 		{
+			int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
+			CopyStatus copyStatus = CLIENT_INVALID_COPY;
+			int closed = -1;
+
+			/* the open connection belongs to this task */
+			int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);
+			Assert(connectionId != INVALID_CONNECTION_ID);
+
+			copyStatus = MultiClientCopyData(connectionId, fileDescriptor);
+			if (copyStatus == CLIENT_COPY_MORE)
+			{
+				/* worker node continues to send more data, keep reading */
+				nextTransmitStatus = EXEC_TRANSMIT_COPYING;
+				break;
+			}
+
+			/* we are done copying data */
+			if (copyStatus == CLIENT_COPY_DONE)
+			{
+				closed = close(fileDescriptor);
+				fileDescriptorArray[currentNodeIndex] = -1;
+
+				if (closed >= 0)
+				{
+					nextTransmitStatus = EXEC_TRANSMIT_DONE;
+				}
+				else
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not close copied file: %m")));
+
+					nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+				}
+			}
+			else if (copyStatus == CLIENT_COPY_FAILED)
+			{
+				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+
+				closed = close(fileDescriptor);
+				fileDescriptorArray[currentNodeIndex] = -1;
+
+				if (closed < 0)
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not close copy file: %m")));
+				}
+			}
+
+			/*
+			 * We use task tracker logic to manage file transmits as well, but that
+			 * abstraction leaks after we drop into the copy protocol. To make it
+			 * work, we reset transmit tracker's connection for next file transmit.
+			 */
 			transmitTracker->connectionBusy = false;
 			transmitTracker->connectionBusyOnTask = NULL;
-		}
 
-		break;
-	}
-
-	case EXEC_TRANSMIT_COPYING:
-	{
-		int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
-		CopyStatus copyStatus = CLIENT_INVALID_COPY;
-		int closed = -1;
-
-		/* the open connection belongs to this task */
-		int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);
-		Assert(connectionId != INVALID_CONNECTION_ID);
-
-		copyStatus = MultiClientCopyData(connectionId, fileDescriptor);
-		if (copyStatus == CLIENT_COPY_MORE)
-		{
-			/* worker node continues to send more data, keep reading */
-			nextTransmitStatus = EXEC_TRANSMIT_COPYING;
 			break;
 		}
 
-		/* we are done copying data */
-		if (copyStatus == CLIENT_COPY_DONE)
+		case EXEC_TRANSMIT_TRACKER_RETRY:
 		{
-			closed = close(fileDescriptor);
-			fileDescriptorArray[currentNodeIndex] = -1;
+			bool trackerHealthy = false;
+			bool trackerConnectionUp = false;
 
-			if (closed >= 0)
+			/*
+			 * The task tracker proxy handles connection errors. On the off chance
+			 * that our connection is still up and the transmit tracker misbehaved,
+			 * we capture this as an intermittent tracker failure.
+			 */
+			trackerConnectionUp = TrackerConnectionUp(transmitTracker);
+			if (trackerConnectionUp)
 			{
-				nextTransmitStatus = EXEC_TRANSMIT_DONE;
+				transmitTracker->trackerFailureCount++;
+			}
+
+			trackerHealthy = TrackerHealthy(transmitTracker);
+			if (trackerHealthy)
+			{
+				nextTransmitStatus = EXEC_TRANSMIT_UNASSIGNED;
 			}
 			else
 			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not close copied file: %m")));
-
-				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
+				nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
 			}
-		}
-		else if (copyStatus == CLIENT_COPY_FAILED)
-		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_RETRY;
 
-			closed = close(fileDescriptor);
-			fileDescriptorArray[currentNodeIndex] = -1;
-
-			if (closed < 0)
-			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not close copy file: %m")));
-			}
+			break;
 		}
 
-		/*
-		 * We use task tracker logic to manage file transmits as well, but that
-		 * abstraction leaks after we drop into the copy protocol. To make it
-		 * work, we reset transmit tracker's connection for next file transmit.
-		 */
-		transmitTracker->connectionBusy = false;
-		transmitTracker->connectionBusyOnTask = NULL;
-
-		break;
-	}
-
-	case EXEC_TRANSMIT_TRACKER_RETRY:
-	{
-		bool trackerHealthy = false;
-		bool trackerConnectionUp = false;
-
-		/*
-		 * The task tracker proxy handles connection errors. On the off chance
-		 * that our connection is still up and the transmit tracker misbehaved,
-		 * we capture this as an intermittent tracker failure.
-		 */
-		trackerConnectionUp = TrackerConnectionUp(transmitTracker);
-		if (trackerConnectionUp)
+		case EXEC_TRANSMIT_TRACKER_FAILED:
 		{
-			transmitTracker->trackerFailureCount++;
-		}
-
-		trackerHealthy = TrackerHealthy(transmitTracker);
-		if (trackerHealthy)
-		{
+			/*
+			 * This case exists to signal to the caller that we failed. The caller
+			 * is now responsible for reassigning the transmit task (and downstream
+			 * SQL task dependencies) and running the appropriate recovery logic.
+			 */
 			nextTransmitStatus = EXEC_TRANSMIT_UNASSIGNED;
+			break;
 		}
-		else
+
+		case EXEC_TRANSMIT_DONE:
 		{
-			nextTransmitStatus = EXEC_TRANSMIT_TRACKER_FAILED;
+			/* we are done with fetching task results to the master node */
+			nextTransmitStatus = EXEC_TRANSMIT_DONE;
+			break;
 		}
 
-		break;
-	}
-
-	case EXEC_TRANSMIT_TRACKER_FAILED:
-	{
-		/*
-		 * This case exists to signal to the caller that we failed. The caller
-		 * is now responsible for reassigning the transmit task (and downstream
-		 * SQL task dependencies) and running the appropriate recovery logic.
-		 */
-		nextTransmitStatus = EXEC_TRANSMIT_UNASSIGNED;
-		break;
-	}
-
-	case EXEC_TRANSMIT_DONE:
-	{
-		/* we are done with fetching task results to the master node */
-		nextTransmitStatus = EXEC_TRANSMIT_DONE;
-		break;
-	}
-
-	default:
-	{
-		/* we fatal here to avoid leaking client-side resources */
-		ereport(FATAL, (errmsg("invalid transmit status: %d", currentTransmitStatus)));
-		break;
-	}
+		default:
+		{
+			/* we fatal here to avoid leaking client-side resources */
+			ereport(FATAL, (errmsg("invalid transmit status: %d",
+								   currentTransmitStatus)));
+			break;
+		}
 	}
 
 	/* update file transmit status for most recent transmit tracker */
@@ -2317,7 +2321,7 @@ AssignQueuedTasks(TaskTracker *taskTracker)
 		{
 			StringInfo taskAssignmentQuery = taskState->taskAssignmentQuery;
 
-			if(taskAssignmentCount > 0)
+			if (taskAssignmentCount > 0)
 			{
 				appendStringInfo(multiAssignQuery, ";");
 			}
@@ -2336,7 +2340,7 @@ AssignQueuedTasks(TaskTracker *taskTracker)
 		taskState = (TrackerTaskState *) hash_seq_search(&status);
 	}
 
-	if(taskAssignmentCount > 0)
+	if (taskAssignmentCount > 0)
 	{
 		void *queryResult = NULL;
 		int rowCount = 0;
@@ -2833,7 +2837,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 			if (queryStatus == CLIENT_QUERY_DONE)
 			{
 				ereport(DEBUG4, (errmsg("completed cleanup query for job " UINT64_FORMAT
-										" on node \"%s:%u\"", jobId, nodeName, nodePort)));
+										" on node \"%s:%u\"", jobId, nodeName,
+										nodePort)));
 
 				/* clear connection for future cleanup queries */
 				taskTracker->connectionBusy = false;

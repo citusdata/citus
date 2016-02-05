@@ -39,9 +39,9 @@
  */
 struct DropRelationCallbackState
 {
-	char		relkind;
-	Oid			heapOid;
-	bool		concurrent;
+	char relkind;
+	Oid heapOid;
+	bool concurrent;
 };
 
 
@@ -190,10 +190,10 @@ multi_ProcessUtility(Node *parsetree,
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && CitusDBHasBeenLoaded())
 	{
-			ereport(NOTICE, (errmsg("CitusDB does not support CREATE ROLE/USER "
-									"for distributed databases"),
-							 errdetail("Multiple roles are currently supported "
-									   "only for local tables")));
+		ereport(NOTICE, (errmsg("CitusDB does not support CREATE ROLE/USER "
+								"for distributed databases"),
+						 errdetail("Multiple roles are currently supported "
+								   "only for local tables")));
 	}
 
 	/* now drop into standard process utility */
@@ -757,7 +757,7 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 		isAlterTableRenameStmt = true;
 	}
 
-#if (PG_VERSION_NUM >=90500)
+#if (PG_VERSION_NUM >= 90500)
 	else if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
 	{
 		isAlterTableRenameStmt = true;
@@ -905,8 +905,9 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString,
 			}
 			else
 			{
-				ereport(DEBUG2, (errmsg("applied command on shard " UINT64_FORMAT " on "
-										"node %s:%d", shardId, workerName, workerPort)));
+				ereport(DEBUG2, (errmsg("applied command on shard " UINT64_FORMAT
+										" on node %s:%d", shardId, workerName,
+										workerPort)));
 			}
 
 			isFirstPlacement = false;

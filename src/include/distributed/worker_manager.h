@@ -43,12 +43,11 @@
  */
 typedef struct WorkerNode
 {
-	uint32 workerPort;				/* node's port; part of hash table key */
+	uint32 workerPort;              /* node's port; part of hash table key */
 	char workerName[WORKER_LENGTH]; /* node's name; part of hash table key */
 	char workerRack[WORKER_LENGTH]; /* node's network location */
 
-	bool inWorkerFile;				/* is node in current membership file? */
-
+	bool inWorkerFile;              /* is node in current membership file? */
 } WorkerNode;
 
 

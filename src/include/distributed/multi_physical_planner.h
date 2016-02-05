@@ -2,7 +2,7 @@
  *
  * multi_physical_planner.h
  *	  Type and function declarations used in creating the distributed execution
- *	  plan. 
+ *	  plan.
  *
  * Copyright (c) 2012, Citus Data, Inc.
  *
@@ -40,17 +40,18 @@
  (" UINT64_FORMAT ", %d, %s, '%s', %d, %d)"
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
-#define MERGE_FILES_AND_RUN_QUERY_COMMAND "SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, '%s', '%s')"
+#define MERGE_FILES_AND_RUN_QUERY_COMMAND \
+	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, '%s', '%s')"
 
 
 typedef enum CitusRTEKind
 {
-	CITUS_RTE_RELATION = RTE_RELATION,	/* ordinary relation reference */
-	CITUS_RTE_SUBQUERY = RTE_SUBQUERY,	/* subquery in FROM */
-	CITUS_RTE_JOIN = RTE_JOIN,			/* join */
-	CITUS_RTE_FUNCTION = RTE_FUNCTION,	/* function in FROM */
-	CITUS_RTE_VALUES = RTE_VALUES,		/* VALUES (<exprlist>), (<exprlist>), ... */
-	CITUS_RTE_CTE = RTE_CTE,			/* common table expr (WITH list element) */
+	CITUS_RTE_RELATION = RTE_RELATION,  /* ordinary relation reference */
+	CITUS_RTE_SUBQUERY = RTE_SUBQUERY,  /* subquery in FROM */
+	CITUS_RTE_JOIN = RTE_JOIN,          /* join */
+	CITUS_RTE_FUNCTION = RTE_FUNCTION,  /* function in FROM */
+	CITUS_RTE_VALUES = RTE_VALUES,      /* VALUES (<exprlist>), (<exprlist>), ... */
+	CITUS_RTE_CTE = RTE_CTE,            /* common table expr (WITH list element) */
 	CITUS_RTE_SHARD,
 	CITUS_RTE_REMOTE_QUERY
 } CitusRTEKind;
@@ -61,8 +62,7 @@ typedef enum
 {
 	PARTITION_INVALID_FIRST = 0,
 	RANGE_PARTITION_TYPE = 1,
-	HASH_PARTITION_TYPE	 = 2
-
+	HASH_PARTITION_TYPE = 2
 } PartitionType;
 
 
@@ -77,7 +77,6 @@ typedef enum
 	MAP_OUTPUT_FETCH_TASK = 5,
 	MERGE_FETCH_TASK = 6,
 	MODIFY_TASK = 7
-
 } TaskType;
 
 
@@ -88,7 +87,6 @@ typedef enum
 	TASK_ASSIGNMENT_GREEDY = 1,
 	TASK_ASSIGNMENT_ROUND_ROBIN = 2,
 	TASK_ASSIGNMENT_FIRST_REPLICA = 3
-
 } TaskAssignmentPolicyType;
 
 
@@ -99,7 +97,6 @@ typedef enum
 	JOIN_MAP_MERGE_JOB = 1,
 	SUBQUERY_MAP_MERGE_JOB = 2,
 	TOP_LEVEL_WORKER_JOB = 3
-
 } BoundaryNodeJobType;
 
 
@@ -133,7 +130,6 @@ typedef struct MapMergeJob
 	ShardInterval **sortedShardIntervalArray; /* only applies to range partitioning */
 	List *mapTaskList;
 	List *mergeTaskList;
-
 } MapMergeJob;
 
 
@@ -153,18 +149,17 @@ typedef struct Task
 	uint64 jobId;
 	uint32 taskId;
 	char *queryString;
-	uint64 anchorShardId;		/* only applies to compute tasks */
-	List *taskPlacementList;	/* only applies to compute tasks */
-	List *dependedTaskList;		/* only applies to compute tasks */
+	uint64 anchorShardId;       /* only applies to compute tasks */
+	List *taskPlacementList;    /* only applies to compute tasks */
+	List *dependedTaskList;     /* only applies to compute tasks */
 
 	uint32 partitionId;
-	uint32 upstreamTaskId;		  /* only applies to data fetch tasks */
+	uint32 upstreamTaskId;        /* only applies to data fetch tasks */
 	ShardInterval *shardInterval; /* only applies to merge tasks */
 	bool assignmentConstrained;   /* only applies to merge tasks */
-	uint64 shardId;				  /* only applies to shard fetch tasks */
+	uint64 shardId;               /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution; /* used by task tracker executor */
-	bool upsertQuery;			  /* only applies to modify tasks */
-
+	bool upsertQuery;             /* only applies to modify tasks */
 } Task;
 
 
@@ -177,7 +172,6 @@ typedef struct RangeTableFragment
 	CitusRTEKind fragmentType;
 	void *fragmentReference;
 	uint32 rangeTableId;
-
 } RangeTableFragment;
 
 
@@ -190,7 +184,6 @@ typedef struct JoinSequenceNode
 {
 	uint32 rangeTableId;
 	int32 joiningRangeTableId;
-
 } JoinSequenceNode;
 
 
@@ -203,7 +196,6 @@ typedef struct MultiPlan
 	Job *workerJob;
 	Query *masterQuery;
 	char *masterTableName;
-
 } MultiPlan;
 
 
