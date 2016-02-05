@@ -989,6 +989,7 @@ AllFinalizedPlacementsAccessible(Oid relationId)
 static void
 RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, void *arg)
 {
+	/* *INDENT-OFF* */
 	HeapTuple	tuple;
 	struct DropRelationCallbackState *state;
 	char		relkind;
@@ -1023,10 +1024,8 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 	classform = (Form_pg_class) GETSTRUCT(tuple);
 
 	if (classform->relkind != relkind)
-	{
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						errmsg("\"%s\" is not an index", rel->relname)));
-	}
 
 	/* Allow DROP to either table owner or schema owner */
 	if (!pg_class_ownercheck(relOid, GetUserId()) &&
@@ -1055,4 +1054,5 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 		if (OidIsValid(state->heapOid))
 			LockRelationOid(state->heapOid, heap_lockmode);
 	}
+	/* *INDENT-ON* */
 }
