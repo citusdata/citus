@@ -393,6 +393,7 @@ DistributedModifyTask(Query *query)
 		query->onConflict = RebuildOnConflict(relationId, query->onConflict);
 	}
 #else
+
 	/* always set to false for PG_VERSION_NUM < 90500 */
 	upsertQuery = false;
 #endif
@@ -414,6 +415,7 @@ DistributedModifyTask(Query *query)
 
 
 #if (PG_VERSION_NUM >= 90500)
+
 /*
  * RebuildOnConflict rebuilds OnConflictExpr for correct deparsing. The function
  * makes WHERE clause elements explicit and filters dropped columns
@@ -433,7 +435,7 @@ RebuildOnConflict(Oid relationId, OnConflictExpr *originalOnConflict)
 
 	/* Convert onConflictWhere qualifiers to an explicitly and'd clause */
 	updatedOnConflict->onConflictWhere =
-			(Node *) make_ands_explicit((List *) onConflictWhere);
+		(Node *) make_ands_explicit((List *) onConflictWhere);
 
 	/*
 	 * Here we handle dropped columns on the distributed table. onConflictSet
@@ -448,7 +450,7 @@ RebuildOnConflict(Oid relationId, OnConflictExpr *originalOnConflict)
 	foreach(targetEntryCell, onConflictSet)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		FormData_pg_attribute *tableAttribute = tableAttributes[targetEntry->resno -1];
+		FormData_pg_attribute *tableAttribute = tableAttributes[targetEntry->resno - 1];
 
 		/* skip dropped columns */
 		if (tableAttribute->attisdropped)
@@ -468,6 +470,8 @@ RebuildOnConflict(Oid relationId, OnConflictExpr *originalOnConflict)
 
 	return updatedOnConflict;
 }
+
+
 #endif
 
 

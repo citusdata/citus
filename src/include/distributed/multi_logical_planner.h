@@ -40,8 +40,8 @@ typedef struct MultiNode
 	CitusNodeTag type;
 
 	struct MultiNode *parentNode;
-	/* child node(s) are defined in unary and binary nodes */
 
+	/* child node(s) are defined in unary and binary nodes */
 } MultiNode;
 
 
@@ -51,7 +51,6 @@ typedef struct MultiUnaryNode
 	MultiNode node;
 
 	struct MultiNode *childNode;
-
 } MultiUnaryNode;
 
 
@@ -62,7 +61,6 @@ typedef struct MultiBinaryNode
 
 	struct MultiNode *leftChildNode;
 	struct MultiNode *rightChildNode;
-
 } MultiBinaryNode;
 
 
@@ -73,7 +71,6 @@ typedef struct MultiBinaryNode
 typedef struct MultiTreeRoot
 {
 	MultiUnaryNode unaryNode;
-
 } MultiTreeRoot;
 
 
@@ -91,7 +88,6 @@ typedef struct MultiTable
 	Alias *alias;
 	Alias *referenceNames;
 	Query *subquery; /* this field is only valid for non-relation subquery types */
-
 } MultiTable;
 
 
@@ -100,7 +96,6 @@ typedef struct MultiProject
 {
 	MultiUnaryNode unaryNode;
 	List *columnList;
-
 } MultiProject;
 
 
@@ -112,7 +107,6 @@ typedef struct MultiProject
 typedef struct MultiCollect
 {
 	MultiUnaryNode unaryNode;
-
 } MultiCollect;
 
 
@@ -125,7 +119,6 @@ typedef struct MultiSelect
 {
 	MultiUnaryNode unaryNode;
 	List *selectClauseList;
-
 } MultiSelect;
 
 
@@ -140,7 +133,6 @@ typedef struct MultiJoin
 	List *joinClauseList;
 	JoinRuleType joinRuleType;
 	JoinType joinType;
-
 } MultiJoin;
 
 
@@ -150,7 +142,6 @@ typedef struct MultiPartition
 	MultiUnaryNode unaryNode;
 	Var *partitionColumn;
 	uint32 splitPointTableId;
-
 } MultiPartition;
 
 
@@ -158,7 +149,6 @@ typedef struct MultiPartition
 typedef struct MultiCartesianProduct
 {
 	MultiBinaryNode binaryNode;
-
 } MultiCartesianProduct;
 
 
@@ -183,7 +173,6 @@ typedef struct MultiExtendedOp
 	List *sortClauseList;
 	Node *limitCount;
 	Node *limitOffset;
-
 } MultiExtendedOp;
 
 

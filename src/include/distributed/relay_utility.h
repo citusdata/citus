@@ -3,7 +3,7 @@
  * relay_utility.h
  *
  * Header and type declarations that extend relation, index and constraint names
- * with the appropriate shard identifiers. 
+ * with the appropriate shard identifiers.
  *
  * Copyright (c) 2012, Citus Data, Inc.
  *
@@ -35,7 +35,6 @@ typedef enum
 	FILE_CACHED = 2,
 	FILE_INACTIVE = 3,
 	FILE_TO_DELETE = 4
-
 } RelayFileState;
 
 

@@ -93,7 +93,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a hash partitioned table",
-								relationName),
+							   relationName),
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
@@ -128,7 +128,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	CreateShardPlacements(shardId, ddlEventList, candidateNodeList, 0,
-	                      ShardReplicationFactor);
+						  ShardReplicationFactor);
 
 	InsertShardRow(relationId, shardId, SHARD_STORAGE_TABLE, nullMinValue, nullMaxValue);
 
@@ -361,7 +361,7 @@ CheckDistributedTable(Oid relationId)
  */
 void
 CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
-                      int workerStartIndex, int replicationFactor)
+					  int workerStartIndex, int replicationFactor)
 {
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
@@ -393,7 +393,7 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
 		else
 		{
 			ereport(WARNING, (errmsg("could not create shard on \"%s:%u\"",
-			                         nodeName, nodePort)));
+									 nodeName, nodePort)));
 		}
 
 		if (placementsCreated >= replicationFactor)
@@ -406,7 +406,7 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
 	if (placementsCreated < replicationFactor)
 	{
 		ereport(ERROR, (errmsg("could only create %u of %u of required shard replicas",
-		                       placementsCreated, replicationFactor)));
+							   placementsCreated, replicationFactor)));
 	}
 }
 

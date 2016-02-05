@@ -40,22 +40,22 @@ worker_foreign_file_path(PG_FUNCTION_ARGS)
 	ForeignTable *foreignTable = GetForeignTable(relationId);
 
 	ListCell *optionCell = NULL;
-    foreach(optionCell, foreignTable->options)
-    {
-        DefElem *option = (DefElem *) lfirst(optionCell);
+	foreach(optionCell, foreignTable->options)
+	{
+		DefElem *option = (DefElem *) lfirst(optionCell);
 		char *optionName = option->defname;
 
-        int compareResult = strncmp(optionName, FOREIGN_FILENAME_OPTION, MAXPGPATH);
-        if (compareResult == 0)
-        {
-            char *optionValue = defGetString(option);
-            foreignFilePath = cstring_to_text(optionValue);
-            break;
-        }
-    }
+		int compareResult = strncmp(optionName, FOREIGN_FILENAME_OPTION, MAXPGPATH);
+		if (compareResult == 0)
+		{
+			char *optionValue = defGetString(option);
+			foreignFilePath = cstring_to_text(optionValue);
+			break;
+		}
+	}
 
 	/* check that we found the filename option */
-    if (foreignFilePath == NULL)
+	if (foreignFilePath == NULL)
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errmsg("could not find filename for foreign table: \"%s\"",
