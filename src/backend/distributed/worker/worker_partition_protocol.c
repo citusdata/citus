@@ -1143,6 +1143,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 }
 
 
+/* *INDENT-OFF* */
 /* Append data to the copy buffer in outputState */
 static void
 CopySendData(PartialCopyState outputState, const void *databuf, int datasize)
@@ -1282,6 +1283,7 @@ CopyAttributeOutText(PartialCopyState cstate, char *string)
 }
 
 
+/* *INDENT-ON* */
 /* Helper function to send pending copy output */
 static inline void
 CopyFlushOutput(PartialCopyState cstate, char *start, char *pointer)
