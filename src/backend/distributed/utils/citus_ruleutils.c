@@ -102,6 +102,7 @@ pg_get_extensiondef_string(Oid tableRelationId)
 static Oid
 get_extension_schema(Oid ext_oid)
 {
+	/* *INDENT-OFF* */
 	Oid			result;
 	Relation	rel;
 	SysScanDesc scandesc;
@@ -131,6 +132,7 @@ get_extension_schema(Oid ext_oid)
 	heap_close(rel, AccessShareLock);
 
 	return result;
+	/* *INDENT-ON* */
 }
 
 
