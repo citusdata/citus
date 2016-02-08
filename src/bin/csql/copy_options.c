@@ -16,6 +16,7 @@
 #include "stringutils.h"
 
 
+/* *INDENT-OFF* */
 void
 free_copy_options(copy_options * ptr)
 {
@@ -224,8 +225,10 @@ error:
 	return NULL;
 }
 
+/* *INDENT-ON* */
 
 /* Frees copy options. */
+
 /*
  * ParseStageOptions takes the given copy options, parses the additional options
  * needed for the \stage command, and sets them in the copy options structure.
