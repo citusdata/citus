@@ -16,7 +16,21 @@
 #include "stringutils.h"
 
 
-/* Concatenates "more" onto "var", and frees the original value of *var. */
+void
+free_copy_options(copy_options * ptr)
+{
+	if (!ptr)
+		return;
+	free(ptr->before_tofrom);
+	free(ptr->after_tofrom);
+	free(ptr->file);
+	free(ptr->tableName);
+	free(ptr->columnList);
+	free(ptr);
+}
+
+
+/* concatenate "more" onto "var", freeing the original value of *var */
 static void
 xstrcat(char **var, const char *more)
 {
@@ -212,20 +226,6 @@ error:
 
 
 /* Frees copy options. */
-void
-free_copy_options(copy_options * ptr)
-{
-	if (!ptr)
-		return;
-	free(ptr->before_tofrom);
-	free(ptr->after_tofrom);
-	free(ptr->file);
-	free(ptr->tableName);
-	free(ptr->columnList);
-	free(ptr);
-}
-
-
 /*
  * ParseStageOptions takes the given copy options, parses the additional options
  * needed for the \stage command, and sets them in the copy options structure.
