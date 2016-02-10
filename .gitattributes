@@ -20,3 +20,23 @@ src/test/regress/output/*.source	-whitespace
 
 # These files are maintained or generated elsewhere.  We take them as is.
 configure				-whitespace
+
+# all C files (implementation and header) use our style...
+*.[ch] citus-style
+
+# except these exceptions...
+src/backend/distributed/utils/citus_outfuncs.c -citus-style
+src/backend/distributed/utils/citus_read.c -citus-style
+src/backend/distributed/utils/citus_readfuncs_94.c -citus-style
+src/backend/distributed/utils/citus_readfuncs_95.c -citus-style
+src/backend/distributed/utils/ruleutils_94.c -citus-style
+src/backend/distributed/utils/ruleutils_95.c -citus-style
+src/include/distributed/citus_nodes.h -citus-style
+src/include/dumputils.h -citus-style
+
+# all csql files use PostgreSQL style...
+src/bin/csql/*.[ch] -citus-style
+
+# except these exceptions
+src/bin/csql/copy_options.c citus-style
+src/bin/csql/stage.[ch] citus-style
