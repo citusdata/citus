@@ -2808,6 +2808,10 @@ SimpleOpExpression(Expr *clause)
 		return false; /* not a binary opclause */
 	}
 
+	/* strip coercions before doing check */
+	leftOperand = strip_implicit_coercions(leftOperand);
+	rightOperand = strip_implicit_coercions(rightOperand);
+
 	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
 	{
 		constantClause = (Const *) rightOperand;
@@ -2918,6 +2922,10 @@ OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 	Node *leftOperand = get_leftop((Expr *) operatorExpression);
 	Node *rightOperand = get_rightop((Expr *) operatorExpression);
 	Var *column = NULL;
+
+	/* strip coercions before doing check */
+	leftOperand = strip_implicit_coercions(leftOperand);
+	rightOperand = strip_implicit_coercions(rightOperand);
 
 	if (IsA(leftOperand, Var))
 	{
