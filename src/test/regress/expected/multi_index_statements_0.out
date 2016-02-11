@@ -136,7 +136,7 @@ DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 DROP INDEX lineitem_partkey_desc_index;
 DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
@@ -150,7 +150,7 @@ DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 DROP INDEX lineitem_partial_index;
 DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
@@ -164,7 +164,7 @@ DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 -- Verify that we handle if exists statements correctly
 DROP INDEX non_existent_index;
 ERROR:  index "non_existent_index" does not exist
@@ -183,7 +183,7 @@ DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 DROP INDEX lineitem_orderkey_hash_index;
 ERROR:  index "lineitem_orderkey_hash_index" does not exist
 -- Verify that all the indexes are also dropped from the master node

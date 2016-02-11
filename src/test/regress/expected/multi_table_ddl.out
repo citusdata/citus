@@ -22,25 +22,27 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 -- verify that the distribution column can't be dropped
 ALTER TABLE testtableddl DROP COLUMN distributecol;
 ERROR:  cannot execute ALTER TABLE command involving partition column
--- verify that the table cannot be dropped while shards exist
+-- verify that the table cannot be dropped in a transaction block
+BEGIN;
+DROP TABLE testtableddl;
+ERROR:  DROP distributed table cannot run inside a transaction block
+CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citusdb_drop_trigger() line 15 at PERFORM
+ROLLBACK;
+-- verify that the table can be dropped
+DROP TABLE testtableddl;
+-- verify that the table can dropped even if shards exist
+CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
+SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
 SELECT 1 FROM master_create_empty_shard('testtableddl');
  ?column? 
 ----------
         1
-(1 row)
-
-DROP TABLE testtableddl;
-ERROR:  cannot drop distributed table with existing shards
-HINT:  Delete shards first using: SELECT master_apply_delete_command('DELETE FROM public.testtableddl')
--- not even with cascade
-DROP TABLE testtableddl CASCADE;
-ERROR:  cannot drop distributed table with existing shards
-HINT:  Delete shards first using: SELECT master_apply_delete_command('DELETE FROM public.testtableddl')
--- but it can be dropped after dropping the shards
-SELECT master_apply_delete_command('DELETE FROM testtableddl');
- master_apply_delete_command 
------------------------------
-                           1
 (1 row)
 
 DROP TABLE testtableddl;

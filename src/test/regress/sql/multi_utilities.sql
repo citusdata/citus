@@ -36,9 +36,6 @@ EXECUTE sharded_query;
 EXECUTE sharded_delete;
 EXECUTE sharded_query;
 
--- try to drop table
-DROP TABLE sharded_table;
-
 -- try to drop shards with where clause
 SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 
