@@ -31,6 +31,9 @@ int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 
 
+static bool IsRoutableQuery(MultiPlan *multiPlan);
+
+
 /*
  * JobExecutorType selects the executor type for the given multiPlan using the task
  * executor type config value. The function then checks if the given multiPlan needs
@@ -60,6 +63,22 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (firstTask->taskType == MODIFY_TASK)
 		{
 			return MULTI_EXECUTOR_ROUTER;
+		}
+	}
+
+	if (executorType == MULTI_EXECUTOR_DYNAMIC)
+	{
+		if (dependedJobCount > 0)
+		{
+			executorType = MULTI_EXECUTOR_TASK_TRACKER;
+		}
+		else if (IsRoutableQuery(multiPlan))
+		{
+			executorType = MULTI_EXECUTOR_ROUTER;
+		}
+		else
+		{
+			executorType = MULTI_EXECUTOR_REAL_TIME;
 		}
 	}
 
@@ -164,6 +183,60 @@ JobExecutorType(MultiPlan *multiPlan)
 	}
 
 	return executorType;
+}
+
+
+/*
+ * IsRoutableQuery returns whether a multi-plan can be executed using the
+ * router executor.
+ */
+static bool
+IsRoutableQuery(MultiPlan *multiPlan)
+{
+	Job *job = multiPlan->workerJob;
+	Query *masterQuery = multiPlan->masterQuery;
+	List *workerTaskList = job->taskList;
+	int taskCount = list_length(workerTaskList);
+	int dependedJobCount = list_length(job->dependedJobList);
+
+	Task *workerTask = NULL;
+	List *workerDependentTaskList = NIL;
+	bool masterQueryHasAggregates = false;
+
+	/* router executor cannot execute repartition jobs */
+	if (dependedJobCount > 0)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries that hit more than one shard */
+	if (taskCount != 1)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries with dependent data fetch tasks */
+	workerTask = list_nth(workerTaskList, 0);
+	workerDependentTaskList = workerTask->dependedTaskList;
+	if (list_length(workerDependentTaskList) > 0)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries with order by */
+	if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries with aggregates */
+	masterQueryHasAggregates = job->jobQuery->hasAggs;
+	if (masterQueryHasAggregates)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

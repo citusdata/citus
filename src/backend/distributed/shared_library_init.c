@@ -58,6 +58,7 @@ static const struct config_enum_entry task_executor_type_options[] = {
 	{"real-time", MULTI_EXECUTOR_REAL_TIME, false},
 	{"task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false},
 	{"router", MULTI_EXECUTOR_ROUTER, false},
+	{"dynamic", MULTI_EXECUTOR_DYNAMIC, false},
 	{NULL, 0, false}
 };
 
@@ -463,7 +464,8 @@ RegisterCitusConfigVariables(void)
 					 "aggregations and/or co-located joins on multiple shards. The "
 					 "task-tracker executor is optimal for long-running, complex "
 					 "queries that touch thousands of shards and/or that involve "
-					 "table repartitioning."),
+					 "table repartitioning. The dynamic executor automatically "
+					 "chooses between them."),
 		&TaskExecutorType,
 		MULTI_EXECUTOR_REAL_TIME,
 		task_executor_type_options,
