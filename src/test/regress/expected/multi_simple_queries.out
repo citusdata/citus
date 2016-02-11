@@ -309,7 +309,7 @@ SET client_min_messages TO 'DEBUG2';
 SELECT *
 	FROM articles
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -323,7 +323,7 @@ DEBUG:  predicate pruning for shardId 103093
 SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 17;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -343,7 +343,7 @@ HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 SELECT id as article_id, word_count * id as random_value
 	FROM articles
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
  article_id | random_value 
 ------------+--------------
           1 |         9572
@@ -360,7 +360,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  push down of limit count: 3
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
  first_author | second_word_count 
 --------------+-------------------
@@ -375,7 +375,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  push down of limit count: 3
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with JOINs
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- do not create the master query for LIMIT on a single shard SELECT
@@ -384,7 +384,7 @@ SELECT *
 	WHERE author_id = 1
 	LIMIT 2;
 DEBUG:  push down of limit count: 2
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |       9572
@@ -398,7 +398,7 @@ SELECT id
 	FROM articles
 	WHERE author_id = 1
 	GROUP BY id;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
  id 
 ----
  41
@@ -415,7 +415,7 @@ COPY articles_single_shard TO stdout;
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
-DEBUG:  predicate pruning for shardId 103092
+DEBUG:  predicate pruning for shardId 103093
 ERROR:  cannot use router executor with aggregates
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- max, min, sum, count is somehow implemented
@@ -424,7 +424,7 @@ SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
 	WHERE author_id = 2;
-DEBUG:  predicate pruning for shardId 103092
+DEBUG:  predicate pruning for shardId 103093
 ERROR:  cannot use router executor with aggregates
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with ORDER BY
@@ -432,7 +432,7 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1
 	ORDER BY word_count;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with ORDER BY clauses
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with ORDER BY and LIMIT
@@ -442,7 +442,7 @@ SELECT *
 	ORDER BY word_count
 	LIMIT 2;
 DEBUG:  push down of limit count: 2
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with ORDER BY clauses
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with aggregates and GROUP BY
@@ -450,14 +450,14 @@ SELECT max(word_count)
 	FROM articles
 	WHERE author_id = 1
 	GROUP BY author_id;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with aggregates
 HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
-DEBUG:  predicate pruning for shardId 103093
+DEBUG:  predicate pruning for shardId 103094
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
