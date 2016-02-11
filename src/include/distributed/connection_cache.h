@@ -51,7 +51,7 @@ typedef struct NodeConnectionEntry
 
 
 /* function declarations for obtaining and using a connection */
-extern PGconn * GetConnection(char *nodeName, int32 nodePort);
+extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
 extern void PurgeConnection(PGconn *connection);
 extern void ReportRemoteError(PGconn *connection, PGresult *result);
 
