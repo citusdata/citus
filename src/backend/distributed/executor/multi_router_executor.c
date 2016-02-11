@@ -250,7 +250,7 @@ ExecuteDistributedModify(Task *task)
 
 		Assert(taskPlacement->shardState == FILE_FINALIZED);
 
-		connection = GetConnection(nodeName, nodePort);
+		connection = GetOrEstablishConnection(nodeName, nodePort);
 		if (connection == NULL)
 		{
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
@@ -383,7 +383,7 @@ ExecuteTaskAndStoreResults(Task *task, TupleDesc tupleDescriptor,
 		bool queryOK = false;
 		bool storedOK = false;
 
-		PGconn *connection = GetConnection(nodeName, nodePort);
+		PGconn *connection = GetOrEstablishConnection(nodeName, nodePort);
 		if (connection == NULL)
 		{
 			continue;
