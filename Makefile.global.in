@@ -19,6 +19,9 @@ vpath_build=@vpath_build@
 ifeq ($(vpath_build),yes)
 	VPATH:=$(citus_abs_srcdir)
 	USE_VPATH:=$(VPATH)
+	citus_top_srcdir:=$(citus_abs_top_srcdir)
+else
+	citus_top_srcdir:=$(citus_top_builddir)
 endif
 
 # Citus is built using PostgreSQL's pgxs
