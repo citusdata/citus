@@ -1,0 +1,70 @@
+--
+-- MULTI_TABLE_DDL
+--
+-- Tests around changing the schema and dropping of a distributed table
+CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
+SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- verify that the citusdb extension can't be dropped while distributed tables exist
+DROP EXTENSION citusdb;
+WARNING:  could not clean the metadata cache on DROP EXTENSION command
+HINT:  Reconnect to the server again.
+ERROR:  cannot drop extension citusdb because other objects depend on it
+DETAIL:  table testtableddl depends on extension citusdb
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- verify that the distribution column can't have its type changed
+ALTER TABLE testtableddl ALTER COLUMN distributecol TYPE text;
+ERROR:  cannot execute ALTER TABLE command involving partition column
+-- verify that the distribution column can't be dropped
+ALTER TABLE testtableddl DROP COLUMN distributecol;
+ERROR:  cannot execute ALTER TABLE command involving partition column
+-- verify that the table cannot be dropped while shards exist
+SELECT 1 FROM master_create_empty_shard('testtableddl');
+ ?column? 
+----------
+        1
+(1 row)
+
+DROP TABLE testtableddl;
+ERROR:  cannot drop distributed table with existing shards
+HINT:  Delete shards first using: SELECT master_apply_delete_command('DELETE FROM public.testtableddl')
+-- not even with cascade
+DROP TABLE testtableddl CASCADE;
+ERROR:  cannot drop distributed table with existing shards
+HINT:  Delete shards first using: SELECT master_apply_delete_command('DELETE FROM public.testtableddl')
+-- but it can be dropped after dropping the shards
+SELECT master_apply_delete_command('DELETE FROM testtableddl');
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
+DROP TABLE testtableddl;
+-- ensure no metadata of distributed tables are remaining
+SELECT * FROM pg_dist_partition;
+ logicalrelid | partmethod | partkey 
+--------------+------------+---------
+(0 rows)
+
+SELECT * FROM pg_dist_shard;
+ logicalrelid | shardid | shardstorage | shardalias | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement;
+ shardid | shardstate | shardlength | nodename | nodeport 
+---------+------------+-------------+----------+----------
+(0 rows)
+
+-- check that the extension now can be dropped (and recreated). We reconnect
+-- before creating the extension to expire extension specific variables which
+-- are cached for performance.
+DROP EXTENSION citusdb;
+WARNING:  could not clean the metadata cache on DROP EXTENSION command
+HINT:  Reconnect to the server again.
+\c
+CREATE EXTENSION citusdb;

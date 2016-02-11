@@ -1,0 +1,30 @@
+--
+-- MULTI_BASIC_QUERIES
+--
+-- Execute simple sum, average, and count queries on data recently uploaded to
+-- our partitioned table.
+SELECT count(*) FROM lineitem;
+ count 
+-------
+ 12000
+(1 row)
+
+SELECT sum(l_extendedprice) FROM lineitem;
+     sum      
+--------------
+ 457702024.50
+(1 row)
+
+SELECT avg(l_extendedprice) FROM lineitem;
+        avg         
+--------------------
+ 38141.835375000000
+(1 row)
+
+-- Verify temp tables which are used for final result aggregation don't persist.
+SELECT count(*) FROM pg_class WHERE relname LIKE 'pg_merge_job_%' AND relkind = 'r';
+ count 
+-------
+     0
+(1 row)
+

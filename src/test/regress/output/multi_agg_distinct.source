@@ -1,0 +1,99 @@
+--
+-- MULTI_AGG_DISTINCT
+--
+-- Create a new range partitioned lineitem table and stage data into it
+CREATE TABLE lineitem_range (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null );
+SELECT master_create_distributed_table('lineitem_range', 'l_orderkey', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+\STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+-- Run aggregate(distinct) on partition column for range partitioned table
+SELECT count(distinct l_orderkey) FROM lineitem_range;
+ count 
+-------
+  2986
+(1 row)
+
+SELECT avg(distinct l_orderkey) FROM lineitem_range;
+          avg          
+-----------------------
+ 7465.3171466845277964
+(1 row)
+
+-- Run count(distinct) on join between a range partitioned table and a single
+-- sharded table. For this test, we also change a config setting to ensure that
+-- we don't repartition any of the tables during the query.
+SET citusdb.large_table_shard_count TO 2;
+SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
+	WHERE l_partkey = p_partkey
+	GROUP BY p_partkey
+	ORDER BY p_partkey LIMIT 10;
+ p_partkey | count 
+-----------+-------
+        18 |     1
+        79 |     1
+        91 |     1
+       149 |     2
+       175 |     1
+       179 |     1
+       182 |     1
+       195 |     1
+       204 |     1
+       222 |     1
+(10 rows)
+
+RESET citusdb.large_table_shard_count;
+-- Check that we don't support count(distinct) on non-partition column, and
+-- complex expressions.
+SELECT count(distinct l_partkey) FROM lineitem_range;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  aggregate (distinct) on complex expressions is unsupported
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+-- Now test append partitioned tables. First run count(distinct) on a single
+-- sharded table.
+SELECT count(distinct p_mfgr) FROM part;
+ count 
+-------
+     5
+(1 row)
+
+SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr;
+          p_mfgr           | count 
+---------------------------+-------
+ Manufacturer#1            |   193
+ Manufacturer#3            |   228
+ Manufacturer#5            |   185
+ Manufacturer#2            |   190
+ Manufacturer#4            |   204
+(5 rows)
+
+-- We don't support count(distinct) queries if table is append partitioned and
+-- has multiple shards
+SELECT count(distinct o_orderkey) FROM orders;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+HINT:  You can load the hll extension from contrib packages and enable distinct approximations.

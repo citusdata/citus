@@ -1,0 +1,8 @@
+--
+-- WORKER_COPY
+--
+
+COPY lineitem FROM '@abs_srcdir@/data/lineitem.1.data' WITH DELIMITER '|';
+COPY lineitem FROM '@abs_srcdir@/data/lineitem.2.data' WITH DELIMITER '|';
+
+COPY supplier FROM '@abs_srcdir@/data/supplier.data' WITH DELIMITER '|';

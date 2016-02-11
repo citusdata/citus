@@ -1,0 +1,86 @@
+--
+-- MULTI_WORKING_COLUMNS
+--
+-- Columns that are used in sorting and grouping but that do not appear in the
+-- projection order are called working (resjunk) columns. We check in here that
+-- these columns are pulled to the master, and are correctly used in sorting and
+-- grouping.
+SELECT l_quantity FROM lineitem ORDER BY l_shipdate, l_quantity LIMIT 20;
+ l_quantity 
+------------
+      38.00
+      13.00
+      15.00
+      17.00
+      30.00
+      24.00
+      24.00
+       5.00
+      38.00
+      13.00
+      26.00
+      30.00
+      30.00
+      35.00
+      38.00
+      24.00
+      37.00
+      11.00
+      18.00
+      17.00
+(20 rows)
+
+SELECT l_quantity, count(*) as count FROM lineitem
+	GROUP BY l_quantity, l_shipdate ORDER BY l_quantity, count
+	LIMIT 20;
+ l_quantity | count 
+------------+-------
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+       1.00 |     1
+(20 rows)
+
+SELECT l_quantity, l_shipdate, count(*) as count FROM lineitem
+	GROUP BY l_quantity, l_shipdate ORDER BY l_quantity, count, l_shipdate
+	LIMIT 20;
+ l_quantity | l_shipdate | count 
+------------+------------+-------
+       1.00 | 02-07-1992 |     1
+       1.00 | 02-23-1992 |     1
+       1.00 | 03-17-1992 |     1
+       1.00 | 04-22-1992 |     1
+       1.00 | 04-23-1992 |     1
+       1.00 | 04-30-1992 |     1
+       1.00 | 05-13-1992 |     1
+       1.00 | 05-15-1992 |     1
+       1.00 | 05-27-1992 |     1
+       1.00 | 05-29-1992 |     1
+       1.00 | 06-09-1992 |     1
+       1.00 | 06-23-1992 |     1
+       1.00 | 07-15-1992 |     1
+       1.00 | 07-18-1992 |     1
+       1.00 | 07-23-1992 |     1
+       1.00 | 08-03-1992 |     1
+       1.00 | 08-11-1992 |     1
+       1.00 | 08-29-1992 |     1
+       1.00 | 09-08-1992 |     1
+       1.00 | 09-11-1992 |     1
+(20 rows)
+

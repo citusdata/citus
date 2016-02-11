@@ -1,0 +1,18 @@
+--
+-- MULTI_UTILITY_WARNINGS
+--
+-- Tests to check if we inform the user about potential caveats of creating new
+-- databases, schemas, and roles.
+CREATE DATABASE new_database;
+NOTICE:  CitusDB partially supports CREATE DATABASE for distributed databases
+DETAIL:  CitusDB does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+CREATE SCHEMA new_schema;
+NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+CREATE ROLE new_role;
+NOTICE:  CitusDB does not support CREATE ROLE/USER for distributed databases
+DETAIL:  Multiple roles are currently supported only for local tables
+CREATE USER new_user;
+NOTICE:  CitusDB does not support CREATE ROLE/USER for distributed databases
+DETAIL:  Multiple roles are currently supported only for local tables

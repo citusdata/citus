@@ -1,0 +1,194 @@
+--
+-- MULTI_SINGLE_RELATION_SUBQUERY
+--
+-- This test checks that we are able to run selected set of distributed SQL subqueries.
+SET citusdb.task_executor_type TO 'task-tracker';
+select
+    number_sum,
+    count(*) as total,
+    avg(total_count) avg_count
+from
+    (select
+        l_suppkey,
+        l_linestatus,
+        sum(l_linenumber) as number_sum,
+        count(*) as total_count
+    from
+        lineitem
+    group by
+        l_suppkey,
+        l_linestatus) as distributed_table
+where
+    number_sum >= 10
+group by
+    number_sum
+order by
+    total desc,
+    number_sum desc
+limit 10;
+ number_sum | total |     avg_count      
+------------+-------+--------------------
+         10 |   136 | 2.3970588235294118
+         11 |    97 | 2.6082474226804124
+         12 |    56 | 2.8392857142857143
+         13 |    42 | 2.8809523809523810
+         14 |    21 | 3.2857142857142857
+         16 |    10 | 3.5000000000000000
+         15 |    10 | 3.3000000000000000
+         17 |     6 | 3.3333333333333333
+         18 |     3 | 4.0000000000000000
+         19 |     2 | 4.0000000000000000
+(10 rows)
+
+select
+    (l_suppkey / 100) as suppkey_bin,
+    avg(total_count) avg_count
+from
+    (select
+        l_suppkey,
+        sum(l_linenumber) as number_sum,
+        count(*) as total_count
+    from
+        lineitem
+    group by
+        l_suppkey,
+        l_linestatus) as distributed_table
+group by
+    suppkey_bin
+order by
+    avg_count desc
+limit 20;
+ suppkey_bin |     avg_count      
+-------------+--------------------
+          95 | 1.4851485148514851
+          90 | 1.4761904761904762
+          52 | 1.4680851063829787
+          40 | 1.4659090909090909
+          15 | 1.4642857142857143
+          75 | 1.4444444444444444
+          72 | 1.4375000000000000
+          84 | 1.4242424242424242
+          35 | 1.4226804123711340
+          64 | 1.4166666666666667
+          74 | 1.4117647058823529
+          21 | 1.4000000000000000
+          18 | 1.4000000000000000
+          26 | 1.3932584269662921
+          96 | 1.3913043478260870
+          71 | 1.3913043478260870
+          86 | 1.3894736842105263
+          55 | 1.3882352941176471
+          57 | 1.3875000000000000
+           1 | 1.3846153846153846
+(20 rows)
+
+select
+    total,
+    avg(avg_count) as total_avg_count
+from
+    (select
+        number_sum,
+        count(*) as total,
+        avg(total_count) avg_count
+    from
+        (select
+            l_suppkey,
+            sum(l_linenumber) as number_sum,
+            count(*) as total_count
+        from
+            lineitem
+        where
+            l_partkey > 100 and
+            l_quantity > 2 and
+            l_orderkey < 10000
+        group by
+            l_suppkey) as distributed_table
+    where
+        number_sum >= 10
+    group by
+        number_sum) as distributed_table_2
+group by
+    total
+order by
+    total;
+ total |  total_avg_count   
+-------+--------------------
+     1 | 4.8000000000000000
+     6 | 3.0000000000000000
+    10 | 3.5000000000000000
+    27 | 2.9259259259259259
+    32 | 2.8125000000000000
+    57 | 2.4912280701754386
+    77 | 2.3896103896103896
+(7 rows)
+
+-- Check that we support subquery even though group by clause is an expression
+-- and it is not referred in the target list.
+select
+    avg(count)
+from
+    (select
+        l_suppkey,
+        count(*) as count
+    from
+        lineitem
+    group by
+        (l_orderkey/4)::int,
+        l_suppkey )  as distributed_table;
+          avg           
+------------------------
+ 1.00083402835696413678
+(1 row)
+
+-- Check that we don't support subqueries with limit.
+select
+    l_suppkey,
+    sum(suppkey_count) as total_suppkey_count
+from
+    (select
+        l_suppkey,
+        count(*) as suppkey_count
+    from
+        lineitem
+    group by
+        l_suppkey
+    order by
+        l_suppkey
+    limit 100) as distributed_table
+group by
+    l_suppkey;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries with limit are not supported yet
+-- Check that we don't support subqueries without aggregates.
+select
+    rounded_tax
+from
+    (select
+        round(l_tax) as rounded_tax
+    from
+        lineitem
+    group by
+        l_tax) as distributed_table;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries without aggregates are not supported yet
+-- Check that if subquery is pulled, we don't error and run query properly.
+SELECT max(l_suppkey) FROM
+(
+    SELECT
+        l_suppkey
+        FROM (
+            SELECT
+                l_suppkey,
+                count(*)
+            FROM
+                lineitem_subquery
+            WHERE
+                l_orderkey < 20000
+            GROUP BY
+                l_suppkey) z
+) y;
+ max  
+------
+ 9999
+(1 row)
+

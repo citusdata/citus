@@ -1,0 +1,125 @@
+# ----------
+# $Id$
+#
+# Regression tests that exercise distributed planning/execution functionality.
+#
+# Note that we use variant comparison files to test version dependent regression
+# test results. For more information:
+# http://www.postgresql.org/docs/9.5/static/regress-variant.html
+# ----------
+
+# ---
+# Tests around schema changes, these are run first, so there's no preexisting objects.
+# ---
+test: multi_table_ddl
+
+# ----------
+# The following distributed tests depend on creating a partitioned table and
+# uploading data to it.
+# ----------
+test: multi_create_table
+test: multi_master_protocol
+test: multi_stage_data
+
+# ----------
+# Miscellaneous tests to check our query planning behavior
+# ----------
+test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
+test: multi_subquery
+test: multi_single_relation_subquery
+test: multi_agg_distinct multi_limit_clause multi_limit_clause_approximate
+test: multi_average_expression multi_working_columns
+test: multi_array_agg
+test: multi_agg_type_conversion multi_count_type_conversion
+test: multi_partition_pruning
+test: multi_join_pruning multi_hash_pruning
+test: multi_null_minmax_value_pruning
+test: multi_query_directory_cleanup
+test: multi_task_assignment_policy
+test: multi_utility_statements
+test: multi_dropped_column_aliases
+test: multi_verify_no_join_with_alias
+test: multi_binary_master_copy_format
+test: multi_prepare_sql multi_prepare_plsql
+
+# ----------
+# Parallel TPC-H tests to check our distributed execution behavior
+# ----------
+test: multi_tpch_query1 multi_tpch_query3 multi_tpch_query6 multi_tpch_query10
+test: multi_tpch_query12 multi_tpch_query14 multi_tpch_query19
+test: multi_tpch_query7 multi_tpch_query7_nested
+
+# ----------
+# Parallel tests to check our join order planning logic. Note that we stage data
+# below; and therefore these tests should come after the execution tests.
+# ----------
+test: multi_join_order_tpch_small multi_join_order_additional
+test: multi_stage_more_data
+test: multi_join_order_tpch_large
+
+# ----------
+# Tests for large-table join planning and execution.
+# Be careful when staging new data before these tests, as they
+# expect specific shard identifiers in the output.
+# ----------
+test: multi_large_table_join_planning
+test: multi_large_table_pruning
+test: multi_large_table_task_assignment
+
+# ----------
+# Tests to check our large record staging and shard deletion behavior
+# ----------
+test: multi_stage_large_records multi_master_delete_protocol
+
+# ----------
+# Tests around DDL statements run on distributed tables
+# ----------
+test: multi_index_statements multi_alter_table_statements
+
+# ----------
+# multi_create_schema tests creation, staging and querying of a table in a new
+# schema (namespace).
+# ----------
+test: multi_create_schema
+
+# ----------
+# Tests to check if we inform the user about potential caveats of creating new
+# databases, schemas, and roles.
+# ----------
+test: multi_utility_warnings
+
+# ---------
+# multi_append_table_to_shard stages shards in a way that forces
+# shard caching.
+# ---------
+test: multi_append_table_to_shard
+
+# ---------
+# multi_outer_join stages shards to create different mappings for outer joins
+# ---------
+test: multi_outer_join
+
+# ---
+# Tests covering mostly modification queries and required preliminary
+# functionality related to metadata, shard creation, shard pruning and
+# "hacky" copy script for hash partitioned tables.
+# Note that the order of the following tests are important.
+# ---
+test: multi_create_fdw
+test: multi_connection_cache
+test: multi_distribution_metadata
+test: multi_generate_ddl_commands
+test: multi_create_shards
+test: multi_prune_shard_list
+test: multi_repair_shards
+test: multi_modifications
+test: multi_upsert
+test: multi_simple_queries
+test: multi_utilities
+test: multi_create_insert_proxy
+test: multi_data_types
+
+# ----------
+# multi_large_shardid stages more shards into lineitem
+# ----------
+test: multi_large_shardid

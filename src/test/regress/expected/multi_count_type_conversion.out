@@ -1,0 +1,85 @@
+--
+-- MULTI_COUNT_TYPE_CONVERSION
+--
+-- Verify that we can sort count(*) results correctly. We perform this check as
+-- our count() operations execute in two steps: worker nodes report their
+-- count() results, and the master node sums these counts up. During this sum(),
+-- the data type changes from int8 to numeric. When we sort the numeric value,
+-- we get erroneous results on 64-bit architectures. To fix this issue, we
+-- manually cast back the sum() result to an int8 data type.
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity ASC, l_quantity DESC;
+ count_quantity | l_quantity 
+----------------+------------
+            219 |      13.00
+            222 |      29.00
+            227 |       3.00
+            229 |      31.00
+            229 |      18.00
+            230 |      26.00
+            230 |      17.00
+            230 |      16.00
+            230 |      14.00
+            232 |       7.00
+            234 |      10.00
+            235 |      15.00
+            236 |      25.00
+            237 |       2.00
+            241 |      12.00
+            242 |      22.00
+            242 |       6.00
+            243 |      19.00
+            243 |       1.00
+            244 |       4.00
+            246 |      20.00
+            249 |      27.00
+            249 |      24.00
+            250 |      11.00
+            250 |       8.00
+            254 |       5.00
+            255 |      21.00
+            258 |       9.00
+            261 |      23.00
+            264 |      30.00
+            273 |      28.00
+(31 rows)
+
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity DESC, l_quantity ASC;
+ count_quantity | l_quantity 
+----------------+------------
+            273 |      28.00
+            264 |      30.00
+            261 |      23.00
+            258 |       9.00
+            255 |      21.00
+            254 |       5.00
+            250 |       8.00
+            250 |      11.00
+            249 |      24.00
+            249 |      27.00
+            246 |      20.00
+            244 |       4.00
+            243 |       1.00
+            243 |      19.00
+            242 |       6.00
+            242 |      22.00
+            241 |      12.00
+            237 |       2.00
+            236 |      25.00
+            235 |      15.00
+            234 |      10.00
+            232 |       7.00
+            230 |      14.00
+            230 |      16.00
+            230 |      17.00
+            230 |      26.00
+            229 |      18.00
+            229 |      31.00
+            227 |       3.00
+            222 |      29.00
+            219 |      13.00
+(31 rows)
+

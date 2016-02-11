@@ -1,0 +1,28 @@
+--
+-- MULTI_FDW_STAGE_DATA
+--
+-- Tests for staging foreign data in a distributed cluster.
+\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+NOTICE:  extension "file_fdw" already exists, skipping
+\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+NOTICE:  extension "file_fdw" already exists, skipping
+\STAGE orders FROM '@abs_srcdir@/data/orders.1.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+NOTICE:  extension "file_fdw" already exists, skipping
+\STAGE orders FROM '@abs_srcdir@/data/orders.2.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+NOTICE:  extension "file_fdw" already exists, skipping
+SELECT set_config('citusdb.shard_replication_factor', '1', false);
+ set_config 
+------------
+ 1
+(1 row)
+
+\STAGE customer FROM '@abs_srcdir@/data/customer.1.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+\STAGE nation FROM '@abs_srcdir@/data/nation.data'
+NOTICE:  extension "file_fdw" already exists, skipping
+\STAGE part FROM '@abs_srcdir@/data/part.data'
+NOTICE:  extension "file_fdw" already exists, skipping

@@ -1,0 +1,33 @@
+--
+-- MULTI_STAGE_DATA
+--
+
+-- Tests for staging data in a distributed cluster. Please note that the number
+-- of shards uploaded depends on two config values: citusdb.shard_replication_factor and
+-- citusdb.shard_max_size. These values are manually set in pg_regress.c. We also set
+-- the shard placement policy to the local-node-first policy as other regression
+-- tests expect the placements to be in that order.
+
+SET citusdb.shard_placement_policy TO 'local-node-first';
+
+\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+
+\STAGE orders FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\STAGE orders FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+
+\STAGE customer FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\STAGE nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+\STAGE part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
+\STAGE supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+
+-- check that we error out if we try to stage into a hash partitioned table
+
+CREATE TABLE nation_hash_partitioned (
+	n_nationkey integer not null,
+	n_name char(25) not null,
+	n_regionkey integer not null,
+	n_comment varchar(152));
+SELECT master_create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
+
+\STAGE nation_hash_partitioned FROM '@abs_srcdir@/data/nation.data' with delimiter '|'

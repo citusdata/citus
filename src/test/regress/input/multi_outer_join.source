@@ -1,0 +1,383 @@
+SET citusdb.large_table_shard_count TO 2;
+SET citusdb.log_multi_join_order to true;
+SET client_min_messages TO LOG;
+
+CREATE TABLE multi_outer_join_left
+(
+	l_custkey integer not null,
+	l_name varchar(25) not null,
+	l_address varchar(40) not null,
+	l_nationkey integer not null,
+	l_phone char(15) not null,
+	l_acctbal decimal(15,2) not null,
+	l_mktsegment char(10) not null,
+	l_comment varchar(117) not null
+);
+SELECT master_create_distributed_table('multi_outer_join_left', 'l_custkey', 'append');
+
+CREATE TABLE multi_outer_join_right
+(
+	r_custkey integer not null,
+	r_name varchar(25) not null,
+	r_address varchar(40) not null,
+	r_nationkey integer not null,
+	r_phone char(15) not null,
+	r_acctbal decimal(15,2) not null,
+	r_mktsegment char(10) not null,
+	r_comment varchar(117) not null
+);
+SELECT master_create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
+
+CREATE TABLE multi_outer_join_third
+(
+	t_custkey integer not null,
+	t_name varchar(25) not null,
+	t_address varchar(40) not null,
+	t_nationkey integer not null,
+	t_phone char(15) not null,
+	t_acctbal decimal(15,2) not null,
+	t_mktsegment char(10) not null,
+	t_comment varchar(117) not null
+);
+SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
+
+-- Make sure we do not crash if both tables have no shards
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
+
+-- Left table is a large table
+\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-10.data' with delimiter '|'
+\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
+
+-- Right table is a small table
+\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+
+-- Make sure we do not crash if one table has no shards
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
+
+SELECT
+	min(t_custkey), max(t_custkey)
+FROM
+	multi_outer_join_third a LEFT JOIN multi_outer_join_right b ON (r_custkey = t_custkey);
+
+-- Third table is a single shard table with all data
+\STAGE multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
+
+-- Regular outer join should return results for all rows
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+-- Since this is a broadcast join, we should be able to join on any key
+SELECT
+	count(*)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
+
+
+-- Anti-join should return customers for which there is no row in the right table
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey IS NULL;
+
+
+-- Partial anti-join with specific value
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey IS NULL OR r_custkey = 5;
+
+
+-- This query is an INNER JOIN in disguise since there cannot be NULL results
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey = 5;
+
+
+-- Right join should be disallowed in this case
+SELECT
+	min(r_custkey), max(r_custkey)
+FROM
+	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+
+-- Reverse right join should be same as left join
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
+
+
+-- Turn the right table into a large table
+\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+
+
+-- Shards do not have 1-1 matching. We should error here.
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+-- empty tables
+SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
+SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
+
+-- reload shards with 1-1 matching
+\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+
+\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
+\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+
+-- multi_outer_join_third is a single shard table
+
+-- Regular left join should work as expected
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+
+-- Since we cannot broadcast or re-partition, joining on a different key should error out
+SELECT
+	count(*)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_nationkey = r_nationkey);
+
+
+-- Anti-join should return customers for which there is no row in the right table
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey IS NULL;
+
+
+-- Partial anti-join with specific value (5, 11-15)
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey IS NULL OR r_custkey = 15;
+
+
+-- This query is an INNER JOIN in disguise since there cannot be NULL results (21)
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
+WHERE
+	r_custkey = 21;
+
+
+-- Right join should be allowed in this case
+SELECT
+	min(r_custkey), max(r_custkey)
+FROM
+	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+
+-- Reverse right join should be same as left join
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_right a RIGHT JOIN multi_outer_join_left b ON (l_custkey = r_custkey);
+
+
+-- complex query tree should error out
+SELECT
+	*
+FROM
+	multi_outer_join_left l1
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
+	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey);
+
+-- add an anti-join, this should also error out
+SELECT
+	*
+FROM
+	multi_outer_join_left l1
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_right r2 ON (l1.l_custkey  = r2.r_custkey)
+	RIGHT JOIN multi_outer_join_left l2 ON (r2.r_custkey = l2.l_custkey)
+WHERE
+	r1.r_custkey is NULL;
+
+-- Three way join 2-2-1 (local + broadcast join) should work
+SELECT
+	l_custkey, r_custkey, t_custkey
+FROM
+	multi_outer_join_left l1
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+
+-- Right join with single shard right most table should error out
+SELECT
+	l_custkey, r_custkey, t_custkey
+FROM
+	multi_outer_join_left l1
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+	RIGHT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+
+-- Right join with single shard left most table should work
+SELECT
+	t_custkey, r_custkey, l_custkey
+FROM
+	multi_outer_join_third t1
+	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
+
+-- Make it anti-join, should display values with l_custkey is null
+SELECT
+	t_custkey, r_custkey, l_custkey
+FROM
+	multi_outer_join_third t1
+	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey)
+WHERE
+	l_custkey is NULL;
+
+-- Cascading right join with single shard left most table should error out
+SELECT
+	t_custkey, r_custkey, l_custkey
+FROM
+	multi_outer_join_third t1
+	RIGHT JOIN multi_outer_join_right r1 ON (t1.t_custkey = r1.r_custkey)
+	RIGHT JOIN multi_outer_join_left l1 ON (r1.r_custkey  = l1.l_custkey);
+
+-- full outer join should work with 1-1 matched shards
+SELECT
+	l_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey);
+
+-- full outer join + anti (right) should work with 1-1 matched shards
+SELECT
+	l_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+WHERE 
+	r_custkey is NULL;
+
+-- full outer join + anti (left) should work with 1-1 matched shards
+SELECT
+	l_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+WHERE 
+	l_custkey is NULL;
+
+-- full outer join + anti (both) should work with 1-1 matched shards
+SELECT
+	l_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	FULL JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+WHERE 
+	l_custkey is NULL or r_custkey is NULL;
+
+-- full outer join should error out for mismatched shards
+SELECT
+	l_custkey, t_custkey
+FROM
+	multi_outer_join_left l1
+	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey);
+
+-- inner join  + single shard left join should work
+SELECT
+	l_custkey, r_custkey, t_custkey
+FROM
+	multi_outer_join_left l1
+	INNER JOIN multi_outer_join_right r1 ON (l1.l_custkey = r1.r_custkey)
+	LEFT JOIN multi_outer_join_third t1 ON (r1.r_custkey  = t1.t_custkey);
+
+-- inner (broadcast) join  + 2 shards left (local) join should work
+SELECT
+	l_custkey, t_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+
+-- inner (local) join  + 2 shards left (dual partition) join should error out
+SELECT
+	t_custkey, l_custkey, r_custkey
+FROM
+	multi_outer_join_third t1
+	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+
+-- inner (local) join  + 2 shards left (dual partition) join should error out
+SELECT
+	l_custkey, t_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
+
+-- inner (broadcast) join  + 2 shards left (local) + anti join should work
+SELECT
+	l_custkey, t_custkey, r_custkey
+FROM
+	multi_outer_join_left l1
+	INNER JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey)
+	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey)
+WHERE
+	r_custkey is NULL;
+
+-- Test joinExpr aliases by performing an outer-join. 
+SELECT 
+	t_custkey
+FROM   
+	(multi_outer_join_right r1 
+	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
+    test(c_custkey, c_nationkey)
+    INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
+
+-- Add a shard to the left table that overlaps with multiple shards in the right
+\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+
+
+-- All outer joins should error out
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+SELECT
+	min(l_custkey), max(l_custkey)
+FROM
+	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
+
+SELECT 
+	t_custkey
+FROM   
+	(multi_outer_join_right r1 
+	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
+    test(c_custkey, c_nationkey)
+    INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);

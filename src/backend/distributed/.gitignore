@@ -1,0 +1,13 @@
+# ====================
+# = Project-Specific =
+# ====================
+
+# regression test detritus
+/log/
+/regression.diffs
+/regression.out
+/results/
+/tmp_check*
+
+# ignore latest install file
+citusdb--5.0.sql

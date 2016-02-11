@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+
+# make bash behave
+set -euo pipefail
+IFS=$'\n\t'
+
+# constants
+stdout=1
+stderr=2
+success=0
+badusage=64
+noinput=66
+
+# default values for certain options
+format='text'
+schema='public'
+
+# we'll append to this string to build options list
+options='OIDS false, FREEZE false'
+
+# outputs usage message on specified device before exiting with provided status
+usage() {
+	cat << 'E_O_USAGE' >&"$1"
+usage: copy_to_distributed_table [-BCTHh] [-c encoding] [-d delimiter]
+	[-e escape] [-n null] [-q quote] [-s schema] filename tablename
+
+  B : use binary format for input
+  C : use CSV format for input
+  T : use text format for input
+  H : specifies file contains header line to be ignored
+  h : print this help message
+
+  c : specifies file is encoded using `encoding`
+      Default: the current client encoding
+  d : specifies the character used to separate columns
+      Default: a tab character in text format, a comma in CSV format
+  e : specifies the character used to escape quotes
+      Default: the same as the `quote` value (quotes within data are doubled)
+  n : specifies the string that represents a null value
+      Default: \N in text format, an unquoted empty string in CSV format
+  q : specifies the quoting character to be used when a data value is quoted
+      Default: double-quote
+  s : specifies the schema in which the target table resides
+      Default: 'public'
+
+copy_to_distributed_table outputs the total number of rows successfully copied
+to the distributed table, counted from the beginning of the input file.
+E_O_USAGE
+
+	exit $2;
+}
+
+# process flags
+while getopts ':BCc:d:e:Hhn:q:s:T' o; do
+	case "${o}" in
+		B)
+			format='binary'
+			;;
+		C)
+			format='csv'
+			;;
+		c)
+			encoding=`echo ${OPTARG} | sed s/\'/\'\'/g`
+			options="${options}, ENCODING '${encoding}'"
+			;;
+		d)
+			delimiter=`echo ${OPTARG} | sed s/\'/\'\'/g`
+			options="${options}, DELIMITER '${delimiter}'"
+			;;
+		e)
+			escape=`echo ${OPTARG} | sed s/\'/\'\'/g`
+			options="${options}, ESCAPE '${escape}'"
+			;;
+		H)
+			options="${options}, HEADER true"
+			;;
+		h)
+			usage $stdout $success
+			;;
+		n)
+			null=`echo ${OPTARG} | sed s/\'/\'\'/g`
+			options="${options}, NULL '${null}'"
+			;;
+		q)
+			quote=`echo ${OPTARG} | sed s/\'/\'\'/g`
+			options="${options}, QUOTE '${quote}'"
+			;;
+		s)
+			# we'll escape schema in psql itself
+			schema=${OPTARG}
+			;;
+		T)
+			format='text'
+			;;
+		*)
+			echo "$0: illegal option -- ${OPTARG}" >&2
+			usage $stderr $badusage
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+if [ "$#" -ne 2 ]; then
+	usage $stderr $badusage
+fi
+
+# append format to options and extract file/table names
+options="${options}, FORMAT ${format}"
+filename=$1
+tablename=$2
+
+# validate inputs
+if [ -d "${filename}" ]; then
+	echo "$0: ${filename}: Is a directory" >&2
+	exit $noinput
+elif [ ! -e "${filename}" ]; then
+	echo "$0: ${filename}: No such file" >&2
+	exit $noinput
+elif [ ! -r "${filename}" ]; then
+	echo "$0: ${filename}: Permission denied" >&2
+	exit $noinput
+fi
+
+# invoke psql, ignoring .psqlrc and passing the following heredoc
+psql -X -vtable="${tablename}" -vfile="${filename}" \
+		-vschema="${schema}" -voptions="${options}" << 'E_O_SQL'
+-- only print values, left-align them, and don't rollback or stop on error
+\set QUIET on
+\set ON_ERROR_ROLLBACK off
+\pset format unaligned
+\pset tuples_only on
+\set ON_ERROR_STOP on
+
+-- squelch all output until COPY completes
+\o /dev/null
+
+-- Use a session-bound counter to keep track of the number of rows inserted: we
+-- can't roll back so we need to tell the user how many rows were inserted. Due
+-- to the trigger implementation, the COPY will report zero rows, so we count
+-- them manually for a better experience.
+CREATE TEMPORARY SEQUENCE rows_inserted MINVALUE 0 CACHE 100000;
+
+-- initialize counter to zero
+SELECT nextval('rows_inserted');
+
+-- get qualified table name
+SELECT format('%I.%I', :'schema', :'table') AS target
+\gset
+
+-- create insert proxy and save name; pass in sequence
+SELECT create_insert_proxy_for_table(:'target', 'rows_inserted') AS proxy
+\gset
+
+-- don't stop if copy errors out: continue to print file name and row count
+\set ON_ERROR_STOP off
+
+-- \copy doesn't allow variable substitution, so do it ourselves...
+SELECT format('\copy pg_temp.%I from %L with (%s)',
+			  :'proxy', :'file', :'options') AS copy_cmd
+\gset
+
+-- ... then execute the result
+:copy_cmd
+
+-- reconnect STDOUT to display row count
+\o
+
+SELECT currval('rows_inserted');
+E_O_SQL

@@ -1,0 +1,6 @@
+# CitusDB extension
+comment = 'CitusDB distributed database'
+default_version = '5.0'
+module_pathname = '$libdir/citusdb'
+relocatable = false
+schema = pg_catalog

@@ -1,0 +1,151 @@
+--
+-- MULTI_LIMIT_CLAUSE_APPROXIMATE
+--
+-- Display debug messages on limit clause push down.
+SET client_min_messages TO DEBUG1;
+-- We first look at results with limit optimization disabled. This first query
+-- has a group and an order by. The order by clause is a commutative aggregate
+-- function.
+SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY aggregate DESC LIMIT 10;
+ l_partkey | aggregate  
+-----------+------------
+    194541 | 3727794642
+    160895 | 3671463005
+    183486 | 3128069328
+    179825 | 3093889125
+    162432 | 2834113536
+    153937 | 2761321906
+    199283 | 2726988572
+    185925 | 2672114100
+    196629 | 2622637602
+    157064 | 2614644408
+(10 rows)
+
+-- Enable limit optimization to fetch one third of each shard's data
+SET citusdb.limit_clause_row_fetch_count TO 600;
+SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY aggregate DESC LIMIT 10;
+DEBUG:  push down of limit count: 600
+ l_partkey | aggregate  
+-----------+------------
+    194541 | 3727794642
+    160895 | 3671463005
+    183486 | 3128069328
+    179825 | 3093889125
+    162432 | 2834113536
+    153937 | 2761321906
+    199283 | 2726988572
+    185925 | 2672114100
+    157064 | 2614644408
+    189336 | 2596175232
+(10 rows)
+
+-- Disable limit optimization for our second test. This time, we have a query
+-- that joins several tables, and that groups and orders the results.
+RESET citusdb.limit_clause_row_fetch_count;
+SELECT c_custkey, c_name, count(*) as lineitem_count
+	FROM customer, orders, lineitem
+	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
+	GROUP BY c_custkey, c_name
+	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
+ c_custkey |       c_name       | lineitem_count 
+-----------+--------------------+----------------
+        43 | Customer#000000043 |             42
+       370 | Customer#000000370 |             40
+        79 | Customer#000000079 |             38
+       689 | Customer#000000689 |             38
+       685 | Customer#000000685 |             37
+       472 | Customer#000000472 |             36
+       643 | Customer#000000643 |             34
+       226 | Customer#000000226 |             33
+       496 | Customer#000000496 |             32
+       304 | Customer#000000304 |             31
+(10 rows)
+
+-- Now, enable limit optimization to fetch half of each task's results. For this
+-- test, we also change a config setting to ensure that we don't repartition any
+-- of the tables during the query.
+SET citusdb.limit_clause_row_fetch_count TO 150;
+SET citusdb.large_table_shard_count TO 2;
+SELECT c_custkey, c_name, count(*) as lineitem_count
+	FROM customer, orders, lineitem
+	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
+	GROUP BY c_custkey, c_name
+	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
+DEBUG:  push down of limit count: 150
+ c_custkey |       c_name       | lineitem_count 
+-----------+--------------------+----------------
+        43 | Customer#000000043 |             42
+       370 | Customer#000000370 |             36
+       689 | Customer#000000689 |             36
+       226 | Customer#000000226 |             33
+       496 | Customer#000000496 |             32
+       685 | Customer#000000685 |             32
+       304 | Customer#000000304 |             31
+       472 | Customer#000000472 |             31
+        79 | Customer#000000079 |             30
+       145 | Customer#000000145 |             30
+(10 rows)
+
+RESET citusdb.large_table_shard_count;
+-- We now test scenarios where applying the limit optimization wouldn't produce
+-- meaningful results. First, we check that we don't push down the limit clause
+-- for non-commutative aggregates.
+SELECT l_partkey, avg(l_suppkey) AS average FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY average DESC, l_partkey LIMIT 10;
+ l_partkey |        average        
+-----------+-----------------------
+      9998 | 9999.0000000000000000
+    102466 | 9997.0000000000000000
+    184959 | 9996.0000000000000000
+     17492 | 9994.0000000000000000
+    124966 | 9991.0000000000000000
+     89989 | 9990.0000000000000000
+     32479 | 9989.0000000000000000
+    144960 | 9989.0000000000000000
+    147473 | 9988.0000000000000000
+     37481 | 9985.0000000000000000
+(10 rows)
+
+-- Next, check that we don't apply the limit optimization for expressions that
+-- have aggregates within them
+SELECT l_partkey, round(sum(l_suppkey)) AS complex_expression FROM lineitem
+	GROUP BY l_partkey
+	ORDER BY complex_expression DESC LIMIT 10;
+ l_partkey | complex_expression 
+-----------+--------------------
+    160895 |              22816
+    194541 |              19160
+     37018 |              19044
+     64284 |              18594
+     15283 |              18357
+      1927 |              18284
+    136884 |              18194
+    114073 |              18192
+      1051 |              18156
+     41555 |              18136
+(10 rows)
+
+-- Check that query execution works as expected for other queries without limits
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 10.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity ASC, l_quantity ASC;
+ count_quantity | l_quantity 
+----------------+------------
+            227 |       3.00
+            232 |       7.00
+            237 |       2.00
+            242 |       6.00
+            243 |       1.00
+            244 |       4.00
+            250 |       8.00
+            254 |       5.00
+            258 |       9.00
+(9 rows)
+
+RESET citusdb.limit_clause_row_fetch_count;
+RESET client_min_messages;

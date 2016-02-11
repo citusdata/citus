@@ -1,0 +1,142 @@
+--
+-- MULTI_NULL_MINMAX_VALUE_PRUNING
+--
+-- This test checks that we can handle null min/max values in shard statistics
+-- and that we don't partition or join prune shards that have null values.
+SET client_min_messages TO DEBUG2;
+-- Change configuration to treat lineitem and orders tables as large
+SET citusdb.large_table_shard_count TO 2;
+SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102009;
+ shardminvalue | shardmaxvalue 
+---------------+---------------
+ 1             | 2496
+(1 row)
+
+SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102010;
+ shardminvalue | shardmaxvalue 
+---------------+---------------
+ 2497          | 4964
+(1 row)
+
+-- Check that partition and join pruning works when min/max values exist
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102009
+ l_orderkey | l_linenumber | l_shipdate 
+------------+--------------+------------
+       9030 |            1 | 09-02-1998
+       9030 |            2 | 08-19-1998
+       9030 |            3 | 08-27-1998
+       9030 |            4 | 07-20-1998
+       9030 |            5 | 09-29-1998
+       9030 |            6 | 09-03-1998
+(6 rows)
+
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey;
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
+  sum  |        avg         
+-------+--------------------
+ 36086 | 3.0076679446574429
+(1 row)
+
+-- Now set the minimum value for a shard to null. Then check that we don't apply
+-- partition or join pruning for the shard with null min value.
+UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 102009;
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102010
+ l_orderkey | l_linenumber | l_shipdate 
+------------+--------------+------------
+       9030 |            1 | 09-02-1998
+       9030 |            2 | 08-19-1998
+       9030 |            3 | 08-27-1998
+       9030 |            4 | 07-20-1998
+       9030 |            5 | 09-29-1998
+       9030 |            6 | 09-03-1998
+(6 rows)
+
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey;
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+  sum  |        avg         
+-------+--------------------
+ 36086 | 3.0076679446574429
+(1 row)
+
+-- Next, set the maximum value for another shard to null. Then check that we
+-- don't apply partition or join pruning for this other shard either.
+UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 102010;
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102011
+ l_orderkey | l_linenumber | l_shipdate 
+------------+--------------+------------
+       9030 |            1 | 09-02-1998
+       9030 |            2 | 08-19-1998
+       9030 |            3 | 08-27-1998
+       9030 |            4 | 07-20-1998
+       9030 |            5 | 09-29-1998
+       9030 |            6 | 09-03-1998
+(6 rows)
+
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey;
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+  sum  |        avg         
+-------+--------------------
+ 36086 | 3.0076679446574429
+(1 row)
+
+-- Last, set the minimum value to 0 and check that we don't treat it as null. We
+-- should apply partition and join pruning for this shard now.
+UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 102009;
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102009
+ l_orderkey | l_linenumber | l_shipdate 
+------------+--------------+------------
+       9030 |            1 | 09-02-1998
+       9030 |            2 | 08-19-1998
+       9030 |            3 | 08-27-1998
+       9030 |            4 | 07-20-1998
+       9030 |            5 | 09-29-1998
+       9030 |            6 | 09-03-1998
+(6 rows)
+
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey;
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [0,2496] and [8997,14946]
+  sum  |        avg         
+-------+--------------------
+ 36086 | 3.0076679446574429
+(1 row)
+
+-- Set minimum and maximum values for two shards back to their original values
+UPDATE pg_dist_shard SET shardminvalue = '1' WHERE shardid = 102009;
+UPDATE pg_dist_shard SET shardmaxvalue = '4964' WHERE shardid = 102010;
+SET client_min_messages TO NOTICE;

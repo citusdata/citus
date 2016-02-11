@@ -1,0 +1,160 @@
+--
+-- MULTI_COMPLEX_EXPRESSIONS
+--
+-- Check that we can correctly handle complex expressions and aggregates.
+SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
+        ?column?        
+------------------------
+ 12000.0000000000000000
+(1 row)
+
+SELECT sum(l_quantity) / (10 * avg(l_quantity)) FROM lineitem;
+       ?column?        
+-----------------------
+ 1200.0000000000000000
+(1 row)
+
+SELECT (sum(l_quantity) / (10 * avg(l_quantity))) + 11 FROM lineitem;
+       ?column?        
+-----------------------
+ 1211.0000000000000000
+(1 row)
+
+SELECT avg(l_quantity) as average FROM lineitem;
+       average       
+---------------------
+ 25.4462500000000000
+(1 row)
+
+SELECT 100 * avg(l_quantity) as average_times_hundred FROM lineitem;
+ average_times_hundred 
+-----------------------
+ 2544.6250000000000000
+(1 row)
+
+SELECT 100 * avg(l_quantity) / 10 as average_times_ten FROM lineitem;
+  average_times_ten   
+----------------------
+ 254.4625000000000000
+(1 row)
+
+SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem 
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+ l_quantity | count_quantity 
+------------+----------------
+      44.00 |           2150
+      38.00 |           2160
+      45.00 |           2180
+      13.00 |           2190
+      47.00 |           2200
+      29.00 |           2220
+      36.00 |           2230
+      49.00 |           2230
+       3.00 |           2270
+      35.00 |           2280
+      18.00 |           2290
+      31.00 |           2290
+      43.00 |           2290
+      14.00 |           2300
+      16.00 |           2300
+      17.00 |           2300
+      26.00 |           2300
+       7.00 |           2320
+      10.00 |           2340
+      34.00 |           2340
+      15.00 |           2350
+      25.00 |           2360
+      33.00 |           2360
+      42.00 |           2360
+       2.00 |           2370
+      12.00 |           2410
+      37.00 |           2410
+       6.00 |           2420
+      22.00 |           2420
+       1.00 |           2430
+      19.00 |           2430
+       4.00 |           2440
+      20.00 |           2460
+      48.00 |           2460
+      41.00 |           2470
+      24.00 |           2490
+      27.00 |           2490
+       8.00 |           2500
+      11.00 |           2500
+       5.00 |           2540
+      21.00 |           2550
+      32.00 |           2550
+       9.00 |           2580
+      39.00 |           2600
+      46.00 |           2600
+      50.00 |           2600
+      23.00 |           2610
+      30.00 |           2640
+      40.00 |           2690
+      28.00 |           2730
+(50 rows)
+
+-- Check that we can handle complex select clause expressions.
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment || l_comment) > 40;
+ count 
+-------
+  8148
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(concat(l_comment, l_comment)) > 40;
+ count 
+-------
+  8148
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment) + octet_length('randomtext'::text) > 40;
+ count 
+-------
+  4611
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment) + 10 > 40;
+ count 
+-------
+  4611
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE (l_receiptdate::timestamp - l_shipdate::timestamp) > interval '5 days';
+ count 
+-------
+ 10008
+(1 row)
+
+SELECT count(*) FROM lineitem WHERE random() = 0.1;
+ERROR:  unsupported clause type
+-- Check that we can handle implicit and explicit join clause definitions.
+SELECT count(*) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+SELECT count(*) FROM lineitem
+	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+SELECT count(*) FROM lineitem JOIN orders ON l_orderkey = o_orderkey
+	WHERE l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+-- Check that we make sure local joins are between columns only.
+SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
+ERROR:  cannot perform local joins that involve expressions
+DETAIL:  local joins can be performed between columns only

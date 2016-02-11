@@ -1,0 +1,153 @@
+--
+-- MULTI_ALTER_TABLE_STATEMENTS
+--
+
+-- Check that we can run ALTER TABLE statements on distributed tables. We
+-- increase the logging verbosity to verify that commands are propagated to
+-- all worker shards. We also set the shardid sequence here so that the shardids
+-- in this test aren't affected by changes to the previous tests.
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
+CREATE TABLE lineitem_alter (
+	l_orderkey bigint not null,
+	l_partkey integer not null,
+	l_suppkey integer not null,
+	l_linenumber integer not null,
+	l_quantity decimal(15, 2) not null,
+	l_extendedprice decimal(15, 2) not null,
+	l_discount decimal(15, 2) not null,
+	l_tax decimal(15, 2) not null,
+	l_returnflag char(1) not null,
+	l_linestatus char(1) not null,
+	l_shipdate date not null,
+	l_commitdate date not null,
+	l_receiptdate date not null,
+	l_shipinstruct char(25) not null,
+	l_shipmode char(10) not null,
+	l_comment varchar(44) not null
+	);
+SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
+\STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+
+SET client_min_messages TO DEBUG2;
+
+-- Verify that we can add columns
+
+ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
+ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
+ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER DEFAULT 1;
+ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
+ALTER TABLE lineitem_alter ADD COLUMN null_column INTEGER;
+
+\d lineitem_alter
+SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
+SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
+
+-- Verify that SET|DROP DEFAULT works
+
+ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
+ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
+
+-- \stage to verify that default values take effect
+\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+
+SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
+SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
+
+-- Verify that SET NOT NULL works
+
+ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
+\d lineitem_alter
+
+-- Drop default so that NULLs will be inserted for this column
+ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
+
+-- \stage should fail because it will try to insert NULLs for a NOT NULL column
+\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+
+-- Verify that DROP NOT NULL works
+
+ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
+\d lineitem_alter
+
+-- \stage should succeed now 
+\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT count(*) from lineitem_alter;
+
+-- Verify that SET DATA TYPE works
+
+SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
+
+ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE FLOAT;
+\d lineitem_alter
+
+SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
+
+-- Verify that DROP COLUMN works
+
+ALTER TABLE lineitem_alter DROP COLUMN int_column1;
+ALTER TABLE lineitem_alter DROP COLUMN float_column;
+ALTER TABLE lineitem_alter DROP COLUMN date_column;
+
+-- Verify that IF EXISTS works as expected
+
+ALTER TABLE non_existent_table ADD COLUMN new_column INTEGER;
+ALTER TABLE IF EXISTS non_existent_table ADD COLUMN new_column INTEGER;
+ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
+
+ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
+ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
+ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
+\d lineitem_alter
+
+-- Verify that we can execute commands with multiple subcommands
+
+ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
+	ADD COLUMN int_column2 INTEGER;
+\d lineitem_alter
+
+ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
+	ALTER COLUMN int_column1 SET STATISTICS 10;
+
+ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
+\d lineitem_alter
+
+-- Verify that we cannot execute alter commands on the distribution column
+
+ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey DROP NOT NULL;
+ALTER TABLE lineitem_alter DROP COLUMN l_orderkey;
+
+-- Verify that we error out on unsupported statement types
+
+ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
+ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
+ALTER TABLE lineitem_alter SET WITHOUT OIDS;
+
+-- Verify that we error out in case of postgres errors on supported statement
+-- types
+
+ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
+ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
+ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
+
+-- Verify that we error out on statements involving RENAME
+
+ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
+ALTER TABLE lineitem_alter RENAME COLUMN l_orderkey TO l_orderkey_renamed;
+ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
+
+-- Verify that IF EXISTS works as expected with RENAME statements
+
+ALTER TABLE non_existent_table RENAME TO non_existent_table_renamed;
+ALTER TABLE IF EXISTS non_existent_table RENAME TO non_existent_table_renamed;
+ALTER TABLE IF EXISTS non_existent_table RENAME COLUMN column1 TO column2;
+ALTER TABLE IF EXISTS lineitem_alter RENAME l_orderkey TO l_orderkey_renamed;
+
+-- Verify that none of the failed alter table commands took effect on the master
+-- node
+\d lineitem_alter
+
+-- Cleanup the table and its shards
+RESET client_min_messages;
+SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
+DROP TABLE lineitem_alter;

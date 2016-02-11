@@ -1,0 +1,152 @@
+--
+-- MULTI_QUERY_DIRECTORY_CLEANUP
+--
+-- We execute sub-queries on worker nodes, and copy query results to a directory
+-- on the master node for final processing. When the query completes or fails,
+-- the resource owner should automatically clean up these intermediate query
+-- result files.
+BEGIN;
+-- pg_ls_dir() displays jobids. We explicitly set the jobId sequence
+-- here so that the regression output becomes independent of the
+-- number of jobs executed prior to running this test.
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250;
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+COMMIT;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+BEGIN;
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+    revenue    
+---------------
+ 22770844.7654
+(1 row)
+
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+ROLLBACK;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+
+-- Test that multiple job directories are all cleaned up correctly,
+-- both individually (by closing a cursor) and in bulk when ending a
+-- transaction.
+BEGIN;
+DECLARE c_00 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_01 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_02 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_03 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_04 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_05 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_06 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_07 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_08 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_09 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_10 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_11 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_12 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_13 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_14 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_15 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_16 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_17 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_18 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+DECLARE c_19 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
+SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
+    f     
+----------
+ job_1256
+ job_1257
+ job_1258
+ job_1259
+ job_1260
+ job_1261
+ job_1262
+ job_1263
+ job_1264
+ job_1265
+ job_1266
+ job_1267
+ job_1268
+ job_1269
+ job_1270
+ job_1271
+ job_1272
+ job_1273
+ job_1274
+ job_1275
+(20 rows)
+
+-- close first, 17th (first after re-alloc) and last cursor.
+CLOSE c_00;
+CLOSE c_16;
+CLOSE c_19;
+SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
+    f     
+----------
+ job_1257
+ job_1258
+ job_1259
+ job_1260
+ job_1261
+ job_1262
+ job_1263
+ job_1264
+ job_1265
+ job_1266
+ job_1267
+ job_1268
+ job_1269
+ job_1270
+ job_1271
+ job_1273
+ job_1274
+(17 rows)
+
+ROLLBACK;
+SELECT pg_ls_dir('base/pgsql_job_cache');
+ pg_ls_dir 
+-----------
+(0 rows)
+

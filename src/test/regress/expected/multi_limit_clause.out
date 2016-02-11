@@ -1,0 +1,206 @@
+--
+-- MULTI_LIMIT_CLAUSE
+--
+-- Display debug messages on limit clause push down.
+SET client_min_messages TO DEBUG1;
+-- Check that we can correctly handle the Limit clause in distributed queries.
+-- Note that we don't have the limit optimization enabled for these queries, and
+-- will end up fetching all rows to the master database.
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity ASC, l_quantity ASC;
+ count_quantity | l_quantity 
+----------------+------------
+            219 |      13.00
+            222 |      29.00
+            227 |       3.00
+            229 |      18.00
+            229 |      31.00
+            230 |      14.00
+            230 |      16.00
+            230 |      17.00
+            230 |      26.00
+            232 |       7.00
+            234 |      10.00
+            235 |      15.00
+            236 |      25.00
+            237 |       2.00
+            241 |      12.00
+            242 |       6.00
+            242 |      22.00
+            243 |       1.00
+            243 |      19.00
+            244 |       4.00
+            246 |      20.00
+            249 |      24.00
+            249 |      27.00
+            250 |       8.00
+            250 |      11.00
+            254 |       5.00
+            255 |      21.00
+            258 |       9.00
+            261 |      23.00
+            264 |      30.00
+            273 |      28.00
+(31 rows)
+
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity DESC, l_quantity DESC;
+ count_quantity | l_quantity 
+----------------+------------
+            273 |      28.00
+            264 |      30.00
+            261 |      23.00
+            258 |       9.00
+            255 |      21.00
+            254 |       5.00
+            250 |      11.00
+            250 |       8.00
+            249 |      27.00
+            249 |      24.00
+            246 |      20.00
+            244 |       4.00
+            243 |      19.00
+            243 |       1.00
+            242 |      22.00
+            242 |       6.00
+            241 |      12.00
+            237 |       2.00
+            236 |      25.00
+            235 |      15.00
+            234 |      10.00
+            232 |       7.00
+            230 |      26.00
+            230 |      17.00
+            230 |      16.00
+            230 |      14.00
+            229 |      31.00
+            229 |      18.00
+            227 |       3.00
+            222 |      29.00
+            219 |      13.00
+(31 rows)
+
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 5;
+ count_quantity | l_quantity 
+----------------+------------
+            219 |      13.00
+            222 |      29.00
+            227 |       3.00
+            229 |      18.00
+            229 |      31.00
+(5 rows)
+
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity ASC, l_quantity ASC LIMIT 10;
+ count_quantity | l_quantity 
+----------------+------------
+            219 |      13.00
+            222 |      29.00
+            227 |       3.00
+            229 |      18.00
+            229 |      31.00
+            230 |      14.00
+            230 |      16.00
+            230 |      17.00
+            230 |      26.00
+            232 |       7.00
+(10 rows)
+
+SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 32.0
+	GROUP BY l_quantity
+	ORDER BY count_quantity DESC, l_quantity DESC LIMIT 10;
+ count_quantity | l_quantity 
+----------------+------------
+            273 |      28.00
+            264 |      30.00
+            261 |      23.00
+            258 |       9.00
+            255 |      21.00
+            254 |       5.00
+            250 |      11.00
+            250 |       8.00
+            249 |      27.00
+            249 |      24.00
+(10 rows)
+
+-- Check that we can handle limits for simple sort clauses. We order by columns
+-- in the first two tests, and then by a simple expression in the last test.
+SELECT min(l_orderkey) FROM  lineitem;
+ min 
+-----
+   1
+(1 row)
+
+SELECT l_orderkey FROM lineitem ORDER BY l_orderkey ASC LIMIT 1;
+DEBUG:  push down of limit count: 1
+ l_orderkey 
+------------
+          1
+(1 row)
+
+SELECT max(l_orderkey) FROM lineitem;
+  max  
+-------
+ 14947
+(1 row)
+
+SELECT l_orderkey FROM lineitem ORDER BY l_orderkey DESC LIMIT 1;
+DEBUG:  push down of limit count: 1
+ l_orderkey 
+------------
+      14947
+(1 row)
+
+SELECT * FROM lineitem ORDER BY l_orderkey DESC, l_linenumber DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |            l_comment            
+------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+---------------------------------
+      14947 |    107098 |      7099 |            2 |      29.00 |        32047.61 |       0.04 |  0.06 | N            | O            | 11-08-1995 | 08-30-1995   | 12-03-1995    | TAKE BACK RETURN          | FOB        | inal sentiments t
+      14947 |     31184 |      3688 |            1 |      14.00 |        15612.52 |       0.09 |  0.02 | N            | O            | 11-05-1995 | 09-25-1995   | 11-27-1995    | TAKE BACK RETURN          | RAIL       | bout the even, iro
+      14946 |     79479 |      4494 |            2 |      37.00 |        53963.39 |       0.01 |  0.01 | N            | O            | 11-27-1996 | 02-01-1997   | 11-29-1996    | COLLECT COD               | AIR        | sleep furiously after the furio
+(3 rows)
+
+SELECT max(extract(epoch from l_shipdate)) FROM lineitem;
+    max    
+-----------
+ 912124800
+(1 row)
+
+SELECT * FROM lineitem
+	ORDER BY extract(epoch from l_shipdate) DESC, l_orderkey DESC LIMIT 3;
+DEBUG:  push down of limit count: 3
+ l_orderkey | l_partkey | l_suppkey | l_linenumber | l_quantity | l_extendedprice | l_discount | l_tax | l_returnflag | l_linestatus | l_shipdate | l_commitdate | l_receiptdate |      l_shipinstruct       | l_shipmode |              l_comment               
+------------+-----------+-----------+--------------+------------+-----------------+------------+-------+--------------+--------------+------------+--------------+---------------+---------------------------+------------+--------------------------------------
+       4678 |     57388 |      9894 |            1 |      35.00 |        47088.30 |       0.04 |  0.08 | N            | O            | 11-27-1998 | 10-02-1998   | 12-17-1998    | TAKE BACK RETURN          | AIR        | he accounts. fluffily bold sheaves b
+      12384 |     84161 |      1686 |            5 |       6.00 |         6870.96 |       0.04 |  0.00 | N            | O            | 11-26-1998 | 10-04-1998   | 12-08-1998    | COLLECT COD               | RAIL       | ep blithely. blithely ironic r
+       1124 |     92298 |      4808 |            3 |      35.00 |        45160.15 |       0.10 |  0.05 | N            | O            | 11-25-1998 | 10-08-1998   | 12-25-1998    | TAKE BACK RETURN          | AIR        | ut the slyly bold pinto beans; fi
+(3 rows)
+
+-- Exercise the scenario where order by clauses don't have any aggregates, and
+-- that we can push down the limit as a result. Check that when this happens, we
+-- also sort on all group by clauses behind the covers.
+SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
+	GROUP BY l_quantity, l_discount
+	ORDER BY l_quantity LIMIT 1;
+DEBUG:  push down of limit count: 1
+ l_quantity | l_discount |        avg         
+------------+------------+--------------------
+       1.00 |       0.00 | 99167.304347826087
+(1 row)
+
+-- Results from the previous query should match this query's results.
+SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
+	GROUP BY l_quantity, l_discount
+	ORDER BY l_quantity, l_discount LIMIT 1;
+DEBUG:  push down of limit count: 1
+ l_quantity | l_discount |        avg         
+------------+------------+--------------------
+       1.00 |       0.00 | 99167.304347826087
+(1 row)
+
+SET client_min_messages TO NOTICE;

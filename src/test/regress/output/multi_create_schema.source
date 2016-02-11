@@ -1,0 +1,25 @@
+CREATE SCHEMA tpch
+CREATE TABLE nation (
+	n_nationkey integer not null,
+	n_name char(25) not null,
+	n_regionkey integer not null,
+	n_comment varchar(152));
+NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+\STAGE tpch.nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+SELECT count(*) from tpch.nation;
+ count 
+-------
+    25
+(1 row)
+

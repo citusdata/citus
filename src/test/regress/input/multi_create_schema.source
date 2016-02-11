@@ -1,0 +1,11 @@
+CREATE SCHEMA tpch
+CREATE TABLE nation (
+	n_nationkey integer not null,
+	n_name char(25) not null,
+	n_regionkey integer not null,
+	n_comment varchar(152));
+SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
+
+\STAGE tpch.nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+
+SELECT count(*) from tpch.nation;

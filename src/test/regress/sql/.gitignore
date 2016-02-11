@@ -1,0 +1,15 @@
+/multi_agg_distinct.sql
+/multi_agg_type_conversion.sql
+/multi_alter_table_statements.sql
+/multi_append_table_to_shard.sql
+/multi_create_schema.sql
+/multi_fdw_large_shardid.sql
+/multi_fdw_stage_data.sql
+/multi_large_shardid.sql
+/multi_master_delete_protocol.sql
+/multi_outer_join.sql
+/multi_stage_data.sql
+/multi_stage_large_records.sql
+/multi_stage_more_data.sql
+/multi_subquery.sql
+/worker_copy.sql

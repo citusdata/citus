@@ -1,0 +1,17 @@
+/multi_agg_distinct.out
+/multi_agg_type_conversion.out
+/multi_alter_table_statements.out
+/multi_alter_table_statements_0.out
+/multi_append_table_to_shard.out
+/multi_create_schema.out
+/multi_fdw_large_shardid.out
+/multi_fdw_stage_data.out
+/multi_large_shardid.out
+/multi_master_delete_protocol.out
+/multi_outer_join.out
+/multi_stage_data.out
+/multi_stage_large_records.out
+/multi_stage_more_data.out
+/multi_subquery.out
+/multi_subquery_0.out
+/worker_copy.out

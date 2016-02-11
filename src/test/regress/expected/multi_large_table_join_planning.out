@@ -1,0 +1,237 @@
+--
+-- MULTI_LARGE_TABLE_PLANNING
+--
+-- Tests that cover large table join planning. Note that we explicitly start a
+-- transaction block here so that we don't emit debug messages with changing
+-- transaction ids in them. Also, we set the executor type to task tracker
+-- executor here, as we cannot run repartition jobs with real time executor.
+BEGIN;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+SET citusdb.large_table_shard_count TO 2;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+SET citusdb.task_executor_type TO 'task-tracker';
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+-- Debug4 log messages display jobIds within them. We explicitly set the jobId
+-- sequence here so that the regression output becomes independent of the number
+-- of jobs executed prior to running this test.
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+-- Multi-level repartition join to verify our projection columns are correctly
+-- referenced and propagated across multiple repartition jobs. The test also
+-- validates that only the minimal necessary projection columns are transferred
+-- between jobs.
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, part, orders, customer
+WHERE
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
+        (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
+        p_size > 8 AND o_totalprice > 10 AND
+        c_acctbal < 5000.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey
+LIMIT 30;
+DEBUG:  StartTransactionCommand
+DEBUG:  push down of limit count: 30
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
+DEBUG:  generated sql query for job 1250 and task 3
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102014 lineitem JOIN orders_102016 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  generated sql query for job 1250 and task 6
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102013 lineitem JOIN orders_102016 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  generated sql query for job 1250 and task 9
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102012 lineitem JOIN orders_102016 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  generated sql query for job 1250 and task 12
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102011 lineitem JOIN orders_102015 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  generated sql query for job 1250 and task 15
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102010 lineitem JOIN orders_102015 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  generated sql query for job 1250 and task 18
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102009 lineitem JOIN orders_102015 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DEBUG:  assigned task 18 to node localhost:57637
+DEBUG:  assigned task 15 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
+DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
+DEBUG:  generated sql query for job 1251 and task 3
+DETAIL:  query string: "SELECT "pg_merge_job_1250.task_000019".intermediate_column_1250_0, "pg_merge_job_1250.task_000019".intermediate_column_1250_1, "pg_merge_job_1250.task_000019".intermediate_column_1250_2, "pg_merge_job_1250.task_000019".intermediate_column_1250_3, "pg_merge_job_1250.task_000019".intermediate_column_1250_4 FROM (pg_merge_job_1250.task_000019 "pg_merge_job_1250.task_000019" JOIN part_102019 part ON (("pg_merge_job_1250.task_000019".intermediate_column_1250_0 = part.p_partkey))) WHERE (part.p_size > 8)"
+DEBUG:  generated sql query for job 1251 and task 6
+DETAIL:  query string: "SELECT "pg_merge_job_1250.task_000026".intermediate_column_1250_0, "pg_merge_job_1250.task_000026".intermediate_column_1250_1, "pg_merge_job_1250.task_000026".intermediate_column_1250_2, "pg_merge_job_1250.task_000026".intermediate_column_1250_3, "pg_merge_job_1250.task_000026".intermediate_column_1250_4 FROM (pg_merge_job_1250.task_000026 "pg_merge_job_1250.task_000026" JOIN part_102035 part ON (("pg_merge_job_1250.task_000026".intermediate_column_1250_0 = part.p_partkey))) WHERE (part.p_size > 8)"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 26
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
+DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
+DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
+DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
+DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
+DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
+DEBUG:  generated sql query for job 1252 and task 3
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000007".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000007 "pg_merge_job_1251.task_000007" JOIN customer_102017 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000007".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000007".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000007".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1, "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 LIMIT '30'::bigint"
+DEBUG:  generated sql query for job 1252 and task 6
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000010".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000010 "pg_merge_job_1251.task_000010" JOIN customer_102034 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000010".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000010".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000010".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1, "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 LIMIT '30'::bigint"
+DEBUG:  generated sql query for job 1252 and task 9
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000013".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000013 "pg_merge_job_1251.task_000013" JOIN customer_102033 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000013".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000013".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000013".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1, "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 LIMIT '30'::bigint"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 10
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 13
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  completed cleanup query for job 1252 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1252 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1251 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1251 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1250 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1250 on node "localhost:57637"
+DEBUG:  CommitTransactionCommand
+ l_partkey | o_orderkey | count 
+-----------+------------+-------
+        18 |      12005 |     1
+        79 |       5121 |     1
+        91 |       2883 |     1
+       222 |       9413 |     1
+       278 |       1287 |     1
+       309 |       2374 |     1
+       318 |        321 |     1
+       321 |       5984 |     1
+       337 |      10403 |     1
+       350 |      13698 |     1
+       358 |       4323 |     1
+       364 |       9347 |     1
+       416 |        640 |     1
+       426 |      10855 |     1
+       450 |         35 |     1
+       484 |       3843 |     1
+       504 |      14566 |     1
+       510 |      13569 |     1
+       532 |       3175 |     1
+       641 |        134 |     1
+       669 |      10944 |     1
+       716 |       2885 |     1
+       738 |       4355 |     1
+       802 |       2534 |     1
+       824 |       9287 |     1
+       864 |       3175 |     1
+       957 |       4293 |     1
+       960 |      10980 |     1
+       963 |       4580 |     1
+      6014 |       4614 |     1
+(30 rows)
+
+SELECT
+	l_partkey, o_orderkey, count(*)
+FROM
+	lineitem, orders
+WHERE
+	l_suppkey = o_shippriority AND
+        l_quantity < 5.0 AND o_totalprice <> 4.0
+GROUP BY
+	l_partkey, o_orderkey
+ORDER BY
+	l_partkey, o_orderkey;
+DEBUG:  StartTransactionCommand
+DEBUG:  generated sql query for job 1253 and task 2
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102014 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  generated sql query for job 1253 and task 4
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102013 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  generated sql query for job 1253 and task 6
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102012 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  generated sql query for job 1253 and task 8
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102011 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  generated sql query for job 1253 and task 10
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102010 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  generated sql query for job 1253 and task 12
+DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102009 lineitem WHERE (l_quantity < 5.0)"
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  assigned task 10 to node localhost:57638
+DEBUG:  assigned task 8 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  generated sql query for job 1254 and task 2
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_102016 orders WHERE (o_totalprice <> 4.0)"
+DEBUG:  generated sql query for job 1254 and task 4
+DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_102015 orders WHERE (o_totalprice <> 4.0)"
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  generated sql query for job 1255 and task 3
+DETAIL:  query string: "SELECT "pg_merge_job_1253.task_000013".intermediate_column_1253_0 AS l_partkey, "pg_merge_job_1254.task_000005".intermediate_column_1254_0 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1253.task_000013 "pg_merge_job_1253.task_000013" JOIN pg_merge_job_1254.task_000005 "pg_merge_job_1254.task_000005" ON (("pg_merge_job_1253.task_000013".intermediate_column_1253_1 = "pg_merge_job_1254.task_000005".intermediate_column_1254_1))) WHERE true GROUP BY "pg_merge_job_1253.task_000013".intermediate_column_1253_0, "pg_merge_job_1254.task_000005".intermediate_column_1254_0"
+DEBUG:  generated sql query for job 1255 and task 6
+DETAIL:  query string: "SELECT "pg_merge_job_1253.task_000020".intermediate_column_1253_0 AS l_partkey, "pg_merge_job_1254.task_000008".intermediate_column_1254_0 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1253.task_000020 "pg_merge_job_1253.task_000020" JOIN pg_merge_job_1254.task_000008 "pg_merge_job_1254.task_000008" ON (("pg_merge_job_1253.task_000020".intermediate_column_1253_1 = "pg_merge_job_1254.task_000008".intermediate_column_1254_1))) WHERE true GROUP BY "pg_merge_job_1253.task_000020".intermediate_column_1253_0, "pg_merge_job_1254.task_000008".intermediate_column_1254_0"
+DEBUG:  generated sql query for job 1255 and task 9
+DETAIL:  query string: "SELECT "pg_merge_job_1253.task_000027".intermediate_column_1253_0 AS l_partkey, "pg_merge_job_1254.task_000011".intermediate_column_1254_0 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1253.task_000027 "pg_merge_job_1253.task_000027" JOIN pg_merge_job_1254.task_000011 "pg_merge_job_1254.task_000011" ON (("pg_merge_job_1253.task_000027".intermediate_column_1253_1 = "pg_merge_job_1254.task_000011".intermediate_column_1254_1))) WHERE true GROUP BY "pg_merge_job_1253.task_000027".intermediate_column_1253_0, "pg_merge_job_1254.task_000011".intermediate_column_1254_0"
+DEBUG:  generated sql query for job 1255 and task 12
+DETAIL:  query string: "SELECT "pg_merge_job_1253.task_000034".intermediate_column_1253_0 AS l_partkey, "pg_merge_job_1254.task_000014".intermediate_column_1254_0 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1253.task_000034 "pg_merge_job_1253.task_000034" JOIN pg_merge_job_1254.task_000014 "pg_merge_job_1254.task_000014" ON (("pg_merge_job_1253.task_000034".intermediate_column_1253_1 = "pg_merge_job_1254.task_000014".intermediate_column_1254_1))) WHERE true GROUP BY "pg_merge_job_1253.task_000034".intermediate_column_1253_0, "pg_merge_job_1254.task_000014".intermediate_column_1254_0"
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 13
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 20
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 27
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 11
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 34
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  completed cleanup query for job 1255 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1255 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1253 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1253 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1254 on node "localhost:57638"
+DEBUG:  completed cleanup query for job 1254 on node "localhost:57637"
+DEBUG:  CommitTransactionCommand
+ l_partkey | o_orderkey | count 
+-----------+------------+-------
+(0 rows)
+
+-- Reset client logging level to its previous value
+SET client_min_messages TO NOTICE;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+COMMIT;

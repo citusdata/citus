@@ -1,0 +1,101 @@
+--
+-- MULTI_JOIN_PRUNING
+--
+-- Check that join-pruning works for joins between two large relations. For now
+-- we only check for join-pruning between locally partitioned relations. In the
+-- future we want to check for pruning between re-partitioned relations as well.
+SET client_min_messages TO DEBUG2;
+-- Change configuration to treat all tables as large
+SET citusdb.large_table_shard_count TO 2;
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey;
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
+  sum  |        avg         
+-------+--------------------
+ 36086 | 3.0076679446574429
+(1 row)
+
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102009
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+  sum  |        avg         
+-------+--------------------
+ 17996 | 3.0194630872483221
+(1 row)
+
+-- Shards for the lineitem table have been pruned away. Check that join pruning
+-- works as expected in this case.
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
+DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102012
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102009
+ sum | avg 
+-----+-----
+     |    
+(1 row)
+
+-- Partition pruning left three shards for the lineitem and one shard for the
+-- orders table. These shard sets don't overlap, so join pruning should prune
+-- out all the shards, and leave us with an empty task list.
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102016
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+ sum | avg 
+-----+-----
+     |    
+(1 row)
+
+-- These tests check that we can do join pruning for tables partitioned over
+-- different type of columns including varchar, array types, composite types
+-- etc. This is in response to a bug we had where we were not able to resolve
+-- correct operator types for some kind of column types.
+EXPLAIN SELECT count(*)
+	FROM array_partitioned_table table1, array_partitioned_table table2
+	WHERE table1.array_column = table2.array_column;
+DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
+DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ explain statements for distributed queries are currently unsupported
+(1 row)
+
+EXPLAIN SELECT count(*)
+	FROM composite_partitioned_table table1, composite_partitioned_table table2
+	WHERE table1.composite_column = table2.composite_column;
+DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
+DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ explain statements for distributed queries are currently unsupported
+(1 row)
+
+-- Large table joins between varchar columns do not work because of a bug we
+-- have. Currently, we require joins to be only on columns. Postgres adds a
+-- relabel to typecast varchars to text due to which our check fails and we
+-- error out.
+EXPLAIN SELECT count(*)
+	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
+	WHERE table1.varchar_column = table2.varchar_column;
+ERROR:  cannot perform local joins that involve expressions
+DETAIL:  local joins can be performed between columns only
+SET client_min_messages TO NOTICE;

@@ -1,0 +1,15 @@
+sudo: required
+dist: trusty
+language: c
+cache: apt
+env:
+  matrix:
+    - PGVERSION=9.5
+    - PGVERSION=9.4
+before_install:
+  - git clone --depth 1 https://github.com/citusdata/tools.git
+  - tools/travis/setup_apt.sh
+  - tools/travis/nuke_pg.sh
+install:
+  - tools/travis/install_pg.sh
+script: tools/travis/pg_travis_multi_test.sh

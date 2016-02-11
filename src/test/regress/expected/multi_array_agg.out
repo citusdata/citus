@@ -1,0 +1,141 @@
+--
+-- MULTI_ARRAY_AGG
+--
+-- Check multi_cat_agg() aggregate which is used to implement array_agg()
+SELECT array_cat_agg(i) FROM (VALUES (ARRAY[1,2]), (NULL), (ARRAY[3,4])) AS t(i);
+ array_cat_agg 
+---------------
+ {1,2,3,4}
+(1 row)
+
+-- Check that we don't support distinct and order by with array_agg()
+SELECT array_agg(distinct l_orderkey) FROM lineitem;
+ERROR:  array_agg (distinct) is unsupported
+SELECT array_agg(l_orderkey ORDER BY l_partkey) FROM lineitem;
+ERROR:  array_agg with order by is unsupported
+SELECT array_agg(distinct l_orderkey ORDER BY l_orderkey) FROM lineitem;
+ERROR:  array_agg with order by is unsupported
+-- Check array_agg() for different data types and LIMIT clauses
+SELECT array_agg(l_partkey) FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                    array_agg                     
+--------------------------------------------------
+ {155190,67310,63700,2132,24027,15635}
+ {106170}
+ {4297,19036,128449,29380,183095,62143}
+ {88035}
+ {108570,123927,37531}
+ {139636}
+ {182052,145243,94780,163073,151894,79251,157238}
+ {82704,197921,44161,2743,85811,11615}
+ {61336,60519,137469,33918}
+ {88362,89414,169544}
+(10 rows)
+
+SELECT array_agg(l_extendedprice) FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                            array_agg                            
+-----------------------------------------------------------------
+ {21168.23,45983.16,13309.60,28955.64,22824.48,49620.16}
+ {44694.46}
+ {54058.05,46796.47,39890.88,2618.76,32986.52,28733.64}
+ {30690.90}
+ {23678.55,50723.92,73426.50}
+ {61998.31}
+ {13608.60,11594.16,81639.88,31809.96,73943.82,43058.75,6476.15}
+ {47227.60,64605.44,2210.32,6582.96,79059.64,9159.66}
+ {40217.23,47344.32,7532.30,75928.31}
+ {17554.68,30875.02,9681.24}
+(10 rows)
+
+SELECT array_agg(l_shipdate) FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                   array_agg                                    
+--------------------------------------------------------------------------------
+ {03-13-1996,04-12-1996,01-29-1996,04-21-1996,03-30-1996,01-30-1996}
+ {01-28-1997}
+ {02-02-1994,11-09-1993,01-16-1994,12-04-1993,12-14-1993,10-29-1993}
+ {01-10-1996}
+ {10-31-1994,10-16-1994,08-08-1994}
+ {04-27-1992}
+ {05-07-1996,02-01-1996,01-15-1996,03-21-1996,02-11-1996,01-16-1996,02-10-1996}
+ {10-23-1995,08-14-1995,08-07-1995,08-04-1995,08-28-1995,07-21-1995}
+ {10-29-1993,12-09-1993,12-09-1993,11-09-1993}
+ {10-23-1998,10-09-1998,10-30-1998}
+(10 rows)
+
+SELECT array_agg(l_shipmode) FROM lineitem GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 10;
+                                          array_agg                                           
+----------------------------------------------------------------------------------------------
+ {"TRUCK     ","MAIL      ","REG AIR   ","AIR       ","FOB       ","MAIL      "}
+ {"RAIL      "}
+ {"AIR       ","RAIL      ","SHIP      ","TRUCK     ","FOB       ","RAIL      "}
+ {"REG AIR   "}
+ {"AIR       ","FOB       ","AIR       "}
+ {"TRUCK     "}
+ {"FOB       ","SHIP      ","MAIL      ","FOB       ","TRUCK     ","FOB       ","FOB       "}
+ {"TRUCK     ","AIR       ","AIR       ","REG AIR   ","AIR       ","RAIL      "}
+ {"TRUCK     ","MAIL      ","AIR       ","MAIL      "}
+ {"REG AIR   ","FOB       ","FOB       "}
+(10 rows)
+
+-- Check that we can execute array_agg() within other functions
+SELECT array_length(array_agg(l_orderkey), 1) FROM lineitem;
+ array_length 
+--------------
+        12000
+(1 row)
+
+-- Check that we can execute array_agg() on select queries that hit multiple
+-- shards and contain different aggregates, filter clauses and other complex
+-- expressions. Note that the l_orderkey ranges are such that the matching rows
+-- lie in different shards.
+SELECT l_quantity, count(*), avg(l_extendedprice), array_agg(l_orderkey) FROM lineitem
+	WHERE l_quantity < 5 AND l_orderkey > 5500 AND l_orderkey < 9500
+	GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity | count |          avg          |                                            array_agg                                             
+------------+-------+-----------------------+--------------------------------------------------------------------------------------------------
+       1.00 |    17 | 1477.1258823529411765 | {5543,5633,5634,5698,5766,5856,5857,5986,8997,9026,9158,9184,9220,9222,9348,9383,9476}
+       2.00 |    19 | 3078.4242105263157895 | {5506,5540,5573,5669,5703,5730,5798,5831,5893,5920,5923,9030,9058,9123,9124,9188,9344,9441,9476}
+       3.00 |    14 | 4714.0392857142857143 | {5509,5543,5605,5606,5827,9124,9157,9184,9223,9254,9349,9414,9475,9477}
+       4.00 |    19 | 5929.7136842105263158 | {5504,5507,5508,5511,5538,5764,5766,5826,5829,5862,5959,5985,9091,9120,9281,9347,9382,9440,9473}
+(4 rows)
+
+SELECT l_quantity, array_agg(extract (month FROM o_orderdate)) AS my_month
+	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
+	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity |                    my_month                    
+------------+------------------------------------------------
+       1.00 | {9,5,7,5,9,11,11,4,7,7,4,7,4,2,6,3,5}
+       2.00 | {11,10,8,5,5,12,3,11,7,11,5,7,6,6,10,1,12,6,5}
+       3.00 | {4,9,8,11,7,10,6,7,8,5,8,9,11,3}
+       4.00 | {1,5,6,11,12,10,9,6,1,2,5,1,11,6,2,8,2,6,10}
+(4 rows)
+
+SELECT l_quantity, array_agg(l_orderkey * 2 + 1) FROM lineitem WHERE l_quantity < 5
+	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
+	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
+ l_quantity |                  array_agg                  
+------------+---------------------------------------------
+       1.00 | {11269,11397,11713,11715,11973,18317,18445}
+       2.00 | {11847,18061,18247,18953}
+       3.00 | {18249,18315,18699,18951,18955}
+       4.00 | {11653,11659,18241,18765}
+(4 rows)
+
+-- Check that we can execute array_agg() with an expression containing NULL values
+SELECT array_agg(case when l_quantity > 20 then l_quantity else NULL end)
+	FROM lineitem WHERE l_orderkey < 10;
+                                                                    array_agg                                                                     
+--------------------------------------------------------------------------------------------------------------------------------------------------
+ {NULL,36.00,NULL,28.00,24.00,32.00,38.00,45.00,49.00,27.00,NULL,28.00,26.00,30.00,NULL,26.00,50.00,37.00,NULL,NULL,46.00,28.00,38.00,35.00,NULL}
+(1 row)
+
+-- Check that we return NULL in case there are no input rows to array_agg()
+SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
+ array_agg 
+-----------
+ 
+(1 row)
+

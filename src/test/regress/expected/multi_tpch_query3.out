@@ -1,0 +1,48 @@
+--
+-- MULTI_TPCH_QUERY3
+--
+-- Query #3 from the TPC-H decision support benchmark. Unlike other TPC-H tests,
+-- we don't set citusdb.large_table_shard_count here, and instead use the default value
+-- coming from postgresql.conf or multi_task_tracker_executor.conf.
+SELECT
+	l_orderkey,
+	sum(l_extendedprice * (1 - l_discount)) as revenue,
+	o_orderdate,
+	o_shippriority
+FROM
+	customer,
+	orders,
+	lineitem
+WHERE
+	c_mktsegment = 'BUILDING'
+	AND c_custkey = o_custkey
+	AND l_orderkey = o_orderkey
+	AND o_orderdate < date '1995-03-15'
+	AND l_shipdate > date '1995-03-15'
+GROUP BY
+	l_orderkey,
+	o_orderdate,
+	o_shippriority
+ORDER BY
+	revenue DESC,
+	o_orderdate;
+ l_orderkey |   revenue   | o_orderdate | o_shippriority 
+------------+-------------+-------------+----------------
+       1637 | 268170.6408 | 02-08-1995  |              0
+       9696 | 252014.5497 | 02-20-1995  |              0
+      10916 | 242749.1996 | 03-11-1995  |              0
+        450 | 221012.3165 | 03-05-1995  |              0
+       5347 | 198353.7942 | 02-22-1995  |              0
+      10691 | 112800.1020 | 03-14-1995  |              0
+        386 | 104975.2484 | 01-25-1995  |              0
+       5765 |  88222.7556 | 12-15-1994  |              0
+       4707 |  88143.7774 | 02-27-1995  |              0
+       5312 |  83750.7028 | 02-24-1995  |              0
+       5728 |  70101.6400 | 12-11-1994  |              0
+        577 |  57986.6224 | 12-19-1994  |              0
+      12706 |  16636.6368 | 11-21-1994  |              0
+       3844 |   8851.3200 | 12-29-1994  |              0
+      11073 |   7433.6295 | 12-02-1994  |              0
+      13924 |   3111.4970 | 12-20-1994  |              0
+(16 rows)
+

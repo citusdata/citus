@@ -1,0 +1,88 @@
+--
+-- MULTI_MASTER_DELETE_PROTOCOL
+--
+-- Create a new range partitioned customer_delete_protocol table and stage data into it.
+CREATE TABLE customer_delete_protocol (
+        c_custkey integer not null,
+        c_name varchar(25) not null,
+        c_address varchar(40) not null,
+        c_nationkey integer not null,
+        c_phone char(15) not null,
+        c_acctbal decimal(15,2) not null,
+        c_mktsegment char(10) not null,
+        c_comment varchar(117) not null);
+SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
+\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
+-- Check that we don't support conditions on columns other than partition key.
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+                                           WHERE c_acctbal > 0.0');
+ERROR:  cannot delete from distributed table
+DETAIL:  Where clause includes a column other than partition column
+-- Check that we delete a shard if and only if all rows in the shard satisfy the condition.
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol 
+                                           WHERE c_custkey > 6500');
+ master_apply_delete_command 
+-----------------------------
+                           0
+(1 row)
+
+SELECT count(*) from customer_delete_protocol;
+ count 
+-------
+  3000
+(1 row)
+
+-- Delete one shard that satisfies the given conditions.
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+                                           WHERE c_custkey > 1000 AND c_custkey < 3000');
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
+SELECT count(*) from customer_delete_protocol;
+ count 
+-------
+  2000
+(1 row)
+
+-- Delete all shards if no condition is provided.
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+ master_apply_delete_command 
+-----------------------------
+                           2
+(1 row)
+
+SELECT count(*) FROM customer_delete_protocol;
+ count 
+-------
+      
+(1 row)
+
+-- Verify that empty shards are deleted if no condition is provided
+SELECT master_create_empty_shard('customer_delete_protocol');
+ master_create_empty_shard 
+---------------------------
+                    102041
+(1 row)
+
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+                                           WHERE c_custkey > 1000');
+ master_apply_delete_command 
+-----------------------------
+                           0
+(1 row)
+
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
