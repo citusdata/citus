@@ -1893,7 +1893,9 @@ fi
 
 
 # Allow to overwrite the C compiler, default to the one postgres was
-# compiled with
+# compiled with. We don't want autoconf's default CFLAGS though, so save
+# those.
+SAVE_CFLAGS="$CFLAGS"
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
 ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
@@ -2491,6 +2493,7 @@ ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
+CFLAGS="$SAVE_CFLAGS"
 
 # check for a number of CFLAGS that make development easier
 
