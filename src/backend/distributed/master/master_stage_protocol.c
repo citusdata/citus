@@ -45,7 +45,8 @@ static bool WorkerCreateShard(char *nodeName, uint32 nodePort,
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardLength,
 							 text **shardMinValue, text **shardMaxValue);
-static uint64 WorkerTableSize(char *nodeName, uint32 nodePort, char *tableName);
+static uint64 WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId,
+							  char *tableName);
 static StringInfo WorkerPartitionValue(char *nodeName, uint32 nodePort, Oid relationId,
 									   char *shardName, char *selectQuery);
 
@@ -77,17 +78,10 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	List *candidateNodeList = NIL;
 	text *nullMinValue = NULL;
 	text *nullMaxValue = NULL;
-	char tableType = 0;
 	char partitionMethod = 0;
 
 	Oid relationId = ResolveRelationId(relationNameText);
 	CheckDistributedTable(relationId);
-
-	tableType = get_rel_relkind(relationId);
-	if (tableType != RELKIND_RELATION)
-	{
-		ereport(ERROR, (errmsg("relation \"%s\" is not a regular table", relationName)));
-	}
 
 	partitionMethod = PartitionMethod(relationId);
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -171,9 +165,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid relationId = shardInterval->relationId;
+	bool cstoreTable = CStoreTable(relationId);
 
 	char storageType = shardInterval->storageType;
-	if (storageType != SHARD_STORAGE_TABLE)
+	if (storageType != SHARD_STORAGE_TABLE && !cstoreTable)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("The underlying shard is not a regular table")));
@@ -457,7 +452,7 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 
 	PG_TRY();
 	{
-		uint64 tableSize = WorkerTableSize(nodeName, nodePort, shardName);
+		uint64 tableSize = WorkerTableSize(nodeName, nodePort, relationId, shardName);
 		StringInfo minValue = WorkerPartitionValue(nodeName, nodePort, relationId,
 												   shardName, SHARD_MIN_VALUE_QUERY);
 		StringInfo maxValue = WorkerPartitionValue(nodeName, nodePort, relationId,
@@ -482,15 +477,23 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
  * given relation. The function assumes the relation represents a regular table.
  */
 static uint64
-WorkerTableSize(char *nodeName, uint32 nodePort, char *tableName)
+WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName)
 {
 	uint64 tableSize = 0;
 	List *queryResultList = NIL;
 	StringInfo tableSizeString = NULL;
 	char *tableSizeStringEnd = NULL;
+	bool cstoreTable = CStoreTable(relationId);
 
 	StringInfo tableSizeQuery = makeStringInfo();
-	appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
+	if (cstoreTable)
+	{
+		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, tableName);
+	}
+	else
+	{
+		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
+	}
 
 	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, tableSizeQuery);
 	if (queryResultList == NIL)
