@@ -121,16 +121,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	Assert(commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		   commandType == CMD_DELETE);
 
-	if (!(partitionMethod == DISTRIBUTE_BY_HASH ||
-		  partitionMethod == DISTRIBUTE_BY_RANGE))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("Only hash- or range-partitioned tables may be the "
-								  "target of distributed modifications")));
-	}
-
 	/*
 	 * Reject subqueries which are in SELECT or WHERE clause.
 	 * Queries which include subqueries in FROM clauses are rejected below.
