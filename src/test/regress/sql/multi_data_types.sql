@@ -104,7 +104,7 @@ CREATE TABLE varchar_hash_partitioned_table
     name varchar
 );
 
-SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'id', 'hash');
+SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
 SELECT master_create_worker_shards('varchar_hash_partitioned_table', 4, 1);
 
 -- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
@@ -114,8 +114,8 @@ INSERT INTO varchar_hash_partitioned_table VALUES  (3, 'Onder');
 INSERT INTO varchar_hash_partitioned_table VALUES  (4, 'Sumedh');
 INSERT INTO varchar_hash_partitioned_table VALUES  (5, 'Marco');
 
-SELECT * FROM varchar_hash_partitioned_table WHERE name = 'Onder';
+SELECT * FROM varchar_hash_partitioned_table WHERE id = 1;
 
-UPDATE varchar_hash_partitioned_table SET name = 'Samay' WHERE id = 5;
+UPDATE varchar_hash_partitioned_table SET id = 6 WHERE name = 'Jason';
 
-SELECT * FROM varchar_hash_partitioned_table WHERE name = 'Samay';
+SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
