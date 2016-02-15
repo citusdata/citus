@@ -16,7 +16,7 @@
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(citusdb_extradata_container);
+PG_FUNCTION_INFO_V1(citus_extradata_container);
 
 
 /*
@@ -189,7 +189,7 @@ ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 	if (list_length(fauxFuncExpr->args) != 4)
 	{
 		ereport(ERROR, (errmsg("unexpected number of function arguments to "
-							   "citusdb_extradata_container")));
+							   "citus_extradata_container")));
 		return;
 	}
 
@@ -290,13 +290,13 @@ GetRangeTblKind(RangeTblEntry *rte)
 
 
 /*
- * citusdb_extradata_container is a placeholder function to store information
- * needed by CitusDB in plain postgres node trees. Executor and other hooks
+ * citus_extradata_container is a placeholder function to store information
+ * needed by Citus in plain postgres node trees. Executor and other hooks
  * should always intercept statements containing calls to this function. It's
  * not actually SQL callable by the user because of an INTERNAL argument.
  */
 Datum
-citusdb_extradata_container(PG_FUNCTION_ARGS)
+citus_extradata_container(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
 

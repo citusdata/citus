@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * stage.c
  *	  Helper routines to execute the csql meta-command \stage. These routines
  *	  communicate with the master and worker nodes; and create new shards and

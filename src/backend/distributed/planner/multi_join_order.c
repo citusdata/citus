@@ -175,7 +175,7 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 									   "query"),
 								errdetail("Cannot perform outer joins with broadcast "
 										  "joins of more than 1 shard"),
-								errhint("Set citusdb.large_table_shard_count to 1")));
+								errhint("Set citus.large_table_shard_count to 1")));
 			}
 		}
 		else if (nextJoinNode->joinRuleType == LOCAL_PARTITION_JOIN)

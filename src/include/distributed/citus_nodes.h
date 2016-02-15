@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * citus_nodes.h
- *	  Additional node types, and related infrastructure, for CitusDB.
+ *	  Additional node types, and related infrastructure, for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *
@@ -52,7 +52,7 @@ typedef enum CitusNodeTag
 #define CitusIsA(nodeptr,_type_)	(CitusNodeTag(nodeptr) == T_##_type_)
 
 
-/* CitusDB variant of newNode(), don't use directly. */
+/* Citus variant of newNode(), don't use directly. */
 #define CitusNewNode(size, tag) \
 ({	Node   *_result; \
 	AssertMacro((size) >= sizeof(Node));		/* need the tag, at least */ \
@@ -63,7 +63,7 @@ typedef enum CitusNodeTag
 
 
 /*
- * CitusMakeNode is CitusDB variant of makeNode(). Use it to create nodes of
+ * CitusMakeNode is Citus variant of makeNode(). Use it to create nodes of
  * the types listed in the CitusNodeTag enum and plain NodeTag. Initializes
  * memory, besides the node tag, to 0.
  */

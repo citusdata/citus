@@ -8,11 +8,11 @@
 BEGIN;
 SET client_min_messages TO DEBUG3;
 DEBUG:  CommitTransactionCommand
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
@@ -52,7 +52,7 @@ DEBUG:  CommitTransactionCommand
 -- more than one shard. This situation results in multiple sql tasks depending on
 -- the same merge task, and tests our constraint group creation and assignment
 -- propagation. Here 'orders' is considered the small table.
-SET citusdb.large_table_shard_count TO 3;
+SET citus.large_table_shard_count TO 3;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
@@ -128,7 +128,7 @@ DEBUG:  CommitTransactionCommand
  11998
 (1 row)
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand

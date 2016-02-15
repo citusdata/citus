@@ -9,8 +9,8 @@
 
 BEGIN;
 SET client_min_messages TO DEBUG3;
-SET citusdb.large_table_shard_count TO 2;
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.large_table_shard_count TO 2;
+SET citus.task_executor_type TO 'task-tracker';
 
 -- Single range repartition join to test anchor-shard based task assignment and
 -- assignment propagation to merge and data-fetch tasks.
@@ -27,7 +27,7 @@ WHERE
 -- the same merge task, and tests our constraint group creation and assignment
 -- propagation. Here 'orders' is considered the small table.
 
-SET citusdb.large_table_shard_count TO 3;
+SET citus.large_table_shard_count TO 3;
 
 SELECT
 	count(*)
@@ -37,7 +37,7 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 
 -- The next test, dual hash repartition join, uses the current jobId to assign
 -- tasks in a round-robin fashion. We therefore need to ensure that jobIds start

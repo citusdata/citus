@@ -55,7 +55,7 @@ SET client_min_messages TO DEBUG3;
 
 -- First test the default greedy task assignment policy
 
-SET citusdb.task_assignment_policy TO 'greedy';
+SET citus.task_assignment_policy TO 'greedy';
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
@@ -63,7 +63,7 @@ EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
 -- Next test the first-replica task assignment policy
 
-SET citusdb.task_assignment_policy TO 'first-replica';
+SET citus.task_assignment_policy TO 'first-replica';
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
@@ -80,7 +80,7 @@ SELECT case when (currval('pg_dist_jobid_seq') % 2) = 0
 
 -- Finally test the round-robin task assignment policy
 
-SET citusdb.task_assignment_policy TO 'round-robin';
+SET citus.task_assignment_policy TO 'round-robin';
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
@@ -88,7 +88,7 @@ EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
-RESET citusdb.task_assignment_policy;
+RESET citus.task_assignment_policy;
 RESET client_min_messages;
 
 COMMIT;

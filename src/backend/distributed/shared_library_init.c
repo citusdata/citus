@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * shared_library_init.c
- *	  Initialize CitusDB extension
+ *	  Initialize Citus extension
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -74,8 +74,8 @@ _PG_init(void)
 {
 	if (!process_shared_preload_libraries_in_progress)
 	{
-		ereport(ERROR, (errmsg("CitusDB can only be loaded via shared_preload_libraries"),
-						errhint("Add citusdb to shared_preload_libraries.")));
+		ereport(ERROR, (errmsg("Citus can only be loaded via shared_preload_libraries"),
+						errhint("Add citus to shared_preload_libraries.")));
 	}
 
 	/*
@@ -95,8 +95,8 @@ _PG_init(void)
 		ExecutorEnd_hook != NULL ||
 		ProcessUtility_hook != NULL)
 	{
-		ereport(ERROR, (errmsg("CitusDB has to be loaded first"),
-						errhint("Place citusdb at the beginning of "
+		ereport(ERROR, (errmsg("Citus has to be loaded first"),
+						errhint("Place citus at the beginning of "
 								"shared_preload_libraries.")));
 	}
 
@@ -107,7 +107,7 @@ _PG_init(void)
 	CreateRequiredDirectories();
 
 	/*
-	 * Register CitusDB configuration variables. Do so before intercepting
+	 * Register Citus configuration variables. Do so before intercepting
 	 * hooks or calling initialization functions, in case we want to do the
 	 * latter in a configuration dependent manner.
 	 */
@@ -137,7 +137,7 @@ _PG_init(void)
 
 
 /*
- * CreateRequiredDirectories - Create directories required for CitusDB to
+ * CreateRequiredDirectories - Create directories required for Citus to
  * function.
  *
  * These used to be created by initdb, but that's not possible anymore.
@@ -166,12 +166,12 @@ CreateRequiredDirectories(void)
 }
 
 
-/* Register CitusDB configuration variables. */
+/* Register Citus configuration variables. */
 static void
 RegisterCitusConfigVariables(void)
 {
 	DefineCustomStringVariable(
-		"citusdb.worker_list_file",
+		"citus.worker_list_file",
 		gettext_noop("Sets the server's \"worker_list\" configuration file."),
 		NULL,
 		&WorkerListFileName,
@@ -182,7 +182,7 @@ RegisterCitusConfigVariables(void)
 	NormalizeWorkerListPath();
 
 	DefineCustomBoolVariable(
-		"citusdb.binary_master_copy_format",
+		"citus.binary_master_copy_format",
 		gettext_noop("Use the binary master copy format."),
 		gettext_noop("When enabled, data is copied from workers to the master "
 					 "in PostgreSQL's binary serialization format."),
@@ -193,7 +193,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.binary_worker_copy_format",
+		"citus.binary_worker_copy_format",
 		gettext_noop("Use the binary worker copy format."),
 		gettext_noop("When enabled, data is copied from workers to workers "
 					 "in PostgreSQL's binary serialization format when "
@@ -205,7 +205,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.expire_cached_shards",
+		"citus.expire_cached_shards",
 		gettext_noop("Enables shard cache expiration if a shard's size on disk has changed. "),
 		gettext_noop("When appending to an existing shard, old data may still be cached on "
 					 "other workers. This configuration entry activates automatic "
@@ -217,7 +217,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.subquery_pushdown",
+		"citus.subquery_pushdown",
 		gettext_noop("Enables supported subquery pushdown to workers."),
 		NULL,
 		&SubqueryPushdown,
@@ -227,7 +227,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.log_multi_join_order",
+		"citus.log_multi_join_order",
 		gettext_noop("Logs the distributed join order to the server log."),
 		gettext_noop("We use this private configuration entry as a debugging aid. "
 					 "If enabled, we print the distributed join order."),
@@ -238,7 +238,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.explain_multi_logical_plan",
+		"citus.explain_multi_logical_plan",
 		gettext_noop("Enables Explain to print out distributed logical plans."),
 		gettext_noop("We use this private configuration entry as a debugging aid. "
 					 "If enabled, the Explain command prints out the optimized "
@@ -250,7 +250,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.explain_multi_physical_plan",
+		"citus.explain_multi_physical_plan",
 		gettext_noop("Enables Explain to print out distributed physical plans."),
 		gettext_noop("We use this private configuration entry as a debugging aid. "
 					 "If enabled, the Explain command prints out the physical "
@@ -262,7 +262,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citusdb.all_modifications_commutative",
+		"citus.all_modifications_commutative",
 		gettext_noop("Bypasses commutativity checks when enabled"),
 		NULL,
 		&AllModificationsCommutative,
@@ -272,7 +272,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.shard_replication_factor",
+		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),
 		gettext_noop("Shards are replicated across nodes according to this "
 					 "replication factor. Note that shards read this "
@@ -285,7 +285,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.shard_max_size",
+		"citus.shard_max_size",
 		gettext_noop("Sets the maximum size a shard will grow before it gets split."),
 		gettext_noop("Shards store table and file data. When the source "
 					 "file's size for one shard exceeds this configuration "
@@ -300,7 +300,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.max_worker_nodes_tracked",
+		"citus.max_worker_nodes_tracked",
 		gettext_noop("Sets the maximum number of worker nodes that are tracked."),
 		gettext_noop("Worker nodes' network locations, their membership and "
 					 "health status are tracked in a shared hash table on "
@@ -314,7 +314,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.remote_task_check_interval",
+		"citus.remote_task_check_interval",
 		gettext_noop("Sets the frequency at which we check job statuses."),
 		gettext_noop("The master node assigns tasks to workers nodes, and "
 					 "then regularly checks with them about each task's "
@@ -327,7 +327,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.task_tracker_delay",
+		"citus.task_tracker_delay",
 		gettext_noop("Task tracker sleep time between task management rounds."),
 		gettext_noop("The task tracker process wakes up regularly, walks over "
 					 "all tasks assigned to it, and schedules and executes these "
@@ -341,7 +341,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.max_assign_task_batch_size",
+		"citus.max_assign_task_batch_size",
 		gettext_noop("Sets the maximum number of tasks to assign per round."),
 		gettext_noop("The master node synchronously assigns tasks to workers in "
 					 "batches. Bigger batches allow for faster task assignment, "
@@ -355,7 +355,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.max_tracked_tasks_per_node",
+		"citus.max_tracked_tasks_per_node",
 		gettext_noop("Sets the maximum number of tracked tasks per node."),
 		gettext_noop("The task tracker processes keeps all assigned tasks in "
 					 "a shared hash table, and schedules and executes these "
@@ -369,7 +369,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.max_running_tasks_per_node",
+		"citus.max_running_tasks_per_node",
 		gettext_noop("Sets the maximum number of tasks to run concurrently per node."),
 		gettext_noop("The task tracker process schedules and executes the tasks "
 					 "assigned to it as appropriate. This configuration value "
@@ -382,7 +382,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.partition_buffer_size",
+		"citus.partition_buffer_size",
 		gettext_noop("Sets the buffer size to use for partition operations."),
 		gettext_noop("Worker nodes allow for table data to be repartitioned "
 					 "into multiple text files, much like Hadoop's Map "
@@ -396,7 +396,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.large_table_shard_count",
+		"citus.large_table_shard_count",
 		gettext_noop("The shard count threshold over which a table is considered large."),
 		gettext_noop("A distributed table is considered to be large if it has "
 					 "more shards than the value specified here. This largeness "
@@ -409,7 +409,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
-		"citusdb.limit_clause_row_fetch_count",
+		"citus.limit_clause_row_fetch_count",
 		gettext_noop("Number of rows to fetch per task for limit clause optimization."),
 		gettext_noop("Select queries get partitioned and executed as smaller "
 					 "tasks. In some cases, select queries with limit clauses "
@@ -424,7 +424,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
-		"citusdb.count_distinct_error_rate",
+		"citus.count_distinct_error_rate",
 		gettext_noop("Desired error rate when calculating count(distinct) "
 					 "approximates using the postgresql-hll extension. "
 					 "0.0 disables approximations for count(distinct); 1.0 "
@@ -437,7 +437,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citusdb.task_assignment_policy",
+		"citus.task_assignment_policy",
 		gettext_noop("Sets the policy to use when assigning tasks to worker nodes."),
 		gettext_noop("The master node assigns tasks to worker nodes based on shard "
 						 "locations. This configuration value specifies the policy to "
@@ -454,7 +454,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citusdb.task_executor_type",
+		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),
 		gettext_noop("The master node chooses between three different executor types "
 					 "when executing a distributed query. The router executor is "
@@ -472,7 +472,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citusdb.shard_placement_policy",
+		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
 		gettext_noop("The master node chooses which worker nodes to place new shards "
 					 "on. This configuration value specifies the policy to use when "
@@ -486,8 +486,8 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
-	/* warn about config items in the citusdb namespace that are not registered above */
-	EmitWarningsOnPlaceholders("citusdb");
+	/* warn about config items in the citus namespace that are not registered above */
+	EmitWarningsOnPlaceholders("citus");
 	/* Also warn about citus namespace, as that's a very likely misspelling */
 	EmitWarningsOnPlaceholders("citus");
 }
@@ -495,7 +495,7 @@ RegisterCitusConfigVariables(void)
 
 /*
  * NormalizeWorkerListPath converts the path configured via
- * citusdb.worker_list_file into an absolute path, falling back to the default
+ * citus.worker_list_file into an absolute path, falling back to the default
  * value if necessary. The previous value of the config variable is
  * overwritten with the normalized value.
  *
@@ -525,11 +525,11 @@ NormalizeWorkerListPath(void)
 		ereport(FATAL, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("%s does not know where to find the \"worker_list_file\" "
 							   "configuration file.\n"
-							   "This can be specified as \"citusdb.worker_list_file\" in "
+							   "This can be specified as \"citus.worker_list_file\" in "
 							   "\"%s\", or by the -D invocation option, or by the PGDATA "
 							   "environment variable.\n", progname, ConfigFileName)));
 	}
 
-	SetConfigOption("citusdb.worker_list_file", absoluteFileName, PGC_POSTMASTER, PGC_S_OVERRIDE);
+	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER, PGC_S_OVERRIDE);
 	free(absoluteFileName);
 }
