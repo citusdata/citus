@@ -249,7 +249,7 @@ CreateNodeConnectionHash(void)
 	info.hcxt = CacheMemoryContext;
 	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
-	nodeConnectionHash = hash_create("citusdb connection cache", 32, &info, hashFlags);
+	nodeConnectionHash = hash_create("citus connection cache", 32, &info, hashFlags);
 
 	return nodeConnectionHash;
 }
@@ -257,7 +257,7 @@ CreateNodeConnectionHash(void)
 
 /*
  * ConnectToNode opens a connection to a remote PostgreSQL server. The function
- * configures the connection's fallback application name to 'citusdb' and sets
+ * configures the connection's fallback application name to 'citus' and sets
  * the remote encoding to match the local one. This function requires that the
  * port be specified as a string for easier use with libpq functions.
  *
@@ -277,7 +277,7 @@ ConnectToNode(char *nodeName, char *nodePort)
 		"client_encoding", "connect_timeout", "dbname", NULL
 	};
 	const char *valueArray[] = {
-		nodeName, nodePort, "citusdb", clientEncoding,
+		nodeName, nodePort, "citus", clientEncoding,
 		CLIENT_CONNECT_TIMEOUT_SECONDS, dbname, NULL
 	};
 

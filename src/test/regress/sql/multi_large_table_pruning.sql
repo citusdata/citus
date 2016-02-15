@@ -6,9 +6,9 @@
 -- set executor type to task tracker executor here, as we cannot run repartition
 -- jobs with real time executor.
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO DEBUG2;
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 
 -- Single range-repartition join to test join-pruning behaviour.
 

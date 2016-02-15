@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_executor.h
- *	  Executor support for CitusDB.
+ *	  Executor support for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------

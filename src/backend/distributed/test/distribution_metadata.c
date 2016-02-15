@@ -3,7 +3,7 @@
  * test/src/distribution_metadata.c
  *
  * This file contains functions to exercise distributed table metadata
- * functionality within CitusDB.
+ * functionality within Citus.
  *
  * Copyright (c) 2014-2015, Citus Data, Inc.
  *

@@ -3,23 +3,23 @@
 -- ===================================================================
 CREATE FUNCTION prune_using_no_values(regclass)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION prune_using_single_value(regclass, text)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C;
 CREATE FUNCTION prune_using_either_value(regclass, text, text)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION prune_using_both_values(regclass, text, text)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION debug_equality_expression(regclass)
 	RETURNS cstring
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 -- ===================================================================
 -- test shard pruning functionality

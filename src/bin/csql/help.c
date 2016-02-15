@@ -67,7 +67,7 @@ usage(unsigned short int pager)
 
 	output = PageOutput(59, pager ? &(pset.popt.topt) : NULL);
 
-	printf(_("csql is the CitusDB interactive terminal.\n\n"));
+	printf(_("csql is the Citus interactive terminal.\n\n"));
 	fprintf(output, _("Usage:\n"));
 	printf(_("  csql [OPTION]... [DBNAME [USERNAME]]\n\n"));
 

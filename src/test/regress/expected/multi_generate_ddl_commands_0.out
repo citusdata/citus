@@ -3,7 +3,7 @@
 -- ===================================================================
 CREATE FUNCTION table_ddl_command_array(regclass)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 -- ===================================================================
 -- test ddl command generation functionality
@@ -33,8 +33,8 @@ SELECT table_ddl_command_array('not_null_table');
 
 -- ensure tables not in search path are schema-prefixed
 CREATE SCHEMA not_in_path CREATE TABLE simple_table (id bigint);
-NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 SELECT table_ddl_command_array('not_in_path.simple_table');
                                      table_ddl_command_array                                     
 -------------------------------------------------------------------------------------------------

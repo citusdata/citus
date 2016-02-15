@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_explain.h
- *	  Explain support for CitusDB.
+ *	  Explain support for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------

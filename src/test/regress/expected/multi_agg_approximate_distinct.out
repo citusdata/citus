@@ -7,14 +7,14 @@ ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
 -- Check approximate count(distinct) at different precisions / error rates
-SET citusdb.count_distinct_error_rate = 0.1;
+SET citus.count_distinct_error_rate = 0.1;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
 -------
   2612
 (1 row)
 
-SET citusdb.count_distinct_error_rate = 0.01;
+SET citus.count_distinct_error_rate = 0.01;
 SELECT count(distinct l_orderkey) FROM lineitem;
  count 
 -------
@@ -102,7 +102,7 @@ SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM linei
 
 -- If we have an order by on count(distinct) that we intend to push down to
 -- worker nodes, we need to error out. Otherwise, we are fine.
-SET citusdb.limit_clause_row_fetch_count = 1000;
+SET citus.limit_clause_row_fetch_count = 1000;
 SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
 	FROM lineitem
 	GROUP BY l_returnflag
@@ -123,7 +123,7 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 (3 rows)
 
 -- Check that we can revert config and disable count(distinct) approximations
-SET citusdb.count_distinct_error_rate = 0.0;
+SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  table partitioning is unsuitable for aggregate (distinct)

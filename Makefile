@@ -1,11 +1,11 @@
-# CitusDB toplevel Makefile
+# Citus toplevel Makefile
 
-citusdb_subdir = .
-citusdb_top_builddir = .
+citus_subdir = .
+citus_top_builddir = .
 
 # Hint that configure should be run first
 ifeq (,$(wildcard Makefile.global))
-  $(error ./configure needs to be run before compiling CitusDB)
+  $(error ./configure needs to be run before compiling Citus)
 endif
 
 include Makefile.global
@@ -20,9 +20,9 @@ install-extension:
 install-headers:
 	$(MKDIR_P) '$(includedir_server)/distributed/'
 # generated headers are located in the build directory
-	$(INSTALL_DATA) src/include/citusdb_config.h '$(includedir_server)/'
+	$(INSTALL_DATA) src/include/citus_config.h '$(includedir_server)/'
 # the rest in the source tree
-	$(INSTALL_DATA) $(citusdb_abs_srcdir)/src/include/distributed/*.h '$(includedir_server)/distributed/'
+	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(includedir_server)/distributed/'
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
 .PHONY: extension install-extension clean-extension

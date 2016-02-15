@@ -104,7 +104,7 @@ ORDER BY
 	cust_nation,
 	l_year;
 
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
 -- execute prepared statements
@@ -136,7 +136,7 @@ CREATE TEMP TABLE prepared_sql_test_7 AS EXECUTE prepared_test_7('UNITED KINGDOM
 SELECT * from prepared_sql_test_7;
 
 -- now, run some of the tests with real-time executor
-SET citusdb.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'real-time';
 
 -- execute prepared statements
 EXECUTE prepared_test_1;

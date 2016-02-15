@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * copy_options.c
  *	  Routines for parsing copy and stage meta commands.
  *

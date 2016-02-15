@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * copy_options.h
  *	  Shared declarations for parsing copy and stage meta-commands. The stage
  *	  meta-command borrows from copy's syntax, but does not yet support

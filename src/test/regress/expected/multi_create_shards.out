@@ -3,7 +3,7 @@
 -- ===================================================================
 CREATE FUNCTION sort_names(cstring, cstring, cstring)
 	RETURNS cstring
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 -- create a custom type...
 CREATE TYPE dummy_type AS (
@@ -47,7 +47,7 @@ SELECT master_create_distributed_table('table_to_distribute', 'bad_column', 'has
 ERROR:  column "bad_column" of relation "table_to_distribute" does not exist
 -- use unrecognized partition type
 SELECT master_create_distributed_table('table_to_distribute', 'name', 'unrecognized');
-ERROR:  invalid input value for enum citusdb.distribution_type: "unrecognized"
+ERROR:  invalid input value for enum citus.distribution_type: "unrecognized"
 LINE 1: ..._distributed_table('table_to_distribute', 'name', 'unrecogni...
                                                              ^
 -- use a partition column of a type lacking any default operator class
@@ -209,7 +209,7 @@ SELECT master_create_worker_shards('weird_shard_count', 7, 1);
  
 (1 row)
 
--- CitusDB ensures all shards are roughly the same size
+-- Citus ensures all shards are roughly the same size
 SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 	FROM pg_dist_shard
 	WHERE logicalrelid = 'weird_shard_count'::regclass

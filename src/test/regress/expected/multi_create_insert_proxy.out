@@ -9,8 +9,8 @@ CREATE SCHEMA "A$AP Mob"
 		id bigint PRIMARY KEY,
 		data text NOT NULL DEFAULT 'lorem ipsum'
 	);
-NOTICE:  CitusDB partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by CitusDB are not supported yet
+NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 \set insert_target '"A$AP Mob"."Dr. Bronner''s ""Magic"" Soaps"'
 -- create proxy and save proxy table name
 SELECT create_insert_proxy_for_table(:'insert_target') AS proxy_tablename
