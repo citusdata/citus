@@ -14,9 +14,10 @@
  */
 
 #include "postgres.h"
-
+#include "c.h"
 #include "miscadmin.h"
 
+#include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "storage/lmgr.h"
 
@@ -67,6 +68,8 @@ LockShardResource(uint64 shardId, LOCKMODE lockmode)
 	LOCKTAG	tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
+
+	AssertArg(shardId != INVALID_SHARD_ID);
 
 	SET_LOCKTAG_SHARD_RESOURCE(tag, MyDatabaseId, shardId);
 
