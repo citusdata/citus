@@ -394,7 +394,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	/* close relation and invalidate previous cache entry */
 	heap_close(pgDistShard, RowExclusiveLock);
-	CacheInvalidateRelcacheByRelid(relationId);
+	CitusInvalidateRelcacheByRelid(relationId);
 }
 
 
@@ -452,10 +452,6 @@ DeleteShardRow(uint64 shardId)
 	HeapTuple heapTuple = NULL;
 	Form_pg_dist_shard pgDistShardForm = NULL;
 	Oid distributedRelationId = InvalidOid;
-	HeapTuple relationOidTuple = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	Datum tupleValues[1] = { (Datum) NULL };
-	bool tupleNulls[1] = { false };
 
 	pgDistShard = heap_open(DistShardRelationId(), RowExclusiveLock);
 
@@ -482,17 +478,8 @@ DeleteShardRow(uint64 shardId)
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistShard, RowExclusiveLock);
 
-	/*
-	 * Invalidate using a heap tuple containing the relation OID. We avoid calling
-	 * CacheInvalidateRelcacheByRelid here, since that throw an error if the table
-	 * is no longer in the catalog, which is the case when calling this function
-	 * from a DROP TABLE trigger.
-	 */
-	tupleDescriptor = CreateTemplateTupleDesc(1, true);
-	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "relation", OIDOID, -1, 0);
-	tupleValues[0] = ObjectIdGetDatum(distributedRelationId);
-	relationOidTuple = heap_form_tuple(tupleDescriptor, tupleValues, tupleNulls);
-	CacheInvalidateRelcacheByTuple(relationOidTuple);
+	/* invalidate previous cache entry */
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
 }
 
 
