@@ -53,11 +53,14 @@ static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 static void DeleteFile(const char *filename);
 static void FetchTableCommon(text *tableName, uint64 remoteTableSize,
 							 ArrayType *nodeNameObject, ArrayType *nodePortObject,
-							 bool (*FetchTableFunction) (const char *, uint32, StringInfo));
+							 bool (*FetchTableFunction)(const char *, uint32,
+														StringInfo));
 static uint64 LocalTableSize(Oid relationId);
 static uint64 ExtractShardId(StringInfo tableName);
-static bool FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName);
-static bool FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName);
+static bool FetchRegularTable(const char *nodeName, uint32 nodePort,
+							  StringInfo tableName);
+static bool FetchForeignTable(const char *nodeName, uint32 nodePort,
+							  StringInfo tableName);
 static List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
 								  StringInfo tableName);
 static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
@@ -85,7 +88,7 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 partitionTaskId = PG_GETARG_UINT32(1);
 	uint32 partitionFileId = PG_GETARG_UINT32(2);
-	uint32 upstreamTaskId  = PG_GETARG_UINT32(3);
+	uint32 upstreamTaskId = PG_GETARG_UINT32(3);
 	text *nodeNameText = PG_GETARG_TEXT_P(4);
 	uint32 nodePort = PG_GETARG_UINT32(5);
 	char *nodeName = NULL;
@@ -226,7 +229,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 	char filename[MAXPGPATH];
 	int closed = -1;
 	const int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-	const int fileMode  = (S_IRUSR | S_IWUSR);
+	const int fileMode = (S_IRUSR | S_IWUSR);
 
 	QueryStatus queryStatus = CLIENT_INVALID_QUERY;
 	int32 connectionId = INVALID_CONNECTION_ID;
@@ -309,7 +312,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 		}
 		else if (copyStatus == CLIENT_COPY_MORE)
 		{
-			;  /* remote node will continue to send more data */
+			/* remote node will continue to send more data */
 		}
 		else
 		{
@@ -468,7 +471,7 @@ worker_fetch_foreign_file(PG_FUNCTION_ARGS)
 static void
 FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 				 ArrayType *nodeNameObject, ArrayType *nodePortObject,
-				 bool (*FetchTableFunction) (const char *, uint32, StringInfo))
+				 bool (*FetchTableFunction)(const char *, uint32, StringInfo))
 {
 	StringInfo tableName = NULL;
 	char *tableNameCString = NULL;
@@ -531,7 +534,7 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 		if (remoteTableSize > localTableSize)
 		{
 			/* table is not up to date, drop the table */
-			ObjectAddress tableObject = {InvalidOid, InvalidOid, 0};
+			ObjectAddress tableObject = { InvalidOid, InvalidOid, 0 };
 
 			tableObject.classId = RelationRelationId;
 			tableObject.objectId = relationId;
@@ -554,7 +557,7 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 		char *nodeName = TextDatumGetCString(nodeNameDatum);
 		uint32 nodePort = DatumGetUInt32(nodePortDatum);
 
-		tableFetched = (*FetchTableFunction) (nodeName, nodePort, tableName);
+		tableFetched = (*FetchTableFunction)(nodeName, nodePort, tableName);
 
 		nodeIndex++;
 	}
@@ -1010,7 +1013,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
- 	shardId = ExtractShardId(shardNameString);
+	shardId = ExtractShardId(shardNameString);
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	localFilePath = makeStringInfo();
@@ -1049,7 +1052,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 static bool
 check_log_statement(List *statementList)
 {
-	ListCell   *statementCell;
+	ListCell *statementCell;
 
 	if (log_statement == LOGSTMT_NONE)
 	{

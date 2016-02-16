@@ -24,6 +24,7 @@
 #define INVALID_TASK_ID 0
 
 #if (PG_VERSION_NUM >= 90500)
+
 /* reserved alias name for UPSERTs */
 #define UPSERT_ALIAS "citus_table_alias"
 #endif

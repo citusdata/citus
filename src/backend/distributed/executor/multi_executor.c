@@ -157,7 +157,6 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			queryDesc->plannedstmt = masterSelectPlan;
 			eflags |= EXEC_FLAG_CITUS_MASTER_SELECT;
 		}
-
 	}
 
 	/* if the execution is not done for router executor, drop into standard executor */
@@ -253,7 +252,7 @@ multi_ExecutorEnd(QueryDesc *queryDesc)
 		RangeTblEntry *rangeTableEntry = linitial(planStatement->rtable);
 		Oid masterTableRelid = rangeTableEntry->relid;
 
-		ObjectAddress masterTableObject = {InvalidOid, InvalidOid, 0};
+		ObjectAddress masterTableObject = { InvalidOid, InvalidOid, 0 };
 
 		masterTableObject.classId = RelationRelationId;
 		masterTableObject.objectId = masterTableRelid;
