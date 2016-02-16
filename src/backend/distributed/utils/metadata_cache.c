@@ -477,9 +477,7 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 	/*
 	 * Invalidate relcache for the relevant relation(s). In theory
 	 * logicalrelid should never change, but it doesn't hurt to be
-	 * paranoid. We ignore the case that there's no corresponding pg_class
-	 * entry - that happens if the pg_dist_partition tuple is deleted after
-	 * the relation has been dropped.
+	 * paranoid.
 	 */
 	if (oldLogicalRelationId != InvalidOid &&
 		oldLogicalRelationId != newLogicalRelationId)
@@ -537,9 +535,7 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 	/*
 	 * Invalidate relcache for the relevant relation(s). In theory
 	 * logicalrelid should never change, but it doesn't hurt to be
-	 * paranoid. We ignore the case that there's no corresponding pg_class
-	 * entry - that happens if the pg_dist_shard tuple is deleted after
-	 * the relation has been dropped.
+	 * paranoid.
 	 */
 	if (oldLogicalRelationId != InvalidOid &&
 		oldLogicalRelationId != newLogicalRelationId)
