@@ -18,12 +18,12 @@ SUBDIRS = . commands executor master planner relay test utils worker
 OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(wildcard $(citus_abs_srcdir)/$(dir)/*.c)))
 
+# be explicit about the default target
+all:
+
 # define build process for latest install file
 $(EXTENSION)--$(EXTVERSION).sql: $(EXTENSION).sql
 	cat $^ > $@
-
-# be explicit about the default target
-all:
 
 NO_PGXS = 1
 
