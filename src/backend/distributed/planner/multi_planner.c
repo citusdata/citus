@@ -52,19 +52,10 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	if (NeedsDistributedPlanning(parse))
 	{
-		MemoryContext oldcontext = NULL;
-		MultiPlan *physicalPlan = NULL;
-
-		/* Switch to top level message context */
-		oldcontext = MemoryContextSwitchTo(MessageContext);
-
-		physicalPlan = CreatePhysicalPlan(parse);
+		MultiPlan *physicalPlan = CreatePhysicalPlan(parse);
 
 		/* store required data into the planned statement */
 		result = MultiQueryContainerNode(result, physicalPlan);
-
-		/* Now switch back to original context */
-		MemoryContextSwitchTo(oldcontext);
 	}
 
 	return result;

@@ -32,7 +32,7 @@
 
 /*
  * NodeConnectionHash is the connection hash itself. It begins uninitialized.
- * The first call to GetConnection triggers hash creation.
+ * The first call to GetOrEstablishConnection triggers hash creation.
  */
 static HTAB *NodeConnectionHash = NULL;
 
@@ -44,10 +44,10 @@ static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
 
 
 /*
- * GetConnection returns a PGconn which can be used to execute queries on a
- * remote PostgreSQL server. If no suitable connection to the specified node on
- * the specified port yet exists, the function establishes a new connection and
- * returns that.
+ * GetOrEstablishConnection returns a PGconn which can be used to execute
+ * queries on a remote PostgreSQL server. If no suitable connection to the
+ * specified node on the specified port yet exists, the function establishes
+ * a new connection and adds it to the connection cache before returning it.
  *
  * Returned connections are guaranteed to be in the CONNECTION_OK state. If the
  * requested connection cannot be established, or if it was previously created
@@ -56,7 +56,7 @@ static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
  * This function throws an error if a hostname over 255 characters is provided.
  */
 PGconn *
-GetConnection(char *nodeName, int32 nodePort)
+GetOrEstablishConnection(char *nodeName, int32 nodePort)
 {
 	PGconn *connection = NULL;
 	NodeConnectionKey nodeConnectionKey;
