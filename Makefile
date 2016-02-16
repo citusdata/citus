@@ -15,9 +15,9 @@ all: extension csql
 # build extension
 extension:
 	$(MAKE) -C src/backend/distributed/ all
-install-extension:
+install-extension: extension
 	$(MAKE) -C src/backend/distributed/ install
-install-headers:
+install-headers: extension
 	$(MKDIR_P) '$(includedir_server)/distributed/'
 # generated headers are located in the build directory
 	$(INSTALL_DATA) src/include/citus_config.h '$(includedir_server)/'
@@ -33,7 +33,7 @@ clean: clean-extension
 # build csql binary
 csql:
 	$(MAKE) -C src/bin/csql/ all
-install-csql:
+install-csql: csql
 	$(MAKE) -C src/bin/csql/ install
 clean-csql:
 	$(MAKE) -C src/bin/csql/ clean
