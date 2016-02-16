@@ -133,7 +133,7 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 
 	const char *createMergeTableQuery = text_to_cstring(createMergeTableQueryText);
 	const char *createIntermediateTableQuery =
-			text_to_cstring(createIntermediateTableQueryText);
+		text_to_cstring(createIntermediateTableQueryText);
 
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
 	StringInfo jobSchemaName = JobSchemaName(jobId);
@@ -170,14 +170,14 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	if (setSearchPathResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-								setSearchPathString->data)));
+							   setSearchPathString->data)));
 	}
 
 	createMergeTableResult = SPI_exec(createMergeTableQuery, 0);
 	if (createMergeTableResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-								createMergeTableQuery)));
+							   createMergeTableQuery)));
 	}
 
 	appendStringInfo(mergeTableName, "%s%s", intermediateTableName->data,
@@ -188,7 +188,7 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	if (createIntermediateTableResult < 0)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-						createIntermediateTableQuery)));
+							   createIntermediateTableQuery)));
 	}
 
 	finished = SPI_finish();
@@ -256,8 +256,8 @@ JobSchemaName(uint64 jobId)
 	 */
 #ifdef HAVE_INTTYPES_H
 	StringInfo jobSchemaName = makeStringInfo();
-	appendStringInfo(jobSchemaName, "%s%0*"PRIu64,
-					 JOB_SCHEMA_PREFIX, MIN_JOB_DIRNAME_WIDTH, jobId);
+	appendStringInfo(jobSchemaName, "%s%0*" PRIu64, JOB_SCHEMA_PREFIX,
+					 MIN_JOB_DIRNAME_WIDTH, jobId);
 #else
 	StringInfo jobSchemaName = makeStringInfo();
 	appendStringInfo(jobSchemaName, "%s%0*llu",

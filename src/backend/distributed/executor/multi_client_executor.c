@@ -301,7 +301,7 @@ MultiClientCancel(int32 connectionId)
 	if (cancelSent == 0)
 	{
 		ereport(WARNING, (errmsg("could not issue cancel request"),
-						  errdetail("Client error: %s",	errorBuffer)));
+						  errdetail("Client error: %s", errorBuffer)));
 
 		canceled = false;
 	}
@@ -348,7 +348,7 @@ MultiClientResultStatus(int32 connectionId)
 	}
 	else
 	{
-		ereport(WARNING, (errmsg("could not consume data from worker node")));	
+		ereport(WARNING, (errmsg("could not consume data from worker node")));
 		resultStatus = CLIENT_RESULT_UNAVAILABLE;
 	}
 
@@ -589,7 +589,7 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 	while (receiveLength > 0)
 	{
 		/* received copy data; append these data to file */
-		int appended =  -1;
+		int appended = -1;
 		errno = 0;
 
 		appended = write(fileDescriptor, receiveBuffer, receiveLength);
@@ -706,7 +706,7 @@ ClientConnectionReady(PGconn *connection, PostgresPollingStatusType pollingStatu
 	fd_set readFileDescriptorSet;
 	fd_set writeFileDescriptorSet;
 	fd_set exceptionFileDescriptorSet;
-	struct timeval immediateTimeout = {0, 0};
+	struct timeval immediateTimeout = { 0, 0 };
 	int connectionFileDescriptor = PQsocket(connection);
 
 	FD_ZERO(&readFileDescriptorSet);

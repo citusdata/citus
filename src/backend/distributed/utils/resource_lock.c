@@ -30,7 +30,7 @@
 void
 LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 {
-	LOCKTAG	tag;
+	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
@@ -64,7 +64,7 @@ LockRelationDistributionMetadata(Oid relationId, LOCKMODE lockMode)
 void
 LockShardResource(uint64 shardId, LOCKMODE lockmode)
 {
-	LOCKTAG	tag;
+	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
@@ -78,7 +78,7 @@ LockShardResource(uint64 shardId, LOCKMODE lockmode)
 void
 UnlockShardResource(uint64 shardId, LOCKMODE lockmode)
 {
-	LOCKTAG	tag;
+	LOCKTAG tag;
 	const bool sessionLock = false;
 
 	SET_LOCKTAG_SHARD_RESOURCE(tag, MyDatabaseId, shardId);
@@ -95,7 +95,7 @@ UnlockShardResource(uint64 shardId, LOCKMODE lockmode)
 void
 LockJobResource(uint64 jobId, LOCKMODE lockmode)
 {
-	LOCKTAG	tag;
+	LOCKTAG tag;
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
@@ -109,7 +109,7 @@ LockJobResource(uint64 jobId, LOCKMODE lockmode)
 void
 UnlockJobResource(uint64 jobId, LOCKMODE lockmode)
 {
-	LOCKTAG	tag;
+	LOCKTAG tag;
 	const bool sessionLock = false;
 
 	SET_LOCKTAG_JOB_RESOURCE(tag, MyDatabaseId, jobId);

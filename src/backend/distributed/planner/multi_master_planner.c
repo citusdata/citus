@@ -122,7 +122,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	AggStrategy aggregateStrategy = AGG_PLAIN;
 	AggClauseCosts aggregateCosts;
 	AttrNumber *groupColumnIdArray = NULL;
-	List *aggregateTargetList = NIL; 
+	List *aggregateTargetList = NIL;
 	List *groupColumnList = NIL;
 	List *columnList = NIL;
 	ListCell *columnCell = NULL;
@@ -168,13 +168,13 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 
 	/* finally create the plan */
 #if (PG_VERSION_NUM >= 90500)
-	aggregatePlan =  make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
-							  &aggregateCosts, groupColumnCount, groupColumnIdArray,
-							  groupColumnOpArray, NIL, rowEstimate, subPlan);
+	aggregatePlan = make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
+							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
+							 groupColumnOpArray, NIL, rowEstimate, subPlan);
 #else
-	aggregatePlan =  make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
-							  &aggregateCosts, groupColumnCount, groupColumnIdArray,
-							  groupColumnOpArray, rowEstimate, subPlan);
+	aggregatePlan = make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
+							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
+							 groupColumnOpArray, rowEstimate, subPlan);
 #endif
 
 	return aggregatePlan;
@@ -211,7 +211,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 	rangeTableEntry = copyObject(queryRangeTableEntry);
 	rangeTableEntry->rtekind = RTE_RELATION;
 	rangeTableEntry->eref = makeAlias(masterTableName, NIL);
-	rangeTableEntry->relid = 0;	/* to be filled in exec_Start */
+	rangeTableEntry->relid = 0; /* to be filled in exec_Start */
 	rangeTableEntry->inh = false;
 	rangeTableEntry->inFromCl = true;
 
@@ -220,7 +220,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 
 	/* (2) build and initialize sequential scan node */
 	sequentialScan = makeNode(SeqScan);
-	sequentialScan->scanrelid = 1;	/* always one */
+	sequentialScan->scanrelid = 1;  /* always one */
 
 	/* (3) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)

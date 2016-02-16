@@ -35,7 +35,7 @@
 
 /* Local functions forward declarations */
 static bool TypeAddIndexConstraint(const AlterTableCmd *command);
-static bool TypeDropIndexConstraint(const AlterTableCmd *command, 
+static bool TypeDropIndexConstraint(const AlterTableCmd *command,
 									const RangeVar *relation, uint64 shardId);
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 
@@ -67,7 +67,7 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 			AppendShardIdToName(sequenceName, shardId);
 			break;
 		}
-		
+
 		case T_AlterTableStmt:
 		{
 			/*
@@ -79,7 +79,7 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
 			char **relationName = &(alterTableStmt->relation->relname);
-			RangeVar *relation  = alterTableStmt->relation; /* for constraints */
+			RangeVar *relation = alterTableStmt->relation;  /* for constraints */
 
 			List *commandList = alterTableStmt->cmds;
 			ListCell *commandCell = NULL;
@@ -179,15 +179,15 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 				objectType == OBJECT_INDEX || objectType == OBJECT_FOREIGN_TABLE ||
 				objectType == OBJECT_FOREIGN_SERVER)
 			{
-				List  *relationNameList = NULL;
-				int    relationNameListLength = 0;
+				List *relationNameList = NULL;
+				int relationNameListLength = 0;
 				Value *relationNameValue = NULL;
-				char  **relationName = NULL;
+				char **relationName = NULL;
 
 				uint32 dropCount = list_length(dropStmt->objects);
 				if (dropCount > 1)
 				{
-					ereport(ERROR, 
+					ereport(ERROR,
 							(errmsg("cannot extend name for multiple drop objects")));
 				}
 
@@ -205,19 +205,30 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 				switch (relationNameListLength)
 				{
 					case 1:
+					{
 						relationNameValue = linitial(relationNameList);
 						break;
+					}
+
 					case 2:
+					{
 						relationNameValue = lsecond(relationNameList);
 						break;
+					}
+
 					case 3:
+					{
 						relationNameValue = lthird(relationNameList);
 						break;
+					}
+
 					default:
+					{
 						ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR),
 										errmsg("improper relation name: \"%s\"",
 											   NameListToString(relationNameList))));
 						break;
+					}
 				}
 
 				relationName = &(relationNameValue->val.str);
@@ -304,7 +315,7 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 		{
 			RenameStmt *renameStmt = (RenameStmt *) parseTree;
 			ObjectType objectType = renameStmt->renameType;
-			
+
 			if (objectType == OBJECT_TABLE || objectType == OBJECT_SEQUENCE ||
 				objectType == OBJECT_INDEX)
 			{
@@ -335,7 +346,7 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 			 * We currently do not support truncate statements. This is
 			 * primarily because truncates allow implicit modifications to
 			 * sequences through table column dependencies. As we have not
-			 * determined our dependency model for sequences, we error here. 
+			 * determined our dependency model for sequences, we error here.
 			 */
 			ereport(ERROR, (errmsg("cannot extend name for truncate statement")));
 			break;
@@ -384,18 +395,18 @@ TypeAddIndexConstraint(const AlterTableCmd *command)
  * associated with an index.
  */
 static bool
-TypeDropIndexConstraint(const AlterTableCmd *command, 
+TypeDropIndexConstraint(const AlterTableCmd *command,
 						const RangeVar *relation, uint64 shardId)
 {
 	Relation pgConstraint = NULL;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData	scanKey[1];
+	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	HeapTuple heapTuple = NULL;
 
 	char *searchedConstraintName = NULL;
-	bool indexConstraint = false;	
-	Oid  relationId = InvalidOid;
+	bool indexConstraint = false;
+	Oid relationId = InvalidOid;
 	bool failOK = true;
 
 	if (command->subtype != AT_DropConstraint)
@@ -423,8 +434,8 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
 				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
-	
-	scanDescriptor = systable_beginscan(pgConstraint, 
+
+	scanDescriptor = systable_beginscan(pgConstraint,
 										ConstraintRelidIndexId, true, /* indexOK */
 										NULL, scanKeyCount, scanKey);
 
@@ -433,7 +444,7 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 	{
 		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
 		char *constraintName = NameStr(constraintForm->conname);
-		
+
 		if (strncmp(constraintName, searchedConstraintName, NAMEDATALEN) == 0)
 		{
 			/* we found the constraint, now check if it is for an index */
@@ -442,7 +453,7 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 			{
 				indexConstraint = true;
 			}
-			
+
 			break;
 		}
 
@@ -451,7 +462,7 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, AccessShareLock);
-	
+
 	pfree(searchedConstraintName);
 
 	return indexConstraint;
@@ -489,10 +500,10 @@ AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId)
 void
 AppendShardIdToName(char **name, uint64 shardId)
 {
-	char   extendedName[NAMEDATALEN];
+	char extendedName[NAMEDATALEN];
 	uint32 extendedNameLength = 0;
 
-	snprintf(extendedName, NAMEDATALEN, "%s%c" UINT64_FORMAT, 
+	snprintf(extendedName, NAMEDATALEN, "%s%c" UINT64_FORMAT,
 			 (*name), SHARD_NAME_SEPARATOR, shardId);
 
 	/*

@@ -20,9 +20,9 @@
 
 
 #define MAX_TASK_EXECUTION_FAILURES 3 /* allowed failure count for one task */
-#define MAX_TRACKER_FAILURE_COUNT   3 /* allowed failure count for one tracker */
+#define MAX_TRACKER_FAILURE_COUNT 3   /* allowed failure count for one tracker */
 #define REMOTE_NODE_CONNECT_TIMEOUT 4000 /* async connect timeout in ms */
-#define RESERVED_FD_COUNT			64 /* file descriptors unavailable to executor */
+#define RESERVED_FD_COUNT 64           /* file descriptors unavailable to executor */
 
 /* copy out query results */
 #define COPY_QUERY_TO_STDOUT_TEXT "COPY (%s) TO STDOUT"
@@ -32,9 +32,9 @@
 
 /* Task tracker executor related defines */
 #define TASK_ASSIGNMENT_QUERY "SELECT task_tracker_assign_task \
- ("UINT64_FORMAT", %u, %s)"
-#define TASK_STATUS_QUERY "SELECT task_tracker_task_status("UINT64_FORMAT", %u)"
-#define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT")"
+ ("UINT64_FORMAT ", %u, %s)"
+#define TASK_STATUS_QUERY "SELECT task_tracker_task_status("UINT64_FORMAT ", %u)"
+#define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT ")"
 #define JOB_CLEANUP_TASK_ID INT_MAX
 
 
@@ -43,9 +43,9 @@ typedef enum
 {
 	EXEC_TASK_INVALID_FIRST = 0,
 	EXEC_TASK_CONNECT_START = 1,
-	EXEC_TASK_CONNECT_POLL  = 2,
+	EXEC_TASK_CONNECT_POLL = 2,
 	EXEC_TASK_FAILED = 3,
-	EXEC_FETCH_TASK_LOOP  = 4,
+	EXEC_FETCH_TASK_LOOP = 4,
 	EXEC_FETCH_TASK_START = 5,
 	EXEC_FETCH_TASK_RUNNING = 6,
 	EXEC_COMPUTE_TASK_START = 7,
@@ -60,7 +60,6 @@ typedef enum
 	EXEC_TASK_TRACKER_FAILED = 14,
 	EXEC_SOURCE_TASK_TRACKER_RETRY = 15,
 	EXEC_SOURCE_TASK_TRACKER_FAILED = 16
-
 } TaskExecStatus;
 
 
@@ -74,7 +73,6 @@ typedef enum
 	EXEC_TRANSMIT_TRACKER_RETRY = 4,
 	EXEC_TRANSMIT_TRACKER_FAILED = 5,
 	EXEC_TRANSMIT_DONE = 6
-
 } TransmitExecStatus;
 
 
@@ -86,7 +84,6 @@ typedef enum
 	TRACKER_CONNECT_POLL = 2,
 	TRACKER_CONNECTED = 3,
 	TRACKER_CONNECTION_FAILED = 4
-
 } TrackerStatus;
 
 
@@ -97,7 +94,6 @@ typedef enum
 	MULTI_EXECUTOR_REAL_TIME = 1,
 	MULTI_EXECUTOR_TASK_TRACKER = 2,
 	MULTI_EXECUTOR_ROUTER = 3
-
 } MultiExecutorType;
 
 
@@ -107,7 +103,6 @@ typedef enum
 	CONNECT_ACTION_NONE = 0,
 	CONNECT_ACTION_OPENED = 1,
 	CONNECT_ACTION_CLOSED = 2
-
 } ConnectAction;
 
 
@@ -132,7 +127,6 @@ struct TaskExecution
 	uint32 querySourceNodeIndex; /* only applies to map fetch tasks */
 	int32 dataFetchTaskIndex;
 	uint32 failureCount;
-
 };
 
 
@@ -147,7 +141,6 @@ typedef struct TrackerTaskState
 	uint32 taskId;
 	TaskStatus status;
 	StringInfo taskAssignmentQuery;
-
 } TrackerTaskState;
 
 
@@ -158,7 +151,7 @@ typedef struct TrackerTaskState
  */
 typedef struct TaskTracker
 {
-	uint32 workerPort;				/* node's port; part of hash table key */
+	uint32 workerPort;              /* node's port; part of hash table key */
 	char workerName[WORKER_LENGTH]; /* node's name; part of hash table key */
 	TrackerStatus trackerStatus;
 	int32 connectionId;
@@ -171,7 +164,6 @@ typedef struct TaskTracker
 	int32 currentTaskIndex;
 	bool connectionBusy;
 	TrackerTaskState *connectionBusyOnTask;
-
 } TaskTracker;
 
 
@@ -184,7 +176,6 @@ typedef struct WorkerNodeState
 	uint32 workerPort;
 	char workerName[WORKER_LENGTH];
 	uint32 openConnectionCount;
-
 } WorkerNodeState;
 
 

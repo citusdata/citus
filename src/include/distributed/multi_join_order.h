@@ -29,7 +29,7 @@ typedef enum JoinRuleType
 {
 	JOIN_RULE_INVALID_FIRST = 0,
 	BROADCAST_JOIN = 1,
-	LOCAL_PARTITION_JOIN  = 2,
+	LOCAL_PARTITION_JOIN = 2,
 	SINGLE_PARTITION_JOIN = 3,
 	DUAL_PARTITION_JOIN = 4,
 	CARTESIAN_PRODUCT = 5,
@@ -40,7 +40,6 @@ typedef enum JoinRuleType
 	 * RuleNameArray.
 	 */
 	JOIN_RULE_LAST
-
 } JoinRuleType;
 
 
@@ -53,7 +52,6 @@ typedef struct TableEntry
 {
 	Oid relationId;
 	uint32 rangeTableId;
-
 } TableEntry;
 
 
@@ -65,14 +63,13 @@ typedef struct TableEntry
  */
 typedef struct JoinOrderNode
 {
-	TableEntry *tableEntry;		/* this node's relation and range table id */
-	JoinRuleType joinRuleType;	/* not relevant for the first table */
-	JoinType joinType;			/* not relevant for the first table */
-	Var *partitionColumn;		/* not relevant for the first table */
+	TableEntry *tableEntry;     /* this node's relation and range table id */
+	JoinRuleType joinRuleType;  /* not relevant for the first table */
+	JoinType joinType;          /* not relevant for the first table */
+	Var *partitionColumn;       /* not relevant for the first table */
 	char partitionMethod;
-	List *joinClauseList;		/* not relevant for the first table */
+	List *joinClauseList;       /* not relevant for the first table */
 	List *shardIntervalList;
-
 } JoinOrderNode;
 
 

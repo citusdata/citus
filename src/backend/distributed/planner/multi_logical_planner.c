@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_logical_planner.c
- * 
+ *
  * Routines for constructing a logical plan tree from the given Query tree
  * structure. This new logical plan is based on multi-relational algebra rules.
  *
@@ -39,11 +39,11 @@ bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 
 
 /* Function pointer type definition for apply join rule functions */
-typedef MultiNode * (*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNode,
-										  Var *partitionColumn, JoinType joinType,
-										  List *joinClauses);
+typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNode,
+										 Var *partitionColumn, JoinType joinType,
+										 List *joinClauses);
 
-static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = {0}; /* join rules */
+static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
 static MultiNode * MultiPlanTree(Query *queryTree);
@@ -157,7 +157,7 @@ SubqueryEntryList(Query *queryTree)
 	 * only walk over range table entries at this level and do not recurse into
 	 * subqueries.
 	 */
-	ExtractRangeTableIndexWalker((Node*) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
 	{
 		/*
@@ -285,6 +285,7 @@ MultiPlanTree(Query *queryTree)
 	else
 	{
 		bool hasOuterJoin = false;
+
 		/*
 		 * We calculate the join order using the list of tables in the query and
 		 * the join clauses between them. Note that this function owns the table
@@ -465,6 +466,7 @@ ErrorIfQueryNotSupported(Query *queryTree)
 
 
 #if (PG_VERSION_NUM >= 90500)
+
 /* HasTablesample returns tree if the query contains tablesample */
 static bool
 HasTablesample(Query *queryTree)
@@ -485,6 +487,8 @@ HasTablesample(Query *queryTree)
 
 	return hasTablesample;
 }
+
+
 #endif
 
 
@@ -529,7 +533,8 @@ HasUnsupportedJoinWalker(Node *node, void *context)
  * ErrorIfSubqueryNotSupported checks that we can perform distributed planning for
  * the given subquery.
  */
-static void ErrorIfSubqueryNotSupported(Query *subqueryTree)
+static void
+ErrorIfSubqueryNotSupported(Query *subqueryTree)
 {
 	char *errorDetail = NULL;
 	bool preconditionsSatisfied = true;
@@ -587,7 +592,6 @@ HasOuterJoin(Query *queryTree)
 static bool
 HasOuterJoinWalker(Node *node, void *context)
 {
-
 	bool hasOuterJoin = false;
 	if (node == NULL)
 	{
@@ -657,7 +661,7 @@ HasComplexRangeTableType(Query *queryTree)
 	 * Extract all range table indexes from the join tree. Note that sub-queries
 	 * that get pulled up by PostgreSQL don't appear in this join tree.
 	 */
-	ExtractRangeTableIndexWalker((Node*) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
 	{
 		/*
@@ -675,7 +679,7 @@ HasComplexRangeTableType(Query *queryTree)
 		 * subquery.
 		 */
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
-				rangeTableEntry->rtekind != RTE_SUBQUERY)
+			rangeTableEntry->rtekind != RTE_SUBQUERY)
 		{
 			hasComplexRangeTableType = true;
 		}
@@ -966,7 +970,7 @@ TableEntryList(List *rangeTableList)
 
 	foreach(rangeTableCell, rangeTableList)
 	{
-		RangeTblEntry *rangeTableEntry =  (RangeTblEntry *) lfirst(rangeTableCell);
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
 		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
@@ -1178,8 +1182,8 @@ IsSelectClause(Node *clause)
 
 	/* we currently consider the following nodes as select clauses */
 	NodeTag nodeTag = nodeTag(clause);
-	if ( !(nodeTag == T_OpExpr || nodeTag == T_ScalarArrayOpExpr ||
-		   nodeTag == T_NullTest || nodeTag == T_BooleanTest) )
+	if (!(nodeTag == T_OpExpr || nodeTag == T_ScalarArrayOpExpr ||
+		  nodeTag == T_NullTest || nodeTag == T_BooleanTest))
 	{
 		return false;
 	}
@@ -1317,9 +1321,9 @@ UnaryOperator(MultiNode *node)
 {
 	bool unaryOperator = false;
 
-	if (CitusIsA(node, MultiTreeRoot) || CitusIsA(node, MultiTable)  ||
-		CitusIsA(node, MultiCollect)  || CitusIsA(node, MultiSelect) ||
-		CitusIsA(node, MultiProject)  || CitusIsA(node, MultiPartition) ||
+	if (CitusIsA(node, MultiTreeRoot) || CitusIsA(node, MultiTable) ||
+		CitusIsA(node, MultiCollect) || CitusIsA(node, MultiSelect) ||
+		CitusIsA(node, MultiProject) || CitusIsA(node, MultiPartition) ||
 		CitusIsA(node, MultiExtendedOp))
 	{
 		unaryOperator = true;
@@ -1403,7 +1407,7 @@ FindNodesOfType(MultiNode *node, int type)
 	}
 	else if (BinaryOperator(node))
 	{
-		MultiNode *leftChildNode  = ((MultiBinaryNode *) node)->leftChildNode;
+		MultiNode *leftChildNode = ((MultiBinaryNode *) node)->leftChildNode;
 		MultiNode *rightChildNode = ((MultiBinaryNode *) node)->rightChildNode;
 
 		List *leftChildNodeList = FindNodesOfType(leftChildNode, type);
@@ -1533,9 +1537,9 @@ ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
 List *
 pull_var_clause_default(Node *node)
 {
-   List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES,
-									  PVC_REJECT_PLACEHOLDERS);
-   return columnList;
+	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES,
+									   PVC_REJECT_PLACEHOLDERS);
+	return columnList;
 }
 
 
@@ -1552,7 +1556,7 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 	MultiNode *multiNode = NULL;
 
 	List *applicableJoinClauses = NIL;
-	List *leftTableIdList  = OutputTableIdList(leftNode);
+	List *leftTableIdList = OutputTableIdList(leftNode);
 	List *rightTableIdList = OutputTableIdList(rightNode);
 	int rightTableIdCount = 0;
 	uint32 rightTableId = 0;
@@ -1567,8 +1571,8 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 
 	/* call the join rule application function to create the new join node */
 	ruleApplyFunction = JoinRuleApplyFunction(ruleType);
-	multiNode = (*ruleApplyFunction) (leftNode, rightNode, partitionColumn,
-									  joinType, applicableJoinClauses);
+	multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumn,
+									 joinType, applicableJoinClauses);
 
 	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
 	{
@@ -1918,7 +1922,7 @@ ErrorIfSubqueryJoin(Query *queryTree)
 	 * Extract all range table indexes from the join tree. Note that sub-queries
 	 * that get pulled up by PostgreSQL don't appear in this join tree.
 	 */
-	ExtractRangeTableIndexWalker((Node*) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 	joiningRangeTableCount = list_length(joinTreeTableIndexList);
 
 	if (joiningRangeTableCount > 1)

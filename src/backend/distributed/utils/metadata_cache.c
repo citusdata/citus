@@ -51,10 +51,10 @@ static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
-                                      Oid *intervalTypeId, int32 *intervalTypeMod);
+									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
-                                            TupleDesc tupleDescriptor, Oid intervalTypeId,
-                                            int32 intervalTypeMod);
+											TupleDesc tupleDescriptor, Oid intervalTypeId,
+											int32 intervalTypeMod);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 
 
@@ -87,6 +87,7 @@ IsDistributedTable(Oid relationId)
 	return cacheEntry->isDistributedTable;
 }
 
+
 /*
  * LoadShardInterval reads shard metadata for given shardId from pg_dist_shard,
  * and converts min/max values in these metadata to their properly typed datum
@@ -98,7 +99,7 @@ LoadShardInterval(uint64 shardId)
 {
 	ShardInterval *shardInterval;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData	scanKey[1];
+	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	HeapTuple heapTuple = NULL;
 	Form_pg_dist_shard shardForm = NULL;
@@ -127,17 +128,18 @@ LoadShardInterval(uint64 shardId)
 	partitionEntry = DistributedTableCacheEntry(shardForm->logicalrelid);
 
 	GetPartitionTypeInputInfo(partitionEntry->partitionKeyString,
-	                          partitionEntry->partitionMethod, &intervalTypeId,
-	                          &intervalTypeMod);
+							  partitionEntry->partitionMethod, &intervalTypeId,
+							  &intervalTypeMod);
 
 	shardInterval = TupleToShardInterval(heapTuple, tupleDescriptor, intervalTypeId,
-	                                     intervalTypeMod);
+										 intervalTypeMod);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistShard, AccessShareLock);
 
 	return shardInterval;
 }
+
 
 /*
  * DistributedTableCacheEntry looks up a pg_dist_partition entry for a
@@ -239,19 +241,19 @@ LookupDistTableCacheEntry(Oid relationId)
 		int32 intervalTypeMod = -1;
 
 		GetPartitionTypeInputInfo(partitionKeyString, partitionMethod, &intervalTypeId,
-		                          &intervalTypeMod);
+								  &intervalTypeMod);
 
 		shardIntervalArray = MemoryContextAllocZero(CacheMemoryContext,
-		                                            shardIntervalArrayLength *
-		                                            sizeof(ShardInterval));
+													shardIntervalArrayLength *
+													sizeof(ShardInterval));
 
 		foreach(distShardTupleCell, distShardTupleList)
 		{
 			HeapTuple shardTuple = lfirst(distShardTupleCell);
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
-			                                                    distShardTupleDesc,
-			                                                    intervalTypeId,
-			                                                    intervalTypeMod);
+																distShardTupleDesc,
+																intervalTypeId,
+																intervalTypeMod);
 			MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 
 			CopyShardInterval(shardInterval, &shardIntervalArray[arrayIndex]);
@@ -773,7 +775,7 @@ LookupDistShardTuples(Oid relationId)
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
 
 	scanDescriptor = systable_beginscan(pgDistShard, DistShardLogicalRelidIndexId(), true,
-	                                    NULL, 1, scanKey);
+										NULL, 1, scanKey);
 
 	currentShardTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(currentShardTuple))
@@ -797,7 +799,7 @@ LookupDistShardTuples(Oid relationId)
  */
 static void
 GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
-                          Oid *intervalTypeId, int32 *intervalTypeMod)
+						  Oid *intervalTypeId, int32 *intervalTypeMod)
 {
 	*intervalTypeId = InvalidOid;
 	*intervalTypeMod = -1;
@@ -826,7 +828,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("unsupported table partition type: %c",
-							       partitionMethod)));
+								   partitionMethod)));
 		}
 	}
 }
@@ -838,7 +840,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
  */
 static ShardInterval *
 TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid intervalTypeId,
-                     int32 intervalTypeMod)
+					 int32 intervalTypeMod)
 {
 	ShardInterval *shardInterval = NULL;
 	bool isNull = false;
@@ -847,16 +849,16 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 	Oid inputFunctionId = InvalidOid;
 	Oid typeIoParam = InvalidOid;
 	Datum relationIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_logicalrelid,
-	                                     tupleDescriptor, &isNull);
+										 tupleDescriptor, &isNull);
 	Datum shardIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardid,
-	                                     tupleDescriptor, &isNull);
+									  tupleDescriptor, &isNull);
 	Datum storageTypeDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardstorage,
-	                                      tupleDescriptor, &isNull);
+										  tupleDescriptor, &isNull);
 
 	Datum minValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardminvalue,
-	                                       tupleDescriptor, &minValueNull);
+										   tupleDescriptor, &minValueNull);
 	Datum maxValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardmaxvalue,
-	                                       tupleDescriptor, &maxValueNull);
+										   tupleDescriptor, &maxValueNull);
 
 	Oid relationId = DatumGetObjectId(relationIdDatum);
 	int64 shardId = DatumGetInt64(shardIdDatum);
@@ -877,7 +879,7 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 
 		/* TODO: move this up the call stack to avoid per-tuple invocation? */
 		get_type_io_data(intervalTypeId, IOFunc_input, &intervalTypeLen, &intervalByVal,
-		                 &intervalAlign, &intervalDelim, &typeIoParam, &inputFunctionId);
+						 &intervalAlign, &intervalDelim, &typeIoParam, &inputFunctionId);
 
 		/* finally convert min/max values to their actual types */
 		minValue = OidInputFunctionCall(inputFunctionId, minValueString,
