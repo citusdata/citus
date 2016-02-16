@@ -154,7 +154,7 @@ CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery)
 static void
 AcquireExecutorShardLock(Task *task, LOCKMODE lockMode)
 {
-	int64 shardId = task->shardId;
+	int64 shardId = task->anchorShardId;
 
 	LockShardResource(shardId, lockMode);
 }
