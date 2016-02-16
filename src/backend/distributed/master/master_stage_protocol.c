@@ -79,9 +79,16 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	text *nullMinValue = NULL;
 	text *nullMaxValue = NULL;
 	char partitionMethod = 0;
+	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText);
 	CheckDistributedTable(relationId);
+
+	if (CStoreTable(relationId))
+	{
+		storageType = SHARD_STORAGE_COLUMNAR;
+	}
+
 
 	partitionMethod = PartitionMethod(relationId);
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
@@ -124,7 +131,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	CreateShardPlacements(shardId, ddlEventList, candidateNodeList, 0,
 	                      ShardReplicationFactor);
 
-	InsertShardRow(relationId, shardId, SHARD_STORAGE_TABLE, nullMinValue, nullMaxValue);
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
 
 	PG_RETURN_INT64(shardId);
 }
@@ -474,7 +481,8 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 
 /*
  * WorkerTableSize queries the worker node to extract the disk space used by the
- * given relation. The function assumes the relation represents a regular table.
+ * given relation. The function assumes the relation represents a regular table or
+ * a cstore_fdw table.
  */
 static uint64
 WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName)
@@ -484,8 +492,8 @@ WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName
 	StringInfo tableSizeString = NULL;
 	char *tableSizeStringEnd = NULL;
 	bool cstoreTable = CStoreTable(relationId);
-
 	StringInfo tableSizeQuery = makeStringInfo();
+
 	if (cstoreTable)
 	{
 		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, tableName);
