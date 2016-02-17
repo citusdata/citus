@@ -126,9 +126,9 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	if ((partitionMethod == DISTRIBUTE_BY_HASH) && (deleteCriteria != NULL))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		                errmsg("cannot delete from distributed table"),
-		                errdetail("Delete statements on hash-partitioned tables "
-		                          "with where clause is not supported")));
+						errmsg("cannot delete from distributed table"),
+						errdetail("Delete statements on hash-partitioned tables "
+								  "with where clause is not supported")));
 	}
 
 	CheckDeleteCriteria(deleteCriteria);
@@ -149,8 +149,8 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	else
 	{
 		deletableShardIntervalList = ShardsMatchingDeleteCriteria(relationId,
-		                                                          shardIntervalList,
-		                                                          deleteCriteria);
+																  shardIntervalList,
+																  deleteCriteria);
 	}
 
 	droppedShardCount = DropShards(relationId, schemaName, relationName,
@@ -222,7 +222,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	{
 		List *shardPlacementList = NIL;
 		List *droppedPlacementList = NIL;
-		List *lingeringPlacementList= NIL;
+		List *lingeringPlacementList = NIL;
 		ListCell *shardPlacementCell = NULL;
 		ListCell *droppedPlacementCell = NULL;
 		ListCell *lingeringPlacementCell = NULL;
@@ -251,7 +251,8 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
-			ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
+			ShardPlacement *shardPlacement =
+				(ShardPlacement *) lfirst(shardPlacementCell);
 			char *workerName = shardPlacement->nodeName;
 			uint32 workerPort = shardPlacement->nodePort;
 			bool dropSuccessful = false;
@@ -260,15 +261,18 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 			char storageType = shardInterval->storageType;
 			if (storageType == SHARD_STORAGE_TABLE)
 			{
-				appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND, quotedShardName);
+				appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
+								 quotedShardName);
 			}
 			else if (storageType == SHARD_STORAGE_COLUMNAR ||
 					 storageType == SHARD_STORAGE_FOREIGN)
 			{
-				appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND, quotedShardName);
+				appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND,
+								 quotedShardName);
 			}
 
-			dropSuccessful = ExecuteRemoteCommand(workerName, workerPort, workerDropQuery);
+			dropSuccessful = ExecuteRemoteCommand(workerName, workerPort,
+												  workerDropQuery);
 			if (dropSuccessful)
 			{
 				droppedPlacementList = lappend(droppedPlacementList, shardPlacement);
@@ -312,12 +316,13 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 		if (QueryCancelPending)
 		{
-			ereport(WARNING, (errmsg("cancel requests are ignored during shard deletion")));
+			ereport(WARNING, (errmsg("cancel requests are ignored during shard "
+									 "deletion")));
 			QueryCancelPending = false;
 		}
 
 		RESUME_INTERRUPTS();
-    }
+	}
 
 	droppedShardCount = list_length(deletableShardIntervalList);
 
@@ -343,7 +348,7 @@ CheckTableCount(Query *deleteQuery)
 static void
 CheckDeleteCriteria(Node *deleteCriteria)
 {
-	bool simpleOpExpression  = true;
+	bool simpleOpExpression = true;
 
 	if (deleteCriteria == NULL)
 	{
@@ -372,7 +377,7 @@ CheckDeleteCriteria(Node *deleteCriteria)
 	}
 	else
 	{
-		simpleOpExpression = false;	
+		simpleOpExpression = false;
 	}
 
 	if (!simpleOpExpression)
@@ -384,15 +389,15 @@ CheckDeleteCriteria(Node *deleteCriteria)
 }
 
 
- /*
-  * CheckPartitionColumn checks that the given where clause is based only on the
-  * partition key of the given relation id.
-  */
+/*
+ * CheckPartitionColumn checks that the given where clause is based only on the
+ * partition key of the given relation id.
+ */
 static void
 CheckPartitionColumn(Oid relationId, Node *whereClause)
 {
 	Var *partitionColumn = PartitionKey(relationId);
-    ListCell *columnCell = NULL;
+	ListCell *columnCell = NULL;
 
 	List *columnList = pull_var_clause_default(whereClause);
 	foreach(columnCell, columnList)
@@ -418,7 +423,7 @@ CheckPartitionColumn(Oid relationId, Node *whereClause)
  */
 static List *
 ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
-                             Node *deleteCriteria)
+							 Node *deleteCriteria)
 {
 	List *dropShardIntervalList = NIL;
 	List *deleteCriteriaList = NIL;

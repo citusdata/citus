@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * resource_lock.h
- *	  Locking Infrastructure for CitusDB.
+ *	  Locking Infrastructure for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -21,7 +21,7 @@
  * advisory locks. Only 1 and 2 are used allowing us to define non-conflicting
  * lock methods.
  *
- * In case postgres starts to use additional values, CitusDB's values
+ * In case postgres starts to use additional values, Citus's values
  * will have to be changed. That just requires re-compiling and a restart.
  */
 typedef enum AdvisoryLocktagClass
@@ -29,7 +29,8 @@ typedef enum AdvisoryLocktagClass
 	/* values defined in postgres' lockfuncs.c */
 	ADV_LOCKTAG_CLASS_INT64 = 1,
 	ADV_LOCKTAG_CLASS_INT32 = 2,
-	/* CitusDB lock types */
+
+	/* Citus lock types */
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,
 	ADV_LOCKTAG_CLASS_CITUS_JOB = 6

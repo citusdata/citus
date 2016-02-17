@@ -73,7 +73,7 @@ JobExecutorType(MultiPlan *multiPlan)
 			ereport(WARNING, (errmsg("this query uses more connections than the "
 									 "configured max_connections limit"),
 							  errhint("Consider increasing max_connections or setting "
-									  "citusdb.task_executor_type to "
+									  "citus.task_executor_type to "
 									  "\"task-tracker\".")));
 		}
 
@@ -88,7 +88,7 @@ JobExecutorType(MultiPlan *multiPlan)
 			ereport(WARNING, (errmsg("this query uses more file descriptors than the "
 									 "configured max_files_per_process limit"),
 							  errhint("Consider increasing max_files_per_process or "
-									  "setting citusdb.task_executor_type to "
+									  "setting citus.task_executor_type to "
 									  "\"task-tracker\".")));
 		}
 
@@ -96,7 +96,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (dependedJobCount > 0)
 		{
 			ereport(ERROR, (errmsg("cannot use real time executor with repartition jobs"),
-							errhint("Set citusdb.task_executor_type to "
+							errhint("Set citus.task_executor_type to "
 									"\"task-tracker\".")));
 		}
 	}
@@ -119,7 +119,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (dependedJobCount > 0)
 		{
 			ereport(ERROR, (errmsg("cannot use router executor with repartition jobs"),
-							errhint("Set citusdb.task_executor_type to "
+							errhint("Set citus.task_executor_type to "
 									"\"task-tracker\".")));
 		}
 
@@ -128,7 +128,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		{
 			ereport(ERROR, (errmsg("cannot use router executor with queries that "
 								   "hit multiple shards"),
-							errhint("Set citusdb.task_executor_type to \"real-time\" or "
+							errhint("Set citus.task_executor_type to \"real-time\" or "
 									"\"task-tracker\".")));
 		}
 
@@ -138,7 +138,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (list_length(workerDependentTaskList) > 0)
 		{
 			ereport(ERROR, (errmsg("cannot use router executor with JOINs"),
-							errhint("Set citusdb.task_executor_type to \"real-time\" or "
+							errhint("Set citus.task_executor_type to \"real-time\" or "
 									"\"task-tracker\".")));
 		}
 
@@ -146,7 +146,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
 		{
 			ereport(ERROR, (errmsg("cannot use router executor with ORDER BY clauses"),
-							errhint("Set citusdb.task_executor_type to \"real-time\" or "
+							errhint("Set citus.task_executor_type to \"real-time\" or "
 									"\"task-tracker\".")));
 		}
 
@@ -158,7 +158,7 @@ JobExecutorType(MultiPlan *multiPlan)
 		if (masterQueryHasAggregates)
 		{
 			ereport(ERROR, (errmsg("cannot use router executor with aggregates"),
-							errhint("Set citusdb.task_executor_type to \"real-time\" or "
+							errhint("Set citus.task_executor_type to \"real-time\" or "
 									"\"task-tracker\".")));
 		}
 	}
@@ -173,7 +173,7 @@ JobExecutorType(MultiPlan *multiPlan)
  * Every task requires 2 FDs, one file and one connection. Some FDs are taken by
  * the VFD pool and there is currently no way to reclaim these before opening a
  * connection. We therefore assume some FDs to be reserved for VFDs, based on
- * observing a typical size of the pool on a CitusDB master.
+ * observing a typical size of the pool on a Citus master.
  */
 int
 MaxMasterConnectionCount(void)
@@ -303,13 +303,13 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 
 	if (taskExecution->currentNodeIndex < maxNodeIndex)
 	{
-		taskExecution->currentNodeIndex++;	 /* try next worker node */
+		taskExecution->currentNodeIndex++;   /* try next worker node */
 	}
 	else
 	{
 		taskExecution->currentNodeIndex = 0; /* go back to the first worker node */
 	}
 
-	taskExecution->dataFetchTaskIndex = -1;	/* reset data fetch counter */
-	taskExecution->failureCount++;			/* record failure */
+	taskExecution->dataFetchTaskIndex = -1; /* reset data fetch counter */
+	taskExecution->failureCount++;          /* record failure */
 }

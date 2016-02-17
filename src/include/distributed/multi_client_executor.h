@@ -15,21 +15,20 @@
 #define MULTI_CLIENT_EXECUTOR_H
 
 
-#define INVALID_CONNECTION_ID  -1 /* identifies an invalid connection */
-#define CLIENT_CONNECT_TIMEOUT  5 /* connection timeout in seconds */
+#define INVALID_CONNECTION_ID -1  /* identifies an invalid connection */
+#define CLIENT_CONNECT_TIMEOUT 5  /* connection timeout in seconds */
 #define MAX_CONNECTION_COUNT 2048 /* simultaneous client connection count */
-#define STRING_BUFFER_SIZE   1024 /* buffer size for character arrays */
+#define STRING_BUFFER_SIZE 1024   /* buffer size for character arrays */
 #define CONN_INFO_TEMPLATE "host=%s port=%u dbname=%s connect_timeout=%u"
 
 
 /* Enumeration to track one client connection's status */
 typedef enum
 {
-	CLIENT_INVALID_CONNECT  = 0,
-	CLIENT_CONNECTION_BAD   = 1,
-	CLIENT_CONNECTION_BUSY  = 2,
+	CLIENT_INVALID_CONNECT = 0,
+	CLIENT_CONNECTION_BAD = 1,
+	CLIENT_CONNECTION_BUSY = 2,
 	CLIENT_CONNECTION_READY = 3
-
 } ConnectStatus;
 
 
@@ -38,9 +37,8 @@ typedef enum
 {
 	CLIENT_INVALID_RESULT_STATUS = 0,
 	CLIENT_RESULT_UNAVAILABLE = 1,
-	CLIENT_RESULT_BUSY  = 2,
+	CLIENT_RESULT_BUSY = 2,
 	CLIENT_RESULT_READY = 3
-
 } ResultStatus;
 
 
@@ -48,10 +46,9 @@ typedef enum
 typedef enum
 {
 	CLIENT_INVALID_QUERY = 0,
-	CLIENT_QUERY_FAILED  = 1,
+	CLIENT_QUERY_FAILED = 1,
 	CLIENT_QUERY_DONE = 2,
 	CLIENT_QUERY_COPY = 3
-
 } QueryStatus;
 
 
@@ -59,21 +56,19 @@ typedef enum
 typedef enum
 {
 	CLIENT_INVALID_COPY = 0,
-	CLIENT_COPY_MORE    = 1,
-	CLIENT_COPY_FAILED  = 2,
-	CLIENT_COPY_DONE    = 3
-
+	CLIENT_COPY_MORE = 1,
+	CLIENT_COPY_FAILED = 2,
+	CLIENT_COPY_DONE = 3
 } CopyStatus;
 
 
 /* Enumeration to track the status of a query in a batch on the client */
 typedef enum
 {
-	CLIENT_INVALID_BATCH_QUERY  = 0,
-	CLIENT_BATCH_QUERY_FAILED   = 1,
+	CLIENT_INVALID_BATCH_QUERY = 0,
+	CLIENT_BATCH_QUERY_FAILED = 1,
 	CLIENT_BATCH_QUERY_CONTINUE = 2,
-	CLIENT_BATCH_QUERY_DONE     = 3
-
+	CLIENT_BATCH_QUERY_DONE = 3
 } BatchQueryStatus;
 
 

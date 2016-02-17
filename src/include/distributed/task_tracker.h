@@ -19,10 +19,10 @@
 #include "utils/hsearch.h"
 
 
-#define HIGH_PRIORITY_TASK_TIME 1 	/* assignment time for high priority tasks */
-#define RESERVED_JOB_ID 1			/* reserved for cleanup and shutdown tasks */
+#define HIGH_PRIORITY_TASK_TIME 1   /* assignment time for high priority tasks */
+#define RESERVED_JOB_ID 1           /* reserved for cleanup and shutdown tasks */
 #define SHUTDOWN_MARKER_TASK_ID UINT_MAX /* used to identify task tracker shutdown */
-#define MAX_TASK_FAILURE_COUNT 2	/* allowed failure count for one task */
+#define MAX_TASK_FAILURE_COUNT 2    /* allowed failure count for one task */
 #define LOCAL_HOST_NAME "localhost" /* connect to local backends using this name */
 #define TASK_CALL_STRING_SIZE 12288 /* max length of task call string */
 #define TEMPLATE0_NAME "template0"  /* skip job schema cleanup for template0 */
@@ -37,13 +37,13 @@
 typedef enum
 {
 	TASK_STATUS_INVALID_FIRST = 0,
-	TASK_ASSIGNED = 1,			/* master node and task tracker */
+	TASK_ASSIGNED = 1,          /* master node and task tracker */
 	TASK_SCHEDULED = 2,
 	TASK_RUNNING = 3,
-	TASK_FAILED  = 4,
+	TASK_FAILED = 4,
 	TASK_PERMANENTLY_FAILED = 5,
 	TASK_SUCCEEDED = 6,
-	TASK_CANCEL_REQUESTED = 7,	/* master node only */
+	TASK_CANCEL_REQUESTED = 7,  /* master node only */
 	TASK_CANCELED = 8,
 	TASK_TO_REMOVE = 9,
 
@@ -63,7 +63,6 @@ typedef enum
 	 * TASK_STATUS_LAST, should never have their numbers changed.
 	 */
 	TASK_STATUS_LAST
-
 } TaskStatus;
 
 
@@ -76,16 +75,15 @@ typedef enum
  */
 typedef struct WorkerTask
 {
-	uint64 jobId;	   /* job id (upper 32-bits reserved); part of hash table key */
-	uint32 taskId;	   /* task id; part of hash table key */
+	uint64 jobId;      /* job id (upper 32-bits reserved); part of hash table key */
+	uint32 taskId;     /* task id; part of hash table key */
 	uint32 assignedAt; /* task assignment time in epoch seconds */
 
 	char taskCallString[TASK_CALL_STRING_SIZE]; /* query or function call string */
-	TaskStatus taskStatus;	/* task's current execution status */
-	char   databaseName[NAMEDATALEN]; /* name to use for local backend connection */
-	int32  connectionId;	/* connection id to local backend */
-	uint32 failureCount;	/* number of task failures */
-
+	TaskStatus taskStatus;  /* task's current execution status */
+	char databaseName[NAMEDATALEN];   /* name to use for local backend connection */
+	int32 connectionId;     /* connection id to local backend */
+	uint32 failureCount;    /* number of task failures */
 } WorkerTask;
 
 
@@ -97,6 +95,7 @@ typedef struct WorkerTasksSharedStateData
 {
 	/* Hash table shared by the task tracker and task tracker protocol functions */
 	HTAB *taskHash;
+
 	/* Lock protecting workerNodesHash */
 	LWLock *taskHashLock;
 } WorkerTasksSharedStateData;

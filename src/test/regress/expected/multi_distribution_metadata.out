@@ -3,55 +3,55 @@
 -- ===================================================================
 CREATE FUNCTION load_shard_id_array(regclass)
 	RETURNS bigint[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION load_shard_interval_array(bigint, anyelement)
 	RETURNS anyarray
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION load_shard_placement_array(bigint, bool)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION partition_column_id(regclass)
 	RETURNS smallint
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION partition_type(regclass)
 	RETURNS "char"
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION is_distributed_table(regclass)
 	RETURNS boolean
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION column_name_to_column_id(regclass, cstring)
 	RETURNS smallint
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION create_monolithic_shard_row(regclass)
 	RETURNS bigint
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION create_healthy_local_shard_placement_row(bigint)
 	RETURNS void
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION delete_shard_placement_row(bigint, text, bigint)
 	RETURNS bool
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION update_shard_placement_row_state(bigint, text, bigint, int)
 	RETURNS bool
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	RETURNS void
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION column_name_to_column(regclass, text)
 	RETURNS text
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 -- ===================================================================
 -- test distribution metadata functionality

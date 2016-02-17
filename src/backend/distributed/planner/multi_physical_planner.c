@@ -138,7 +138,7 @@ static OpExpr * MakeOpExpressionWithZeroConst(void);
 static List * BuildRestrictInfoList(List *qualList);
 static List * FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 									  List *dependedJobList);
-static JoinSequenceNode * JoinSequenceArray(List * rangeTableFragmentsList,
+static JoinSequenceNode * JoinSequenceArray(List *rangeTableFragmentsList,
 											Query *jobQuery, List *dependedJobList);
 static bool PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList);
 static void CheckJoinBetweenColumns(OpExpr *joinClause);
@@ -155,7 +155,8 @@ static StringInfo DatumArrayString(Datum *datumArray, uint32 datumCount, Oid dat
 static Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);
 static void UpdateRangeTableAlias(List *rangeTableList, List *fragmentList);
-static Alias * FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment);
+static Alias * FragmentAlias(RangeTblEntry *rangeTableEntry,
+							 RangeTableFragment *fragment);
 static uint64 AnchorShardId(List *fragmentList, uint32 anchorRangeTableId);
 static List * PruneSqlTaskDependencies(List *sqlTaskList);
 static List * AssignTaskList(List *sqlTaskList);
@@ -167,7 +168,7 @@ static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 static List * RoundRobinAssignTaskList(List *taskList);
 static List * RoundRobinReorder(Task *task, List *placementList);
 static List * ReorderAndAssignTaskList(List *taskList,
-									   List * (*reorderFunction) (Task *, List *));
+									   List * (*reorderFunction)(Task *, List *));
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
@@ -309,6 +310,7 @@ BuildJobTree(MultiTreeRoot *multiTree)
 															partitionKey, partitionType,
 															baseRelationId,
 															JOIN_MAP_MERGE_JOB);
+
 				/* reset depended job list */
 				loopDependedJobList = NIL;
 				loopDependedJobList = list_make1(mapMergeJob);
@@ -538,7 +540,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	 * If we are building this query on a repartitioned subquery job then we
 	 * don't need to update column attributes.
 	 */
-	if(dependedJobList != NIL)
+	if (dependedJobList != NIL)
 	{
 		Job *job = (Job *) linitial(dependedJobList);
 		if (CitusIsA(job, MapMergeJob))
@@ -628,10 +630,10 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	jobQuery->rtable = rangeTableList;
 	jobQuery->targetList = targetList;
 	jobQuery->jointree = joinTree;
-	jobQuery->sortClause  = sortClauseList;
+	jobQuery->sortClause = sortClauseList;
 	jobQuery->groupClause = groupClauseList;
 	jobQuery->limitOffset = limitOffset;
-	jobQuery->limitCount  = limitCount;
+	jobQuery->limitCount = limitCount;
 	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
 
 	return jobQuery;
@@ -718,10 +720,10 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependedJobList)
 	reduceQuery->rtable = derivedRangeTableList;
 	reduceQuery->targetList = targetList;
 	reduceQuery->jointree = joinTree;
-	reduceQuery->sortClause  = extendedOpNode->sortClauseList;
+	reduceQuery->sortClause = extendedOpNode->sortClauseList;
 	reduceQuery->groupClause = extendedOpNode->groupClauseList;
 	reduceQuery->limitOffset = extendedOpNode->limitOffset;
-	reduceQuery->limitCount  = extendedOpNode->limitCount;
+	reduceQuery->limitCount = extendedOpNode->limitCount;
 	reduceQuery->hasAggs = contain_agg_clause((Node *) targetList);
 
 	return reduceQuery;
@@ -754,7 +756,7 @@ BaseRangeTableList(MultiNode *multiNode)
 			 */
 			MultiTable *multiTable = (MultiTable *) multiNode;
 			if (multiTable->relationId != SUBQUERY_RELATION_ID &&
-					multiTable->relationId != HEAP_ANALYTICS_SUBQUERY_RELATION_ID)
+				multiTable->relationId != HEAP_ANALYTICS_SUBQUERY_RELATION_ID)
 			{
 				RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
 				rangeTableEntry->inFromCl = true;
@@ -870,7 +872,7 @@ TargetEntryList(List *expressionList)
 		Expr *expression = (Expr *) lfirst(expressionCell);
 
 		TargetEntry *targetEntry = makeTargetEntry(expression,
-												   list_length(targetEntryList)+1,
+												   list_length(targetEntryList) + 1,
 												   NULL, false);
 		targetEntryList = lappend(targetEntryList, targetEntry);
 	}
@@ -1044,7 +1046,7 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 
 			/* fix the column attributes in ON (...) clauses */
 			columnList = pull_var_clause_default((Node *) joinNode->joinClauseList);
-			foreach (columnCell, columnList)
+			foreach(columnCell, columnList)
 			{
 				Var *column = (Var *) lfirst(columnCell);
 				UpdateColumnAttributes(column, *rangeTableList, dependedJobList);
@@ -1093,7 +1095,8 @@ QueryJoinTree(MultiNode *multiNode, List *dependedJobList, List **rangeTableList
 			uint32 columnCount = (uint32) list_length(dependedTargetList);
 			List *columnNameList = DerivedColumnNameList(columnCount, dependedJob->jobId);
 
-			RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode, columnNameList,
+			RangeTblEntry *rangeTableEntry = DerivedRangeTableEntry(multiNode,
+																	columnNameList,
 																	tableIdList);
 			RangeTblRef *rangeTableRef = makeNode(RangeTblRef);
 
@@ -1246,7 +1249,7 @@ ExtractColumns(RangeTblEntry *rangeTableEntry, int rangeTableId, List *dependedJ
 	else if (rangeTableKind == CITUS_RTE_RELATION)
 	{
 		/*
-		 * For distributed tables, we construct a regular table RTE to call 
+		 * For distributed tables, we construct a regular table RTE to call
 		 * expandRTE, which will extract columns from the distributed table
 		 * schema.
 		 */
@@ -1405,10 +1408,10 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->rtable = rangeTableList;
 	jobQuery->targetList = targetList;
 	jobQuery->jointree = joinTree;
-	jobQuery->sortClause  = sortClauseList;
+	jobQuery->sortClause = sortClauseList;
 	jobQuery->groupClause = groupClauseList;
 	jobQuery->limitOffset = limitOffset;
-	jobQuery->limitCount  = limitCount;
+	jobQuery->limitCount = limitCount;
 	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
 
 	return jobQuery;
@@ -1646,7 +1649,7 @@ static uint64
 UniqueJobId(void)
 {
 	text *sequenceName = cstring_to_text(JOBID_SEQUENCE_NAME);
-	Oid   sequenceId = ResolveRelationId(sequenceName);
+	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	/* generate new and unique jobId from sequence */
@@ -1747,7 +1750,7 @@ HashPartitionCount(void)
 	uint32 nodeCount = WorkerGetLiveNodeCount();
 	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
 
-	uint32 partitionCount = (uint32) rint(nodeCount * maxReduceTasksPerNode);	
+	uint32 partitionCount = (uint32) rint(nodeCount * maxReduceTasksPerNode);
 	return partitionCount;
 }
 
@@ -1864,8 +1867,9 @@ SplitPointObject(ShardInterval **shardIntervalArray, uint32 shardIntervalCount)
 	return splitPointObject;
 }
 
+
 /* ------------------------------------------------------------
- * Functions that relate to building and assigning tasks follow 
+ * Functions that relate to building and assigning tasks follow
  * ------------------------------------------------------------
  */
 
@@ -1986,7 +1990,7 @@ SubquerySqlTaskList(Job *job)
 	ListCell *rangeTableCell = NULL;
 	ListCell *queryCell = NULL;
 	Node *whereClauseTree = NULL;
-	uint32 taskIdIndex = 1;	/* 0 is reserved for invalid taskId */
+	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
 	uint32 anchorRangeTableId = 0;
 	uint32 rangeTableIndex = 0;
 	const uint32 fragmentSize = sizeof(RangeTableFragment);
@@ -2036,10 +2040,10 @@ SubquerySqlTaskList(Job *job)
 		if (opExpressionList != NIL)
 		{
 			Var *partitionColumn = PartitionColumn(relationId, tableId);
-			List *whereClauseList =	ReplaceColumnsInOpExpressionList(opExpressionList,
+			List *whereClauseList = ReplaceColumnsInOpExpressionList(opExpressionList,
 																	 partitionColumn);
 			finalShardIntervalList = PruneShardList(relationId, tableId, whereClauseList,
-			                                        shardIntervalList);
+													shardIntervalList);
 		}
 		else
 		{
@@ -2146,7 +2150,7 @@ static List *
 SqlTaskList(Job *job)
 {
 	List *sqlTaskList = NIL;
-	uint32 taskIdIndex = 1;	/* 0 is reserved for invalid taskId */
+	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
 	uint64 jobId = job->jobId;
 	bool anchorRangeTableBasedAssignment = false;
 	uint32 anchorRangeTableId = 0;
@@ -2472,8 +2476,8 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 
 			List *shardIntervalList = LoadShardIntervalList(relationId);
 			List *prunedShardIntervalList = PruneShardList(relationId, tableId,
-			                                               whereClauseList,
-			                                               shardIntervalList);
+														   whereClauseList,
+														   shardIntervalList);
 
 			/*
 			 * If we prune all shards for one table, query results will be empty.
@@ -2548,7 +2552,7 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
  */
 List *
 PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
-               List *shardIntervalList)
+			   List *shardIntervalList)
 {
 	List *remainingShardList = NIL;
 	ListCell *shardIntervalCell = NULL;
@@ -2653,7 +2657,7 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	Oid accessMethodId = BTREE_AM_OID;
 	Oid operatorId = InvalidOid;
 	Oid operatorClassInputType = InvalidOid;
-	Const  *constantValue = NULL;
+	Const *constantValue = NULL;
 	OpExpr *expression = NULL;
 	char typeType = 0;
 
@@ -2679,7 +2683,7 @@ MakeOpExpression(Var *variable, int16 strategyNumber)
 	/* Now make the expression with the given variable and a null constant */
 	expression = (OpExpr *) make_opclause(operatorId,
 										  InvalidOid, /* no result type yet */
-										  false,	  /* no return set */
+										  false,      /* no return set */
 										  (Expr *) variable,
 										  (Expr *) constantValue,
 										  InvalidOid, collationId);
@@ -2808,6 +2812,10 @@ SimpleOpExpression(Expr *clause)
 		return false; /* not a binary opclause */
 	}
 
+	/* strip coercions before doing check */
+	leftOperand = strip_implicit_coercions(leftOperand);
+	rightOperand = strip_implicit_coercions(rightOperand);
+
 	if (IsA(rightOperand, Const) && IsA(leftOperand, Var))
 	{
 		constantClause = (Const *) rightOperand;
@@ -2896,7 +2904,7 @@ HashableClauseMutator(Node *originalNode, Var *partitionColumn)
 	 * If this node is not hashable, continue walking down the expression tree
 	 * to find and hash clauses which are eligible.
 	 */
-	if(newNode == NULL)
+	if (newNode == NULL)
 	{
 		newNode = expression_tree_mutator(originalNode, HashableClauseMutator,
 										  (void *) partitionColumn);
@@ -2918,6 +2926,10 @@ OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 	Node *leftOperand = get_leftop((Expr *) operatorExpression);
 	Node *rightOperand = get_rightop((Expr *) operatorExpression);
 	Var *column = NULL;
+
+	/* strip coercions before doing check */
+	leftOperand = strip_implicit_coercions(leftOperand);
+	rightOperand = strip_implicit_coercions(rightOperand);
 
 	if (IsA(leftOperand, Var))
 	{
@@ -3037,7 +3049,7 @@ MakeInt4Constant(Datum constantValue)
 	bool constantIsNull = false;
 	bool constantByValue = true;
 
-	Const *int4Constant = makeConst(constantType, constantTypeMode,	constantCollationId,
+	Const *int4Constant = makeConst(constantType, constantTypeMode, constantCollationId,
 									constantLength, constantValue, constantIsNull,
 									constantByValue);
 	return int4Constant;
@@ -3094,7 +3106,7 @@ UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 	Node *greaterThanExpr = (Node *) lsecond(andExpr->args);
 
 	Node *minNode = get_rightop((Expr *) greaterThanExpr); /* right op */
-	Node *maxNode = get_rightop((Expr *) lessThanExpr);	   /* right op */
+	Node *maxNode = get_rightop((Expr *) lessThanExpr);    /* right op */
 	Const *minConstant = NULL;
 	Const *maxConstant = NULL;
 
@@ -3265,7 +3277,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 	joinSequenceArray[joinedTableCount].joiningRangeTableId = NON_PRUNABLE_JOIN;
 	joinedTableCount++;
 
-	foreach (joinExprCell, joinExprList)
+	foreach(joinExprCell, joinExprList)
 	{
 		JoinExpr *joinExpr = (JoinExpr *) lfirst(joinExprCell);
 		JoinType joinType = joinExpr->jointype;
@@ -3339,7 +3351,7 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 			if (IS_OUTER_JOIN(joinType))
 			{
 				int innerRangeTableId = 0;
-				List * tableFragments = NIL;
+				List *tableFragments = NIL;
 				int fragmentCount = 0;
 
 				if (joinType == JOIN_RIGHT)
@@ -3492,7 +3504,7 @@ FindRangeTableFragmentsList(List *rangeTableFragmentsList, int tableId)
 		if (tableFragments != NIL)
 		{
 			RangeTableFragment *tableFragment =
-				(RangeTableFragment*) linitial(tableFragments);
+				(RangeTableFragment *) linitial(tableFragments);
 			if (tableFragment->rangeTableId == tableId)
 			{
 				foundTableFragments = tableFragments;
@@ -3698,7 +3710,7 @@ UniqueFragmentList(List *fragmentList)
 		foreach(uniqueFragmentCell, uniqueFragmentList)
 		{
 			RangeTableFragment *uniqueFragment =
-					(RangeTableFragment *) lfirst(uniqueFragmentCell);
+				(RangeTableFragment *) lfirst(uniqueFragmentCell);
 			uint64 *uniqueShardId = uniqueFragment->fragmentReference;
 
 			if (*shardId == *uniqueShardId)
@@ -4038,6 +4050,7 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 	return alias;
 }
 
+
 /*
  * AnchorShardId walks over each fragment in the given fragment list, finds the
  * fragment that corresponds to the given anchor range tableId, and returns this
@@ -4352,7 +4365,7 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 			StringInfo intermediateTableQueryString =
 				IntermediateTableQueryString(jobId, taskIdIndex, reduceQuery);
 
-			StringInfo mergeAndRunQueryString= makeStringInfo();
+			StringInfo mergeAndRunQueryString = makeStringInfo();
 			appendStringInfo(mergeAndRunQueryString, MERGE_FILES_AND_RUN_QUERY_COMMAND,
 							 jobId, taskIdIndex, mergeTableQueryString->data,
 							 intermediateTableQueryString->data);
@@ -4678,7 +4691,7 @@ TaskListAppendUnique(List *list, Task *task)
 List *
 TaskListConcatUnique(List *list1, List *list2)
 {
-	ListCell   *taskCell = NULL;
+	ListCell *taskCell = NULL;
 
 	foreach(taskCell, list2)
 	{
@@ -4952,7 +4965,7 @@ List *
 FirstReplicaAssignTaskList(List *taskList)
 {
 	/* No additional reordering need take place for this algorithm */
-	List * (*reorderFunction)(Task *, List *) = NULL;
+	List *(*reorderFunction)(Task *, List *) = NULL;
 
 	taskList = ReorderAndAssignTaskList(taskList, reorderFunction);
 
@@ -4975,6 +4988,7 @@ RoundRobinAssignTaskList(List *taskList)
 
 	return taskList;
 }
+
 
 /*
  * RoundRobinReorder implements the core of the round-robin assignment policy.
@@ -5108,7 +5122,8 @@ ActiveShardPlacementLists(List *taskList)
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);
 
 		/* sort shard placements by their insertion time */
-		activeShardPlacementList = SortList(activeShardPlacementList, CompareShardPlacements);
+		activeShardPlacementList = SortList(activeShardPlacementList,
+											CompareShardPlacements);
 		shardPlacementLists = lappend(shardPlacementLists, activeShardPlacementList);
 	}
 
@@ -5249,7 +5264,8 @@ AssignDualHashTaskList(List *taskList)
 		uint32 replicaIndex = 0;
 		for (replicaIndex = 0; replicaIndex < ShardReplicationFactor; replicaIndex++)
 		{
-			uint32 assignmentOffset = beginningNodeIndex + assignedTaskIndex + replicaIndex;
+			uint32 assignmentOffset = beginningNodeIndex + assignedTaskIndex +
+									  replicaIndex;
 			uint32 assignmentIndex = assignmentOffset % workerNodeCount;
 			WorkerNode *workerNode = list_nth(workerNodeList, assignmentIndex);
 

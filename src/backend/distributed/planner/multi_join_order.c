@@ -33,18 +33,18 @@
 
 
 /* Config variables managed via guc.c */
-int LargeTableShardCount = 4;	/* shard counts for a large table */
+int LargeTableShardCount = 4;   /* shard counts for a large table */
 bool LogMultiJoinOrder = false; /* print join order as a debugging aid */
 
 /* Function pointer type definition for join rule evaluation functions */
-typedef JoinOrderNode * (*RuleEvalFunction) (JoinOrderNode *currentJoinNode,
-											 TableEntry *candidateTable,
-											 List *candidateShardList,
-											 List *applicableJoinClauses,
-											 JoinType joinType);
+typedef JoinOrderNode *(*RuleEvalFunction) (JoinOrderNode *currentJoinNode,
+											TableEntry *candidateTable,
+											List *candidateShardList,
+											List *applicableJoinClauses,
+											JoinType joinType);
 
-static char * RuleNameArray[JOIN_RULE_LAST] = {0}; /* ordered join rule names */
-static RuleEvalFunction RuleEvalFunctionArray[JOIN_RULE_LAST] = {0}; /* join rules */
+static char *RuleNameArray[JOIN_RULE_LAST] = { 0 }; /* ordered join rule names */
+static RuleEvalFunction RuleEvalFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 
 /* Local functions forward declarations */
@@ -54,7 +54,8 @@ static bool JoinExprListWalker(Node *node, List **joinList);
 static bool ExtractLeftMostRangeTableIndex(Node *node, int *rangeTableIndex);
 static List * MergeShardIntervals(List *leftShardIntervalList,
 								  List *rightShardIntervalList, JoinType joinType);
-static bool ShardIntervalsMatch(List *leftShardIntervalList, List *rightShardIntervalList);
+static bool ShardIntervalsMatch(List *leftShardIntervalList,
+								List *rightShardIntervalList);
 static List * LoadSortedShardIntervalList(Oid relationId);
 static List * JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
 								List *joinClauseList);
@@ -68,31 +69,41 @@ static List * TableEntryListDifference(List *lhsTableList, List *rhsTableList);
 static TableEntry * FindTableEntry(List *tableEntryList, uint32 tableId);
 
 /* Local functions forward declarations for join evaluations */
-static JoinOrderNode * EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
-										 TableEntry *candidateTable, List *candidateShardList,
+static JoinOrderNode * EvaluateJoinRules(List *joinedTableList,
+										 JoinOrderNode *currentJoinNode,
+										 TableEntry *candidateTable,
+										 List *candidateShardList,
 										 List *joinClauseList, JoinType joinType);
 static List * RangeTableIdList(List *tableList);
 static RuleEvalFunction JoinRuleEvalFunction(JoinRuleType ruleType);
 static char * JoinRuleName(JoinRuleType ruleType);
 static JoinOrderNode * BroadcastJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
-									 List *candidateShardList, List *applicableJoinClauses,
+									 List *candidateShardList,
+									 List *applicableJoinClauses,
 									 JoinType joinType);
 static JoinOrderNode * LocalJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
 								 List *candidateShardList, List *applicableJoinClauses,
 								 JoinType joinType);
 static bool JoinOnColumns(Var *currentPartitioncolumn, Var *candidatePartitionColumn,
 						  List *joinClauseList);
-static JoinOrderNode * SinglePartitionJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
-										   List *candidateShardList, List *applicableJoinClauses,
+static JoinOrderNode * SinglePartitionJoin(JoinOrderNode *joinNode,
+										   TableEntry *candidateTable,
+										   List *candidateShardList,
+										   List *applicableJoinClauses,
 										   JoinType joinType);
-static JoinOrderNode * DualPartitionJoin(JoinOrderNode *joinNode, TableEntry *candidateTable,
-										 List *candidateShardList, List *applicableJoinClauses,
+static JoinOrderNode * DualPartitionJoin(JoinOrderNode *joinNode,
+										 TableEntry *candidateTable,
+										 List *candidateShardList,
+										 List *applicableJoinClauses,
 										 JoinType joinType);
-static JoinOrderNode * CartesianProduct(JoinOrderNode *joinNode, TableEntry *candidateTable,
-										List *candidateShardList, List *applicableJoinClauses,
+static JoinOrderNode * CartesianProduct(JoinOrderNode *joinNode,
+										TableEntry *candidateTable,
+										List *candidateShardList,
+										List *applicableJoinClauses,
 										JoinType joinType);
-static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType joinRuleType,
-										 Var *partitionColumn, char partitionMethod);
+static JoinOrderNode * MakeJoinOrderNode(TableEntry *tableEntry, JoinRuleType
+										 joinRuleType, Var *partitionColumn,
+										 char partitionMethod);
 
 
 /*
@@ -106,7 +117,7 @@ List *
 FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 {
 	List *joinList = NIL;
-	ListCell * joinCell = NULL;
+	ListCell *joinCell = NULL;
 	List *joinWhereClauseList = NIL;
 	List *joinOrderList = NIL;
 	List *joinedTableList = NIL;
@@ -175,7 +186,7 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 									   "query"),
 								errdetail("Cannot perform outer joins with broadcast "
 										  "joins of more than 1 shard"),
-								errhint("Set citusdb.large_table_shard_count to 1")));
+								errhint("Set citus.large_table_shard_count to 1")));
 			}
 		}
 		else if (nextJoinNode->joinRuleType == LOCAL_PARTITION_JOIN)
@@ -199,7 +210,6 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 									   "query"),
 								errdetail("Shards of relations in outer join queries "
 										  "must have 1-to-1 shard partitioning")));
-
 			}
 		}
 		else
@@ -439,7 +449,7 @@ MergeShardIntervals(List *leftShardIntervalList, List *rightShardIntervalList,
 			bool nextMaxSmaller = comparisonResult > 0;
 
 			if ((shardUnion && nextMaxLarger) ||
-				(!shardUnion && nextMaxSmaller) )
+				(!shardUnion && nextMaxSmaller))
 			{
 				newShardInterval->maxValue = datumCopy(nextMax, typeByValue, typeLen);
 			}
@@ -586,7 +596,8 @@ ShardIntervalsMatch(List *leftShardIntervalList, List *rightShardIntervalList)
 		nextRightIntervalCell = lnext(rightShardIntervalCell);
 		if (nextRightIntervalCell != NULL)
 		{
-			ShardInterval *nextRightInterval = (ShardInterval *) lfirst(nextRightIntervalCell);
+			ShardInterval *nextRightInterval =
+				(ShardInterval *) lfirst(nextRightIntervalCell);
 			shardIntervalsIntersect = ShardIntervalsOverlap(leftInterval,
 															nextRightInterval);
 			if (shardIntervalsIntersect)
@@ -730,7 +741,7 @@ JoinOrderForTable(TableEntry *firstTable, List *tableEntryList, List *joinClause
  * BestJoinOrder takes in a list of candidate join orders, and determines the
  * best join order among these candidates. The function uses two heuristics for
  * this. First, the function chooses join orders that have the fewest number of
- * join operators that cause large data transfers. Second, the function chooses 
+ * join operators that cause large data transfers. Second, the function chooses
  * join orders where large data transfers occur later in the execution.
  */
 static List *
@@ -1009,7 +1020,7 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 	uint32 candidateTableId = 0;
 	List *joinedTableIdList = NIL;
 	List *applicableJoinClauses = NIL;
-	uint32 lowestValidIndex  = JOIN_RULE_INVALID_FIRST + 1;
+	uint32 lowestValidIndex = JOIN_RULE_INVALID_FIRST + 1;
 	uint32 highestValidIndex = JOIN_RULE_LAST - 1;
 	uint32 ruleIndex = 0;
 
@@ -1028,11 +1039,11 @@ EvaluateJoinRules(List *joinedTableList, JoinOrderNode *currentJoinNode,
 		JoinRuleType ruleType = (JoinRuleType) ruleIndex;
 		RuleEvalFunction ruleEvalFunction = JoinRuleEvalFunction(ruleType);
 
-		nextJoinNode = (*ruleEvalFunction) (currentJoinNode,
-											candidateTable,
-											candidateShardList,
-											applicableJoinClauses,
-											joinType);
+		nextJoinNode = (*ruleEvalFunction)(currentJoinNode,
+										   candidateTable,
+										   candidateShardList,
+										   applicableJoinClauses,
+										   joinType);
 
 		/* break after finding the first join rule that applies */
 		if (nextJoinNode != NULL)

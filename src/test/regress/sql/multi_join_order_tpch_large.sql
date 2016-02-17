@@ -4,7 +4,7 @@
 
 -- Enable configuration to print table join order
 
-SET citusdb.log_multi_join_order TO TRUE;
+SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 
 -- Change configuration to treat lineitem, orders, customer, and part tables as
@@ -12,7 +12,7 @@ SET client_min_messages TO LOG;
 -- except that more data has been staged to customer and part tables. Therefore,
 -- we will apply different distributed join strategies for these queries.
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 
 -- Query #6 from the TPC-H decision support benchmark
 

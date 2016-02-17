@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_resowner.h
- *	  CitusDB resource owner integration.
+ *	  Citus resource owner integration.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------

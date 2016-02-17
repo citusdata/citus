@@ -49,7 +49,7 @@
 
 /* Shard related configuration */
 int ShardReplicationFactor = 2; /* desired replication factor for shards */
-int ShardMaxSize = 1048576;		/* maximum size in KB one shard can grow to */
+int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 
 
@@ -210,7 +210,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		tableDDLEventCell = list_head(tableDDLEventList);
 
 		functionContext->user_fctx = tableDDLEventCell;
-		
+
 		MemoryContextSwitchTo(oldContext);
 	}
 
@@ -226,8 +226,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	if (tableDDLEventCell != NULL)
 	{
 		char *ddlStatement = (char *) lfirst(tableDDLEventCell);
-		text *ddlStatementText = cstring_to_text(ddlStatement);		
-		
+		text *ddlStatementText = cstring_to_text(ddlStatement);
+
 		functionContext->user_fctx = lnext(tableDDLEventCell);
 
 		SRF_RETURN_NEXT(functionContext, PointerGetDatum(ddlStatementText));
@@ -252,7 +252,7 @@ Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
 	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
-	Oid   sequenceId = ResolveRelationId(sequenceName);
+	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	/* generate new and unique shardId from sequence */
@@ -281,7 +281,7 @@ master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldContext  = NULL;
+		MemoryContext oldContext = NULL;
 		TupleDesc tupleDescriptor = NULL;
 		uint32 liveNodeCount = 0;
 		bool hasOid = false;
@@ -396,7 +396,7 @@ master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldContext  = NULL;
+		MemoryContext oldContext = NULL;
 		TupleDesc tupleDescriptor = NULL;
 		List *workerNodeList = NIL;
 		TypeFuncClass resultTypeClass = 0;
@@ -477,7 +477,7 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldContext  = NULL;
+		MemoryContext oldContext = NULL;
 		List *workerNodeList = NIL;
 		uint32 workerNodeCount = 0;
 		TupleDesc tupleDescriptor = NULL;
@@ -567,7 +567,7 @@ GetTableDDLEvents(Oid relationId)
 
 	Relation pgIndex = NULL;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData	scanKey[1];
+	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	HeapTuple heapTuple = NULL;
 
@@ -599,13 +599,13 @@ GetTableDDLEvents(Oid relationId)
 	/* fetch table schema and column option definitions */
 	tableSchemaDef = pg_get_tableschemadef_string(relationId);
 	tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
-	
+
 	tableDDLEventList = lappend(tableDDLEventList, tableSchemaDef);
 	if (tableColumnOptionsDef != NULL)
 	{
 		tableDDLEventList = lappend(tableDDLEventList, tableColumnOptionsDef);
 	}
-	
+
 	/* open system catalog and scan all indexes that belong to this table */
 	pgIndex = heap_open(IndexRelationId, AccessShareLock);
 
@@ -660,7 +660,7 @@ GetTableDDLEvents(Oid relationId)
 		{
 			statementDef = pg_get_indexdef_string(indexId);
 		}
-		
+
 		/* append found constraint or index definition to the list */
 		tableDDLEventList = lappend(tableDDLEventList, statementDef);
 
@@ -695,8 +695,8 @@ hostname_client_addr(void)
 	Port *port = MyProcPort;
 	char *remoteHost = NULL;
 	int remoteHostLen = NI_MAXHOST;
-	int flags = NI_NAMEREQD;	/* require fully qualified hostname */
-	int	nameFound = 0;
+	int flags = NI_NAMEREQD;    /* require fully qualified hostname */
+	int nameFound = 0;
 
 	if (port == NULL)
 	{
@@ -709,10 +709,15 @@ hostname_client_addr(void)
 #ifdef HAVE_IPV6
 		case AF_INET6:
 #endif
-			break;
+			{
+				break;
+			}
+
 		default:
+		{
 			ereport(ERROR, (errmsg("invalid address family in connection")));
 			break;
+		}
 	}
 
 	remoteHost = palloc0(remoteHostLen);

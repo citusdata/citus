@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * metadata_cache.h
- *	  Executor support for CitusDB.
+ *	  Executor support for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *
@@ -47,7 +47,7 @@ extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 
-extern bool CitusDBHasBeenLoaded(void);
+extern bool CitusHasBeenLoaded(void);
 
 /* relation oids */
 extern Oid DistPartitionRelationId(void);

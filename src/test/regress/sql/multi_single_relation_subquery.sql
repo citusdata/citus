@@ -4,7 +4,7 @@
 
 -- This test checks that we are able to run selected set of distributed SQL subqueries.
 
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 
 select
     number_sum,
@@ -124,6 +124,18 @@ from
         lineitem
     group by
         l_tax) as distributed_table;
+
+-- Check that we don't support subqueries with count(distinct).
+
+select
+    different_shipment_days
+from
+    (select
+        count(distinct l_shipdate) as different_shipment_days
+    from
+        lineitem
+    group by
+        l_partkey) as distributed_table;
 
 -- Check that if subquery is pulled, we don't error and run query properly.
 

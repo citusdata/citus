@@ -24,7 +24,7 @@ SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 (10 rows)
 
 -- Enable limit optimization to fetch one third of each shard's data
-SET citusdb.limit_clause_row_fetch_count TO 600;
+SET citus.limit_clause_row_fetch_count TO 600;
 SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 	GROUP BY l_partkey
 	ORDER BY aggregate DESC LIMIT 10;
@@ -45,7 +45,7 @@ DEBUG:  push down of limit count: 600
 
 -- Disable limit optimization for our second test. This time, we have a query
 -- that joins several tables, and that groups and orders the results.
-RESET citusdb.limit_clause_row_fetch_count;
+RESET citus.limit_clause_row_fetch_count;
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
 	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
@@ -68,8 +68,8 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 -- Now, enable limit optimization to fetch half of each task's results. For this
 -- test, we also change a config setting to ensure that we don't repartition any
 -- of the tables during the query.
-SET citusdb.limit_clause_row_fetch_count TO 150;
-SET citusdb.large_table_shard_count TO 2;
+SET citus.limit_clause_row_fetch_count TO 150;
+SET citus.large_table_shard_count TO 2;
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
 	WHERE c_custkey = o_custkey AND l_orderkey = o_orderkey
@@ -90,7 +90,7 @@ DEBUG:  push down of limit count: 150
        145 | Customer#000000145 |             30
 (10 rows)
 
-RESET citusdb.large_table_shard_count;
+RESET citus.large_table_shard_count;
 -- We now test scenarios where applying the limit optimization wouldn't produce
 -- meaningful results. First, we check that we don't push down the limit clause
 -- for non-commutative aggregates.
@@ -147,5 +147,5 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 10.0
             258 |       9.00
 (9 rows)
 
-RESET citusdb.limit_clause_row_fetch_count;
+RESET citus.limit_clause_row_fetch_count;
 RESET client_min_messages;

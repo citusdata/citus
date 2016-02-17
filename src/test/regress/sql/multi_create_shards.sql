@@ -4,7 +4,7 @@
 
 CREATE FUNCTION sort_names(cstring, cstring, cstring)
 	RETURNS cstring
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 
 -- create a custom type...
@@ -125,7 +125,7 @@ CREATE TABLE weird_shard_count
 SELECT master_create_distributed_table('weird_shard_count', 'id', 'hash');
 SELECT master_create_worker_shards('weird_shard_count', 7, 1);
 
--- CitusDB ensures all shards are roughly the same size
+-- Citus ensures all shards are roughly the same size
 SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 	FROM pg_dist_shard
 	WHERE logicalrelid = 'weird_shard_count'::regclass

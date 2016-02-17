@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * citus_readfuncs.c
- *	  CitusDB adapted reader functions for Citus & Postgres tree nodes
+ *	  Citus adapted reader functions for Citus & Postgres tree nodes
  *
  * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California

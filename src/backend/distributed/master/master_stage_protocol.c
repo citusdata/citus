@@ -45,7 +45,8 @@ static bool WorkerCreateShard(char *nodeName, uint32 nodePort,
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardLength,
 							 text **shardMinValue, text **shardMaxValue);
-static uint64 WorkerTableSize(char *nodeName, uint32 nodePort, char *tableName);
+static uint64 WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId,
+							  char *tableName);
 static StringInfo WorkerPartitionValue(char *nodeName, uint32 nodePort, Oid relationId,
 									   char *shardName, char *selectQuery);
 
@@ -77,23 +78,22 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	List *candidateNodeList = NIL;
 	text *nullMinValue = NULL;
 	text *nullMaxValue = NULL;
-	char tableType = 0;
 	char partitionMethod = 0;
+	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText);
 	CheckDistributedTable(relationId);
 
-	tableType = get_rel_relkind(relationId);
-	if (tableType != RELKIND_RELATION)
+	if (CStoreTable(relationId))
 	{
-		ereport(ERROR, (errmsg("relation \"%s\" is not a regular table", relationName)));
+		storageType = SHARD_STORAGE_COLUMNAR;
 	}
 
 	partitionMethod = PartitionMethod(relationId);
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errmsg("relation \"%s\" is a hash partitioned table",
-								relationName),
+							   relationName),
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
@@ -128,9 +128,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	CreateShardPlacements(shardId, ddlEventList, candidateNodeList, 0,
-	                      ShardReplicationFactor);
+						  ShardReplicationFactor);
 
-	InsertShardRow(relationId, shardId, SHARD_STORAGE_TABLE, nullMinValue, nullMaxValue);
+	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
 
 	PG_RETURN_INT64(shardId);
 }
@@ -171,9 +171,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid relationId = shardInterval->relationId;
+	bool cstoreTable = CStoreTable(relationId);
 
 	char storageType = shardInterval->storageType;
-	if (storageType != SHARD_STORAGE_TABLE)
+	if (storageType != SHARD_STORAGE_TABLE && !cstoreTable)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("The underlying shard is not a regular table")));
@@ -361,7 +362,7 @@ CheckDistributedTable(Oid relationId)
  */
 void
 CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
-                      int workerStartIndex, int replicationFactor)
+					  int workerStartIndex, int replicationFactor)
 {
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
@@ -393,7 +394,7 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
 		else
 		{
 			ereport(WARNING, (errmsg("could not create shard on \"%s:%u\"",
-			                         nodeName, nodePort)));
+									 nodeName, nodePort)));
 		}
 
 		if (placementsCreated >= replicationFactor)
@@ -406,7 +407,7 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
 	if (placementsCreated < replicationFactor)
 	{
 		ereport(ERROR, (errmsg("could only create %u of %u of required shard replicas",
-		                       placementsCreated, replicationFactor)));
+							   placementsCreated, replicationFactor)));
 	}
 }
 
@@ -457,7 +458,7 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 
 	PG_TRY();
 	{
-		uint64 tableSize = WorkerTableSize(nodeName, nodePort, shardName);
+		uint64 tableSize = WorkerTableSize(nodeName, nodePort, relationId, shardName);
 		StringInfo minValue = WorkerPartitionValue(nodeName, nodePort, relationId,
 												   shardName, SHARD_MIN_VALUE_QUERY);
 		StringInfo maxValue = WorkerPartitionValue(nodeName, nodePort, relationId,
@@ -479,18 +480,27 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 
 /*
  * WorkerTableSize queries the worker node to extract the disk space used by the
- * given relation. The function assumes the relation represents a regular table.
+ * given relation. The function assumes the relation represents a regular table or
+ * a cstore_fdw table.
  */
 static uint64
-WorkerTableSize(char *nodeName, uint32 nodePort, char *tableName)
+WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName)
 {
 	uint64 tableSize = 0;
 	List *queryResultList = NIL;
 	StringInfo tableSizeString = NULL;
 	char *tableSizeStringEnd = NULL;
-
+	bool cstoreTable = CStoreTable(relationId);
 	StringInfo tableSizeQuery = makeStringInfo();
-	appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
+
+	if (cstoreTable)
+	{
+		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, tableName);
+	}
+	else
+	{
+		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
+	}
 
 	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, tableSizeQuery);
 	if (queryResultList == NIL)

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_planner.c
- *	  General CitusDB planner code.
+ *	  General Citus planner code.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -45,26 +45,17 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannedStmt *result = NULL;
 
 	/*
-	 * First call into standard planner. This is required because the CitusDB
+	 * First call into standard planner. This is required because the Citus
 	 * planner relies on parse tree transformations made by postgres' planner.
 	 */
 	result = standard_planner(parse, cursorOptions, boundParams);
 
 	if (NeedsDistributedPlanning(parse))
 	{
-		MemoryContext oldcontext = NULL;
-		MultiPlan *physicalPlan = NULL;
-
-		/* Switch to top level message context */
-		oldcontext = MemoryContextSwitchTo(MessageContext);
-
-		physicalPlan = CreatePhysicalPlan(parse);
+		MultiPlan *physicalPlan = CreatePhysicalPlan(parse);
 
 		/* store required data into the planned statement */
 		result = MultiQueryContainerNode(result, physicalPlan);
-
-		/* Now switch back to original context */
-		MemoryContextSwitchTo(oldcontext);
 	}
 
 	return result;
@@ -99,7 +90,7 @@ CreatePhysicalPlan(Query *parse)
 
 		/*
 		 * This check is here to make it likely that all node types used in
-		 * CitusDB are dumpable. Explain can dump logical and physical plans
+		 * Citus are dumpable. Explain can dump logical and physical plans
 		 * using the extended outfuncs infrastructure, but it's infeasible to
 		 * test most plans. MultiQueryContainerNode always serializes the
 		 * physical plan, so there's no need to check that separately.
@@ -141,7 +132,7 @@ HasCitusToplevelNode(PlannedStmt *result)
 	 * yet. Directly return false, part of the required infrastructure for
 	 * further checks might not be present.
 	 */
-	if (!CitusDBHasBeenLoaded())
+	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
@@ -268,7 +259,7 @@ GetMultiPlanString(PlannedStmt *result)
 	if (list_length(fauxFuncExpr->args) != 1)
 	{
 		ereport(ERROR, (errmsg("unexpected number of function arguments to "
-							   "citusdb_extradata_container")));
+							   "citus_extradata_container")));
 	}
 
 	multiPlanData = (Const *) linitial(fauxFuncExpr->args);

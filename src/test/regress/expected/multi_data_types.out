@@ -121,7 +121,7 @@ CREATE TABLE varchar_hash_partitioned_table
 	id int,
     name varchar
 );
-SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'id', 'hash');
+SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
  master_create_distributed_table 
 ---------------------------------
  
@@ -139,16 +139,16 @@ INSERT INTO varchar_hash_partitioned_table VALUES  (2, 'Ozgun');
 INSERT INTO varchar_hash_partitioned_table VALUES  (3, 'Onder');
 INSERT INTO varchar_hash_partitioned_table VALUES  (4, 'Sumedh');
 INSERT INTO varchar_hash_partitioned_table VALUES  (5, 'Marco');
-SELECT * FROM varchar_hash_partitioned_table WHERE name = 'Onder';
+SELECT * FROM varchar_hash_partitioned_table WHERE id = 1;
  id | name  
 ----+-------
-  3 | Onder
+  1 | Jason
 (1 row)
 
-UPDATE varchar_hash_partitioned_table SET name = 'Samay' WHERE id = 5;
-SELECT * FROM varchar_hash_partitioned_table WHERE name = 'Samay';
+UPDATE varchar_hash_partitioned_table SET id = 6 WHERE name = 'Jason';
+SELECT * FROM varchar_hash_partitioned_table WHERE id = 6;
  id | name  
 ----+-------
-  5 | Samay
+  6 | Jason
 (1 row)
 

@@ -8,10 +8,10 @@ SELECT count(distinct l_orderkey) FROM lineitem;
 
 -- Check approximate count(distinct) at different precisions / error rates
 
-SET citusdb.count_distinct_error_rate = 0.1;
+SET citus.count_distinct_error_rate = 0.1;
 SELECT count(distinct l_orderkey) FROM lineitem;
 
-SET citusdb.count_distinct_error_rate = 0.01;
+SET citus.count_distinct_error_rate = 0.01;
 SELECT count(distinct l_orderkey) FROM lineitem;
 
 -- Check approximate count(distinct) for different data types
@@ -50,7 +50,7 @@ SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM linei
 -- If we have an order by on count(distinct) that we intend to push down to
 -- worker nodes, we need to error out. Otherwise, we are fine.
 
-SET citusdb.limit_clause_row_fetch_count = 1000;
+SET citus.limit_clause_row_fetch_count = 1000;
 SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
 	FROM lineitem
 	GROUP BY l_returnflag
@@ -65,5 +65,5 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 
 -- Check that we can revert config and disable count(distinct) approximations
 
-SET citusdb.count_distinct_error_rate = 0.0;
+SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;

@@ -219,7 +219,7 @@ ShardLength(uint64 shardId)
 	if (shardPlacementList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not find length of shard " UINT64_FORMAT, shardId),
-					    errdetail("Could not find any shard placements for the shard.")));
+						errdetail("Could not find any shard placements for the shard.")));
 	}
 	else
 	{

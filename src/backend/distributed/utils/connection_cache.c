@@ -32,7 +32,7 @@
 
 /*
  * NodeConnectionHash is the connection hash itself. It begins uninitialized.
- * The first call to GetConnection triggers hash creation.
+ * The first call to GetOrEstablishConnection triggers hash creation.
  */
 static HTAB *NodeConnectionHash = NULL;
 
@@ -44,10 +44,10 @@ static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
 
 
 /*
- * GetConnection returns a PGconn which can be used to execute queries on a
- * remote PostgreSQL server. If no suitable connection to the specified node on
- * the specified port yet exists, the function establishes a new connection and
- * returns that.
+ * GetOrEstablishConnection returns a PGconn which can be used to execute
+ * queries on a remote PostgreSQL server. If no suitable connection to the
+ * specified node on the specified port yet exists, the function establishes
+ * a new connection and adds it to the connection cache before returning it.
  *
  * Returned connections are guaranteed to be in the CONNECTION_OK state. If the
  * requested connection cannot be established, or if it was previously created
@@ -56,7 +56,7 @@ static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
  * This function throws an error if a hostname over 255 characters is provided.
  */
 PGconn *
-GetConnection(char *nodeName, int32 nodePort)
+GetOrEstablishConnection(char *nodeName, int32 nodePort)
 {
 	PGconn *connection = NULL;
 	NodeConnectionKey nodeConnectionKey;
@@ -249,7 +249,7 @@ CreateNodeConnectionHash(void)
 	info.hcxt = CacheMemoryContext;
 	hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
-	nodeConnectionHash = hash_create("citusdb connection cache", 32, &info, hashFlags);
+	nodeConnectionHash = hash_create("citus connection cache", 32, &info, hashFlags);
 
 	return nodeConnectionHash;
 }
@@ -257,7 +257,7 @@ CreateNodeConnectionHash(void)
 
 /*
  * ConnectToNode opens a connection to a remote PostgreSQL server. The function
- * configures the connection's fallback application name to 'citusdb' and sets
+ * configures the connection's fallback application name to 'citus' and sets
  * the remote encoding to match the local one. This function requires that the
  * port be specified as a string for easier use with libpq functions.
  *
@@ -277,7 +277,7 @@ ConnectToNode(char *nodeName, char *nodePort)
 		"client_encoding", "connect_timeout", "dbname", NULL
 	};
 	const char *valueArray[] = {
-		nodeName, nodePort, "citusdb", clientEncoding,
+		nodeName, nodePort, "citus", clientEncoding,
 		CLIENT_CONNECT_TIMEOUT_SECONDS, dbname, NULL
 	};
 

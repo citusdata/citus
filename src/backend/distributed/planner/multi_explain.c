@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_explain.c
- *	  CitusDB explain support.
+ *	  Citus explain support.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -45,7 +45,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	if (localQuery)
 	{
 		PlannedStmt *plan = NULL;
-		instr_time	planstart;
+		instr_time planstart;
 		instr_time planduration;
 
 		INSTR_TIME_SET_CURRENT(planstart);

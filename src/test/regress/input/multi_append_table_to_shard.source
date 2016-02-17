@@ -17,16 +17,16 @@ CREATE TABLE multi_append_table_to_shard_left
 SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
 
 -- Replicate 'left' table on both workers
-SELECT set_config('citusdb.shard_replication_factor', '2', false);
+SELECT set_config('citus.shard_replication_factor', '2', false);
 \STAGE multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 \STAGE multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 
 -- Place 'right' table only on the primary worker
-SELECT set_config('citusdb.shard_replication_factor', '1', false);
+SELECT set_config('citus.shard_replication_factor', '1', false);
 \STAGE multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
 
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
-SELECT set_config('citusdb.shard_replication_factor', '2', false);
+SELECT set_config('citus.shard_replication_factor', '2', false);
 
 -- All 8 rows in left table match a row in right table
 SELECT	COUNT(*)

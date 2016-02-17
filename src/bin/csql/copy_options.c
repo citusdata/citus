@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * copy_options.c
  *	  Routines for parsing copy and stage meta commands.
  *
@@ -16,7 +16,22 @@
 #include "stringutils.h"
 
 
-/* Concatenates "more" onto "var", and frees the original value of *var. */
+/* *INDENT-OFF* */
+void
+free_copy_options(copy_options * ptr)
+{
+	if (!ptr)
+		return;
+	free(ptr->before_tofrom);
+	free(ptr->after_tofrom);
+	free(ptr->file);
+	free(ptr->tableName);
+	free(ptr->columnList);
+	free(ptr);
+}
+
+
+/* concatenate "more" onto "var", freeing the original value of *var */
 static void
 xstrcat(char **var, const char *more)
 {
@@ -210,21 +225,9 @@ error:
 	return NULL;
 }
 
+/* *INDENT-ON* */
 
 /* Frees copy options. */
-void
-free_copy_options(copy_options * ptr)
-{
-	if (!ptr)
-		return;
-	free(ptr->before_tofrom);
-	free(ptr->after_tofrom);
-	free(ptr->file);
-	free(ptr->tableName);
-	free(ptr->columnList);
-	free(ptr);
-}
-
 
 /*
  * ParseStageOptions takes the given copy options, parses the additional options

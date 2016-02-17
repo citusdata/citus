@@ -40,10 +40,15 @@ SELECT master_create_empty_shard('range_partitioned') AS new_shard_id
 UPDATE pg_dist_shard SET shardminvalue = 50000, shardmaxvalue = 99999
 WHERE shardid = :new_shard_id;
 
--- create append-partitioned shard
+-- create append-partitioned shards
 SELECT master_create_empty_shard('append_partitioned') AS new_shard_id
 \gset
-UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 100000
+UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 500000
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('append_partitioned') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 500000, shardmaxvalue = 1000000
 WHERE shardid = :new_shard_id;
 
 -- basic single-row INSERT
@@ -59,19 +64,23 @@ INSERT INTO insufficient_shards VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:5
 INSERT INTO range_partitioned VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									  20.69);
 
--- ensure the value is where we put it and query to find it is properly pruned
+-- also insert to an append-partitioned table
+INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
+									   20.69);
+-- ensure the values are where we put them and query to ensure they are properly pruned
 SET client_min_messages TO 'DEBUG2';
-SET citusdb.task_executor_type TO 'router';
+SET citus.task_executor_type TO 'router';
 SELECT * FROM range_partitioned WHERE id = 32743;
+SELECT * FROM append_partitioned WHERE id = 414123;
 SET client_min_messages TO DEFAULT;
-SET citusdb.task_executor_type TO DEFAULT;
+SET citus.task_executor_type TO DEFAULT;
 
--- also try inserting without a range-partitioned shard to receive the value
+-- try inserting without a range-partitioned shard to receive the value
 INSERT INTO range_partitioned VALUES (999999, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									  20.69);
 
--- try an insert to an append-partitioned table
-INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
+-- and insert into an append-partitioned table with a value that spans shards:
+INSERT INTO append_partitioned VALUES (500000, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									   20.69);
 
 -- INSERT with DEFAULT in the target list
