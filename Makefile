@@ -44,9 +44,9 @@ clean: clean-csql
 
 # apply or check style
 reindent:
-	cd ${citusdb_abs_top_srcdir} && citus_indent --quiet
+	cd ${citus_abs_top_srcdir} && citus_indent --quiet
 check-style:
-	cd ${citusdb_abs_top_srcdir} && citus_indent --quiet --check
+	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
 .PHONY: reindent check-style
 
 # depend on install for now
