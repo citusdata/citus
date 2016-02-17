@@ -1,13 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * citus_ruleutils.h
-<<<<<<< HEAD
  *	  Citus ruleutils wrapper functions and exported PostgreSQL ruleutils
- * 	  functions.
-=======
- *	  CitusDB ruleutils wrapper functions and exported PostgreSQL ruleutils
- *    functions.
->>>>>>> origin
+ *	  functions.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
