@@ -96,9 +96,9 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	bool dontWait = false;
 	char partitionMethod = 0;
 	bool failOK = false;
-	bool topLevel = true;
+	bool isTopLevel = true;
 
-	PreventTransactionChain(topLevel, "master_apply_delete_command");
+	PreventTransactionChain(isTopLevel, "master_apply_delete_command");
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
@@ -174,11 +174,11 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 
 	char *schemaName = NULL;
 	char *relationName = NULL;
-	bool topLevel = true;
+	bool isTopLevel = true;
 	List *shardIntervalList = NIL;
 	int droppedShardCount = 0;
 
-	PreventTransactionChain(topLevel, "DROP distributed table");
+	PreventTransactionChain(isTopLevel, "DROP distributed table");
 
 	relationName = get_rel_name(relationId);
 
