@@ -5,10 +5,6 @@
 -- We stage more data to customer and part tables to test distributed joins. The
 -- staging causes the planner to consider customer and part tables as large, and
 -- evaluate plans where some of the underlying tables need to be repartitioned.
--- We also set the shard placement policy to the local-node-first policy as other
--- regression tests expect the placements to be in that order.
-
-SET citus.shard_placement_policy TO 'local-node-first';
 
 \STAGE customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
 \STAGE customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
