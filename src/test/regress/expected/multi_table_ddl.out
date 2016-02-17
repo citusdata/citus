@@ -27,7 +27,7 @@ BEGIN;
 DROP TABLE testtableddl;
 ERROR:  DROP distributed table cannot run inside a transaction block
 CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citusdb_drop_trigger() line 15 at PERFORM
+PL/pgSQL function citus_drop_trigger() line 15 at PERFORM
 ROLLBACK;
 -- verify that the table can be dropped
 DROP TABLE testtableddl;
