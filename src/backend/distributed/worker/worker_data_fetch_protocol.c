@@ -997,11 +997,10 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	StringInfo remoteCopyCommand = NULL;
 	CopyStmt *localCopyCommand = NULL;
 	RangeVar *localTable = NULL;
-	uint64 copiedRowCount = 0;
 	uint64 shardId = INVALID_SHARD_ID;
 	bool received = false;
 	char *quotedTableName = NULL;
-	const char *queryString = NULL;
+	StringInfo queryString = NULL;
 	const char *schemaName = NULL;
 
 	/* copy remote table's data to this node */
@@ -1035,8 +1034,13 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	localTable = makeRangeVar((char *) schemaName, shardNameString->data, -1);
 	localCopyCommand = CopyStatement(localTable, localFilePath->data);
 
-	DoCopy(localCopyCommand, queryString, &copiedRowCount);
-	(void) copiedRowCount;
+	quotedTableName = quote_qualified_identifier(schemaName, shardNameString->data);
+
+	queryString = makeStringInfo();
+	appendStringInfo(queryString, COPY_IN_COMMAND, quotedTableName, localFilePath->data);
+
+	ProcessUtility((Node *) localCopyCommand, queryString->data,
+				   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	/* finally delete the temporary file we created */
 	DeleteFile(localFilePath->data);
