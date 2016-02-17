@@ -3,12 +3,12 @@
 --
 
 -- Tests for staging data in a distributed cluster. Please note that the number
--- of shards uploaded depends on two config values: citusdb.shard_replication_factor and
--- citusdb.shard_max_size. These values are manually set in pg_regress.c. We also set
+-- of shards uploaded depends on two config values: citus.shard_replication_factor and
+-- citus.shard_max_size. These values are manually set in pg_regress.c. We also set
 -- the shard placement policy to the local-node-first policy as other regression
 -- tests expect the placements to be in that order.
 
-SET citusdb.shard_placement_policy TO 'local-node-first';
+SET citus.shard_placement_policy TO 'local-node-first';
 
 \STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'

@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * citus_nodefuncs.h
- *	  Node (de-)serialization support for CitusDB.
+ *	  Node (de-)serialization support for Citus.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *

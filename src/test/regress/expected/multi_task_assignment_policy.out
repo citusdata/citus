@@ -46,7 +46,7 @@ BEGIN;
 SET client_min_messages TO DEBUG3;
 DEBUG:  CommitTransactionCommand
 -- First test the default greedy task assignment policy
-SET citusdb.task_assignment_policy TO 'greedy';
+SET citus.task_assignment_policy TO 'greedy';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
@@ -75,7 +75,7 @@ DEBUG:  CommitTransactionCommand
 (1 row)
 
 -- Next test the first-replica task assignment policy
-SET citusdb.task_assignment_policy TO 'first-replica';
+SET citus.task_assignment_policy TO 'first-replica';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
@@ -118,7 +118,7 @@ DEBUG:  CommitTransactionCommand
 (1 row)
 
 -- Finally test the round-robin task assignment policy
-SET citusdb.task_assignment_policy TO 'round-robin';
+SET citus.task_assignment_policy TO 'round-robin';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
@@ -158,7 +158,7 @@ DEBUG:  CommitTransactionCommand
  explain statements for distributed queries are currently unsupported
 (1 row)
 
-RESET citusdb.task_assignment_policy;
+RESET citus.task_assignment_policy;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand

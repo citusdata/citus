@@ -112,7 +112,7 @@ SELECT title, author_id FROM articles
 	ORDER BY author_id ASC, id;
 
 -- add in some grouping expressions, still on same shard
--- having queries unsupported in CitusDB
+-- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	WHERE author_id = 1 OR author_id = 7 OR author_id = 8 OR author_id = 10
 	GROUP BY author_id
@@ -130,7 +130,7 @@ SELECT title FROM articles;
 -- queries which involve functions in FROM clause are unsupported.
 SELECT * FROM articles, position('om' in 'Thomas');
 
--- subqueries are not supported in WHERE clause in CitusDB
+-- subqueries are not supported in WHERE clause in Citus
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
 
 -- subqueries are supported in FROM clause
@@ -166,23 +166,23 @@ $sharded_sql$;
 -- test cross-shard queries
 SELECT COUNT(*) FROM articles;
 
--- having queries unsupported in CitusDB
+-- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 25000
 	ORDER BY sum(word_count) DESC
 	LIMIT 5;
 
--- more proof CitusDB doesn't support having clauses
+-- more proof Citus doesn't support having clauses
 SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000
 	ORDER BY author_id;
 
--- now, test the cases where CitusDB do or do not need to create
+-- now, test the cases where Citus do or do not need to create
 -- the master queries
-SET citusdb.task_executor_type TO 'router';
-SET citusdb.large_table_shard_count TO 2;
+SET citus.task_executor_type TO 'router';
+SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO 'DEBUG2';
 
 -- start with the simple lookup query
@@ -277,4 +277,4 @@ SELECT *
 	WHERE author_id >= 1 AND author_id <= 3;
 
 SET client_min_messages to 'NOTICE';
-SET citusdb.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'real-time';

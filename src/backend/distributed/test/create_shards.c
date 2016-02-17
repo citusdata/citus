@@ -3,7 +3,7 @@
  * test/src/create_shards.c
  *
  * This file contains functions to exercise shard creation functionality
- * within CitusDB.
+ * within Citus.
  *
  * Copyright (c) 2014-2015, Citus Data, Inc.
  *

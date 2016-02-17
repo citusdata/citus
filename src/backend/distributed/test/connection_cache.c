@@ -2,7 +2,7 @@
  *
  * test/src/connection_cache.c
  *
- * This file contains functions to exercise CitusDB's connection hash
+ * This file contains functions to exercise Citus's connection hash
  * functionality for purposes of unit testing.
  *
  * Copyright (c) 2014-2015, Citus Data, Inc.

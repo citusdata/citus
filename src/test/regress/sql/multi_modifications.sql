@@ -69,11 +69,11 @@ INSERT INTO append_partitioned VALUES (414123, 'AAPL', 9580, '2004-10-19 10:23:5
 									   20.69);
 -- ensure the values are where we put them and query to ensure they are properly pruned
 SET client_min_messages TO 'DEBUG2';
-SET citusdb.task_executor_type TO 'router';
+SET citus.task_executor_type TO 'router';
 SELECT * FROM range_partitioned WHERE id = 32743;
 SELECT * FROM append_partitioned WHERE id = 414123;
 SET client_min_messages TO DEFAULT;
-SET citusdb.task_executor_type TO DEFAULT;
+SET citus.task_executor_type TO DEFAULT;
 
 -- try inserting without a range-partitioned shard to receive the value
 INSERT INTO range_partitioned VALUES (999999, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',

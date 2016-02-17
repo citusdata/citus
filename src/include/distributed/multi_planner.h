@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_planner.h
- *	  General CitusDB planner code.
+ *	  General Citus planner code.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------

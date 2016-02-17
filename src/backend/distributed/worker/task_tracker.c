@@ -240,7 +240,7 @@ TaskTrackerMain(Datum main_arg)
 			/*
 			 * Reload worker membership file. For now we do that in the task
 			 * tracker because that's currently the only background worker in
-			 * CitusDB. And only background workers allow us to safely
+			 * Citus. And only background workers allow us to safely
 			 * register a SIGHUP handler.
 			 */
 			LoadWorkerNodeList(WorkerListFileName);
@@ -295,7 +295,7 @@ WorkerTasksHashEnter(uint64 jobId, uint32 taskId)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
 						errmsg("out of shared memory"),
-						errhint("Try increasing citusdb.max_tracked_tasks_per_node.")));
+						errhint("Try increasing citus.max_tracked_tasks_per_node.")));
 	}
 
 	/* check that we do not have the same task assigned twice to this node */

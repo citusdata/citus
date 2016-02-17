@@ -10,8 +10,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUSDB_TEST_HELPER_FUNCTIONS_H
-#define CITUSDB_TEST_HELPER_FUNCTIONS_H
+#ifndef CITUS_TEST_HELPER_FUNCTIONS_H
+#define CITUS_TEST_HELPER_FUNCTIONS_H
 
 #include "postgres.h"
 #include "c.h"
@@ -70,4 +70,4 @@ extern Datum prune_using_both_values(PG_FUNCTION_ARGS);
 extern Datum debug_equality_expression(PG_FUNCTION_ARGS);
 
 
-#endif /* CITUSDB_TEST_HELPER_FUNCTIONS_H */
+#endif /* CITUS_TEST_HELPER_FUNCTIONS_H */

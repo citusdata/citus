@@ -9,8 +9,8 @@
 
 BEGIN;
 SET client_min_messages TO DEBUG4;
-SET citusdb.large_table_shard_count TO 2;
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.large_table_shard_count TO 2;
+SET citus.task_executor_type TO 'task-tracker';
 
 -- Debug4 log messages display jobIds within them. We explicitly set the jobId
 -- sequence here so that the regression output becomes independent of the number

@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 #----------------------------------------------------------------------
 #
-# pg_regress_multi.pl - Test runner for CitusDB
+# pg_regress_multi.pl - Test runner for Citus
 #
 # Portions Copyright (c) 2012-2015, Citus Data, Inc.
 # Portions Copyright (c) 1996-2015, PostgreSQL Global Development Group
@@ -19,7 +19,7 @@ use Getopt::Long;
 
 sub Usage()
 {
-    print "pg_regress_multi - CitusDB test runner\n";
+    print "pg_regress_multi - Citus test runner\n";
     print "\n";
     print "Usage:\n";
     print "  pg_regress_multi [MULTI OPTIONS] -- [PG REGRESS OPTS]\n";
@@ -56,7 +56,7 @@ GetOptions(
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
 # pointing to the libdir - that's required so the right version of
-# libpq, citusdb et al is being picked up.
+# libpq, citus et al is being picked up.
 #
 # XXX: There's some issues with el capitan's SIP here, causing
 # DYLD_LIBRARY_PATH not being inherited if SIP is enabled. That's a
@@ -87,12 +87,12 @@ push(@pgOptions, '-c', "listen_addresses='${host}'");
 # not required, and we don't necessarily have access to the default directory
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
-push(@pgOptions, '-c', "shared_preload_libraries=citusdb");
+push(@pgOptions, '-c', "shared_preload_libraries=citus");
 
-# CitusDB options set for the tests
-push(@pgOptions, '-c', "citusdb.shard_max_size=300kB");
-push(@pgOptions, '-c', "citusdb.max_running_tasks_per_node=4");
-push(@pgOptions, '-c', "citusdb.expire_cached_shards=on");
+# Citus options set for the tests
+push(@pgOptions, '-c', "citus.shard_max_size=300kB");
+push(@pgOptions, '-c', "citus.max_running_tasks_per_node=4");
+push(@pgOptions, '-c', "citus.expire_cached_shards=on");
 
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
@@ -107,7 +107,7 @@ for my $option (@userPgOptions)
                'bug_status', ' ENUM (\'new\', \'open\', \'closed\')');
 
 # define functions as signature->definition
-%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citusdb\' LANGUAGE C STRICT;');
+%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;');
 
 #define fdws as name->handler name
 %fdws = ('fake_fdw', 'fake_fdw_handler');
@@ -274,7 +274,7 @@ elsif ($majorversion eq '9.4')
 }
 else
 {
-    die "CitusDB is not compatible with the detected PostgreSQL version $majorversion";
+    die "Citus is not compatible with the detected PostgreSQL version $majorversion";
 }
 
 # Add load extension parameters to the argument list

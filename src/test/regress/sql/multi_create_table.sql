@@ -83,7 +83,7 @@ CREATE TABLE supplier
 SELECT master_create_distributed_table('supplier', 's_suppkey', 'append');
 
 
--- now test that CitusDB cannot distribute unique constraints that do not include
+-- now test that Citus cannot distribute unique constraints that do not include
 -- the partition column
 CREATE TABLE primary_key_on_non_part_col
 (
@@ -99,7 +99,7 @@ CREATE TABLE unique_const_on_non_part_col
 );
 SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
 
--- now show that CitusDB can distribute unique constrints that include
+-- now show that Citus can distribute unique constrints that include
 -- the partition column
 CREATE TABLE primary_key_on_part_col
 (

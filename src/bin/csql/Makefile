@@ -9,12 +9,12 @@
 #
 #-------------------------------------------------------------------------
 
-citusdb_subdir = src/bin/csql
-citusdb_top_builddir = ../../..
+citus_subdir = src/bin/csql
+citus_top_builddir = ../../..
 
 PROGRAM = csql
 
-PGFILEDESC = "csql - the CitusDB interactive terminal"
+PGFILEDESC = "csql - the Citus interactive terminal"
 PGAPPICON=win32
 
 OBJS =command.o common.o help.o input.o stringutils.o mainloop.o copy.o \
@@ -26,7 +26,7 @@ OBJS =command.o common.o help.o input.o stringutils.o mainloop.o copy.o \
 
 PG_LIBS = $(libpq)
 
-include $(citusdb_top_builddir)/Makefile.global
+include $(citus_top_builddir)/Makefile.global
 
 override CPPFLAGS += -I$(libpq_srcdir) -I$(top_srcdir)/src/bin/csql
 

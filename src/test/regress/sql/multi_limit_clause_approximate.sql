@@ -16,7 +16,7 @@ SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 
 -- Enable limit optimization to fetch one third of each shard's data
 
-SET citusdb.limit_clause_row_fetch_count TO 600;
+SET citus.limit_clause_row_fetch_count TO 600;
 
 SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 	GROUP BY l_partkey
@@ -25,7 +25,7 @@ SELECT l_partkey, sum(l_partkey * (1 + l_suppkey)) AS aggregate FROM lineitem
 -- Disable limit optimization for our second test. This time, we have a query
 -- that joins several tables, and that groups and orders the results.
 
-RESET citusdb.limit_clause_row_fetch_count;
+RESET citus.limit_clause_row_fetch_count;
 
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
@@ -37,8 +37,8 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 -- test, we also change a config setting to ensure that we don't repartition any
 -- of the tables during the query.
 
-SET citusdb.limit_clause_row_fetch_count TO 150;
-SET citusdb.large_table_shard_count TO 2;
+SET citus.limit_clause_row_fetch_count TO 150;
+SET citus.large_table_shard_count TO 2;
 
 SELECT c_custkey, c_name, count(*) as lineitem_count
 	FROM customer, orders, lineitem
@@ -46,7 +46,7 @@ SELECT c_custkey, c_name, count(*) as lineitem_count
 	GROUP BY c_custkey, c_name
 	ORDER BY lineitem_count DESC, c_custkey LIMIT 10;
 
-RESET citusdb.large_table_shard_count;
+RESET citus.large_table_shard_count;
 
 -- We now test scenarios where applying the limit optimization wouldn't produce
 -- meaningful results. First, we check that we don't push down the limit clause
@@ -69,5 +69,5 @@ SELECT count(*) count_quantity, l_quantity FROM lineitem WHERE l_quantity < 10.0
 	GROUP BY l_quantity
 	ORDER BY count_quantity ASC, l_quantity ASC;
 
-RESET citusdb.limit_clause_row_fetch_count;
+RESET citus.limit_clause_row_fetch_count;
 RESET client_min_messages;

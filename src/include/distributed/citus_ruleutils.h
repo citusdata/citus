@@ -1,8 +1,13 @@
 /*-------------------------------------------------------------------------
  *
  * citus_ruleutils.h
+<<<<<<< HEAD
+ *	  Citus ruleutils wrapper functions and exported PostgreSQL ruleutils
+ * 	  functions.
+=======
  *	  CitusDB ruleutils wrapper functions and exported PostgreSQL ruleutils
  *    functions.
+>>>>>>> origin
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -15,7 +20,7 @@
 #include "nodes/parsenodes.h"
 
 
-/* Function declarations for version independent CitusDB ruleutils wrapper functions */
+/* Function declarations for version independent Citus ruleutils wrapper functions */
 extern char * pg_get_extensiondef_string(Oid tableRelationId);
 extern char * pg_get_serverdef_string(Oid tableRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId);

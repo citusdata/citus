@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_utility.h
- *	  CitusDB utility hook and related functionality.
+ *	  Citus utility hook and related functionality.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
