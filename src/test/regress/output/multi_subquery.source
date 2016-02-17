@@ -43,7 +43,7 @@ SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range')
  
 (1 row)
 
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 -- Check that we don't allow subquery pushdown in default settings.
 SELECT
 	avg(unit_price)
@@ -60,7 +60,7 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Join in subqueries is not supported yet
-SET citusdb.subquery_pushdown to TRUE;
+SET citus.subquery_pushdown to TRUE;
 -- Check that we don't crash if there are not any shards.
 SELECT
 	avg(unit_price)
@@ -81,7 +81,7 @@ FROM
 (1 row)
 
 -- Stage data to tables.
-SET citusdb.shard_max_size TO "1MB";
+SET citus.shard_max_size TO "1MB";
 \STAGE lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \STAGE lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 \STAGE orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'

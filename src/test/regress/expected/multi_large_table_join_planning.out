@@ -8,11 +8,11 @@
 BEGIN;
 SET client_min_messages TO DEBUG4;
 DEBUG:  CommitTransactionCommand
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand

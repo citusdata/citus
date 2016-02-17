@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * citus_outfuncs.c
- *	  Output functions for CitusDB tree nodes.
+ *	  Output functions for Citus tree nodes.
  *
  * Portions Copyright (c) 1996-2014, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
@@ -9,7 +9,7 @@
  *
  * NOTES
  *	  This is a wrapper around postgres' nodeToString() that additionally
- *	  supports CitusDB node types.
+ *	  supports Citus node types.
  *
  *    Keep as closely aligned with the upstream version as possible.
  *
@@ -220,7 +220,7 @@ _outDatum(StringInfo str, Datum value, int typlen, bool typbyval)
 
 
 /*****************************************************************************
- *	Output routines for CitusDB node types
+ *	Output routines for Citus node types
  *****************************************************************************/
 
 static void

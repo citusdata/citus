@@ -10,4 +10,4 @@
 /tmp_check*
 
 # ignore latest install file
-citusdb--5.0.sql
+citus--5.0.sql

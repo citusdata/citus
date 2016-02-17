@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * resource_lock.c
- *	  Locking Infrastructure for CitusDB.
+ *	  Locking Infrastructure for Citus.
  *
  * To avoid introducing a new type of locktag - that then could not be
  * displayed by core functionality - we reuse advisory locks. If we'd just

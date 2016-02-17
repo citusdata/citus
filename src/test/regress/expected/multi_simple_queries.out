@@ -169,7 +169,7 @@ SELECT title, author_id FROM articles
 (10 rows)
 
 -- add in some grouping expressions, still on same shard
--- having queries unsupported in CitusDB
+-- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	WHERE author_id = 1 OR author_id = 7 OR author_id = 8 OR author_id = 10
 	GROUP BY author_id
@@ -190,7 +190,7 @@ ERROR:  cannot plan queries that include both regular and partitioned relations
 SELECT * FROM articles, position('om' in 'Thomas');
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Complex table expressions are currently unsupported
--- subqueries are not supported in WHERE clause in CitusDB
+-- subqueries are not supported in WHERE clause in Citus
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
 ERROR:  cannot plan queries that include both regular and partitioned relations
 -- subqueries are supported in FROM clause
@@ -285,7 +285,7 @@ SELECT COUNT(*) FROM articles;
     50
 (1 row)
 
--- having queries unsupported in CitusDB
+-- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 25000
@@ -293,17 +293,17 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	LIMIT 5;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Having qual is currently unsupported
--- more proof CitusDB doesn't support having clauses
+-- more proof Citus doesn't support having clauses
 SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000
 	ORDER BY author_id;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Having qual is currently unsupported
--- now, test the cases where CitusDB do or do not need to create
+-- now, test the cases where Citus do or do not need to create
 -- the master queries
-SET citusdb.task_executor_type TO 'router';
-SET citusdb.large_table_shard_count TO 2;
+SET citus.task_executor_type TO 'router';
+SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO 'DEBUG2';
 -- start with the simple lookup query
 SELECT *
@@ -338,7 +338,7 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 18;
 ERROR:  cannot use router executor with queries that hit multiple shards
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- rename the output columns on a no master query case
 SELECT id as article_id, word_count * id as random_value
 	FROM articles
@@ -377,7 +377,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 DEBUG:  push down of limit count: 3
 DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with JOINs
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- do not create the master query for LIMIT on a single shard SELECT
 SELECT *
 	FROM articles
@@ -417,7 +417,7 @@ SELECT avg(word_count)
 	WHERE author_id = 2;
 DEBUG:  predicate pruning for shardId 103093
 ERROR:  cannot use router executor with aggregates
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- max, min, sum, count is somehow implemented
 -- differently in distributed planning but, still error out 
 SELECT max(word_count) as max, min(word_count) as min,
@@ -426,7 +426,7 @@ SELECT max(word_count) as max, min(word_count) as min,
 	WHERE author_id = 2;
 DEBUG:  predicate pruning for shardId 103093
 ERROR:  cannot use router executor with aggregates
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with ORDER BY
 SELECT *
 	FROM articles
@@ -434,7 +434,7 @@ SELECT *
 	ORDER BY word_count;
 DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with ORDER BY and LIMIT
 SELECT *
 	FROM articles
@@ -444,7 +444,7 @@ SELECT *
 DEBUG:  push down of limit count: 2
 DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with aggregates and GROUP BY
 SELECT max(word_count)
 	FROM articles
@@ -452,7 +452,7 @@ SELECT max(word_count)
 	GROUP BY author_id;
 DEBUG:  predicate pruning for shardId 103094
 ERROR:  cannot use router executor with aggregates
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles a, articles b
@@ -487,12 +487,12 @@ DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 14
 ERROR:  cannot use router executor with repartition jobs
-HINT:  Set citusdb.task_executor_type to "task-tracker".
+HINT:  Set citus.task_executor_type to "task-tracker".
 -- error out for queries which hit more than 1 shards
 SELECT *
 	FROM articles
 	WHERE author_id >= 1 AND author_id <= 3;
 ERROR:  cannot use router executor with queries that hit multiple shards
-HINT:  Set citusdb.task_executor_type to "real-time" or "task-tracker".
+HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 SET client_min_messages to 'NOTICE';
-SET citusdb.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'real-time';

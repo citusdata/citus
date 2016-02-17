@@ -6,8 +6,8 @@
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
 
--- verify that the citusdb extension can't be dropped while distributed tables exist
-DROP EXTENSION citusdb;
+-- verify that the citus extension can't be dropped while distributed tables exist
+DROP EXTENSION citus;
 
 -- verify that the distribution column can't have its type changed
 ALTER TABLE testtableddl ALTER COLUMN distributecol TYPE text;
@@ -34,6 +34,6 @@ SELECT * FROM pg_dist_shard_placement;
 -- check that the extension now can be dropped (and recreated). We reconnect
 -- before creating the extension to expire extension specific variables which
 -- are cached for performance.
-DROP EXTENSION citusdb;
+DROP EXTENSION citus;
 \c
-CREATE EXTENSION citusdb;
+CREATE EXTENSION citus;

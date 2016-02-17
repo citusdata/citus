@@ -9,7 +9,7 @@ SET client_min_messages TO DEBUG2;
 
 -- Change configuration to treat lineitem and orders tables as large
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102009;
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102010;

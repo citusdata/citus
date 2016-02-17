@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_resowner.c
- *	  CitusDB resource owner integration
+ *	  Citus resource owner integration
  *
  * An extension can't directly add members to ResourceOwnerData. Instead we
  * have to use the resource owner callback mechanism. Right now it's

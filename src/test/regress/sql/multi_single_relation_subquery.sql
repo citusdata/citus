@@ -4,7 +4,7 @@
 
 -- This test checks that we are able to run selected set of distributed SQL subqueries.
 
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 
 select
     number_sum,

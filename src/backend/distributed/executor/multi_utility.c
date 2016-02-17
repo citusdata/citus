@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  * multi_utility.c
- *	  CitusDB utility hook and related functionality.
+ *	  Citus utility hook and related functionality.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -76,7 +76,7 @@ static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid ol
 
 
 /*
- * Utility for handling citusdb specific concerns around utility statements.
+ * Utility for handling citus specific concerns around utility statements.
  *
  * There's two basic types of concerns here:
  * 1) Intercept utility statements that run after distributed query
@@ -168,29 +168,29 @@ multi_ProcessUtility(Node *parsetree,
 	/*
 	 * Inform the user about potential caveats.
 	 *
-	 * To prevent failures in aborted transactions, CitusDBHasBeenLoaded() needs
+	 * To prevent failures in aborted transactions, CitusHasBeenLoaded() needs
 	 * to be the second condition. See RelationIdGetRelation() which is called
-	 * by CitusDBHasBeenLoaded().
+	 * by CitusHasBeenLoaded().
 	 */
-	if (IsA(parsetree, CreatedbStmt) && CitusDBHasBeenLoaded())
+	if (IsA(parsetree, CreatedbStmt) && CitusHasBeenLoaded())
 	{
-		ereport(NOTICE, (errmsg("CitusDB partially supports CREATE DATABASE for "
+		ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
 								"distributed databases"),
-						 errdetail("CitusDB does not propagate CREATE DATABASE "
+						 errdetail("Citus does not propagate CREATE DATABASE "
 								   "command to workers"),
 						 errhint("You can manually create a database and its "
 								 "extensions on workers.")));
 	}
-	else if (IsA(parsetree, CreateSchemaStmt) && CitusDBHasBeenLoaded())
+	else if (IsA(parsetree, CreateSchemaStmt) && CitusHasBeenLoaded())
 	{
-		ereport(NOTICE, (errmsg("CitusDB partially supports CREATE SCHEMA "
+		ereport(NOTICE, (errmsg("Citus partially supports CREATE SCHEMA "
 								"for distributed databases"),
 						 errdetail("schema usage in joins and in some UDFs "
-								   "provided by CitusDB are not supported yet")));
+								   "provided by Citus are not supported yet")));
 	}
-	else if (IsA(parsetree, CreateRoleStmt) && CitusDBHasBeenLoaded())
+	else if (IsA(parsetree, CreateRoleStmt) && CitusHasBeenLoaded())
 	{
-		ereport(NOTICE, (errmsg("CitusDB does not support CREATE ROLE/USER "
+		ereport(NOTICE, (errmsg("Citus does not support CREATE ROLE/USER "
 								"for distributed databases"),
 						 errdetail("Multiple roles are currently supported "
 								   "only for local tables")));
@@ -204,7 +204,7 @@ multi_ProcessUtility(Node *parsetree,
 
 /*
  * WarnIfDropCitusExtension prints a WARNING if dropStatement includes dropping
- * citusdb extension.
+ * citus extension.
  */
 static void
 WarnIfDropCitusExtension(DropStmt *dropStatement)
@@ -218,8 +218,8 @@ WarnIfDropCitusExtension(DropStmt *dropStatement)
 		List *objectNameList = lfirst(dropStatementObject);
 		char *objectName = NameListToString(objectNameList);
 
-		/* we're only concerned with the citusdb extension */
-		if (strncmp("citusdb", objectName, NAMEDATALEN) == 0)
+		/* we're only concerned with the citus extension */
+		if (strncmp("citus", objectName, NAMEDATALEN) == 0)
 		{
 			/*
 			 * Warn the user about the possibility of invalid cache. Also, see
@@ -296,7 +296,7 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 
 
 /*
- * ProcessCopyStmt handles CitusDB specific concerns for COPY like supporting
+ * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
  * COPYing from distributed tables and preventing unsupported actions.
  */
 static Node *

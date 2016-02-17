@@ -77,7 +77,7 @@ IsDistributedTable(Oid relationId)
 	 * yet. As we can't do lookups in nonexistent tables, directly return
 	 * false.
 	 */
-	if (!CitusDBHasBeenLoaded())
+	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
@@ -157,7 +157,7 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 	 * yet. As we can't do lookups in nonexistent tables, directly return NULL
 	 * here.
 	 */
-	if (!CitusDBHasBeenLoaded())
+	if (!CitusHasBeenLoaded())
 	{
 		return NULL;
 	}
@@ -294,7 +294,7 @@ LookupDistTableCacheEntry(Oid relationId)
 
 
 /*
- * CitusDBHasBeenLoaded returns true if the citusdb extension has been created
+ * CitusHasBeenLoaded returns true if the citus extension has been created
  * in the current database and the extension script has been executed. Otherwise,
  * it returns false. The result is cached as this is called very frequently.
  *
@@ -303,17 +303,17 @@ LookupDistTableCacheEntry(Oid relationId)
  * acceptable.
  */
 bool
-CitusDBHasBeenLoaded(void)
+CitusHasBeenLoaded(void)
 {
 	static bool extensionLoaded = false;
 
-	/* recheck presence until citusdb has been loaded */
+	/* recheck presence until citus has been loaded */
 	if (!extensionLoaded)
 	{
 		bool extensionPresent = false;
 		bool extensionScriptExecuted = true;
 
-		Oid extensionOid = get_extension_oid("citusdb", true);
+		Oid extensionOid = get_extension_oid("citus", true);
 		if (extensionOid != InvalidOid)
 		{
 			extensionPresent = true;
@@ -321,7 +321,7 @@ CitusDBHasBeenLoaded(void)
 
 		if (extensionPresent)
 		{
-			/* check if CitusDB extension objects are still being created */
+			/* check if Citus extension objects are still being created */
 			if (creating_extension && CurrentExtensionObject == extensionOid)
 			{
 				extensionScriptExecuted = false;
@@ -430,7 +430,7 @@ CitusExtraDataContainerFuncId(void)
 	if (cachedOid == InvalidOid)
 	{
 		nameList = list_make2(makeString("pg_catalog"),
-							  makeString("citusdb_extradata_container"));
+							  makeString("citus_extradata_container"));
 		cachedOid = LookupFuncName(nameList, 1, paramOids, false);
 	}
 

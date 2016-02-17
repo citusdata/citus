@@ -1,4 +1,4 @@
--- this test file aims to test UPSERT feature on CitusDB
+-- this test file aims to test UPSERT feature on Citus
 -- note that output of this file for postgresql 9.4 will
 -- be full syntax errors, which is expected.
 CREATE TABLE upsert_test
@@ -157,7 +157,7 @@ SELECT master_create_worker_shards('upsert_test_2', '4', '2');
  
 (1 row)
 
--- now show that CitusDB works with multiple columns as the PRIMARY KEY, including the partiton key
+-- now show that Citus works with multiple columns as the PRIMARY KEY, including the partiton key
 INSERT INTO upsert_test_2 (part_key, other_col) VALUES (1, 1);
 INSERT INTO upsert_test_2 (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key, other_col) DO NOTHING;
 ERROR:  syntax error at or near "ON"
@@ -284,7 +284,7 @@ INSERT INTO dropcol_distributed AS dropcol (key, keep1) VALUES (1, '5') ON CONFL
 ERROR:  syntax error at or near "AS"
 LINE 1: INSERT INTO dropcol_distributed AS dropcol (key, keep1) VALU...
                                         ^
--- below we test the cases that CitusDB does not support
+-- below we test the cases that Citus does not support
 -- subquery in the SET clause
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET other_col = (SELECT count(*) from upsert_test);

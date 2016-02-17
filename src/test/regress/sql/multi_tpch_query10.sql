@@ -3,7 +3,7 @@
 --
 
 -- Query #10 from the TPC-H decision support benchmark. Unlike other TPC-H tests,
--- we don't set citusdb.large_table_shard_count here, and instead use the default value
+-- we don't set citus.large_table_shard_count here, and instead use the default value
 -- coming from postgresql.conf or multi_task_tracker_executor.conf.
 
 SELECT

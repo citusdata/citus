@@ -200,7 +200,7 @@ MainLoop(FILE *source)
 			(line[4] == '\0' || line[4] == ';' || isspace((unsigned char) line[4])))
 		{
 			free(line);
-			puts(_("You are using csql, the command-line interface to CitusDB."));
+			puts(_("You are using csql, the command-line interface to Citus."));
 			printf(_("Type:  \\copyright for distribution terms\n"
 					 "       \\h for help with SQL commands\n"
 					 "       \\? for help with csql commands\n"

@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * stage.h
  *	  Declarations for the csql meta-command \stage. These declarations define a
  *	  protocol for the client to communicate to the master and worker nodes.

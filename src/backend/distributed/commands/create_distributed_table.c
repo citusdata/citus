@@ -165,7 +165,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 *
 	 * Similarly, do not allow UNIQUE constraint and/or PRIMARY KEY if it does not
 	 * include partition column. This check is important for two reasons. First,
-	 * currently CitusDB does not enforce uniqueness constraint on multiple shards.
+	 * currently Citus does not enforce uniqueness constraint on multiple shards.
 	 * Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed with no
 	 * further check for constraints.
 	 */
@@ -191,7 +191,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		}
 
 		/*
-		 * CitusDB cannot enforce uniqueness constraints with overlapping shards. Thus,
+		 * Citus cannot enforce uniqueness constraints with overlapping shards. Thus,
 		 * emit a warning for unique indexes on append partitioned tables.
 		 */
 		if (distributionMethod == DISTRIBUTE_BY_APPEND)
@@ -262,7 +262,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
  * necessary for a distributed relation in addition to the preexisting ones
  * for a normal relation.
  *
- * We create one dependency from the (now distributed) relation to the citusdb
+ * We create one dependency from the (now distributed) relation to the citus
  * extension to prevent the extension from being dropped while distributed
  * tables exist. Furthermore a dependency from pg_dist_partition's
  * distribution clause to the underlying columns is created, but it's marked
@@ -281,7 +281,7 @@ RecordDistributedRelationDependencies(Oid distributedRelationId, Node *distribut
 	relationAddr.objectSubId = 0;
 
 	citusExtensionAddr.classId = ExtensionRelationId;
-	citusExtensionAddr.objectId = get_extension_oid("citusdb", false);
+	citusExtensionAddr.objectId = get_extension_oid("citus", false);
 	citusExtensionAddr.objectSubId = 0;
 
 	/* dependency from table entry to extension */
@@ -294,10 +294,10 @@ RecordDistributedRelationDependencies(Oid distributedRelationId, Node *distribut
 
 
 /*
- * LookupDistributionMethod maps the oids of citusdb.distribution_type enum
+ * LookupDistributionMethod maps the oids of citus.distribution_type enum
  * values to pg_dist_partition.partmethod values.
  *
- * The passed in oid has to belong to a value of citusdb.distribution_type.
+ * The passed in oid has to belong to a value of citus.distribution_type.
  */
 static char
 LookupDistributionMethod(Oid distributionMethodOid)

@@ -9,8 +9,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUSDB_LISTUTILS_H
-#define CITUSDB_LISTUTILS_H
+#ifndef CITUS_LISTUTILS_H
+#define CITUS_LISTUTILS_H
 
 #include "postgres.h"
 #include "c.h"
@@ -23,4 +23,4 @@ extern List * SortList(List *pointerList,
 					   int (*ComparisonFunction)(const void *, const void *));
 
 
-#endif /* CITUSDB_LISTUTILS_H */
+#endif /* CITUS_LISTUTILS_H */
