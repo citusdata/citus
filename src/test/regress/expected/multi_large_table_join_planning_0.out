@@ -63,12 +63,12 @@ DEBUG:  generated sql query for job 1250 and task 15
 DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102010 lineitem JOIN orders_102015 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > 10::numeric)"
 DEBUG:  generated sql query for job 1250 and task 18
 DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_102009 lineitem JOIN orders_102015 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > 10::numeric)"
-DEBUG:  assigned task 18 to node localhost:57637
-DEBUG:  assigned task 15 to node localhost:57638
-DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 9 to node localhost:57638
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 15 to node localhost:57637
+DEBUG:  assigned task 18 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57637
+DEBUG:  assigned task 12 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  generated sql query for job 1251 and task 3
@@ -99,9 +99,9 @@ DEBUG:  pruning merge fetch taskId 4
 DETAIL:  Creating dependency on merge taskId 10
 DEBUG:  pruning merge fetch taskId 7
 DETAIL:  Creating dependency on merge taskId 13
-DEBUG:  assigned task 3 to node localhost:57637
-DEBUG:  assigned task 9 to node localhost:57638
 DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57637
 DEBUG:  completed cleanup query for job 1252 on node "localhost:57638"
 DEBUG:  completed cleanup query for job 1252 on node "localhost:57637"
 DEBUG:  completed cleanup query for job 1251 on node "localhost:57638"
@@ -167,18 +167,18 @@ DEBUG:  generated sql query for job 1253 and task 10
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102010 lineitem WHERE (l_quantity < 5.0)"
 DEBUG:  generated sql query for job 1253 and task 12
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_102009 lineitem WHERE (l_quantity < 5.0)"
-DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 10 to node localhost:57638
-DEBUG:  assigned task 8 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 10 to node localhost:57637
+DEBUG:  assigned task 12 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 8 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  generated sql query for job 1254 and task 2
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_102016 orders WHERE (o_totalprice <> 4.0)"
 DEBUG:  generated sql query for job 1254 and task 4
 DETAIL:  query string: "SELECT o_orderkey, o_shippriority FROM orders_102015 orders WHERE (o_totalprice <> 4.0)"
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
+DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3
