@@ -259,6 +259,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
+			ErrorIfContainsUnsupportedAggregate((MultiNode *) tableNode);
 			TransformSubqueryNode(tableNode);
 		}
 	}
@@ -2145,8 +2146,9 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	bool distinctSupported = true;
 	List *repartitionNodeList = NIL;
 	Var *distinctColumn = NULL;
-
-	AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+	List *multiTableNodeList = NIL;
+	ListCell *multiTableNodeCell = NULL;
+	AggregateType aggregateType = AGGREGATE_INVALID_FIRST;
 
 	/* check if logical plan includes a subquery */
 	List *subqueryMultiTableList = SubqueryMultiTableList(logicalPlanNode);
@@ -2157,7 +2159,20 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 						errdetail("distinct in the outermost query is unsupported")));
 	}
 
+	multiTableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	foreach(multiTableNodeCell, multiTableNodeList)
+	{
+		MultiTable *multiTable = (MultiTable *) lfirst(multiTableNodeCell);
+		if (multiTable->relationId == SUBQUERY_RELATION_ID)
+		{
+			ereport(ERROR, (errmsg("cannot compute count (distinct)"),
+							errdetail("Subqueries with aggregate (distinct) are "
+									  "not supported yet")));
+		}
+	}
+
 	/* if we have a count(distinct), and distinct approximation is enabled */
+	aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
 	if (aggregateType == AGGREGATE_COUNT &&
 		CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 	{
