@@ -22,7 +22,8 @@
 #include "distributed/multi_resowner.h"
 
 
-typedef struct JobDirectoryEntry {
+typedef struct JobDirectoryEntry
+{
 	ResourceOwner owner;
 	uint64 jobId;
 } JobDirectoryEntry;
@@ -44,8 +45,8 @@ MultiResourceOwnerReleaseCallback(ResourceReleasePhase phase,
 								  bool isTopLevel,
 								  void *arg)
 {
-	int	lastJobIndex = NumRegisteredJobDirectories - 1;
-	int	jobIndex = 0;
+	int lastJobIndex = NumRegisteredJobDirectories - 1;
+	int jobIndex = 0;
 
 	if (phase == RESOURCE_RELEASE_AFTER_LOCKS)
 	{
@@ -79,7 +80,7 @@ MultiResourceOwnerReleaseCallback(ResourceReleasePhase phase,
 void
 ResourceOwnerEnlargeJobDirectories(ResourceOwner owner)
 {
-	int	newMax = 0;
+	int newMax = 0;
 
 	/* ensure callback is registered */
 	if (!RegisteredResownerCallback)
@@ -91,15 +92,17 @@ ResourceOwnerEnlargeJobDirectories(ResourceOwner owner)
 	if (RegisteredJobDirectories == NULL)
 	{
 		newMax = 16;
-		RegisteredJobDirectories = (JobDirectoryEntry *)
-			MemoryContextAlloc(TopMemoryContext, newMax * sizeof(JobDirectoryEntry));
+		RegisteredJobDirectories =
+			(JobDirectoryEntry *) MemoryContextAlloc(TopMemoryContext,
+													 newMax * sizeof(JobDirectoryEntry));
 		NumAllocatedJobDirectories = newMax;
 	}
 	else if (NumRegisteredJobDirectories + 1 > NumAllocatedJobDirectories)
 	{
 		newMax = NumAllocatedJobDirectories * 2;
-		RegisteredJobDirectories = (JobDirectoryEntry *)
-			repalloc(RegisteredJobDirectories, newMax * sizeof(JobDirectoryEntry));
+		RegisteredJobDirectories =
+			(JobDirectoryEntry *) repalloc(RegisteredJobDirectories,
+										   newMax * sizeof(JobDirectoryEntry));
 		NumAllocatedJobDirectories = newMax;
 	}
 }
@@ -123,8 +126,8 @@ ResourceOwnerRememberJobDirectory(ResourceOwner owner, uint64 jobId)
 void
 ResourceOwnerForgetJobDirectory(ResourceOwner owner, uint64 jobId)
 {
-	int	lastJobIndex = NumRegisteredJobDirectories - 1;
-	int	jobIndex = 0;
+	int lastJobIndex = NumRegisteredJobDirectories - 1;
+	int jobIndex = 0;
 
 	for (jobIndex = lastJobIndex; jobIndex >= 0; jobIndex--)
 	{
@@ -135,7 +138,8 @@ ResourceOwnerForgetJobDirectory(ResourceOwner owner, uint64 jobId)
 			/* move all later entries one up */
 			while (jobIndex < lastJobIndex)
 			{
-				RegisteredJobDirectories[jobIndex] = RegisteredJobDirectories[jobIndex + 1];
+				RegisteredJobDirectories[jobIndex] =
+					RegisteredJobDirectories[jobIndex + 1];
 				jobIndex++;
 			}
 			NumRegisteredJobDirectories = lastJobIndex;

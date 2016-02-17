@@ -89,7 +89,7 @@ MultiRealTimeExecute(Job *job)
 	}
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
-	while ( !(allTasksCompleted || taskFailed || QueryCancelPending) )
+	while (!(allTasksCompleted || taskFailed || QueryCancelPending))
 	{
 		uint32 taskCount = list_length(taskList);
 		uint32 completedTaskCount = 0;
@@ -230,333 +230,338 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution)
 
 	switch (currentStatus)
 	{
-	case EXEC_TASK_CONNECT_START:
-	{
-		int32 connectionId = INVALID_CONNECTION_ID;
-		char *nodeDatabase = NULL;
-
-		/* we use the same database name on the master and worker nodes */
-		nodeDatabase = get_database_name(MyDatabaseId);
-
-		connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase);
-		connectionIdArray[currentIndex] = connectionId;
-
-		/* if valid, poll the connection until the connection is initiated */
-		if (connectionId != INVALID_CONNECTION_ID)
+		case EXEC_TASK_CONNECT_START:
 		{
-			taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_POLL;
-			taskExecution->connectPollCount = 0;
-			connectAction = CONNECT_ACTION_OPENED;
-		}
-		else
-		{
-			AdjustStateForFailure(taskExecution);
-		}
+			int32 connectionId = INVALID_CONNECTION_ID;
+			char *nodeDatabase = NULL;
 
-		break;
-	}
+			/* we use the same database name on the master and worker nodes */
+			nodeDatabase = get_database_name(MyDatabaseId);
 
-	case EXEC_TASK_CONNECT_POLL:
-	{
-		int32 connectionId = connectionIdArray[currentIndex];
-		ConnectStatus pollStatus = MultiClientConnectPoll(connectionId);
+			connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase);
+			connectionIdArray[currentIndex] = connectionId;
 
-		/*
-		 * If the connection is established, we reset the data fetch counter and
-		 * change our status to data fetching.
-		 */
-		if (pollStatus == CLIENT_CONNECTION_READY)
-		{
-			taskExecution->dataFetchTaskIndex = -1;
-			taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
-		}
-		else if (pollStatus == CLIENT_CONNECTION_BUSY)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_POLL;
-		}
-		else if (pollStatus == CLIENT_CONNECTION_BAD)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-		}
-
-		/* now check if we have been trying to connect for too long */
-		taskExecution->connectPollCount++;
-		if (pollStatus == CLIENT_CONNECTION_BUSY)
-		{
-			uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
-			uint32 currentCount = taskExecution->connectPollCount;
-			if (currentCount >= maxCount)
+			/* if valid, poll the connection until the connection is initiated */
+			if (connectionId != INVALID_CONNECTION_ID)
 			{
-				ereport(WARNING, (errmsg("could not establish asynchronous connection "
-										 "after %u ms", REMOTE_NODE_CONNECT_TIMEOUT)));
+				taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_POLL;
+				taskExecution->connectPollCount = 0;
+				connectAction = CONNECT_ACTION_OPENED;
+			}
+			else
+			{
+				AdjustStateForFailure(taskExecution);
+			}
 
+			break;
+		}
+
+		case EXEC_TASK_CONNECT_POLL:
+		{
+			int32 connectionId = connectionIdArray[currentIndex];
+			ConnectStatus pollStatus = MultiClientConnectPoll(connectionId);
+
+			/*
+			 * If the connection is established, we reset the data fetch counter and
+			 * change our status to data fetching.
+			 */
+			if (pollStatus == CLIENT_CONNECTION_READY)
+			{
+				taskExecution->dataFetchTaskIndex = -1;
+				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
+			}
+			else if (pollStatus == CLIENT_CONNECTION_BUSY)
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_POLL;
+			}
+			else if (pollStatus == CLIENT_CONNECTION_BAD)
+			{
 				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
 			}
-		}
 
-		break;
-	}
-
-	case EXEC_TASK_FAILED:
-	{
-		/*
-		 * On task failure, we close the connection. We also reset our execution
-		 * status assuming that we might fail on all other worker nodes and come
-		 * back to this failed node. In that case, we will retry the same fetch
-		 * and compute task(s) on this node again.
-		 */
-		int32 connectionId = connectionIdArray[currentIndex];
-		MultiClientDisconnect(connectionId);
-		connectionIdArray[currentIndex] = INVALID_CONNECTION_ID;
-		connectAction = CONNECT_ACTION_CLOSED;
-
-		taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_START;
-
-		/* try next worker node */
-		AdjustStateForFailure(taskExecution);
-
-		break;
-	}
-
-	case EXEC_FETCH_TASK_LOOP:
-	{
-		List *dataFetchTaskList = task->dependedTaskList;
-		int32 dataFetchTaskCount = list_length(dataFetchTaskList);
-
-		/* move to the next data fetch task */
-		taskExecution->dataFetchTaskIndex++;
-
-		if (taskExecution->dataFetchTaskIndex < dataFetchTaskCount)
-		{
-			taskStatusArray[currentIndex] = EXEC_FETCH_TASK_START;
-		}
-		else
-		{
-			taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
-		}
-
-		break;
-	}
-
-	case EXEC_FETCH_TASK_START:
-	{
-		List *dataFetchTaskList = task->dependedTaskList;
-		int32 dataFetchTaskIndex = taskExecution->dataFetchTaskIndex;
-		Task *dataFetchTask = (Task *) list_nth(dataFetchTaskList, dataFetchTaskIndex);
-
-		char *dataFetchQuery = dataFetchTask->queryString;
-		int32 connectionId = connectionIdArray[currentIndex];
-
-		bool querySent = MultiClientSendQuery(connectionId, dataFetchQuery);
-		if (querySent)
-		{
-			taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-		}
-		else
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-		}
-
-		break;
-	}
-
-	case EXEC_FETCH_TASK_RUNNING:
-	{
-		int32 connectionId = connectionIdArray[currentIndex];
-		ResultStatus resultStatus = MultiClientResultStatus(connectionId);
-		QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-
-		/* check if query results are in progress or unavailable */
-		if (resultStatus == CLIENT_RESULT_BUSY)
-		{
-			taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-			break;
-		}
-		else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			break;
-		}
-
-		Assert(resultStatus == CLIENT_RESULT_READY);
-
-		/*
-		 * If the query executed successfully, loop onto the next data fetch
-		 * task. Else if the query failed, try data fetching on another node.
-		 */
-		queryStatus = MultiClientQueryStatus(connectionId);
-		if (queryStatus == CLIENT_QUERY_DONE)
-		{
-			taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
-		}
-		else if (queryStatus == CLIENT_QUERY_FAILED)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-		}
-		else
-		{
-			ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
-		}
-
-		break;
-	}
-
-	case EXEC_COMPUTE_TASK_START:
-	{
-		int32 connectionId = connectionIdArray[currentIndex];
-		bool querySent = false;
-
-		/* construct new query to copy query results to stdout */
-		char *queryString = task->queryString;
-		StringInfo computeTaskQuery = makeStringInfo();
-		if (BinaryMasterCopyFormat)
-		{
-			appendStringInfo(computeTaskQuery, COPY_QUERY_TO_STDOUT_BINARY, queryString);
-		}
-		else
-		{
-			appendStringInfo(computeTaskQuery, COPY_QUERY_TO_STDOUT_TEXT, queryString);
-		}
-
-		querySent = MultiClientSendQuery(connectionId, computeTaskQuery->data);
-		if (querySent)
-		{
-			taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_RUNNING;
-		}
-		else
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-		}
-
-		break;
-	}
-
-	case EXEC_COMPUTE_TASK_RUNNING:
-	{
-		int32 connectionId = connectionIdArray[currentIndex];
-		ResultStatus resultStatus = MultiClientResultStatus(connectionId);
-		QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-
-		/* check if query results are in progress or unavailable */
-		if (resultStatus == CLIENT_RESULT_BUSY)
-		{
-			taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_RUNNING;
-			break;
-		}
-		else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			break;
-		}
-
-		Assert(resultStatus == CLIENT_RESULT_READY);
-
-		/* check if our request to copy query results has been acknowledged */
-		queryStatus = MultiClientQueryStatus(connectionId);
-		if (queryStatus == CLIENT_QUERY_COPY)
-		{
-			StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
-			StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
-
-			char *filename = taskFilename->data;
-			int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
-			int fileMode = (S_IRUSR | S_IWUSR);
-
-			int32 fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
-			if (fileDescriptor >= 0)
+			/* now check if we have been trying to connect for too long */
+			taskExecution->connectPollCount++;
+			if (pollStatus == CLIENT_CONNECTION_BUSY)
 			{
-				/*
-				 * All files inside the job directory get automatically cleaned
-				 * up on transaction commit or abort.
-				 */
-				fileDescriptorArray[currentIndex] = fileDescriptor;
+				uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
+				uint32 currentCount = taskExecution->connectPollCount;
+				if (currentCount >= maxCount)
+				{
+					ereport(WARNING, (errmsg("could not establish asynchronous "
+											 "connection after %u ms",
+											 REMOTE_NODE_CONNECT_TIMEOUT)));
+
+					taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+				}
+			}
+
+			break;
+		}
+
+		case EXEC_TASK_FAILED:
+		{
+			/*
+			 * On task failure, we close the connection. We also reset our execution
+			 * status assuming that we might fail on all other worker nodes and come
+			 * back to this failed node. In that case, we will retry the same fetch
+			 * and compute task(s) on this node again.
+			 */
+			int32 connectionId = connectionIdArray[currentIndex];
+			MultiClientDisconnect(connectionId);
+			connectionIdArray[currentIndex] = INVALID_CONNECTION_ID;
+			connectAction = CONNECT_ACTION_CLOSED;
+
+			taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_START;
+
+			/* try next worker node */
+			AdjustStateForFailure(taskExecution);
+
+			break;
+		}
+
+		case EXEC_FETCH_TASK_LOOP:
+		{
+			List *dataFetchTaskList = task->dependedTaskList;
+			int32 dataFetchTaskCount = list_length(dataFetchTaskList);
+
+			/* move to the next data fetch task */
+			taskExecution->dataFetchTaskIndex++;
+
+			if (taskExecution->dataFetchTaskIndex < dataFetchTaskCount)
+			{
+				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_START;
+			}
+			else
+			{
+				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
+			}
+
+			break;
+		}
+
+		case EXEC_FETCH_TASK_START:
+		{
+			List *dataFetchTaskList = task->dependedTaskList;
+			int32 dataFetchTaskIndex = taskExecution->dataFetchTaskIndex;
+			Task *dataFetchTask = (Task *) list_nth(dataFetchTaskList,
+													dataFetchTaskIndex);
+
+			char *dataFetchQuery = dataFetchTask->queryString;
+			int32 connectionId = connectionIdArray[currentIndex];
+
+			bool querySent = MultiClientSendQuery(connectionId, dataFetchQuery);
+			if (querySent)
+			{
+				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
+			}
+			else
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+			}
+
+			break;
+		}
+
+		case EXEC_FETCH_TASK_RUNNING:
+		{
+			int32 connectionId = connectionIdArray[currentIndex];
+			ResultStatus resultStatus = MultiClientResultStatus(connectionId);
+			QueryStatus queryStatus = CLIENT_INVALID_QUERY;
+
+			/* check if query results are in progress or unavailable */
+			if (resultStatus == CLIENT_RESULT_BUSY)
+			{
+				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
+				break;
+			}
+			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+				break;
+			}
+
+			Assert(resultStatus == CLIENT_RESULT_READY);
+
+			/*
+			 * If the query executed successfully, loop onto the next data fetch
+			 * task. Else if the query failed, try data fetching on another node.
+			 */
+			queryStatus = MultiClientQueryStatus(connectionId);
+			if (queryStatus == CLIENT_QUERY_DONE)
+			{
+				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
+			}
+			else if (queryStatus == CLIENT_QUERY_FAILED)
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+			}
+			else
+			{
+				ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
+			}
+
+			break;
+		}
+
+		case EXEC_COMPUTE_TASK_START:
+		{
+			int32 connectionId = connectionIdArray[currentIndex];
+			bool querySent = false;
+
+			/* construct new query to copy query results to stdout */
+			char *queryString = task->queryString;
+			StringInfo computeTaskQuery = makeStringInfo();
+			if (BinaryMasterCopyFormat)
+			{
+				appendStringInfo(computeTaskQuery, COPY_QUERY_TO_STDOUT_BINARY,
+								 queryString);
+			}
+			else
+			{
+				appendStringInfo(computeTaskQuery, COPY_QUERY_TO_STDOUT_TEXT,
+								 queryString);
+			}
+
+			querySent = MultiClientSendQuery(connectionId, computeTaskQuery->data);
+			if (querySent)
+			{
+				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_RUNNING;
+			}
+			else
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+			}
+
+			break;
+		}
+
+		case EXEC_COMPUTE_TASK_RUNNING:
+		{
+			int32 connectionId = connectionIdArray[currentIndex];
+			ResultStatus resultStatus = MultiClientResultStatus(connectionId);
+			QueryStatus queryStatus = CLIENT_INVALID_QUERY;
+
+			/* check if query results are in progress or unavailable */
+			if (resultStatus == CLIENT_RESULT_BUSY)
+			{
+				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_RUNNING;
+				break;
+			}
+			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+				break;
+			}
+
+			Assert(resultStatus == CLIENT_RESULT_READY);
+
+			/* check if our request to copy query results has been acknowledged */
+			queryStatus = MultiClientQueryStatus(connectionId);
+			if (queryStatus == CLIENT_QUERY_COPY)
+			{
+				StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
+				StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
+
+				char *filename = taskFilename->data;
+				int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
+				int fileMode = (S_IRUSR | S_IWUSR);
+
+				int32 fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
+				if (fileDescriptor >= 0)
+				{
+					/*
+					 * All files inside the job directory get automatically cleaned
+					 * up on transaction commit or abort.
+					 */
+					fileDescriptorArray[currentIndex] = fileDescriptor;
+					taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_COPYING;
+				}
+				else
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not open file \"%s\": %m",
+											 filename)));
+
+					taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+				}
+			}
+			else if (queryStatus == CLIENT_QUERY_FAILED)
+			{
+				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+			}
+			else
+			{
+				ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
+			}
+
+			break;
+		}
+
+		case EXEC_COMPUTE_TASK_COPYING:
+		{
+			int32 connectionId = connectionIdArray[currentIndex];
+			int32 fileDesc = fileDescriptorArray[currentIndex];
+			int closed = -1;
+
+			/* copy data from worker node, and write to local file */
+			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc);
+
+			/* if worker node will continue to send more data, keep reading */
+			if (copyStatus == CLIENT_COPY_MORE)
+			{
 				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_COPYING;
 			}
-			else
+			else if (copyStatus == CLIENT_COPY_DONE)
 			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not open file \"%s\": %m", filename)));
+				closed = close(fileDesc);
+				fileDescriptorArray[currentIndex] = -1;
 
+				if (closed >= 0)
+				{
+					taskStatusArray[currentIndex] = EXEC_TASK_DONE;
+
+					/* we are done executing; we no longer need the connection */
+					MultiClientDisconnect(connectionId);
+					connectionIdArray[currentIndex] = INVALID_CONNECTION_ID;
+					connectAction = CONNECT_ACTION_CLOSED;
+				}
+				else
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not close copied file: %m")));
+
+					taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+				}
+			}
+			else if (copyStatus == CLIENT_COPY_FAILED)
+			{
 				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+
+				closed = close(fileDesc);
+				fileDescriptorArray[currentIndex] = -1;
+
+				if (closed < 0)
+				{
+					ereport(WARNING, (errcode_for_file_access(),
+									  errmsg("could not close copy file: %m")));
+				}
 			}
+
+			break;
 		}
-		else if (queryStatus == CLIENT_QUERY_FAILED)
+
+		case EXEC_TASK_DONE:
 		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
+			/* we are done with this task's execution */
+			break;
 		}
-		else
+
+		default:
 		{
-			ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
+			/* we fatal here to avoid leaking client-side resources */
+			ereport(FATAL, (errmsg("invalid execution status: %d", currentStatus)));
+			break;
 		}
-
-		break;
-	}
-
-	case EXEC_COMPUTE_TASK_COPYING:
-	{
-		int32 connectionId = connectionIdArray[currentIndex];
-		int32 fileDesc = fileDescriptorArray[currentIndex];
-		int closed = -1;
-
-		/* copy data from worker node, and write to local file */
-		CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc);
-
-		/* if worker node will continue to send more data, keep reading */
-		if (copyStatus == CLIENT_COPY_MORE)
-		{
-			taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_COPYING;
-		}
-		else if (copyStatus == CLIENT_COPY_DONE)
-		{
-			closed = close(fileDesc);
-			fileDescriptorArray[currentIndex] = -1;
-
-			if (closed >= 0)
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_DONE;
-
-				/* we are done executing; we no longer need the connection */
-				MultiClientDisconnect(connectionId);
-				connectionIdArray[currentIndex] = INVALID_CONNECTION_ID;
-				connectAction = CONNECT_ACTION_CLOSED;
-			}
-			else
-			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not close copied file: %m")));
-
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			}
-		}
-		else if (copyStatus == CLIENT_COPY_FAILED)
-		{
-			taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-
-			closed = close(fileDesc);
-			fileDescriptorArray[currentIndex] = -1;
-
-			if (closed < 0)
-			{
-				ereport(WARNING, (errcode_for_file_access(),
-								  errmsg("could not close copy file: %m")));
-			}
-		}
-
-		break;
-	}
-
-	case EXEC_TASK_DONE:
-	{
-		/* we are done with this task's execution */
-		break;
-	}
-
-	default:
-	{
-		/* we fatal here to avoid leaking client-side resources */
-		ereport(FATAL, (errmsg("invalid execution status: %d", currentStatus)));
-		break;
-	}
 	}
 
 	return connectAction;

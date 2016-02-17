@@ -91,7 +91,8 @@ static void ParentSetNewChild(MultiNode *parentNode, MultiNode *oldChildNode,
 
 /* Local functions forward declarations for aggregate expressions */
 static void ApplyExtendedOpNodes(MultiExtendedOp *originalNode,
-								 MultiExtendedOp *masterNode, MultiExtendedOp *workerNode);
+								 MultiExtendedOp *masterNode,
+								 MultiExtendedOp *workerNode);
 static void TransformSubqueryNode(MultiTable *subqueryNode);
 static MultiExtendedOp * MasterExtendedOpNode(MultiExtendedOp *originalOpNode);
 static Node * MasterAggregateMutator(Node *originalNode, AttrNumber *columnId);
@@ -117,7 +118,8 @@ static void ErrorIfUnsupportedArrayAggregate(Aggref *arrayAggregateExpression);
 static void ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 												MultiNode *logicalPlanNode);
 static Var * AggregateDistinctColumn(Aggref *aggregateExpression);
-static bool TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
+static bool TablePartitioningSupportsDistinct(List *tableNodeList,
+											  MultiExtendedOp *opNode,
 											  Var *distinctColumn);
 static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 
@@ -257,6 +259,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
+			ErrorIfContainsUnsupportedAggregate((MultiNode *) tableNode);
 			TransformSubqueryNode(tableNode);
 		}
 	}
@@ -488,7 +491,7 @@ AddressProjectSpecialConditions(MultiProject *projectNode)
 
 	/*
 	 * We check if we need to include any child columns in the project node to
-	 * address the following special conditions. 
+	 * address the following special conditions.
 	 *
 	 * SNC1: project node must include child node's projected columns, or
 	 * SNC2: project node must include child node's partition column,  or
@@ -637,7 +640,7 @@ Commutative(MultiUnaryNode *parentNode, MultiUnaryNode *childNode)
 {
 	PushDownStatus pushDownStatus = PUSH_DOWN_NOT_VALID;
 	CitusNodeTag parentNodeTag = CitusNodeTag(parentNode);
-	CitusNodeTag childNodeTag  = CitusNodeTag(childNode);
+	CitusNodeTag childNodeTag = CitusNodeTag(childNode);
 
 	/* we cannot be commutative with non-query operators */
 	if (childNodeTag == T_MultiTreeRoot || childNodeTag == T_MultiTable)
@@ -692,7 +695,7 @@ Distributive(MultiUnaryNode *parentNode, MultiBinaryNode *childNode)
 {
 	PushDownStatus pushDownStatus = PUSH_DOWN_NOT_VALID;
 	CitusNodeTag parentNodeTag = CitusNodeTag(parentNode);
-	CitusNodeTag childNodeTag  = CitusNodeTag(childNode);
+	CitusNodeTag childNodeTag = CitusNodeTag(childNode);
 
 	/* special condition checks for partition operator are not implemented */
 	Assert(parentNodeTag != T_MultiPartition);
@@ -751,7 +754,7 @@ Factorizable(MultiBinaryNode *parentNode, MultiUnaryNode *childNode)
 {
 	PullUpStatus pullUpStatus = PULL_UP_NOT_VALID;
 	CitusNodeTag parentNodeTag = CitusNodeTag(parentNode);
-	CitusNodeTag childNodeTag  = CitusNodeTag(childNode);
+	CitusNodeTag childNodeTag = CitusNodeTag(childNode);
 
 	/*
 	 * The following nodes are factorizable with their parents, but we don't
@@ -1220,7 +1223,7 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
 		if (hasAggregates)
 		{
-			Node *newNode = MasterAggregateMutator((Node*) originalExpression,
+			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
 												   &columnId);
 			newExpression = (Expr *) newNode;
 		}
@@ -1826,7 +1829,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate)
 static AggregateType
 GetAggregateType(Oid aggFunctionId)
 {
-	char  *aggregateProcName = NULL;
+	char *aggregateProcName = NULL;
 	uint32 aggregateCount = 0;
 	uint32 aggregateIndex = 0;
 	bool found = false;
@@ -1980,22 +1983,30 @@ CountDistinctHashFunctionName(Oid argumentType)
 	switch (argumentType)
 	{
 		case INT4OID:
+		{
 			hashFunctionName = pstrdup(HLL_HASH_INTEGER_FUNC_NAME);
 			break;
+		}
 
 		case INT8OID:
+		{
 			hashFunctionName = pstrdup(HLL_HASH_BIGINT_FUNC_NAME);
 			break;
+		}
 
 		case TEXTOID:
 		case BPCHAROID:
 		case VARCHAROID:
+		{
 			hashFunctionName = pstrdup(HLL_HASH_TEXT_FUNC_NAME);
 			break;
+		}
 
 		default:
+		{
 			hashFunctionName = pstrdup(HLL_HASH_ANY_FUNC_NAME);
 			break;
+		}
 	}
 
 	return hashFunctionName;
@@ -2135,8 +2146,9 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 	bool distinctSupported = true;
 	List *repartitionNodeList = NIL;
 	Var *distinctColumn = NULL;
-
-	AggregateType aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
+	List *multiTableNodeList = NIL;
+	ListCell *multiTableNodeCell = NULL;
+	AggregateType aggregateType = AGGREGATE_INVALID_FIRST;
 
 	/* check if logical plan includes a subquery */
 	List *subqueryMultiTableList = SubqueryMultiTableList(logicalPlanNode);
@@ -2147,7 +2159,20 @@ ErrorIfUnsupportedAggregateDistinct(Aggref *aggregateExpression,
 						errdetail("distinct in the outermost query is unsupported")));
 	}
 
+	multiTableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	foreach(multiTableNodeCell, multiTableNodeList)
+	{
+		MultiTable *multiTable = (MultiTable *) lfirst(multiTableNodeCell);
+		if (multiTable->relationId == SUBQUERY_RELATION_ID)
+		{
+			ereport(ERROR, (errmsg("cannot compute count (distinct)"),
+							errdetail("Subqueries with aggregate (distinct) are "
+									  "not supported yet")));
+		}
+	}
+
 	/* if we have a count(distinct), and distinct approximation is enabled */
+	aggregateType = GetAggregateType(aggregateExpression->aggfnoid);
 	if (aggregateType == AGGREGATE_COUNT &&
 		CountDistinctErrorRate != DISABLE_DISTINCT_APPROXIMATION)
 	{
@@ -2479,7 +2504,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 	if (subqueryTree->setOperations)
 	{
 		SetOperationStmt *setOperationStatement =
-				(SetOperationStmt *) subqueryTree->setOperations;
+			(SetOperationStmt *) subqueryTree->setOperations;
 
 		if (setOperationStatement->op == SETOP_UNION)
 		{
@@ -2563,7 +2588,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 		List *joinTreeTableIndexList = NIL;
 		uint32 joiningTableCount = 0;
 
-		ExtractRangeTableIndexWalker((Node*) subqueryTree->jointree,
+		ExtractRangeTableIndexWalker((Node *) subqueryTree->jointree,
 									 &joinTreeTableIndexList);
 		joiningTableCount = list_length(joinTreeTableIndexList);
 
@@ -2587,7 +2612,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 		List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
 															 targetEntryList);
 		bool distinctOnPartitionColumn =
-				TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
+			TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
 		if (!distinctOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;
@@ -2609,7 +2634,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 	foreach(rangeTableEntryCell, subqueryEntryList)
 	{
 		RangeTblEntry *rangeTableEntry =
-				(RangeTblEntry *) lfirst(rangeTableEntryCell);
+			(RangeTblEntry *) lfirst(rangeTableEntryCell);
 
 		Query *innerSubquery = rangeTableEntry->subquery;
 		ErrorIfCannotPushdownSubquery(innerSubquery, outerQueryHasLimit);
@@ -2639,7 +2664,7 @@ ErrorIfUnsupportedTableCombination(Query *queryTree)
 	 * Extract all range table indexes from the join tree. Note that sub-queries
 	 * that get pulled up by PostgreSQL don't appear in this join tree.
 	 */
-	ExtractRangeTableIndexWalker((Node*) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
 	{
 		/*
@@ -2768,7 +2793,7 @@ ErrorIfUnsupportedUnionQuery(Query *unionQuery)
 	leftQueryOnPartitionColumn = TargetListOnPartitionColumn(leftQuery,
 															 leftQuery->targetList);
 	rightQueryOnPartitionColumn = TargetListOnPartitionColumn(rightQuery,
-															 rightQuery->targetList);
+															  rightQuery->targetList);
 
 	if (!(leftQueryOnPartitionColumn && rightQueryOnPartitionColumn))
 	{
@@ -2807,7 +2832,7 @@ GroupTargetEntryList(List *groupClauseList, List *targetEntryList)
 	{
 		SortGroupClause *groupClause = (SortGroupClause *) lfirst(groupClauseCell);
 		TargetEntry *groupTargetEntry =
-				get_sortgroupclause_tle(groupClause, targetEntryList);
+			get_sortgroupclause_tle(groupClause, targetEntryList);
 		groupTargetEntryList = lappend(groupTargetEntryList, groupTargetEntry);
 	}
 
@@ -2890,7 +2915,7 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 	else if (IsA(columnExpression, FieldSelect))
 	{
 		FieldSelect *compositeField = (FieldSelect *) columnExpression;
-		Expr *fieldExpression  = compositeField->arg;
+		Expr *fieldExpression = compositeField->arg;
 
 		if (IsA(fieldExpression, Var))
 		{
@@ -2909,7 +2934,7 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 		return false;
 	}
 
-	rangeTableEntryIndex =	candidateColumn->varno - 1;
+	rangeTableEntryIndex = candidateColumn->varno - 1;
 	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
@@ -2980,7 +3005,7 @@ CompositeFieldRecursive(Expr *expression, Query *query)
 		return NULL;
 	}
 
-	rangeTableEntryIndex =	candidateColumn->varno - 1;
+	rangeTableEntryIndex = candidateColumn->varno - 1;
 	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_SUBQUERY)
@@ -3019,7 +3044,7 @@ FullCompositeFieldList(List *compositeFieldList)
 	uint32 fieldIndex = 0;
 
 	ListCell *fieldSelectCell = NULL;
-	foreach (fieldSelectCell, compositeFieldList)
+	foreach(fieldSelectCell, compositeFieldList)
 	{
 		FieldSelect *fieldSelect = (FieldSelect *) lfirst(fieldSelectCell);
 		uint32 compositeFieldIndex = 0;
@@ -3226,9 +3251,10 @@ SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
 		if (outerColumnIsPartitionColumn && localColumnIsPartitionColumn)
 		{
 			FieldSelect *outerCompositeField =
-					CompositeFieldRecursive(outerQueryExpression, parentQuery);
+				CompositeFieldRecursive(outerQueryExpression, parentQuery);
 			FieldSelect *localCompositeField =
-					CompositeFieldRecursive(localQueryExpression, lateralQuery);
+				CompositeFieldRecursive(localQueryExpression, lateralQuery);
+
 			/*
 			 * If partition colums are composite fields, add them to list to
 			 * check later if all composite fields are used.
@@ -3251,12 +3277,12 @@ SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
 	}
 
 	/* check composite fields */
-	if(!supportedLateralQuery)
+	if (!supportedLateralQuery)
 	{
 		bool outerFullCompositeFieldList =
-				FullCompositeFieldList(outerCompositeFieldList);
+			FullCompositeFieldList(outerCompositeFieldList);
 		bool localFullCompositeFieldList =
-				FullCompositeFieldList(localCompositeFieldList);
+			FullCompositeFieldList(localCompositeFieldList);
 
 		if (outerFullCompositeFieldList && localFullCompositeFieldList)
 		{
@@ -3301,15 +3327,15 @@ JoinOnPartitionColumn(Query *query)
 		if (isLeftColumnPartitionColumn && isRightColumnPartitionColumn)
 		{
 			FieldSelect *leftCompositeField =
-					CompositeFieldRecursive(leftArgument, query);
+				CompositeFieldRecursive(leftArgument, query);
 			FieldSelect *rightCompositeField =
-					CompositeFieldRecursive(rightArgument, query);
+				CompositeFieldRecursive(rightArgument, query);
 
 			/*
 			 * If partition colums are composite fields, add them to list to
 			 * check later if all composite fields are used.
 			 */
-			if(leftCompositeField && rightCompositeField)
+			if (leftCompositeField && rightCompositeField)
 			{
 				leftCompositeFieldList = lappend(leftCompositeFieldList,
 												 leftCompositeField);
@@ -3318,7 +3344,7 @@ JoinOnPartitionColumn(Query *query)
 			}
 
 			/* if both sides are not composite fields, they are normal columns */
-			if(!(leftCompositeField && rightCompositeField))
+			if (!(leftCompositeField && rightCompositeField))
 			{
 				joinOnPartitionColumn = true;
 				break;
@@ -3327,12 +3353,12 @@ JoinOnPartitionColumn(Query *query)
 	}
 
 	/* check composite fields */
-	if(!joinOnPartitionColumn)
+	if (!joinOnPartitionColumn)
 	{
 		bool leftFullCompositeFieldList =
-				FullCompositeFieldList(leftCompositeFieldList);
+			FullCompositeFieldList(leftCompositeFieldList);
 		bool rightFullCompositeFieldList =
-				FullCompositeFieldList(rightCompositeFieldList);
+			FullCompositeFieldList(rightCompositeFieldList);
 
 		if (leftFullCompositeFieldList && rightFullCompositeFieldList)
 		{
@@ -3409,7 +3435,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 
 		/* check if this table has 1-1 shard partitioning with first table */
 		coPartitionedTables = CoPartitionedTables(firstShardIntervalList,
-		                                          currentShardIntervalList);
+												  currentShardIntervalList);
 		if (!coPartitionedTables)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -3437,7 +3463,7 @@ RelationIdList(Query *query)
 
 	foreach(tableEntryCell, tableEntryList)
 	{
-		TableEntry *tableEntry =  (TableEntry *) lfirst(tableEntryCell);
+		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
 		Oid relationId = tableEntry->relationId;
 
 		relationIdList = list_append_unique_oid(relationIdList, relationId);
@@ -3617,7 +3643,7 @@ ExtractQueryWalker(Node *node, List **queryList)
 		Query *query = (Query *) node;
 
 		(*queryList) = lappend(*queryList, query);
-		walkerResult = query_tree_walker(query,	ExtractQueryWalker, queryList,
+		walkerResult = query_tree_walker(query, ExtractQueryWalker, queryList,
 										 QTW_EXAMINE_RTES);
 	}
 
@@ -3641,7 +3667,7 @@ LeafQuery(Query *queryTree)
 	 * Extract all range table indexes from the join tree. Note that sub-queries
 	 * that get pulled up by PostgreSQL don't appear in this join tree.
 	 */
-	ExtractRangeTableIndexWalker((Node*) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
 	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
 	{
 		/*
@@ -3725,7 +3751,7 @@ PartitionColumnOpExpressionList(Query *query)
 		}
 		else if (IsA(leftArgument, Const) && IsA(leftArgument, Var))
 		{
-			candidatePartitionColumn =  (Var *) rightArgument;
+			candidatePartitionColumn = (Var *) rightArgument;
 		}
 		else
 		{

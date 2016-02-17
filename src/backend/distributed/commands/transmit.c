@@ -136,7 +136,7 @@ static File
 FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 {
 	File fileDesc = -1;
-	int  fileStated = -1;
+	int fileStated = -1;
 	struct stat fileStat;
 
 	fileStated = stat(filename, &fileStat);
@@ -145,7 +145,7 @@ FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 		if (S_ISDIR(fileStat.st_mode))
 		{
 			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("\"%s\" is a directory", filename)));
+							errmsg("\"%s\" is a directory", filename)));
 		}
 	}
 
@@ -270,18 +270,28 @@ ReceiveCopyData(StringInfo copyData)
 
 	switch (messageType)
 	{
-		case 'd':		/* CopyData */
+		case 'd':       /* CopyData */
+		{
 			copyDone = false;
 			break;
-		case 'c':		/* CopyDone */
+		}
+
+		case 'c':       /* CopyDone */
+		{
 			copyDone = true;
 			break;
-		case 'f':		/* CopyFail */
+		}
+
+		case 'f':       /* CopyFail */
+		{
 			ereport(ERROR, (errcode(ERRCODE_QUERY_CANCELED),
 							errmsg("COPY data failed: %s", pq_getmsgstring(copyData))));
 			break;
-		case 'H':		/* Flush */
-		case 'S':		/* Sync */
+		}
+
+		case 'H':       /* Flush */
+		case 'S':       /* Sync */
+		{
 			/*
 			 * Ignore Flush/Sync for the convenience of client libraries (such
 			 * as libpq) that may send those without noticing that the command
@@ -289,11 +299,15 @@ ReceiveCopyData(StringInfo copyData)
 			 */
 			copyDone = false;
 			break;
+		}
+
 		default:
+		{
 			ereport(ERROR, (errcode(ERRCODE_PROTOCOL_VIOLATION),
 							errmsg("unexpected message type 0x%02X during COPY data",
 								   messageType)));
 			break;
+		}
 	}
 
 	return copyDone;

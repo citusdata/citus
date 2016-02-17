@@ -265,7 +265,7 @@ GetRangeTblKind(RangeTblEntry *rte)
 {
 	CitusRTEKind rteKind = CITUS_RTE_RELATION /* invalid */;
 
-	switch(rte->rtekind)
+	switch (rte->rtekind)
 	{
 		/* directly rtekind if it's not possibly an extended RTE */
 		case RTE_RELATION:
@@ -273,9 +273,13 @@ GetRangeTblKind(RangeTblEntry *rte)
 		case RTE_JOIN:
 		case RTE_VALUES:
 		case RTE_CTE:
+		{
 			rteKind = (CitusRTEKind) rte->rtekind;
 			break;
+		}
+
 		case RTE_FUNCTION:
+		{
 			/*
 			 * Extract extra data - correct even if a plain RTE_FUNCTION, not
 			 * an extended one, ExtractRangeTblExtraData handles that case
@@ -283,6 +287,7 @@ GetRangeTblKind(RangeTblEntry *rte)
 			 */
 			ExtractRangeTblExtraData(rte, &rteKind, NULL, NULL, NULL);
 			break;
+		}
 	}
 
 	return rteKind;

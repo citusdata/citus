@@ -21,9 +21,9 @@
  */
 typedef struct FormData_pg_dist_partition
 {
-	Oid			logicalrelid;	   /* logical relation id; references pg_class oid */
-	char		partmethod;		   /* partition method; see codes below */
-	text		partkey;		   /* partition key expression */
+	Oid logicalrelid;              /* logical relation id; references pg_class oid */
+	char partmethod;               /* partition method; see codes below */
+	text partkey;                  /* partition key expression */
 } FormData_pg_dist_partition;
 
 /* ----------------
@@ -37,16 +37,16 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
  *      compiler constants for pg_dist_partitions
  * ----------------
  */
-#define Natts_pg_dist_partition						3
-#define Anum_pg_dist_partition_logicalrelid			1
-#define Anum_pg_dist_partition_partmethod			2
-#define Anum_pg_dist_partition_partkey				3
+#define Natts_pg_dist_partition 3
+#define Anum_pg_dist_partition_logicalrelid 1
+#define Anum_pg_dist_partition_partmethod 2
+#define Anum_pg_dist_partition_partkey 3
 
 /* valid values for partmethod include append, hash, and range */
-#define DISTRIBUTE_BY_APPEND		'a'
-#define DISTRIBUTE_BY_HASH			'h'
-#define DISTRIBUTE_BY_RANGE			'r'
-#define REDISTRIBUTE_BY_HASH        'x'
+#define DISTRIBUTE_BY_APPEND 'a'
+#define DISTRIBUTE_BY_HASH 'h'
+#define DISTRIBUTE_BY_RANGE 'r'
+#define REDISTRIBUTE_BY_HASH 'x'
 
 
 #endif   /* PG_DIST_PARTITION_H */

@@ -49,13 +49,14 @@
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
 
 /* Remote call definitions to help with data staging and deletion */
-#define WORKER_APPLY_SHARD_DDL_COMMAND "SELECT worker_apply_shard_ddl_command \
- ("UINT64_FORMAT", %s)"
-#define WORKER_APPEND_TABLE_TO_SHARD "SELECT worker_append_table_to_shard \
- (%s, %s, %s, %u)"
+#define WORKER_APPLY_SHARD_DDL_COMMAND \
+	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
+#define WORKER_APPEND_TABLE_TO_SHARD \
+	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
 #define SHARD_MIN_VALUE_QUERY "SELECT min(%s) FROM %s"
 #define SHARD_MAX_VALUE_QUERY "SELECT max(%s) FROM %s"
 #define SHARD_TABLE_SIZE_QUERY "SELECT pg_table_size('%s')"
+#define SHARD_CSTORE_TABLE_SIZE_QUERY "SELECT cstore_table_size('%s')"
 #define DROP_REGULAR_TABLE_COMMAND "DROP TABLE IF EXISTS %s"
 #define DROP_FOREIGN_TABLE_COMMAND "DROP FOREIGN TABLE IF EXISTS %s"
 #define CREATE_SCHEMA_COMMAND "CREATE SCHEMA IF NOT EXISTS %s"
@@ -67,7 +68,6 @@ typedef enum
 	SHARD_PLACEMENT_INVALID_FIRST = 0,
 	SHARD_PLACEMENT_LOCAL_NODE_FIRST = 1,
 	SHARD_PLACEMENT_ROUND_ROBIN = 2
-
 } ShardPlacementPolicyType;
 
 
@@ -83,8 +83,8 @@ extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateShardPlacements(int64 shardId, List *ddlEventList,
-                                  List *workerNodeList, int workerStartIndex,
-                                  int replicationFactor);
+								  List *workerNodeList, int workerStartIndex,
+								  int replicationFactor);
 
 /* Function declarations for generating metadata for shard creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);

@@ -29,6 +29,7 @@ typedef enum AdvisoryLocktagClass
 	/* values defined in postgres' lockfuncs.c */
 	ADV_LOCKTAG_CLASS_INT64 = 1,
 	ADV_LOCKTAG_CLASS_INT32 = 2,
+
 	/* Citus lock types */
 	ADV_LOCKTAG_CLASS_CITUS_SHARD_METADATA = 4,
 	ADV_LOCKTAG_CLASS_CITUS_SHARD = 5,

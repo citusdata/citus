@@ -303,13 +303,13 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 
 	if (taskExecution->currentNodeIndex < maxNodeIndex)
 	{
-		taskExecution->currentNodeIndex++;	 /* try next worker node */
+		taskExecution->currentNodeIndex++;   /* try next worker node */
 	}
 	else
 	{
 		taskExecution->currentNodeIndex = 0; /* go back to the first worker node */
 	}
 
-	taskExecution->dataFetchTaskIndex = -1;	/* reset data fetch counter */
-	taskExecution->failureCount++;			/* record failure */
+	taskExecution->dataFetchTaskIndex = -1; /* reset data fetch counter */
+	taskExecution->failureCount++;          /* record failure */
 }
