@@ -42,6 +42,13 @@ clean-csql:
 install: install-csql
 clean: clean-csql
 
+# apply or check style
+reindent:
+	cd ${citusdb_abs_top_srcdir} && citus_indent --quiet
+check-style:
+	cd ${citusdb_abs_top_srcdir} && citus_indent --quiet --check
+.PHONY: reindent check-style
+
 # depend on install for now
 check: all install
 	$(MAKE) -C src/test/regress check-full

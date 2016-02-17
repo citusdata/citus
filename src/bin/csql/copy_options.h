@@ -46,7 +46,7 @@ typedef struct copy_options
 	bool		psql_inout;		/* true = use psql stdin/stdout */
 	bool		from;			/* true = FROM, false = TO */
 
-	char 	   *tableName;		/* table name to stage data to */
+	char	   *tableName;		/* table name to stage data to */
 	char	   *columnList;		/* optional column list used in staging */
 } copy_options;
 

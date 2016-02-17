@@ -197,11 +197,11 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		if (distributionMethod == DISTRIBUTE_BY_APPEND)
 		{
 			ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("table \"%s\" has a unique constraint",
-							distributedRelationName),
-							errdetail("Unique constraints and primary keys on "
-									  "append-partitioned tables cannot be enforced."),
-							errhint("Consider using hash partitioning.")));
+							  errmsg("table \"%s\" has a unique constraint",
+									 distributedRelationName),
+							  errdetail("Unique constraints and primary keys on "
+										"append-partitioned tables cannot be enforced."),
+							  errhint("Consider using hash partitioning.")));
 		}
 
 		attributeCount = indexInfo->ii_NumIndexAttrs;

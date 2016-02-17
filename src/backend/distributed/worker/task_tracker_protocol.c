@@ -57,7 +57,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 {
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
-	text  *taskCallStringText = PG_GETARG_TEXT_P(2);
+	text *taskCallStringText = PG_GETARG_TEXT_P(2);
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
 	bool schemaExists = false;
@@ -185,7 +185,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 			CleanupTask(currentTask);
 		}
 
-		currentTask = (WorkerTask *) hash_seq_search(&status);		
+		currentTask = (WorkerTask *) hash_seq_search(&status);
 	}
 
 	LWLockRelease(WorkerTasksSharedState->taskHashLock);
@@ -308,7 +308,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 }
 
 
-/* 
+/*
  * UpdateTask updates the call string text for an already existing task. Note
  * that this function expects the caller to hold an exclusive lock over the
  * shared hash.
@@ -331,7 +331,7 @@ UpdateTask(WorkerTask *workerTask, char *taskCallString)
 	if (taskStatus == TASK_SUCCEEDED || taskStatus == TASK_CANCEL_REQUESTED ||
 		taskStatus == TASK_CANCELED)
 	{
-		;	/* nothing to do */
+		/* nothing to do */
 	}
 	else if (taskStatus == TASK_PERMANENTLY_FAILED)
 	{

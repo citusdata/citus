@@ -125,6 +125,18 @@ from
     group by
         l_tax) as distributed_table;
 
+-- Check that we don't support subqueries with count(distinct).
+
+select
+    different_shipment_days
+from
+    (select
+        count(distinct l_shipdate) as different_shipment_days
+    from
+        lineitem
+    group by
+        l_partkey) as distributed_table;
+
 -- Check that if subquery is pulled, we don't error and run query properly.
 
 SELECT max(l_suppkey) FROM

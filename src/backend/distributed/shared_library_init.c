@@ -48,23 +48,23 @@ static void NormalizeWorkerListPath(void);
 
 /* GUC enum definitions */
 static const struct config_enum_entry task_assignment_policy_options[] = {
-	{"greedy", TASK_ASSIGNMENT_GREEDY, false},
-	{"first-replica", TASK_ASSIGNMENT_FIRST_REPLICA, false},
-	{"round-robin", TASK_ASSIGNMENT_ROUND_ROBIN, false},
-	{NULL, 0, false}
+	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
+	{ "first-replica", TASK_ASSIGNMENT_FIRST_REPLICA, false },
+	{ "round-robin", TASK_ASSIGNMENT_ROUND_ROBIN, false },
+	{ NULL, 0, false }
 };
 
 static const struct config_enum_entry task_executor_type_options[] = {
-	{"real-time", MULTI_EXECUTOR_REAL_TIME, false},
-	{"task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false},
-	{"router", MULTI_EXECUTOR_ROUTER, false},
-	{NULL, 0, false}
+	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
+	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
+	{ "router", MULTI_EXECUTOR_ROUTER, false },
+	{ NULL, 0, false }
 };
 
 static const struct config_enum_entry shard_placement_policy_options[] = {
-	{"local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false},
-	{"round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false},
-	{NULL, 0, false}
+	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
+	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
+	{ NULL, 0, false }
 };
 
 
@@ -206,9 +206,10 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.expire_cached_shards",
-		gettext_noop("Enables shard cache expiration if a shard's size on disk has changed. "),
-		gettext_noop("When appending to an existing shard, old data may still be cached on "
-					 "other workers. This configuration entry activates automatic "
+		gettext_noop("Enables shard cache expiration if a shard's size on disk has "
+					 "changed."),
+		gettext_noop("When appending to an existing shard, old data may still be cached "
+					 "on other workers. This configuration entry activates automatic "
 					 "expiration, but should not be used with manual updates to shards."),
 		&ExpireCachedShards,
 		false,
@@ -440,11 +441,11 @@ RegisterCitusConfigVariables(void)
 		"citus.task_assignment_policy",
 		gettext_noop("Sets the policy to use when assigning tasks to worker nodes."),
 		gettext_noop("The master node assigns tasks to worker nodes based on shard "
-						 "locations. This configuration value specifies the policy to "
-						 "use when making these assignments. The greedy policy aims to "
-						 "evenly distribute tasks across worker nodes, first-replica just "
-						 "assigns tasks in the order shard placements were created, "
-						 "and the round-robin policy assigns tasks to worker nodes in "
+					 "locations. This configuration value specifies the policy to "
+					 "use when making these assignments. The greedy policy aims to "
+					 "evenly distribute tasks across worker nodes, first-replica just "
+					 "assigns tasks in the order shard placements were created, "
+					 "and the round-robin policy assigns tasks to worker nodes in "
 					 "a round-robin fashion."),
 		&TaskAssignmentPolicy,
 		TASK_ASSIGNMENT_GREEDY,
@@ -488,8 +489,6 @@ RegisterCitusConfigVariables(void)
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
-	/* Also warn about citus namespace, as that's a very likely misspelling */
-	EmitWarningsOnPlaceholders("citus");
 }
 
 
@@ -515,8 +514,10 @@ NormalizeWorkerListPath(void)
 	{
 		absoluteFileName = malloc(strlen(DataDir) + strlen(WORKER_LIST_FILENAME) + 2);
 		if (absoluteFileName == NULL)
+		{
 			ereport(FATAL, (errcode(ERRCODE_OUT_OF_MEMORY),
 							errmsg("out of memory")));
+		}
 
 		sprintf(absoluteFileName, "%s/%s", DataDir, WORKER_LIST_FILENAME);
 	}
@@ -530,6 +531,7 @@ NormalizeWorkerListPath(void)
 							   "environment variable.\n", progname, ConfigFileName)));
 	}
 
-	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER, PGC_S_OVERRIDE);
+	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
+					PGC_S_OVERRIDE);
 	free(absoluteFileName);
 }
