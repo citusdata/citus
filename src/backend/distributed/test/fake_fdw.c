@@ -116,9 +116,9 @@ FakeGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid,
 				   ForeignPath *best_path, List *tlist, List *scan_clauses)
 #else
 static ForeignScan *
-FakeGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid,
-				   ForeignPath *best_path, List *tlist, List *scan_clauses,
-				   Plan *outer_plan)
+FakeGetForeignPlan(PlannerInfo * root, RelOptInfo * baserel, Oid foreigntableid,
+				   ForeignPath * best_path, List * tlist, List * scan_clauses,
+				   Plan * outer_plan)
 #endif
 {
 	Index scan_relid = baserel->relid;
@@ -129,7 +129,7 @@ FakeGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid,
 	return make_foreignscan(tlist, scan_clauses, scan_relid, NIL, NIL);
 #else
 	return make_foreignscan(tlist, scan_clauses, scan_relid, NIL, NIL, NIL, NIL,
-	                        outer_plan);
+							outer_plan);
 #endif
 }
 

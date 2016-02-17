@@ -2,7 +2,7 @@
 -- MULTI_SINGLE_RELATION_SUBQUERY
 --
 -- This test checks that we are able to run selected set of distributed SQL subqueries.
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 select
     number_sum,
     count(*) as total,
@@ -171,6 +171,18 @@ from
         l_tax) as distributed_table;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries without aggregates are not supported yet
+-- Check that we don't support subqueries with count(distinct).
+select
+    different_shipment_days
+from
+    (select
+        count(distinct l_shipdate) as different_shipment_days
+    from
+        lineitem
+    group by
+        l_partkey) as distributed_table;
+ERROR:  cannot compute count (distinct)
+DETAIL:  Subqueries with aggregate (distinct) are not supported yet
 -- Check that if subquery is pulled, we don't error and run query properly.
 SELECT max(l_suppkey) FROM
 (

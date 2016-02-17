@@ -1,5 +1,5 @@
 /*
- * csql - the CitusDB interactive terminal
+ * csql - the Citus interactive terminal
  * copy_options.h
  *	  Shared declarations for parsing copy and stage meta-commands. The stage
  *	  meta-command borrows from copy's syntax, but does not yet support
@@ -46,7 +46,7 @@ typedef struct copy_options
 	bool		psql_inout;		/* true = use psql stdin/stdout */
 	bool		from;			/* true = FROM, false = TO */
 
-	char 	   *tableName;		/* table name to stage data to */
+	char	   *tableName;		/* table name to stage data to */
 	char	   *columnList;		/* optional column list used in staging */
 } copy_options;
 

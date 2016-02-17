@@ -80,6 +80,7 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	queryDesc->estate = executorState;
 
 #if (PG_VERSION_NUM < 90500)
+
 	/* make sure that upsertQuery is false for versions that UPSERT is not available */
 	Assert(task->upsertQuery == false);
 #endif
@@ -153,7 +154,7 @@ CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery)
 static void
 AcquireExecutorShardLock(Task *task, LOCKMODE lockMode)
 {
-	int64 shardId = task->shardId;
+	int64 shardId = task->anchorShardId;
 
 	LockShardResource(shardId, lockMode);
 }
@@ -177,14 +178,14 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 	if (!ScanDirectionIsForward(direction))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				errmsg("scan directions other than forward scans "
-						"are unsupported")));
+						errmsg("scan directions other than forward scans "
+							   "are unsupported")));
 	}
 	if (count != 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				errmsg("fetching rows from a query using a cursor "
-						"is unsupported")));
+						errmsg("fetching rows from a query using a cursor "
+							   "is unsupported")));
 	}
 
 	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
@@ -210,7 +211,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 	else
 	{
 		ereport(ERROR, (errmsg("unrecognized operation code: %d",
-				(int) operation)));
+							   (int) operation)));
 	}
 
 	if (queryDesc->totaltime != NULL)
@@ -219,8 +220,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 	}
 
 	MemoryContextSwitchTo(oldcontext);
-
 }
+
 
 /*
  * ExecuteDistributedModify is the main entry point for modifying distributed
@@ -250,7 +251,7 @@ ExecuteDistributedModify(Task *task)
 
 		Assert(taskPlacement->shardState == FILE_FINALIZED);
 
-		connection = GetConnection(nodeName, nodePort);
+		connection = GetOrEstablishConnection(nodeName, nodePort);
 		if (connection == NULL)
 		{
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
@@ -383,7 +384,7 @@ ExecuteTaskAndStoreResults(Task *task, TupleDesc tupleDescriptor,
 		bool queryOK = false;
 		bool storedOK = false;
 
-		PGconn *connection = GetConnection(nodeName, nodePort);
+		PGconn *connection = GetOrEstablishConnection(nodeName, nodePort);
 		if (connection == NULL)
 		{
 			continue;
@@ -532,9 +533,10 @@ StoreQueryResult(PGconn *connection, TupleDesc tupleDescriptor,
 	return true;
 }
 
+
 /*
-* RouterExecutorFinish cleans up after a distributed execution.
-*/
+ * RouterExecutorFinish cleans up after a distributed execution.
+ */
 void
 RouterExecutorFinish(QueryDesc *queryDesc)
 {

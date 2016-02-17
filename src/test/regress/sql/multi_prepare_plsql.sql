@@ -187,7 +187,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-SET citusdb.task_executor_type TO 'task-tracker';
+SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
 -- now, run plain SQL functions
@@ -222,7 +222,7 @@ SELECT plpgsql_test_2();
 
 -- run the tests which do not require re-partition
 -- with real-time executor
-SET citusdb.task_executor_type TO 'real-time';
+SET citus.task_executor_type TO 'real-time';
 
 -- now, run plain SQL functions
 SELECT sql_test_no_1();

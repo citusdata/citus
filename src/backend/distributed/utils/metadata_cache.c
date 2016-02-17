@@ -51,10 +51,10 @@ static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
-                                      Oid *intervalTypeId, int32 *intervalTypeMod);
+									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
-                                            TupleDesc tupleDescriptor, Oid intervalTypeId,
-                                            int32 intervalTypeMod);
+											TupleDesc tupleDescriptor, Oid intervalTypeId,
+											int32 intervalTypeMod);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 
 
@@ -77,7 +77,7 @@ IsDistributedTable(Oid relationId)
 	 * yet. As we can't do lookups in nonexistent tables, directly return
 	 * false.
 	 */
-	if (!CitusDBHasBeenLoaded())
+	if (!CitusHasBeenLoaded())
 	{
 		return false;
 	}
@@ -86,6 +86,7 @@ IsDistributedTable(Oid relationId)
 
 	return cacheEntry->isDistributedTable;
 }
+
 
 /*
  * LoadShardInterval reads shard metadata for given shardId from pg_dist_shard,
@@ -98,7 +99,7 @@ LoadShardInterval(uint64 shardId)
 {
 	ShardInterval *shardInterval;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData	scanKey[1];
+	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 	HeapTuple heapTuple = NULL;
 	Form_pg_dist_shard shardForm = NULL;
@@ -127,17 +128,18 @@ LoadShardInterval(uint64 shardId)
 	partitionEntry = DistributedTableCacheEntry(shardForm->logicalrelid);
 
 	GetPartitionTypeInputInfo(partitionEntry->partitionKeyString,
-	                          partitionEntry->partitionMethod, &intervalTypeId,
-	                          &intervalTypeMod);
+							  partitionEntry->partitionMethod, &intervalTypeId,
+							  &intervalTypeMod);
 
 	shardInterval = TupleToShardInterval(heapTuple, tupleDescriptor, intervalTypeId,
-	                                     intervalTypeMod);
+										 intervalTypeMod);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistShard, AccessShareLock);
 
 	return shardInterval;
 }
+
 
 /*
  * DistributedTableCacheEntry looks up a pg_dist_partition entry for a
@@ -155,7 +157,7 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 	 * yet. As we can't do lookups in nonexistent tables, directly return NULL
 	 * here.
 	 */
-	if (!CitusDBHasBeenLoaded())
+	if (!CitusHasBeenLoaded())
 	{
 		return NULL;
 	}
@@ -239,19 +241,19 @@ LookupDistTableCacheEntry(Oid relationId)
 		int32 intervalTypeMod = -1;
 
 		GetPartitionTypeInputInfo(partitionKeyString, partitionMethod, &intervalTypeId,
-		                          &intervalTypeMod);
+								  &intervalTypeMod);
 
 		shardIntervalArray = MemoryContextAllocZero(CacheMemoryContext,
-		                                            shardIntervalArrayLength *
-		                                            sizeof(ShardInterval));
+													shardIntervalArrayLength *
+													sizeof(ShardInterval));
 
 		foreach(distShardTupleCell, distShardTupleList)
 		{
 			HeapTuple shardTuple = lfirst(distShardTupleCell);
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
-			                                                    distShardTupleDesc,
-			                                                    intervalTypeId,
-			                                                    intervalTypeMod);
+																distShardTupleDesc,
+																intervalTypeId,
+																intervalTypeMod);
 			MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 
 			CopyShardInterval(shardInterval, &shardIntervalArray[arrayIndex]);
@@ -292,7 +294,7 @@ LookupDistTableCacheEntry(Oid relationId)
 
 
 /*
- * CitusDBHasBeenLoaded returns true if the citusdb extension has been created
+ * CitusHasBeenLoaded returns true if the citus extension has been created
  * in the current database and the extension script has been executed. Otherwise,
  * it returns false. The result is cached as this is called very frequently.
  *
@@ -301,17 +303,17 @@ LookupDistTableCacheEntry(Oid relationId)
  * acceptable.
  */
 bool
-CitusDBHasBeenLoaded(void)
+CitusHasBeenLoaded(void)
 {
 	static bool extensionLoaded = false;
 
-	/* recheck presence until citusdb has been loaded */
+	/* recheck presence until citus has been loaded */
 	if (!extensionLoaded)
 	{
 		bool extensionPresent = false;
 		bool extensionScriptExecuted = true;
 
-		Oid extensionOid = get_extension_oid("citusdb", true);
+		Oid extensionOid = get_extension_oid("citus", true);
 		if (extensionOid != InvalidOid)
 		{
 			extensionPresent = true;
@@ -319,7 +321,7 @@ CitusDBHasBeenLoaded(void)
 
 		if (extensionPresent)
 		{
-			/* check if CitusDB extension objects are still being created */
+			/* check if Citus extension objects are still being created */
 			if (creating_extension && CurrentExtensionObject == extensionOid)
 			{
 				extensionScriptExecuted = false;
@@ -428,7 +430,7 @@ CitusExtraDataContainerFuncId(void)
 	if (cachedOid == InvalidOid)
 	{
 		nameList = list_make2(makeString("pg_catalog"),
-							  makeString("citusdb_extradata_container"));
+							  makeString("citus_extradata_container"));
 		cachedOid = LookupFuncName(nameList, 1, paramOids, false);
 	}
 
@@ -741,7 +743,7 @@ LookupDistShardTuples(Oid relationId)
 	scanKey[0].sk_argument = ObjectIdGetDatum(relationId);
 
 	scanDescriptor = systable_beginscan(pgDistShard, DistShardLogicalRelidIndexId(), true,
-	                                    NULL, 1, scanKey);
+										NULL, 1, scanKey);
 
 	currentShardTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(currentShardTuple))
@@ -765,7 +767,7 @@ LookupDistShardTuples(Oid relationId)
  */
 static void
 GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
-                          Oid *intervalTypeId, int32 *intervalTypeMod)
+						  Oid *intervalTypeId, int32 *intervalTypeMod)
 {
 	*intervalTypeId = InvalidOid;
 	*intervalTypeMod = -1;
@@ -794,7 +796,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("unsupported table partition type: %c",
-							       partitionMethod)));
+								   partitionMethod)));
 		}
 	}
 }
@@ -806,7 +808,7 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
  */
 static ShardInterval *
 TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid intervalTypeId,
-                     int32 intervalTypeMod)
+					 int32 intervalTypeMod)
 {
 	ShardInterval *shardInterval = NULL;
 	bool isNull = false;
@@ -815,16 +817,16 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 	Oid inputFunctionId = InvalidOid;
 	Oid typeIoParam = InvalidOid;
 	Datum relationIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_logicalrelid,
-	                                     tupleDescriptor, &isNull);
+										 tupleDescriptor, &isNull);
 	Datum shardIdDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardid,
-	                                     tupleDescriptor, &isNull);
+									  tupleDescriptor, &isNull);
 	Datum storageTypeDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardstorage,
-	                                      tupleDescriptor, &isNull);
+										  tupleDescriptor, &isNull);
 
 	Datum minValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardminvalue,
-	                                       tupleDescriptor, &minValueNull);
+										   tupleDescriptor, &minValueNull);
 	Datum maxValueTextDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardmaxvalue,
-	                                       tupleDescriptor, &maxValueNull);
+										   tupleDescriptor, &maxValueNull);
 
 	Oid relationId = DatumGetObjectId(relationIdDatum);
 	int64 shardId = DatumGetInt64(shardIdDatum);
@@ -845,7 +847,7 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 
 		/* TODO: move this up the call stack to avoid per-tuple invocation? */
 		get_type_io_data(intervalTypeId, IOFunc_input, &intervalTypeLen, &intervalByVal,
-		                 &intervalAlign, &intervalDelim, &typeIoParam, &inputFunctionId);
+						 &intervalAlign, &intervalDelim, &typeIoParam, &inputFunctionId);
 
 		/* finally convert min/max values to their actual types */
 		minValue = OidInputFunctionCall(inputFunctionId, minValueString,

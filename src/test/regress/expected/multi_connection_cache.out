@@ -3,19 +3,19 @@
 -- ===================================================================
 CREATE FUNCTION initialize_remote_temp_table(cstring, integer)
 	RETURNS bool
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION count_remote_temp_table_rows(cstring, integer)
 	RETURNS integer
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION get_and_purge_connection(cstring, integer)
 	RETURNS bool
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 CREATE FUNCTION set_connection_status_bad(cstring, integer)
 	RETURNS bool
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 -- ===================================================================
 -- test connection hash functionality

@@ -10,7 +10,7 @@ SET client_min_messages TO DEBUG2;
 
 -- Change configuration to treat all tables as large
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;

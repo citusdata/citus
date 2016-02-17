@@ -4,7 +4,7 @@
 
 -- Set configuration to print table join order and pruned shards
 
-SET citusdb.log_multi_join_order TO TRUE;
+SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO DEBUG2;
 
 -- The following query checks that we can correctly handle self-joins
@@ -14,7 +14,7 @@ EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 
 -- Update configuration to treat lineitem and orders tables as large
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO LOG;
 
 -- The following queries check that we correctly handle joins and OR clauses. In
@@ -66,7 +66,7 @@ UPDATE pg_dist_partition SET partmethod = 'a' WHERE
        logicalrelid = (SELECT relfilenode FROM pg_class WHERE relname = 'customer');
 
 -- Update the large table shard count for all the following tests.
-SET citusdb.large_table_shard_count TO 1;
+SET citus.large_table_shard_count TO 1;
 
 -- Validate that we don't use a single-partition join method for a hash
 -- re-partitioned table, thus preventing a partition of just the customer table.

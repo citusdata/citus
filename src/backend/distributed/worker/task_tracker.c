@@ -50,7 +50,7 @@
 #include "utils/memutils.h"
 
 
-int TaskTrackerDelay = 200;		  /* process sleep interval in millisecs */
+int TaskTrackerDelay = 200;       /* process sleep interval in millisecs */
 int MaxRunningTasksPerNode = 16;  /* max number of running tasks */
 int MaxTrackedTasksPerNode = 1024; /* max number of tracked tasks */
 WorkerTasksSharedStateData *WorkerTasksSharedState; /* shared memory state */
@@ -76,10 +76,10 @@ static void TrackerCleanupJobSchemas(void);
 static void TrackerCleanupConnections(HTAB *WorkerTasksHash);
 static void TrackerRegisterShutDown(HTAB *WorkerTasksHash);
 static void TrackerDelayLoop(void);
-static List *SchedulableTaskList(HTAB *WorkerTasksHash);
+static List * SchedulableTaskList(HTAB *WorkerTasksHash);
 static WorkerTask * SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash);
 static uint32 CountTasksMatchingCriteria(HTAB *WorkerTasksHash,
-										 bool (*CriteriaFunction) (WorkerTask *));
+										 bool (*CriteriaFunction)(WorkerTask *));
 static bool RunningTask(WorkerTask *workerTask);
 static bool SchedulableTask(WorkerTask *workerTask);
 static int CompareTasksByTime(const void *first, const void *second);
@@ -240,7 +240,7 @@ TaskTrackerMain(Datum main_arg)
 			/*
 			 * Reload worker membership file. For now we do that in the task
 			 * tracker because that's currently the only background worker in
-			 * CitusDB. And only background workers allow us to safely
+			 * Citus. And only background workers allow us to safely
 			 * register a SIGHUP handler.
 			 */
 			LoadWorkerNodeList(WorkerListFileName);
@@ -295,7 +295,7 @@ WorkerTasksHashEnter(uint64 jobId, uint32 taskId)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY),
 						errmsg("out of shared memory"),
-						errhint("Try increasing citusdb.max_tracked_tasks_per_node.")));
+						errhint("Try increasing citus.max_tracked_tasks_per_node.")));
 	}
 
 	/* check that we do not have the same task assigned twice to this node */
@@ -393,7 +393,7 @@ TrackerCleanupJobSchemas(void)
 		/*
 		 * We create cleanup tasks since we can't remove schemas within the task
 		 * tracker process. We also assign high priorities to these tasks so
-		 * that they get scheduled before everyone else. 
+		 * that they get scheduled before everyone else.
 		 */
 		cleanupTask = WorkerTasksHashEnter(jobId, taskIndex);
 		cleanupTask->assignedAt = HIGH_PRIORITY_TASK_TIME;
@@ -440,7 +440,7 @@ TrackerCleanupConnections(HTAB *WorkerTasksHash)
 			currentTask->connectionId = INVALID_CONNECTION_ID;
 		}
 
-		currentTask = (WorkerTask *) hash_seq_search(&status);		
+		currentTask = (WorkerTask *) hash_seq_search(&status);
 	}
 }
 
@@ -494,8 +494,9 @@ TrackerDelayLoop(void)
 	}
 }
 
+
 /* ------------------------------------------------------------
- * Signal handling and shared hash initialization functions follow 
+ * Signal handling and shared hash initialization functions follow
  * ------------------------------------------------------------
  */
 
@@ -503,7 +504,7 @@ TrackerDelayLoop(void)
 static void
 TrackerSigHupHandler(SIGNAL_ARGS)
 {
-	int	save_errno = errno;
+	int save_errno = errno;
 
 	got_SIGHUP = true;
 	if (MyProc != NULL)
@@ -519,7 +520,7 @@ TrackerSigHupHandler(SIGNAL_ARGS)
 static void
 TrackerShutdownHandler(SIGNAL_ARGS)
 {
-	int	save_errno = errno;
+	int save_errno = errno;
 
 	got_SIGTERM = true;
 	if (MyProc != NULL)
@@ -579,10 +580,10 @@ TaskTrackerShmemInit(void)
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
 	/* allocate struct containing task tracker related shared state */
-	WorkerTasksSharedState = (WorkerTasksSharedStateData *)
-		ShmemInitStruct("Worker Task Control",
-						sizeof(WorkerTasksSharedStateData),
-						&alreadyInitialized);
+	WorkerTasksSharedState =
+		(WorkerTasksSharedStateData *) ShmemInitStruct("Worker Task Control",
+													   sizeof(WorkerTasksSharedStateData),
+													   &alreadyInitialized);
 
 	if (!alreadyInitialized)
 	{
@@ -606,6 +607,7 @@ TaskTrackerShmemInit(void)
 		prev_shmem_startup_hook();
 	}
 }
+
 
 /* ------------------------------------------------------------
  * Task scheduling and management functions follow
@@ -638,7 +640,7 @@ SchedulableTaskList(HTAB *WorkerTasksHash)
 	schedulableTaskCount = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask);
 	if (schedulableTaskCount == 0)
 	{
-		return NIL;  /* we do not have any new tasks to schedule */		
+		return NIL;  /* we do not have any new tasks to schedule */
 	}
 
 	tasksToScheduleCount = MaxRunningTasksPerNode - runningTaskCount;
@@ -653,7 +655,7 @@ SchedulableTaskList(HTAB *WorkerTasksHash)
 	for (queueIndex = 0; queueIndex < tasksToScheduleCount; queueIndex++)
 	{
 		WorkerTask *schedulableTask = (WorkerTask *) palloc0(sizeof(WorkerTask));
-		schedulableTask->jobId  = schedulableTaskQueue[queueIndex].jobId;
+		schedulableTask->jobId = schedulableTaskQueue[queueIndex].jobId;
 		schedulableTask->taskId = schedulableTaskQueue[queueIndex].taskId;
 
 		schedulableTaskList = lappend(schedulableTaskList, schedulableTask);
@@ -681,13 +683,13 @@ SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 	uint32 queueIndex = 0;
 
 	/* our priority queue size equals to the number of schedulable tasks */
-	queueSize = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask); 
+	queueSize = CountTasksMatchingCriteria(WorkerTasksHash, &SchedulableTask);
 	if (queueSize == 0)
 	{
 		return NULL;
 	}
 
-	/* allocate an array of tasks for our priority queue */ 
+	/* allocate an array of tasks for our priority queue */
 	priorityQueue = (WorkerTask *) palloc0(sizeof(WorkerTask) * queueSize);
 
 	/* copy tasks in the shared hash to the priority queue */
@@ -719,7 +721,7 @@ SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 /* Counts the number of tasks that match the given criteria function. */
 static uint32
 CountTasksMatchingCriteria(HTAB *WorkerTasksHash,
-						   bool (*CriteriaFunction) (WorkerTask *))
+						   bool (*CriteriaFunction)(WorkerTask *))
 {
 	HASH_SEQ_STATUS status;
 	WorkerTask *currentTask = NULL;
@@ -730,13 +732,13 @@ CountTasksMatchingCriteria(HTAB *WorkerTasksHash,
 	currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
 	{
-		bool matchesCriteria = (*CriteriaFunction) (currentTask);
+		bool matchesCriteria = (*CriteriaFunction)(currentTask);
 		if (matchesCriteria)
 		{
 			taskCount++;
 		}
 
-		currentTask = (WorkerTask *) hash_seq_search(&status);		
+		currentTask = (WorkerTask *) hash_seq_search(&status);
 	}
 
 	return taskCount;
@@ -775,7 +777,7 @@ SchedulableTask(WorkerTask *workerTask)
 static int
 CompareTasksByTime(const void *first, const void *second)
 {
-	WorkerTask *firstTask  = (WorkerTask *) first;
+	WorkerTask *firstTask = (WorkerTask *) first;
 	WorkerTask *secondTask = (WorkerTask *) second;
 
 	/* tasks that are assigned earlier have higher priority */
@@ -893,7 +895,7 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 	{
 		case TASK_ASSIGNED:
 		{
-			break;	/* nothing to do until the task gets scheduled */
+			break;  /* nothing to do until the task gets scheduled */
 		}
 
 		case TASK_SCHEDULED:

@@ -35,14 +35,14 @@ SELECT avg(distinct l_orderkey) FROM lineitem_range;
 -- sharded table. For this test, we also change a config setting to ensure that
 -- we don't repartition any of the tables during the query.
 
-SET citusdb.large_table_shard_count TO 2;
+SET citus.large_table_shard_count TO 2;
 
 SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 	WHERE l_partkey = p_partkey
 	GROUP BY p_partkey
 	ORDER BY p_partkey LIMIT 10;
 
-RESET citusdb.large_table_shard_count;
+RESET citus.large_table_shard_count;
 
 -- Check that we don't support count(distinct) on non-partition column, and
 -- complex expressions.

@@ -14,7 +14,7 @@ NOTICE:  extension "file_fdw" already exists, skipping
 \STAGE orders FROM '@abs_srcdir@/data/orders.2.data'
 NOTICE:  extension "file_fdw" already exists, skipping
 NOTICE:  extension "file_fdw" already exists, skipping
-SELECT set_config('citusdb.shard_replication_factor', '1', false);
+SELECT set_config('citus.shard_replication_factor', '1', false);
  set_config 
 ------------
  1

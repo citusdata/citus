@@ -10,59 +10,59 @@ SET client_min_messages TO DEBUG2;
 --
 -- Verify that we can create different types of indexes
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DEBUG:  building index "lineitem_orderkey_index" on table "lineitem"
 CREATE INDEX lineitem_partkey_desc_index ON lineitem (l_partkey DESC);
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DEBUG:  building index "lineitem_partkey_desc_index" on table "lineitem"
 CREATE INDEX lineitem_partial_index ON lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DEBUG:  building index "lineitem_partial_index" on table "lineitem"
 CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey);
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DEBUG:  building index "lineitem_orderkey_hash_index" on table "lineitem"
@@ -88,15 +88,15 @@ ERROR:  specifying tablespaces with CREATE INDEX statements is currently unsuppo
 -- Verify that we error out in case of postgres errors on supported statement
 -- types.
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
-WARNING:  could not receive query results from localhost:57637
+WARNING:  could not receive query results from localhost:57638
 DETAIL:  Client error: relation "lineitem_orderkey_index_102014" already exists
 ERROR:  could not execute DDL command on worker node shards
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
-WARNING:  could not receive query results from localhost:57637
+WARNING:  could not receive query results from localhost:57638
 DETAIL:  Client error: data type bigint has no default operator class for access method "gist"
 ERROR:  could not execute DDL command on worker node shards
 CREATE INDEX try_index ON lineitem (non_existent_column);
-WARNING:  could not receive query results from localhost:57637
+WARNING:  could not receive query results from localhost:57638
 DETAIL:  Client error: column "non_existent_column" does not exist
 ERROR:  could not execute DDL command on worker node shards
 -- Verify that none of failed indexes got created on the master node
@@ -123,42 +123,42 @@ DROP INDEX CONCURRENTLY lineitem_orderkey_index;
 ERROR:  dropping indexes concurrently on distributed tables is currently unsupported
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DROP INDEX lineitem_partkey_desc_index;
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DROP INDEX lineitem_partial_index;
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 -- Verify that we handle if exists statements correctly
@@ -167,16 +167,16 @@ ERROR:  index "non_existent_index" does not exist
 DROP INDEX IF EXISTS non_existent_index;
 NOTICE:  index "non_existent_index" does not exist, skipping
 DROP INDEX IF EXISTS lineitem_orderkey_hash_index;
-DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102014 on node localhost:57638
+DEBUG:  applied command on shard 102014 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57637
 DEBUG:  applied command on shard 102013 on node localhost:57638
-DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102012 on node localhost:57638
+DEBUG:  applied command on shard 102012 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57637
 DEBUG:  applied command on shard 102011 on node localhost:57638
-DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102010 on node localhost:57638
+DEBUG:  applied command on shard 102010 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57637
 DEBUG:  applied command on shard 102009 on node localhost:57638
 DROP INDEX lineitem_orderkey_hash_index;

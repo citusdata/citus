@@ -4,7 +4,7 @@
 
 CREATE FUNCTION table_ddl_command_array(regclass)
 	RETURNS text[]
-	AS 'citusdb'
+	AS 'citus'
 	LANGUAGE C STRICT;
 
 -- ===================================================================

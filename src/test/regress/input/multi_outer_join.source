@@ -1,5 +1,5 @@
-SET citusdb.large_table_shard_count TO 2;
-SET citusdb.log_multi_join_order to true;
+SET citus.large_table_shard_count TO 2;
+SET citus.log_multi_join_order to true;
 SET client_min_messages TO LOG;
 
 CREATE TABLE multi_outer_join_left

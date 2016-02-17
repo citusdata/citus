@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * multi_planner.h
- *	  General CitusDB planner code.
+ *	  General Citus planner code.
  *
  * Copyright (c) 2012-2015, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -13,8 +13,8 @@
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
 
-extern PlannedStmt *multi_planner(Query *parse, int cursorOptions,
-								  ParamListInfo boundParams);
+extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
+								   ParamListInfo boundParams);
 
 extern bool HasCitusToplevelNode(PlannedStmt *planStatement);
 struct MultiPlan;

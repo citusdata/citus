@@ -1,24 +1,24 @@
-/* citusdb.sql */
+/* citus.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION citusdb" to load this file. \quit
+\echo Use "CREATE EXTENSION citus" to load this file. \quit
 
-CREATE SCHEMA citusdb;
+CREATE SCHEMA citus;
 
--- Ensure CREATE EXTENSION is not run against an old citusdb data
+-- Ensure CREATE EXTENSION is not run against an old citus data
 -- directory, we're not compatible (due to the builtin functions/tables)
 DO $$
 BEGIN
    IF EXISTS(SELECT * FROM pg_proc WHERE proname = 'worker_apply_shard_ddl_command') THEN
-      RAISE 'cannot install citusdb extension in CitusDB 4 data directory';
+      RAISE 'cannot install citus extension in Citus 4 data directory';
    END IF;
 END;
 $$;
 
 /*****************************************************************************
- * CitusDB data types
+ * Citus data types
  *****************************************************************************/
-CREATE TYPE citusdb.distribution_type AS ENUM (
+CREATE TYPE citus.distribution_type AS ENUM (
    'hash',
    'range',
    'append'
@@ -26,18 +26,18 @@ CREATE TYPE citusdb.distribution_type AS ENUM (
 
 
 /*****************************************************************************
- * CitusDB tables & corresponding indexes
+ * Citus tables & corresponding indexes
  *****************************************************************************/
-CREATE TABLE citusdb.pg_dist_partition(
+CREATE TABLE citus.pg_dist_partition(
     logicalrelid Oid NOT NULL,
     partmethod "char" NOT NULL,
     partkey text NOT NULL
 );
 CREATE UNIQUE INDEX pg_dist_partition_logical_relid_index
-ON citusdb.pg_dist_partition using btree(logicalrelid);
-ALTER TABLE citusdb.pg_dist_partition SET SCHEMA pg_catalog;
+ON citus.pg_dist_partition using btree(logicalrelid);
+ALTER TABLE citus.pg_dist_partition SET SCHEMA pg_catalog;
 
-CREATE TABLE citusdb.pg_dist_shard(
+CREATE TABLE citus.pg_dist_shard(
     logicalrelid oid NOT NULL,
     shardid int8 NOT NULL,
     shardstorage "char" NOT NULL,
@@ -46,12 +46,12 @@ CREATE TABLE citusdb.pg_dist_shard(
     shardmaxvalue text
 );
 CREATE UNIQUE INDEX pg_dist_shard_shardid_index
-ON citusdb.pg_dist_shard using btree(shardid);
+ON citus.pg_dist_shard using btree(shardid);
 CREATE INDEX pg_dist_shard_logical_relid_index
-ON citusdb.pg_dist_shard using btree(logicalrelid);
-ALTER TABLE citusdb.pg_dist_shard SET SCHEMA pg_catalog;
+ON citus.pg_dist_shard using btree(logicalrelid);
+ALTER TABLE citus.pg_dist_shard SET SCHEMA pg_catalog;
 
-CREATE TABLE citusdb.pg_dist_shard_placement(
+CREATE TABLE citus.pg_dist_shard_placement(
     shardid int8 NOT NULL,
     shardstate int4 NOT NULL,
     shardlength int8 NOT NULL,
@@ -59,40 +59,40 @@ CREATE TABLE citusdb.pg_dist_shard_placement(
     nodeport int8 NOT NULL
 ) WITH oids;
 CREATE UNIQUE INDEX pg_dist_shard_placement_oid_index
-ON citusdb.pg_dist_shard_placement using btree(oid);
+ON citus.pg_dist_shard_placement using btree(oid);
 CREATE INDEX pg_dist_shard_placement_shardid_index
-ON citusdb.pg_dist_shard_placement using btree(shardid);
+ON citus.pg_dist_shard_placement using btree(shardid);
 CREATE INDEX pg_dist_shard_placement_nodeid_index
-ON citusdb.pg_dist_shard_placement using btree(nodename, nodeport);
-ALTER TABLE citusdb.pg_dist_shard_placement SET SCHEMA pg_catalog;
+ON citus.pg_dist_shard_placement using btree(nodename, nodeport);
+ALTER TABLE citus.pg_dist_shard_placement SET SCHEMA pg_catalog;
 
 
 /*****************************************************************************
- * CitusDB sequences
+ * Citus sequences
  *****************************************************************************/
 
 /*
  * Unternal sequence to generate 64-bit shard ids. These identifiers are then
  * used to identify shards in the distributed database.
  */
-CREATE SEQUENCE citusdb.pg_dist_shardid_seq
+CREATE SEQUENCE citus.pg_dist_shardid_seq
     MINVALUE 102008
     NO CYCLE;
-ALTER SEQUENCE  citusdb.pg_dist_shardid_seq SET SCHEMA pg_catalog;
+ALTER SEQUENCE  citus.pg_dist_shardid_seq SET SCHEMA pg_catalog;
 
 /*
  * internal sequence to generate 32-bit jobIds. These identifiers are then
  * used to identify jobs in the distributed database; and they wrap at 32-bits
  * to allow for slave nodes to independently execute their distributed jobs.
  */
-CREATE SEQUENCE citusdb.pg_dist_jobid_seq
+CREATE SEQUENCE citus.pg_dist_jobid_seq
     MINVALUE 2 /* first jobId reserved for clean up jobs */
     MAXVALUE 4294967296;
-ALTER SEQUENCE  citusdb.pg_dist_jobid_seq SET SCHEMA pg_catalog;
+ALTER SEQUENCE  citus.pg_dist_jobid_seq SET SCHEMA pg_catalog;
 
 
 /*****************************************************************************
- * CitusDB functions
+ * Citus functions
  *****************************************************************************/
 
 /* For backward compatibility and ease of use create functions et al. in pg_catalog */
@@ -182,13 +182,13 @@ COMMENT ON FUNCTION master_get_round_robin_candidate_nodes(shard_id bigint)
 
 CREATE FUNCTION master_create_distributed_table(table_name regclass,
                                                 distribution_column text,
-                                                distribution_method citusdb.distribution_type)
+                                                distribution_method citus.distribution_type)
     RETURNS void
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$master_create_distributed_table$$;
 COMMENT ON FUNCTION master_create_distributed_table(table_name regclass,
                                                     distribution_column text,
-                                                    distribution_method citusdb.distribution_type)
+                                                    distribution_method citus.distribution_type)
     IS 'define the table distribution functions';
 
 -- define shard creation function for hash-partitioned tables
@@ -323,7 +323,7 @@ COMMENT ON FUNCTION worker_append_table_to_shard(text, text, text, integer)
 
 /* trigger functions */
 
-CREATE OR REPLACE FUNCTION citusdb_drop_trigger()
+CREATE OR REPLACE FUNCTION citus_drop_trigger()
     RETURNS event_trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog
@@ -349,7 +349,7 @@ BEGIN
     END LOOP;
 END;
 $cdbdt$;
-COMMENT ON FUNCTION citusdb_drop_trigger()
+COMMENT ON FUNCTION citus_drop_trigger()
     IS 'perform checks and actions at the end of DROP actions';
 
 CREATE FUNCTION master_dist_partition_cache_invalidate()
@@ -369,21 +369,21 @@ COMMENT ON FUNCTION master_dist_shard_cache_invalidate()
 
 /* internal functions, not user accessible */
 
-CREATE FUNCTION citusdb_extradata_container(INTERNAL)
+CREATE FUNCTION citus_extradata_container(INTERNAL)
     RETURNS void
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$citusdb_extradata_container$$;
-COMMENT ON FUNCTION pg_catalog.citusdb_extradata_container(INTERNAL)
+    AS 'MODULE_PATHNAME', $$citus_extradata_container$$;
+COMMENT ON FUNCTION pg_catalog.citus_extradata_container(INTERNAL)
     IS 'placeholder function to store additional data in postgres node trees';
 
 
 /*****************************************************************************
- * CitusDB triggers
+ * Citus triggers
  *****************************************************************************/
 
-CREATE EVENT TRIGGER citusdb_cascade_to_partition
+CREATE EVENT TRIGGER citus_cascade_to_partition
     ON SQL_DROP
-    EXECUTE PROCEDURE citusdb_drop_trigger();
+    EXECUTE PROCEDURE citus_drop_trigger();
 
 CREATE TRIGGER dist_partition_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE
@@ -397,7 +397,7 @@ CREATE TRIGGER dist_shard_cache_invalidate
 
 
 /*****************************************************************************
- * CitusDB aggregates
+ * Citus aggregates
  *****************************************************************************/
 CREATE AGGREGATE array_cat_agg(anyarray) (SFUNC = array_cat, STYPE = anyarray);
 COMMENT ON AGGREGATE array_cat_agg(anyarray)

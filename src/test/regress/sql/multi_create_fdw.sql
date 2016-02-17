@@ -5,7 +5,7 @@
 -- create fake fdw for use in tests
 CREATE FUNCTION fake_fdw_handler()
 RETURNS fdw_handler
-AS 'citusdb'
+AS 'citus'
 LANGUAGE C STRICT;
 
 CREATE FOREIGN DATA WRAPPER fake_fdw HANDLER fake_fdw_handler;

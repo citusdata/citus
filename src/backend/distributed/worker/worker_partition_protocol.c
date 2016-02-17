@@ -59,7 +59,7 @@ static void FileOutputStreamWrite(FileOutputStream file, StringInfo dataToWrite)
 static void FileOutputStreamFlush(FileOutputStream file);
 static void FilterAndPartitionTable(const char *filterQuery,
 									const char *columnName, Oid columnType,
-									uint32 (*PartitionIdFunction) (Datum, const void *),
+									uint32 (*PartitionIdFunction)(Datum, const void *),
 									const void *partitionIdContext,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
@@ -105,7 +105,7 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
 	text *partitionColumnText = PG_GETARG_TEXT_P(3);
-	Oid   partitionColumnType = PG_GETARG_OID(4);
+	Oid partitionColumnType = PG_GETARG_OID(4);
 	ArrayType *splitPointObject = PG_GETARG_ARRAYTYPE_P(5);
 
 	const char *filterQuery = text_to_cstring(filterQueryText);
@@ -125,7 +125,7 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 	if (splitPointType != partitionColumnType)
 	{
 		ereport(ERROR, (errmsg("partition column type %u and split point type %u "
-							   "do not match", partitionColumnType, splitPointType)));		
+							   "do not match", partitionColumnType, splitPointType)));
 	}
 
 	/* use column's type information to get the comparison function */
@@ -181,7 +181,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
 	text *partitionColumnText = PG_GETARG_TEXT_P(3);
-	Oid   partitionColumnType = PG_GETARG_OID(4);
+	Oid partitionColumnType = PG_GETARG_OID(4);
 	uint32 partitionCount = PG_GETARG_UINT32(5);
 
 	const char *filterQuery = text_to_cstring(filterQueryText);
@@ -463,7 +463,7 @@ JobDirectoryName(uint64 jobId)
 	 */
 #ifdef HAVE_INTTYPES_H
 	StringInfo jobDirectoryName = makeStringInfo();
-	appendStringInfo(jobDirectoryName, "base/%s/%s%0*"PRIu64,
+	appendStringInfo(jobDirectoryName, "base/%s/%s%0*" PRIu64,
 					 PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX,
 					 MIN_JOB_DIRNAME_WIDTH, jobId);
 #else
@@ -726,7 +726,7 @@ FileOutputStreamFlush(FileOutputStream file)
 static void
 FilterAndPartitionTable(const char *filterQuery,
 						const char *partitionColumnName, Oid partitionColumnType,
-						uint32 (*PartitionIdFunction) (Datum, const void *),
+						uint32 (*PartitionIdFunction)(Datum, const void *),
 						const void *partitionIdContext,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
@@ -794,7 +794,7 @@ FilterAndPartitionTable(const char *filterQuery,
 			FileOutputStream partitionFile = { 0, 0, 0 };
 			StringInfo rowText = NULL;
 			Datum partitionKey = 0;
-			bool  partitionKeyNull = false;
+			bool partitionKeyNull = false;
 			uint32 partitionId = 0;
 
 			partitionKey = SPI_getbinval(row, rowDescriptor,
@@ -808,7 +808,7 @@ FilterAndPartitionTable(const char *filterQuery,
 			 */
 			if (!partitionKeyNull)
 			{
-				partitionId = (*PartitionIdFunction) (partitionKey, partitionIdContext);
+				partitionId = (*PartitionIdFunction)(partitionKey, partitionIdContext);
 			}
 			else
 			{
@@ -926,7 +926,7 @@ InitRowOutputState(void)
 
 	/* initialize defaults for printing null values */
 	char *nullPrint = pstrdup("\\N");
-	int   nullPrintLen = strlen(nullPrint);
+	int nullPrintLen = strlen(nullPrint);
 	char *nullPrintClient = pg_server_to_any(nullPrint, nullPrintLen, fileEncoding);
 
 	/* set default text output characters */
@@ -946,7 +946,7 @@ InitRowOutputState(void)
 	}
 
 	/* set up transcoding information and default text output characters */
-	if ( (fileEncoding != databaseEncoding) || (databaseEncodingMaxLength > 1) )
+	if ((fileEncoding != databaseEncoding) || (databaseEncodingMaxLength > 1))
 	{
 		rowOutputState->need_transcoding = true;
 	}
@@ -1057,7 +1057,7 @@ OutputRow(HeapTuple row, TupleDesc rowDescriptor,
 				CopySendString(rowOutputState, rowOutputState->null_print_client);
 			}
 
-			lastColumn = ((columnIndex+1) == columnCount);
+			lastColumn = ((columnIndex + 1) == columnCount);
 			if (!lastColumn)
 			{
 				CopySendChar(rowOutputState, rowOutputState->delim[0]);
@@ -1094,9 +1094,9 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 	{
 		/* Generate header for a binary copy */
 		const int32 zero = 0;
-		FileOutputStream partitionFile = {0, 0, 0};
+		FileOutputStream partitionFile = { 0, 0, 0 };
 		PartialCopyStateData headerOutputStateData;
-		PartialCopyState headerOutputState = (PartialCopyState) &headerOutputStateData;
+		PartialCopyState headerOutputState = (PartialCopyState) & headerOutputStateData;
 
 		memset(headerOutputState, 0, sizeof(PartialCopyStateData));
 		headerOutputState->fe_msgbuf = makeStringInfo();
@@ -1128,9 +1128,9 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 	{
 		/* Generate footer for a binary copy */
 		int16 negative = -1;
-		FileOutputStream partitionFile = {0, 0, 0};
+		FileOutputStream partitionFile = { 0, 0, 0 };
 		PartialCopyStateData footerOutputStateData;
-		PartialCopyState footerOutputState = (PartialCopyState) &footerOutputStateData;
+		PartialCopyState footerOutputState = (PartialCopyState) & footerOutputStateData;
 
 		memset(footerOutputState, 0, sizeof(PartialCopyStateData));
 		footerOutputState->fe_msgbuf = makeStringInfo();
@@ -1143,6 +1143,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 }
 
 
+/* *INDENT-OFF* */
 /* Append data to the copy buffer in outputState */
 static void
 CopySendData(PartialCopyState outputState, const void *databuf, int datasize)
@@ -1282,6 +1283,7 @@ CopyAttributeOutText(PartialCopyState cstate, char *string)
 }
 
 
+/* *INDENT-ON* */
 /* Helper function to send pending copy output */
 static inline void
 CopyFlushOutput(PartialCopyState cstate, char *start, char *pointer)
@@ -1359,7 +1361,7 @@ RangePartitionId(Datum partitionValue, const void *context)
 			currentLength = currentLength - halfLength - 1;
 		}
 	}
-	
+
 	return firstIndex;
 }
 

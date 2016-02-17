@@ -10,7 +10,7 @@
 \STAGE orders FROM '@abs_srcdir@/data/orders.1.data'
 \STAGE orders FROM '@abs_srcdir@/data/orders.2.data'
 
-SELECT set_config('citusdb.shard_replication_factor', '1', false);
+SELECT set_config('citus.shard_replication_factor', '1', false);
 
 \STAGE customer FROM '@abs_srcdir@/data/customer.1.data'
 \STAGE nation FROM '@abs_srcdir@/data/nation.data'

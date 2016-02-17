@@ -3,7 +3,7 @@
  * test/src/generate_ddl_commands.c
  *
  * This file contains functions to exercise DDL generation functionality
- * within CitusDB.
+ * within Citus.
  *
  * Copyright (c) 2014-2015, Citus Data, Inc.
  *
