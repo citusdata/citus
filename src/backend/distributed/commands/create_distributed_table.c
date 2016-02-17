@@ -246,7 +246,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	/* finally insert tuple, build index entries & register cache invalidation */
 	simple_heap_insert(pgDistPartition, newTuple);
 	CatalogUpdateIndexes(pgDistPartition, newTuple);
-	CacheInvalidateRelcacheByRelid(distributedRelationId);
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
 
 	RecordDistributedRelationDependencies(distributedRelationId, distributionKey);
 

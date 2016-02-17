@@ -65,10 +65,6 @@ EXECUTE sharded_query;
 ------
 (0 rows)
 
--- try to drop table
-DROP TABLE sharded_table;
-ERROR:  cannot drop distributed table with existing shards
-HINT:  Delete shards first using: SELECT master_apply_delete_command('DELETE FROM public.sharded_table')
 -- try to drop shards with where clause
 SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 ERROR:  cannot delete from distributed table

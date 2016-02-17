@@ -54,10 +54,10 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerTableRewrite(17667)
+DEBUG:  EventTriggerTableRewrite(17676)
 DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17667
-DEBUG:  drop auto-cascades to type pg_temp_17667[]
+DEBUG:  drop auto-cascades to type pg_temp_17676
+DEBUG:  drop auto-cascades to type pg_temp_17676[]
 ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
 DEBUG:  applied command on shard 103002 on node localhost:57638
 DEBUG:  applied command on shard 103002 on node localhost:57637
@@ -65,10 +65,10 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerTableRewrite(17667)
+DEBUG:  EventTriggerTableRewrite(17676)
 DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17667
-DEBUG:  drop auto-cascades to type pg_temp_17667[]
+DEBUG:  drop auto-cascades to type pg_temp_17676
+DEBUG:  drop auto-cascades to type pg_temp_17676[]
 ALTER TABLE lineitem_alter ADD COLUMN null_column INTEGER;
 DEBUG:  applied command on shard 103002 on node localhost:57638
 DEBUG:  applied command on shard 103002 on node localhost:57637
@@ -129,7 +129,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 -- \stage to verify that default values take effect
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_metadata($1::text)
@@ -235,7 +235,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 -- \stage should fail because it will try to insert NULLs for a NOT NULL column
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_metadata($1::text)
@@ -362,10 +362,10 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerTableRewrite(17667)
+DEBUG:  EventTriggerTableRewrite(17676)
 DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17667
-DEBUG:  drop auto-cascades to type pg_temp_17667[]
+DEBUG:  drop auto-cascades to type pg_temp_17676
+DEBUG:  drop auto-cascades to type pg_temp_17676[]
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -419,7 +419,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 ALTER TABLE lineitem_alter DROP COLUMN float_column;
 DEBUG:  applied command on shard 103009 on node localhost:57637
 DEBUG:  applied command on shard 103009 on node localhost:57638
@@ -440,7 +440,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
 DEBUG:  drop auto-cascades to default for table lineitem_alter column float_column
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 ALTER TABLE lineitem_alter DROP COLUMN date_column;
 DEBUG:  applied command on shard 103009 on node localhost:57637
 DEBUG:  applied command on shard 103009 on node localhost:57638
@@ -460,7 +460,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 -- Verify that IF EXISTS works as expected
 ALTER TABLE non_existent_table ADD COLUMN new_column INTEGER;
 ERROR:  relation "non_existent_table" does not exist
@@ -485,10 +485,10 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerTableRewrite(17667)
+DEBUG:  EventTriggerTableRewrite(17676)
 DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17667
-DEBUG:  drop auto-cascades to type pg_temp_17667[]
+DEBUG:  drop auto-cascades to type pg_temp_17676
+DEBUG:  drop auto-cascades to type pg_temp_17676[]
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 WARNING:  could not receive query results from localhost:57637
 DETAIL:  Client error: column "non_existent_column" of relation "lineitem_alter_103009" does not exist
@@ -532,7 +532,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -623,7 +623,7 @@ DEBUG:  applied command on shard 103001 on node localhost:57637
 DEBUG:  applied command on shard 103001 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57638
 DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  EventTriggerInvoke 16532
+DEBUG:  EventTriggerInvoke 16541
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 

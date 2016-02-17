@@ -479,33 +479,17 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 	/*
 	 * Invalidate relcache for the relevant relation(s). In theory
 	 * logicalrelid should never change, but it doesn't hurt to be
-	 * paranoid. We ignore the case that there's no corresponding pg_class
-	 * entry - that happens if the pg_dist_partition tuple is deleted after
-	 * the relation has been dropped.
+	 * paranoid.
 	 */
 	if (oldLogicalRelationId != InvalidOid &&
 		oldLogicalRelationId != newLogicalRelationId)
 	{
-		HeapTuple oldClassTuple =
-			SearchSysCache1(RELOID, ObjectIdGetDatum(oldLogicalRelationId));
-
-		if (HeapTupleIsValid(oldClassTuple))
-		{
-			CacheInvalidateRelcacheByTuple(oldClassTuple);
-			ReleaseSysCache(oldClassTuple);
-		}
+		CitusInvalidateRelcacheByRelid(oldLogicalRelationId);
 	}
 
 	if (newLogicalRelationId != InvalidOid)
 	{
-		HeapTuple newClassTuple =
-			SearchSysCache1(RELOID, ObjectIdGetDatum(newLogicalRelationId));
-
-		if (HeapTupleIsValid(newClassTuple))
-		{
-			CacheInvalidateRelcacheByTuple(newClassTuple);
-			ReleaseSysCache(newClassTuple);
-		}
+		CitusInvalidateRelcacheByRelid(newLogicalRelationId);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
@@ -553,33 +537,17 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 	/*
 	 * Invalidate relcache for the relevant relation(s). In theory
 	 * logicalrelid should never change, but it doesn't hurt to be
-	 * paranoid. We ignore the case that there's no corresponding pg_class
-	 * entry - that happens if the pg_dist_shard tuple is deleted after
-	 * the relation has been dropped.
+	 * paranoid.
 	 */
 	if (oldLogicalRelationId != InvalidOid &&
 		oldLogicalRelationId != newLogicalRelationId)
 	{
-		HeapTuple oldClassTuple =
-			SearchSysCache1(RELOID, ObjectIdGetDatum(oldLogicalRelationId));
-
-		if (HeapTupleIsValid(oldClassTuple))
-		{
-			CacheInvalidateRelcacheByTuple(oldClassTuple);
-			ReleaseSysCache(oldClassTuple);
-		}
+		CitusInvalidateRelcacheByRelid(oldLogicalRelationId);
 	}
 
 	if (newLogicalRelationId != InvalidOid)
 	{
-		HeapTuple newClassTuple =
-			SearchSysCache1(RELOID, ObjectIdGetDatum(newLogicalRelationId));
-
-		if (HeapTupleIsValid(newClassTuple))
-		{
-			CacheInvalidateRelcacheByTuple(newClassTuple);
-			ReleaseSysCache(newClassTuple);
-		}
+		CitusInvalidateRelcacheByRelid(newLogicalRelationId);
 	}
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
@@ -927,5 +895,27 @@ CachedRelationLookup(const char *relationName, Oid *cachedOid)
 			ereport(ERROR, (errmsg("cache lookup failed for %s, called to early?",
 								   relationName)));
 		}
+	}
+}
+
+
+/*
+ * Register a relcache invalidation for a non-shared relation.
+ *
+ * We ignore the case that there's no corresponding pg_class entry - that
+ * happens if we register a relcache invalidation (e.g. for a
+ * pg_dist_partition deletion) after the relation has been dropped. That's ok,
+ * because in those cases we're guaranteed to already have registered an
+ * invalidation for the target relation.
+ */
+void
+CitusInvalidateRelcacheByRelid(Oid relationId)
+{
+	HeapTuple classTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+
+	if (HeapTupleIsValid(classTuple))
+	{
+		CacheInvalidateRelcacheByTuple(classTuple);
+		ReleaseSysCache(classTuple);
 	}
 }

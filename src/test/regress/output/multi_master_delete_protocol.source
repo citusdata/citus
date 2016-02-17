@@ -86,3 +86,8 @@ SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
                            1
 (1 row)
 
+-- Verify that master_apply_delete_command cannot be called in a transaction block
+BEGIN;
+SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+ERROR:  master_apply_delete_command cannot run inside a transaction block
+ROLLBACK;

@@ -148,6 +148,15 @@ CREATE FUNCTION master_append_table_to_shard(bigint, text, text, integer)
 COMMENT ON FUNCTION master_append_table_to_shard(bigint, text, text, integer)
     IS 'append given table to all shard placements and update metadata';
 
+CREATE FUNCTION master_drop_all_shards(logicalrelid regclass,
+                                       schema_name text,
+                                       table_name text)
+    RETURNS integer
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_drop_all_shards$$;
+COMMENT ON FUNCTION master_drop_all_shards(regclass, text, text)
+    IS 'drop all shards in a relation and update metadata';
+
 CREATE FUNCTION master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -322,7 +331,7 @@ CREATE OR REPLACE FUNCTION citus_drop_trigger()
 DECLARE v_obj record;
 BEGIN
     FOR v_obj IN SELECT * FROM pg_event_trigger_dropped_objects() LOOP
-        IF v_obj.object_type <> 'table' THEN
+        IF v_obj.object_type NOT IN ('table', 'foreign table') THEN
            CONTINUE;
         END IF;
 
@@ -331,20 +340,11 @@ BEGIN
             CONTINUE;
         END IF;
 
-        -- check if there's shards for the table, error out if so
-        IF EXISTS(SELECT * FROM pg_dist_shard WHERE logicalrelid = v_obj.objid) THEN
-           RAISE EXCEPTION USING
-                 MESSAGE = 'cannot drop distributed table with existing shards',
-                 HINT = $$Delete shards first using: $$ ||
-                        $$SELECT master_apply_delete_command('DELETE FROM $$ ||
-                        v_obj.object_identity || $$')$$;
-        END IF;
+        -- ensure all shards are dropped
+        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
 
         -- delete partition entry
         DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
-        IF NOT FOUND THEN
-           RAISE EXCEPTION 'could not find previously found pg_dist_partition entry';
-        END IF;
 
     END LOOP;
 END;
