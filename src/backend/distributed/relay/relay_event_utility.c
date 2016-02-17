@@ -520,3 +520,15 @@ AppendShardIdToName(char **name, uint64 shardId)
 	(*name) = (char *) repalloc((*name), extendedNameLength);
 	snprintf((*name), extendedNameLength, "%s", extendedName);
 }
+
+
+/*
+ * AppendShardIdToStringInfo appends shardId to the given name, represented
+ * by a StringInfo.
+ */
+void
+AppendShardIdToStringInfo(StringInfo name, uint64 shardId)
+{
+	appendStringInfo(name, "%c" UINT64_FORMAT, SHARD_NAME_SEPARATOR, shardId);
+}
+

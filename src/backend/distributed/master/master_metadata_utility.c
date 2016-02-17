@@ -394,7 +394,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	/* close relation and invalidate previous cache entry */
 	heap_close(pgDistShard, RowExclusiveLock);
-	CacheInvalidateRelcacheByRelid(relationId);
+	CitusInvalidateRelcacheByRelid(relationId);
 }
 
 
@@ -479,7 +479,7 @@ DeleteShardRow(uint64 shardId)
 	heap_close(pgDistShard, RowExclusiveLock);
 
 	/* invalidate previous cache entry */
-	CacheInvalidateRelcacheByRelid(distributedRelationId);
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
 }
 
 

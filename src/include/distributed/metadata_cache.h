@@ -45,6 +45,7 @@ typedef struct
 extern bool IsDistributedTable(Oid relationId);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 
 extern bool CitusHasBeenLoaded(void);
 

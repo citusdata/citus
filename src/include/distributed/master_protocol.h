@@ -98,6 +98,7 @@ extern Datum master_get_active_worker_nodes(PG_FUNCTION_ARGS);
 extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
 extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
 extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
+extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 
 /* function declarations for shard creation functionality */
 extern Datum master_create_worker_shards(PG_FUNCTION_ARGS);

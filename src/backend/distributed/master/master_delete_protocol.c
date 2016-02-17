@@ -18,20 +18,25 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
+#include "access/xact.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "commands/dbcommands.h"
+#include "commands/event_trigger.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
+#include "nodes/makefuncs.h"
 #include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
@@ -45,12 +50,15 @@ static void CheckDeleteCriteria(Node *deleteCriteria);
 static void CheckPartitionColumn(Oid relationId, Node *whereClause);
 static List * ShardsMatchingDeleteCriteria(Oid relationId, List *shardList,
 										   Node *deleteCriteria);
+static int DropShards(Oid relationId, char *schemaName, char *relationName,
+					  List *deletableShardIntervalList);
 static bool ExecuteRemoteCommand(const char *nodeName, uint32 nodePort,
 								 StringInfo queryString);
 
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_apply_delete_command);
+PG_FUNCTION_INFO_V1(master_drop_all_shards);
 
 
 /*
@@ -72,10 +80,9 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
 	char *relationName = NULL;
-	text *relationNameText = NULL;
+	char *schemaName = NULL;
 	Oid relationId = InvalidOid;
 	List *shardIntervalList = NIL;
-	ListCell *shardIntervalCell = NULL;
 	List *deletableShardIntervalList = NIL;
 	List *queryTreeList = NIL;
 	Query *deleteQuery = NULL;
@@ -83,11 +90,15 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	Node *deleteCriteria = NULL;
 	Node *queryTreeNode = NULL;
 	DeleteStmt *deleteStatement = NULL;
-	int32 deleteCriteriaShardCount = 0;
+	int droppedShardCount = 0;
 	LOCKTAG lockTag;
 	bool sessionLock = false;
 	bool dontWait = false;
 	char partitionMethod = 0;
+	bool failOK = false;
+	bool isTopLevel = true;
+
+	PreventTransactionChain(isTopLevel, "master_apply_delete_command");
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
@@ -97,10 +108,10 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	}
 
 	deleteStatement = (DeleteStmt *) queryTreeNode;
-	relationName = deleteStatement->relation->relname;
-	relationNameText = cstring_to_text(relationName);
 
-	relationId = ResolveRelationId(relationNameText);
+	schemaName = deleteStatement->relation->schemaname;
+	relationName = deleteStatement->relation->relname;
+	relationId = RangeVarGetRelid(deleteStatement->relation, NoLock, failOK);
 	CheckDistributedTable(relationId);
 
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
@@ -142,6 +153,71 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 																  deleteCriteria);
 	}
 
+	droppedShardCount = DropShards(relationId, schemaName, relationName,
+								   deletableShardIntervalList);
+
+	PG_RETURN_INT32(droppedShardCount);
+}
+
+
+/*
+ * master_drop_shards attempts to drop all shards for a given relation.
+ * Unlike master_apply_delete_command, this function can be called even
+ * if the table has already been dropped.
+ */
+Datum
+master_drop_all_shards(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	text *schemaNameText = PG_GETARG_TEXT_P(1);
+	text *relationNameText = PG_GETARG_TEXT_P(2);
+
+	char *schemaName = NULL;
+	char *relationName = NULL;
+	bool isTopLevel = true;
+	List *shardIntervalList = NIL;
+	int droppedShardCount = 0;
+
+	PreventTransactionChain(isTopLevel, "DROP distributed table");
+
+	relationName = get_rel_name(relationId);
+
+	if (relationName != NULL)
+	{
+		/* ensure proper values are used if the table exists */
+		Oid schemaId = get_rel_namespace(relationId);
+		schemaName = get_namespace_name(schemaId);
+	}
+	else
+	{
+		/* table has been dropped, rely on user-supplied values */
+		schemaName = text_to_cstring(schemaNameText);
+		relationName = text_to_cstring(relationNameText);
+	}
+
+	shardIntervalList = LoadShardIntervalList(relationId);
+	droppedShardCount = DropShards(relationId, schemaName, relationName,
+								   shardIntervalList);
+
+	PG_RETURN_INT32(droppedShardCount);
+}
+
+
+/*
+ * DropShards drops all given shards in a relation. The id, name and schema
+ * for the relation are explicitly provided, since this function may be
+ * called when the table is already dropped.
+ *
+ * We mark shard placements that we couldn't drop as to be deleted later, but
+ * we do delete the shard metadadata.
+ */
+int
+DropShards(Oid relationId, char *schemaName, char *relationName,
+		   List *deletableShardIntervalList)
+{
+	ListCell *shardIntervalCell = NULL;
+	int droppedShardCount = 0;
+
 	foreach(shardIntervalCell, deletableShardIntervalList)
 	{
 		List *shardPlacementList = NIL;
@@ -152,17 +228,25 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 		ListCell *lingeringPlacementCell = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
+		char *shardAlias = NULL;
 		char *quotedShardName = NULL;
+		StringInfo shardName = makeStringInfo();
+
+		Assert(shardInterval->relationId == relationId);
 
 		/* if shard doesn't have an alias, extend regular table name */
-		char *shardName = LoadShardAlias(relationId, shardId);
-		if (shardName == NULL)
+		shardAlias = LoadShardAlias(relationId, shardId);
+		if (shardAlias == NULL)
 		{
-			shardName = get_rel_name(relationId);
-			AppendShardIdToName(&shardName, shardId);
+			appendStringInfoString(shardName, relationName);
+			AppendShardIdToStringInfo(shardName, shardId);
+		}
+		else
+		{
+			appendStringInfoString(shardName, shardAlias);
 		}
 
-		quotedShardName = quote_qualified_identifier(NULL, shardName);
+		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);
 
 		shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
@@ -174,13 +258,14 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 			bool dropSuccessful = false;
 			StringInfo workerDropQuery = makeStringInfo();
 
-			char tableType = get_rel_relkind(relationId);
-			if (tableType == RELKIND_RELATION)
+			char storageType = shardInterval->storageType;
+			if (storageType == SHARD_STORAGE_TABLE)
 			{
 				appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
 								 quotedShardName);
 			}
-			else if (tableType == RELKIND_FOREIGN_TABLE)
+			else if (storageType == SHARD_STORAGE_COLUMNAR ||
+					 storageType == SHARD_STORAGE_FOREIGN)
 			{
 				appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND,
 								 quotedShardName);
@@ -223,7 +308,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 									workerName, workerPort);
 
 			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node "
-									 "\"%s:%u\"", shardName, workerName, workerPort),
+									 "\"%s:%u\"", shardName->data, workerName, workerPort),
 							  errdetail("Marking this shard placement for deletion")));
 		}
 
@@ -239,8 +324,9 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 		RESUME_INTERRUPTS();
 	}
 
-	deleteCriteriaShardCount = list_length(deletableShardIntervalList);
-	PG_RETURN_INT32(deleteCriteriaShardCount);
+	droppedShardCount = list_length(deletableShardIntervalList);
+
+	return droppedShardCount;
 }
 
 
