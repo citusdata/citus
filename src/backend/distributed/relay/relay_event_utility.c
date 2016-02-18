@@ -531,4 +531,3 @@ AppendShardIdToStringInfo(StringInfo name, uint64 shardId)
 {
 	appendStringInfo(name, "%c" UINT64_FORMAT, SHARD_NAME_SEPARATOR, shardId);
 }
-

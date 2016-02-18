@@ -307,8 +307,8 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 			InsertShardPlacementRow(shardId, FILE_TO_DELETE, oldShardLength,
 									workerName, workerPort);
 
-			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node "
-									 "\"%s:%u\"", shardName->data, workerName, workerPort),
+			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node \"%s:%u\"",
+									 shardName->data, workerName, workerPort),
 							  errdetail("Marking this shard placement for deletion")));
 		}
 
