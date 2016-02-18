@@ -52,8 +52,11 @@ fi
 AC_SUBST(vpath_build)
 
 # Allow to overwrite the C compiler, default to the one postgres was
-# compiled with
+# compiled with. We don't want autoconf's default CFLAGS though, so save
+# those.
+SAVE_CFLAGS="$CFLAGS"
 AC_PROG_CC([$($PG_CONFIG --cc)])
+CFLAGS="$SAVE_CFLAGS"
 
 # check for a number of CFLAGS that make development easier
 

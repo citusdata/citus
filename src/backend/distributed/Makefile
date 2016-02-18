@@ -7,7 +7,8 @@ MODULE_big = citus
 EXTENSION = citus
 EXTVERSION = 5.0
 DATA_built = $(EXTENSION)--$(EXTVERSION).sql
-SCRIPTS = $(wildcard $(citus_top_builddir)/src/bin/scripts/*)
+# Install scripts in build and/or source directory, but only once if those are the same
+SCRIPTS = $(sort $(wildcard $(citus_top_builddir)/src/bin/scripts/* $(citus_top_srcdir)/src/bin/scripts/*))
 
 # directories with source files
 SUBDIRS = . commands executor master planner relay test utils worker
@@ -17,12 +18,12 @@ SUBDIRS = . commands executor master planner relay test utils worker
 OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(wildcard $(citus_abs_srcdir)/$(dir)/*.c)))
 
+# be explicit about the default target
+all:
+
 # define build process for latest install file
 $(EXTENSION)--$(EXTVERSION).sql: $(EXTENSION).sql
 	cat $^ > $@
-
-# be explicit about the default target
-all:
 
 NO_PGXS = 1
 
