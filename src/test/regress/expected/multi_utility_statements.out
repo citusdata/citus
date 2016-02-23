@@ -188,9 +188,6 @@ VIETNAM
 RUSSIA                   
 UNITED KINGDOM           
 UNITED STATES            
--- Ensure that preventing COPY FROM against distributed tables works
-COPY customer FROM STDIN;
-ERROR:  cannot execute COPY FROM on a distributed table on master node
 -- Test that we can create on-commit drop tables, and also test creating with
 -- oids, along with changing column names
 BEGIN;
