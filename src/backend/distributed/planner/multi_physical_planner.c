@@ -110,8 +110,6 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
 static uint32 HashPartitionCount(void);
-static int CompareShardIntervals(const void *leftElement, const void *rightElement,
-								 FmgrInfo *typeCompareFunction);
 static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 									uint32 shardIntervalCount);
 
@@ -169,7 +167,6 @@ static List * RoundRobinAssignTaskList(List *taskList);
 static List * RoundRobinReorder(Task *task, List *placementList);
 static List * ReorderAndAssignTaskList(List *taskList,
 									   List * (*reorderFunction)(Task *, List *));
-static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
 static List * ActivePlacementList(List *placementList);
 static List * LeftRotateList(List *list, uint32 rotateCount);
@@ -1810,7 +1807,7 @@ SortedShardIntervalArray(List *shardIntervalList)
  * CompareShardIntervals acts as a helper function to compare two shard interval
  * pointers by their minimum values, using the value's type comparison function.
  */
-static int
+int
 CompareShardIntervals(const void *leftElement, const void *rightElement,
 					  FmgrInfo *typeCompareFunction)
 {
@@ -5073,7 +5070,7 @@ ReorderAndAssignTaskList(List *taskList, List * (*reorderFunction)(Task *, List 
 
 
 /* Helper function to compare two tasks by their anchor shardId. */
-static int
+int
 CompareTasksByShardId(const void *leftElement, const void *rightElement)
 {
 	const Task *leftTask = *((const Task **) leftElement);
