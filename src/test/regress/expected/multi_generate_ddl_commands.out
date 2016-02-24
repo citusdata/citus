@@ -84,9 +84,9 @@ CREATE TABLE pkey_table (
 	id bigint PRIMARY KEY
 );
 SELECT table_ddl_command_array('pkey_table');
-                                                                     table_ddl_command_array                                                                     
------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE pkey_table (first_name text, last_name text, id bigint NOT NULL)","ALTER TABLE ONLY pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)"}
+                                                                      table_ddl_command_array                                                                      
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"CREATE TABLE pkey_table (first_name text, last_name text, id bigint NOT NULL)","ALTER TABLE public.pkey_table ADD CONSTRAINT pkey_table_pkey PRIMARY KEY (id)"}
 (1 row)
 
 -- as do unique indexes...
@@ -95,9 +95,9 @@ CREATE TABLE unique_table (
 	username text UNIQUE not null
 );
 SELECT table_ddl_command_array('unique_table');
-                                                                          table_ddl_command_array                                                                           
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE unique_table (user_id bigint NOT NULL, username text NOT NULL)","ALTER TABLE ONLY unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)"}
+                                                                           table_ddl_command_array                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"CREATE TABLE unique_table (user_id bigint NOT NULL, username text NOT NULL)","ALTER TABLE public.unique_table ADD CONSTRAINT unique_table_username_key UNIQUE (username)"}
 (1 row)
 
 -- and indexes used for clustering
