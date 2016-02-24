@@ -1,10 +1,9 @@
 --
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
--- Check that we can run ALTER TABLE statements on distributed tables. We
--- increase the logging verbosity to verify that commands are propagated to
--- all worker shards. We also set the shardid sequence here so that the shardids
--- in this test aren't affected by changes to the previous tests.
+-- Check that we can run ALTER TABLE statements on distributed tables.
+-- We set the shardid sequence here so that the shardids in this test
+-- aren't affected by changes to the previous tests.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
 CREATE TABLE lineitem_alter (
 	l_orderkey bigint not null,
@@ -31,49 +30,51 @@ SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append')
 (1 row)
 
 \STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-SET client_min_messages TO DEBUG2;
 -- Verify that we can add columns
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER DEFAULT 1;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17675
-DEBUG:  drop auto-cascades to type pg_temp_17675[]
 ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17675
-DEBUG:  drop auto-cascades to type pg_temp_17675[]
 ALTER TABLE lineitem_alter ADD COLUMN null_column INTEGER;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
+-- show changed schema on one worker
+\c - - - :worker_1_port
+SELECT attname, atttypid::regtype
+FROM
+    (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
+    JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
+ORDER BY attnum;
+     attname     |     atttypid      
+-----------------+-------------------
+ tableoid        | oid
+ cmax            | cid
+ xmax            | xid
+ cmin            | cid
+ xmin            | xid
+ ctid            | tid
+ l_orderkey      | bigint
+ l_partkey       | integer
+ l_suppkey       | integer
+ l_linenumber    | integer
+ l_quantity      | numeric
+ l_extendedprice | numeric
+ l_discount      | numeric
+ l_tax           | numeric
+ l_returnflag    | character
+ l_linestatus    | character
+ l_shipdate      | date
+ l_commitdate    | date
+ l_receiptdate   | date
+ l_shipinstruct  | character
+ l_shipmode      | character
+ l_comment       | character varying
+ float_column    | double precision
+ date_column     | date
+ int_column1     | integer
+ int_column2     | integer
+ null_column     | integer
+(27 rows)
+
+\c - - - :master_port
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -114,55 +115,9 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 -- \stage to verify that default values take effect
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_metadata($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_ddl_events($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
  float_column | count 
 --------------+-------
@@ -179,19 +134,6 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 
 -- Verify that SET NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  verifying table "lineitem_alter"
 \d lineitem_alter
                 Table "public.lineitem_alter"
      Column      |         Type          |     Modifiers      
@@ -220,28 +162,8 @@ DEBUG:  verifying table "lineitem_alter"
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 -- \stage should fail because it will try to insert NULLs for a NOT NULL column
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_metadata($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_ddl_events($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
 ERROR:  null value in column "int_column2" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 03-13-1996, 02-12-1996, 03-22-1996, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
 CONTEXT:  COPY lineitem_alter_103006, line 1: "1|155190|7706|1|17|21168.23|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-03-22|DELIVER IN PERSON|TRUCK|e..."
@@ -251,18 +173,6 @@ CONTEXT:  COPY lineitem_alter_103006, line 1: "1|155190|7706|1|17|21168.23|0.04|
 \stage: failed to replicate shard to enough replicas
 -- Verify that DROP NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -291,40 +201,6 @@ DEBUG:  applied command on shard 103000 on node localhost:57637
 
 -- \stage should succeed now 
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_metadata($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_table_ddl_events($1::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM master_get_new_shardid()
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard  (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  ($1::oid, $2::int8, $3::char, $4::text, $5::text)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
-DEBUG:  parse <unnamed>: INSERT INTO pg_dist_shard_placement  (shardid, shardstate, shardlength, nodename, nodeport) VALUES  ($1::int8, $2::int4, $3::int8, $4::text, $5::int4)
-DEBUG:  bind <unnamed> to <unnamed>
 SELECT count(*) from lineitem_alter;
  count 
 -------
@@ -340,27 +216,6 @@ SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP B
 (2 rows)
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE FLOAT;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17675
-DEBUG:  drop auto-cascades to type pg_temp_17675[]
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -396,133 +251,21 @@ SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP B
 
 -- Verify that DROP COLUMN works
 ALTER TABLE lineitem_alter DROP COLUMN int_column1;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 ALTER TABLE lineitem_alter DROP COLUMN float_column;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  drop auto-cascades to default for table lineitem_alter column float_column
 ALTER TABLE lineitem_alter DROP COLUMN date_column;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 -- Verify that IF EXISTS works as expected
 ALTER TABLE non_existent_table ADD COLUMN new_column INTEGER;
 ERROR:  relation "non_existent_table" does not exist
 ALTER TABLE IF EXISTS non_existent_table ADD COLUMN new_column INTEGER;
 NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
-DEBUG:  rewriting table "lineitem_alter"
-DEBUG:  drop auto-cascades to type pg_temp_17675
-DEBUG:  drop auto-cascades to type pg_temp_17675[]
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 WARNING:  could not receive query results from localhost:57637
 DETAIL:  Client error: column "non_existent_column" of relation "lineitem_alter_103009" does not exist
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -548,24 +291,6 @@ DEBUG:  applied command on shard 103000 on node localhost:57637
 -- Verify that we can execute commands with multiple subcommands
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
 	ADD COLUMN int_column2 INTEGER;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -595,24 +320,6 @@ ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 ERROR:  alter table command is currently supported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
-DEBUG:  applied command on shard 103009 on node localhost:57637
-DEBUG:  applied command on shard 103009 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57638
-DEBUG:  applied command on shard 103008 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57637
-DEBUG:  applied command on shard 103007 on node localhost:57638
-DEBUG:  applied command on shard 103005 on node localhost:57637
-DEBUG:  applied command on shard 103005 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57638
-DEBUG:  applied command on shard 103004 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57637
-DEBUG:  applied command on shard 103003 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57638
-DEBUG:  applied command on shard 103002 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57637
-DEBUG:  applied command on shard 103001 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57638
-DEBUG:  applied command on shard 103000 on node localhost:57637
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -704,8 +411,48 @@ ERROR:  renaming distributed tables or their objects is currently unsupported
  l_comment       | character varying(44) | not null
  null_column     | integer               | 
 
+-- Check that the schema on the worker still looks reasonable
+\c - - - :worker_1_port
+SELECT attname, atttypid::regtype
+FROM
+    (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
+    JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
+ORDER BY attnum;
+            attname            |     atttypid      
+-------------------------------+-------------------
+ tableoid                      | oid
+ cmax                          | cid
+ xmax                          | xid
+ cmin                          | cid
+ xmin                          | xid
+ ctid                          | tid
+ l_orderkey                    | bigint
+ l_partkey                     | integer
+ l_suppkey                     | integer
+ l_linenumber                  | integer
+ l_quantity                    | numeric
+ l_extendedprice               | numeric
+ l_discount                    | numeric
+ l_tax                         | numeric
+ l_returnflag                  | character
+ l_linestatus                  | character
+ l_shipdate                    | date
+ l_commitdate                  | date
+ l_receiptdate                 | date
+ l_shipinstruct                | character
+ l_shipmode                    | character
+ l_comment                     | character varying
+ ........pg.dropped.17........ | -
+ ........pg.dropped.18........ | -
+ ........pg.dropped.19........ | -
+ ........pg.dropped.20........ | -
+ null_column                   | integer
+ ........pg.dropped.22........ | -
+ ........pg.dropped.23........ | -
+(29 rows)
+
+\c - - - :master_port
 -- Cleanup the table and its shards
-RESET client_min_messages;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
  master_apply_delete_command 
 -----------------------------
@@ -713,3 +460,11 @@ SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 (1 row)
 
 DROP TABLE lineitem_alter;
+-- check that nothing's left over on workers
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
+ relname 
+---------
+(0 rows)
+
+\c - - - :master_port
