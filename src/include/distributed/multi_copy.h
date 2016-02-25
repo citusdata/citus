@@ -1,9 +1,8 @@
 /*-------------------------------------------------------------------------
  *
  * multi_copy.h
- *
- * Declarations for public functions and variables used in COPY for
- * distributed tables.
+ *    Declarations for public functions and variables used in COPY for
+ *    distributed tables.
  *
  * Copyright (c) 2016, Citus Data, Inc.
  *
@@ -14,8 +13,7 @@
 #define MULTI_COPY_H
 
 
-#include "libpq-fe.h"
-#include "distributed/transaction_manager.h"
+#include "nodes/parsenodes.h"
 
 
 /* config variable managed via guc.c */

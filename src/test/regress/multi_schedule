@@ -99,6 +99,7 @@ test: multi_append_table_to_shard
 # ---------
 test: multi_outer_join
 
+#
 # ---
 # Tests covering mostly modification queries and required preliminary
 # functionality related to metadata, shard creation, shard pruning and
@@ -118,6 +119,11 @@ test: multi_simple_queries
 test: multi_utilities
 test: multi_create_insert_proxy
 test: multi_data_types
+
+# ---------
+# multi_copy creates hash and range-partitioned tables and performs COPY
+# ---------
+test: multi_copy
 
 # ----------
 # multi_large_shardid stages more shards into lineitem
