@@ -16,6 +16,7 @@
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
@@ -1290,4 +1291,157 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 	return attnums;
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * ReplicateGrantStmt replicates GRANT/REVOKE command to worker nodes if the
+ * the statement affects distributed tables.
+ *
+ * NB: So far column level privileges are not supported.
+ */
+void
+ReplicateGrantStmt(Node *parsetree)
+{
+	GrantStmt *grantStmt = (GrantStmt *) parsetree;
+	StringInfoData privsString;
+	StringInfoData granteesString;
+	StringInfoData targetString;
+	StringInfoData ddlString;
+	ListCell *granteeCell = NULL;
+	ListCell *objectCell = NULL;
+	ListCell *privilegeCell = NULL;
+	bool isFirst = true;
+
+	initStringInfo(&privsString);
+	initStringInfo(&granteesString);
+	initStringInfo(&targetString);
+	initStringInfo(&ddlString);
+
+	/*
+	 * So far only table level grants are supported. Most other types of
+	 * grants aren't interesting anyway.
+	 */
+	if (grantStmt->targtype != ACL_TARGET_OBJECT ||
+		grantStmt->objtype != ACL_OBJECT_RELATION)
+	{
+		return;
+	}
+
+	/* deparse the privileges */
+	if (grantStmt->privileges == NIL)
+	{
+		appendStringInfo(&privsString, "ALL");
+	}
+	else
+	{
+		isFirst = true;
+		foreach(privilegeCell, grantStmt->privileges)
+		{
+			AccessPriv *priv = lfirst(privilegeCell);
+
+			if (!isFirst)
+			{
+				appendStringInfoString(&privsString, ", ");
+			}
+			isFirst = false;
+
+			Assert(priv->cols == NIL);
+			Assert(priv->priv_name != NULL);
+
+			appendStringInfo(&privsString, "%s", priv->priv_name);
+		}
+	}
+
+	/* deparse the privileges */
+	isFirst = true;
+	foreach(granteeCell, grantStmt->grantees)
+	{
+#if (PG_VERSION_NUM >= 90500)
+		RoleSpec *spec = lfirst(granteeCell);
+#else
+		PrivGrantee *spec = lfirst(granteeCell);
+#endif
+
+		if (!isFirst)
+		{
+			appendStringInfoString(&granteesString, ", ");
+		}
+		isFirst = false;
+
+#if (PG_VERSION_NUM >= 90500)
+		if (spec->roletype == ROLESPEC_CSTRING)
+		{
+			appendStringInfoString(&granteesString, quote_identifier(spec->rolename));
+		}
+		else if (spec->roletype == ROLESPEC_CURRENT_USER)
+		{
+			appendStringInfoString(&granteesString, "CURRENT_USER");
+		}
+		else if (spec->roletype == ROLESPEC_SESSION_USER)
+		{
+			appendStringInfoString(&granteesString, "SESSION_USER");
+		}
+		else if (spec->roletype == ROLESPEC_PUBLIC)
+		{
+			appendStringInfoString(&granteesString, "PUBLIC");
+		}
+#else
+		if (spec->rolname)
+		{
+			appendStringInfoString(&granteesString, quote_identifier(spec->rolname));
+		}
+		else
+		{
+			appendStringInfoString(&granteesString, "PUBLIC");
+		}
+#endif
+	}
+
+	/*
+	 * Deparse the target objects, and issue the deparsed statements to
+	 * workers, if applicable. That's so we easily can replicate statements
+	 * only to distributed relations.
+	 */
+	isFirst = true;
+	foreach(objectCell, grantStmt->objects)
+	{
+		RangeVar *relvar = (RangeVar *) lfirst(objectCell);
+		Oid relOid = RangeVarGetRelid(relvar, NoLock, false);
+		const char *grantOption = "";
+
+		if (!IsDistributedTable(relOid))
+		{
+			continue;
+		}
+
+		resetStringInfo(&targetString);
+		appendStringInfo(&targetString, "%s", generate_relation_name(relOid, NIL));
+
+		if (grantStmt->is_grant)
+		{
+			if (grantStmt->grant_option)
+			{
+				grantOption = " WITH GRANT OPTION";
+			}
+
+			appendStringInfo(&ddlString, "GRANT %s ON %s TO %s%s",
+							 privsString.data, targetString.data, granteesString.data,
+							 grantOption);
+		}
+		else
+		{
+			if (grantStmt->grant_option)
+			{
+				grantOption = "GRANT OPTION FOR ";
+			}
+
+			appendStringInfo(&ddlString, "REVOKE %s%s ON %s FROM %s",
+							 grantOption, privsString.data, targetString.data,
+							 granteesString.data);
+		}
+
+		ExecuteDistributedDDLCommand(relOid, ddlString.data);
+		resetStringInfo(&ddlString);
+	}
 }

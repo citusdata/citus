@@ -16,6 +16,7 @@
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
+extern void ReplicateGrantStmt(Node *parsetree);
 
 
 #endif /* MULTI_UTILITY_H */
