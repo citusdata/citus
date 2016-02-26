@@ -81,6 +81,7 @@ for (my $workerIndex = 1; $workerIndex <= $workerCount; $workerIndex++) {
 }
 
 my $host = "localhost";
+my $user = "postgres";
 my @pgOptions = ();
 
 # Postgres options set for the tests
@@ -150,7 +151,7 @@ for my $port (@workerPorts)
 }
 
 # Create new data directories, copy workers for speed
-system("$bindir/initdb", ("--nosync", "tmp_check/master/data")) == 0
+system("$bindir/initdb", ("--nosync", "-U", $user, "tmp_check/master/data")) == 0
     or die "Could not create master data directory";
 
 for my $port (@workerPorts)
@@ -225,14 +226,14 @@ for my $port (@workerPorts)
 for my $port (@workerPorts)
 {
     system("$bindir/psql",
-           ('-h', $host, '-p', $port, "postgres",
+           ('-h', $host, '-p', $port, '-U', $user, "postgres",
             '-c', "CREATE DATABASE regression;")) == 0
         or die "Could not create regression database on worker";
 
     for my $extension (@extensions)
     {
         system("$bindir/psql",
-               ('-h', $host, '-p', $port, "regression",
+               ('-h', $host, '-p', $port, '-U', $user, "regression",
                 '-c', "CREATE EXTENSION IF NOT EXISTS \"$extension\";")) == 0
             or die "Could not create extension on worker";
     }
@@ -240,7 +241,7 @@ for my $port (@workerPorts)
     foreach my $dataType (keys %dataTypes)
     {
         system("$bindir/psql",
-                ('-h', $host, '-p', $port, "regression",
+                ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE TYPE $dataType AS $dataTypes{$dataType};")) == 0
             or die "Could not create TYPE $dataType on worker";
     }
@@ -248,15 +249,15 @@ for my $port (@workerPorts)
     foreach my $function (keys %functions)
     {
         system("$bindir/psql",
-                ('-h', $host, '-p', $port, "regression",
+                ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
             or die "Could not create FUNCTION $function on worker";
     }
-    
+
     foreach my $fdw (keys %fdws)
     {
         system("$bindir/psql",
-                ('-h', $host, '-p', $port, "regression",
+                ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};")) == 0
             or die "Could not create foreign data wrapper $fdw on worker";
     }
@@ -264,7 +265,7 @@ for my $port (@workerPorts)
     foreach my $fdwServer (keys %fdwServers)
     {
         system("$bindir/psql",
-                ('-h', $host, '-p', $port, "regression",
+                ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE SERVER $fdwServer FOREIGN DATA WRAPPER $fdwServers{$fdwServer};")) == 0
             or die "Could not create server $fdwServer on worker";
     }
@@ -273,7 +274,8 @@ for my $port (@workerPorts)
 # Prepare pg_regress arguments
 my @arguments = (
     "--host", $host,
-    '--port', $masterPort
+    '--port', $masterPort,
+    '--user', $user
 );
 
 if ($majorversion eq '9.5')
