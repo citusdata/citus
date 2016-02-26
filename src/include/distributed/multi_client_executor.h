@@ -19,7 +19,7 @@
 #define CLIENT_CONNECT_TIMEOUT 5  /* connection timeout in seconds */
 #define MAX_CONNECTION_COUNT 2048 /* simultaneous client connection count */
 #define STRING_BUFFER_SIZE 1024   /* buffer size for character arrays */
-#define CONN_INFO_TEMPLATE "host=%s port=%u dbname=%s connect_timeout=%u"
+#define CONN_INFO_TEMPLATE "host=%s port=%u dbname=%s user=%s connect_timeout=%u"
 
 
 /* Enumeration to track one client connection's status */
@@ -74,7 +74,7 @@ typedef enum
 
 /* Function declarations for executing client-side (libpq) logic. */
 extern int32 MultiClientConnect(const char *nodeName, uint32 nodePort,
-								const char *nodeDatabase);
+								const char *nodeDatabase, const char *nodeUser);
 extern int32 MultiClientConnectStart(const char *nodeName, uint32 nodePort,
 									 const char *nodeDatabase);
 extern ConnectStatus MultiClientConnectPoll(int32 connectionId);

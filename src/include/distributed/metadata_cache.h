@@ -69,4 +69,6 @@ extern Oid DistShardPlacementShardidIndexId(void);
 /* function oids */
 extern Oid CitusExtraDataContainerFuncId(void);
 
+/* user related functions */
+extern char * CurrentUserName(void);
 #endif /* METADATA_CACHE_H */

@@ -22,6 +22,7 @@
 #include "access/xact.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
@@ -288,6 +289,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 	WorkerTask *workerTask = NULL;
 	uint32 assignmentTime = 0;
 	char *databaseName = get_database_name(MyDatabaseId);
+	char *userName = CurrentUserName();
 
 	/* increase task priority for cleanup tasks */
 	assignmentTime = (uint32) time(NULL);
@@ -305,6 +307,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 	workerTask->connectionId = INVALID_CONNECTION_ID;
 	workerTask->failureCount = 0;
 	strncpy(workerTask->databaseName, databaseName, NAMEDATALEN);
+	strncpy(workerTask->userName, userName, NAMEDATALEN);
 }
 
 

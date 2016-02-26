@@ -82,6 +82,7 @@ typedef struct WorkerTask
 	char taskCallString[TASK_CALL_STRING_SIZE]; /* query or function call string */
 	TaskStatus taskStatus;  /* task's current execution status */
 	char databaseName[NAMEDATALEN];   /* name to use for local backend connection */
+	char userName[NAMEDATALEN]; /* user to use for local backend connection */
 	int32 connectionId;     /* connection id to local backend */
 	uint32 failureCount;    /* number of task failures */
 } WorkerTask;

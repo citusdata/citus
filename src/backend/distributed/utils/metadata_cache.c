@@ -9,6 +9,8 @@
 
 #include "postgres.h"
 
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
@@ -646,6 +648,20 @@ CitusExtraDataContainerFuncId(void)
 	}
 
 	return extraDataContainerFuncId;
+}
+
+
+/* return the  username of the currently active role */
+char *
+CurrentUserName(void)
+{
+	Oid userId = GetUserId();
+
+#if (PG_VERSION_NUM < 90500)
+	return GetUserNameFromId(userId);
+#else
+	return GetUserNameFromId(userId, false);
+#endif
 }
 
 

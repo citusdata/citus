@@ -254,7 +254,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 	nodeDatabase = get_database_name(MyDatabaseId);
 
 	/* connect to remote node */
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase);
+	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, NULL);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		ReceiveResourceCleanup(connectionId, filename, fileDescriptor);
@@ -870,7 +870,6 @@ ForeignFilePath(const char *nodeName, uint32 nodePort, StringInfo tableName)
 List *
 ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, StringInfo queryString)
 {
-	char *nodeDatabase = get_database_name(MyDatabaseId);
 	int32 connectionId = -1;
 	bool querySent = false;
 	bool queryReady = false;
@@ -881,7 +880,7 @@ ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, StringInfo queryString
 	int columnCount = 0;
 	List *resultList = NIL;
 
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase);
+	connectionId = MultiClientConnect(nodeName, nodePort, NULL, NULL);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		return NIL;

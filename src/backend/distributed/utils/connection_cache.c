@@ -20,6 +20,7 @@
 
 #include "commands/dbcommands.h"
 #include "distributed/connection_cache.h"
+#include "distributed/metadata_cache.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
@@ -61,6 +62,7 @@ GetOrEstablishConnection(char *nodeName, int32 nodePort)
 	NodeConnectionEntry *nodeConnectionEntry = NULL;
 	bool entryFound = false;
 	bool needNewConnection = true;
+	char *userName = CurrentUserName();
 
 	/* check input */
 	if (strnlen(nodeName, MAX_NODE_LENGTH + 1) > MAX_NODE_LENGTH)
@@ -79,6 +81,7 @@ GetOrEstablishConnection(char *nodeName, int32 nodePort)
 	memset(&nodeConnectionKey, 0, sizeof(nodeConnectionKey));
 	strncpy(nodeConnectionKey.nodeName, nodeName, MAX_NODE_LENGTH);
 	nodeConnectionKey.nodePort = nodePort;
+	strncpy(nodeConnectionKey.nodeUser, userName, NAMEDATALEN);
 
 	nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
 									  HASH_FIND, &entryFound);
@@ -97,7 +100,7 @@ GetOrEstablishConnection(char *nodeName, int32 nodePort)
 
 	if (needNewConnection)
 	{
-		connection = ConnectToNode(nodeName, nodePort);
+		connection = ConnectToNode(nodeName, nodePort, nodeConnectionKey.nodeUser);
 		if (connection != NULL)
 		{
 			nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
@@ -123,6 +126,7 @@ PurgeConnection(PGconn *connection)
 	bool entryFound = false;
 	char *nodeNameString = NULL;
 	char *nodePortString = NULL;
+	char *nodeUserString = NULL;
 
 	nodeNameString = ConnectionGetOptionValue(connection, "host");
 	if (nodeNameString == NULL)
@@ -138,12 +142,21 @@ PurgeConnection(PGconn *connection)
 						errmsg("connection is missing port option")));
 	}
 
+	nodeUserString = ConnectionGetOptionValue(connection, "user");
+	if (nodeUserString == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("connection is missing user option")));
+	}
+
 	memset(&nodeConnectionKey, 0, sizeof(nodeConnectionKey));
 	strncpy(nodeConnectionKey.nodeName, nodeNameString, MAX_NODE_LENGTH);
 	nodeConnectionKey.nodePort = pg_atoi(nodePortString, sizeof(int32), 0);
+	strncpy(nodeConnectionKey.nodeUser, nodeUserString, NAMEDATALEN);
 
 	pfree(nodeNameString);
 	pfree(nodePortString);
+	pfree(nodeUserString);
 
 	nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
 									  HASH_REMOVE, &entryFound);
@@ -253,14 +266,14 @@ CreateNodeConnectionHash(void)
 /*
  * ConnectToNode opens a connection to a remote PostgreSQL server. The function
  * configures the connection's fallback application name to 'citus' and sets
- * the remote encoding to match the local one. This function requires that the
- * port be specified as a string for easier use with libpq functions.
+ * the remote encoding to match the local one.  All parameters are required to
+ * be non NULL.
  *
  * We attempt to connect up to MAX_CONNECT_ATTEMPT times. After that we give up
  * and return NULL.
  */
 PGconn *
-ConnectToNode(char *nodeName, int32 nodePort)
+ConnectToNode(char *nodeName, int32 nodePort, char *nodeUser)
 {
 	PGconn *connection = NULL;
 	const char *clientEncoding = GetDatabaseEncodingName();
@@ -269,12 +282,12 @@ ConnectToNode(char *nodeName, int32 nodePort)
 
 	const char *keywordArray[] = {
 		"host", "port", "fallback_application_name",
-		"client_encoding", "connect_timeout", "dbname", NULL
+		"client_encoding", "connect_timeout", "dbname", "user", NULL
 	};
 	char nodePortString[12];
 	const char *valueArray[] = {
 		nodeName, nodePortString, "citus", clientEncoding,
-		CLIENT_CONNECT_TIMEOUT_SECONDS, dbname, NULL
+		CLIENT_CONNECT_TIMEOUT_SECONDS, dbname, nodeUser, NULL
 	};
 
 	sprintf(nodePortString, "%d", nodePort);
