@@ -522,6 +522,31 @@ JobDirectoryElement(const char *filename)
 }
 
 
+/*
+ * CacheDirectoryElement takes in a filename, and checks if this name lives in
+ * the directory path that is used for job, task, table etc. files.
+ */
+bool
+CacheDirectoryElement(const char *filename)
+{
+	bool directoryElement = false;
+	char *directoryPathFound = NULL;
+
+	StringInfo directoryPath = makeStringInfo();
+	appendStringInfo(directoryPath, "base/%s/", PG_JOB_CACHE_DIR);
+
+	directoryPathFound = strstr(filename, directoryPath->data);
+	if (directoryPathFound != NULL)
+	{
+		directoryElement = true;
+	}
+
+	pfree(directoryPath);
+
+	return directoryElement;
+}
+
+
 /* Checks if a directory exists for the given directory name. */
 bool
 DirectoryExists(StringInfo directoryName)

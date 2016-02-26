@@ -1650,11 +1650,19 @@ UniqueJobId(void)
 	text *sequenceName = cstring_to_text(JOBID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	Datum jobIdDatum = 0;
+	int64 jobId = 0;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
 	/* generate new and unique jobId from sequence */
-	Datum jobIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-	int64 jobId = DatumGetInt64(jobIdDatum);
+	jobIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	jobId = DatumGetInt64(jobIdDatum);
 
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	return jobId;
 }
 

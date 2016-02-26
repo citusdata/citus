@@ -10,6 +10,7 @@
 #include "miscadmin.h"
 
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
@@ -23,6 +24,7 @@
 #include "distributed/transmit.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "executor/executor.h"
 #include "parser/parser.h"
 #include "parser/parse_utilcmd.h"
 #include "storage/lmgr.h"
@@ -51,7 +53,8 @@ static bool IsTransmitStmt(Node *parsetree);
 static void VerifyTransmitStmt(CopyStmt *copyStatement);
 
 /* Local functions forward declarations for processing distributed table commands */
-static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag);
+static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
+							  bool *commandMustRunAsOwner);
 static Node * ProcessIndexStmt(IndexStmt *createIndexStatement,
 							   const char *createIndexCommand);
 static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
@@ -73,6 +76,8 @@ static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandStri
 static bool AllFinalizedPlacementsAccessible(Oid relationId);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
+static void CheckCopyPermissions(CopyStmt *copyStatement);
+static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 
 
 /*
@@ -95,6 +100,10 @@ multi_ProcessUtility(Node *parsetree,
 					 DestReceiver *dest,
 					 char *completionTag)
 {
+	bool commandMustRunAsOwner = false;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
 	 * it's no overlaid onto COPY, but with FORMAT = 'transmit' instead of the
@@ -122,7 +131,8 @@ multi_ProcessUtility(Node *parsetree,
 
 	if (IsA(parsetree, CopyStmt))
 	{
-		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag);
+		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
+									&commandMustRunAsOwner);
 
 		if (parsetree == NULL)
 		{
@@ -191,15 +201,26 @@ multi_ProcessUtility(Node *parsetree,
 	}
 	else if (IsA(parsetree, CreateRoleStmt) && CitusHasBeenLoaded())
 	{
-		ereport(NOTICE, (errmsg("Citus does not support CREATE ROLE/USER "
-								"for distributed databases"),
-						 errdetail("Multiple roles are currently supported "
-								   "only for local tables")));
+		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"
+								" nodes"),
+						 errhint("Connect to worker nodes directly to manually create all"
+								 " necessary users and roles.")));
+	}
+
+	if (commandMustRunAsOwner)
+	{
+		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 	}
 
 	/* now drop into standard process utility */
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+
+	if (commandMustRunAsOwner)
+	{
+		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	}
 }
 
 
@@ -270,27 +291,17 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
  * COPYing from distributed tables and preventing unsupported actions. The
  * function returns a modified COPY statement to be executed, or NULL if no
  * further processing is needed.
+ *
+ * commandMustRunAsOwner is an output parameter used to communicate to the caller whether
+ * the copy statement should be executed using elevated privileges. If
+ * ProcessCopyStmt that is required, a call to CheckCopyPermissions will take
+ * care of verifying the current user's permissions before ProcessCopyStmt
+ * returns.
  */
 static Node *
-ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag)
+ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustRunAsOwner)
 {
-	/*
-	 * We first check if we have a "COPY (query) TO filename". If we do, copy doesn't
-	 * accept relative file paths. However, SQL tasks that get assigned to worker nodes
-	 * have relative paths. We therefore convert relative paths to absolute ones here.
-	 */
-	if (copyStatement->relation == NULL &&
-		!copyStatement->is_from &&
-		!copyStatement->is_program &&
-		copyStatement->filename != NULL)
-	{
-		const char *filename = copyStatement->filename;
-
-		if (!is_absolute_path(filename) && JobDirectoryElement(filename))
-		{
-			copyStatement->filename = make_absolute_path(filename);
-		}
-	}
+	*commandMustRunAsOwner = false; /* make sure variable is initialized */
 
 	/*
 	 * We check whether a distributed relation is affected. For that, we need to open the
@@ -301,8 +312,10 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag)
 	{
 		Relation copiedRelation = NULL;
 		bool isDistributedRelation = false;
+		bool isFrom = copyStatement->is_from;
 
-		copiedRelation = heap_openrv(copyStatement->relation, AccessShareLock);
+		copiedRelation = heap_openrv(copyStatement->relation,
+									 isFrom ? RowExclusiveLock : AccessShareLock);
 
 		isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
 
@@ -348,6 +361,50 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag)
 			}
 		}
 	}
+
+
+	if (copyStatement->filename != NULL && !copyStatement->is_program)
+	{
+		const char *filename = copyStatement->filename;
+
+		if (CacheDirectoryElement(filename))
+		{
+			/*
+			 * Only superusers are allowed to copy from a file, so we have to
+			 * become superuser to execute copies to/from files used by citus'
+			 * query execution.
+			 *
+			 * XXX: This is a decidedly suboptimal solution, as that means
+			 * that triggers, input functions, etc. run with elevated
+			 * privileges.  But this is better than not being able to run
+			 * queries as normal user.
+			 */
+			*commandMustRunAsOwner = true;
+
+			/*
+			 * Have to manually check permissions here as the COPY is will be
+			 * run as a superuser.
+			 */
+			if (copyStatement->relation != NULL)
+			{
+				CheckCopyPermissions(copyStatement);
+			}
+
+			/*
+			 * Check if we have a "COPY (query) TO filename". If we do, copy
+			 * doesn't accept relative file paths. However, SQL tasks that get
+			 * assigned to worker nodes have relative paths. We therefore
+			 * convert relative paths to absolute ones here.
+			 */
+			if (copyStatement->relation == NULL &&
+				!copyStatement->is_from &&
+				!is_absolute_path(filename))
+			{
+				copyStatement->filename = make_absolute_path(filename);
+			}
+		}
+	}
+
 
 	return (Node *) copyStatement;
 }
@@ -1086,5 +1143,151 @@ RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, voi
 		if (OidIsValid(state->heapOid))
 			LockRelationOid(state->heapOid, heap_lockmode);
 	}
+	/* *INDENT-ON* */
+}
+
+
+/*
+ * Check whether the current user has the permission to execute a COPY
+ * statement, raise ERROR if not. In some cases we have to do this separately
+ * from postgres' copy.c, because we have to execute the copy with elevated
+ * privileges.
+ *
+ * Copied from postgres, where it's part of DoCopy().
+ */
+static void
+CheckCopyPermissions(CopyStmt *copyStatement)
+{
+	/* *INDENT-OFF* */
+	bool		is_from = copyStatement->is_from;
+	Relation	rel;
+	Oid			relid;
+	List	   *range_table = NIL;
+	TupleDesc	tupDesc;
+	AclMode		required_access = (is_from ? ACL_INSERT : ACL_SELECT);
+	List	   *attnums;
+	ListCell   *cur;
+	RangeTblEntry *rte;
+
+	rel = heap_openrv(copyStatement->relation,
+								 is_from ? RowExclusiveLock : AccessShareLock);
+
+	relid = RelationGetRelid(rel);
+
+	rte = makeNode(RangeTblEntry);
+	rte->rtekind = RTE_RELATION;
+	rte->relid = relid;
+	rte->relkind = rel->rd_rel->relkind;
+	rte->requiredPerms = required_access;
+	range_table = list_make1(rte);
+
+	tupDesc = RelationGetDescr(rel);
+
+	attnums = CopyGetAttnums(tupDesc, rel, copyStatement->attlist);
+	foreach(cur, attnums)
+	{
+		int			attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
+
+		if (is_from)
+		{
+#if (PG_VERSION_NUM >= 90500)
+			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
+#else
+			rte->modifiedCols = bms_add_member(rte->modifiedCols, attno);
+#endif
+		}
+		else
+		{
+			rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+		}
+	}
+
+	ExecCheckRTPerms(range_table, true);
+
+	/* TODO: Perform RLS checks once supported */
+
+	heap_close(rel, NoLock);
+	/* *INDENT-ON* */
+}
+
+
+/* Helper for CheckCopyPermissions(), copied from postgres */
+static List *
+CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
+{
+	/* *INDENT-OFF* */
+	List	   *attnums = NIL;
+
+	if (attnamelist == NIL)
+	{
+		/* Generate default column list */
+		Form_pg_attribute *attr = tupDesc->attrs;
+		int			attr_count = tupDesc->natts;
+		int			i;
+
+		for (i = 0; i < attr_count; i++)
+		{
+			if (attr[i]->attisdropped)
+			{
+				continue;
+			}
+			attnums = lappend_int(attnums, i + 1);
+		}
+	}
+	else
+	{
+		/* Validate the user-supplied list and extract attnums */
+		ListCell   *l;
+
+		foreach(l, attnamelist)
+		{
+			char	   *name = strVal(lfirst(l));
+			int			attnum;
+			int			i;
+
+			/* Lookup column name */
+			attnum = InvalidAttrNumber;
+			for (i = 0; i < tupDesc->natts; i++)
+			{
+				if (tupDesc->attrs[i]->attisdropped)
+				{
+					continue;
+				}
+				if (namestrcmp(&(tupDesc->attrs[i]->attname), name) == 0)
+				{
+					attnum = tupDesc->attrs[i]->attnum;
+					break;
+				}
+			}
+			if (attnum == InvalidAttrNumber)
+			{
+				if (rel != NULL)
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_COLUMN),
+					errmsg("column \"%s\" of relation \"%s\" does not exist",
+						   name, RelationGetRelationName(rel))));
+				}
+				else
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_UNDEFINED_COLUMN),
+							 errmsg("column \"%s\" does not exist",
+									name)));
+				}
+			}
+			/* Check for duplicates */
+			if (list_member_int(attnums, attnum))
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_DUPLICATE_COLUMN),
+						 errmsg("column \"%s\" specified more than once",
+								name)));
+			}
+			attnums = lappend_int(attnums, attnum);
+		}
+	}
+
+	return attnums;
 	/* *INDENT-ON* */
 }
