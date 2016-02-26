@@ -16,7 +16,9 @@
 #include "access/htup_details.h"
 #include "access/nbtree.h"
 #include "access/xact.h"
+#include "access/sysattr.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
@@ -648,6 +650,72 @@ CitusExtraDataContainerFuncId(void)
 	}
 
 	return extraDataContainerFuncId;
+}
+
+
+/*
+ * CitusExtensionOwner() returns the owner of the 'citus' extension. That user
+ * is, amongst others, used to perform actions a normal user might not be
+ * allowed to perform.
+ */
+extern Oid
+CitusExtensionOwner(void)
+{
+	Relation relation = NULL;
+	SysScanDesc scandesc;
+	ScanKeyData entry[1];
+	HeapTuple extensionTuple = NULL;
+	Form_pg_extension extensionForm = NULL;
+	static Oid extensionOwner = InvalidOid;
+
+	if (extensionOwner != InvalidOid)
+	{
+		return extensionOwner;
+	}
+
+	relation = heap_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_extname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum("citus"));
+
+	scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
+								  NULL, 1, entry);
+
+	extensionTuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(extensionTuple))
+	{
+		extensionForm = (Form_pg_extension) GETSTRUCT(extensionTuple);
+
+		/*
+		 * For some operations Citus requires superuser permissions; we use
+		 * the extension owner for that. The extension owner is guaranteed to
+		 * be a superuser (otherwise C functions can't be created), but it'd
+		 * be possible to change the owner. So check that this still a
+		 * superuser.
+		 */
+		if (!superuser_arg(extensionForm->extowner))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("citus extension needs to be owned by superuser")));
+		}
+		extensionOwner = extensionForm->extowner;
+		Assert(OidIsValid(extensionOwner));
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("citus extension not loaded")));
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(relation, AccessShareLock);
+
+	return extensionOwner;
 }
 
 
