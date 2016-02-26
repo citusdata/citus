@@ -494,7 +494,7 @@ ExecuteRemoteCommand(const char *nodeName, uint32 nodePort, StringInfo queryStri
 	bool queryReady = false;
 	bool queryDone = false;
 
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase);
+	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, NULL);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		return false;

@@ -15,6 +15,10 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "libpq-fe.h"
+#include "miscadmin.h"
+
+#include "commands/dbcommands.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 
 #include <errno.h>
@@ -76,24 +80,57 @@ AllocateConnectionId(void)
  * MultiClientConnect synchronously tries to establish a connection. If it
  * succeeds, it returns the connection id. Otherwise, it reports connection
  * error and returns INVALID_CONNECTION_ID.
+ *
+ * nodeDatabase and userName can be NULL, in which case values from the
+ * current session are used.
  */
 int32
-MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDatabase)
+MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDatabase,
+				   const char *userName)
 {
 	PGconn *connection = NULL;
 	char connInfoString[STRING_BUFFER_SIZE];
 	ConnStatusType connStatusType = CONNECTION_OK;
-
 	int32 connectionId = AllocateConnectionId();
+	char *effectiveDatabaseName = NULL;
+	char *effectiveUserName = NULL;
+
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
 		return connectionId;
 	}
 
+	if (nodeDatabase == NULL)
+	{
+		effectiveDatabaseName = get_database_name(MyDatabaseId);
+	}
+	else
+	{
+		effectiveDatabaseName = pstrdup(nodeDatabase);
+	}
+
+	if (userName == NULL)
+	{
+		effectiveUserName = CurrentUserName();
+	}
+	else
+	{
+		effectiveUserName = pstrdup(userName);
+	}
+
+	/*
+	 * FIXME: This code is bad on several levels. It completely forgoes any
+	 * escaping, it misses setting a number of parameters, it works with a
+	 * limited string size without erroring when it's too long. We shouldn't
+	 * even build a query string this way, there's PQconnectdbParams()!
+	 */
+
 	/* transcribe connection paremeters to string */
 	snprintf(connInfoString, STRING_BUFFER_SIZE, CONN_INFO_TEMPLATE,
-			 nodeName, nodePort, nodeDatabase, CLIENT_CONNECT_TIMEOUT);
+			 nodeName, nodePort,
+			 effectiveDatabaseName, effectiveUserName,
+			 CLIENT_CONNECT_TIMEOUT);
 
 	/* establish synchronous connection to worker node */
 	connection = PQconnectdb(connInfoString);
@@ -111,6 +148,9 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 		connectionId = INVALID_CONNECTION_ID;
 	}
 
+	pfree(effectiveDatabaseName);
+	pfree(effectiveUserName);
+
 	return connectionId;
 }
 
@@ -126,6 +166,7 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	PGconn *connection = NULL;
 	char connInfoString[STRING_BUFFER_SIZE];
 	ConnStatusType connStatusType = CONNECTION_BAD;
+	char *userName = CurrentUserName();
 
 	int32 connectionId = AllocateConnectionId();
 	if (connectionId == INVALID_CONNECTION_ID)
@@ -136,7 +177,7 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 
 	/* transcribe connection paremeters to string */
 	snprintf(connInfoString, STRING_BUFFER_SIZE, CONN_INFO_TEMPLATE,
-			 nodeName, nodePort, nodeDatabase, CLIENT_CONNECT_TIMEOUT);
+			 nodeName, nodePort, nodeDatabase, userName, CLIENT_CONNECT_TIMEOUT);
 
 	/* prepare asynchronous request for worker node connection */
 	connection = PQconnectStart(connInfoString);

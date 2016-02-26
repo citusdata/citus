@@ -15,6 +15,8 @@
 
 #include <math.h>
 
+#include "miscadmin.h"
+
 #include "access/genam.h"
 #include "access/hash.h"
 #include "access/heapam.h"

@@ -793,11 +793,12 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeName = placement->nodeName;
 		int nodePort = placement->nodePort;
+		char *nodeUser = CurrentUserName();
 		TransactionConnection *transactionConnection = NULL;
 		StringInfo copyCommand = NULL;
 		PGresult *result = NULL;
 
-		PGconn *connection = ConnectToNode(nodeName, nodePort);
+		PGconn *connection = ConnectToNode(nodeName, nodePort, nodeUser);
 
 		/* release failed placement list and copy command at the end of this function */
 		oldContext = MemoryContextSwitchTo(localContext);

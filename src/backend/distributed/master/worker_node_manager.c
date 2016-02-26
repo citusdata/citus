@@ -793,9 +793,8 @@ static bool
 WorkerNodeResponsive(const char *workerName, uint32 workerPort)
 {
 	bool workerNodeResponsive = false;
-	const char *databaseName = get_database_name(MyDatabaseId);
 
-	int connectionId = MultiClientConnect(workerName, workerPort, databaseName);
+	int connectionId = MultiClientConnect(workerName, workerPort, NULL, NULL);
 	if (connectionId != INVALID_CONNECTION_ID)
 	{
 		MultiClientDisconnect(connectionId);

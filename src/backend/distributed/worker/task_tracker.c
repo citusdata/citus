@@ -88,7 +88,7 @@ static void ManageWorkerTasksHash(HTAB *WorkerTasksHash);
 static void ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash);
 static void RemoveWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash);
 static void CreateJobDirectoryIfNotExists(uint64 jobId);
-static int32 ConnectToLocalBackend(const char *databaseName);
+static int32 ConnectToLocalBackend(const char *databaseName, const char *userName);
 
 
 /* Organize, at startup, that the task tracker is started */
@@ -904,7 +904,8 @@ ManageWorkerTask(WorkerTask *workerTask, HTAB *WorkerTasksHash)
 			CreateJobDirectoryIfNotExists(workerTask->jobId);
 
 			/* the task is ready to run; connect to local backend */
-			workerTask->connectionId = ConnectToLocalBackend(workerTask->databaseName);
+			workerTask->connectionId = ConnectToLocalBackend(workerTask->databaseName,
+															 workerTask->userName);
 
 			if (workerTask->connectionId != INVALID_CONNECTION_ID)
 			{
@@ -1082,7 +1083,7 @@ CreateJobDirectoryIfNotExists(uint64 jobId)
 
 /* Wrapper function to inititate connection to local backend. */
 static int32
-ConnectToLocalBackend(const char *databaseName)
+ConnectToLocalBackend(const char *databaseName, const char *userName)
 {
 	const char *nodeName = LOCAL_HOST_NAME;
 	const uint32 nodePort = PostPortNumber;
@@ -1091,7 +1092,7 @@ ConnectToLocalBackend(const char *databaseName)
 	 * Our client library currently only handles TCP sockets. We therefore do
 	 * not use Unix domain sockets here.
 	 */
-	int32 connectionId = MultiClientConnect(nodeName, nodePort, databaseName);
+	int32 connectionId = MultiClientConnect(nodeName, nodePort, databaseName, userName);
 
 	return connectionId;
 }
