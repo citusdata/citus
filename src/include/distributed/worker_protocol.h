@@ -106,6 +106,7 @@ extern bool JobSchemaExists(StringInfo schemaName);
 extern StringInfo JobDirectoryName(uint64 jobId);
 extern StringInfo TaskDirectoryName(uint64 jobId, uint32 taskId);
 extern StringInfo PartitionFilename(StringInfo directoryName, uint32 partitionId);
+extern bool CacheDirectoryElement(const char *filename);
 extern bool JobDirectoryElement(const char *filename);
 extern bool DirectoryExists(StringInfo directoryName);
 extern void CreateDirectory(StringInfo directoryName);

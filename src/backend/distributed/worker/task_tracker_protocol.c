@@ -259,6 +259,10 @@ CreateJobSchema(StringInfo schemaName)
 	const char *queryString = NULL;
 	bool oldAllowSystemTableMods = false;
 
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+
+	/* build a CREATE SCHEMA statement */
 	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
 	createSchemaStmt->schemaname = schemaName->data;
 #if (PG_VERSION_NUM >= 90500)
@@ -272,8 +276,16 @@ CreateJobSchema(StringInfo schemaName)
 	oldAllowSystemTableMods = allowSystemTableMods;
 	allowSystemTableMods = true;
 
+	/* ensure we're allowed to create this schema */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/* actually create schema, and make it visible */
 	CreateSchemaCommand(createSchemaStmt, queryString);
 	CommandCounterIncrement();
+
+	/* and reset environment */
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	allowSystemTableMods = oldAllowSystemTableMods;
 }
 

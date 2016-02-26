@@ -49,6 +49,8 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
 		Job *workerJob = multiPlan->workerJob;
 
+		ExecCheckRTPerms(planStatement->rtable, true);
+
 		executorType = JobExecutorType(multiPlan);
 		if (executorType == MULTI_EXECUTOR_ROUTER)
 		{

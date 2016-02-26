@@ -327,6 +327,7 @@ CREATE OR REPLACE FUNCTION citus_drop_trigger()
     RETURNS event_trigger
     LANGUAGE plpgsql
     SET search_path = pg_catalog
+    /* declared as SECURITY DEFINER in upgrade script */
     AS $cdbdt$
 DECLARE v_obj record;
 BEGIN

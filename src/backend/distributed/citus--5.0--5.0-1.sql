@@ -22,3 +22,6 @@ CREATE FUNCTION pg_catalog.master_stage_shard_placement_row(shardid int8,
     AS 'MODULE_PATHNAME', $$master_stage_shard_placement_row$$;
 COMMENT ON FUNCTION pg_catalog.master_stage_shard_placement_row(int8, int4, int8, text, int4)
     IS 'deprecated function to insert a row into pg_dist_shard_placement';
+
+
+ALTER FUNCTION pg_catalog.citus_drop_trigger() SECURITY DEFINER;
