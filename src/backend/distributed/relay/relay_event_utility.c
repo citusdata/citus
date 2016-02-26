@@ -243,6 +243,26 @@ RelayEventExtendNames(Node *parseTree, uint64 shardId)
 			break;
 		}
 
+
+		case T_GrantStmt:
+		{
+			GrantStmt *grantStmt = (GrantStmt *) parseTree;
+
+			if (grantStmt->targtype == ACL_TARGET_OBJECT &&
+				grantStmt->objtype == ACL_OBJECT_RELATION)
+			{
+				ListCell *lc;
+
+				foreach(lc, grantStmt->objects)
+				{
+					RangeVar *relation = (RangeVar *) lfirst(lc);
+					char **relationName = &(relation->relname);
+					AppendShardIdToName(relationName, shardId);
+				}
+			}
+			break;
+		}
+
 		case T_IndexStmt:
 		{
 			IndexStmt *indexStmt = (IndexStmt *) parseTree;

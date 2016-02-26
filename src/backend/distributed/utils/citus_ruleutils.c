@@ -17,6 +17,7 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_aggregate.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_opclass.h"
@@ -54,6 +55,7 @@
 
 static Oid get_extension_schema(Oid ext_oid);
 static void AppendOptionListToString(StringInfo stringData, List *options);
+static const char * convert_aclright_to_string(int aclright);
 
 /*
  * pg_get_extensiondef_string finds the foreign data wrapper that corresponds to
@@ -573,4 +575,185 @@ pg_get_indexclusterdef_string(Oid indexRelationId)
 	ReleaseSysCache(indexTuple);
 
 	return (buffer.data);
+}
+
+
+/*
+ * pg_get_table_grants returns a list of sql statements which recreate the
+ * permissions for a specific table.
+ *
+ * This function is modeled after aclexplode(), don't change too heavily.
+ */
+List *
+pg_get_table_grants(Oid relationId)
+{
+	/* *INDENT-OFF* */
+	StringInfoData buffer;
+	Relation relation = NULL;
+	char *relationName = NULL;
+	List *defs = NIL;
+	HeapTuple classTuple = NULL;
+	Datum aclDatum = 0;
+	Acl *acl = NULL;
+	bool isNull = false;
+	int offtype = 0;
+
+	relation = relation_open(relationId, AccessShareLock);
+	relationName = generate_relation_name(relationId, NIL);
+
+	initStringInfo(&buffer);
+
+	/* lookup all table level grants */
+	classTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+	if (!HeapTupleIsValid(classTuple))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_TABLE),
+				 errmsg("relation with OID %u does not exist",
+						relationId)));
+	}
+
+	aclDatum = SysCacheGetAttr(RELOID, classTuple, Anum_pg_class_relacl,
+							   &isNull);
+
+	ReleaseSysCache(classTuple);
+
+	if (!isNull)
+	{
+		int i = 0;
+		AclItem *aidat = NULL;
+
+
+		/*
+		 * First revoke all default permissions, so we can start adding the
+		 * exact permissions from the master. Note that we only do so if there
+		 * are any actual grants; an empty grant set signals default
+		 * permissions.
+		 *
+		 * Note: This doesn't work correctly if default permissions have been
+		 * changed with ALTER DEFAULT PRIVILEGES - but that's hard to fix
+		 * properly currently.
+		 */
+		appendStringInfo(&buffer, "REVOKE ALL ON %s FROM PUBLIC",
+						 relationName);
+		defs = lappend(defs, pstrdup(buffer.data));
+		resetStringInfo(&buffer);
+
+		/* iterate through the acl datastructure, emit GRANTs */
+
+		acl = DatumGetAclP(aclDatum);
+		aidat = ACL_DAT(acl);
+
+		offtype = -1;
+		i = 0;
+		while (i < ACL_NUM(acl))
+		{
+			AclItem    *aidata = NULL;
+			AclMode		priv_bit = 0;
+
+			offtype++;
+
+			if (offtype == N_ACL_RIGHTS)
+			{
+				offtype = 0;
+				i++;
+				if (i >= ACL_NUM(acl)) /* done */
+				{
+					break;
+				}
+			}
+
+			aidata = &aidat[i];
+			priv_bit = 1 << offtype;
+
+			if (ACLITEM_GET_PRIVS(*aidata) & priv_bit)
+			{
+				const char *roleName = NULL;
+				const char *withGrant = "";
+
+				if (aidata->ai_grantee != 0)
+				{
+					HeapTuple htup;
+
+					htup = SearchSysCache1(AUTHOID, ObjectIdGetDatum(aidata->ai_grantee));
+					if (HeapTupleIsValid(htup))
+					{
+						Form_pg_authid authForm = ((Form_pg_authid) GETSTRUCT(htup));
+
+						roleName = quote_identifier(NameStr(authForm->rolname));
+
+						ReleaseSysCache(htup);
+					}
+					else
+					{
+						elog(ERROR, "cache lookup failed for role %u", aidata->ai_grantee);
+					}
+				}
+				else
+				{
+					roleName = "PUBLIC";
+				}
+
+				if ((ACLITEM_GET_GOPTIONS(*aidata) & priv_bit) != 0)
+				{
+					withGrant = " WITH GRANT OPTION";
+				}
+
+				appendStringInfo(&buffer, "GRANT %s ON %s TO %s%s",
+								 convert_aclright_to_string(priv_bit),
+								 relationName,
+								 roleName,
+								 withGrant);
+
+				defs = lappend(defs, pstrdup(buffer.data));
+
+				resetStringInfo(&buffer);
+			}
+		}
+	}
+
+	resetStringInfo(&buffer);
+
+	relation_close(relation, NoLock);
+	return defs;
+	/* *INDENT-ON* */
+}
+
+
+/* copy of postgresql's function, which is static as well */
+static const char *
+convert_aclright_to_string(int aclright)
+{
+	/* *INDENT-OFF* */
+	switch (aclright)
+	{
+		case ACL_INSERT:
+			return "INSERT";
+		case ACL_SELECT:
+			return "SELECT";
+		case ACL_UPDATE:
+			return "UPDATE";
+		case ACL_DELETE:
+			return "DELETE";
+		case ACL_TRUNCATE:
+			return "TRUNCATE";
+		case ACL_REFERENCES:
+			return "REFERENCES";
+		case ACL_TRIGGER:
+			return "TRIGGER";
+		case ACL_EXECUTE:
+			return "EXECUTE";
+		case ACL_USAGE:
+			return "USAGE";
+		case ACL_CREATE:
+			return "CREATE";
+		case ACL_CREATE_TEMP:
+			return "TEMPORARY";
+		case ACL_CONNECT:
+			return "CONNECT";
+		default:
+			elog(ERROR, "unrecognized aclright: %d", aclright);
+			return NULL;
+	}
+	/* *INDENT-ON* */
 }
