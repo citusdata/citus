@@ -135,7 +135,8 @@ WHERE shardid = :new_shard_id;
 COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
 
 -- Check whether data went into the right shard (maybe)
-SELECT count(*) FROM customer_copy_range WHERE c_custkey = 1;
+SELECT min(c_custkey), max(c_custkey), avg(c_custkey), count(*)
+FROM customer_copy_range WHERE c_custkey <= 500;
 
 -- Check whether data was copied
 SELECT count(*) FROM customer_copy_range;
