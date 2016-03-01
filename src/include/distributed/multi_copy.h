@@ -21,7 +21,7 @@ extern int CopyTransactionManager;
 
 
 /* function declarations for copying into a distributed table */
-extern void CitusCopyFrom(CopyStmt *copyStatement, char* completionTag);
+extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 
 
 #endif /* MULTI_COPY_H */

@@ -97,7 +97,7 @@ AbortTransactions(List *connectionList)
 				ereport(WARNING, (errmsg("Failed to roll back prepared transaction '%s'",
 										 transactionName->data),
 								  errhint("Run ROLLBACK TRANSACTION '%s' on %s:%s",
-										 transactionName->data, nodeName, nodePort)));
+										  transactionName->data, nodeName, nodePort)));
 			}
 
 			PQclear(result);
@@ -150,7 +150,7 @@ CommitTransactions(List *connectionList)
 				ereport(WARNING, (errmsg("Failed to commit prepared transaction '%s'",
 										 transactionName->data),
 								  errhint("Run COMMIT TRANSACTION '%s' on %s:%s",
-										 transactionName->data, nodeName, nodePort)));
+										  transactionName->data, nodeName, nodePort)));
 			}
 		}
 		else
@@ -183,7 +183,7 @@ BuildTransactionName(int connectionId)
 	StringInfo commandString = makeStringInfo();
 
 	appendStringInfo(commandString, "citus_%d_%u_%d", MyProcPid,
-									GetCurrentTransactionId(), connectionId);
+					 GetCurrentTransactionId(), connectionId);
 
 	return commandString;
 }
