@@ -43,7 +43,7 @@ typedef struct TransactionConnection
 {
 	int64 connectionId;
 	TransactionState transactionState;
-	PGconn* connection;
+	PGconn *connection;
 } TransactionConnection;
 
 

@@ -69,7 +69,7 @@ static const struct config_enum_entry shard_placement_policy_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry transaction_manager_options[] =  {
+static const struct config_enum_entry transaction_manager_options[] = {
 	{ "1pc", TRANSACTION_MANAGER_1PC, false },
 	{ "2pc", TRANSACTION_MANAGER_2PC, false },
 	{ NULL, 0, false }
