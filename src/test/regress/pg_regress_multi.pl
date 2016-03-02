@@ -14,6 +14,7 @@
 use strict;
 use warnings;
 
+use Fcntl;
 use Getopt::Long;
 
 
@@ -124,11 +125,22 @@ for my $port (@workerPorts)
     system("rm", ('-rf', "tmp_check/worker.$port")) == 0 or die "Could not remove worker directory";
 }
 
-# Prepare a wrapper directory in which 'psql' is a symlink to 'csql'
+# Prepare directory in which 'psql' is a wrapper around 'csql', which
+# also adds some variables to csql.
 system("mkdir", ('-p', "tmp_check/tmp-bin")) == 0
 	or die "Could not create tmp-bin directory";
-system("ln", ('-s', "$bindir/csql", "tmp_check/tmp-bin/psql")) == 0
-	or die "Could not create psql to csql symlink";
+sysopen my $fh, "tmp_check/tmp-bin/psql", O_CREAT|O_TRUNC|O_RDWR, 0700
+	or die "Could not create psql wrapper";
+print $fh "#!/bin/bash\n";
+print $fh "exec $bindir/csql ";
+print $fh "--variable=master_port=$masterPort ";
+for my $workeroff (0 .. $#workerPorts)
+{
+	my $port = $workerPorts[$workeroff];
+	print $fh "--variable=worker_".($workeroff+1)."_port=$port ";
+}
+print $fh "\"\$@\"\n"; # pass on the commandline arguments
+close $fh;
 
 system("mkdir", ('-p', 'tmp_check/master/log')) == 0 or die "Could not create master directory";
 for my $port (@workerPorts)
