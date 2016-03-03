@@ -54,10 +54,13 @@ PrepareTransactions(List *connectionList)
 			transactionConnection->transactionState = TRANSACTION_STATE_CLOSED;
 
 			ReportRemoteError(connection, result);
+			PQclear(result);
 
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("Failed to prepare transaction")));
 		}
+
+		PQclear(result);
 
 		transactionConnection->transactionState = TRANSACTION_STATE_PREPARED;
 	}
