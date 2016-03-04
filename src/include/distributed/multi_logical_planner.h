@@ -35,7 +35,7 @@
  */
 typedef struct MultiNode
 {
-	CitusNodeTag type;
+	CitusNode type;
 
 	struct MultiNode *parentNode;
 

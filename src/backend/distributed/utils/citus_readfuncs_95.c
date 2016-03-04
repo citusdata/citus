@@ -144,8 +144,6 @@
 	((length) == 0 ? NULL : debackslash(token, length))
 
 
-static Datum readDatum(bool typbyval);
-
 /*
  * _readBitmapset
  */
@@ -1368,216 +1366,6 @@ _readTableSampleClause(void)
 }
 
 
-/* XXX: BEGIN Citus Nodes */
-
-static void
-_readJobInfo(Job *local_node)
-{
-	READ_TEMP_LOCALS();
-
-	READ_UINT64_FIELD(jobId);
-	READ_NODE_FIELD(jobQuery);
-	READ_NODE_FIELD(taskList);
-	READ_NODE_FIELD(dependedJobList);
-	READ_BOOL_FIELD(subqueryPushdown);
-}
-
-
-static Job *
-_readJob(void)
-{
-	READ_LOCALS_NO_FIELDS(Job);
-
-	_readJobInfo(local_node);
-
-	READ_DONE();
-}
-
-
-static MultiPlan *
-_readMultiPlan(void)
-{
-	READ_LOCALS(MultiPlan);
-
-	READ_NODE_FIELD(workerJob);
-	READ_NODE_FIELD(masterQuery);
-	READ_STRING_FIELD(masterTableName);
-
-	READ_DONE();
-}
-
-
-static ShardInterval *
-_readShardInterval(void)
-{
-	READ_LOCALS(ShardInterval);
-
-
-	READ_OID_FIELD(relationId);
-	READ_CHAR_FIELD(storageType);
-	READ_OID_FIELD(valueTypeId);
-	READ_INT_FIELD(valueTypeLen);
-	READ_BOOL_FIELD(valueByVal);
-	READ_BOOL_FIELD(minValueExists);
-	READ_BOOL_FIELD(maxValueExists);
-
-	token = citus_pg_strtok(&length); /* skip :minValue */
-	if (!local_node->minValueExists)
-		token = citus_pg_strtok(&length);		/* skip "<>" */
-	else
-		local_node->minValue = readDatum(local_node->valueByVal);
-
-	token = citus_pg_strtok(&length); /* skip :maxValue */
-	if (!local_node->minValueExists)
-		token = citus_pg_strtok(&length);		/* skip "<>" */
-	else
-		local_node->maxValue = readDatum(local_node->valueByVal);
-
-	READ_UINT64_FIELD(shardId);
-
-	READ_DONE();
-}
-
-
-static MapMergeJob *
-_readMapMergeJob(void)
-{
-	int arrayLength;
-	int i;
-
-	READ_LOCALS(MapMergeJob);
-
-	_readJobInfo(&local_node->job);
-
-	READ_NODE_FIELD(reduceQuery);
-	READ_ENUM_FIELD(partitionType, PartitionType);
-	READ_NODE_FIELD(partitionColumn);
-	READ_UINT_FIELD(partitionCount);
-	READ_INT_FIELD(sortedShardIntervalArrayLength);
-
-	arrayLength = local_node->sortedShardIntervalArrayLength;
-
-	/* now build & read sortedShardIntervalArray */
-	local_node->sortedShardIntervalArray =
-			(ShardInterval**) palloc(arrayLength * sizeof(ShardInterval *));
-
-	for (i = 0; i < arrayLength; ++i)
-	{
-		local_node->sortedShardIntervalArray[i] = _readShardInterval();
-	}
-
-	READ_NODE_FIELD(mapTaskList);
-	READ_NODE_FIELD(mergeTaskList);
-
-	READ_DONE();
-}
-
-
-static ShardPlacement *
-_readShardPlacement(void)
-{
-	READ_LOCALS(ShardPlacement);
-
-	READ_UINT64_FIELD(placementId);
-	READ_UINT64_FIELD(shardId);
-	READ_UINT64_FIELD(shardLength);
-	READ_ENUM_FIELD(shardState, RelayFileState);
-	READ_STRING_FIELD(nodeName);
-	READ_UINT_FIELD(nodePort);
-
-	READ_DONE();
-}
-
-
-static Task *
-_readTask(void)
-{
-	READ_LOCALS(Task);
-
-	READ_ENUM_FIELD(taskType, TaskType);
-	READ_UINT64_FIELD(jobId);
-	READ_UINT_FIELD(taskId);
-	READ_STRING_FIELD(queryString);
-	READ_UINT64_FIELD(anchorShardId);
-	READ_NODE_FIELD(taskPlacementList);
-	READ_NODE_FIELD(dependedTaskList);
-	READ_UINT_FIELD(partitionId);
-	READ_UINT_FIELD(upstreamTaskId);
-	READ_NODE_FIELD(shardInterval);
-	READ_BOOL_FIELD(assignmentConstrained);
-	READ_NODE_FIELD(taskExecution);
-	READ_BOOL_FIELD(upsertQuery);
-	READ_BOOL_FIELD(requiresMasterEvaluation);
-
-	READ_DONE();
-}
-
-
-/* XXX: END Citus Nodes */
-
-
-/*
- * readDatum
- *
- * Given a string representation of a constant, recreate the appropriate
- * Datum.  The string representation embeds length info, but not byValue,
- * so we must be told that.
- */
-static Datum
-readDatum(bool typbyval)
-{
-	Size		length,
-				i;
-	int			tokenLength;
-	char	   *token;
-	Datum		res;
-	char	   *s;
-
-	/*
-	 * read the actual length of the value
-	 */
-	token = citus_pg_strtok(&tokenLength);
-	length = atoui(token);
-
-	token = citus_pg_strtok(&tokenLength);	/* read the '[' */
-	if (token == NULL || token[0] != '[')
-		elog(ERROR, "expected \"[\" to start datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
-
-	if (typbyval)
-	{
-		if (length > (Size) sizeof(Datum))
-			elog(ERROR, "byval datum but length = %zu", length);
-		res = (Datum) 0;
-		s = (char *) (&res);
-		for (i = 0; i < (Size) sizeof(Datum); i++)
-		{
-			token = citus_pg_strtok(&tokenLength);
-			s[i] = (char) atoi(token);
-		}
-	}
-	else if (length <= 0)
-		res = (Datum) NULL;
-	else
-	{
-		s = (char *) palloc(length);
-		for (i = 0; i < length; i++)
-		{
-			token = citus_pg_strtok(&tokenLength);
-			s[i] = (char) atoi(token);
-		}
-		res = PointerGetDatum(s);
-	}
-
-	token = citus_pg_strtok(&tokenLength);	/* read the ']' */
-	if (token == NULL || token[0] != ']')
-		elog(ERROR, "expected \"]\" to end datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
-
-	return res;
-}
-
-
 /*
  * parseNodeString
  *
@@ -1718,17 +1506,17 @@ CitusParseNodeString(void)
 		return_value = _readDeclareCursorStmt();
 /* XXX: BEGIN Citus Nodes */
 	else if (MATCH("MULTIPLAN", 9))
-		return_value = _readMultiPlan();
+		return_value = ReadMultiPlan();
 	else if (MATCH("JOB", 3))
-		return_value = _readJob();
+		return_value = ReadJob();
 	else if (MATCH("SHARDINTERVAL", 13))
-		return_value = _readShardInterval();
+		return_value = ReadShardInterval();
 	else if (MATCH("MAPMERGEJOB", 11))
-		return_value = _readMapMergeJob();
+		return_value = ReadMapMergeJob();
 	else if (MATCH("SHARDPLACEMENT", 14))
-		return_value = _readShardPlacement();
+		return_value = ReadShardPlacement();
 	else if (MATCH("TASK", 4))
-		return_value = _readTask();
+		return_value = ReadTask();
 /* XXX: END Citus Nodes */
 	else
 	{
