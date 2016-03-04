@@ -99,7 +99,6 @@ TaskTrackerRegister(void)
 
 	/* organize and register initialization of required shared memory */
 	RequestAddinShmemSpace(TaskTrackerShmemSize());
-	RequestAddinLWLocks(1);
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = TaskTrackerShmemInit;
@@ -376,7 +375,7 @@ TrackerCleanupJobSchemas(void)
 	const uint64 jobId = RESERVED_JOB_ID;
 	uint32 taskIndex = 1;
 
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	foreach(databaseNameCell, databaseNameList)
 	{
@@ -409,7 +408,7 @@ TrackerCleanupJobSchemas(void)
 		taskIndex++;
 	}
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
 	if (databaseNameList != NIL)
 	{
@@ -457,13 +456,13 @@ TrackerRegisterShutDown(HTAB *WorkerTasksHash)
 	uint32 taskId = SHUTDOWN_MARKER_TASK_ID;
 	WorkerTask *shutdownMarkerTask = NULL;
 
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	shutdownMarkerTask = WorkerTasksHashEnter(jobId, taskId);
 	shutdownMarkerTask->taskStatus = TASK_SUCCEEDED;
 	shutdownMarkerTask->connectionId = INVALID_CONNECTION_ID;
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 }
 
 
@@ -587,8 +586,16 @@ TaskTrackerShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
-		/* allocate lwlock protecting the task tracker hash table */
-		WorkerTasksSharedState->taskHashLock = LWLockAssign();
+		/* initialize lwlock protecting the task tracker hash table */
+		LWLockTranche *tranche = &WorkerTasksSharedState->taskHashLockTranche;
+
+		WorkerTasksSharedState->taskHashTrancheId = LWLockNewTrancheId();
+		tranche->array_base = &WorkerTasksSharedState->taskHashLock;
+		tranche->array_stride = sizeof(LWLock);
+		tranche->name = "Worker Task Hash Tranche";
+		LWLockRegisterTranche(WorkerTasksSharedState->taskHashTrancheId, tranche);
+		LWLockInitialize(&WorkerTasksSharedState->taskHashLock,
+						 WorkerTasksSharedState->taskHashTrancheId);
 	}
 
 	/*  allocate hash table */
@@ -600,7 +607,7 @@ TaskTrackerShmemInit(void)
 	LWLockRelease(AddinShmemInitLock);
 
 	Assert(WorkerTasksSharedState->taskHash != NULL);
-	Assert(WorkerTasksSharedState->taskHashLock != NULL);
+	Assert(WorkerTasksSharedState->taskHashTrancheId != 0);
 
 	if (prev_shmem_startup_hook != NULL)
 	{
@@ -844,11 +851,11 @@ ManageWorkerTasksHash(HTAB *WorkerTasksHash)
 	WorkerTask *currentTask = NULL;
 
 	/* ask the scheduler if we have new tasks to schedule */
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_SHARED);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 	schedulableTaskList = SchedulableTaskList(WorkerTasksHash);
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	/* schedule new tasks if we have any */
 	if (schedulableTaskList != NIL)
@@ -878,7 +885,7 @@ ManageWorkerTasksHash(HTAB *WorkerTasksHash)
 		currentTask = (WorkerTask *) hash_seq_search(&status);
 	}
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 }
 
 
