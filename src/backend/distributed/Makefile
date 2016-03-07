@@ -7,8 +7,7 @@ MODULE_big = citus
 EXTENSION = citus
 EXTVERSION = 5.0
 DATA_built = $(EXTENSION)--$(EXTVERSION).sql
-# Install scripts in build and/or source directory, but only once if those are the same
-SCRIPTS = $(sort $(wildcard $(citus_top_builddir)/src/bin/scripts/* $(citus_top_srcdir)/src/bin/scripts/*))
+SCRIPTS = ../../bin/scripts/copy_to_distributed_table
 
 # directories with source files
 SUBDIRS = . commands executor master planner relay test utils worker
