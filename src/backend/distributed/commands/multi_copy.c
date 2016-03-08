@@ -628,7 +628,7 @@ ShardIntervalCompareFunction(Var *partitionColumn, char partitionMethod)
 static bool
 IsUniformHashDistribution(ShardInterval **shardIntervalArray, int shardCount)
 {
-	uint32 hashTokenIncrement = (uint32) (HASH_TOKEN_COUNT / shardCount);
+	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
 	int shardIndex = 0;
 
 	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
@@ -676,10 +676,10 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 		}
 		else
 		{
-			uint32 hashTokenIncrement = (uint32) (HASH_TOKEN_COUNT / shardCount);
-			int shardHashCode = ((uint32) (hashedValue - INT32_MIN) / hashTokenIncrement);
+			uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
+			int shardIndex = (uint32) (hashedValue - INT32_MIN) / hashTokenIncrement;
 
-			shardInterval = shardIntervalCache[shardHashCode];
+			shardInterval = shardIntervalCache[shardIndex];
 		}
 	}
 	else
@@ -753,7 +753,7 @@ OpenShardConnections(CopyStmt *copyStatement, ShardConnections *shardConnections
 	ListCell *failedPlacementCell = NULL;
 	List *connectionList = NIL;
 
-	finalizedPlacementList = ShardPlacementList(shardId);
+	finalizedPlacementList = FinalizedShardPlacementList(shardId);
 
 	foreach(placementCell, finalizedPlacementList)
 	{
@@ -962,7 +962,9 @@ ConnectionList(HTAB *connectionHash)
 	ShardConnections *shardConnections = NULL;
 
 	hash_seq_init(&status, connectionHash);
-	while ((shardConnections = (ShardConnections *) hash_seq_search(&status)) != NULL)
+
+	shardConnections = (ShardConnections *) hash_seq_search(&status);
+	while (shardConnections != NULL)
 	{
 		ListCell *connectionCell = NULL;
 		foreach(connectionCell, shardConnections->connectionList)
@@ -972,6 +974,8 @@ ConnectionList(HTAB *connectionHash)
 
 			connectionList = lappend(connectionList, transactionConnection);
 		}
+
+		shardConnections = (ShardConnections *) hash_seq_search(&status);
 	}
 
 	return connectionList;
