@@ -238,8 +238,6 @@ extern int CompareShardPlacements(const void *leftElement, const void *rightElem
 extern ShardInterval ** SortedShardIntervalArray(List *shardList);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
-extern int CompareShardIntervals(const void *leftElement, const void *rightElement,
-								 FmgrInfo *typeCompareFunction);
 
 /* function declarations for Task and Task list operations */
 extern bool TasksEqual(const Task *a, const Task *b);
@@ -249,7 +247,6 @@ extern bool TaskListMember(const List *taskList, const Task *task);
 extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * TaskListUnion(const List *list1, const List *list2);
 extern List * FirstReplicaAssignTaskList(List *taskList);
-extern int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */
