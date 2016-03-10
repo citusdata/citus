@@ -333,7 +333,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	compareFunction = ShardIntervalCompareFunction(partitionColumn, partitionMethod);
 
 	/* allocate column values and nulls arrays */
-	rel = heap_open(tableId, AccessShareLock);
+	rel = heap_open(tableId, RowExclusiveLock);
 	tupleDescriptor = RelationGetDescr(rel);
 	columnCount = tupleDescriptor->natts;
 	columnValues = palloc0(columnCount * sizeof(Datum));
