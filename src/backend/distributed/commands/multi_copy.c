@@ -508,6 +508,8 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		{
 			PrepareTransactions(connectionList);
 		}
+
+		CHECK_FOR_INTERRUPTS();
 	}
 	PG_CATCH();
 	{
