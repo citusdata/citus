@@ -13,7 +13,8 @@
 #include "postgres.h"
 #include "c.h"
 #include "fmgr.h"
-#include "libpq-int.h"
+
+#include "libpq-fe.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -143,7 +144,7 @@ set_connection_status_bad(PG_FUNCTION_ARGS)
 	}
 
 	/* set the connection status */
-	connection->status = CONNECTION_BAD;
+	SetConnectionStatus(connection, CONNECTION_BAD);
 
 	PG_RETURN_BOOL(true);
 }

@@ -18,11 +18,11 @@ extension:
 install-extension: extension
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
-	$(MKDIR_P) '$(includedir_server)/distributed/'
+	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
 # generated headers are located in the build directory
-	$(INSTALL_DATA) src/include/citus_config.h '$(includedir_server)/'
+	$(INSTALL_DATA) src/include/citus_config.h '$(DESTDIR)$(includedir_server)/'
 # the rest in the source tree
-	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(includedir_server)/distributed/'
+	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(DESTDIR)$(includedir_server)/distributed/'
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
 .PHONY: extension install-extension clean-extension

@@ -17,9 +17,10 @@ PGXS:=$(shell $(PG_CONFIG) --pgxs)
 # Support for VPATH builds (i.e. builds from outside the source tree)
 vpath_build=@vpath_build@
 ifeq ($(vpath_build),yes)
-	VPATH:=$(citus_abs_srcdir)
+	override VPATH:=$(citus_abs_srcdir)
 	USE_VPATH:=$(VPATH)
 	citus_top_srcdir:=$(citus_abs_top_srcdir)
+	override srcdir=$(VPATH)
 else
 	citus_top_srcdir:=$(citus_top_builddir)
 endif
