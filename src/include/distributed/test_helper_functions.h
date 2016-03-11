@@ -16,6 +16,7 @@
 #include "postgres.h"
 #include "c.h"
 #include "fmgr.h"
+#include "libpq-fe.h"
 
 #include "utils/array.h"
 
@@ -29,6 +30,7 @@
 /* function declarations for generic test functions */
 extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
 										 Oid datumTypeId);
+extern void SetConnectionStatus(PGconn *connection, ConnStatusType status);
 
 /* fake FDW for use in tests */
 extern Datum fake_fdw_handler(PG_FUNCTION_ARGS);

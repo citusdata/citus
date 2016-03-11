@@ -28,7 +28,10 @@ PG_LIBS = $(libpq)
 
 include $(citus_top_builddir)/Makefile.global
 
-override CPPFLAGS += -I$(libpq_srcdir) -I$(top_srcdir)/src/bin/csql
+# ensure client includes occur before server
+client_includes := $(shell $(PG_CONFIG) --includedir)/internal
+
+override CPPFLAGS := -I$(client_includes) -I$(libpq_srcdir) -I$(citus_abs_top_srcdir)/src/bin/csql $(CPPFLAGS)
 
 # psqlscan is compiled as part of mainloop
 mainloop.o: psqlscan.c
