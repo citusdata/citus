@@ -226,14 +226,14 @@ for my $port (@workerPorts)
 ###
 for my $port (@workerPorts)
 {
-    system("$bindir/psql",
+    system("$bindir/psql", '-X',
            ('-h', $host, '-p', $port, '-U', $user, "postgres",
             '-c', "CREATE DATABASE regression;")) == 0
         or die "Could not create regression database on worker";
 
     for my $extension (@extensions)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                ('-h', $host, '-p', $port, '-U', $user, "regression",
                 '-c', "CREATE EXTENSION IF NOT EXISTS \"$extension\";")) == 0
             or die "Could not create extension on worker";
@@ -241,7 +241,7 @@ for my $port (@workerPorts)
 
     foreach my $dataType (keys %dataTypes)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE TYPE $dataType AS $dataTypes{$dataType};")) == 0
             or die "Could not create TYPE $dataType on worker";
@@ -249,7 +249,7 @@ for my $port (@workerPorts)
 
     foreach my $function (keys %functions)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
             or die "Could not create FUNCTION $function on worker";
@@ -257,7 +257,7 @@ for my $port (@workerPorts)
 
     foreach my $operator (keys %operators)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE OPERATOR $operator $operators{$operator};")) == 0
             or die "Could not create OPERATOR $operator on worker";
@@ -265,7 +265,7 @@ for my $port (@workerPorts)
 
     foreach my $fdw (keys %fdws)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};")) == 0
             or die "Could not create foreign data wrapper $fdw on worker";
@@ -273,7 +273,7 @@ for my $port (@workerPorts)
 
     foreach my $fdwServer (keys %fdwServers)
     {
-        system("$bindir/psql",
+        system("$bindir/psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE SERVER $fdwServer FOREIGN DATA WRAPPER $fdwServers{$fdwServer};")) == 0
             or die "Could not create server $fdwServer on worker";
