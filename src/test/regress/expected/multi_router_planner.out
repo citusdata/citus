@@ -757,33 +757,35 @@ DEBUG:  Plan is router executable
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1
-	GROUP BY id;
+	GROUP BY id
+	ORDER BY id;
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id 
 ----
- 41
- 11
- 31
   1
+ 11
  21
+ 31
+ 41
 (5 rows)
 
 -- single shard select with distinct is router plannable
-SELECT distinct id
+SELECT DISTINCT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY id;
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id 
 ----
- 41
- 11
- 31
   1
+ 11
  21
+ 31
+ 41
 (5 rows)
 
 -- single shard aggregate is router plannable

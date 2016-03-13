@@ -25,6 +25,7 @@
 #include "access/hash.h"
 #include "access/htup_details.h"
 #include "access/nbtree.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"

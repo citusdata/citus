@@ -334,12 +334,14 @@ SELECT *
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1
-	GROUP BY id;
+	GROUP BY id
+	ORDER BY id;
 
 -- single shard select with distinct is router plannable
-SELECT distinct id
+SELECT DISTINCT id
 	FROM articles_hash
-	WHERE author_id = 1;
+	WHERE author_id = 1
+	ORDER BY id;
 
 -- single shard aggregate is router plannable
 SELECT avg(word_count)

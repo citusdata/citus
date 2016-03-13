@@ -38,9 +38,20 @@
  * routine.
  */
 
+/* Store const reference to raw input node in local named 'node' */
+#define WRITE_LOCALS(nodeTypeName) \
+		const nodeTypeName *node = (const nodeTypeName *) raw_node
+
 /* Write the label for the node type */
+#if (PG_VERSION_NUM >= 90600)
+#define WRITE_NODE_TYPE(nodelabel) \
+	(void) 0
+
+#else
 #define WRITE_NODE_TYPE(nodelabel) \
 	appendStringInfoString(str, nodelabel)
+
+#endif
 
 /* Write an integer field (anything written as ":fldname %d") */
 #define WRITE_INT_FIELD(fldname) \
@@ -83,7 +94,7 @@
 /* Write a character-string (possibly NULL) field */
 #define WRITE_STRING_FIELD(fldname) \
 	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
-	 _outToken(str, node->fldname))
+	 outToken(str, node->fldname))
 
 /* Write a parse location field (actually same as INT case) */
 #define WRITE_LOCATION_FIELD(fldname) \
@@ -92,7 +103,7 @@
 /* Write a Node field */
 #define WRITE_NODE_FIELD(fldname) \
 	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
-	 _outNode(str, node->fldname))
+	 outNode(str, node->fldname))
 
 /* Write a bitmapset field */
 #define WRITE_BITMAPSET_FIELD(fldname) \
@@ -102,18 +113,18 @@
 
 #define booltostr(x)  ((x) ? "true" : "false")
 
-static void _outNode(StringInfo str, const void *obj);
-
+#if (PG_VERSION_NUM < 90600)
+static void outNode(StringInfo str, const void *obj);
 
 /*
- * _outToken
+ * outToken
  *	  Convert an ordinary string (eg, an identifier) into a form that
  *	  will be decoded back to a plain token by read.c's functions.
  *
  *	  If a null or empty string is given, it is encoded as "<>".
  */
 static void
-_outToken(StringInfo str, const char *s)
+outToken(StringInfo str, const char *s)
 {
 	if (s == NULL || *s == '\0')
 	{
@@ -166,7 +177,7 @@ _outList(StringInfo str, const List *node)
 		 */
 		if (IsA(node, List))
 		{
-			_outNode(str, lfirst(lc));
+			outNode(str, lfirst(lc));
 			if (lnext(lc))
 				appendStringInfoChar(str, ' ');
 		}
@@ -187,7 +198,7 @@ _outList(StringInfo str, const List *node)
  * Print the value of a Datum given its type.
  */
 static void
-_outDatum(StringInfo str, Datum value, int typlen, bool typbyval)
+outDatum(StringInfo str, Datum value, int typlen, bool typbyval)
 {
 	Size		length,
 				i;
@@ -218,38 +229,49 @@ _outDatum(StringInfo str, Datum value, int typlen, bool typbyval)
 	}
 }
 
+#endif
 
 /*****************************************************************************
  *	Output routines for Citus node types
  *****************************************************************************/
 
 static void
-_outMultiUnaryNode(StringInfo str, const MultiUnaryNode *node)
+OutMultiUnaryNodeFields(StringInfo str, const MultiUnaryNode *node)
 {
 	WRITE_NODE_FIELD(childNode);
 }
 
 
 static void
-_outMultiBinaryNode(StringInfo str, const MultiBinaryNode *node)
+OutMultiBinaryNodeFields(StringInfo str, const MultiBinaryNode *node)
 {
 	WRITE_NODE_FIELD(leftChildNode);
 	WRITE_NODE_FIELD(rightChildNode);
 }
 
-
-static void
-_outMultiTreeRoot(StringInfo str, const MultiTreeRoot *node)
+void
+OutMultiNode(OUTFUNC_ARGS)
 {
-	WRITE_NODE_TYPE("MULTITREEROOT");
-
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	WRITE_NODE_TYPE("MULTINODE");
 }
 
 
-static void
-_outMultiPlan(StringInfo str, const MultiPlan *node)
+void
+OutMultiTreeRoot(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiTreeRoot);
+
+	WRITE_NODE_TYPE("MULTITREEROOT");
+
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
+}
+
+
+void
+OutMultiPlan(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(MultiPlan);
+
 	WRITE_NODE_TYPE("MULTIPLAN");
 
 	WRITE_NODE_FIELD(workerJob);
@@ -258,87 +280,95 @@ _outMultiPlan(StringInfo str, const MultiPlan *node)
 }
 
 
-static void
-_outMultiProject(StringInfo str, const MultiProject *node)
+void
+OutMultiProject(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiProject);
 	WRITE_NODE_TYPE("MULTIPROJECT");
 
 	WRITE_NODE_FIELD(columnList);
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 
-static void
-_outMultiCollect(StringInfo str, const MultiCollect *node)
+void
+OutMultiCollect(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiCollect);
 	WRITE_NODE_TYPE("MULTICOLLECT");
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 
-static void
-_outMultiSelect(StringInfo str, const MultiSelect *node)
+void
+OutMultiSelect(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiSelect);
 	WRITE_NODE_TYPE("MULTISELECT");
 
 	WRITE_NODE_FIELD(selectClauseList);
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 
-static void
-_outMultiTable(StringInfo str, const MultiTable *node)
+void
+OutMultiTable(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiTable);
 	WRITE_NODE_TYPE("MULTITABLE");
 
 	WRITE_OID_FIELD(relationId);
 	WRITE_INT_FIELD(rangeTableId);
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 
-static void
-_outMultiJoin(StringInfo str, const MultiJoin *node)
+void
+OutMultiJoin(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiJoin);
 	WRITE_NODE_TYPE("MULTIJOIN");
 
 	WRITE_NODE_FIELD(joinClauseList);
 	WRITE_ENUM_FIELD(joinRuleType, JoinRuleType);
 	WRITE_ENUM_FIELD(joinType, JoinType);
 
-	_outMultiBinaryNode(str, (const MultiBinaryNode *) node);
+	OutMultiBinaryNodeFields(str, (const MultiBinaryNode *) node);
 }
 
 
-static void
-_outMultiPartition(StringInfo str, const MultiPartition *node)
+void
+OutMultiPartition(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiPartition);
 	WRITE_NODE_TYPE("MULTIPARTITION");
 
 	WRITE_NODE_FIELD(partitionColumn);
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 
-static void
-_outMultiCartesianProduct(StringInfo str, const MultiCartesianProduct *node)
+void
+OutMultiCartesianProduct(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiCartesianProduct);
 	WRITE_NODE_TYPE("MULTICARTESIANPRODUCT");
 
-	_outMultiBinaryNode(str, (const MultiBinaryNode *) node);
+	OutMultiBinaryNodeFields(str, (const MultiBinaryNode *) node);
 }
 
 
 
 
-static void
-_outMultiExtendedOp(StringInfo str, const MultiExtendedOp *node)
+void
+OutMultiExtendedOp(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MultiExtendedOp);
 	WRITE_NODE_TYPE("MULTIEXTENDEDOP");
 
 	WRITE_NODE_FIELD(targetList);
@@ -348,11 +378,11 @@ _outMultiExtendedOp(StringInfo str, const MultiExtendedOp *node)
 	WRITE_NODE_FIELD(limitOffset);
 	WRITE_NODE_FIELD(havingQual);
 
-	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
+	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }
 
 static void
-_outJobInfo(StringInfo str, const Job *node)
+OutJobFields(StringInfo str, const Job *node)
 {
 	WRITE_UINT64_FIELD(jobId);
 	WRITE_NODE_FIELD(jobQuery);
@@ -362,18 +392,20 @@ _outJobInfo(StringInfo str, const Job *node)
 }
 
 
-static void
-_outJob(StringInfo str, const Job *node)
+void
+OutJob(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(Job);
 	WRITE_NODE_TYPE("JOB");
 
-	_outJobInfo(str, node);
+	OutJobFields(str, node);
 }
 
 
-static void
-_outShardInterval(StringInfo str, const ShardInterval *node)
+void
+OutShardInterval(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(ShardInterval);
 	WRITE_NODE_TYPE("SHARDINTERVAL");
 
 	WRITE_OID_FIELD(relationId);
@@ -388,27 +420,28 @@ _outShardInterval(StringInfo str, const ShardInterval *node)
 	if (!node->minValueExists)
 		appendStringInfoString(str, "<>");
 	else
-		_outDatum(str, node->minValue, node->valueTypeLen, node->valueByVal);
+		outDatum(str, node->minValue, node->valueTypeLen, node->valueByVal);
 
 	appendStringInfoString(str, " :maxValue ");
 	if (!node->maxValueExists)
 		appendStringInfoString(str, "<>");
 	else
-		_outDatum(str, node->maxValue, node->valueTypeLen, node->valueByVal);
+		outDatum(str, node->maxValue, node->valueTypeLen, node->valueByVal);
 
 	WRITE_UINT64_FIELD(shardId);
 }
 
 
-static void
-_outMapMergeJob(StringInfo str, const MapMergeJob *node)
+void
+OutMapMergeJob(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(MapMergeJob);
 	int arrayLength = node->sortedShardIntervalArrayLength;
 	int i;
 
 	WRITE_NODE_TYPE("MAPMERGEJOB");
 
-	_outJobInfo(str, (Job *) node);
+	OutJobFields(str, (Job *) node);
 	WRITE_NODE_FIELD(reduceQuery);
 	WRITE_ENUM_FIELD(partitionType, PartitionType);
 	WRITE_NODE_FIELD(partitionColumn);
@@ -417,9 +450,7 @@ _outMapMergeJob(StringInfo str, const MapMergeJob *node)
 
 	for (i = 0; i < arrayLength; ++i)
 	{
-		ShardInterval *writeElement = node->sortedShardIntervalArray[i];
-
-		_outShardInterval(str, writeElement);
+		outNode(str, node->sortedShardIntervalArray[i]);
 	}
 
 	WRITE_NODE_FIELD(mapTaskList);
@@ -427,9 +458,10 @@ _outMapMergeJob(StringInfo str, const MapMergeJob *node)
 }
 
 
-static void
-_outShardPlacement(StringInfo str, const ShardPlacement *node)
+void
+OutShardPlacement(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(ShardPlacement);
 	WRITE_NODE_TYPE("SHARDPLACEMENT");
 
 	WRITE_UINT64_FIELD(placementId);
@@ -441,9 +473,10 @@ _outShardPlacement(StringInfo str, const ShardPlacement *node)
 }
 
 
-static void
-_outTask(StringInfo str, const Task *node)
+void
+OutTask(OUTFUNC_ARGS)
 {
+	WRITE_LOCALS(Task);
 	WRITE_NODE_TYPE("TASK");
 
 	WRITE_ENUM_FIELD(taskType, TaskType);
@@ -462,13 +495,14 @@ _outTask(StringInfo str, const Task *node)
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 }
 
+#if (PG_VERSION_NUM < 90600)
 
 /*
- * _outNode -
+ * outNode -
  *	  converts a Node into ascii string and append it to 'str'
  */
 static void
-_outNode(StringInfo str, const void *obj)
+outNode(StringInfo str, const void *obj)
 {
 	if (obj == NULL)
 	{
@@ -487,91 +521,91 @@ _outNode(StringInfo str, const void *obj)
 
 		case T_MultiTreeRoot:
 			appendStringInfoChar(str, '{');
-			_outMultiTreeRoot(str, obj);
+			OutMultiTreeRoot(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiProject:
 			appendStringInfoChar(str, '{');
-			_outMultiProject(str, obj);
+			OutMultiProject(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiCollect:
 			appendStringInfoChar(str, '{');
-			_outMultiCollect(str, obj);
+			OutMultiCollect(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiSelect:
 			appendStringInfoChar(str, '{');
-			_outMultiSelect(str, obj);
+			OutMultiSelect(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiTable:
 			appendStringInfoChar(str, '{');
-			_outMultiTable(str, obj);
+			OutMultiTable(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiJoin:
 			appendStringInfoChar(str, '{');
-			_outMultiJoin(str, obj);
+			OutMultiJoin(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiPartition:
 			appendStringInfoChar(str, '{');
-			_outMultiPartition(str, obj);
+			OutMultiPartition(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiCartesianProduct:
 			appendStringInfoChar(str, '{');
-			_outMultiCartesianProduct(str, obj);
+			OutMultiCartesianProduct(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiExtendedOp:
 			appendStringInfoChar(str, '{');
-			_outMultiExtendedOp(str, obj);
+			OutMultiExtendedOp(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_Job:
 			appendStringInfoChar(str, '{');
-			_outJob(str, obj);
+			OutJob(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MapMergeJob:
 			appendStringInfoChar(str, '{');
-			_outMapMergeJob(str, obj);
+			OutMapMergeJob(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_MultiPlan:
 			appendStringInfoChar(str, '{');
-			_outMultiPlan(str, obj);
+			OutMultiPlan(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_Task:
 			appendStringInfoChar(str, '{');
-			_outTask(str, obj);
+			OutTask(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_ShardInterval:
 			appendStringInfoChar(str, '{');
-			_outShardInterval(str, obj);
+			OutShardInterval(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
 		case T_ShardPlacement:
 			appendStringInfoChar(str, '{');
-			_outShardPlacement(str, obj);
+			OutShardPlacement(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
@@ -581,6 +615,7 @@ _outNode(StringInfo str, const void *obj)
 	}
 }
 
+#endif
 
 /*
  * CitusNodeToString -
@@ -589,9 +624,13 @@ _outNode(StringInfo str, const void *obj)
 char *
 CitusNodeToString(const void *obj)
 {
+#if (PG_VERSION_NUM >= 90600)
+	return nodeToString(obj);
+#else
 	StringInfoData str;
 
 	initStringInfo(&str);
-	_outNode(&str, obj);
+	outNode(&str, obj);
 	return str.data;
+#endif
 }
