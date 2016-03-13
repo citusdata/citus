@@ -29,6 +29,35 @@
 #include "nodes/value.h"
 
 
+/*
+ * For 9.6 onwards, we use 9.6's extensible node system, thus there's no need
+ * to copy various routines anymore. In that case, replace these functions
+ * with plain wrappers.
+ */
+#if (PG_VERSION_NUM >= 90600)
+
+void *
+CitusStringToNode(char *str)
+{
+	return stringToNode(str);
+}
+
+
+char *
+citus_pg_strtok(int *length)
+{
+	return pg_strtok(length);
+}
+
+
+void *
+CitusNodeRead(char *token, int tok_len)
+{
+	return nodeRead(token, tok_len);
+}
+
+#else
+
 /* Static state for citus_pg_strtok */
 static char *citus_pg_strtok_ptr = NULL;
 
@@ -63,7 +92,7 @@ CitusStringToNode(char *str)
 /*
  * citus_pg_strtok is a copy of postgres' pg_strtok routine, referencing
  * citus_pg_strtok_ptr instead of pg_strtok_ptr as state.
-*/
+ */
 char *
 citus_pg_strtok(int *length)
 {
@@ -346,3 +375,5 @@ CitusNodeRead(char *token, int tok_len)
 
 	return (void *) result;
 }
+
+#endif /* (PG_VERSION_NUM < 90600) */

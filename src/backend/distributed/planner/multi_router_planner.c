@@ -535,10 +535,21 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM < 90600, "When porting to a newer PG this section"
+	StaticAssertStmt(PG_VERSION_NUM < 90700, "When porting to a newer PG this section"
 											 " needs to be reviewed.");
+	if (IsA(expression, Aggref))
+	{
+		Aggref *expr = (Aggref *) expression;
 
-	if (IsA(expression, OpExpr))
+		volatileFlag = func_volatile(expr->aggfnoid);
+	}
+	else if (IsA(expression, WindowFunc))
+	{
+		WindowFunc *expr = (WindowFunc *) expression;
+
+		volatileFlag = func_volatile(expr->winfnoid);
+	}
+	else if (IsA(expression, OpExpr))
 	{
 		OpExpr *expr = (OpExpr *) expression;
 

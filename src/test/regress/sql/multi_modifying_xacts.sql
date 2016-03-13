@@ -63,6 +63,7 @@ COMMIT;
 SELECT name FROM researchers WHERE lab_id = 3 AND id = 6;
 
 -- even if created by PL/pgSQL...
+\set VERBOSITY terse
 BEGIN;
 DO $$
 BEGIN
@@ -93,6 +94,7 @@ EXCEPTION
         RAISE NOTICE 'caught not_null_violation';
 END $$;
 COMMIT;
+\set VERBOSITY default
 
 
 -- should be valid to edit labs after researchers...
@@ -247,6 +249,7 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 \c - - - :master_port
 
 -- test partial failure; worker_1 succeeds, 2 fails
+\set VERBOSITY terse
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
@@ -399,6 +402,7 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
+\set VERBOSITY default
 
 -- data to objects should be persisted, but labs should not...
 SELECT * FROM objects WHERE id = 1;

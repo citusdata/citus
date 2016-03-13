@@ -18,6 +18,7 @@
 
 #include "commands/explain.h"
 #include "executor/executor.h"
+#include "distributed/citus_nodefuncs.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
@@ -128,6 +129,9 @@ _PG_init(void)
 	 * latter in a configuration dependent manner.
 	 */
 	RegisterCitusConfigVariables();
+
+	/* make our additional node types known */
+	RegisterNodes();
 
 	/* intercept planner */
 	planner_hook = multi_planner;
