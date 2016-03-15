@@ -153,8 +153,14 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * the later hooks, so we set a flag marking this as a distributed
 			 * statement running on the master. That e.g. allows us to drop the
 			 * temp table later.
+			 *
+			 * We copy the original statement's queryId, to allow
+			 * pg_stat_statements and similar extension to associate the
+			 * statement with the toplevel statement.
 			 */
+			masterSelectPlan->queryId = queryDesc->plannedstmt->queryId;
 			queryDesc->plannedstmt = masterSelectPlan;
+
 			eflags |= EXEC_FLAG_CITUS_MASTER_SELECT;
 		}
 	}
