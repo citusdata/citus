@@ -81,10 +81,10 @@ typedef struct HashPartitionContext
 
 /*
  * A smaller version of copy.c's CopyStateData, trimmed to the elements
- * necessary for re-partition jobs. While it'd be a bit nicer to share code,
+ * necessary to copy out results. While it'd be a bit nicer to share code,
  * it'd require changing core postgres code.
  */
-typedef struct PartialCopyStateData
+typedef struct OutputCopyStateData
 {
 	StringInfo fe_msgbuf;       /* used for all dests during COPY TO, only for
 	                             * dest == COPY_NEW_FE in COPY FROM */
@@ -96,9 +96,9 @@ typedef struct PartialCopyStateData
 	char *delim;                /* column delimiter (must be 1 byte) */
 
 	MemoryContext rowcontext;   /* per-row evaluation context */
-} PartialCopyStateData;
+} OutputCopyStateData;
 
-typedef struct PartialCopyStateData *PartialCopyState;
+typedef struct OutputCopyStateData *OutputCopyState;
 
 
 /*

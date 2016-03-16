@@ -65,19 +65,19 @@ static void FilterAndPartitionTable(const char *filterQuery,
 									uint32 fileCount);
 static int ColumnIndex(TupleDesc rowDescriptor, const char *columnName);
 static FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
-static PartialCopyState InitRowOutputState(void);
-static void ClearRowOutputState(PartialCopyState copyState);
+static OutputCopyState InitRowOutputState(void);
+static void ClearRowOutputState(OutputCopyState copyState);
 static void OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-					  PartialCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
+					  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
-static void CopySendData(PartialCopyState outputState, const void *databuf, int datasize);
-static void CopySendString(PartialCopyState outputState, const char *str);
-static void CopySendChar(PartialCopyState outputState, char c);
-static void CopySendInt32(PartialCopyState outputState, int32 val);
-static void CopySendInt16(PartialCopyState outputState, int16 val);
-static void CopyAttributeOutText(PartialCopyState outputState, char *string);
-static inline void CopyFlushOutput(PartialCopyState outputState,
+static void CopySendData(OutputCopyState outputState, const void *databuf, int datasize);
+static void CopySendString(OutputCopyState outputState, const char *str);
+static void CopySendChar(OutputCopyState outputState, char c);
+static void CopySendInt32(OutputCopyState outputState, int32 val);
+static void CopySendInt16(OutputCopyState outputState, int16 val);
+static void CopyAttributeOutText(OutputCopyState outputState, char *string);
+static inline void CopyFlushOutput(OutputCopyState outputState,
 								   char *start, char *pointer);
 static uint32 RangePartitionId(Datum partitionValue, const void *context);
 static uint32 HashPartitionId(Datum partitionValue, const void *context);
@@ -731,7 +731,7 @@ FilterAndPartitionTable(const char *filterQuery,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
-	PartialCopyState rowOutputState = NULL;
+	OutputCopyState rowOutputState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
 	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
@@ -926,11 +926,11 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
  * must match one another. Therefore, any changes to the default values in the
  * copy command must be propagated to this function.
  */
-static PartialCopyState
+static OutputCopyState
 InitRowOutputState(void)
 {
-	PartialCopyState rowOutputState =
-		(PartialCopyState) palloc0(sizeof(PartialCopyStateData));
+	OutputCopyState rowOutputState =
+		(OutputCopyState) palloc0(sizeof(OutputCopyStateData));
 
 	int fileEncoding = pg_get_client_encoding();
 	int databaseEncoding = GetDatabaseEncoding();
@@ -987,7 +987,7 @@ InitRowOutputState(void)
 
 /* Clears copy state used for outputting row data. */
 static void
-ClearRowOutputState(PartialCopyState rowOutputState)
+ClearRowOutputState(OutputCopyState rowOutputState)
 {
 	Assert(rowOutputState != NULL);
 
@@ -1010,7 +1010,7 @@ ClearRowOutputState(PartialCopyState rowOutputState)
  */
 static void
 OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-		  PartialCopyState rowOutputState, FmgrInfo *columnOutputFunctions)
+		  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions)
 {
 	MemoryContext oldContext = NULL;
 	uint32 columnIndex = 0;
@@ -1099,10 +1099,10 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 		/* Generate header for a binary copy */
 		const int32 zero = 0;
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		PartialCopyStateData headerOutputStateData;
-		PartialCopyState headerOutputState = (PartialCopyState) & headerOutputStateData;
+		OutputCopyStateData headerOutputStateData;
+		OutputCopyState headerOutputState = (OutputCopyState) & headerOutputStateData;
 
-		memset(headerOutputState, 0, sizeof(PartialCopyStateData));
+		memset(headerOutputState, 0, sizeof(OutputCopyStateData));
 		headerOutputState->fe_msgbuf = makeStringInfo();
 
 		/* Signature */
@@ -1133,10 +1133,10 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 		/* Generate footer for a binary copy */
 		int16 negative = -1;
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		PartialCopyStateData footerOutputStateData;
-		PartialCopyState footerOutputState = (PartialCopyState) & footerOutputStateData;
+		OutputCopyStateData footerOutputStateData;
+		OutputCopyState footerOutputState = (OutputCopyState) & footerOutputStateData;
 
-		memset(footerOutputState, 0, sizeof(PartialCopyStateData));
+		memset(footerOutputState, 0, sizeof(OutputCopyStateData));
 		footerOutputState->fe_msgbuf = makeStringInfo();
 
 		CopySendInt16(footerOutputState, negative);
@@ -1150,7 +1150,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 /* *INDENT-OFF* */
 /* Append data to the copy buffer in outputState */
 static void
-CopySendData(PartialCopyState outputState, const void *databuf, int datasize)
+CopySendData(OutputCopyState outputState, const void *databuf, int datasize)
 {
 	appendBinaryStringInfo(outputState->fe_msgbuf, databuf, datasize);
 }
@@ -1158,7 +1158,7 @@ CopySendData(PartialCopyState outputState, const void *databuf, int datasize)
 
 /* Append a striong to the copy buffer in outputState. */
 static void
-CopySendString(PartialCopyState outputState, const char *str)
+CopySendString(OutputCopyState outputState, const char *str)
 {
 	appendBinaryStringInfo(outputState->fe_msgbuf, str, strlen(str));
 }
@@ -1166,7 +1166,7 @@ CopySendString(PartialCopyState outputState, const char *str)
 
 /* Append a char to the copy buffer in outputState. */
 static void
-CopySendChar(PartialCopyState outputState, char c)
+CopySendChar(OutputCopyState outputState, char c)
 {
 	appendStringInfoCharMacro(outputState->fe_msgbuf, c);
 }
@@ -1174,7 +1174,7 @@ CopySendChar(PartialCopyState outputState, char c)
 
 /* Append an int32 to the copy buffer in outputState. */
 static void
-CopySendInt32(PartialCopyState outputState, int32 val)
+CopySendInt32(OutputCopyState outputState, int32 val)
 {
 	uint32 buf = htonl((uint32) val);
 	CopySendData(outputState, &buf, sizeof(buf));
@@ -1183,7 +1183,7 @@ CopySendInt32(PartialCopyState outputState, int32 val)
 
 /* Append an int16 to the copy buffer in outputState. */
 static void
-CopySendInt16(PartialCopyState outputState, int16 val)
+CopySendInt16(OutputCopyState outputState, int16 val)
 {
 	uint16 buf = htons((uint16) val);
 	CopySendData(outputState, &buf, sizeof(buf));
@@ -1197,7 +1197,7 @@ CopySendInt16(PartialCopyState outputState, int16 val)
  * our coding style. The function should be kept in sync with copy.c.
  */
 static void
-CopyAttributeOutText(PartialCopyState cstate, char *string)
+CopyAttributeOutText(OutputCopyState cstate, char *string)
 {
 	char *pointer = NULL;
 	char *start = NULL;
@@ -1290,7 +1290,7 @@ CopyAttributeOutText(PartialCopyState cstate, char *string)
 /* *INDENT-ON* */
 /* Helper function to send pending copy output */
 static inline void
-CopyFlushOutput(PartialCopyState cstate, char *start, char *pointer)
+CopyFlushOutput(OutputCopyState cstate, char *start, char *pointer)
 {
 	if (pointer > start)
 	{
