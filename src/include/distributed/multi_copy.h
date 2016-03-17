@@ -43,13 +43,13 @@ typedef struct OutputCopyStateData
 
 typedef struct OutputCopyStateData *OutputCopyState;
 
+
+/* function declarations for copying into a distributed table */
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern void OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 					  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
 extern void CopySendBinaryHeaders(OutputCopyState headerOutputState);
 extern void CopySendBinaryFooters(OutputCopyState footerOutputState);
-
-/* function declarations for copying into a distributed table */
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 
 

@@ -156,7 +156,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	HTAB *shardConnectionHash = NULL;
 	List *connectionList = NIL;
 	MemoryContext tupleContext = NULL;
-	MemoryContext outputContext = NULL;
+	MemoryContext outputRowContext = NULL;
 	CopyState copyState = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	uint32 columnCount = 0;
@@ -290,23 +290,25 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	 * files.
 	 */
 	tupleContext = AllocSetContextCreate(CurrentMemoryContext,
-										 "COPY Row Memory Context",
+										 "COPY FROM Row Memory Context",
 										 ALLOCSET_DEFAULT_MINSIZE,
 										 ALLOCSET_DEFAULT_INITSIZE,
 										 ALLOCSET_DEFAULT_MAXSIZE);
 
-	outputContext = AllocSetContextCreate(CurrentMemoryContext,
-										 "COPY Output Memory Context",
-										 ALLOCSET_DEFAULT_MINSIZE,
-										 ALLOCSET_DEFAULT_INITSIZE,
-										 ALLOCSET_DEFAULT_MAXSIZE);
-
-	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, true);
+	/* we use outputRowContext to serialize row to send to workers */
+	outputRowContext = AllocSetContextCreate(CurrentMemoryContext,
+											 "COPY TO Row Memory Context",
+											 ALLOCSET_DEFAULT_MINSIZE,
+											 ALLOCSET_DEFAULT_INITSIZE,
+											 ALLOCSET_DEFAULT_MAXSIZE);
 
 	rowOutputState = (OutputCopyState) palloc0(sizeof(OutputCopyStateData));
 	rowOutputState->binary = true;
 	rowOutputState->fe_msgbuf = makeStringInfo();
-	rowOutputState->rowcontext = outputContext;
+	rowOutputState->rowcontext = outputRowContext;
+
+	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor,
+												  rowOutputState->binary);
 
 	/* we use a PG_TRY block to roll back on errors (e.g. in NextCopyFrom) */
 	PG_TRY();
