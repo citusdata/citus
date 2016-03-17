@@ -10,9 +10,6 @@ CREATE INDEX ON customer_engagements (id);
 CREATE INDEX ON customer_engagements (created_at);
 CREATE INDEX ON customer_engagements (event_data);
 
-\set first_worker_port 57637
-\set second_worker_port 57638
-
 -- distribute the table
 SELECT master_create_distributed_table('customer_engagements', 'id', 'hash');
 
@@ -36,22 +33,22 @@ SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_e
 \gset
 
 -- now, update the second placement as unhealthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :second_worker_port;
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_2_port;
 
 -- add a fake healthy placement for the tests
 INSERT INTO pg_dist_shard_placement (nodename, nodeport, shardid, shardstate, shardlength)
-							 VALUES ('dummyhost', :second_worker_port, :newshardid, 1, 0);
+							 VALUES ('dummyhost', :worker_2_port, :newshardid, 1, 0);
 
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :first_worker_port, 'dummyhost', :second_worker_port);
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'dummyhost', :worker_2_port);
 
 -- also try to copy from an inactive placement
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :second_worker_port, 'localhost', :first_worker_port);
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
 -- "copy" this shard from the first placement to the second one
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :first_worker_port, 'localhost', :second_worker_port);
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :first_worker_port;
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_1_port;
 
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
@@ -74,7 +71,7 @@ SELECT shardid as remotenewshardid FROM pg_dist_shard WHERE logicalrelid = 'remo
 \gset
 
 -- now, update the second placement as unhealthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND nodeport = :second_worker_port;
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND nodeport = :worker_2_port;
 
 -- oops! we don't support repairing shards backed by foreign tables
-SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :first_worker_port, 'localhost', :second_worker_port);
+SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);

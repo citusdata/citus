@@ -2,10 +2,9 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 
--- Check that we can run ALTER TABLE statements on distributed tables. We
--- increase the logging verbosity to verify that commands are propagated to
--- all worker shards. We also set the shardid sequence here so that the shardids
--- in this test aren't affected by changes to the previous tests.
+-- Check that we can run ALTER TABLE statements on distributed tables.
+-- We set the shardid sequence here so that the shardids in this test
+-- aren't affected by changes to the previous tests.
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
 CREATE TABLE lineitem_alter (
@@ -29,8 +28,6 @@ CREATE TABLE lineitem_alter (
 SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 \STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
-SET client_min_messages TO DEBUG2;
-
 -- Verify that we can add columns
 
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
@@ -38,6 +35,15 @@ ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER DEFAULT 1;
 ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
 ALTER TABLE lineitem_alter ADD COLUMN null_column INTEGER;
+
+-- show changed schema on one worker
+\c - - - :worker_1_port
+SELECT attname, atttypid::regtype
+FROM
+    (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
+    JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
+ORDER BY attnum;
+\c - - - :master_port
 
 \d lineitem_alter
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
@@ -147,7 +153,19 @@ ALTER TABLE IF EXISTS lineitem_alter RENAME l_orderkey TO l_orderkey_renamed;
 -- node
 \d lineitem_alter
 
+-- Check that the schema on the worker still looks reasonable
+\c - - - :worker_1_port
+SELECT attname, atttypid::regtype
+FROM
+    (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
+    JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
+ORDER BY attnum;
+\c - - - :master_port
+
 -- Cleanup the table and its shards
-RESET client_min_messages;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
+-- check that nothing's left over on workers
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
+\c - - - :master_port
