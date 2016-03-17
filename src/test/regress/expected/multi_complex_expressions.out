@@ -130,8 +130,195 @@ SELECT count(*) FROM lineitem
  10008
 (1 row)
 
-SELECT count(*) FROM lineitem WHERE random() = 0.1;
-ERROR:  unsupported clause type
+-- can push down queries where no columns present on the WHERE clause
+SELECT count(*) FROM lineitem WHERE random() = -0.1;
+ count 
+-------
+     0
+(1 row)
+
+-- boolean tests can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (l_partkey > 10000) is true;
+ count 
+-------
+ 11423
+(1 row)
+
+-- scalar array operator expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE l_partkey = ANY(ARRAY[19353, 19354, 19355]);
+ count 
+-------
+     1
+(1 row)
+
+-- some more scalar array operator expressions
+SELECT count(*) FROM lineitem
+	WHERE l_partkey = ALL(ARRAY[19353]);
+ count 
+-------
+     1
+(1 row)
+
+-- operator expressions involving arrays
+SELECT count(*) FROM lineitem
+	WHERE ARRAY[19353, 19354, 19355] @> ARRAY[l_partkey];
+ count 
+-------
+     1
+(1 row)
+
+-- coerced via io expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (l_quantity/100)::int::bool::text::bool;
+ count 
+-------
+   260
+(1 row)
+
+-- case expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (CASE WHEN l_orderkey > 4000 THEN l_partkey / 100 > 1 ELSE false END);
+ count 
+-------
+  7948
+(1 row)
+
+-- coalesce expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE COALESCE((l_partkey/50000)::bool, false);
+ count 
+-------
+  9122
+(1 row)
+
+-- nullif expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE NULLIF((l_partkey/50000)::bool, false);
+ count 
+-------
+  9122
+(1 row)
+
+-- null test expressions can be pushed down
+SELECT count(*) FROM orders
+	WHERE o_comment IS NOT null;
+ count 
+-------
+  2984
+(1 row)
+
+-- functions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE isfinite(l_shipdate);
+ count 
+-------
+ 12000
+(1 row)
+
+-- constant expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE 0 != 0;
+ count 
+-------
+     0
+(1 row)
+
+-- distinct expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE l_partkey IS DISTINCT FROM 50040;
+ count 
+-------
+ 11999
+(1 row)
+
+-- row compare expression can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE row(l_partkey, 2, 3) > row(2000, 2, 3);
+ count 
+-------
+ 11882
+(1 row)
+
+-- combination of different expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE
+		  (l_quantity/100)::int::bool::text::bool AND
+		  CASE WHEN l_orderkey > 4000 THEN l_partkey / 100 > 1 ELSE false END AND
+		  COALESCE((l_partkey/50000)::bool, false) AND
+		  NULLIF((l_partkey/50000)::bool, false) AND
+		  isfinite(l_shipdate) AND
+		  l_partkey IS DISTINCT FROM 50040 AND
+		  row(l_partkey, 2, 3) > row(2000, 2, 3);
+ count 
+-------
+   137
+(1 row)
+
+-- constant expression in the WHERE clause with a column in the target list
+SELECT l_linenumber FROM lineitem
+	WHERE
+		1!=0
+	ORDER BY
+		l_linenumber
+	LIMIT 1;
+ l_linenumber 
+--------------
+            1
+(1 row)
+
+-- constant expression in the WHERE clause with expressions and a column the target list
+SELECT count(*) * l_discount as total_discount, count(*), sum(l_tax), l_discount FROM lineitem
+	WHERE
+		1!=0
+	GROUP BY
+		l_discount
+	ORDER BY
+		total_discount DESC, sum(l_tax) DESC;
+ total_discount | count |  sum  | l_discount 
+----------------+-------+-------+------------
+         104.80 |  1048 | 41.08 |       0.10
+          98.55 |  1095 | 44.15 |       0.09
+          90.64 |  1133 | 45.94 |       0.08
+          71.05 |  1015 | 41.19 |       0.07
+          69.42 |  1157 | 45.75 |       0.06
+          53.60 |  1072 | 42.82 |       0.05
+          43.64 |  1091 | 44.40 |       0.04
+          32.55 |  1085 | 43.30 |       0.03
+          22.22 |  1111 | 45.07 |       0.02
+          11.22 |  1122 | 44.54 |       0.01
+           0.00 |  1071 | 44.00 |       0.00
+(11 rows)
+
+-- distinct expressions in the WHERE clause with a column in the target list
+SELECT l_linenumber FROM lineitem
+	WHERE
+		l_linenumber IS DISTINCT FROM 1 AND
+		l_orderkey IS DISTINCT FROM 8997
+	ORDER BY
+		l_linenumber
+	LIMIT 1;
+ l_linenumber 
+--------------
+            2
+(1 row)
+
+-- distinct expressions in the WHERE clause with expressions and a column the target list
+SELECT max(l_linenumber), min(l_discount), l_receiptdate FROM lineitem
+	WHERE
+		l_linenumber IS DISTINCT FROM 1 AND
+		l_orderkey IS DISTINCT FROM 8997
+	GROUP BY
+		l_receiptdate
+	ORDER BY
+		l_receiptdate
+	LIMIT 1;
+ max | min  | l_receiptdate 
+-----+------+---------------
+   3 | 0.07 | 01-09-1992
+(1 row)
+
 -- Check that we can handle implicit and explicit join clause definitions.
 SELECT count(*) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
