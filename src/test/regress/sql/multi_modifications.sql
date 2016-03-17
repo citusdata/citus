@@ -186,14 +186,12 @@ UPDATE limit_orders SET (kind, limit_price) = ('buy', DEFAULT) WHERE id = 246;
 SELECT kind, limit_price FROM limit_orders WHERE id = 246;
 
 -- Test that shards which miss a modification are marked unhealthy
-\set first_worker_port 57637
-\set second_worker_port 57638
 
 -- First: Mark all placements for a node as inactive
 UPDATE pg_dist_shard_placement
 SET    shardstate = 3
 WHERE  nodename = 'localhost' AND
-	   nodeport = :first_worker_port;
+	   nodeport = :worker_1_port;
 
 -- Second: Perform an INSERT to the remaining node
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
@@ -202,7 +200,7 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 UPDATE pg_dist_shard_placement
 SET    shardstate = 1
 WHERE  nodename = 'localhost' AND
-	   nodeport = :first_worker_port;
+	   nodeport = :worker_1_port;
 
 -- Fourth: Perform the same INSERT (primary key violation)
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
@@ -214,7 +212,7 @@ FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
 WHERE  sp.shardid = s.shardid
 AND    sp.nodename = 'localhost'
-AND    sp.nodeport = :second_worker_port
+AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'limit_orders'::regclass;
 
