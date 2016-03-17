@@ -43,6 +43,7 @@ typedef struct OutputCopyStateData
 
 typedef struct OutputCopyStateData *OutputCopyState;
 
+extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern void OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 					  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
 extern void CopySendBinaryHeaders(OutputCopyState headerOutputState);
