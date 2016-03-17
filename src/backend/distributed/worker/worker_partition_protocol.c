@@ -64,7 +64,6 @@ static void FilterAndPartitionTable(const char *filterQuery,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
 static int ColumnIndex(TupleDesc rowDescriptor, const char *columnName);
-static FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 static OutputCopyState InitRowOutputState(void);
 static void ClearRowOutputState(OutputCopyState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
@@ -865,44 +864,6 @@ ColumnIndex(TupleDesc rowDescriptor, const char *columnName)
 
 	Assert(columnIndex >= 1);
 	return columnIndex;
-}
-
-
-/*
- * ColumnOutputFunctions walks over a table's columns, and finds each column's
- * type information. The function then resolves each type's output function,
- * and stores and returns these output functions in an array.
- */
-static FmgrInfo *
-ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
-{
-	uint32 columnCount = (uint32) rowDescriptor->natts;
-	FmgrInfo *columnOutputFunctions = palloc0(columnCount * sizeof(FmgrInfo));
-
-	uint32 columnIndex = 0;
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		FmgrInfo *currentOutputFunction = &columnOutputFunctions[columnIndex];
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
-		Oid columnTypeId = currentColumn->atttypid;
-		Oid outputFunctionId = InvalidOid;
-		bool typeVariableLength = false;
-
-		if (binaryFormat)
-		{
-			getTypeBinaryOutputInfo(columnTypeId, &outputFunctionId, &typeVariableLength);
-		}
-		else
-		{
-			getTypeOutputInfo(columnTypeId, &outputFunctionId, &typeVariableLength);
-		}
-
-		Assert(currentColumn->attisdropped == false);
-
-		fmgr_info(outputFunctionId, currentOutputFunction);
-	}
-
-	return columnOutputFunctions;
 }
 
 
