@@ -1,6 +1,6 @@
 ![Citus Banner](/github-banner.png)
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
+[![Build Status](https://travis-ci.com/citusdata/citus.svg?token=bSq3ym67qubHCGNs1iYZ&branch=master)](https://travis-ci.com/citusdata/citus)
 [![Citus IRC](https://img.shields.io/badge/irc-%23citus-blue.svg)](irc://irc.freenode.net/citus)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/documentation/citus-documentation-5/index.html)
 
