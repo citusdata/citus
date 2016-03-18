@@ -823,6 +823,7 @@ FilterAndPartitionTable(const char *filterQuery,
 			FileOutputStreamWrite(partitionFile, rowText);
 
 			resetStringInfo(rowText);
+			MemoryContextReset(rowOutputState->rowcontext);
 		}
 
 		SPI_freetuptable(SPI_tuptable);
