@@ -156,7 +156,6 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	HTAB *shardConnectionHash = NULL;
 	List *connectionList = NIL;
 	MemoryContext tupleContext = NULL;
-	MemoryContext outputRowContext = NULL;
 	CopyState copyState = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	uint32 columnCount = 0;
@@ -290,22 +289,15 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	 * files.
 	 */
 	tupleContext = AllocSetContextCreate(CurrentMemoryContext,
-										 "COPY FROM Row Memory Context",
+										 "COPY Row Memory Context",
 										 ALLOCSET_DEFAULT_MINSIZE,
 										 ALLOCSET_DEFAULT_INITSIZE,
 										 ALLOCSET_DEFAULT_MAXSIZE);
 
-	/* we use outputRowContext to serialize row to send to workers */
-	outputRowContext = AllocSetContextCreate(CurrentMemoryContext,
-											 "COPY TO Row Memory Context",
-											 ALLOCSET_DEFAULT_MINSIZE,
-											 ALLOCSET_DEFAULT_INITSIZE,
-											 ALLOCSET_DEFAULT_MAXSIZE);
-
 	rowOutputState = (OutputCopyState) palloc0(sizeof(OutputCopyStateData));
 	rowOutputState->binary = true;
 	rowOutputState->fe_msgbuf = makeStringInfo();
-	rowOutputState->rowcontext = outputRowContext;
+	rowOutputState->rowcontext = tupleContext;
 
 	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor,
 												  rowOutputState->binary);
@@ -919,6 +911,8 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
  * and appends the data to the row output state object's message buffer.
  * This function is modeled after the CopyOneRowTo() function in
  * commands/copy.c, but only implements a subset of that functionality.
+ * Note that the caller of this function should reset row memory context
+ * to not bloat memory usage.
  */
 void
 OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
@@ -928,9 +922,8 @@ OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	uint32 columnIndex = 0;
 	uint32 columnCount = 0;
 
-	/* reset previous tuple's output data, and the temporary memory context */
+	/* reset previous tuple's output data */
 	resetStringInfo(rowOutputState->fe_msgbuf);
-	MemoryContextReset(rowOutputState->rowcontext);
 
 	oldContext = MemoryContextSwitchTo(rowOutputState->rowcontext);
 
