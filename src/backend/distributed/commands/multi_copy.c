@@ -125,18 +125,18 @@ static void OpenCopyTransactions(CopyStmt *copyStatement,
 								 ShardConnections *shardConnections,
 								 int64 shardId);
 static StringInfo ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId);
-static void CopyRowToPlacements(StringInfo lineBuf, ShardConnections *shardConnections);
+static void SendCopyDataToPlacements(StringInfo lineBuf,
+									 ShardConnections *shardConnections);
 static List * ConnectionList(HTAB *connectionHash);
 static void EndRemoteCopy(List *connectionList, bool stopOnFailure);
 static void ReportCopyError(PGconn *connection, PGresult *result);
-static void CopySendData(OutputCopyState outputState, const void *databuf, int datasize);
-static void CopySendString(OutputCopyState outputState, const char *str);
-static void CopySendChar(OutputCopyState outputState, char c);
-static void CopySendInt32(OutputCopyState outputState, int32 val);
-static void CopySendInt16(OutputCopyState outputState, int16 val);
-static void CopyAttributeOutText(OutputCopyState outputState, char *string);
-static inline void CopyFlushOutput(OutputCopyState outputState, char *start,
-								   char *pointer);
+static void CopySendData(CopyOutState outputState, const void *databuf, int datasize);
+static void CopySendString(CopyOutState outputState, const char *str);
+static void CopySendChar(CopyOutState outputState, char c);
+static void CopySendInt32(CopyOutState outputState, int32 val);
+static void CopySendInt16(CopyOutState outputState, int16 val);
+static void CopyAttributeOutText(CopyOutState outputState, char *string);
+static inline void CopyFlushOutput(CopyOutState outputState, char *start, char *pointer);
 
 
 /*
@@ -171,7 +171,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	uint64 processedRowCount = 0;
 	ErrorContextCallback errorCallback;
 	ShardConnections *shardConnections = NULL;
-	OutputCopyState rowOutputState = NULL;
+	CopyOutState copyOutState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
 
 	/* disallow COPY to/from file or program except for superusers */
@@ -294,13 +294,12 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 										 ALLOCSET_DEFAULT_INITSIZE,
 										 ALLOCSET_DEFAULT_MAXSIZE);
 
-	rowOutputState = (OutputCopyState) palloc0(sizeof(OutputCopyStateData));
-	rowOutputState->binary = true;
-	rowOutputState->fe_msgbuf = makeStringInfo();
-	rowOutputState->rowcontext = tupleContext;
+	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	copyOutState->binary = true;
+	copyOutState->fe_msgbuf = makeStringInfo();
+	copyOutState->rowcontext = tupleContext;
 
-	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor,
-												  rowOutputState->binary);
+	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, copyOutState->binary);
 
 	/* we use a PG_TRY block to roll back on errors (e.g. in NextCopyFrom) */
 	PG_TRY();
@@ -366,15 +365,14 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 
 				OpenCopyTransactions(copyStatement, shardConnections, shardId);
 
-				CopySendBinaryHeaders(rowOutputState);
-				CopyRowToPlacements(rowOutputState->fe_msgbuf, shardConnections);
+				CopySendBinaryHeaders(copyOutState);
+				SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 			}
 
-			OutputRow(columnValues, columnNulls, tupleDescriptor, rowOutputState,
-					  columnOutputFunctions);
-
 			/* Replicate row to all shard placements */
-			CopyRowToPlacements(rowOutputState->fe_msgbuf, shardConnections);
+			CopySendRow(columnValues, columnNulls, tupleDescriptor, copyOutState,
+						columnOutputFunctions);
+			SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 
 			processedRowCount += 1;
 
@@ -383,8 +381,8 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 
 		if (shardConnections != NULL)
 		{
-			CopySendBinaryFooters(rowOutputState);
-			CopyRowToPlacements(rowOutputState->fe_msgbuf, shardConnections);
+			CopySendBinaryFooters(copyOutState);
+			SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 		}
 
 		connectionList = ConnectionList(shardConnectionHash);
@@ -725,10 +723,11 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId)
 
 
 /*
- * CopyRowToPlacements copies a row to a list of placements for a shard.
+ * SendCopyDataToPlacements copies given copy data to a list of placements for
+ * a shard.
  */
 static void
-CopyRowToPlacements(StringInfo lineBuf, ShardConnections *shardConnections)
+SendCopyDataToPlacements(StringInfo lineBuf, ShardConnections *shardConnections)
 {
 	ListCell *connectionCell = NULL;
 	foreach(connectionCell, shardConnections->connectionList)
@@ -907,7 +906,7 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
 
 
 /*
- * OutputRow serializes one row using the column output functions,
+ * CopySendRow serializes one row using the column output functions,
  * and appends the data to the row output state object's message buffer.
  * This function is modeled after the CopyOneRowTo() function in
  * commands/copy.c, but only implements a subset of that functionality.
@@ -915,8 +914,8 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
  * to not bloat memory usage.
  */
 void
-OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-		  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions)
+CopySendRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
+			CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions)
 {
 	MemoryContext oldContext = NULL;
 	uint32 columnIndex = 0;
@@ -993,7 +992,7 @@ OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 
 /* Append binary headers to the copy buffer in headerOutputState. */
 void
-CopySendBinaryHeaders(OutputCopyState headerOutputState)
+CopySendBinaryHeaders(CopyOutState headerOutputState)
 {
 	const int32 zero = 0;
 
@@ -1012,7 +1011,7 @@ CopySendBinaryHeaders(OutputCopyState headerOutputState)
 
 /* Append binary footers to the copy buffer in footerOutputState. */
 void
-CopySendBinaryFooters(OutputCopyState footerOutputState)
+CopySendBinaryFooters(CopyOutState footerOutputState)
 {
 	int16 negative = -1;
 
@@ -1024,7 +1023,7 @@ CopySendBinaryFooters(OutputCopyState footerOutputState)
 /* *INDENT-OFF* */
 /* Append data to the copy buffer in outputState */
 static void
-CopySendData(OutputCopyState outputState, const void *databuf, int datasize)
+CopySendData(CopyOutState outputState, const void *databuf, int datasize)
 {
 	appendBinaryStringInfo(outputState->fe_msgbuf, databuf, datasize);
 }
@@ -1032,7 +1031,7 @@ CopySendData(OutputCopyState outputState, const void *databuf, int datasize)
 
 /* Append a striong to the copy buffer in outputState. */
 static void
-CopySendString(OutputCopyState outputState, const char *str)
+CopySendString(CopyOutState outputState, const char *str)
 {
 	appendBinaryStringInfo(outputState->fe_msgbuf, str, strlen(str));
 }
@@ -1040,7 +1039,7 @@ CopySendString(OutputCopyState outputState, const char *str)
 
 /* Append a char to the copy buffer in outputState. */
 static void
-CopySendChar(OutputCopyState outputState, char c)
+CopySendChar(CopyOutState outputState, char c)
 {
 	appendStringInfoCharMacro(outputState->fe_msgbuf, c);
 }
@@ -1048,7 +1047,7 @@ CopySendChar(OutputCopyState outputState, char c)
 
 /* Append an int32 to the copy buffer in outputState. */
 static void
-CopySendInt32(OutputCopyState outputState, int32 val)
+CopySendInt32(CopyOutState outputState, int32 val)
 {
 	uint32 buf = htonl((uint32) val);
 	CopySendData(outputState, &buf, sizeof(buf));
@@ -1057,7 +1056,7 @@ CopySendInt32(OutputCopyState outputState, int32 val)
 
 /* Append an int16 to the copy buffer in outputState. */
 static void
-CopySendInt16(OutputCopyState outputState, int16 val)
+CopySendInt16(CopyOutState outputState, int16 val)
 {
 	uint16 buf = htons((uint16) val);
 	CopySendData(outputState, &buf, sizeof(buf));
@@ -1071,7 +1070,7 @@ CopySendInt16(OutputCopyState outputState, int16 val)
  * our coding style. The function should be kept in sync with copy.c.
  */
 static void
-CopyAttributeOutText(OutputCopyState cstate, char *string)
+CopyAttributeOutText(CopyOutState cstate, char *string)
 {
 	char *pointer = NULL;
 	char *start = NULL;
@@ -1164,7 +1163,7 @@ CopyAttributeOutText(OutputCopyState cstate, char *string)
 /* *INDENT-ON* */
 /* Helper function to send pending copy output */
 static inline void
-CopyFlushOutput(OutputCopyState cstate, char *start, char *pointer)
+CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
 {
 	if (pointer > start)
 	{

@@ -64,8 +64,8 @@ static void FilterAndPartitionTable(const char *filterQuery,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
 static int ColumnIndex(TupleDesc rowDescriptor, const char *columnName);
-static OutputCopyState InitRowOutputState(void);
-static void ClearRowOutputState(OutputCopyState copyState);
+static CopyOutState InitRowOutputState(void);
+static void ClearRowOutputState(CopyOutState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
 static uint32 RangePartitionId(Datum partitionValue, const void *context);
@@ -720,7 +720,7 @@ FilterAndPartitionTable(const char *filterQuery,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
-	OutputCopyState rowOutputState = NULL;
+	CopyOutState rowOutputState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
 	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
@@ -814,9 +814,8 @@ FilterAndPartitionTable(const char *filterQuery,
 			/* deconstruct the tuple; this is faster than repeated heap_getattr */
 			heap_deform_tuple(row, rowDescriptor, valueArray, isNullArray);
 
-			OutputRow(valueArray, isNullArray, rowDescriptor, rowOutputState,
-					  columnOutputFunctions);
-
+			CopySendRow(valueArray, isNullArray, rowDescriptor, rowOutputState,
+						columnOutputFunctions);
 			rowText = rowOutputState->fe_msgbuf;
 
 			partitionFile = partitionFileArray[partitionId];
@@ -881,11 +880,10 @@ ColumnIndex(TupleDesc rowDescriptor, const char *columnName)
  * must match one another. Therefore, any changes to the default values in the
  * copy command must be propagated to this function.
  */
-static OutputCopyState
+static CopyOutState
 InitRowOutputState(void)
 {
-	OutputCopyState rowOutputState =
-		(OutputCopyState) palloc0(sizeof(OutputCopyStateData));
+	CopyOutState rowOutputState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 
 	int fileEncoding = pg_get_client_encoding();
 	int databaseEncoding = GetDatabaseEncoding();
@@ -942,7 +940,7 @@ InitRowOutputState(void)
 
 /* Clears copy state used for outputting row data. */
 static void
-ClearRowOutputState(OutputCopyState rowOutputState)
+ClearRowOutputState(CopyOutState rowOutputState)
 {
 	Assert(rowOutputState != NULL);
 
@@ -969,10 +967,10 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 	{
 		/* Generate header for a binary copy */
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		OutputCopyStateData headerOutputStateData;
-		OutputCopyState headerOutputState = (OutputCopyState) & headerOutputStateData;
+		CopyOutStateData headerOutputStateData;
+		CopyOutState headerOutputState = (CopyOutState) & headerOutputStateData;
 
-		memset(headerOutputState, 0, sizeof(OutputCopyStateData));
+		memset(headerOutputState, 0, sizeof(CopyOutStateData));
 		headerOutputState->fe_msgbuf = makeStringInfo();
 
 		CopySendBinaryHeaders(headerOutputState);
@@ -995,10 +993,10 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 	{
 		/* Generate footer for a binary copy */
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		OutputCopyStateData footerOutputStateData;
-		OutputCopyState footerOutputState = (OutputCopyState) & footerOutputStateData;
+		CopyOutStateData footerOutputStateData;
+		CopyOutState footerOutputState = (CopyOutState) & footerOutputStateData;
 
-		memset(footerOutputState, 0, sizeof(OutputCopyStateData));
+		memset(footerOutputState, 0, sizeof(CopyOutStateData));
 		footerOutputState->fe_msgbuf = makeStringInfo();
 
 		CopySendBinaryFooters(footerOutputState);

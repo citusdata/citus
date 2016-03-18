@@ -27,7 +27,7 @@ static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
  * necessary to copy out results. While it'd be a bit nicer to share code,
  * it'd require changing core postgres code.
  */
-typedef struct OutputCopyStateData
+typedef struct CopyOutStateData
 {
 	StringInfo fe_msgbuf;       /* used for all dests during COPY TO, only for
 	                             * dest == COPY_NEW_FE in COPY FROM */
@@ -39,17 +39,17 @@ typedef struct OutputCopyStateData
 	char *delim;                /* column delimiter (must be 1 byte) */
 
 	MemoryContext rowcontext;   /* per-row evaluation context */
-} OutputCopyStateData;
+} CopyOutStateData;
 
-typedef struct OutputCopyStateData *OutputCopyState;
+typedef struct CopyOutStateData *CopyOutState;
 
 
 /* function declarations for copying into a distributed table */
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
-extern void OutputRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-					  OutputCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
-extern void CopySendBinaryHeaders(OutputCopyState headerOutputState);
-extern void CopySendBinaryFooters(OutputCopyState footerOutputState);
+extern void CopySendRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
+					  CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions);
+extern void CopySendBinaryHeaders(CopyOutState headerOutputState);
+extern void CopySendBinaryFooters(CopyOutState footerOutputState);
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 
 
