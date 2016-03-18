@@ -727,6 +727,9 @@ FilterAndPartitionTable(const char *filterQuery,
 	Portal queryPortal = NULL;
 	int connected = 0;
 	int finished = 0;
+	uint32 columnCount = 0;
+	Datum *valueArray = NULL;
+	bool *isNullArray = NULL;
 
 	const char *noPortalName = NULL;
 	const bool readOnly = true;
@@ -773,17 +776,17 @@ FilterAndPartitionTable(const char *filterQuery,
 		OutputBinaryHeaders(partitionFileArray, fileCount);
 	}
 
+	columnCount = (uint32) SPI_tuptable->tupdesc->natts;
+	valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
+	isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
+
 	while (SPI_processed > 0)
 	{
-		TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
-		uint32 columnCount = (uint32) rowDescriptor->natts;
-		Datum *valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
-		bool *isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
-
 		int rowIndex = 0;
 		for (rowIndex = 0; rowIndex < SPI_processed; rowIndex++)
 		{
 			HeapTuple row = SPI_tuptable->vals[rowIndex];
+			TupleDesc rowDescriptor = SPI_tuptable->tupdesc;
 			FileOutputStream partitionFile = { 0, 0, 0 };
 			StringInfo rowText = NULL;
 			Datum partitionKey = 0;
@@ -822,13 +825,13 @@ FilterAndPartitionTable(const char *filterQuery,
 			resetStringInfo(rowText);
 		}
 
-		pfree(valueArray);
-		pfree(isNullArray);
-
 		SPI_freetuptable(SPI_tuptable);
 
 		SPI_cursor_fetch(queryPortal, fetchForward, prefetchCount);
 	}
+
+	pfree(valueArray);
+	pfree(isNullArray);
 
 	SPI_cursor_close(queryPortal);
 
