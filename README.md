@@ -28,7 +28,7 @@ Common Use-Cases:
 * Large dataset archival and reporting
 * Session analytics (funnels, segmentation, and cohorts)
 
-To learn more, visit [citusdata.com](citusdata.com).
+To learn more, visit [https://www.citusdata.com/](citusdata.com).
 
 ### Quickstart
 
