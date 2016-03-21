@@ -60,11 +60,8 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 
 ### Learn More
 
-The project
-[documentation](https://www.citusdata.com/documentation/citus-documentat
-ion-5/index.html) and
-[tutorials](https://www.citusdata.com/documentation/citus-documentation-
-5/tutorials/tut-real-time.html) are good places to start.
+The project [documentation](https://www.citusdata.com/documentation/citus-documentation-5/index.html) and
+[tutorials](https://www.citusdata.com/documentation/citus-documentation-5/tutorials/tut-real-time.html) are good places to start.
 We’re responsive on Github, so you can use the [issue
 tracker](https://github.com/citusdata/citus/issues) to check for or
 submit bug reports and feature requests. For more immediate help
