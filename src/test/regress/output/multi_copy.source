@@ -126,6 +126,33 @@ SELECT count(*) FROM customer_copy_hash;
   2006
 (1 row)
 
+-- Create a new hash-partitioned table with default now() function
+CREATE TABLE customer_with_default(
+        c_custkey integer,
+        c_name varchar(25) not null,
+        c_time timestamp default now());
+SELECT master_create_distributed_table('customer_with_default', 'c_custkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('customer_with_default', 64, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+-- Test with default values for now() function
+COPY customer_with_default (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+-- Confirm that data was copied with now() function
+SELECT count(*) FROM customer_with_default where c_time IS NOT NULL;
+ count 
+-------
+     2
+(1 row)
+
 -- Create a new range-partitioned table into which to COPY
 CREATE TABLE customer_copy_range (
         c_custkey integer,
