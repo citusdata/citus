@@ -174,6 +174,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	ErrorContextCallback errorCallback;
 	CopyOutState copyOutState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
+	ExprContext *expressionContext = NULL;
 
 	/* disallow COPY to/from file or program except for superusers */
 	if (copyStatement->filename != NULL && !superuser())
@@ -295,6 +296,9 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 										 ALLOCSET_DEFAULT_INITSIZE,
 										 ALLOCSET_DEFAULT_MAXSIZE);
 
+	expressionContext = CreateStandaloneExprContext();
+	expressionContext->ecxt_per_tuple_memory = tupleContext;
+
 	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->binary = true;
 	copyOutState->fe_msgbuf = makeStringInfo();
@@ -317,7 +321,8 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 			oldContext = MemoryContextSwitchTo(tupleContext);
 
 			/* parse a row from the input */
-			nextRowFound = NextCopyFrom(copyState, NULL, columnValues, columnNulls, NULL);
+			nextRowFound = NextCopyFrom(copyState, expressionContext,
+										columnValues,columnNulls, NULL);
 
 			MemoryContextSwitchTo(oldContext);
 
