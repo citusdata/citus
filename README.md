@@ -83,3 +83,7 @@ and have added a
 to issues which are accessible to new contributors. The
 [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
 developing the Citus extension itself and our code quality guidelines.
+
+___
+
+Copyright 2012-2016 Citus Data
