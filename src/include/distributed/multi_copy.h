@@ -46,10 +46,10 @@ typedef struct CopyOutStateData *CopyOutState;
 
 /* function declarations for copying into a distributed table */
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
-extern void CopySendRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-					  CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions);
-extern void CopySendBinaryHeaders(CopyOutState headerOutputState);
-extern void CopySendBinaryFooters(CopyOutState footerOutputState);
+extern void BuildCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
+							 CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions);
+extern void BuildCopyBinaryHeaders(CopyOutState headerOutputState);
+extern void BuildCopyBinaryFooters(CopyOutState footerOutputState);
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 
 

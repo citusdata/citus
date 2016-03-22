@@ -814,8 +814,8 @@ FilterAndPartitionTable(const char *filterQuery,
 			/* deconstruct the tuple; this is faster than repeated heap_getattr */
 			heap_deform_tuple(row, rowDescriptor, valueArray, isNullArray);
 
-			CopySendRow(valueArray, isNullArray, rowDescriptor, rowOutputState,
-						columnOutputFunctions);
+			BuildCopyRowData(valueArray, isNullArray, rowDescriptor,
+							 rowOutputState, columnOutputFunctions);
 			rowText = rowOutputState->fe_msgbuf;
 
 			partitionFile = partitionFileArray[partitionId];
@@ -973,7 +973,7 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 		memset(headerOutputState, 0, sizeof(CopyOutStateData));
 		headerOutputState->fe_msgbuf = makeStringInfo();
 
-		CopySendBinaryHeaders(headerOutputState);
+		BuildCopyBinaryHeaders(headerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
 		FileOutputStreamWrite(partitionFile, headerOutputState->fe_msgbuf);
@@ -999,7 +999,7 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 		memset(footerOutputState, 0, sizeof(CopyOutStateData));
 		footerOutputState->fe_msgbuf = makeStringInfo();
 
-		CopySendBinaryFooters(footerOutputState);
+		BuildCopyBinaryFooters(footerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
 		FileOutputStreamWrite(partitionFile, footerOutputState->fe_msgbuf);

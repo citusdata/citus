@@ -125,7 +125,7 @@ static void OpenCopyTransactions(CopyStmt *copyStatement,
 								 ShardConnections *shardConnections,
 								 int64 shardId);
 static StringInfo ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId);
-static void SendCopyDataToPlacements(StringInfo lineBuf,
+static void SendCopyDataToPlacements(StringInfo dataBuffer,
 									 ShardConnections *shardConnections);
 static List * ConnectionList(HTAB *connectionHash);
 static void EndRemoteCopy(List *connectionList, bool stopOnFailure);
@@ -361,13 +361,13 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 
 				OpenCopyTransactions(copyStatement, shardConnections, shardId);
 
-				CopySendBinaryHeaders(copyOutState);
+				BuildCopyBinaryHeaders(copyOutState);
 				SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 			}
 
 			/* Replicate row to all shard placements */
-			CopySendRow(columnValues, columnNulls, tupleDescriptor, copyOutState,
-						columnOutputFunctions);
+			BuildCopyRowData(columnValues, columnNulls, tupleDescriptor,
+							 copyOutState, columnOutputFunctions);
 			SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 
 			processedRowCount += 1;
@@ -379,7 +379,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		shardConnections = (ShardConnections *) hash_seq_search(&status);
 		while (shardConnections != NULL)
 		{
-			CopySendBinaryFooters(copyOutState);
+			BuildCopyBinaryFooters(copyOutState);
 			SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 
 			shardConnections = (ShardConnections *) hash_seq_search(&status);
@@ -732,7 +732,7 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId)
  * a shard.
  */
 static void
-SendCopyDataToPlacements(StringInfo lineBuf, ShardConnections *shardConnections)
+SendCopyDataToPlacements(StringInfo dataBuffer, ShardConnections *shardConnections)
 {
 	ListCell *connectionCell = NULL;
 	foreach(connectionCell, shardConnections->connectionList)
@@ -743,7 +743,7 @@ SendCopyDataToPlacements(StringInfo lineBuf, ShardConnections *shardConnections)
 		int64 shardId = shardConnections->shardId;
 
 		/* copy the line buffer into the placement */
-		int copyResult = PQputCopyData(connection, lineBuf->data, lineBuf->len);
+		int copyResult = PQputCopyData(connection, dataBuffer->data, dataBuffer->len);
 		if (copyResult != 1)
 		{
 			char *nodeName = ConnectionGetOptionValue(connection, "host");
@@ -911,7 +911,7 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
 
 
 /*
- * CopySendRow serializes one row using the column output functions,
+ * BuildCopyRowData serializes one row using the column output functions,
  * and appends the data to the row output state object's message buffer.
  * This function is modeled after the CopyOneRowTo() function in
  * commands/copy.c, but only implements a subset of that functionality.
@@ -919,8 +919,8 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
  * to not bloat memory usage.
  */
 void
-CopySendRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
-			CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions)
+BuildCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
+				 CopyOutState rowOutputState, FmgrInfo *columnOutputFunctions)
 {
 	MemoryContext oldContext = NULL;
 	uint32 columnIndex = 0;
@@ -997,7 +997,7 @@ CopySendRow(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 
 /* Append binary headers to the copy buffer in headerOutputState. */
 void
-CopySendBinaryHeaders(CopyOutState headerOutputState)
+BuildCopyBinaryHeaders(CopyOutState headerOutputState)
 {
 	const int32 zero = 0;
 
@@ -1016,7 +1016,7 @@ CopySendBinaryHeaders(CopyOutState headerOutputState)
 
 /* Append binary footers to the copy buffer in footerOutputState. */
 void
-CopySendBinaryFooters(CopyOutState footerOutputState)
+BuildCopyBinaryFooters(CopyOutState footerOutputState)
 {
 	int16 negative = -1;
 
