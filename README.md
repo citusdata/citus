@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.com/citusdata/citus.svg?token=bSq3ym67qubHCGNs1iYZ&branch=master)](https://travis-ci.com/citusdata/citus)
 [![Citus IRC](https://img.shields.io/badge/irc-%23citus-blue.svg)](irc://irc.freenode.net/citus)
-[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/documentation/citus-documentation-5/index.html)
+[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/documentation/citus-documentation/index.html)
 
 ### What is Citus?
 
@@ -51,7 +51,7 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
    docker exec -it citus_master psql -U postgres -d postgres
    ```
 
-* Follow the [first tutorial](https://www.citusdata.com/documentation/citus-documentation-5/tutorials/tut-real-time.html) instructions
+* Follow the [first tutorial](https://www.citusdata.com/documentation/citus-documentation/tutorials/tut-real-time.html) instructions
 * To shut the cluster down, run
 
    ```bash
@@ -60,8 +60,8 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 
 ### Learn More
 
-The project [documentation](https://www.citusdata.com/documentation/citus-documentation-5/index.html) and
-[tutorials](https://www.citusdata.com/documentation/citus-documentation-5/tutorials/tut-real-time.html) are good places to start.
+The project [documentation](https://www.citusdata.com/documentation/citus-documentation/index.html) and
+[tutorials](https://www.citusdata.com/documentation/citus-documentation/tutorials/tut-real-time.html) are good places to start.
 We’re responsive on Github, so you can use the [issue
 tracker](https://github.com/citusdata/citus/issues) to check for or
 submit bug reports and feature requests. For more immediate help
