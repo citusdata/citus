@@ -84,6 +84,51 @@ to issues which are accessible to new contributors. The
 [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
 developing the Citus extension itself and our code quality guidelines.
 
+### Who is Using Citus?
+
+<dl>
+
+<dt>CloudFlare</dt>
+<dd>
+CloudFlare uses Citus to provide real-time analytics on 100 TBs of
+data from over 4 million customer websites <a
+href="https://blog.cloudflare.com/scaling-out-postgresql-for-cloudflare-analytics-using-citusdb/">Read
+more ></a>
+</dd>
+
+<dt>Agari</dt>
+<dd>
+Agari uses Citus to secure more than 85 percent of U.S. consumer
+emails on two 6-8 TB clusters <a
+href="https://www.citusdata.com/solutions/case-studies/agari-case-study">Read
+more ></a>
+</dd>
+
+
+<dt>MixRank</dt>
+<dd>
+Citus enables MixRank to efficiently collect and analyze vast amounts
+of data to allow inside B2B sales teams to find new customers <a
+href="https://www.citusdata.com/solutions/case-studies/mixrank-case-study">Read
+more ></a>
+</dd>
+
+<dt>Neustar</dt>
+<dd>
+Neustar builds and maintains scalable ad-tech infrastructure that counts billions of events per day using Citus and HyperLogLog.
+</dd>
+
+<dt>Heap</dt>
+<dd>
+Heap uses Citus for conversion funnels with filtering and grouping,
+retention analysis, and behavioral cohorting across billions of
+users and tens of billions of events. <a
+href="https://www.citusdata.com/community/pgconf-silicon-valley-postgresql-conference/powering-heap-postgresql-and-citusdb">Watch
+video ></a>
+</dd>
+
+</dl>
+
 ___
 
 Copyright 2012-2016 Citus Data
