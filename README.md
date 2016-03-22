@@ -80,6 +80,6 @@ page](https://www.citusdata.com/citus-products/citus-data-pricing).
 Citus is built on and of open source. We welcome your contributions,
 and have added a
 [helpwanted](https://github.com/citusdata/citus/labels/helpwanted) label
-to issues which are accessible to new contributors. The CONTRIBUTING.md
-file explains how to get started developing the Citus extension
-itself and our code quality guidelines.
+to issues which are accessible to new contributors. The
+[CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
+developing the Citus extension itself and our code quality guidelines.
