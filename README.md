@@ -21,6 +21,9 @@ gives developers and enterprises the power and familiarity of a
 traditional relational database. As an extension, Citus supports
 new PostgreSQL releases, allowing users to benefit from new features
 while maintaining compatibility with existing PostgreSQL tools.
+Note that Citus supports many (but not all) SQL commands; see the
+[FAQ](https://www.citusdata.com/frequently-asked-questions) for
+more details.
 
 Common Use-Cases:
 * Powering real-time analytic dashboards
