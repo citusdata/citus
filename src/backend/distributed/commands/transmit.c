@@ -3,7 +3,7 @@
  * transmit.c
  *	  Routines for transmitting regular files between two nodes.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

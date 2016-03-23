@@ -4,7 +4,7 @@
  *	  Type and function declarations used for reading and modifying master
  *    node's metadata.
  *
- * Copyright (c) 2014, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  * $Id$
  *

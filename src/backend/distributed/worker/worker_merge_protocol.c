@@ -6,7 +6,7 @@
  * files is one of the threee distributed execution primitives that we apply on
  * worker nodes.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

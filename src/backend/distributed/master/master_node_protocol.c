@@ -4,7 +4,7 @@
  *	  Routines for requesting information from the master node for creating or
  *	  updating shards.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

@@ -4,7 +4,7 @@
  *	  Type and function declarations for optimizing multi-relation based logical
  *	  plans.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

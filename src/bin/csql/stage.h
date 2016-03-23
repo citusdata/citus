@@ -4,7 +4,7 @@
  *	  Declarations for the csql meta-command \stage. These declarations define a
  *	  protocol for the client to communicate to the master and worker nodes.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  */
