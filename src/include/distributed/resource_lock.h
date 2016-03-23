@@ -3,7 +3,7 @@
  * resource_lock.h
  *	  Locking Infrastructure for Citus.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

@@ -5,7 +5,7 @@
  * Routines for constructing a logical plan tree from the given Query tree
  * structure. This new logical plan is based on multi-relational algebra rules.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

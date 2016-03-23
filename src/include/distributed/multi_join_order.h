@@ -5,7 +5,7 @@
  * Type and function declarations for determining a left-only join order for a
  * distributed query plan.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

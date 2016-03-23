@@ -9,7 +9,7 @@
  * advisory locks, but luckily advisory locks only two values for 'field4' in
  * the locktag.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

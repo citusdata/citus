@@ -4,7 +4,7 @@
  *	  Routines for reading worker nodes from membership file, and allocating
  *	  candidate nodes for shard placement.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *
@@ -723,8 +723,8 @@ ParseWorkerNodeFile(const char *workerNodeFilename)
 		/* allocate worker node structure and set fields */
 		workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 
-		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH + 1);
-		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH + 1);
+		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
+		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->inWorkerFile = true;
 

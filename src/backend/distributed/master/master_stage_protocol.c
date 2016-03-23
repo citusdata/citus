@@ -7,7 +7,7 @@
  * command, but also differ from them in that users stage data from tables and
  * not files, and that they can also append to existing shards.
  *
- * Copyright (c) 2013, Citus Data, Inc.
+ * Copyright (c) 2013-2016, Citus Data, Inc.
  *
  * $Id$
  *

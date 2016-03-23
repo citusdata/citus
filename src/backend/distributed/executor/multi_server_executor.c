@@ -7,7 +7,7 @@
  * routines are implement backend-side logic; and they trigger executions
  * on the client-side via function hooks that they load.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

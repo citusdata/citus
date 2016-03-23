@@ -4,7 +4,7 @@
  *	  Function declarations for building planned statements; these statements
  *	  are then executed on the master node.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

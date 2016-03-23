@@ -5,7 +5,7 @@
  * Routines for fetching remote resources from other nodes to this worker node,
  * and materializing these resources on this node if necessary.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

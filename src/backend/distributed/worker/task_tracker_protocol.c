@@ -6,7 +6,7 @@
  * routines allow for the master node to assign tasks to the task tracker, check
  * these tasks' statuses, and remove these tasks when they are no longer needed.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *
