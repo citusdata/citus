@@ -14,7 +14,8 @@ We're happy you want to contribute! You can help us in different ways:
 2. Install packages with homebrew
 
    ```bash
-   brew install git openssl postgresql-9.5
+   brew update
+   brew install git openssl postgresql
    brew link openssl --force
    ```
 
