@@ -86,48 +86,27 @@ developing the Citus extension itself and our code quality guidelines.
 
 ### Who is Using Citus?
 
-<dl>
+Citus is deployed in production by many customers, ranging from
+technology start-ups to large enterprises. Here are some examples:
 
-<dt>CloudFlare</dt>
-<dd>
-CloudFlare uses Citus to provide real-time analytics on 100 TBs of
-data from over 4 million customer websites <a
-href="https://blog.cloudflare.com/scaling-out-postgresql-for-cloudflare-analytics-using-citusdb/">Read
-more ></a>
-</dd>
-
-<dt>Agari</dt>
-<dd>
-Agari uses Citus to secure more than 85 percent of U.S. consumer
-emails on two 6-8 TB clusters <a
-href="https://www.citusdata.com/solutions/case-studies/agari-case-study">Read
-more ></a>
-</dd>
-
-
-<dt>MixRank</dt>
-<dd>
-Citus enables MixRank to efficiently collect and analyze vast amounts
-of data to allow inside B2B sales teams to find new customers <a
-href="https://www.citusdata.com/solutions/case-studies/mixrank-case-study">Read
-more ></a>
-</dd>
-
-<dt>Neustar</dt>
-<dd>
-Neustar builds and maintains scalable ad-tech infrastructure that counts billions of events per day using Citus and HyperLogLog.
-</dd>
-
-<dt>Heap</dt>
-<dd>
-Heap uses Citus for conversion funnels with filtering and grouping,
-retention analysis, and behavioral cohorting across billions of
-users and tens of billions of events. <a
-href="https://www.citusdata.com/community/pgconf-silicon-valley-postgresql-conference/powering-heap-postgresql-and-citusdb">Watch
-video ></a>
-</dd>
-
-</dl>
+* [CloudFlare](https://www.cloudflare.com/) uses Citus to provide
+real-time analytics on 100 TBs of data from over 4 million customer
+websites. [Case
+Study](https://blog.cloudflare.com/scaling-out-postgresql-for-cloudflare-analytics-using-citusdb/)
+* [MixRank](https://mixrank.com/) uses Citus to efficiently collect
+and analyze vast amounts of data to allow inside B2B sales teams
+to find new customers. [Case
+Study](https://www.citusdata.com/solutions/case-studies/mixrank-case-study)
+* [Neustar](https://www.neustar.biz/) builds and maintains scalable
+ad-tech infrastructure that counts billions of events per day using
+Citus and HyperLogLog.
+* [Agari](https://www.agari.com/) uses Citus to secure more than
+85 percent of U.S. consumer emails on two 6-8 TB clusters. [Case
+Study](https://www.citusdata.com/solutions/case-studies/agari-case-study)
+* [Heap](https://heapanalytics.com/) uses Citus to run dynamic
+funnel, segmentation, and cohort queries across billions of users
+and tens of billions of events. [Watch
+Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
 
 ___
 
