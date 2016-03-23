@@ -6,6 +6,16 @@ We're happy you want to contribute! You can help us in different ways:
   suggestions for improvements
 * Fork this repository and submit a pull request
 
+As with the majority of major open source projects, we ask that
+Citus contributors sign a Contributor License Agreement (CLA). We
+know that this creates a bit of red tape, but also believe that it
+is the best way to create total transparency around your rights as
+a contributor and the most effective way of protecting you as well
+as Citus Data as the company behind the open source project.
+
+If you plan on contributing to Citus, please follow these [instructions
+for signing our CLA](https://www.citusdata.com/community/CLA)
+
 ### Getting and building
 
 #### Mac
