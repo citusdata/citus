@@ -4,7 +4,7 @@
  *
  * Routines for accessing file related information on this worker node.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

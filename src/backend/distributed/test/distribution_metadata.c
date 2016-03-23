@@ -5,7 +5,7 @@
  * This file contains functions to exercise distributed table metadata
  * functionality within Citus.
  *
- * Copyright (c) 2014-2015, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

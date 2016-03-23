@@ -4,7 +4,7 @@
  *	  Header for shared declarations that are used for caching remote resources
  *	  on worker nodes, and also for applying distributed execution primitives.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

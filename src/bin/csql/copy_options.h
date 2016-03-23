@@ -6,7 +6,7 @@
  *	  outputting table data to a file. Further, the stage command reuses copy's
  *	  declarations to maintain compatibility with the copy command.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  */

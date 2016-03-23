@@ -8,7 +8,7 @@
  * certain platforms (those which install a single libpq version but can
  * have multiple PostgreSQL server versions) will faile.
  *
- * Copyright (c) 2014-2015, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

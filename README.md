@@ -105,6 +105,14 @@ funnel, segmentation, and cohort queries across billions of users
 and tens of billions of events. [Watch
 Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
 
+### License
+
+Copyright © 2012–2016 Citus Data, Inc.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [GNU Affero General Public License][license] for more details.
+
 [docs]: https://www.citusdata.com/docs/citus/5.0
 [faq]: https://www.citusdata.com/frequently-asked-questions
 [issues]: https://github.com/citusdata/citus/issues
@@ -113,7 +121,4 @@ Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6A
 [support]: https://www.citusdata.com/citus-products/citus-data-pricing
 [tutorial]: https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html
 [twitter]: https://twitter.com/citusdata
-
-___
-
-Copyright 2012-2016 Citus Data
+[license]: LICENSE

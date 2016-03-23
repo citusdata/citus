@@ -8,7 +8,7 @@
  * the results that are fetched from a single worker is sent to the output console
  * directly. Lastly, router executor can only execute a single task.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  */
 
 #include "postgres.h"
