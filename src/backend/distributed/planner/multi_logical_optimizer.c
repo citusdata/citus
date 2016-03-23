@@ -4,7 +4,7 @@
  *	  Routines for optimizing logical plan trees based on multi-relational
  *	  algebra.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

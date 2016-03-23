@@ -5,7 +5,7 @@
  * This file contains functions to distribute a table by creating shards for it
  * across a set of worker nodes.
  *
- * Copyright (c) 2014-2015, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

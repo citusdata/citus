@@ -6,7 +6,7 @@
  * in a delete command and deletes a shard if and only if all rows in the shard
  * satisfy the conditions in the delete command.
  *
- * Copyright (c) 2014, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  * $Id$
  *

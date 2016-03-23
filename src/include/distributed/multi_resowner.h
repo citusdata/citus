@@ -3,7 +3,7 @@
  * multi_resowner.h
  *	  Citus resource owner integration.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 #ifndef MULTI_RESOWNER_H

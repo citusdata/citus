@@ -2,7 +2,7 @@
  * multi_utility.c
  *	  Citus utility hook and related functionality.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

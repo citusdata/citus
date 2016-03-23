@@ -5,7 +5,7 @@
  * Header and type declarations for assigning tasks to and removing tasks from
  * the task tracker running on this node.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

@@ -4,7 +4,7 @@
  *	  Header for shared declarations for access to master node data. These data
  *	  are used to create new shards or update existing ones.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

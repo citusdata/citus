@@ -3,7 +3,7 @@
  * citus_nodefuncs.c
  *	  Helper functions for dealing with nodes
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

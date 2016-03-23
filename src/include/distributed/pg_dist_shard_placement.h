@@ -9,7 +9,7 @@
  * the master reconciles these shard reports, and determines outdated, under-
  * and over-replicated shards.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
