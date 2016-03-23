@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.com/citusdata/citus.svg?token=bSq3ym67qubHCGNs1iYZ&branch=master)](https://travis-ci.com/citusdata/citus)
 [![Citus IRC](https://img.shields.io/badge/irc-%23citus-blue.svg)](https://webchat.freenode.net/?channels=citus)
-[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/docs/citus/5.0)
+[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)][docs]
 
 ### What is Citus?
 
@@ -22,8 +22,7 @@ traditional relational database. As an extension, Citus supports
 new PostgreSQL releases, allowing users to benefit from new features
 while maintaining compatibility with existing PostgreSQL tools.
 Note that Citus supports many (but not all) SQL commands; see the
-[FAQ](https://www.citusdata.com/frequently-asked-questions) for
-more details.
+[FAQ][faq] for more details.
 
 Common Use-Cases:
 * Powering real-time analytic dashboards
@@ -37,7 +36,7 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 
 #### Local Citus Cluster
 
-* Install docker-compose: [Mac](https://www.docker.com/products/docker-toolbox) | [Linux](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04)
+* Install docker-compose: [Mac][mac_install] | [Linux][linux_install]
 * (Mac only) connect to Docker VM
    ```bash
    eval $(docker-machine env default)
@@ -54,7 +53,7 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
    docker exec -it citus_master psql -U postgres -d postgres
    ```
 
-* Follow the [first tutorial](https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html) instructions
+* Follow the [first tutorial][tutorial] instructions
 * To shut the cluster down, run
 
    ```bash
@@ -63,17 +62,15 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 
 ### Learn More
 
-The project [documentation](https://www.citusdata.com/docs/citus/5.0) and
-[tutorials](https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html) are good places to start.
-We’re responsive on Github, so you can use the [issue
-tracker](https://github.com/citusdata/citus/issues) to check for or
-submit bug reports and feature requests. For more immediate help
-or general discussion we’re on IRC at `#citus` on Freenode and
-[@citusdata](https://twitter.com/citusdata) on Twitter.
+The project [documentation][docs] and [tutorials][tutorial] are
+good places to start.  We’re responsive on Github, so you can use
+the [issue tracker][issues]  to check for or submit bug reports and
+feature requests. For more immediate help or general discussion
+we’re on IRC at `#citus` on Freenode and [@citusdata][twitter] on
+Twitter.
 
 We also offer training and dedicated support options. More information
-is available on our [support
-page](https://www.citusdata.com/citus-products/citus-data-pricing).
+is available on our [support page][support].
 
 ### Contributing
 
@@ -107,6 +104,15 @@ Study](https://www.citusdata.com/solutions/case-studies/agari-case-study)
 funnel, segmentation, and cohort queries across billions of users
 and tens of billions of events. [Watch
 Video](https://www.youtube.com/watch?v=NVl9_6J1G60&list=PLixnExCn6lRpP10ZlpJwx6AuU3XIgNWpL)
+
+[docs]: https://www.citusdata.com/docs/citus/5.0
+[faq]: https://www.citusdata.com/frequently-asked-questions
+[issues]: https://github.com/citusdata/citus/issues
+[linux_install]: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04
+[mac_install]: https://www.docker.com/products/docker-toolbox
+[support]: https://www.citusdata.com/citus-products/citus-data-pricing
+[tutorial]: https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html
+[twitter]: https://twitter.com/citusdata
 
 ___
 
