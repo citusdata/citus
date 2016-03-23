@@ -4,7 +4,7 @@
  *	  Type and function pointer declarations for executing client-side (libpq)
  *	  logic.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

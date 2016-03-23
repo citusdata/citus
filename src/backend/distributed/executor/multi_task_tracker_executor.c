@@ -10,7 +10,7 @@
  * for each task, and (b) distributed execution plans can include map/reduce
  * execution primitives, which involve writing intermediate results to files.
  *
- * Copyright (c) 2013, Citus Data, Inc.
+ * Copyright (c) 2013-2016, Citus Data, Inc.
  *
  * $Id$
  *

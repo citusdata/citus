@@ -9,7 +9,7 @@
  * available. They also can't handle execution primitives that need to write
  * their results to intermediate files.
  *
- * Copyright (c) 2013, Citus Data, Inc.
+ * Copyright (c) 2013-2016, Citus Data, Inc.
  *
  * $Id$
  *

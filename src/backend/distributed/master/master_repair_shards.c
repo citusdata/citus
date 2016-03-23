@@ -5,7 +5,7 @@
  * This file contains functions to repair unhealthy shard placements using data
  * from healthy ones.
  *
- * Copyright (c) 2014-2015, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

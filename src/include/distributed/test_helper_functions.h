@@ -5,7 +5,7 @@
  * Declarations for public functions and types related to unit testing
  * functionality.
  *
- * Copyright (c) 2014-2015, Citus Data, Inc.
+ * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

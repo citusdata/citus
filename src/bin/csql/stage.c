@@ -5,7 +5,7 @@
  *	  communicate with the master and worker nodes; and create new shards and
  *	  upload data into them.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  */

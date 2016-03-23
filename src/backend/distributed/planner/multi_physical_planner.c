@@ -4,7 +4,7 @@
  *	  Routines for creating physical plans from given multi-relational algebra
  *	  trees.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

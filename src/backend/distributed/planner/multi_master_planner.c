@@ -4,7 +4,7 @@
  *	  Routines for building create table and select into table statements on the
  *	  master node.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *
