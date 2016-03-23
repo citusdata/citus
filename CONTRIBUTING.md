@@ -34,8 +34,4 @@ We're happy you want to contribute! You can help us in different ways:
    sudo make install
    cd src/test/regress
    make check-multi
-
-   # if you enncounter an error about __cg_jpeg_resync_to_restart, try
-   # brew uninstall libpng
-   # and retry make check-multi
    ```
