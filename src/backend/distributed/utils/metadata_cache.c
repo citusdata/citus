@@ -3,7 +3,7 @@
  * metadata_cache.c
  *	  Distributed table metadata cache
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 

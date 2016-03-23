@@ -3,7 +3,7 @@
  * transmit.h
  *	  Shared declarations for transmitting files between remote nodes.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */

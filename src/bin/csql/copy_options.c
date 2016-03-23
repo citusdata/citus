@@ -3,7 +3,7 @@
  * copy_options.c
  *	  Routines for parsing copy and stage meta commands.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  */

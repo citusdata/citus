@@ -18,7 +18,7 @@
  * For details on how the task tracker manages resources during process start-up
  * and shutdown, please see the writeboard on our Basecamp project website.
  *
- * Copyright (c) 2012, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  * $Id$
  *

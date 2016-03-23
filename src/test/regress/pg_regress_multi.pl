@@ -3,7 +3,7 @@
 #
 # pg_regress_multi.pl - Test runner for Citus
 #
-# Portions Copyright (c) 2012-2015, Citus Data, Inc.
+# Portions Copyright (c) 2012-2016, Citus Data, Inc.
 # Portions Copyright (c) 1996-2015, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #

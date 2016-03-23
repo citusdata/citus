@@ -3,7 +3,7 @@
  * create_distributed_relation.c
  *	  Routines relation to the creation of distributed relations.
  *
- * Copyright (c) 2012-2015, Citus Data, Inc.
+ * Copyright (c) 2012-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
