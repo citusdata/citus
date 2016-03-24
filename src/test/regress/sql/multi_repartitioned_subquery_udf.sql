@@ -1,0 +1,46 @@
+--
+-- MULTI_REPARTITIONED_SUBQUERY_UDF
+--
+
+-- Create UDF in master and workers
+\c - - - :master_port
+DROP FUNCTION IF EXISTS median(double precision[]);
+
+CREATE FUNCTION median(double precision[]) RETURNS double precision 
+LANGUAGE sql IMMUTABLE AS $_$ 
+	SELECT AVG(val) FROM 
+	  (SELECT val FROM unnest($1) val 
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+$_$;
+
+\c - - - :worker_1_port
+DROP FUNCTION IF EXISTS median(double precision[]);
+
+CREATE FUNCTION median(double precision[]) RETURNS double precision 
+LANGUAGE sql IMMUTABLE AS $_$ 
+	SELECT AVG(val) FROM 
+	  (SELECT val FROM unnest($1) val 
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+$_$;
+
+\c - - - :worker_2_port
+DROP FUNCTION IF EXISTS median(double precision[]);
+
+CREATE FUNCTION median(double precision[]) RETURNS double precision 
+LANGUAGE sql IMMUTABLE AS $_$ 
+	SELECT AVG(val) FROM 
+	  (SELECT val FROM unnest($1) val 
+	   ORDER BY 1 LIMIT  2 - MOD(array_upper($1, 1), 2) 
+	   OFFSET CEIL(array_upper($1, 1) / 2.0) - 1) sub; 
+$_$;
+
+-- Run query on master
+\c - - - :master_port
+
+SET citus.task_executor_type TO 'task-tracker';
+
+SELECT * FROM (SELECT median(ARRAY[1,2,sum(l_suppkey)]) as median, count(*)
+    	  FROM lineitem GROUP BY l_partkey) AS a
+  WHERE median > 2;
