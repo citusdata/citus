@@ -74,7 +74,8 @@ test: multi_stage_large_records multi_master_delete_protocol
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
-test: multi_index_statements multi_alter_table_statements
+test: multi_index_statements
+test: multi_alter_table_statements
 
 # ----------
 # multi_create_schema tests creation, staging and querying of a table in a new
