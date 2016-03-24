@@ -572,18 +572,59 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 							   "currently unsupported")));
 	}
 
-	if (createIndexStatement->unique)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("creating unique indexes on distributed tables is "
-							   "currently unsupported")));
-	}
-
 	if (createIndexStatement->concurrent)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("creating indexes concurrently on distributed tables is "
 							   "currently unsupported")));
+	}
+
+	if (createIndexStatement->unique)
+	{
+		RangeVar *relation = createIndexStatement->relation;
+		bool missingOk = false;
+		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
+		LOCKMODE lockMode = ShareLock;
+		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
+		Var *partitionKey = PartitionKey(relationId);
+		char partitionMethod = PartitionMethod(relationId);
+		List *indexParameterList = NIL;
+		ListCell *indexParameterCell = NULL;
+		bool indexContainsPartitionColumn = false;
+
+		if (partitionMethod == DISTRIBUTE_BY_APPEND)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("creating unique indexes on append-partitioned tables "
+								   "is currently unsupported")));
+		}
+
+		indexParameterList = createIndexStatement->indexParams;
+		foreach(indexParameterCell, indexParameterList)
+		{
+			IndexElem *indexElement = (IndexElem *) lfirst(indexParameterCell);
+			char *columnName = indexElement->name;
+			AttrNumber attributeNumber = InvalidAttrNumber;
+
+			/* column name is null for index expressions, skip it */
+			if (columnName == NULL)
+			{
+				continue;
+			}
+
+			attributeNumber = get_attnum(relationId, columnName);
+			if (attributeNumber == partitionKey->varattno)
+			{
+				indexContainsPartitionColumn = true;
+			}
+		}
+
+		if (!indexContainsPartitionColumn)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("creating unique indexes on non-partition "
+								   "columns is currently unsupported")));
+		}
 	}
 }
 
