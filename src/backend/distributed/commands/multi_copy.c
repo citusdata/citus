@@ -380,13 +380,14 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		shardConnections = (ShardConnections *) hash_seq_search(&status);
 		while (shardConnections != NULL)
 		{
+			List *shardConnectionsList = list_copy(shardConnections->connectionList);
+			connectionList = list_concat(connectionList, shardConnectionsList);
+
 			BuildCopyBinaryFooters(copyOutState);
 			SendCopyDataToPlacements(copyOutState->fe_msgbuf, shardConnections);
 
 			shardConnections = (ShardConnections *) hash_seq_search(&status);
 		}
-
-		connectionList = ConnectionList(shardConnectionHash);
 
 		EndRemoteCopy(connectionList, true);
 
