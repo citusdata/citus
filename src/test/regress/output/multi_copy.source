@@ -20,7 +20,7 @@ SELECT master_create_distributed_table('customer_copy_hash', 'c_custkey', 'hash'
 
 -- Test COPY into empty hash-partitioned table
 COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
-ERROR:  could not find any shards for query
+ERROR:  could not find any shards into which to copy
 DETAIL:  No shards exist for distributed table "customer_copy_hash".
 HINT:  Run master_create_worker_shards to create shards and try again.
 SELECT master_create_worker_shards('customer_copy_hash', 64, 1);
@@ -172,7 +172,7 @@ SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'rang
 
 -- Test COPY into empty range-partitioned table
 COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
-ERROR:  could not find any shards for query
+ERROR:  could not find any shards into which to copy
 DETAIL:  No shards exist for distributed table "customer_copy_range".
 SELECT master_create_empty_shard('customer_copy_range') AS new_shard_id
 \gset

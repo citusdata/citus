@@ -25,12 +25,12 @@ static StringInfo BuildTransactionName(int connectionId);
 
 
 /*
- * PrepareTransactions prepares all transactions on connections in
+ * PrepareRemoteTransactions prepares all transactions on connections in
  * connectionList for commit if the 2PC transaction manager is enabled.
  * On failure, it reports an error and stops.
  */
 void
-PrepareTransactions(List *connectionList)
+PrepareRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -68,11 +68,11 @@ PrepareTransactions(List *connectionList)
 
 
 /*
- * AbortTransactions aborts all transactions on connections in connectionList.
+ * AbortRemoteTransactions aborts all transactions on connections in connectionList.
  * On failure, it reports a warning and continues to abort all of them.
  */
 void
-AbortTransactions(List *connectionList)
+AbortRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -118,11 +118,11 @@ AbortTransactions(List *connectionList)
 
 
 /*
- * CommitTransactions commits all transactions on connections in connectionList.
+ * CommitRemoteTransactions commits all transactions on connections in connectionList.
  * On failure, it reports a warning and continues committing all of them.
  */
 void
-CommitTransactions(List *connectionList)
+CommitRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
