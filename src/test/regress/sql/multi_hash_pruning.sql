@@ -91,8 +91,18 @@ EXPLAIN SELECT count(*) FROM
 
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
--- Check that we don't support pruning for ANY (array expression)
+-- Check that we don't support pruning for ANY (array expression) and give
+-- a notice message when used with the partition column
+EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey = ANY ('{1,2,3}');
 
+-- Check that we don't show the message if the operator is not
+-- equality operator
+EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey < ALL ('{1,2,3}');
+
+-- Check that we don't give a spurious hint message when non-partition 
+-- columns are used with ANY/IN/ALL
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_totalprice IN (2, 5);
 

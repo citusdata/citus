@@ -2896,8 +2896,25 @@ HashableClauseMutator(Node *originalNode, Var *partitionColumn)
 	}
 	else if (IsA(originalNode, ScalarArrayOpExpr))
 	{
-		ereport(NOTICE, (errmsg("cannot use shard pruning with ANY (array expression)"),
-						 errhint("Consider rewriting the expression with OR clauses.")));
+		ScalarArrayOpExpr *arrayOperatorExpression = (ScalarArrayOpExpr *) originalNode;
+		Node *leftOpExpression = linitial(arrayOperatorExpression->args);
+		Node *strippedLeftOpExpression = strip_implicit_coercions(leftOpExpression);
+		char *operatorName = get_opname(arrayOperatorExpression->opno);
+		int equalsCompare = strncmp(operatorName, EQUAL_OPERATOR_STRING, NAMEDATALEN);
+		bool usingEqualityOperator = (equalsCompare == 0);
+
+		/*
+		 * Citus cannot prune hash-distributed shards with ANY/ALL. We show a NOTICE
+		 * if the expression is ANY/ALL performed on the partition column with equality.
+		 */
+		if (usingEqualityOperator && strippedLeftOpExpression != NULL &&
+			equal(strippedLeftOpExpression, partitionColumn))
+		{
+			ereport(NOTICE, (errmsg("cannot use shard pruning with "
+									"ANY/ALL (array expression)"),
+							 errhint("Consider rewriting the expression with "
+									 "OR/AND clauses.")));
+		}
 	}
 
 	/*
