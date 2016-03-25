@@ -315,10 +315,9 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
 										columnValues,columnNulls, NULL);
 
-			MemoryContextSwitchTo(oldContext);
-
 			if (!nextRowFound)
 			{
+				MemoryContextSwitchTo(oldContext);
 				break;
 			}
 
@@ -348,9 +347,11 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 
 			shardId = shardInterval->shardId;
 
+			MemoryContextSwitchTo(oldContext);
+
 			/* find the connections to the shard placements */
 			shardConnections = (ShardConnections *) hash_search(shardConnectionHash,
-																&shardInterval->shardId,
+																&shardId,
 																HASH_ENTER,
 																&found);
 			if (!found)
@@ -394,17 +395,10 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 			PrepareTransactions(connectionList);
 		}
 
-		pfree(columnValues);
-		pfree(columnNulls);
-
-		FreeExecutorState(executorState);
-
 		CHECK_FOR_INTERRUPTS();
 	}
 	PG_CATCH();
 	{
-		EndCopyFrom(copyState);
-
 		/* roll back all transactions */
 		connectionList = ConnectionList(shardConnectionHash);
 		EndRemoteCopy(connectionList, false);
@@ -749,7 +743,7 @@ SendCopyDataToPlacements(StringInfo dataBuffer, ShardConnections *shardConnectio
 			char *nodeName = ConnectionGetOptionValue(connection, "host");
 			char *nodePort = ConnectionGetOptionValue(connection, "port");
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-							errmsg("Failed to COPY to shard %ld on %s:%s",
+							errmsg("failed to COPY to shard %ld on %s:%s",
 								   shardId, nodeName, nodePort)));
 		}
 	}
@@ -817,7 +811,7 @@ EndRemoteCopy(List *connectionList, bool stopOnFailure)
 			if (stopOnFailure)
 			{
 				ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-								errmsg("Failed to COPY to shard %ld on %s:%s",
+								errmsg("failed to COPY to shard %ld on %s:%s",
 									   shardId, nodeName, nodePort)));
 			}
 

@@ -723,8 +723,8 @@ ParseWorkerNodeFile(const char *workerNodeFilename)
 		/* allocate worker node structure and set fields */
 		workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 
-		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH + 1);
-		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH + 1);
+		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
+		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->inWorkerFile = true;
 
