@@ -17,6 +17,7 @@
 #include "postgres.h"
 #include "funcapi.h"
 
+#include <netinet/in.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #ifdef HAVE_INTTYPES_H
