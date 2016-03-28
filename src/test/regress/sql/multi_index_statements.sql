@@ -73,6 +73,7 @@ CREATE UNIQUE INDEX try_unique_append_index_a_b ON index_test_append(a,b);
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
 CREATE INDEX try_index ON lineitem (non_existent_column);
+CREATE INDEX ON lineitem (l_orderkey);
 
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
