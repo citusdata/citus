@@ -15,6 +15,8 @@
 /* Config variables managed via guc.c to explain distributed query plans */
 extern bool ExplainMultiLogicalPlan;
 extern bool ExplainMultiPhysicalPlan;
+extern bool ExplainDistributedQueries;
+extern bool ExplainAllTasks;
 
 extern void MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 								 const char *queryString, ParamListInfo params);

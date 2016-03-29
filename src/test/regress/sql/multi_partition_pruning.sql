@@ -5,6 +5,7 @@
 -- Tests to verify that we correctly prune unreferenced shards. For this, we
 -- need to increase the logging verbosity of messages displayed on the client.
 
+SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 
 -- Adding additional l_orderkey = 1 to make this query not router executable

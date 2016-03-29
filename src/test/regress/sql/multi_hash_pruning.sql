@@ -19,111 +19,69 @@ CREATE TABLE orders_hash_partitioned (
 	o_clerk char(15),
 	o_shippriority integer,
 	o_comment varchar(79) );
-SELECT master_create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'append');
-
-UPDATE pg_dist_partition SET partmethod = 'h'
-	WHERE logicalrelid = 'orders_hash_partitioned'::regclass;
-
--- Create logical shards with shardids 110, 111, 112 and 113
-
-INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue)
-	VALUES ('orders_hash_partitioned'::regclass, 110, 't', -1905060026, -1905060026),
-	       ('orders_hash_partitioned'::regclass, 111, 't', 1134484726, 1134484726),
-	       ('orders_hash_partitioned'::regclass, 112, 't', -1905060026, -28094569),
-	       ('orders_hash_partitioned'::regclass, 113, 't', -1011077333, 0);
-
--- Create shard placements for shards 110, 111, 112 and 113
-
-INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
-       SELECT 110, 1, 1, nodename, nodeport
-       FROM pg_dist_shard_placement
-       GROUP BY nodename, nodeport
-       ORDER BY nodename, nodeport ASC
-       LIMIT 1;
-
-INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
-       SELECT 111, 1, 1, nodename, nodeport
-       FROM pg_dist_shard_placement
-       GROUP BY nodename, nodeport
-       ORDER BY nodename, nodeport ASC
-       LIMIT 1;
-
-INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
-       SELECT 112, 1, 1, nodename, nodeport
-       FROM pg_dist_shard_placement
-       GROUP BY nodename, nodeport
-       ORDER BY nodename, nodeport ASC
-       LIMIT 1;
-
-INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename, nodeport)
-       SELECT 113, 1, 1, nodename, nodeport
-       FROM pg_dist_shard_placement
-       GROUP BY nodename, nodeport
-       ORDER BY nodename, nodeport ASC
-       LIMIT 1;
+SELECT master_create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'hash');
+SELECT master_create_worker_shards('orders_hash_partitioned', 4, 1);
 
 SET client_min_messages TO DEBUG2;
 
 -- Check that we can prune shards for simple cases, boolean expressions and
 -- immutable functions.
 
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
+SELECT count(*) FROM orders_hash_partitioned;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_clerk = 'aaa';
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
-EXPLAIN SELECT count(*) FROM
+SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
 
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
 -- Check that we don't support pruning for ANY (array expression) and give
 -- a notice message when used with the partition column
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = ANY ('{1,2,3}');
 
 -- Check that we don't show the message if the operator is not
 -- equality operator
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey < ALL ('{1,2,3}');
 
 -- Check that we don't give a spurious hint message when non-partition 
 -- columns are used with ANY/IN/ALL
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_totalprice IN (2, 5);
 
 -- Check that we cannot prune for mutable functions.
 
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = random();
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = random();
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() OR o_orderkey = 1;
-EXPLAIN SELECT count(*) FROM orders_hash_partitioned
+SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() AND o_orderkey = 1;
 
 -- Check that we can do join pruning.
 
-EXPLAIN SELECT count(*)
+SELECT count(*)
 	FROM orders_hash_partitioned orders1, orders_hash_partitioned orders2
 	WHERE orders1.o_orderkey = orders2.o_orderkey;
 
-EXPLAIN SELECT count(*)
+SELECT count(*)
 	FROM orders_hash_partitioned orders1, orders_hash_partitioned orders2
 	WHERE orders1.o_orderkey = orders2.o_orderkey
 	AND orders1.o_orderkey = 1
 	AND orders2.o_orderkey is NULL;
-
-SET client_min_messages TO NOTICE;

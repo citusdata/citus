@@ -586,7 +586,6 @@ RouterExecutorEnd(QueryDesc *queryDesc)
 	}
 
 	Assert(estate != NULL);
-	Assert(estate->es_finished);
 
 	FreeExecutorState(estate);
 	queryDesc->estate = NULL;

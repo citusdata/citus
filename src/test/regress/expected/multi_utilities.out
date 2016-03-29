@@ -21,17 +21,6 @@ COPY (SELECT COUNT(*) FROM sharded_table) TO STDOUT;
 -- cursors may not involve distributed tables
 DECLARE all_sharded_rows CURSOR FOR SELECT * FROM sharded_table;
 ERROR:  DECLARE CURSOR can only be used in transaction blocks
--- EXPLAIN support isn't implemented for distributed queries...
-EXPLAIN SELECT * FROM sharded_table;
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
-(1 row)
-
--- ... or for distributed modifications
-EXPLAIN INSERT INTO sharded_table VALUES ('dan', 4);
-ERROR:  cannot show execution plan for distributed modification
-DETAIL:  EXPLAIN commands are unsupported for distributed modifications.
 -- verify PREPARE functionality
 PREPARE sharded_insert AS INSERT INTO sharded_table VALUES ('adam', 1);
 PREPARE sharded_update AS UPDATE sharded_table SET name = 'bob' WHERE id = 1;

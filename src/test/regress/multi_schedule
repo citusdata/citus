@@ -26,6 +26,7 @@ test: multi_stage_data
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
+test: multi_explain
 test: multi_subquery
 test: multi_single_relation_subquery
 test: multi_agg_distinct multi_limit_clause multi_limit_clause_approximate
