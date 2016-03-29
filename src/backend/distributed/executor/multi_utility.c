@@ -303,7 +303,9 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 
 /*
  * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
- * COPYing from distributed tables and preventing unsupported actions.
+ * COPYing from distributed tables and preventing unsupported actions. The
+ * function returns a modified COPY statement to be executed, or NULL if no
+ * further processing is needed.
  */
 static Node *
 ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag)
@@ -588,6 +590,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 	{
 		RangeVar *relation = createIndexStatement->relation;
 		bool missingOk = false;
+
 		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);

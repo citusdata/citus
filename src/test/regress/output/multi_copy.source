@@ -20,7 +20,7 @@ SELECT master_create_distributed_table('customer_copy_hash', 'c_custkey', 'hash'
 
 -- Test COPY into empty hash-partitioned table
 COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
-ERROR:  could not find any shards for query
+ERROR:  could not find any shards into which to copy
 DETAIL:  No shards exist for distributed table "customer_copy_hash".
 HINT:  Run master_create_worker_shards to create shards and try again.
 SELECT master_create_worker_shards('customer_copy_hash', 64, 1);
@@ -47,7 +47,6 @@ COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
 ERROR:  duplicate key value violates unique constraint "customer_copy_hash_pkey_103160"
 DETAIL:  Key (c_custkey)=(2) already exists.
-CONTEXT:  COPY customer_copy_hash, line 4: ""
 -- Confirm that no data was copied
 SELECT count(*) FROM customer_copy_hash;
  count 
@@ -90,7 +89,6 @@ COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
 ERROR:  null value in column "c_name" violates not-null constraint
 DETAIL:  Failing row contains (8, null, null, null, null, null, null, null).
-CONTEXT:  COPY customer_copy_hash, line 4: ""
 -- Confirm that no data was copied
 SELECT count(*) FROM customer_copy_hash;
  count 
@@ -126,6 +124,61 @@ SELECT count(*) FROM customer_copy_hash;
   2006
 (1 row)
 
+-- Create a new hash-partitioned table with default now() function
+CREATE TABLE customer_with_default(
+        c_custkey integer,
+        c_name varchar(25) not null,
+        c_time timestamp default now());
+SELECT master_create_distributed_table('customer_with_default', 'c_custkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('customer_with_default', 64, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+-- Test with default values for now() function
+COPY customer_with_default (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+-- Confirm that data was copied with now() function
+SELECT count(*) FROM customer_with_default where c_time IS NOT NULL;
+ count 
+-------
+     2
+(1 row)
+
+-- Add columns to the table and perform a COPY
+ALTER TABLE customer_copy_hash ADD COLUMN extra1 INT DEFAULT 0;
+ALTER TABLE customer_copy_hash ADD COLUMN extra2 INT DEFAULT 0;
+COPY customer_copy_hash (c_custkey, c_name, extra1, extra2) FROM STDIN CSV;
+SELECT * FROM customer_copy_hash WHERE extra1 = 1;
+ c_custkey |   c_name   | c_address | c_nationkey | c_phone | c_acctbal | c_mktsegment | c_comment | extra1 | extra2 
+-----------+------------+-----------+-------------+---------+-----------+--------------+-----------+--------+--------
+        10 | customer10 |           |             |         |           |              |           |      1 |      5
+(1 row)
+
+-- Test dropping an intermediate column
+ALTER TABLE customer_copy_hash DROP COLUMN extra1;
+COPY customer_copy_hash (c_custkey, c_name, extra2) FROM STDIN CSV;
+SELECT * FROM customer_copy_hash WHERE c_custkey = 11;
+ c_custkey |   c_name   | c_address | c_nationkey | c_phone | c_acctbal | c_mktsegment | c_comment | extra2 
+-----------+------------+-----------+-------------+---------+-----------+--------------+-----------+--------
+        11 | customer11 |           |             |         |           |              |           |      5
+(1 row)
+
+-- Test dropping the last column
+ALTER TABLE customer_copy_hash DROP COLUMN extra2;
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN CSV;
+SELECT * FROM customer_copy_hash WHERE c_custkey = 12;
+ c_custkey |   c_name   | c_address | c_nationkey | c_phone | c_acctbal | c_mktsegment | c_comment 
+-----------+------------+-----------+-------------+---------+-----------+--------------+-----------
+        12 | customer12 |           |             |         |           |              | 
+(1 row)
+
 -- Create a new range-partitioned table into which to COPY
 CREATE TABLE customer_copy_range (
         c_custkey integer,
@@ -145,7 +198,7 @@ SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'rang
 
 -- Test COPY into empty range-partitioned table
 COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
-ERROR:  could not find any shards for query
+ERROR:  could not find any shards into which to copy
 DETAIL:  No shards exist for distributed table "customer_copy_range".
 SELECT master_create_empty_shard('customer_copy_range') AS new_shard_id
 \gset

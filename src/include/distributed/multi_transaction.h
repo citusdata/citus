@@ -48,9 +48,10 @@ typedef struct TransactionConnection
 
 
 /* Functions declarations for transaction and connection management */
-extern void PrepareTransactions(List *connectionList);
-extern void AbortTransactions(List *connectionList);
-extern void CommitTransactions(List *connectionList);
+extern void InitializeDistributedTransaction(void);
+extern void PrepareRemoteTransactions(List *connectionList);
+extern void AbortRemoteTransactions(List *connectionList);
+extern void CommitRemoteTransactions(List *connectionList);
 extern void CloseConnections(List *connectionList);
 
 
