@@ -100,7 +100,6 @@ test: multi_append_table_to_shard
 # ---------
 test: multi_outer_join
 
-#
 # ---
 # Tests covering mostly modification queries and required preliminary
 # functionality related to metadata, shard creation, shard pruning and

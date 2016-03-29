@@ -21,16 +21,31 @@
 
 
 /* Local functions forward declarations */
+static uint32 DistributedTransactionId = 0;
+
+
+/* Local functions forward declarations */
 static StringInfo BuildTransactionName(int connectionId);
 
 
 /*
- * PrepareTransactions prepares all transactions on connections in
+ * InitializeDistributedTransaction prepares the distributed transaction ID
+ * used in transaction names.
+ */
+void
+InitializeDistributedTransaction(void)
+{
+	DistributedTransactionId++;
+}
+
+
+/*
+ * PrepareRemoteTransactions prepares all transactions on connections in
  * connectionList for commit if the 2PC transaction manager is enabled.
  * On failure, it reports an error and stops.
  */
 void
-PrepareTransactions(List *connectionList)
+PrepareRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -57,7 +72,7 @@ PrepareTransactions(List *connectionList)
 			PQclear(result);
 
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-							errmsg("Failed to prepare transaction")));
+							errmsg("failed to prepare transaction")));
 		}
 
 		PQclear(result);
@@ -68,11 +83,11 @@ PrepareTransactions(List *connectionList)
 
 
 /*
- * AbortTransactions aborts all transactions on connections in connectionList.
+ * AbortRemoteTransactions aborts all transactions on connections in connectionList.
  * On failure, it reports a warning and continues to abort all of them.
  */
 void
-AbortTransactions(List *connectionList)
+AbortRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -82,8 +97,6 @@ AbortTransactions(List *connectionList)
 			(TransactionConnection *) lfirst(connectionCell);
 		PGconn *connection = transactionConnection->connection;
 		int64 connectionId = transactionConnection->connectionId;
-		char *nodeName = ConnectionGetOptionValue(connection, "host");
-		char *nodePort = ConnectionGetOptionValue(connection, "port");
 		PGresult *result = NULL;
 
 		if (transactionConnection->transactionState == TRANSACTION_STATE_PREPARED)
@@ -96,11 +109,14 @@ AbortTransactions(List *connectionList)
 			result = PQexec(connection, command->data);
 			if (PQresultStatus(result) != PGRES_COMMAND_OK)
 			{
+				char *nodeName = ConnectionGetOptionValue(connection, "host");
+				char *nodePort = ConnectionGetOptionValue(connection, "port");
+
 				/* log a warning so the user may abort the transaction later */
-				ereport(WARNING, (errmsg("Failed to roll back prepared transaction '%s'",
+				ereport(WARNING, (errmsg("failed to roll back prepared transaction '%s'",
 										 transactionName->data),
-								  errhint("Run ROLLBACK TRANSACTION '%s' on %s:%s",
-										  transactionName->data, nodeName, nodePort)));
+								  errhint("Run \"%s\" on %s:%s",
+										  command->data, nodeName, nodePort)));
 			}
 
 			PQclear(result);
@@ -118,11 +134,11 @@ AbortTransactions(List *connectionList)
 
 
 /*
- * CommitTransactions commits all transactions on connections in connectionList.
+ * CommitRemoteTransactions commits all transactions on connections in connectionList.
  * On failure, it reports a warning and continues committing all of them.
  */
 void
-CommitTransactions(List *connectionList)
+CommitRemoteTransactions(List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 
@@ -132,8 +148,6 @@ CommitTransactions(List *connectionList)
 			(TransactionConnection *) lfirst(connectionCell);
 		PGconn *connection = transactionConnection->connection;
 		int64 connectionId = transactionConnection->connectionId;
-		char *nodeName = ConnectionGetOptionValue(connection, "host");
-		char *nodePort = ConnectionGetOptionValue(connection, "port");
 		PGresult *result = NULL;
 
 		if (transactionConnection->transactionState == TRANSACTION_STATE_PREPARED)
@@ -149,11 +163,14 @@ CommitTransactions(List *connectionList)
 			result = PQexec(connection, command->data);
 			if (PQresultStatus(result) != PGRES_COMMAND_OK)
 			{
+				char *nodeName = ConnectionGetOptionValue(connection, "host");
+				char *nodePort = ConnectionGetOptionValue(connection, "port");
+
 				/* log a warning so the user may commit the transaction later */
-				ereport(WARNING, (errmsg("Failed to commit prepared transaction '%s'",
+				ereport(WARNING, (errmsg("failed to commit prepared transaction '%s'",
 										 transactionName->data),
-								  errhint("Run COMMIT TRANSACTION '%s' on %s:%s",
-										  transactionName->data, nodeName, nodePort)));
+								  errhint("Run \"%s\" on %s:%s",
+										  command->data, nodeName, nodePort)));
 			}
 		}
 		else
@@ -165,7 +182,10 @@ CommitTransactions(List *connectionList)
 			result = PQexec(connection, "COMMIT");
 			if (PQresultStatus(result) != PGRES_COMMAND_OK)
 			{
-				ereport(WARNING, (errmsg("Failed to commit transaction on %s:%s",
+				char *nodeName = ConnectionGetOptionValue(connection, "host");
+				char *nodePort = ConnectionGetOptionValue(connection, "port");
+
+				ereport(WARNING, (errmsg("failed to commit transaction on %s:%s",
 										 nodeName, nodePort)));
 			}
 		}
@@ -178,7 +198,14 @@ CommitTransactions(List *connectionList)
 
 
 /*
- * BuildTransactionName constructs a unique transaction name from an ID.
+ * BuildTransactionName constructs a transaction name that ensures there are no
+ * collisions with concurrent transactions by the same master node, subsequent
+ * transactions by the same backend, or transactions on a different shard.
+ *
+ * Collisions may occur over time if transactions fail to commit or abort and
+ * are left to linger. This would cause a PREPARE failure for the second
+ * transaction, which causes it to be rolled back. In general, the user
+ * should ensure that prepared transactions do not linger.
  */
 static StringInfo
 BuildTransactionName(int connectionId)
@@ -186,7 +213,7 @@ BuildTransactionName(int connectionId)
 	StringInfo commandString = makeStringInfo();
 
 	appendStringInfo(commandString, "citus_%d_%u_%d", MyProcPid,
-					 GetCurrentTransactionId(), connectionId);
+					 DistributedTransactionId, connectionId);
 
 	return commandString;
 }
