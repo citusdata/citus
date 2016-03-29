@@ -1,0 +1,174 @@
+--
+-- MULTI_COPY
+--
+-- Create a new hash-partitioned table into which to COPY
+CREATE TABLE customer_copy_hash (
+        c_custkey integer,
+        c_name varchar(25) not null,
+        c_address varchar(40),
+        c_nationkey integer,
+        c_phone char(15),
+        c_acctbal decimal(15,2),
+        c_mktsegment char(10),
+        c_comment varchar(117),
+		primary key (c_custkey));
+SELECT master_create_distributed_table('customer_copy_hash', 'c_custkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- Test COPY into empty hash-partitioned table
+COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
+ERROR:  could not find any shards for query
+DETAIL:  No shards exist for distributed table "customer_copy_hash".
+HINT:  Run master_create_worker_shards to create shards and try again.
+SELECT master_create_worker_shards('customer_copy_hash', 64, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+-- Test empty copy
+COPY customer_copy_hash FROM STDIN;
+-- Test syntax error 
+COPY customer_copy_hash (c_custkey,c_name) FROM STDIN;
+ERROR:  invalid input syntax for integer: "1,customer1"
+CONTEXT:  COPY customer_copy_hash, line 1, column c_custkey: "1,customer1"
+-- Confirm that no data was copied
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+     0
+(1 row)
+
+-- Test primary key violation
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+ERROR:  duplicate key value violates unique constraint "customer_copy_hash_pkey_103160"
+DETAIL:  Key (c_custkey)=(2) already exists.
+CONTEXT:  COPY customer_copy_hash, line 4: ""
+-- Confirm that no data was copied
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+     0
+(1 row)
+
+-- Test headers option
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv', HEADER true, FORCE_NULL (c_custkey));
+-- Confirm that only first row was skipped
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+     3
+(1 row)
+
+-- Test force_not_null option
+COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN
+WITH (FORMAT 'csv', QUOTE '"', FORCE_NOT_NULL (c_address));
+-- Confirm that value is not null
+SELECT count(c_address) FROM customer_copy_hash WHERE c_custkey = 4;
+ count 
+-------
+     1
+(1 row)
+
+-- Test force_null option
+COPY customer_copy_hash (c_custkey, c_name, c_address) FROM STDIN
+WITH (FORMAT 'csv', QUOTE '"', FORCE_NULL (c_address));
+-- Confirm that value is null
+SELECT count(c_address) FROM customer_copy_hash WHERE c_custkey = 5;
+ count 
+-------
+     0
+(1 row)
+
+-- Test null violation
+COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+ERROR:  null value in column "c_name" violates not-null constraint
+DETAIL:  Failing row contains (8, null, null, null, null, null, null, null).
+CONTEXT:  COPY customer_copy_hash, line 4: ""
+-- Confirm that no data was copied
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+     5
+(1 row)
+
+-- Test server-side copy from program
+COPY customer_copy_hash (c_custkey, c_name) FROM PROGRAM 'echo 9 customer9'
+WITH (DELIMITER ' ');
+-- Confirm that data was copied
+SELECT count(*) FROM customer_copy_hash WHERE c_custkey = 9;
+ count 
+-------
+     1
+(1 row)
+
+-- Test server-side copy from file
+COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.2.data' WITH (DELIMITER '|');
+-- Confirm that data was copied
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+  1006
+(1 row)
+
+-- Test client-side copy from file
+\COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.3.data' WITH (DELIMITER '|');
+-- Confirm that data was copied
+SELECT count(*) FROM customer_copy_hash;
+ count 
+-------
+  2006
+(1 row)
+
+-- Create a new range-partitioned table into which to COPY
+CREATE TABLE customer_copy_range (
+        c_custkey integer,
+        c_name varchar(25),
+        c_address varchar(40),
+        c_nationkey integer,
+        c_phone char(15),
+        c_acctbal decimal(15,2),
+        c_mktsegment char(10),
+        c_comment varchar(117),
+		primary key (c_custkey));
+SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- Test COPY into empty range-partitioned table
+COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
+ERROR:  could not find any shards for query
+DETAIL:  No shards exist for distributed table "customer_copy_range".
+SELECT master_create_empty_shard('customer_copy_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 500
+WHERE shardid = :new_shard_id;
+SELECT master_create_empty_shard('customer_copy_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
+WHERE shardid = :new_shard_id;
+-- Test copy into range-partitioned table
+COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
+-- Check whether data went into the right shard (maybe)
+SELECT min(c_custkey), max(c_custkey), avg(c_custkey), count(*)
+FROM customer_copy_range WHERE c_custkey <= 500;
+ min | max |         avg          | count 
+-----+-----+----------------------+-------
+   1 | 500 | 250.5000000000000000 |   500
+(1 row)
+
+-- Check whether data was copied
+SELECT count(*) FROM customer_copy_range;
+ count 
+-------
+  1000
+(1 row)
+
