@@ -2,6 +2,8 @@
 -- MULTI_TASK_ASSIGNMENT
 --
 
+SET citus.explain_distributed_queries TO off;
+
 -- Check that our policies for assigning tasks to worker nodes run as expected.
 -- To test this, we first create a shell table, and then manually insert shard
 -- and shard placement data into system catalogs. We next run Explain command,

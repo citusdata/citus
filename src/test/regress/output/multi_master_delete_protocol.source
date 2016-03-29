@@ -67,10 +67,10 @@ SELECT count(*) FROM customer_delete_protocol;
 (1 row)
 
 -- Verify that empty shards are deleted if no condition is provided
-SELECT master_create_empty_shard('customer_delete_protocol');
- master_create_empty_shard 
----------------------------
-                    102041
+SELECT 1 AS one FROM master_create_empty_shard('customer_delete_protocol');
+ one 
+-----
+   1
 (1 row)
 
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol

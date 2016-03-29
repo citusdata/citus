@@ -13,12 +13,6 @@ COPY (SELECT COUNT(*) FROM sharded_table) TO STDOUT;
 -- cursors may not involve distributed tables
 DECLARE all_sharded_rows CURSOR FOR SELECT * FROM sharded_table;
 
--- EXPLAIN support isn't implemented for distributed queries...
-EXPLAIN SELECT * FROM sharded_table;
-
--- ... or for distributed modifications
-EXPLAIN INSERT INTO sharded_table VALUES ('dan', 4);
-
 -- verify PREPARE functionality
 PREPARE sharded_insert AS INSERT INTO sharded_table VALUES ('adam', 1);
 PREPARE sharded_update AS UPDATE sharded_table SET name = 'bob' WHERE id = 1;

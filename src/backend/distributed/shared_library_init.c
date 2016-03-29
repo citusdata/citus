@@ -273,6 +273,31 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.explain_distributed_queries",
+		gettext_noop("Enables Explain for distributed queries."),
+		gettext_noop("When enabled, the Explain command shows remote and local "
+					 "plans when used with a distributed query. It is enabled "
+					 "by default, but can be disabled for regression tests."),
+		&ExplainDistributedQueries,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.explain_all_tasks",
+		gettext_noop("Enables showing output for all tasks in Explain."),
+		gettext_noop("The Explain command for distributed queries shows "
+					 "the remote plan for a single task by default. When "
+					 "this configuration entry is enabled, the plan for "
+					 "all tasks is shown, but the Explain takes longer."),
+		&ExplainAllTasks,
+		false,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.all_modifications_commutative",
 		gettext_noop("Bypasses commutativity checks when enabled"),
 		NULL,

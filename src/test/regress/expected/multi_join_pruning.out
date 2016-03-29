@@ -4,6 +4,7 @@
 -- Check that join-pruning works for joins between two large relations. For now
 -- we only check for join-pruning between locally partitioned relations. In the
 -- future we want to check for pruning between re-partitioned relations as well.
+SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 -- Change configuration to treat all tables as large
 SET citus.large_table_shard_count TO 2;
@@ -74,9 +75,9 @@ EXPLAIN SELECT count(*)
 	WHERE table1.array_column = table2.array_column;
 DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
 DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT count(*)
@@ -84,9 +85,9 @@ EXPLAIN SELECT count(*)
 	WHERE table1.composite_column = table2.composite_column;
 DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
 DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Test that large table joins on partition varchar columns work
@@ -95,9 +96,9 @@ EXPLAIN SELECT count(*)
 	WHERE table1.varchar_column = table2.varchar_column;
 DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
 DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 SET client_min_messages TO NOTICE;

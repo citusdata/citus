@@ -1,6 +1,7 @@
 --
 -- MULTI_TASK_ASSIGNMENT
 --
+SET citus.explain_distributed_queries TO off;
 -- Check that our policies for assigning tasks to worker nodes run as expected.
 -- To test this, we first create a shell table, and then manually insert shard
 -- and shard placement data into system catalogs. We next run Explain command,
@@ -57,9 +58,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
@@ -69,9 +70,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Next test the first-replica task assignment policy
@@ -86,9 +87,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
@@ -98,9 +99,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Round-robin task assignment relies on the current jobId. We therefore need to
@@ -129,9 +130,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
@@ -141,9 +142,9 @@ DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
@@ -153,9 +154,9 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 RESET citus.task_assignment_policy;
