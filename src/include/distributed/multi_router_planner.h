@@ -1,16 +1,16 @@
 /*-------------------------------------------------------------------------
  *
- * modify_planner.h
+ * multi_router_planner.h
  *
- * Declarations for public functions and types related to modify planning.
+ * Declarations for public functions and types related to router planning.
  *
  * Copyright (c) 2014-2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
 
-#ifndef MODIFY_PLANNER_H
-#define MODIFY_PLANNER_H
+#ifndef MULTI_ROUTER_PLANNER_H
+#define MULTI_ROUTER_PLANNER_H
 
 #include "c.h"
 
@@ -29,7 +29,7 @@
 #define UPSERT_ALIAS "citus_table_alias"
 #endif
 
+extern MultiPlan * MultiRouterPlanCreate(Query *query);
+extern bool MultiRouterPlannableQuery(Query *query);
 
-extern MultiPlan * MultiModifyPlanCreate(Query *query);
-
-#endif /* MODIFY_PLANNER_H */
+#endif /* MULTI_ROUTER_PLANNER_H */

@@ -56,9 +56,13 @@ JobExecutorType(MultiPlan *multiPlan)
 	if (taskCount > 0)
 	{
 		Task *firstTask = (Task *) linitial(workerTaskList);
+		TaskType taskType = firstTask->taskType;
 
-		if (firstTask->taskType == MODIFY_TASK)
+		if (taskType == MODIFY_TASK || taskType == ROUTER_TASK)
 		{
+			/* router planner creates a single task */
+			Assert(taskCount == 1);
+
 			return MULTI_EXECUTOR_ROUTER;
 		}
 	}

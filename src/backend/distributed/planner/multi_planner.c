@@ -20,7 +20,8 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/modify_planner.h"
+#include "distributed/multi_router_planner.h"
+#include "distributed/multi_server_executor.h"
 
 #include "executor/executor.h"
 
@@ -75,12 +76,23 @@ CreatePhysicalPlan(Query *parse)
 	Query *parseCopy = copyObject(parse);
 	MultiPlan *physicalPlan = NULL;
 	CmdType commandType = parse->commandType;
+	bool routerPlannable = false;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
-		/* modifications go directly from a query to a physical plan */
-		physicalPlan = MultiModifyPlanCreate(parse);
+		routerPlannable = true;
+	}
+	else if (TaskExecutorType == MULTI_EXECUTOR_REAL_TIME ||
+			TaskExecutorType == MULTI_EXECUTOR_ROUTER)
+	{
+		routerPlannable = MultiRouterPlannableQuery(parseCopy);
+	}
+
+	if (routerPlannable)
+	{
+		ereport(DEBUG2, (errmsg("Creating router plan")));
+		physicalPlan = MultiRouterPlanCreate(parseCopy);
 	}
 	else
 	{
