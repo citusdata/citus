@@ -37,6 +37,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -110,8 +111,6 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
 static uint32 HashPartitionCount(void);
-static int CompareShardIntervals(const void *leftElement, const void *rightElement,
-								 FmgrInfo *typeCompareFunction);
 static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 									uint32 shardIntervalCount);
 
@@ -1716,10 +1715,17 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 	else if (partitionType == RANGE_PARTITION_TYPE)
 	{
 		/* build the split point object for the table on the right-hand side */
-		List *shardIntervalList = LoadShardIntervalList(baseRelationId);
-		uint32 shardCount = (uint32) list_length(shardIntervalList);
-		ShardInterval **sortedShardIntervalArray =
-			SortedShardIntervalArray(shardIntervalList);
+		DistTableCacheEntry *cache = DistributedTableCacheEntry(baseRelationId);
+		bool hasUninitializedShardInterval = false;
+		uint32 shardCount = cache->shardIntervalArrayLength;
+		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
+
+		hasUninitializedShardInterval = cache->hasUninitializedShardInterval;
+		if (hasUninitializedShardInterval)
+		{
+			ereport(ERROR, (errmsg("cannot range repartition shard with "
+								   "missing min/max values")));
+		}
 
 		/* this join-type currently doesn't work for hash partitioned tables */
 		char basePartitionMethod PG_USED_FOR_ASSERTS_ONLY =
@@ -1751,78 +1757,6 @@ HashPartitionCount(void)
 
 	uint32 partitionCount = (uint32) rint(nodeCount * maxReduceTasksPerNode);
 	return partitionCount;
-}
-
-
-/*
- * SortedShardIntervalArray returns a sorted array of shard intervals for shards
- * in the given shard list. The array elements are sorted in in ascending order
- * according to shard interval's minimum value.
- */
-ShardInterval **
-SortedShardIntervalArray(List *shardIntervalList)
-{
-	FmgrInfo *typeCompareFunction = NULL;
-	ListCell *shardIntervalCell = NULL;
-	uint32 shardIntervalIndex = 0;
-
-	ShardInterval **shardIntervalArray = NULL;
-	uint32 shardIntervalCount = (uint32) list_length(shardIntervalList);
-	Assert(shardIntervalCount > 0);
-
-	/* allocate an array for sorted shard intervals */
-	shardIntervalArray = palloc0(shardIntervalCount * sizeof(ShardInterval *));
-
-	/* fill in the array with shard intervals */
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		if (shardInterval->minValueExists && shardInterval->maxValueExists)
-		{
-			shardIntervalArray[shardIntervalIndex] = shardInterval;
-		}
-		else
-		{
-			ereport(ERROR, (errmsg("cannot range repartition shard " UINT64_FORMAT
-								   " with missing min/max values",
-								   shardInterval->shardId)));
-		}
-
-		/* resolve the datum type and comparison function on first pass */
-		if (shardIntervalIndex == 0)
-		{
-			Oid typeId = shardInterval->valueTypeId;
-			typeCompareFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
-		}
-		shardIntervalIndex++;
-	}
-
-	/* sort shard intervals by their minimum values in ascending order */
-	qsort_arg(shardIntervalArray, shardIntervalCount, sizeof(ShardInterval *),
-			  (qsort_arg_comparator) CompareShardIntervals, (void *) typeCompareFunction);
-
-	return shardIntervalArray;
-}
-
-
-/*
- * CompareShardIntervals acts as a helper function to compare two shard interval
- * pointers by their minimum values, using the value's type comparison function.
- */
-static int
-CompareShardIntervals(const void *leftElement, const void *rightElement,
-					  FmgrInfo *typeCompareFunction)
-{
-	ShardInterval **leftShardInterval = (ShardInterval **) leftElement;
-	ShardInterval **rightShardInterval = (ShardInterval **) rightElement;
-
-	Datum leftDatum = (*leftShardInterval)->minValue;
-	Datum rightDatum = (*rightShardInterval)->minValue;
-
-	Datum comparisonDatum = CompareCall2(typeCompareFunction, leftDatum, rightDatum);
-	int comparisonResult = DatumGetInt32(comparisonDatum);
-
-	return comparisonResult;
 }
 
 
@@ -2031,7 +1965,6 @@ SubquerySqlTaskList(Job *job)
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		List *finalShardIntervalList = NIL;
 		ListCell *fragmentCombinationCell = NULL;
-		ShardInterval **sortedIntervalArray = NULL;
 		uint32 tableId = rangeTableIndex + 1; /* tableId starts from 1 */
 		uint32 finalShardCount = 0;
 		uint32 shardIndex = 0;
@@ -2056,12 +1989,11 @@ SubquerySqlTaskList(Job *job)
 			return NIL;
 		}
 
-		sortedIntervalArray = SortedShardIntervalArray(finalShardIntervalList);
 		fragmentCombinationCell = list_head(fragmentCombinationList);
 
 		for (shardIndex = 0; shardIndex < finalShardCount; shardIndex++)
 		{
-			ShardInterval *shardInterval = sortedIntervalArray[shardIndex];
+			ShardInterval *shardInterval = list_nth(finalShardIntervalList, shardIndex);
 
 			RangeTableFragment *shardFragment = palloc0(fragmentSize);
 			shardFragment->fragmentReference = &(shardInterval->shardId);

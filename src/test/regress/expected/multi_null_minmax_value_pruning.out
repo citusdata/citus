@@ -21,10 +21,10 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102010;
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102011
 DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
        9030 |            1 | 09-02-1998
@@ -43,12 +43,12 @@ DEBUG:  predicate pruning for shardId 102010
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
-DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
 DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -58,10 +58,10 @@ DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
 -- partition or join pruning for the shard with null min value.
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 102009;
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102011
 DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
        9030 |            1 | 09-02-1998
@@ -74,11 +74,11 @@ DEBUG:  predicate pruning for shardId 102010
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
 DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -88,9 +88,9 @@ DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
 -- don't apply partition or join pruning for this other shard either.
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 102010;
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
 DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
        9030 |            1 | 09-02-1998
@@ -103,10 +103,10 @@ DEBUG:  predicate pruning for shardId 102011
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -116,10 +116,10 @@ DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
 -- should apply partition and join pruning for this shard now.
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 102009;
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102011
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
        9030 |            1 | 09-02-1998
@@ -132,11 +132,11 @@ DEBUG:  predicate pruning for shardId 102009
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
 DEBUG:  join prunable for intervals [0,2496] and [8997,14946]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
