@@ -38,27 +38,27 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 
 * Install docker-compose: [Mac][mac_install] | [Linux][linux_install]
 * (Mac only) connect to Docker VM
-   ```bash
-   eval $(docker-machine env default)
-   ```
+  ```bash
+  eval $(docker-machine env default)
+  ```
 
 * Pull and start the docker images
-   ```bash
-   wget https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
-   docker-compose -p citus up -d
-   ```
+  ```bash
+  wget https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
+  docker-compose -p citus up -d
+  ```
 
 * Connect to the master database
-   ```bash
-   docker exec -it citus_master psql -U postgres -d postgres
-   ```
+  ```bash
+  docker exec -it citus_master psql -U postgres -d postgres
+  ```
 
 * Follow the [first tutorial][tutorial] instructions
 * To shut the cluster down, run
 
-   ```bash
-   docker-compose -p citus down
-   ```
+  ```bash
+  docker-compose -p citus down
+  ```
 
 ### Learn More
 
