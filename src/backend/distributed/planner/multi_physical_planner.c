@@ -110,8 +110,9 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
 static uint32 HashPartitionCount(void);
-static int CompareShardIntervals(const void *leftElement, const void *rightElement,
-								 FmgrInfo *typeCompareFunction);
+static int CompareShardIntervalPointers(const void *leftElement,
+										const void *rightElement,
+										FmgrInfo *typeCompareFunction);
 static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 									uint32 shardIntervalCount);
 
@@ -1759,6 +1760,13 @@ HashPartitionCount(void)
  * SortedShardIntervalArray returns a sorted array of shard intervals for shards
  * in the given shard list. The array elements are sorted in in ascending order
  * according to shard interval's minimum value.
+ *
+ * The sortedShardIntervalArray that this function returns differs from the
+ * sortedShardIntervalArray in the metadata cache in two ways. First, this
+ * function errors out in case there exists any shard intervals without min/max
+ * values. Second, this function sorts the input shardIntervalList, i.e., not the
+ * whole shard intervals that correspond to a single distributed table as in it's
+ * in the cache.
  */
 ShardInterval **
 SortedShardIntervalArray(List *shardIntervalList)
@@ -1800,18 +1808,19 @@ SortedShardIntervalArray(List *shardIntervalList)
 
 	/* sort shard intervals by their minimum values in ascending order */
 	qsort_arg(shardIntervalArray, shardIntervalCount, sizeof(ShardInterval *),
-			  (qsort_arg_comparator) CompareShardIntervals, (void *) typeCompareFunction);
+			  (qsort_arg_comparator) CompareShardIntervalPointers,
+			  (void *) typeCompareFunction);
 
 	return shardIntervalArray;
 }
 
 
 /*
- * CompareShardIntervals acts as a helper function to compare two shard interval
+ * CompareShardIntervalPointers acts as a helper function to compare two shard interval
  * pointers by their minimum values, using the value's type comparison function.
  */
 static int
-CompareShardIntervals(const void *leftElement, const void *rightElement,
+CompareShardIntervalPointers(const void *leftElement, const void *rightElement,
 					  FmgrInfo *typeCompareFunction)
 {
 	ShardInterval **leftShardInterval = (ShardInterval **) leftElement;

@@ -46,6 +46,9 @@ static uint64 * AllocateUint64(uint64 value);
  * LoadShardIntervalList returns a list of shard intervals related for a given
  * distributed table. The function returns an empty list if no shards can be
  * found for the given relation.
+ * Since LoadShardIntervalList relies on sortedShardIntervalArray, it returns
+ * a shard interval list whose elements are sorted on shardminvalue. Shard intervals
+ * with uninitialized shard min/max values are placed in the end of the list.
  */
 List *
 LoadShardIntervalList(Oid relationId)
@@ -59,7 +62,7 @@ LoadShardIntervalList(Oid relationId)
 		ShardInterval *newShardInterval = NULL;
 		newShardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
 
-		CopyShardInterval(&cacheEntry->shardIntervalArray[i], newShardInterval);
+		CopyShardInterval(&cacheEntry->sortedShardIntervalArray[i], newShardInterval);
 
 		shardList = lappend(shardList, newShardInterval);
 	}
@@ -71,6 +74,9 @@ LoadShardIntervalList(Oid relationId)
 /*
  * LoadShardList reads list of shards for given relationId from pg_dist_shard,
  * and returns the list of found shardIds.
+ * Since LoadShardList relies on sortedShardIntervalArray, it returns a shard
+ * list whose elements are sorted on shardminvalue. Shards with uninitialized
+ * shard min/max values are placed in the end of the list.
  */
 List *
 LoadShardList(Oid relationId)
@@ -81,7 +87,7 @@ LoadShardList(Oid relationId)
 
 	for (i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
 	{
-		ShardInterval *currentShardInterval = &cacheEntry->shardIntervalArray[i];
+		ShardInterval *currentShardInterval = &cacheEntry->sortedShardIntervalArray[i];
 		uint64 *shardIdPointer = AllocateUint64(currentShardInterval->shardId);
 
 		shardList = lappend(shardList, shardIdPointer);

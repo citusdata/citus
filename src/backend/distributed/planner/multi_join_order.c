@@ -56,7 +56,6 @@ static List * MergeShardIntervals(List *leftShardIntervalList,
 								  List *rightShardIntervalList, JoinType joinType);
 static bool ShardIntervalsMatch(List *leftShardIntervalList,
 								List *rightShardIntervalList);
-static List * LoadSortedShardIntervalList(Oid relationId);
 static List * JoinOrderForTable(TableEntry *firstTable, List *tableEntryList,
 								List *joinClauseList);
 static List * BestJoinOrder(List *candidateJoinOrders);
@@ -123,6 +122,20 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 	List *joinedTableList = NIL;
 	JoinOrderNode *firstJoinNode = NULL;
 	JoinOrderNode *currentJoinNode = NULL;
+	ListCell *tableEntryCell = NULL;
+
+	foreach(tableEntryCell, tableEntryList)
+	{
+		TableEntry *rangeTableEntry = (TableEntry *) lfirst(tableEntryCell);
+
+		if (HasUninitializedShardInterval(rangeTableEntry->relationId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning on this query"),
+							errdetail("Shards of relations in outer join queries must "
+									  "have shard min/max values.")));
+		}
+	}
 
 	/* get the FROM section as a flattened list of JoinExpr nodes */
 	joinList = JoinExprList(fromExpr);
@@ -159,8 +172,8 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 			joinClauseList = list_concat(joinClauseList, joinWhereClauseList);
 		}
 
-		/* get the list of shards to check broadcast/local join possibility */
-		candidateShardList = LoadSortedShardIntervalList(nextTable->relationId);
+		/* get the sorted list of shards to check broadcast/local join possibility */
+		candidateShardList = LoadShardIntervalList(nextTable->relationId);
 
 		/* find the best join rule type */
 		nextJoinNode = EvaluateJoinRules(joinedTableList, currentJoinNode,
@@ -268,8 +281,7 @@ CreateFirstJoinOrderNode(FromExpr *fromExpr, List *tableEntryList)
 									  firstPartitionColumn,
 									  firstPartitionMethod);
 
-	firstJoinNode->shardIntervalList =
-		LoadSortedShardIntervalList(firstTable->relationId);
+	firstJoinNode->shardIntervalList = LoadShardIntervalList(firstTable->relationId);
 
 	return firstJoinNode;
 }
@@ -459,40 +471,6 @@ MergeShardIntervals(List *leftShardIntervalList, List *rightShardIntervalList,
 	}
 
 	return mergedShardIntervalList;
-}
-
-
-/*
- * LoadSortedShardIntervalList loads a list of shard intervals from the metadata
- * and sorts the list by the minimum value of the intervals.
- */
-static List *
-LoadSortedShardIntervalList(Oid relationId)
-{
-	List *shardIntervalList = NIL;
-	int shardCount = 0;
-	int intervalIndex = 0;
-	ShardInterval **sortedShardIntervalArray = NULL;
-	List *sortedShardIntervalList = NIL;
-
-	shardIntervalList = LoadShardIntervalList(relationId);
-
-	shardCount = list_length(shardIntervalList);
-	if (shardCount <= 1)
-	{
-		return shardIntervalList;
-	}
-
-	sortedShardIntervalArray = SortedShardIntervalArray(shardIntervalList);
-
-	for (intervalIndex = 0; intervalIndex < shardCount; intervalIndex++)
-	{
-		ShardInterval *shardInterval = sortedShardIntervalArray[intervalIndex];
-
-		sortedShardIntervalList = lappend(sortedShardIntervalList, shardInterval);
-	}
-
-	return sortedShardIntervalList;
 }
 
 

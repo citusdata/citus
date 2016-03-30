@@ -38,11 +38,12 @@ typedef struct
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
-	ShardInterval *shardIntervalArray;
+	ShardInterval *sortedShardIntervalArray;
 } DistTableCacheEntry;
 
 
 extern bool IsDistributedTable(Oid relationId);
+extern bool HasUninitializedShardInterval(Oid relationId);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
