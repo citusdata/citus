@@ -126,6 +126,11 @@ test: multi_repartitioned_subquery_udf
 # ---------
 test: multi_copy
 
+# ---------
+# multi_router_planner creates hash partitioned tables. 
+# ---------
+test: multi_router_planner
+
 # ----------
 # multi_large_shardid stages more shards into lineitem
 # ----------

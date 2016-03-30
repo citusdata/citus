@@ -322,6 +322,7 @@ SET client_min_messages TO 'DEBUG2';
 SELECT *
 	FROM articles
 	WHERE author_id = 1;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -356,6 +357,7 @@ HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 SELECT id as article_id, word_count * id as random_value
 	FROM articles
 	WHERE author_id = 1;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
  article_id | random_value 
 ------------+--------------
@@ -396,7 +398,7 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1
 	LIMIT 2;
-DEBUG:  push down of limit count: 2
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -411,6 +413,7 @@ SELECT id
 	FROM articles
 	WHERE author_id = 1
 	GROUP BY id;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
  id 
 ----
@@ -428,44 +431,68 @@ COPY articles_single_shard TO stdout;
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103093
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+        avg         
+--------------------
+ 12356.400000000000
+(1 row)
+
 -- max, min, sum, count is somehow implemented
 -- differently in distributed planning but, still error out 
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
 	WHERE author_id = 2;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103093
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+  max  | min  |  sum  | cnt 
+-------+------+-------+-----
+ 18185 | 2728 | 61782 |   5
+(1 row)
+
 -- error out for queries with ORDER BY
 SELECT *
 	FROM articles
 	WHERE author_id = 1
 	ORDER BY word_count;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+  1 |         1 | arsenous     |       9572
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
 -- error out for queries with ORDER BY and LIMIT
 SELECT *
 	FROM articles
 	WHERE author_id = 1
 	ORDER BY word_count
 	LIMIT 2;
-DEBUG:  push down of limit count: 2
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+ 11 |         1 | alamo    |       1347
+ 21 |         1 | arcading |       5890
+(2 rows)
+
 -- error out for queries with aggregates and GROUP BY
 SELECT max(word_count)
 	FROM articles
 	WHERE author_id = 1
 	GROUP BY author_id;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+  max  
+-------
+ 11814
+(1 row)
+
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles a, articles b

@@ -42,7 +42,8 @@ bool AllModificationsCommutative = false;
 static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
 static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
 static int32 ExecuteDistributedModify(Task *task);
-static void ExecuteSingleShardSelect(Task *task, EState *executorState,
+static void ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 numberTuples,
+									 Task *task, EState *executorState,
 									 TupleDesc tupleDescriptor,
 									 DestReceiver *destination);
 static bool SendQueryInSingleRowMode(PGconn *connection, char *query);
@@ -57,7 +58,6 @@ static bool StoreQueryResult(PGconn *connection, TupleDesc tupleDescriptor,
 void
 RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 {
-	bool topLevel = true;
 	LOCKMODE lockMode = NoLock;
 	EState *executorState = NULL;
 	CmdType commandType = queryDesc->operation;
@@ -65,9 +65,13 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	/* ensure that the task is not NULL */
 	Assert(task != NULL);
 
-	/* disallow transactions and triggers during distributed commands */
-	PreventTransactionChain(topLevel, "distributed commands");
-	eflags |= EXEC_FLAG_SKIP_TRIGGERS;
+	/* disallow transactions and triggers during distributed modify commands */
+	if (commandType != CMD_SELECT)
+	{
+		bool topLevel = true;
+		PreventTransactionChain(topLevel, "distributed commands");
+		eflags |= EXEC_FLAG_SKIP_TRIGGERS;
+	}
 
 	/* signal that it is a router execution */
 	eflags |= EXEC_FLAG_CITUS_ROUTER_EXECUTOR;
@@ -78,6 +82,13 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	executorState->es_instrument = queryDesc->instrument_options;
 
 	queryDesc->estate = executorState;
+
+	/*
+	* As it's similar to what we're doing, use a MaterialState node to store
+	* our state. This is used to store our tuplestore, so cursors etc. can
+	* work.
+	*/
+	queryDesc->planstate = (PlanState *) makeNode(MaterialState);
 
 #if (PG_VERSION_NUM < 90500)
 
@@ -181,12 +192,6 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 						errmsg("scan directions other than forward scans "
 							   "are unsupported")));
 	}
-	if (count != 0)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("fetching rows from a query using a cursor "
-							   "is unsupported")));
-	}
 
 	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
 
@@ -206,7 +211,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 		DestReceiver *destination = queryDesc->dest;
 		TupleDesc resultTupleDescriptor = queryDesc->tupDesc;
 
-		ExecuteSingleShardSelect(task, estate, resultTupleDescriptor, destination);
+		ExecuteSingleShardSelect(queryDesc, count, task, estate,
+								 resultTupleDescriptor, destination);
 	}
 	else
 	{
@@ -310,24 +316,32 @@ ExecuteDistributedModify(Task *task)
 
 
 /*
- * ExecuteSingleShardSelect executes the remote select query and sends the
- * resultant tuples to the given destination receiver. If the query fails on a
+ * ExecuteSingleShardSelect executes, if not done already, the remote select query and
+ * sends the resulting tuples to the given destination receiver. If the query fails on a
  * given placement, the function attempts it on its replica.
  */
 static void
-ExecuteSingleShardSelect(Task *task, EState *executorState,
-						 TupleDesc tupleDescriptor, DestReceiver *destination)
+ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 numberTuples, Task *task,
+						 EState *executorState, TupleDesc tupleDescriptor,
+						 DestReceiver *destination)
 {
-	Tuplestorestate *tupleStore = NULL;
 	bool resultsOK = false;
 	TupleTableSlot *tupleTableSlot = NULL;
+	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
+	Tuplestorestate *tupleStore = routerState->tuplestorestate;
+	uint64 currentTupleCount = 0;
 
-	tupleStore = tuplestore_begin_heap(false, false, work_mem);
-
-	resultsOK = ExecuteTaskAndStoreResults(task, tupleDescriptor, tupleStore);
-	if (!resultsOK)
+	/* initialize tuplestore for the first call */
+	if (routerState->tuplestorestate == NULL)
 	{
-		ereport(ERROR, (errmsg("could not receive query results")));
+		routerState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
+		tupleStore = routerState->tuplestorestate;
+
+		resultsOK = ExecuteTaskAndStoreResults(task, tupleDescriptor, tupleStore);
+		if (!resultsOK)
+		{
+			ereport(ERROR, (errmsg("could not receive query results")));
+		}
 	}
 
 	tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor);
@@ -348,14 +362,22 @@ ExecuteSingleShardSelect(Task *task, EState *executorState,
 		executorState->es_processed++;
 
 		ExecClearTuple(tupleTableSlot);
+
+		currentTupleCount++;
+		/*
+		 * If numberTuples is zero fetch all tuples, otherwise stop after
+		 * count tuples.
+		 */
+		if (numberTuples && numberTuples == currentTupleCount)
+		{
+			break;
+		}
 	}
 
 	/* shutdown the tuple receiver */
 	(*destination->rShutdown)(destination);
 
 	ExecDropSingleTupleTableSlot(tupleTableSlot);
-
-	tuplestore_end(tupleStore);
 }
 
 
@@ -555,6 +577,12 @@ void
 RouterExecutorEnd(QueryDesc *queryDesc)
 {
 	EState *estate = queryDesc->estate;
+	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
+
+	if (routerState->tuplestorestate)
+	{
+		tuplestore_end(routerState->tuplestorestate);
+	}
 
 	Assert(estate != NULL);
 	Assert(estate->es_finished);
