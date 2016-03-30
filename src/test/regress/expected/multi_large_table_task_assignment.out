@@ -25,14 +25,14 @@ FROM
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
-DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
-DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
+DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
+DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 4
@@ -64,40 +64,40 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 3 to node localhost:57637
-DEBUG:  assigned task 15 to node localhost:57638
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 18 to node localhost:57638
 DEBUG:  assigned task 9 to node localhost:57637
-DEBUG:  assigned task 12 to node localhost:57638
-DEBUG:  join prunable for intervals [1,2496] and [13921,14947]
-DEBUG:  join prunable for intervals [1,2496] and [11554,13920]
-DEBUG:  join prunable for intervals [1,2496] and [8997,11554]
-DEBUG:  join prunable for intervals [1,2496] and [4965,5986]
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 15 to node localhost:57637
+DEBUG:  assigned task 18 to node localhost:57638
 DEBUG:  join prunable for intervals [1,2496] and [2497,4964]
-DEBUG:  join prunable for intervals [2497,4964] and [13921,14947]
-DEBUG:  join prunable for intervals [2497,4964] and [11554,13920]
-DEBUG:  join prunable for intervals [2497,4964] and [8997,11554]
-DEBUG:  join prunable for intervals [2497,4964] and [4965,5986]
+DEBUG:  join prunable for intervals [1,2496] and [4965,5986]
+DEBUG:  join prunable for intervals [1,2496] and [8997,11554]
+DEBUG:  join prunable for intervals [1,2496] and [11554,13920]
+DEBUG:  join prunable for intervals [1,2496] and [13921,14947]
 DEBUG:  join prunable for intervals [2497,4964] and [1,2496]
-DEBUG:  join prunable for intervals [4965,5986] and [13921,14947]
-DEBUG:  join prunable for intervals [4965,5986] and [11554,13920]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,11554]
-DEBUG:  join prunable for intervals [4965,5986] and [2497,4964]
+DEBUG:  join prunable for intervals [2497,4964] and [4965,5986]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,11554]
+DEBUG:  join prunable for intervals [2497,4964] and [11554,13920]
+DEBUG:  join prunable for intervals [2497,4964] and [13921,14947]
 DEBUG:  join prunable for intervals [4965,5986] and [1,2496]
-DEBUG:  join prunable for intervals [8997,11554] and [13921,14947]
-DEBUG:  join prunable for intervals [8997,11554] and [4965,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [2497,4964]
+DEBUG:  join prunable for intervals [4965,5986] and [2497,4964]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,11554]
+DEBUG:  join prunable for intervals [4965,5986] and [11554,13920]
+DEBUG:  join prunable for intervals [4965,5986] and [13921,14947]
 DEBUG:  join prunable for intervals [8997,11554] and [1,2496]
-DEBUG:  join prunable for intervals [11554,13920] and [13921,14947]
-DEBUG:  join prunable for intervals [11554,13920] and [4965,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [2497,4964]
+DEBUG:  join prunable for intervals [8997,11554] and [2497,4964]
+DEBUG:  join prunable for intervals [8997,11554] and [4965,5986]
+DEBUG:  join prunable for intervals [8997,11554] and [13921,14947]
 DEBUG:  join prunable for intervals [11554,13920] and [1,2496]
-DEBUG:  join prunable for intervals [13921,14947] and [11554,13920]
-DEBUG:  join prunable for intervals [13921,14947] and [8997,11554]
-DEBUG:  join prunable for intervals [13921,14947] and [4965,5986]
-DEBUG:  join prunable for intervals [13921,14947] and [2497,4964]
+DEBUG:  join prunable for intervals [11554,13920] and [2497,4964]
+DEBUG:  join prunable for intervals [11554,13920] and [4965,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [13921,14947]
 DEBUG:  join prunable for intervals [13921,14947] and [1,2496]
+DEBUG:  join prunable for intervals [13921,14947] and [2497,4964]
+DEBUG:  join prunable for intervals [13921,14947] and [4965,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [8997,11554]
+DEBUG:  join prunable for intervals [13921,14947] and [11554,13920]
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 19
 DEBUG:  pruning merge fetch taskId 4
@@ -116,10 +116,10 @@ DEBUG:  pruning merge fetch taskId 22
 DETAIL:  Creating dependency on merge taskId 54
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 3 to node localhost:57638
-DEBUG:  assigned task 24 to node localhost:57637
-DEBUG:  assigned task 9 to node localhost:57638
 DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 18 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 18 to node localhost:57637
+DEBUG:  assigned task 24 to node localhost:57638
 DEBUG:  propagating assignment from merge task 40 to constrained sql task 15
 DEBUG:  propagating assignment from merge task 47 to constrained sql task 21
 DEBUG:  CommitTransactionCommand
@@ -154,15 +154,15 @@ FROM
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 10 to node localhost:57637
-DEBUG:  assigned task 12 to node localhost:57638
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 8 to node localhost:57638
-DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57638
-DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 8 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
+DEBUG:  assigned task 10 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3

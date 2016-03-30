@@ -33,6 +33,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
 #include "executor/execdesc.h"
 #include "lib/stringinfo.h"
 #if (PG_VERSION_NUM >= 90500)
@@ -51,6 +52,7 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+#include "utils/typcache.h"
 
 
 /* planner functions forward declarations */
@@ -62,8 +64,11 @@ static OnConflictExpr * RebuildOnConflict(Oid relationId,
 #endif
 static ShardInterval * TargetShardInterval(Query *query);
 static List * QueryRestrictList(Query *query);
+static bool FastShardPruningPossible(CmdType commandType, char partitionMethod);
+static ShardInterval * FastShardPruning(Oid distributedTableId,
+										Const *partionColumnValue);
 static Oid ExtractFirstDistributedTableId(Query *query);
-static Const * ExtractPartitionValue(Query *query, Var *partitionColumn);
+static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
 static Task * RouterSelectTask(Query *query);
 static Job * RouterQueryJob(Query *query, Task *task);
 static bool ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column);
@@ -507,18 +512,19 @@ TargetShardInterval(Query *query)
 {
 	CmdType commandType = query->commandType;
 	bool selectTask = (commandType == CMD_SELECT);
-	List *restrictClauseList = NIL;
 	List *prunedShardList = NIL;
-	Index tableId = 1;
 	int prunedShardCount = 0;
 
 
+	int shardCount = 0;
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
-	List *shardIntervalList = NIL;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	bool fastShardPruningPossible = false;
 
 	/* error out if no shards exist for the table */
-	shardIntervalList = LoadShardIntervalList(distributedTableId);
-	if (shardIntervalList == NIL)
+	shardCount = cacheEntry->shardIntervalArrayLength;
+	if (shardCount == 0)
 	{
 		char *relationName = get_rel_name(distributedTableId);
 
@@ -530,9 +536,29 @@ TargetShardInterval(Query *query)
 								"and try again.")));
 	}
 
-	restrictClauseList = QueryRestrictList(query);
-	prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
-									 shardIntervalList);
+	fastShardPruningPossible = FastShardPruningPossible(query->commandType,
+														partitionMethod);
+	if (fastShardPruningPossible)
+	{
+		uint32 rangeTableId = 1;
+		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+		Const *partitionValue = ExtractInsertPartitionValue(query, partitionColumn);
+		ShardInterval *shardInterval = FastShardPruning(distributedTableId,
+														partitionValue);
+
+		if (shardInterval != NULL)
+		{
+			prunedShardList = lappend(prunedShardList, shardInterval);
+		}
+	}
+	else
+	{
+		List *restrictClauseList = QueryRestrictList(query);
+		Index tableId = 1;
+		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
+
+		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
+										 shardIntervalList);
 	prunedShardCount = list_length(prunedShardList);
 	if (prunedShardCount != 1)
 	{
@@ -555,6 +581,74 @@ TargetShardInterval(Query *query)
 
 
 /*
+ * UseFastShardPruning returns true if the commandType is INSERT and partition method
+ * is hash or range.
+ */
+static bool
+FastShardPruningPossible(CmdType commandType, char partitionMethod)
+{
+	/* we currently only support INSERTs */
+	if (commandType != CMD_INSERT)
+	{
+		return false;
+	}
+
+	/* fast shard pruning is only supported for hash and range partitioned tables */
+	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * FastShardPruning is a higher level API for FindShardInterval function. Given the relationId
+ * of the distributed table and partitionValue, FastShardPruning function finds the corresponding
+ * shard interval that the partitionValue should be in. FastShardPruning returns NULL if no
+ * ShardIntervals exist for the given partitionValue.
+ */
+static ShardInterval *
+FastShardPruning(Oid distributedTableId, Const *partitionValue)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	int shardCount = cacheEntry->shardIntervalArrayLength;
+	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	bool useBinarySearch = false;
+	char partitionMethod = cacheEntry->partitionMethod;
+	FmgrInfo *shardIntervalCompareFunction = cacheEntry->shardIntervalCompareFunction;
+	bool hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
+	FmgrInfo *hashFunction = NULL;
+	ShardInterval *shardInterval = NULL;
+
+	/* determine whether to use binary search */
+	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
+	{
+		useBinarySearch = true;
+	}
+
+	/* we only need hash functions for hash distributed tables */
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		hashFunction = cacheEntry->hashFunction;
+	}
+
+	/*
+	 * Call FindShardInterval to find the corresponding shard interval for the
+	 * given partition value.
+	 */
+	shardInterval = FindShardInterval(partitionValue->constvalue,
+									  sortedShardIntervalArray, shardCount,
+									  partitionMethod,
+									  shardIntervalCompareFunction, hashFunction,
+									  useBinarySearch);
+
+	return shardInterval;
+}
+
+
+/*
  * QueryRestrictList returns the restriction clauses for the query. For a SELECT
  * statement these are the where-clause expressions. For INSERT statements we
  * build an equality clause based on the partition-column and its supplied
@@ -572,7 +666,7 @@ QueryRestrictList(Query *query)
 		Oid distributedTableId = ExtractFirstDistributedTableId(query);
 		uint32 rangeTableId = 1;
 		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-		Const *partitionValue = ExtractPartitionValue(query, partitionColumn);
+		Const *partitionValue = ExtractInsertPartitionValue(query, partitionColumn);
 
 		OpExpr *equalityExpr = MakeOpExpression(partitionColumn, BTEqualStrategyNumber);
 
@@ -628,11 +722,11 @@ ExtractFirstDistributedTableId(Query *query)
 
 /*
  * ExtractPartitionValue extracts the partition column value from a the target
- * of a modification command. If a partition value is missing altogether or is
+ * of an INSERT command. If a partition value is missing altogether or is
  * NULL, this function throws an error.
  */
 static Const *
-ExtractPartitionValue(Query *query, Var *partitionColumn)
+ExtractInsertPartitionValue(Query *query, Var *partitionColumn)
 {
 	Const *partitionValue = NULL;
 	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,

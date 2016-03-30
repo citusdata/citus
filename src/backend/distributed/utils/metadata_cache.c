@@ -22,6 +22,8 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/shardinterval_utils.h"
+#include "distributed/worker_protocol.h"
 #include "parser/parse_func.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -34,6 +36,7 @@
 #include "utils/relfilenodemap.h"
 #include "utils/relmapper.h"
 #include "utils/syscache.h"
+#include "utils/typcache.h"
 
 
 /* state which should be cleared upon DROP EXTENSION */
@@ -57,6 +60,16 @@ static ScanKeyData DistShardScanKey[1];
 
 /* local function forward declarations */
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
+static FmgrInfo * ShardIntervalCompareFunction(ShardInterval **shardIntervalArray,
+											   char partitionMethod);
+static ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray,
+											   int shardCount,
+											   FmgrInfo *
+											   shardIntervalSortCompareFunction);
+static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
+									   int shardIntervalArrayLength);
+static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
+										  int shardCount);
 static void InitializeDistTableCache(void);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
@@ -202,7 +215,12 @@ LookupDistTableCacheEntry(Oid relationId)
 	char partitionMethod = 0;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
-	ShardInterval *shardIntervalArray = NULL;
+	ShardInterval **shardIntervalArray = NULL;
+	ShardInterval **sortedShardIntervalArray = NULL;
+	FmgrInfo *shardIntervalCompareFunction = NULL;
+	FmgrInfo *hashFunction = NULL;
+	bool hasUninitializedShardInterval = false;
+	bool hasUniformHashDistribution = false;
 	void *hashKey = (void *) &relationId;
 
 	if (DistTableCacheHash == NULL)
@@ -257,7 +275,7 @@ LookupDistTableCacheEntry(Oid relationId)
 
 		shardIntervalArray = MemoryContextAllocZero(CacheMemoryContext,
 													shardIntervalArrayLength *
-													sizeof(ShardInterval));
+													sizeof(ShardInterval *));
 
 		foreach(distShardTupleCell, distShardTupleList)
 		{
@@ -266,9 +284,12 @@ LookupDistTableCacheEntry(Oid relationId)
 																distShardTupleDesc,
 																intervalTypeId,
 																intervalTypeMod);
+			ShardInterval *newShardInterval = NULL;
 			MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 
-			CopyShardInterval(shardInterval, &shardIntervalArray[arrayIndex]);
+			newShardInterval = (ShardInterval *) palloc0(sizeof(ShardInterval));
+			CopyShardInterval(shardInterval, newShardInterval);
+			shardIntervalArray[arrayIndex] = newShardInterval;
 
 			MemoryContextSwitchTo(oldContext);
 
@@ -278,6 +299,53 @@ LookupDistTableCacheEntry(Oid relationId)
 		}
 
 		heap_close(distShardRelation, AccessShareLock);
+	}
+
+	/* decide and allocate interval comparison function */
+	if (shardIntervalArrayLength > 0)
+	{
+		MemoryContext oldContext = CurrentMemoryContext;
+
+		/* allocate the comparison function in the cache context */
+		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+		shardIntervalCompareFunction = ShardIntervalCompareFunction(shardIntervalArray,
+																	partitionMethod);
+
+		MemoryContextSwitchTo(oldContext);
+	}
+
+	/* sort the interval array */
+	sortedShardIntervalArray = SortShardIntervalArray(shardIntervalArray,
+													  shardIntervalArrayLength,
+													  shardIntervalCompareFunction);
+
+	/* check the shard distribution for hash partitioned tables */
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		hasUniformHashDistribution =
+			HasUniformHashDistribution(sortedShardIntervalArray,
+									   shardIntervalArrayLength);
+	}
+
+	/* check if there exists any shard intervals with no min/max values */
+	hasUninitializedShardInterval =
+		HasUninitializedShardInterval(sortedShardIntervalArray, shardIntervalArrayLength);
+
+	/* we only need hash functions for hash distributed tables */
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		TypeCacheEntry *typeEntry = NULL;
+		Node *partitionNode = stringToNode(partitionKeyString);
+		Var *partitionColumn = (Var *) partitionNode;
+		Assert(IsA(partitionNode, Var));
+		typeEntry = lookup_type_cache(partitionColumn->vartype,
+									  TYPECACHE_HASH_PROC_FINFO);
+
+		hashFunction = MemoryContextAllocZero(CacheMemoryContext,
+											  sizeof(FmgrInfo));
+
+		fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo), CacheMemoryContext);
 	}
 
 	cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER, NULL);
@@ -298,10 +366,148 @@ LookupDistTableCacheEntry(Oid relationId)
 		cacheEntry->partitionKeyString = partitionKeyString;
 		cacheEntry->partitionMethod = partitionMethod;
 		cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
-		cacheEntry->shardIntervalArray = shardIntervalArray;
+		cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
+		cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
+		cacheEntry->hashFunction = hashFunction;
+		cacheEntry->hasUninitializedShardInterval = hasUninitializedShardInterval;
+		cacheEntry->hasUniformHashDistribution = hasUniformHashDistribution;
 	}
 
 	return cacheEntry;
+}
+
+
+/*
+ * ShardIntervalCompareFunction returns the appropriate compare function for the
+ * partition column type. In case of hash-partitioning, it always returns the compare
+ * function for integers. Callers of this function has to ensure that shardIntervalArray
+ * has at least one element.
+ */
+static FmgrInfo *
+ShardIntervalCompareFunction(ShardInterval **shardIntervalArray, char partitionMethod)
+{
+	FmgrInfo *shardIntervalCompareFunction = NULL;
+	Oid comparisonTypeId = InvalidOid;
+
+	Assert(shardIntervalArray != NULL);
+
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		comparisonTypeId = INT4OID;
+	}
+	else
+	{
+		ShardInterval *shardInterval = shardIntervalArray[0];
+		comparisonTypeId = shardInterval->valueTypeId;
+	}
+
+	shardIntervalCompareFunction = GetFunctionInfo(comparisonTypeId, BTREE_AM_OID,
+												   BTORDER_PROC);
+
+	return shardIntervalCompareFunction;
+}
+
+
+/*
+ * SortedShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
+ * no min/max values are placed at the end of the array.
+ */
+static ShardInterval **
+SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
+					   FmgrInfo *shardIntervalSortCompareFunction)
+{
+	ShardInterval **sortedShardIntervalArray = NULL;
+
+	/* short cut if there are no shard intervals in the array */
+	if (shardCount == 0)
+	{
+		return shardIntervalArray;
+	}
+
+	/* if a shard doesn't have min/max values, it's placed in the end of the array */
+	qsort_arg(shardIntervalArray, shardCount, sizeof(ShardInterval *),
+			  (qsort_arg_comparator) CompareShardIntervals,
+			  (void *) shardIntervalSortCompareFunction);
+
+	sortedShardIntervalArray = shardIntervalArray;
+
+	return sortedShardIntervalArray;
+}
+
+
+/*
+ * HasUniformHashDistribution determines whether the given list of sorted shards
+ * has a uniform hash distribution, as produced by master_create_worker_shards for
+ * hash partitioned tables.
+ */
+static bool
+HasUniformHashDistribution(ShardInterval **shardIntervalArray,
+						   int shardIntervalArrayLength)
+{
+	uint64 hashTokenIncrement = 0;
+	int shardIndex = 0;
+
+	/* if there are no shards, there is no uniform distribution */
+	if (shardIntervalArrayLength == 0)
+	{
+		return false;
+	}
+
+	/* calculate the hash token increment */
+	hashTokenIncrement = HASH_TOKEN_COUNT / shardIntervalArrayLength;
+
+	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
+	{
+		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
+		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
+		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
+
+		if (shardIndex == (shardIntervalArrayLength - 1))
+		{
+			shardMaxHashToken = INT32_MAX;
+		}
+
+		if (DatumGetInt32(shardInterval->minValue) != shardMinHashToken ||
+			DatumGetInt32(shardInterval->maxValue) != shardMaxHashToken)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * HasUninitializedShardInterval returns true if all the elements of the
+ * sortedShardIntervalArray has min/max values. Callers of the function must
+ * ensure that input shard interval array is sorted on shardminvalue and uninitialized
+ * shard intervals are at the end of the array.
+ */
+static bool
+HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shardCount)
+{
+	bool hasUninitializedShardInterval = false;
+	ShardInterval *lastShardInterval = NULL;
+
+	if (shardCount == 0)
+	{
+		return hasUninitializedShardInterval;
+	}
+
+	Assert(sortedShardIntervalArray != NULL);
+
+	/*
+	 * Since the shard interval array is sorted, and uninitialized ones stored
+	 * in the end of the array, checking the last element is enough.
+	 */
+	lastShardInterval = sortedShardIntervalArray[shardCount - 1];
+	if (!lastShardInterval->minValueExists || !lastShardInterval->maxValueExists)
+	{
+		hasUninitializedShardInterval = true;
+	}
+
+	return hasUninitializedShardInterval;
 }
 
 
@@ -628,7 +834,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 
 		for (i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
 		{
-			ShardInterval *shardInterval = &cacheEntry->shardIntervalArray[i];
+			ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[i];
 			bool valueByVal = shardInterval->valueByVal;
 
 			if (!valueByVal)
@@ -643,11 +849,26 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 					pfree(DatumGetPointer(shardInterval->maxValue));
 				}
 			}
+
+			pfree(shardInterval);
 		}
 
-		pfree(cacheEntry->shardIntervalArray);
-		cacheEntry->shardIntervalArray = NULL;
+		pfree(cacheEntry->sortedShardIntervalArray);
+		cacheEntry->sortedShardIntervalArray = NULL;
 		cacheEntry->shardIntervalArrayLength = 0;
+
+		cacheEntry->hasUninitializedShardInterval = false;
+		cacheEntry->hasUniformHashDistribution = false;
+
+		pfree(cacheEntry->shardIntervalCompareFunction);
+		cacheEntry->shardIntervalCompareFunction = NULL;
+
+		/* we only allocated hash function for hash distributed tables */
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			pfree(cacheEntry->hashFunction);
+			cacheEntry->hashFunction = NULL;
+		}
 	}
 }
 

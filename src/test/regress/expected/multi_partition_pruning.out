@@ -6,10 +6,10 @@
 SET client_min_messages TO DEBUG2;
 -- Adding additional l_orderkey = 1 to make this query not router executable
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102011
 DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  l_orderkey | l_linenumber | l_shipdate 
 ------------+--------------+------------
        9030 |            1 | 09-02-1998
@@ -32,9 +32,9 @@ DEBUG:  predicate pruning for shardId 102010
 -- trigger the the creation of toasted tables and indexes. This in turn prints
 -- non-deterministic debug messages. To avoid this chain, we use l_linenumber.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
   sum  |        avg         
 -------+--------------------
  17999 | 3.0189533713518953
@@ -50,12 +50,12 @@ DEBUG:  predicate pruning for shardId 102011
 
 -- The following query should prune out all shards and return empty results
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem WHERE l_orderkey > 20000;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102012
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102012
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  sum | avg 
 -----+-----
      |    
