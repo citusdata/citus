@@ -63,11 +63,11 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
 ### Learn More
 
 The project [documentation][docs] and [tutorials][tutorial] are
-good places to start.  We’re responsive on Github, so you can use
-the [issue tracker][issues]  to check for or submit bug reports and
-feature requests. For more immediate help or general discussion
-we’re on IRC at `#citus` on Freenode and [@citusdata][twitter] on
-Twitter.
+good places to start. We’re responsive on Github, so you can use
+the [issue tracker][issues] to check for or submit bug reports and
+feature requests. For more general questions and discussion visit
+our [mailing list][groups], or chat with us at `#citus` on Freenode
+and [@citusdata][twitter] on Twitter.
 
 We also offer training and dedicated support options. More information
 is available on our [support page][support].
@@ -117,4 +117,5 @@ Copyright © 2012–2016 Citus Data, Inc.
 [support]: https://www.citusdata.com/citus-products/citus-data-pricing
 [tutorial]: https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html
 [twitter]: https://twitter.com/citusdata
+[groups]: https://groups.google.com/forum/#!forum/citus-users
 [license]: LICENSE
