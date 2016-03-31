@@ -136,7 +136,7 @@ CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery)
 	}
 	else if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
 	{
-		lockMode = ExclusiveLock;
+		lockMode = NoLock;
 	}
 	else
 	{
@@ -195,10 +195,26 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 		InstrStartNode(queryDesc->totaltime);
 	}
 
-	if (operation == CMD_INSERT || operation == CMD_UPDATE ||
-		operation == CMD_DELETE)
+	if (operation == CMD_INSERT)
 	{
 		int32 affectedRowCount = ExecuteDistributedModify(task);
+		estate->es_processed = affectedRowCount;
+	}
+	else if (operation == CMD_UPDATE || operation == CMD_DELETE)
+	{
+		int32 affectedRowCount = -1;
+		char *originalQueryString = task->queryString;
+		StringInfo modifiedQueryString = makeStringInfo();
+
+		appendStringInfoString(modifiedQueryString, "BEGIN; ");
+		appendStringInfoString(modifiedQueryString, originalQueryString);
+
+		task->queryString = modifiedQueryString->data;
+		affectedRowCount = ExecuteDistributedModify(task);
+
+		task->queryString = "COMMIT";
+		ExecuteDistributedModify(task);
+
 		estate->es_processed = affectedRowCount;
 	}
 	else if (operation == CMD_SELECT)
@@ -269,7 +285,11 @@ ExecuteDistributedModify(Task *task)
 		}
 
 		currentAffectedTupleString = PQcmdTuples(result);
-		currentAffectedTupleCount = pg_atoi(currentAffectedTupleString, sizeof(int32), 0);
+		if (*currentAffectedTupleString != '\0')
+		{
+			currentAffectedTupleCount = pg_atoi(currentAffectedTupleString,
+												sizeof(int32), 0);
+		}
 
 		if ((affectedTupleCount == -1) ||
 			(affectedTupleCount == currentAffectedTupleCount))
