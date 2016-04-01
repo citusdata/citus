@@ -16,9 +16,9 @@ CREATE TABLE orders_hash_partitioned (
 	o_clerk char(15),
 	o_shippriority integer,
 	o_comment varchar(79) );
-SELECT master_create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

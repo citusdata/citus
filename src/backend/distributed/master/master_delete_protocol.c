@@ -57,12 +57,12 @@ static bool ExecuteRemoteCommand(const char *nodeName, uint32 nodePort,
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_apply_delete_command);
-PG_FUNCTION_INFO_V1(master_drop_all_shards);
+PG_FUNCTION_INFO_V1(apply_delete_command);
+PG_FUNCTION_INFO_V1(drop_all_shards);
 
 
 /*
- * master_apply_delete_command takes in a delete command, finds shards that
+ * apply_delete_command takes in a delete command, finds shards that
  * match the criteria defined in the delete command, drops the found shards from
  * the worker nodes, and updates the corresponding metadata on the master node.
  * This function drops a shard if and only if all rows in the shard satisfy
@@ -75,7 +75,7 @@ PG_FUNCTION_INFO_V1(master_drop_all_shards);
  * even though related shard placements are not deleted.
  */
 Datum
-master_apply_delete_command(PG_FUNCTION_ARGS)
+apply_delete_command(PG_FUNCTION_ARGS)
 {
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
@@ -98,7 +98,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	bool failOK = false;
 	bool isTopLevel = true;
 
-	PreventTransactionChain(isTopLevel, "master_apply_delete_command");
+	PreventTransactionChain(isTopLevel, "apply_delete_command");
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
@@ -161,12 +161,12 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 
 /*
- * master_drop_shards attempts to drop all shards for a given relation.
- * Unlike master_apply_delete_command, this function can be called even
+ * drop_shards attempts to drop all shards for a given relation.
+ * Unlike apply_delete_command, this function can be called even
  * if the table has already been dropped.
  */
 Datum
-master_drop_all_shards(PG_FUNCTION_ARGS)
+drop_all_shards(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);

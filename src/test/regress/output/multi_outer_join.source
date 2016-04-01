@@ -12,9 +12,9 @@ CREATE TABLE multi_outer_join_left
 	l_mktsegment char(10) not null,
 	l_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_left', 'l_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_outer_join_left', 'l_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -29,9 +29,9 @@ CREATE TABLE multi_outer_join_right
 	r_mktsegment char(10) not null,
 	r_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -46,9 +46,9 @@ CREATE TABLE multi_outer_join_third
 	t_mktsegment char(10) not null,
 	t_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -172,16 +172,16 @@ FROM
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
 -- empty tables
-SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
- master_apply_delete_command 
------------------------------
-                           2
+SELECT * FROM apply_delete_command('DELETE FROM multi_outer_join_left');
+ apply_delete_command 
+----------------------
+                    2
 (1 row)
 
-SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
- master_apply_delete_command 
------------------------------
-                           2
+SELECT * FROM apply_delete_command('DELETE FROM multi_outer_join_right');
+ apply_delete_command 
+----------------------
+                    2
 (1 row)
 
 -- reload shards with 1-1 matching

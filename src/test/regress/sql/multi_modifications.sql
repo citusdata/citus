@@ -17,36 +17,36 @@ CREATE TABLE insufficient_shards ( LIKE limit_orders );
 CREATE TABLE range_partitioned ( LIKE limit_orders );
 CREATE TABLE append_partitioned ( LIKE limit_orders );
 
-SELECT master_create_distributed_table('limit_orders', 'id', 'hash');
-SELECT master_create_distributed_table('insufficient_shards', 'id', 'hash');
-SELECT master_create_distributed_table('range_partitioned', 'id', 'range');
-SELECT master_create_distributed_table('append_partitioned', 'id', 'append');
+SELECT create_distributed_table('limit_orders', 'id', 'hash');
+SELECT create_distributed_table('insufficient_shards', 'id', 'hash');
+SELECT create_distributed_table('range_partitioned', 'id', 'range');
+SELECT create_distributed_table('append_partitioned', 'id', 'append');
 
-SELECT master_create_worker_shards('limit_orders', 2, 2);
+SELECT create_worker_shards('limit_orders', 2, 2);
 
 -- make a single shard that covers no partition values
-SELECT master_create_worker_shards('insufficient_shards', 1, 1);
+SELECT create_worker_shards('insufficient_shards', 1, 1);
 UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 0
 WHERE logicalrelid = 'insufficient_shards'::regclass;
 
 -- create range-partitioned shards
-SELECT master_create_empty_shard('range_partitioned') AS new_shard_id
+SELECT create_empty_shard('range_partitioned') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 49999
 WHERE shardid = :new_shard_id;
 
-SELECT master_create_empty_shard('range_partitioned') AS new_shard_id
+SELECT create_empty_shard('range_partitioned') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 50000, shardmaxvalue = 99999
 WHERE shardid = :new_shard_id;
 
 -- create append-partitioned shards
-SELECT master_create_empty_shard('append_partitioned') AS new_shard_id
+SELECT create_empty_shard('append_partitioned') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 500000
 WHERE shardid = :new_shard_id;
 
-SELECT master_create_empty_shard('append_partitioned') AS new_shard_id
+SELECT create_empty_shard('append_partitioned') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 500000, shardmaxvalue = 1000000
 WHERE shardid = :new_shard_id;

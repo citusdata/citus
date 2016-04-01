@@ -2,15 +2,15 @@
 -- test utility statement functionality
 -- ===================================================================
 CREATE TABLE sharded_table ( name text, id bigint );
-SELECT master_create_distributed_table('sharded_table', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('sharded_table', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('sharded_table', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_worker_shards('sharded_table', 2, 1);
+ create_worker_shards 
+----------------------
  
 (1 row)
 
@@ -66,14 +66,14 @@ EXECUTE sharded_query;
 (0 rows)
 
 -- try to drop shards with where clause
-SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
+SELECT apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 ERROR:  cannot delete from distributed table
 DETAIL:  Delete statements on hash-partitioned tables with where clause is not supported
 -- drop all shards
-SELECT master_apply_delete_command('DELETE FROM sharded_table');
- master_apply_delete_command 
------------------------------
-                           2
+SELECT apply_delete_command('DELETE FROM sharded_table');
+ apply_delete_command 
+----------------------
+                    2
 (1 row)
 
 -- drop table

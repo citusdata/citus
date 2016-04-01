@@ -44,15 +44,15 @@ CREATE TABLE composite_type_partitioned_table
 	id integer,
 	col test_composite_type
 );
-SELECT master_create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('composite_type_partitioned_table', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_worker_shards('composite_type_partitioned_table', 4, 1);
+ create_worker_shards 
+----------------------
  
 (1 row)
 
@@ -81,15 +81,15 @@ CREATE TABLE bugs (
     id integer, 
     status bug_status
 );
-SELECT master_create_distributed_table('bugs', 'status', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('bugs', 'status', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('bugs', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_worker_shards('bugs', 4, 1);
+ create_worker_shards 
+----------------------
  
 (1 row)
 
@@ -121,15 +121,15 @@ CREATE TABLE varchar_hash_partitioned_table
 	id int,
     name varchar
 );
-SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('varchar_hash_partitioned_table', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_worker_shards('varchar_hash_partitioned_table', 4, 1);
+ create_worker_shards 
+----------------------
  
 (1 row)
 

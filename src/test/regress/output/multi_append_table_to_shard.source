@@ -7,9 +7,9 @@ CREATE TABLE multi_append_table_to_shard_right
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -18,9 +18,9 @@ CREATE TABLE multi_append_table_to_shard_left
 	left_number INTEGER not null,
 	left_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -65,13 +65,13 @@ CREATE TABLE multi_append_table_to_shard_stage
 	text TEXT not null
 );
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/agg.data';
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
- master_append_table_to_shard 
-------------------------------
-                    0.0533333
+ append_table_to_shard 
+-----------------------
+             0.0533333
 (1 row)
 
 -- Only the primary worker will see the new matches, as the secondary still uses a cached shard
@@ -87,13 +87,13 @@ WHERE	left_number = right_number;
 -- Now add a lot of data to ensure we increase the size on disk
 DELETE FROM multi_append_table_to_shard_stage;
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
- master_append_table_to_shard 
-------------------------------
-                     0.106667
+ append_table_to_shard 
+-----------------------
+              0.106667
 (1 row)
 
 -- This join will refresh the shard on the secondary, all 8 rows in the left table will match twice (16)
@@ -109,10 +109,10 @@ WHERE	left_number = right_number;
 -- Check that we error out if we try to append data to a hash partitioned table.
 UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
-SELECT master_create_empty_shard('multi_append_table_to_shard_right');
+SELECT create_empty_shard('multi_append_table_to_shard_right');
 ERROR:  relation "multi_append_table_to_shard_right" is a hash partitioned table
 DETAIL:  We currently don't support creating shards on hash-partitioned tables
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
@@ -121,16 +121,16 @@ DETAIL:  We currently don't support appending to shards in hash-partitioned tabl
 UPDATE pg_dist_partition SET partmethod = 'a' WHERE
 	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
 -- Clean up after test
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
- master_apply_delete_command 
------------------------------
-                           1
+SELECT apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
+ apply_delete_command 
+----------------------
+                    1
 (1 row)
 
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
- master_apply_delete_command 
------------------------------
-                           2
+SELECT apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
+ apply_delete_command 
+----------------------
+                    2
 (1 row)
 
 DROP TABLE multi_append_table_to_shard_stage;

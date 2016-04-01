@@ -13,7 +13,7 @@ CREATE TABLE multi_outer_join_left
 	l_mktsegment char(10) not null,
 	l_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_left', 'l_custkey', 'append');
+SELECT create_distributed_table('multi_outer_join_left', 'l_custkey', 'append');
 
 CREATE TABLE multi_outer_join_right
 (
@@ -26,7 +26,7 @@ CREATE TABLE multi_outer_join_right
 	r_mktsegment char(10) not null,
 	r_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
+SELECT create_distributed_table('multi_outer_join_right', 'r_custkey', 'append');
 
 CREATE TABLE multi_outer_join_third
 (
@@ -39,7 +39,7 @@ CREATE TABLE multi_outer_join_third
 	t_mktsegment char(10) not null,
 	t_comment varchar(117) not null
 );
-SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
+SELECT create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
 
 -- Make sure we do not crash if both tables have no shards
 SELECT
@@ -133,8 +133,8 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
 
 -- empty tables
-SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_left');
-SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
+SELECT * FROM apply_delete_command('DELETE FROM multi_outer_join_left');
+SELECT * FROM apply_delete_command('DELETE FROM multi_outer_join_right');
 
 -- reload shards with 1-1 matching
 \STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'

@@ -23,7 +23,7 @@ CREATE TABLE lineitem (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
 
 CREATE INDEX lineitem_time_index ON lineitem (l_shipdate);
 
@@ -38,7 +38,7 @@ CREATE TABLE orders (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders', 'o_orderkey', 'append');
 
 CREATE TABLE customer (
 	c_custkey integer not null,
@@ -49,14 +49,14 @@ CREATE TABLE customer (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer', 'c_custkey', 'append');
+SELECT create_distributed_table('customer', 'c_custkey', 'append');
 
 CREATE TABLE nation (
 	n_nationkey integer not null,
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
+SELECT create_distributed_table('nation', 'n_nationkey', 'append');
 
 CREATE TABLE part (
 	p_partkey integer not null,
@@ -68,7 +68,7 @@ CREATE TABLE part (
 	p_container char(10) not null,
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
-SELECT master_create_distributed_table('part', 'p_partkey', 'append');
+SELECT create_distributed_table('part', 'p_partkey', 'append');
 
 CREATE TABLE supplier
 (
@@ -80,7 +80,7 @@ CREATE TABLE supplier
 	s_acctbal decimal(15,2) not null,
 	s_comment varchar(101) not null
 );
-SELECT master_create_distributed_table('supplier', 's_suppkey', 'append');
+SELECT create_distributed_table('supplier', 's_suppkey', 'append');
 
 
 -- now test that Citus cannot distribute unique constraints that do not include
@@ -90,14 +90,14 @@ CREATE TABLE primary_key_on_non_part_col
 	partition_col integer,
 	other_col integer PRIMARY KEY
 );
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
+SELECT create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
 
 CREATE TABLE unique_const_on_non_part_col
 (
 	partition_col integer,
 	other_col integer UNIQUE
 );
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
+SELECT create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
 
 -- now show that Citus can distribute unique constrints that include
 -- the partition column
@@ -106,14 +106,14 @@ CREATE TABLE primary_key_on_part_col
 	partition_col integer PRIMARY KEY,
 	other_col integer
 );
-SELECT master_create_distributed_table('primary_key_on_part_col', 'partition_col', 'hash');
+SELECT create_distributed_table('primary_key_on_part_col', 'partition_col', 'hash');
 
 CREATE TABLE unique_const_on_part_col
 (
 	partition_col integer UNIQUE,
 	other_col integer
 );
-SELECT master_create_distributed_table('unique_const_on_part_col', 'partition_col', 'hash');
+SELECT create_distributed_table('unique_const_on_part_col', 'partition_col', 'hash');
 
 CREATE TABLE unique_const_on_two_columns
 (
@@ -121,21 +121,21 @@ CREATE TABLE unique_const_on_two_columns
 	other_col integer,
 	UNIQUE (partition_col, other_col)
 );
-SELECT master_create_distributed_table('unique_const_on_two_columns', 'partition_col', 'hash');
+SELECT create_distributed_table('unique_const_on_two_columns', 'partition_col', 'hash');
 
 CREATE TABLE unique_const_append_partitioned_tables
 (
 	partition_col integer UNIQUE,
 	other_col integer
 );
-SELECT master_create_distributed_table('unique_const_append_partitioned_tables', 'partition_col', 'append');
+SELECT create_distributed_table('unique_const_append_partitioned_tables', 'partition_col', 'append');
 
 CREATE TABLE unique_const_range_partitioned_tables
 (
 	partition_col integer UNIQUE,
 	other_col integer
 );
-SELECT master_create_distributed_table('unique_const_range_partitioned_tables', 'partition_col', 'range');
+SELECT create_distributed_table('unique_const_range_partitioned_tables', 'partition_col', 'range');
 
 -- drop unnecessary tables
 DROP TABLE primary_key_on_non_part_col, unique_const_on_non_part_col CASCADE;

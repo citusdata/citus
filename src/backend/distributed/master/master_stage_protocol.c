@@ -52,19 +52,19 @@ static StringInfo WorkerPartitionValue(char *nodeName, uint32 nodePort, Oid rela
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_create_empty_shard);
-PG_FUNCTION_INFO_V1(master_append_table_to_shard);
+PG_FUNCTION_INFO_V1(create_empty_shard);
+PG_FUNCTION_INFO_V1(append_table_to_shard);
 
 
 /*
- * master_create_empty_shard creates an empty shard for the given distributed
+ * create_empty_shard creates an empty shard for the given distributed
  * table. For this, the function first gets a list of candidate nodes, connects
  * to these nodes, and issues DDL commands on the nodes to create empty shard
  * placements. The function then updates metadata on the master node to make
  * this shard (and its placements) visible.
  */
 Datum
-master_create_empty_shard(PG_FUNCTION_ARGS)
+create_empty_shard(PG_FUNCTION_ARGS)
 {
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
@@ -99,7 +99,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	/* generate new and unique shardId from sequence */
-	shardIdDatum = master_get_new_shardid(NULL);
+	shardIdDatum = get_new_shardid(NULL);
 	shardId = DatumGetInt64(shardIdDatum);
 
 	/* get table DDL commands to replay on the worker node */
@@ -137,7 +137,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 
 /*
- * master_append_table_to_shard appends the given table's contents to the given
+ * append_table_to_shard appends the given table's contents to the given
  * shard, and updates shard metadata on the master node. If the function fails
  * to append table data to all shard placements, it doesn't update any metadata
  * and errors out. Else if the function fails to append table data to some of
@@ -145,7 +145,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
  * placements will get cleaned up during shard rebalancing.
  */
 Datum
-master_append_table_to_shard(PG_FUNCTION_ARGS)
+append_table_to_shard(PG_FUNCTION_ARGS)
 {
 	uint64 shardId = PG_GETARG_INT64(0);
 	text *sourceTableNameText = PG_GETARG_TEXT_P(1);
@@ -208,7 +208,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("could not find any shard placements for shardId "
 							   UINT64_FORMAT, shardId),
-						errhint("Try running master_create_empty_shard() first")));
+						errhint("Try running create_empty_shard() first")));
 	}
 
 	/* issue command to append table to each shard placement */

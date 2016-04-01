@@ -29,9 +29,9 @@ CREATE FOREIGN TABLE lineitem (
 	l_comment varchar(44) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -47,9 +47,9 @@ CREATE FOREIGN TABLE orders (
 	o_comment varchar(79) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('orders', 'o_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -64,9 +64,9 @@ CREATE FOREIGN TABLE customer (
 	c_comment varchar(117) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('customer', 'c_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('customer', 'c_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -77,9 +77,9 @@ CREATE FOREIGN TABLE nation (
 	n_comment varchar(152))
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('nation', 'n_nationkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -95,9 +95,9 @@ CREATE FOREIGN TABLE part (
 	p_comment varchar(23) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('part', 'p_partkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('part', 'p_partkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

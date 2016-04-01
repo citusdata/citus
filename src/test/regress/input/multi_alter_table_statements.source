@@ -25,7 +25,7 @@ CREATE TABLE lineitem_alter (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null
 	);
-SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 \STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 -- Verify that we can add columns
@@ -43,7 +43,7 @@ FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-\c - - - :master_port
+\c - - - :port
 
 \d lineitem_alter
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
@@ -160,12 +160,12 @@ FROM
     (SELECT oid FROM pg_class WHERE relname LIKE 'lineitem_alter_%' ORDER BY relname LIMIT 1) pc
     JOIN pg_attribute ON (pc.oid = pg_attribute.attrelid)
 ORDER BY attnum;
-\c - - - :master_port
+\c - - - :port
 
 -- Cleanup the table and its shards
-SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
+SELECT apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
-\c - - - :master_port
+\c - - - :port

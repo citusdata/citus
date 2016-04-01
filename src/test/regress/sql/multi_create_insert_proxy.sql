@@ -47,8 +47,8 @@ CREATE TABLE insert_target (
 -- squelch WARNINGs that contain worker_port
 SET client_min_messages TO ERROR;
 
-SELECT master_create_distributed_table('insert_target', 'id', 'hash');
-SELECT master_create_worker_shards('insert_target', 2, 1);
+SELECT create_distributed_table('insert_target', 'id', 'hash');
+SELECT create_worker_shards('insert_target', 2, 1);
 
 CREATE TEMPORARY SEQUENCE rows_inserted;
 SELECT create_insert_proxy_for_table('insert_target', 'rows_inserted') AS proxy_tablename

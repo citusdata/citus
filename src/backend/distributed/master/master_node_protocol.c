@@ -58,22 +58,22 @@ static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescripto
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_get_table_metadata);
-PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
-PG_FUNCTION_INFO_V1(master_get_new_shardid);
-PG_FUNCTION_INFO_V1(master_get_local_first_candidate_nodes);
-PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
-PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
+PG_FUNCTION_INFO_V1(get_table_metadata);
+PG_FUNCTION_INFO_V1(get_table_ddl_events);
+PG_FUNCTION_INFO_V1(get_new_shardid);
+PG_FUNCTION_INFO_V1(get_local_first_candidate_nodes);
+PG_FUNCTION_INFO_V1(get_round_robin_candidate_nodes);
+PG_FUNCTION_INFO_V1(get_active_worker_nodes);
 
 
 /*
- * master_get_table_metadata takes in a relation name, and returns partition
+ * get_table_metadata takes in a relation name, and returns partition
  * related metadata for the relation. These metadata are grouped and returned in
  * a tuple, and are used by the caller when creating new shards. The function
  * errors if given relation does not exist, or is not partitioned.
  */
 Datum
-master_get_table_metadata(PG_FUNCTION_ARGS)
+get_table_metadata(PG_FUNCTION_ARGS)
 {
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName);
@@ -174,13 +174,13 @@ CStoreTable(Oid relationId)
 
 
 /*
- * master_get_table_ddl_events takes in a relation name, and returns the set of
+ * get_table_ddl_events takes in a relation name, and returns the set of
  * DDL commands needed to reconstruct the relation. The returned DDL commands
  * are similar in flavor to schema definitions that pgdump returns. The function
  * errors if given relation does not exist.
  */
 Datum
-master_get_table_ddl_events(PG_FUNCTION_ARGS)
+get_table_ddl_events(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
 	ListCell *tableDDLEventCell = NULL;
@@ -240,7 +240,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_new_shardid allocates and returns a unique shardId for the shard
+ * get_new_shardid allocates and returns a unique shardId for the shard
  * to be created. This allocation occurs both in shared memory and in write
  * ahead logs; writing to logs avoids the risk of having shardId collisions.
  *
@@ -249,7 +249,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
  * on an internal sequence created in initdb to generate unique identifiers.
  */
 Datum
-master_get_new_shardid(PG_FUNCTION_ARGS)
+get_new_shardid(PG_FUNCTION_ARGS)
 {
 	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName);
@@ -264,7 +264,7 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_local_first_candidate_nodes returns a set of candidate host names
+ * get_local_first_candidate_nodes returns a set of candidate host names
  * and port numbers on which to place new shards. The function makes sure to
  * always allocate the first candidate node as the node the caller is connecting
  * from; and allocates additional nodes until the shard replication factor is
@@ -273,7 +273,7 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
  * replication factor.
  */
 Datum
-master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
+get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
 	uint32 desiredNodeCount = 0;
@@ -380,14 +380,14 @@ master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_round_robin_candidate_nodes returns a set of candidate host names
+ * get_round_robin_candidate_nodes returns a set of candidate host names
  * and port numbers on which to place new shards. The function uses the round
  * robin policy to choose the nodes and tries to ensure that there is an even
  * distribution of shards across the worker nodes. This function errors out if
  * the number of available nodes falls short of the replication factor.
  */
 Datum
-master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
+get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
 {
 	uint64 shardId = PG_GETARG_INT64(0);
 	FuncCallContext *functionContext = NULL;
@@ -464,12 +464,12 @@ master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_active_worker_nodes returns a set of active worker host names and
+ * get_active_worker_nodes returns a set of active worker host names and
  * port numbers in deterministic order. Currently we assume that all worker
  * nodes in pg_worker_list.conf are active.
  */
 Datum
-master_get_active_worker_nodes(PG_FUNCTION_ARGS)
+get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
 	FuncCallContext *functionContext = NULL;
 	uint32 workerNodeIndex = 0;

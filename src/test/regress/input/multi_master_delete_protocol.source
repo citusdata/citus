@@ -13,7 +13,7 @@ CREATE TABLE customer_delete_protocol (
         c_acctbal decimal(15,2) not null,
         c_mktsegment char(10) not null,
         c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 'append');
+SELECT create_distributed_table('customer_delete_protocol', 'c_custkey', 'append');
 
 \STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
 \STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
@@ -21,33 +21,33 @@ SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 
 
 -- Check that we don't support conditions on columns other than partition key.
 
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_acctbal > 0.0');
 
 -- Check that we delete a shard if and only if all rows in the shard satisfy the condition.
 
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol 
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol 
                                            WHERE c_custkey > 6500');
 SELECT count(*) from customer_delete_protocol;
 
 -- Delete one shard that satisfies the given conditions.
 
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_custkey > 1000 AND c_custkey < 3000');
 SELECT count(*) from customer_delete_protocol;
 
 -- Delete all shards if no condition is provided.
 
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol');
 SELECT count(*) FROM customer_delete_protocol;
 
 -- Verify that empty shards are deleted if no condition is provided
-SELECT master_create_empty_shard('customer_delete_protocol');
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
+SELECT create_empty_shard('customer_delete_protocol');
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_custkey > 1000');
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol');
 
--- Verify that master_apply_delete_command cannot be called in a transaction block
+-- Verify that apply_delete_command cannot be called in a transaction block
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
+SELECT apply_delete_command('DELETE FROM customer_delete_protocol');
 ROLLBACK;

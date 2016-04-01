@@ -48,7 +48,7 @@
 
 /* Defines that relate to fetching foreign tables */
 #define FOREIGN_CACHED_FILE_PATH "pg_foreign_file/cached/%s"
-#define GET_TABLE_DDL_EVENTS "SELECT master_get_table_ddl_events('%s')"
+#define GET_TABLE_DDL_EVENTS "SELECT get_table_ddl_events('%s')"
 #define SET_FOREIGN_TABLE_FILENAME "ALTER FOREIGN TABLE %s OPTIONS (SET filename '%s')"
 #define FOREIGN_FILE_PATH_COMMAND "SELECT worker_foreign_file_path('%s')"
 #define SET_SEARCH_PATH_COMMAND "SET search_path TO %s"

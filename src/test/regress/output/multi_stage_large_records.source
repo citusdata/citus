@@ -6,9 +6,9 @@
 -- are creating shards of correct size even when records are large.
 SET citus.shard_max_size TO "256kB";
 CREATE TABLE large_records_table (data_id integer, data text);
-SELECT master_create_distributed_table('large_records_table', 'data_id', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('large_records_table', 'data_id', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

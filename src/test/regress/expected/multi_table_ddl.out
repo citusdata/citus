@@ -3,9 +3,9 @@
 --
 -- Tests around changing the schema and dropping of a distributed table
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -26,20 +26,20 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 BEGIN;
 DROP TABLE testtableddl;
 ERROR:  DROP distributed table cannot run inside a transaction block
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+CONTEXT:  SQL statement "SELECT drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
 PL/pgSQL function citus_drop_trigger() line 15 at PERFORM
 ROLLBACK;
 -- verify that the table can be dropped
 DROP TABLE testtableddl;
 -- verify that the table can dropped even if shards exist
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT 1 FROM master_create_empty_shard('testtableddl');
+SELECT 1 FROM create_empty_shard('testtableddl');
  ?column? 
 ----------
         1

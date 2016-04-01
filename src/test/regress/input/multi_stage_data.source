@@ -25,6 +25,6 @@ CREATE TABLE nation_hash_partitioned (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-SELECT master_create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
+SELECT create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
 
 \STAGE nation_hash_partitioned FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
