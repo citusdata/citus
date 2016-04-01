@@ -3710,6 +3710,8 @@ PartitionColumnOpExpressionList(Query *query)
 		Node *whereNode = (Node *) lfirst(whereClauseCell);
 		Node *leftArgument = NULL;
 		Node *rightArgument = NULL;
+		Node *strippedLeftArgument = NULL;
+		Node *strippedRightArgument = NULL;
 		OpExpr *whereClause = NULL;
 		List *argumentList = NIL;
 		List *rangetableList = NIL;
@@ -3744,14 +3746,16 @@ PartitionColumnOpExpressionList(Query *query)
 
 		leftArgument = (Node *) linitial(argumentList);
 		rightArgument = (Node *) lsecond(argumentList);
+		strippedLeftArgument = strip_implicit_coercions(leftArgument);
+		strippedRightArgument = strip_implicit_coercions(rightArgument);
 
-		if (IsA(leftArgument, Var) && IsA(rightArgument, Const))
+		if (IsA(strippedLeftArgument, Var) && IsA(strippedRightArgument, Const))
 		{
-			candidatePartitionColumn = (Var *) leftArgument;
+			candidatePartitionColumn = (Var *) strippedLeftArgument;
 		}
-		else if (IsA(leftArgument, Const) && IsA(leftArgument, Var))
+		else if (IsA(strippedLeftArgument, Const) && IsA(strippedRightArgument, Var))
 		{
-			candidatePartitionColumn = (Var *) rightArgument;
+			candidatePartitionColumn = (Var *) strippedRightArgument;
 		}
 		else
 		{
@@ -3798,14 +3802,16 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
 
 		Node *leftArgument = (Node *) linitial(argumentList);
 		Node *rightArgument = (Node *) lsecond(argumentList);
+		Node *strippedLeftArgument = strip_implicit_coercions(leftArgument);
+		Node *strippedRightArgument = strip_implicit_coercions(rightArgument);
 
-		if (IsA(leftArgument, Var))
+		if (IsA(strippedLeftArgument, Var))
 		{
-			newArgumentList = list_make2(newColumn, rightArgument);
+			newArgumentList = list_make2(newColumn, strippedRightArgument);
 		}
-		else if (IsA(leftArgument, Var))
+		else if (IsA(strippedRightArgument, Var))
 		{
-			newArgumentList = list_make2(leftArgument, newColumn);
+			newArgumentList = list_make2(strippedLeftArgument, newColumn);
 		}
 
 		copyOpExpression->args = newArgumentList;

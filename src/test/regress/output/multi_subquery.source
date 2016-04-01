@@ -326,3 +326,46 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot push down this subquery
 DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
+-- Check that we can prune shards in subqueries with VARCHAR partition columns
+CREATE TABLE subquery_pruning_varchar_test_table
+(
+   a varchar,
+   b int
+);
+SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+SET citus.subquery_pushdown TO TRUE;
+SET client_min_messages TO DEBUG2;
+SELECT * FROM 
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
+AS foo;
+DEBUG:  predicate pruning for shardId 102029
+DEBUG:  predicate pruning for shardId 102027
+DEBUG:  predicate pruning for shardId 102026
+ count 
+-------
+(0 rows)
+
+SELECT * FROM 
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
+AS foo;
+DEBUG:  predicate pruning for shardId 102029
+DEBUG:  predicate pruning for shardId 102028
+DEBUG:  predicate pruning for shardId 102026
+ count 
+-------
+(0 rows)
+
+SET client_min_messages TO NOTICE;
+DROP TABLE subquery_pruning_varchar_test_table;
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102026;
