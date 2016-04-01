@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * master_create_shards.c
+ * create_shards.c
  *
  * This file contains functions to distribute a table by creating shards for it
  * across a set of worker nodes.
@@ -54,11 +54,11 @@ static text * IntegerToText(int32 value);
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_create_worker_shards);
+PG_FUNCTION_INFO_V1(create_worker_shards);
 
 
 /*
- * master_create_worker_shards creates empty shards for the given table based
+ * create_worker_shards creates empty shards for the given table based
  * on the specified number of initial shards. The function first gets a list of
  * candidate nodes and issues DDL commands on the nodes to create empty shard
  * placements on those nodes. The function then updates metadata on the master
@@ -67,7 +67,7 @@ PG_FUNCTION_INFO_V1(master_create_worker_shards);
  * ranges for each shard, giving them an equal split of the hash space.
  */
 Datum
-master_create_worker_shards(PG_FUNCTION_ARGS)
+create_worker_shards(PG_FUNCTION_ARGS)
 {
 	text *tableNameText = PG_GETARG_TEXT_P(0);
 	int32 shardCount = PG_GETARG_INT32(1);
@@ -163,7 +163,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 		text *maxHashTokenText = NULL;
 		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
-		Datum shardIdDatum = master_get_new_shardid(NULL);
+		Datum shardIdDatum = get_new_shardid(NULL);
 		int64 shardId = DatumGetInt64(shardIdDatum);
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */

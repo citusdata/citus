@@ -59,8 +59,8 @@ static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
-PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
+PG_FUNCTION_INFO_V1(dist_partition_cache_invalidate);
+PG_FUNCTION_INFO_V1(dist_shard_cache_invalidate);
 
 
 /*
@@ -439,12 +439,12 @@ CitusExtraDataContainerFuncId(void)
 
 
 /*
- * master_dist_partition_cache_invalidate is a trigger function that performs
+ * dist_partition_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_partition are changed
  * on the SQL level.
  */
 Datum
-master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
+dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	HeapTuple newTuple = NULL;
@@ -497,12 +497,12 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_shard_cache_invalidate is a trigger function that performs
+ * dist_shard_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_shard are changed
  * on the SQL level.
  */
 Datum
-master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
+dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 {
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	HeapTuple newTuple = NULL;

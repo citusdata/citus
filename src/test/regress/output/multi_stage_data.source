@@ -19,9 +19,9 @@ CREATE TABLE nation_hash_partitioned (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-SELECT master_create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

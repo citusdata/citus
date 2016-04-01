@@ -30,13 +30,13 @@
 #define ROLLBACK_COMMAND "ROLLBACK"
 
 /* Names of remote function calls to execute on the master. */
-#define MASTER_GET_TABLE_METADATA "SELECT * FROM master_get_table_metadata($1::text)"
-#define MASTER_GET_TABLE_DDL_EVENTS "SELECT * FROM master_get_table_ddl_events($1::text)"
-#define MASTER_GET_NEW_SHARDID "SELECT * FROM master_get_new_shardid()"
+#define MASTER_GET_TABLE_METADATA "SELECT * FROM get_table_metadata($1::text)"
+#define MASTER_GET_TABLE_DDL_EVENTS "SELECT * FROM get_table_ddl_events($1::text)"
+#define MASTER_GET_NEW_SHARDID "SELECT * FROM get_new_shardid()"
 #define MASTER_GET_LOCAL_FIRST_CANDIDATE_NODES \
-	"SELECT * FROM master_get_local_first_candidate_nodes()"
+	"SELECT * FROM get_local_first_candidate_nodes()"
 #define MASTER_GET_ROUND_ROBIN_CANDIDATE_NODES \
-	"SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)"
+	"SELECT * FROM  get_round_robin_candidate_nodes($1::int8)"
 
 #define MASTER_INSERT_SHARD_ROW \
 	"INSERT INTO pg_dist_shard  " \

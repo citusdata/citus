@@ -9,7 +9,7 @@
 SET citus.shard_max_size TO "256kB";
 
 CREATE TABLE large_records_table (data_id integer, data text);
-SELECT master_create_distributed_table('large_records_table', 'data_id', 'append');
+SELECT create_distributed_table('large_records_table', 'data_id', 'append');
 
 \STAGE large_records_table FROM '@abs_srcdir@/data/large_records.data' with delimiter '|'
 

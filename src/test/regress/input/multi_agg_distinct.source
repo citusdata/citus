@@ -21,7 +21,7 @@ CREATE TABLE lineitem_range (
 	l_shipinstruct char(25) not null,
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null );
-SELECT master_create_distributed_table('lineitem_range', 'l_orderkey', 'range');
+SELECT create_distributed_table('lineitem_range', 'l_orderkey', 'range');
 
 \STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'

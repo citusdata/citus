@@ -4,7 +4,7 @@
 
 -- Try binary master copy for different executors
 
-SET citus.binary_master_copy_format TO 'on';
+SET citus.binary_copy_format TO 'on';
 SET citus.task_executor_type TO 'task-tracker';
 
 SELECT count(*) FROM lineitem;

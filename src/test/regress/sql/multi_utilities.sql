@@ -3,8 +3,8 @@
 -- ===================================================================
 
 CREATE TABLE sharded_table ( name text, id bigint );
-SELECT master_create_distributed_table('sharded_table', 'id', 'hash');
-SELECT master_create_worker_shards('sharded_table', 2, 1);
+SELECT create_distributed_table('sharded_table', 'id', 'hash');
+SELECT create_worker_shards('sharded_table', 2, 1);
 
 -- COPY out is supported with distributed tables
 COPY sharded_table TO STDOUT;
@@ -37,10 +37,10 @@ EXECUTE sharded_delete;
 EXECUTE sharded_query;
 
 -- try to drop shards with where clause
-SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
+SELECT apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 
 -- drop all shards
-SELECT master_apply_delete_command('DELETE FROM sharded_table');
+SELECT apply_delete_command('DELETE FROM sharded_table');
 
 -- drop table
 DROP TABLE sharded_table;

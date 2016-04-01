@@ -276,7 +276,7 @@ create_monolithic_shard_row(PG_FUNCTION_ARGS)
 	Oid distributedTableId = PG_GETARG_OID(0);
 	StringInfo minInfo = makeStringInfo();
 	StringInfo maxInfo = makeStringInfo();
-	Datum newShardIdDatum = master_get_new_shardid(NULL);
+	Datum newShardIdDatum = get_new_shardid(NULL);
 	int64 newShardId = DatumGetInt64(newShardIdDatum);
 	text *maxInfoText = NULL;
 	text *minInfoText = NULL;

@@ -524,7 +524,7 @@ DistributedModifyShardInterval(Query *query)
 						errmsg("could not find any shards for modification"),
 						errdetail("No shards exist for distributed table \"%s\".",
 								  relationName),
-						errhint("Run master_create_worker_shards to create shards "
+						errhint("Run create_worker_shards to create shards "
 								"and try again.")));
 	}
 

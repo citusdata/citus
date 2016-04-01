@@ -46,15 +46,15 @@ CREATE TABLE insert_target (
 );
 -- squelch WARNINGs that contain worker_port
 SET client_min_messages TO ERROR;
-SELECT master_create_distributed_table('insert_target', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('insert_target', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('insert_target', 2, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_worker_shards('insert_target', 2, 1);
+ create_worker_shards 
+----------------------
  
 (1 row)
 

@@ -8,14 +8,14 @@ CREATE TABLE upsert_test
 	third_col int
 );
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test', 'part_key', 'hash');
- master_create_distributed_table 
+SELECT create_distributed_table('upsert_test', 'part_key', 'hash');
+ create_distributed_table 
 ---------------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('upsert_test', '4', '2');
- master_create_worker_shards 
+SELECT create_worker_shards('upsert_test', '4', '2');
+ create_worker_shards 
 -----------------------------
  
 (1 row)
@@ -145,14 +145,14 @@ CREATE TABLE upsert_test_2
 	PRIMARY KEY (part_key, other_col)
 );
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_2', 'part_key', 'hash');
- master_create_distributed_table 
+SELECT create_distributed_table('upsert_test_2', 'part_key', 'hash');
+ create_distributed_table 
 ---------------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('upsert_test_2', '4', '2');
- master_create_worker_shards 
+SELECT create_worker_shards('upsert_test_2', '4', '2');
+ create_worker_shards 
 -----------------------------
  
 (1 row)
@@ -177,14 +177,14 @@ CREATE TABLE upsert_test_3
 -- note that this is not a unique index
 CREATE INDEX idx_ups_test ON upsert_test_3(part_key);
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_3', 'part_key', 'hash');
- master_create_distributed_table 
+SELECT create_distributed_table('upsert_test_3', 'part_key', 'hash');
+ create_distributed_table 
 ---------------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('upsert_test_3', '4', '2');
- master_create_worker_shards 
+SELECT create_worker_shards('upsert_test_3', '4', '2');
+ create_worker_shards 
 -----------------------------
  
 (1 row)
@@ -201,14 +201,14 @@ CREATE TABLE upsert_test_4
 	count int
 );
 -- distribute the table and create shards
-SELECT master_create_distributed_table('upsert_test_4', 'part_key', 'hash');
- master_create_distributed_table 
+SELECT create_distributed_table('upsert_test_4', 'part_key', 'hash');
+ create_distributed_table 
 ---------------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('upsert_test_4', '4', '2');
- master_create_worker_shards 
+SELECT create_worker_shards('upsert_test_4', '4', '2');
+ create_worker_shards 
 -----------------------------
  
 (1 row)
@@ -249,14 +249,14 @@ SELECT * FROM upsert_test_4;
 
 -- now test dropped columns
 CREATE TABLE dropcol_distributed(key int primary key, drop1 int, keep1 text, drop2 numeric, keep2 float);
-SELECT master_create_distributed_table('dropcol_distributed', 'key', 'hash');
- master_create_distributed_table 
+SELECT create_distributed_table('dropcol_distributed', 'key', 'hash');
+ create_distributed_table 
 ---------------------------------
  
 (1 row)
 
-SELECT master_create_worker_shards('dropcol_distributed', 4, 1);
- master_create_worker_shards 
+SELECT create_worker_shards('dropcol_distributed', 4, 1);
+ create_worker_shards 
 -----------------------------
  
 (1 row)

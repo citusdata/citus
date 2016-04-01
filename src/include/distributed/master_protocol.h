@@ -87,23 +87,23 @@ extern void CreateShardPlacements(int64 shardId, List *ddlEventList,
 								  int replicationFactor);
 
 /* Function declarations for generating metadata for shard creation */
-extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
-extern Datum master_get_table_ddl_events(PG_FUNCTION_ARGS);
-extern Datum master_get_new_shardid(PG_FUNCTION_ARGS);
-extern Datum master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS);
-extern Datum master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS);
-extern Datum master_get_active_worker_nodes(PG_FUNCTION_ARGS);
+extern Datum get_table_metadata(PG_FUNCTION_ARGS);
+extern Datum get_table_ddl_events(PG_FUNCTION_ARGS);
+extern Datum get_new_shardid(PG_FUNCTION_ARGS);
+extern Datum get_local_first_candidate_nodes(PG_FUNCTION_ARGS);
+extern Datum get_round_robin_candidate_nodes(PG_FUNCTION_ARGS);
+extern Datum get_active_worker_nodes(PG_FUNCTION_ARGS);
 
 /* Function declarations to help with data staging and deletion */
-extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
-extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
-extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
-extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
+extern Datum create_empty_shard(PG_FUNCTION_ARGS);
+extern Datum append_table_to_shard(PG_FUNCTION_ARGS);
+extern Datum apply_delete_command(PG_FUNCTION_ARGS);
+extern Datum drop_all_shards(PG_FUNCTION_ARGS);
 
 /* function declarations for shard creation functionality */
-extern Datum master_create_worker_shards(PG_FUNCTION_ARGS);
+extern Datum create_worker_shards(PG_FUNCTION_ARGS);
 
 /* function declarations for shard repair functionality */
-extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
+extern Datum copy_shard_placement(PG_FUNCTION_ARGS);
 
 #endif   /* MASTER_PROTOCOL_H */

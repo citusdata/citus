@@ -19,7 +19,7 @@ CREATE TABLE orders_hash_partitioned (
 	o_clerk char(15),
 	o_shippriority integer,
 	o_comment varchar(79) );
-SELECT master_create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders_hash_partitioned', 'o_orderkey', 'append');
 
 UPDATE pg_dist_partition SET partmethod = 'h'
 	WHERE logicalrelid = 'orders_hash_partitioned'::regclass;

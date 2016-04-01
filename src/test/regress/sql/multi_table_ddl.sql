@@ -4,7 +4,7 @@
 -- Tests around changing the schema and dropping of a distributed table
 
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
 
 -- verify that the citus extension can't be dropped while distributed tables exist
 DROP EXTENSION citus;
@@ -25,8 +25,8 @@ DROP TABLE testtableddl;
 
 -- verify that the table can dropped even if shards exist
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
-SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
-SELECT 1 FROM master_create_empty_shard('testtableddl');
+SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
+SELECT 1 FROM create_empty_shard('testtableddl');
 DROP TABLE testtableddl;
 
 -- ensure no metadata of distributed tables are remaining

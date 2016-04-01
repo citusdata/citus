@@ -28,7 +28,7 @@ CREATE FOREIGN TABLE lineitem (
 	l_comment varchar(44) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
 
 CREATE FOREIGN TABLE orders (
 	o_orderkey bigint not null,
@@ -42,7 +42,7 @@ CREATE FOREIGN TABLE orders (
 	o_comment varchar(79) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders', 'o_orderkey', 'append');
 
 CREATE FOREIGN TABLE customer (
 	c_custkey integer not null,
@@ -55,7 +55,7 @@ CREATE FOREIGN TABLE customer (
 	c_comment varchar(117) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('customer', 'c_custkey', 'append');
+SELECT create_distributed_table('customer', 'c_custkey', 'append');
 
 CREATE FOREIGN TABLE nation (
 	n_nationkey integer not null,
@@ -64,7 +64,7 @@ CREATE FOREIGN TABLE nation (
 	n_comment varchar(152))
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
+SELECT create_distributed_table('nation', 'n_nationkey', 'append');
 
 CREATE FOREIGN TABLE part (
 	p_partkey integer not null,
@@ -78,4 +78,4 @@ CREATE FOREIGN TABLE part (
 	p_comment varchar(23) not null)
 SERVER file_server 
 OPTIONS (format 'text', filename '', delimiter '|', null '');
-SELECT master_create_distributed_table('part', 'p_partkey', 'append');
+SELECT create_distributed_table('part', 'p_partkey', 'append');

@@ -7,14 +7,14 @@ CREATE TABLE multi_append_table_to_shard_right
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
+SELECT create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
 
 CREATE TABLE multi_append_table_to_shard_left
 (
 	left_number INTEGER not null,
 	left_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
+SELECT create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
 
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
@@ -43,7 +43,7 @@ CREATE TABLE multi_append_table_to_shard_stage
 
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/agg.data';
 
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
@@ -58,7 +58,7 @@ WHERE	left_number = right_number;
 DELETE FROM multi_append_table_to_shard_stage;
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
 
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
@@ -74,9 +74,9 @@ WHERE	left_number = right_number;
 UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
 
-SELECT master_create_empty_shard('multi_append_table_to_shard_right');
+SELECT create_empty_shard('multi_append_table_to_shard_right');
 
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+SELECT	append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
@@ -85,8 +85,8 @@ UPDATE pg_dist_partition SET partmethod = 'a' WHERE
 	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
 
 -- Clean up after test
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
+SELECT apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
+SELECT apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
 DROP TABLE multi_append_table_to_shard_stage;
 DROP TABLE multi_append_table_to_shard_right;
 DROP TABLE multi_append_table_to_shard_left;

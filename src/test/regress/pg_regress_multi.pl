@@ -133,7 +133,7 @@ sysopen my $fh, "tmp_check/tmp-bin/psql", O_CREAT|O_TRUNC|O_RDWR, 0700
 	or die "Could not create psql wrapper";
 print $fh "#!/bin/bash\n";
 print $fh "exec $bindir/csql ";
-print $fh "--variable=master_port=$masterPort ";
+print $fh "--variable=port=$masterPort ";
 for my $workeroff (0 .. $#workerPorts)
 {
 	my $port = $workerPorts[$workeroff];

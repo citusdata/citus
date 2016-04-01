@@ -45,11 +45,11 @@ static bool CopyDataFromFinalizedPlacement(Oid distributedTableId, int64 shardId
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_copy_shard_placement);
+PG_FUNCTION_INFO_V1(copy_shard_placement);
 
 
 /*
- * master_copy_shard_placement implements a user-facing UDF to copy data from
+ * copy_shard_placement implements a user-facing UDF to copy data from
  * a healthy (source) node to an inactive (target) node. To accomplish this it
  * entirely recreates the table structure before copying all data. During this
  * time all modifications are paused to the shard. After successful repair, the
@@ -58,7 +58,7 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
  * in an unhealthy state.
  */
 Datum
-master_copy_shard_placement(PG_FUNCTION_ARGS)
+copy_shard_placement(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	text *sourceNodeName = PG_GETARG_TEXT_P(1);

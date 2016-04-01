@@ -3,7 +3,7 @@
 --
 
 -- Create UDF in master and workers
-\c - - - :master_port
+\c - - - :port
 DROP FUNCTION IF EXISTS median(double precision[]);
 
 CREATE FUNCTION median(double precision[]) RETURNS double precision 
@@ -37,7 +37,7 @@ LANGUAGE sql IMMUTABLE AS $_$
 $_$;
 
 -- Run query on master
-\c - - - :master_port
+\c - - - :port
 
 SET citus.task_executor_type TO 'task-tracker';
 

@@ -100,7 +100,7 @@ SET search_path = 'pg_catalog';
 
 /* master_* functions */
 
-CREATE FUNCTION master_get_table_metadata(relation_name text, OUT logical_relid oid,
+CREATE FUNCTION get_table_metadata(relation_name text, OUT logical_relid oid,
                                           OUT part_storage_type "char",
                                           OUT part_method "char", OUT part_key text,
                                           OUT part_replica_count integer,
@@ -108,91 +108,91 @@ CREATE FUNCTION master_get_table_metadata(relation_name text, OUT logical_relid 
                                           OUT part_placement_policy integer)
     RETURNS record
     LANGUAGE C STABLE STRICT
-    AS 'MODULE_PATHNAME', $$master_get_table_metadata$$;
-COMMENT ON FUNCTION master_get_table_metadata(relation_name text)
+    AS 'MODULE_PATHNAME', $$get_table_metadata$$;
+COMMENT ON FUNCTION get_table_metadata(relation_name text)
     IS 'fetch metadata values for the table';
 
-CREATE FUNCTION master_get_table_ddl_events(text)
+CREATE FUNCTION get_table_ddl_events(text)
     RETURNS SETOF text
     LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_table_ddl_events$$;
-COMMENT ON FUNCTION master_get_table_ddl_events(text)
+    AS 'MODULE_PATHNAME', $$get_table_ddl_events$$;
+COMMENT ON FUNCTION get_table_ddl_events(text)
     IS 'fetch set of ddl statements for the table';
 
-CREATE FUNCTION master_get_new_shardid()
+CREATE FUNCTION get_new_shardid()
     RETURNS bigint
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_get_new_shardid$$;
-COMMENT ON FUNCTION master_get_new_shardid()
+    AS 'MODULE_PATHNAME', $$get_new_shardid$$;
+COMMENT ON FUNCTION get_new_shardid()
     IS 'fetch unique shardId';
 
-CREATE FUNCTION master_get_local_first_candidate_nodes(OUT node_name text,
+CREATE FUNCTION get_local_first_candidate_nodes(OUT node_name text,
                                                        OUT node_port bigint)
     RETURNS SETOF record
     LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_local_first_candidate_nodes$$;
-COMMENT ON FUNCTION master_get_local_first_candidate_nodes()
+    AS 'MODULE_PATHNAME', $$get_local_first_candidate_nodes$$;
+COMMENT ON FUNCTION get_local_first_candidate_nodes()
     IS 'fetch set of candidate nodes for shard uploading choosing the local node first';
 
-CREATE FUNCTION master_create_empty_shard(text)
+CREATE FUNCTION create_empty_shard(text)
     RETURNS bigint
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_create_empty_shard$$;
-COMMENT ON FUNCTION master_create_empty_shard(text)
+    AS 'MODULE_PATHNAME', $$create_empty_shard$$;
+COMMENT ON FUNCTION create_empty_shard(text)
     IS 'create an empty shard and shard placements for the table';
 
-CREATE FUNCTION master_append_table_to_shard(bigint, text, text, integer)
+CREATE FUNCTION append_table_to_shard(bigint, text, text, integer)
     RETURNS real
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_append_table_to_shard$$;
-COMMENT ON FUNCTION master_append_table_to_shard(bigint, text, text, integer)
+    AS 'MODULE_PATHNAME', $$append_table_to_shard$$;
+COMMENT ON FUNCTION append_table_to_shard(bigint, text, text, integer)
     IS 'append given table to all shard placements and update metadata';
 
-CREATE FUNCTION master_drop_all_shards(logicalrelid regclass,
+CREATE FUNCTION drop_all_shards(logicalrelid regclass,
                                        schema_name text,
                                        table_name text)
     RETURNS integer
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_drop_all_shards$$;
-COMMENT ON FUNCTION master_drop_all_shards(regclass, text, text)
+    AS 'MODULE_PATHNAME', $$drop_all_shards$$;
+COMMENT ON FUNCTION drop_all_shards(regclass, text, text)
     IS 'drop all shards in a relation and update metadata';
 
-CREATE FUNCTION master_apply_delete_command(text)
+CREATE FUNCTION apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_apply_delete_command$$;
-COMMENT ON FUNCTION master_apply_delete_command(text)
+    AS 'MODULE_PATHNAME', $$apply_delete_command$$;
+COMMENT ON FUNCTION apply_delete_command(text)
     IS 'drop shards matching delete criteria and update metadata';
 
-CREATE FUNCTION master_get_active_worker_nodes(OUT node_name text, OUT node_port bigint)
+CREATE FUNCTION get_active_worker_nodes(OUT node_name text, OUT node_port bigint)
     RETURNS SETOF record
     LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_active_worker_nodes$$;
-COMMENT ON FUNCTION master_get_active_worker_nodes()
+    AS 'MODULE_PATHNAME', $$get_active_worker_nodes$$;
+COMMENT ON FUNCTION get_active_worker_nodes()
     IS 'fetch set of active worker nodes';
 
-CREATE FUNCTION master_get_round_robin_candidate_nodes(shard_id bigint,
+CREATE FUNCTION get_round_robin_candidate_nodes(shard_id bigint,
                                                        OUT node_name text,
                                                        OUT node_port bigint)
     RETURNS SETOF record
     LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_round_robin_candidate_nodes$$;
-COMMENT ON FUNCTION master_get_round_robin_candidate_nodes(shard_id bigint)
+    AS 'MODULE_PATHNAME', $$get_round_robin_candidate_nodes$$;
+COMMENT ON FUNCTION get_round_robin_candidate_nodes(shard_id bigint)
     IS 'fetch set of candidate nodes for shard uploading in round-robin manner';
 
-CREATE FUNCTION master_create_distributed_table(table_name regclass,
+CREATE FUNCTION create_distributed_table(table_name regclass,
                                                 distribution_column text,
                                                 distribution_method citus.distribution_type)
     RETURNS void
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$master_create_distributed_table$$;
-COMMENT ON FUNCTION master_create_distributed_table(table_name regclass,
+    AS 'MODULE_PATHNAME', $$create_distributed_table$$;
+COMMENT ON FUNCTION create_distributed_table(table_name regclass,
                                                     distribution_column text,
                                                     distribution_method citus.distribution_type)
     IS 'define the table distribution functions';
 
 -- define shard creation function for hash-partitioned tables
-CREATE FUNCTION master_create_worker_shards(table_name text, shard_count integer,
+CREATE FUNCTION create_worker_shards(table_name text, shard_count integer,
                                             replication_factor integer DEFAULT 2)
 RETURNS void
 AS 'MODULE_PATHNAME'
@@ -341,7 +341,7 @@ BEGIN
         END IF;
 
         -- ensure all shards are dropped
-        PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
+        PERFORM drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
 
         -- delete partition entry
         DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
@@ -352,18 +352,18 @@ $cdbdt$;
 COMMENT ON FUNCTION citus_drop_trigger()
     IS 'perform checks and actions at the end of DROP actions';
 
-CREATE FUNCTION master_dist_partition_cache_invalidate()
+CREATE FUNCTION dist_partition_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$master_dist_partition_cache_invalidate$$;
-COMMENT ON FUNCTION master_dist_partition_cache_invalidate()
+    AS 'MODULE_PATHNAME', $$dist_partition_cache_invalidate$$;
+COMMENT ON FUNCTION dist_partition_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 
-CREATE FUNCTION master_dist_shard_cache_invalidate()
+CREATE FUNCTION dist_shard_cache_invalidate()
     RETURNS trigger
     LANGUAGE C
-    AS 'MODULE_PATHNAME', $$master_dist_shard_cache_invalidate$$;
-COMMENT ON FUNCTION master_dist_shard_cache_invalidate()
+    AS 'MODULE_PATHNAME', $$dist_shard_cache_invalidate$$;
+COMMENT ON FUNCTION dist_shard_cache_invalidate()
     IS 'register relcache invalidation for changed rows';
 
 
@@ -388,12 +388,12 @@ CREATE EVENT TRIGGER citus_cascade_to_partition
 CREATE TRIGGER dist_partition_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE
     ON pg_catalog.pg_dist_partition
-    FOR EACH ROW EXECUTE PROCEDURE master_dist_partition_cache_invalidate();
+    FOR EACH ROW EXECUTE PROCEDURE dist_partition_cache_invalidate();
 
 CREATE TRIGGER dist_shard_cache_invalidate
     AFTER INSERT OR UPDATE OR DELETE
     ON pg_catalog.pg_dist_shard
-    FOR EACH ROW EXECUTE PROCEDURE master_dist_shard_cache_invalidate();
+    FOR EACH ROW EXECUTE PROCEDURE dist_shard_cache_invalidate();
 
 
 /*****************************************************************************
@@ -485,7 +485,7 @@ COMMENT ON FUNCTION create_insert_proxy_for_table(regclass, regclass)
         IS 'create a proxy table that redirects INSERTed rows to a target table';
 
 -- define shard repair function
-CREATE FUNCTION master_copy_shard_placement(shard_id bigint,
+CREATE FUNCTION copy_shard_placement(shard_id bigint,
                                             source_node_name text,
                                             source_node_port integer,
                                             target_node_name text,

@@ -65,9 +65,9 @@ CREATE TABLE varchar_partitioned_table
 (
 	varchar_column varchar(100)
 );
-SELECT master_create_distributed_table('varchar_partitioned_table', 'varchar_column', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('varchar_partitioned_table', 'varchar_column', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -93,9 +93,9 @@ CREATE TABLE array_partitioned_table
 (
 	array_column text[]
 );
-SELECT master_create_distributed_table('array_partitioned_table', 'array_column', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('array_partitioned_table', 'array_column', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -129,9 +129,9 @@ CREATE TABLE composite_partitioned_table
 (
 	composite_column composite_type
 );
-SELECT master_create_distributed_table('composite_partitioned_table', 'composite_column', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('composite_partitioned_table', 'composite_column', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

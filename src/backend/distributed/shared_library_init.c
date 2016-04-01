@@ -182,7 +182,7 @@ RegisterCitusConfigVariables(void)
 	NormalizeWorkerListPath();
 
 	DefineCustomBoolVariable(
-		"citus.binary_master_copy_format",
+		"citus.binary_copy_format",
 		gettext_noop("Use the binary master copy format."),
 		gettext_noop("When enabled, data is copied from workers to the master "
 					 "in PostgreSQL's binary serialization format."),

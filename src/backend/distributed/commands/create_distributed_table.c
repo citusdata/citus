@@ -51,11 +51,11 @@ static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 
 
 /* exports for SQL callable functions */
-PG_FUNCTION_INFO_V1(master_create_distributed_table);
+PG_FUNCTION_INFO_V1(create_distributed_table);
 
 
 /*
- * master_create_distributed_table accepts a table, distribution column and
+ * create_distributed_table accepts a table, distribution column and
  * method and performs the corresponding catalog changes.
  *
  * XXX: We should perform more checks here to see if this table is fit for
@@ -66,7 +66,7 @@ PG_FUNCTION_INFO_V1(master_create_distributed_table);
  * preexisting content.
  */
 Datum
-master_create_distributed_table(PG_FUNCTION_ARGS)
+create_distributed_table(PG_FUNCTION_ARGS)
 {
 	Oid distributedRelationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);

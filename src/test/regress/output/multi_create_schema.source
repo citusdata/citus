@@ -6,9 +6,9 @@ CREATE TABLE nation (
 	n_comment varchar(152));
 NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
 DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
-SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('tpch.nation', 'n_nationkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

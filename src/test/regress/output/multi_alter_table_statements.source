@@ -23,9 +23,9 @@ CREATE TABLE lineitem_alter (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null
 	);
-SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -74,7 +74,7 @@ ORDER BY attnum;
  null_column     | integer
 (27 rows)
 
-\c - - - :master_port
+\c - - - :port
 \d lineitem_alter
             Table "public.lineitem_alter"
      Column      |         Type          | Modifiers 
@@ -451,12 +451,12 @@ ORDER BY attnum;
  ........pg.dropped.23........ | -
 (29 rows)
 
-\c - - - :master_port
+\c - - - :port
 -- Cleanup the table and its shards
-SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
- master_apply_delete_command 
------------------------------
-                           9
+SELECT apply_delete_command('DELETE FROM lineitem_alter');
+ apply_delete_command 
+----------------------
+                    9
 (1 row)
 
 DROP TABLE lineitem_alter;
@@ -467,4 +467,4 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 ---------
 (0 rows)
 
-\c - - - :master_port
+\c - - - :port
