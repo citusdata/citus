@@ -294,3 +294,31 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
+
+-- Check that we can prune shards in subqueries with VARCHAR partition columns
+
+CREATE TABLE subquery_pruning_varchar_test_table
+(
+   a varchar,
+   b int
+);
+
+SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
+SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
+
+SET citus.subquery_pushdown TO TRUE;
+SET client_min_messages TO DEBUG2;
+
+SELECT * FROM 
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
+AS foo;
+
+SELECT * FROM 
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
+AS foo;
+
+SET client_min_messages TO NOTICE;
+
+DROP TABLE subquery_pruning_varchar_test_table;
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102026;
