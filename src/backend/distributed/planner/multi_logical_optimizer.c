@@ -139,7 +139,7 @@ static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
-static bool ShardIntervalsEqual(ShardInterval *firstInterval,
+static bool ShardIntervalsEqual(FmgrInfo* comparisonFunction, ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
 static void ErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
@@ -3483,8 +3483,11 @@ RelationIdList(Query *query)
 static bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
+	FmgrInfo *comparisonFunction = NULL;
 	bool coPartitionedTables = true;
 	uint32 intervalIndex = 0;
+	Oid typeId = InvalidOid;
+
 	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
 	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
 	ShardInterval *sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
@@ -3503,12 +3506,17 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		return true;
 	}
 
+	typeId = sortedFirstIntervalArray[0].valueTypeId;
+	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
+
 	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
 	{
 		ShardInterval *firstInterval = &sortedFirstIntervalArray[intervalIndex];
 		ShardInterval *secondInterval = &sortedSecondIntervalArray[intervalIndex];
 
-		bool shardIntervalsEqual = ShardIntervalsEqual(firstInterval, secondInterval);
+		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													firstInterval,
+													secondInterval);
 		if (!shardIntervalsEqual)
 		{
 			coPartitionedTables = false;
@@ -3524,18 +3532,14 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
  * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
  */
 static bool
-ShardIntervalsEqual(ShardInterval *firstInterval, ShardInterval *secondInterval)
+ShardIntervalsEqual(FmgrInfo* comparisonFunction, ShardInterval *firstInterval,
+		ShardInterval *secondInterval)
 {
-	Oid typeId = InvalidOid;
-	FmgrInfo *comparisonFunction = NULL;
 	bool shardIntervalsEqual = false;
 	Datum firstMin = 0;
 	Datum firstMax = 0;
 	Datum secondMin = 0;
 	Datum secondMax = 0;
-
-	typeId = firstInterval->valueTypeId;
-	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
 
 	firstMin = firstInterval->minValue;
 	firstMax = firstInterval->maxValue;
