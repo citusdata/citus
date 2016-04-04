@@ -171,9 +171,9 @@ from
         l_tax) as distributed_table;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries without aggregates are not supported yet
--- Check that we don't support subqueries with count(distinct).
+-- Check that we support subqueries with count(distinct).
 select
-    different_shipment_days
+    avg(different_shipment_days)
 from
     (select
         count(distinct l_shipdate) as different_shipment_days
@@ -181,8 +181,11 @@ from
         lineitem
     group by
         l_partkey) as distributed_table;
-ERROR:  cannot compute count (distinct)
-DETAIL:  Subqueries with aggregate (distinct) are not supported yet
+          avg           
+------------------------
+ 1.02907126318497555956
+(1 row)
+
 -- Check that if subquery is pulled, we don't error and run query properly.
 SELECT max(l_suppkey) FROM
 (

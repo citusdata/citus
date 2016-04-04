@@ -125,10 +125,10 @@ from
     group by
         l_tax) as distributed_table;
 
--- Check that we don't support subqueries with count(distinct).
+-- Check that we support subqueries with count(distinct).
 
 select
-    different_shipment_days
+    avg(different_shipment_days)
 from
     (select
         count(distinct l_shipdate) as different_shipment_days
