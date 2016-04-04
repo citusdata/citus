@@ -41,7 +41,7 @@
 #define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
  (" UINT64_FORMAT ", %d, '%s', '%s')"
 #define MERGE_FILES_AND_RUN_QUERY_COMMAND \
-	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, '%s', '%s')"
+	"SELECT worker_merge_files_and_run_query(" UINT64_FORMAT ", %d, %s, %s)"
 
 
 typedef enum CitusRTEKind

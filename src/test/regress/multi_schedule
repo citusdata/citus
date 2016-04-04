@@ -142,3 +142,8 @@ test: multi_large_shardid
 # multi_drop_extension makes sure we can safely drop and recreate the extension
 # ----------
 test: multi_drop_extension
+
+# ----------
+# multi_complex_count_distinct creates table lineitem_hash, creates shards and load data
+# ----------
+test: multi_complex_count_distinct
