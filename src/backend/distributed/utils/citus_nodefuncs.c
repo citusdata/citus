@@ -46,7 +46,7 @@ SetRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind rteKind,
 	Const *fragmentTableData = NULL;
 	Const *tableIdListData = NULL;
 
-	Assert(rte->eref && rte->eref->colnames != NIL);
+	Assert(rte->eref);
 
 	/* store RTE kind as a plain int4 */
 	rteKindData = makeNode(Const);
