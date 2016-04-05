@@ -285,6 +285,19 @@ SELECT COUNT(*) FROM articles;
     50
 (1 row)
 
+-- test with empty target list
+SELECT FROM articles;
+--
+(50 rows)
+
+SELECT FROM articles WHERE author_id = 3737;
+--
+(0 rows)
+
+SELECT FROM articles WHERE word_count = 65500;
+--
+(0 rows)
+
 -- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
