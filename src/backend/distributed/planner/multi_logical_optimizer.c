@@ -139,7 +139,7 @@ static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
-static bool ShardIntervalsEqual(FmgrInfo* comparisonFunction, ShardInterval *firstInterval,
+static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
 static void ErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
@@ -3515,8 +3515,8 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		ShardInterval *secondInterval = &sortedSecondIntervalArray[intervalIndex];
 
 		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
-													firstInterval,
-													secondInterval);
+													   firstInterval,
+													   secondInterval);
 		if (!shardIntervalsEqual)
 		{
 			coPartitionedTables = false;
@@ -3529,11 +3529,12 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 
 
 /*
- * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
+ * ShardIntervalsEqual checks if given shard intervals have equal min/max values under
+ * some comparison function
  */
 static bool
-ShardIntervalsEqual(FmgrInfo* comparisonFunction, ShardInterval *firstInterval,
-		ShardInterval *secondInterval)
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
+					ShardInterval *secondInterval)
 {
 	bool shardIntervalsEqual = false;
 	Datum firstMin = 0;
