@@ -139,8 +139,10 @@ static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
-static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
+static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
+
 static void ErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
 								   List *secondOpExpressionList);
@@ -3473,7 +3475,6 @@ RelationIdList(Query *query)
 	return relationIdList;
 }
 
-
 /*
  * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
  * partitioning. It uses shard interval array that are sorted on interval minimum
@@ -3506,7 +3507,15 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		return true;
 	}
 
-	typeId = sortedFirstIntervalArray[0].valueTypeId;
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		typeId = INT4OID;
+	}
+	else
+	{
+		typeId = sortedFirstIntervalArray[0].valueTypeId;
+	}
+
 	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
 
 	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)

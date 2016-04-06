@@ -2102,7 +2102,7 @@ SubquerySqlTaskList(Job *job)
 		 * traffic.
 		 */
 		if (anchorRangeTableId == 0 || prunedTableSize > maxPrunedTableSize){
-			maxTableSize = prunedTableSize;
+			maxPrunedTableSize = prunedTableSize;
 			anchorRangeTableId = tableId;
 		}
 
