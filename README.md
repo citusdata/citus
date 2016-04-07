@@ -1,8 +1,8 @@
 ![Citus Banner](/github-banner.png)
 
 [![Build Status](https://travis-ci.org/citusdata/citus.svg?branch=master)](https://travis-ci.org/citusdata/citus)
-[![Citus IRC](https://img.shields.io/badge/irc-%23citus-blue.svg)](https://webchat.freenode.net/?channels=citus)
-[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)][docs]
+[![Google Group](https://img.shields.io/badge/%E2%9C%89-Google%20Group-blue.svg)](https://groups.google.com/forum/#!forum/citus-users)
+[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/docs/citus/5.0)
 
 ### What is Citus?
 
@@ -30,7 +30,9 @@ Common Use-Cases:
 * Large dataset archival and reporting
 * Session analytics (funnels, segmentation, and cohorts)
 
-To learn more, visit [citusdata.com](https://www.citusdata.com).
+To learn more, visit [citusdata.com](https://www.citusdata.com) and join
+the [mailing list](https://groups.google.com/forum/#!forum/citus-users) to
+stay on top of the latest developments.
 
 ### Quickstart
 
@@ -60,17 +62,49 @@ To learn more, visit [citusdata.com](https://www.citusdata.com).
   docker-compose -p citus down
   ```
 
-### Learn More
+### Talk to Contributors and Learn More
 
-The project [documentation][docs] and [tutorials][tutorial] are
-good places to start. We’re responsive on Github, so you can use
-the [issue tracker][issues] to check for or submit bug reports and
-feature requests. For more general questions and discussion visit
-our [mailing list][groups], or chat with us at `#citus` on Freenode
-and [@citusdata][twitter] on Twitter.
-
-We also offer training and dedicated support options. More information
-is available on our [support page][support].
+<table class="tg">
+<col width="45%">
+<col width="65%">
+<tr>
+  <td>Documentation</td>
+  <td>Try the <a
+  href="https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html">Citus
+  tutorials</a> for a hands-on introduction or <br/>the <a
+  href="https://www.citusdata.com/docs/citus/5.0">documentation</a> for
+  a more comprehensive reference.</td>
+</tr>
+<tr>
+  <td>Google Groups</td>
+  <td>The <a
+  href="https://groups.google.com/forum/#!forum/citus-users">Citus Google
+  Group</a> is our place for detailed questions and discussions.</td>
+</tr>
+<tr>
+  <td>IRC</td>
+  <td>Talk with the Citus development team in realtime on the <a
+  href="https://webchat.freenode.net/?channels=citus">#citus</a> Freenode
+  channel.</td>
+</tr>
+<tr>
+  <td>Github Issues</td>
+  <td>We track specific bug reports and feature requests on our <a
+  href="https://github.com/citusdata/citus/issues">project
+  issues</a>.</td>
+</tr>
+<tr>
+  <td>Twitter</td>
+  <td>Follow <a href="https://twitter.com/citusdata">@citusdata</a>
+  for general updates and PostgreSQL scaling tips.</td>
+</tr>
+<tr>
+  <td>Training and Support</td>
+  <td>See our <a
+  href="https://www.citusdata.com/citus-products/citus-data-pricing">support
+  page</a> for training and dedicated support options.</td>
+</tr>
+</table>
 
 ### Contributing
 
@@ -109,13 +143,7 @@ ___
 
 Copyright © 2012–2016 Citus Data, Inc.
 
-[docs]: https://www.citusdata.com/docs/citus/5.0
 [faq]: https://www.citusdata.com/frequently-asked-questions
-[issues]: https://github.com/citusdata/citus/issues
 [linux_install]: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04
 [mac_install]: https://www.docker.com/products/docker-toolbox
-[support]: https://www.citusdata.com/citus-products/citus-data-pricing
 [tutorial]: https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html
-[twitter]: https://twitter.com/citusdata
-[groups]: https://groups.google.com/forum/#!forum/citus-users
-[license]: LICENSE
