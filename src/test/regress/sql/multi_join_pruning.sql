@@ -44,10 +44,7 @@ EXPLAIN SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
 
--- Large table joins between varchar columns do not work because of a bug we
--- have. Currently, we require joins to be only on columns. Postgres adds a
--- relabel to typecast varchars to text due to which our check fails and we
--- error out.
+-- Test that large table joins on partition varchar columns work
 
 EXPLAIN SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2

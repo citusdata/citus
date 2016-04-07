@@ -3500,9 +3500,11 @@ CheckJoinBetweenColumns(OpExpr *joinClause)
 	List *argumentList = joinClause->args;
 	Node *leftArgument = (Node *) linitial(argumentList);
 	Node *rightArgument = (Node *) lsecond(argumentList);
+	Node *strippedLeftArgument = strip_implicit_coercions(leftArgument);
+	Node *strippedRightArgument = strip_implicit_coercions(rightArgument);
 
-	NodeTag leftArgumentType = nodeTag(leftArgument);
-	NodeTag rightArgumentType = nodeTag(rightArgument);
+	NodeTag leftArgumentType = nodeTag(strippedLeftArgument);
+	NodeTag rightArgumentType = nodeTag(strippedRightArgument);
 
 	if (leftArgumentType != T_Var || rightArgumentType != T_Var)
 	{
