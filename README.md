@@ -1,6 +1,8 @@
 ![Citus Banner](/github-banner.png)
 
 [![Build Status](https://travis-ci.org/citusdata/citus.svg?branch=master)](https://travis-ci.org/citusdata/citus)
+[![Google Group](https://img.shields.io/badge/%E2%9C%89-Google%20Group-blue.svg)](https://groups.google.com/forum/#!forum/citus-users)
+[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/docs/citus/5.0)
 
 ### What is Citus?
 
