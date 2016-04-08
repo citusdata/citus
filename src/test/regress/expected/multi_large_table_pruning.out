@@ -16,10 +16,10 @@ WHERE
 	o_custkey = c_custkey;
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
-DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
-DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
+DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
+DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 4
@@ -40,8 +40,8 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
-DEBUG:  predicate pruning for shardId 102016
 DEBUG:  predicate pruning for shardId 102015
+DEBUG:  predicate pruning for shardId 102016
  count 
 -------
       
@@ -56,9 +56,9 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
+DEBUG:  predicate pruning for shardId 102017
 DEBUG:  predicate pruning for shardId 102034
 DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102017
  count 
 -------
       
@@ -115,12 +115,12 @@ FROM
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102012
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102012
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  count 
 -------
       

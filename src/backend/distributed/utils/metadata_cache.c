@@ -12,6 +12,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/nbtree.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
@@ -19,8 +20,10 @@
 #include "commands/trigger.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/worker_protocol.h"
 #include "parser/parse_func.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -45,6 +48,8 @@ static ScanKeyData DistShardScanKey[1];
 
 /* local function forward declarations */
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
+static int CompareShardIntervals(const void *leftElement, const void *rightElement,
+								 FmgrInfo *typeCompareFunction);
 static void InitializeDistTableCache(void);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
@@ -85,6 +90,42 @@ IsDistributedTable(Oid relationId)
 	cacheEntry = LookupDistTableCacheEntry(relationId);
 
 	return cacheEntry->isDistributedTable;
+}
+
+
+
+/*
+ * HasUninitializedShardInterval returns true if the distributed relation has
+ * at least one shard interval whose min/max value has not been set.
+ */
+bool
+HasUninitializedShardInterval(Oid relationId)
+{
+	DistTableCacheEntry *cacheEntry = LookupDistTableCacheEntry(relationId);
+	ShardInterval *sortedShardIntervalArray = NULL;
+	ShardInterval *lastShardInterval = NULL;
+	int shardIntervalCount = 0;
+	bool hasUninitializedShardInterval = false;
+
+	/* only distributed tables could have shard intervals */
+	Assert(cacheEntry->isDistributedTable);
+
+	sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	shardIntervalCount = cacheEntry->shardIntervalArrayLength;
+
+	if (shardIntervalCount > 0)
+	{
+		lastShardInterval = &sortedShardIntervalArray[shardIntervalCount - 1];
+
+		/* Since the shard interval array is sorted, and uninitialized ones stored
+	 	 * in the end of the array, checking the last element is enough.
+	 	 */
+		if (!lastShardInterval->minValueExists || !lastShardInterval->maxValueExists)
+		{
+			hasUninitializedShardInterval = true;
+		}
+	}
+	return hasUninitializedShardInterval;
 }
 
 
@@ -191,6 +232,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	ShardInterval *shardIntervalArray = NULL;
+	ShardInterval *sortedShardIntervalArray = NULL;
 	void *hashKey = (void *) &relationId;
 
 	if (DistTableCacheHash == NULL)
@@ -268,6 +310,23 @@ LookupDistTableCacheEntry(Oid relationId)
 		heap_close(distShardRelation, AccessShareLock);
 	}
 
+	/* sort the interval array */
+	if (shardIntervalArrayLength > 0)
+	{
+		ShardInterval *shardInterval = &shardIntervalArray[0];
+		Oid typeId = shardInterval->valueTypeId;
+		FmgrInfo *typeCompareFunction = GetFunctionInfo(typeId, BTREE_AM_OID,
+														BTORDER_PROC);
+
+		/* if a shard doesn't have min/max values, it's placed in the end of the array */
+		qsort_arg(shardIntervalArray, shardIntervalArrayLength, sizeof(ShardInterval),
+				  (qsort_arg_comparator) CompareShardIntervals,
+				  (void *) typeCompareFunction);
+
+		sortedShardIntervalArray = shardIntervalArray;
+	}
+
+
 	cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER, NULL);
 
 	/* zero out entry, but not the key part */
@@ -286,10 +345,58 @@ LookupDistTableCacheEntry(Oid relationId)
 		cacheEntry->partitionKeyString = partitionKeyString;
 		cacheEntry->partitionMethod = partitionMethod;
 		cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
-		cacheEntry->shardIntervalArray = shardIntervalArray;
+		cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 	}
 
 	return cacheEntry;
+}
+
+
+/*
+ * CompareShardIntervals acts as a helper function to compare two shard intervals
+ * by their minimum values, using the value's type comparison function.
+ *
+ * If a shard interval does not have min/max value, it's treated as being greater
+ * than the other.
+ */
+static int
+CompareShardIntervals(const void *leftElement, const void *rightElement,
+					  FmgrInfo *typeCompareFunction)
+{
+	ShardInterval leftShardInterval = *((ShardInterval *) leftElement);
+	ShardInterval rightShardInterval = *((ShardInterval *) rightElement);
+	Datum leftDatum = 0;
+	Datum rightDatum = 0;
+	int comparisonResult = 0;
+
+	/*
+	 * Left element should be treated as the largest element in case it doesn't
+	 * have min/max values.
+	 */
+	if (!leftShardInterval.minValueExists && !leftShardInterval.maxValueExists)
+	{
+		comparisonResult = 1;
+		return comparisonResult;
+	}
+
+	/*
+	 * Roght element should be treated as the largest element in case it doesn't
+	 * have min/max values.
+	 */
+	if (!rightShardInterval.minValueExists && !rightShardInterval.maxValueExists)
+	{
+		comparisonResult = -1;
+		return comparisonResult;
+	}
+
+	/* if both shard interval have min/max values, calculate the comparison result */
+	leftDatum = leftShardInterval.minValue;
+	rightDatum = rightShardInterval.minValue;
+
+	Datum comparisonDatum = CompareCall2(typeCompareFunction, leftDatum, rightDatum);
+	comparisonResult = DatumGetInt32(comparisonDatum);
+
+	return comparisonResult;
 }
 
 
@@ -621,7 +728,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 
 		for (i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
 		{
-			ShardInterval *shardInterval = &cacheEntry->shardIntervalArray[i];
+			ShardInterval *shardInterval = &cacheEntry->sortedShardIntervalArray[i];
 			bool valueByVal = shardInterval->valueByVal;
 
 			if (!valueByVal)
@@ -638,8 +745,8 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 			}
 		}
 
-		pfree(cacheEntry->shardIntervalArray);
-		cacheEntry->shardIntervalArray = NULL;
+		pfree(cacheEntry->sortedShardIntervalArray);
+		cacheEntry->sortedShardIntervalArray = NULL;
 		cacheEntry->shardIntervalArrayLength = 0;
 	}
 }

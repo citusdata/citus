@@ -26,6 +26,7 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
@@ -137,9 +138,11 @@ static bool SupportedLateralQuery(Query *parentQuery, Query *lateralQuery);
 static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static List * RelationIdList(Query *query);
-static bool CoPartitionedTables(List *firstShardList, List *secondShardList);
-static bool ShardIntervalsEqual(ShardInterval *firstInterval,
+static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
+static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
+
 static void ErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
 								   List *secondOpExpressionList);
@@ -3382,7 +3385,7 @@ JoinOnPartitionColumn(Query *query)
 static void
 ErrorIfUnsupportedShardDistribution(Query *query)
 {
-	List *firstShardIntervalList = NIL;
+	Oid firstTableRelationId = InvalidOid;
 	List *relationIdList = RelationIdList(query);
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
@@ -3421,21 +3424,21 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	foreach(relationIdCell, relationIdList)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
-		List *currentShardIntervalList = LoadShardIntervalList(relationId);
 		bool coPartitionedTables = false;
+		Oid currentRelationId = relationId;
 
 		/* get shard list of first relation and continue for the next relation */
 		if (relationIndex == 0)
 		{
-			firstShardIntervalList = currentShardIntervalList;
+			firstTableRelationId = relationId;
 			relationIndex++;
 
 			continue;
 		}
 
 		/* check if this table has 1-1 shard partitioning with first table */
-		coPartitionedTables = CoPartitionedTables(firstShardIntervalList,
-												  currentShardIntervalList);
+		coPartitionedTables = CoPartitionedTables(firstTableRelationId,
+												  currentRelationId);
 		if (!coPartitionedTables)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -3472,23 +3475,26 @@ RelationIdList(Query *query)
 	return relationIdList;
 }
 
-
 /*
- * CoPartitionedTables checks if given shard lists have 1-to-1 shard partitioning.
- * It first sorts both list according to shard interval minimum values. Then it
- * compares every shard interval in order and if any pair of shard intervals are
- * not equal it returns false.
+ * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
+ * partitioning. It uses shard interval array that are sorted on interval minimum
+ * values. Then it compares every shard interval in order and if any pair of
+ * shard intervals are not equal it returns false.
  */
 static bool
-CoPartitionedTables(List *firstShardList, List *secondShardList)
+CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
+	FmgrInfo *comparisonFunction = NULL;
 	bool coPartitionedTables = true;
 	uint32 intervalIndex = 0;
-	ShardInterval **sortedFirstIntervalArray = NULL;
-	ShardInterval **sortedSecondIntervalArray = NULL;
+	Oid typeId = InvalidOid;
 
-	uint32 firstListShardCount = list_length(firstShardList);
-	uint32 secondListShardCount = list_length(secondShardList);
+	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
+	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+	ShardInterval *sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
+	ShardInterval *sortedSecondIntervalArray = secondTableCache->sortedShardIntervalArray;
+	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
+	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
 
 	if (firstListShardCount != secondListShardCount)
 	{
@@ -3501,15 +3507,25 @@ CoPartitionedTables(List *firstShardList, List *secondShardList)
 		return true;
 	}
 
-	sortedFirstIntervalArray = SortedShardIntervalArray(firstShardList);
-	sortedSecondIntervalArray = SortedShardIntervalArray(secondShardList);
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		typeId = INT4OID;
+	}
+	else
+	{
+		typeId = sortedFirstIntervalArray[0].valueTypeId;
+	}
+
+	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
 
 	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
 	{
-		ShardInterval *firstInterval = sortedFirstIntervalArray[intervalIndex];
-		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
+		ShardInterval *firstInterval = &sortedFirstIntervalArray[intervalIndex];
+		ShardInterval *secondInterval = &sortedSecondIntervalArray[intervalIndex];
 
-		bool shardIntervalsEqual = ShardIntervalsEqual(firstInterval, secondInterval);
+		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													   firstInterval,
+													   secondInterval);
 		if (!shardIntervalsEqual)
 		{
 			coPartitionedTables = false;
@@ -3522,21 +3538,18 @@ CoPartitionedTables(List *firstShardList, List *secondShardList)
 
 
 /*
- * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
+ * ShardIntervalsEqual checks if given shard intervals have equal min/max values under
+ * some comparison function
  */
 static bool
-ShardIntervalsEqual(ShardInterval *firstInterval, ShardInterval *secondInterval)
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
+					ShardInterval *secondInterval)
 {
-	Oid typeId = InvalidOid;
-	FmgrInfo *comparisonFunction = NULL;
 	bool shardIntervalsEqual = false;
 	Datum firstMin = 0;
 	Datum firstMax = 0;
 	Datum secondMin = 0;
 	Datum secondMax = 0;
-
-	typeId = firstInterval->valueTypeId;
-	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
 
 	firstMin = firstInterval->minValue;
 	firstMax = firstInterval->maxValue;

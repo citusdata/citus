@@ -40,7 +40,7 @@ VALUES
 SELECT prune_using_no_values('pruning');
  prune_using_no_values 
 -----------------------
- {13,12,11,10}
+ {10,11,12,13}
 (1 row)
 
 -- with a single value, expect a single shard
@@ -61,7 +61,7 @@ SELECT prune_using_single_value('pruning', NULL);
 SELECT prune_using_either_value('pruning', 'tomato', 'petunia');
  prune_using_either_value 
 --------------------------
- {12,11}
+ {11,12}
 (1 row)
 
 -- an AND clause with incompatible values returns no shards

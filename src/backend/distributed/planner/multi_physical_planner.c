@@ -110,8 +110,9 @@ static MapMergeJob * BuildMapMergeJob(Query *jobQuery, List *dependedJobList,
 									  Oid baseRelationId,
 									  BoundaryNodeJobType boundaryNodeJobType);
 static uint32 HashPartitionCount(void);
-static int CompareShardIntervals(const void *leftElement, const void *rightElement,
-								 FmgrInfo *typeCompareFunction);
+static int CompareShardIntervalPointers(const void *leftElement,
+										const void *rightElement,
+										FmgrInfo *typeCompareFunction);
 static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 									uint32 shardIntervalCount);
 
@@ -1759,6 +1760,13 @@ HashPartitionCount(void)
  * SortedShardIntervalArray returns a sorted array of shard intervals for shards
  * in the given shard list. The array elements are sorted in in ascending order
  * according to shard interval's minimum value.
+ *
+ * The sortedShardIntervalArray that this function returns differs from the
+ * sortedShardIntervalArray in the metadata cache in two ways. First, this
+ * function errors out in case there exists any shard intervals without min/max
+ * values. Second, this function sorts the input shardIntervalList, i.e., not the
+ * whole shard intervals that correspond to a single distributed table as in it's
+ * in the cache.
  */
 ShardInterval **
 SortedShardIntervalArray(List *shardIntervalList)
@@ -1800,18 +1808,19 @@ SortedShardIntervalArray(List *shardIntervalList)
 
 	/* sort shard intervals by their minimum values in ascending order */
 	qsort_arg(shardIntervalArray, shardIntervalCount, sizeof(ShardInterval *),
-			  (qsort_arg_comparator) CompareShardIntervals, (void *) typeCompareFunction);
+			  (qsort_arg_comparator) CompareShardIntervalPointers,
+			  (void *) typeCompareFunction);
 
 	return shardIntervalArray;
 }
 
 
 /*
- * CompareShardIntervals acts as a helper function to compare two shard interval
+ * CompareShardIntervalPointers acts as a helper function to compare two shard interval
  * pointers by their minimum values, using the value's type comparison function.
  */
 static int
-CompareShardIntervals(const void *leftElement, const void *rightElement,
+CompareShardIntervalPointers(const void *leftElement, const void *rightElement,
 					  FmgrInfo *typeCompareFunction)
 {
 	ShardInterval **leftShardInterval = (ShardInterval **) leftElement;
@@ -1994,6 +2003,7 @@ SubquerySqlTaskList(Job *job)
 	uint32 anchorRangeTableId = 0;
 	uint32 rangeTableIndex = 0;
 	const uint32 fragmentSize = sizeof(RangeTableFragment);
+	uint64 maxPrunedTableSize = 0;
 
 	/* find filters on partition columns */
 	ExtractQueryWalker((Node *) subquery, &queryList);
@@ -2017,7 +2027,6 @@ SubquerySqlTaskList(Job *job)
 
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
-	anchorRangeTableId = AnchorRangeTableId(rangeTableList);
 
 	/*
 	 * For each range table entry, first we prune shards for the relation
@@ -2036,6 +2045,7 @@ SubquerySqlTaskList(Job *job)
 		uint32 tableId = rangeTableIndex + 1; /* tableId starts from 1 */
 		uint32 finalShardCount = 0;
 		uint32 shardIndex = 0;
+		uint64 prunedTableSize = 0;
 
 		if (opExpressionList != NIL)
 		{
@@ -2063,7 +2073,6 @@ SubquerySqlTaskList(Job *job)
 		for (shardIndex = 0; shardIndex < finalShardCount; shardIndex++)
 		{
 			ShardInterval *shardInterval = sortedIntervalArray[shardIndex];
-
 			RangeTableFragment *shardFragment = palloc0(fragmentSize);
 			shardFragment->fragmentReference = &(shardInterval->shardId);
 			shardFragment->fragmentType = CITUS_RTE_RELATION;
@@ -2083,6 +2092,18 @@ SubquerySqlTaskList(Job *job)
 				/* get next fragment for the first relation list */
 				fragmentCombinationCell = lnext(fragmentCombinationCell);
 			}
+
+			prunedTableSize += ShardLength(shardInterval->shardId);
+		}
+
+		/*
+		 * The shards of the anchor table are not shipped between workers if it can be
+		 * avoided. By picking the largest table to be the anchor we're reducing network
+		 * traffic.
+		 */
+		if (anchorRangeTableId == 0 || prunedTableSize > maxPrunedTableSize){
+			maxPrunedTableSize = prunedTableSize;
+			anchorRangeTableId = tableId;
 		}
 
 		rangeTableIndex++;
