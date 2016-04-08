@@ -83,7 +83,10 @@ _PG_init(void)
 	if (!process_shared_preload_libraries_in_progress)
 	{
 		ereport(ERROR, (errmsg("Citus can only be loaded via shared_preload_libraries"),
-						errhint("Add citus to shared_preload_libraries.")));
+						errhint("Add citus to shared_preload_libraries configuration "
+								"variable in postgresql.conf in master and workers. Note "
+								"that citus should be at the beginning of "
+								"shared_preload_libraries.")));
 	}
 
 	/*
