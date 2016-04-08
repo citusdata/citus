@@ -367,5 +367,37 @@ DEBUG:  predicate pruning for shardId 102026
 (0 rows)
 
 SET client_min_messages TO NOTICE;
+-- test subquery join on VARCHAR partition column 
+SELECT * FROM
+	(SELECT 
+		a_inner AS a
+	FROM
+		(SELECT 
+			subquery_pruning_varchar_test_table.a AS a_inner
+		FROM 
+		 	subquery_pruning_varchar_test_table
+		GROUP BY 
+		  	subquery_pruning_varchar_test_table.a
+		HAVING 
+		  	count(subquery_pruning_varchar_test_table.a) < 3) 
+		AS f1,
+		(SELECT 
+		 	subquery_pruning_varchar_test_table.a
+		FROM 
+		  	subquery_pruning_varchar_test_table
+		GROUP BY 
+		  	subquery_pruning_varchar_test_table.a
+		HAVING 
+		  	sum(coalesce(subquery_pruning_varchar_test_table.b,0)) > 20.0) 
+		AS f2
+	WHERE 
+		f1.a_inner = f2.a
+	GROUP BY 
+		a_inner)
+AS foo;
+ a 
+---
+(0 rows)
+
 DROP TABLE subquery_pruning_varchar_test_table;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102026;
