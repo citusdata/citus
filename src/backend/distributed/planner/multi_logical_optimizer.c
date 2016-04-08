@@ -2907,14 +2907,15 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 	List *rangetableList = query->rtable;
 	Index rangeTableEntryIndex = 0;
 	RangeTblEntry *rangeTableEntry = NULL;
+	Expr *strippedColumnExpression = strip_implicit_coercions(columnExpression);
 
-	if (IsA(columnExpression, Var))
+	if (IsA(strippedColumnExpression, Var))
 	{
-		candidateColumn = (Var *) columnExpression;
+		candidateColumn = (Var *) strippedColumnExpression;
 	}
-	else if (IsA(columnExpression, FieldSelect))
+	else if (IsA(strippedColumnExpression, FieldSelect))
 	{
-		FieldSelect *compositeField = (FieldSelect *) columnExpression;
+		FieldSelect *compositeField = (FieldSelect *) strippedColumnExpression;
 		Expr *fieldExpression = compositeField->arg;
 
 		if (IsA(fieldExpression, Var))
