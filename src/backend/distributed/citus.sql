@@ -33,6 +33,7 @@ CREATE TABLE citus.pg_dist_partition(
     partmethod "char" NOT NULL,
     partkey text NOT NULL
 );
+/* SELECT granted to PUBLIC in upgrade script */
 CREATE UNIQUE INDEX pg_dist_partition_logical_relid_index
 ON citus.pg_dist_partition using btree(logicalrelid);
 ALTER TABLE citus.pg_dist_partition SET SCHEMA pg_catalog;
@@ -45,6 +46,7 @@ CREATE TABLE citus.pg_dist_shard(
     shardminvalue text,
     shardmaxvalue text
 );
+/* SELECT granted to PUBLIC in upgrade script */
 CREATE UNIQUE INDEX pg_dist_shard_shardid_index
 ON citus.pg_dist_shard using btree(shardid);
 CREATE INDEX pg_dist_shard_logical_relid_index
@@ -58,6 +60,7 @@ CREATE TABLE citus.pg_dist_shard_placement(
     nodename text NOT NULL,
     nodeport int8 NOT NULL
 ) WITH oids;
+/* SELECT granted to PUBLIC in upgrade script */
 CREATE UNIQUE INDEX pg_dist_shard_placement_oid_index
 ON citus.pg_dist_shard_placement using btree(oid);
 CREATE INDEX pg_dist_shard_placement_shardid_index

@@ -25,3 +25,7 @@ COMMENT ON FUNCTION pg_catalog.master_stage_shard_placement_row(int8, int4, int8
 
 
 ALTER FUNCTION pg_catalog.citus_drop_trigger() SECURITY DEFINER;
+
+GRANT SELECT ON pg_catalog.pg_dist_partition TO public;
+GRANT SELECT ON pg_catalog.pg_dist_shard TO public;
+GRANT SELECT ON pg_catalog.pg_dist_shard_placement TO public;
