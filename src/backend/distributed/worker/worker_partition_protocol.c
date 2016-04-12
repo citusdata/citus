@@ -29,6 +29,7 @@
 #include "catalog/pg_collation.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "distributed/multi_copy.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
@@ -45,7 +46,6 @@ bool BinaryWorkerCopyFormat = false;   /* binary format for copying between work
 int PartitionBufferSize = 16384; /* total partitioning buffer size in KB */
 
 /* Local variables */
-static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 static uint32 FileBufferSizeInBytes = 0; /* file buffer size to init later */
 
 
@@ -64,21 +64,10 @@ static void FilterAndPartitionTable(const char *filterQuery,
 									FileOutputStream *partitionFileArray,
 									uint32 fileCount);
 static int ColumnIndex(TupleDesc rowDescriptor, const char *columnName);
-static FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
-static PartialCopyState InitRowOutputState(void);
-static void ClearRowOutputState(PartialCopyState copyState);
-static void OutputRow(HeapTuple row, TupleDesc rowDescriptor,
-					  PartialCopyState rowOutputState, FmgrInfo *columnOutputFunctions);
+static CopyOutState InitRowOutputState(void);
+static void ClearRowOutputState(CopyOutState copyState);
 static void OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount);
 static void OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount);
-static void CopySendData(PartialCopyState outputState, const void *databuf, int datasize);
-static void CopySendString(PartialCopyState outputState, const char *str);
-static void CopySendChar(PartialCopyState outputState, char c);
-static void CopySendInt32(PartialCopyState outputState, int32 val);
-static void CopySendInt16(PartialCopyState outputState, int16 val);
-static void CopyAttributeOutText(PartialCopyState outputState, char *string);
-static inline void CopyFlushOutput(PartialCopyState outputState,
-								   char *start, char *pointer);
 static uint32 RangePartitionId(Datum partitionValue, const void *context);
 static uint32 HashPartitionId(Datum partitionValue, const void *context);
 
@@ -731,13 +720,16 @@ FilterAndPartitionTable(const char *filterQuery,
 						FileOutputStream *partitionFileArray,
 						uint32 fileCount)
 {
-	PartialCopyState rowOutputState = NULL;
+	CopyOutState rowOutputState = NULL;
 	FmgrInfo *columnOutputFunctions = NULL;
 	int partitionColumnIndex = 0;
 	Oid partitionColumnTypeId = InvalidOid;
 	Portal queryPortal = NULL;
 	int connected = 0;
 	int finished = 0;
+	uint32 columnCount = 0;
+	Datum *valueArray = NULL;
+	bool *isNullArray = NULL;
 
 	const char *noPortalName = NULL;
 	const bool readOnly = true;
@@ -784,6 +776,10 @@ FilterAndPartitionTable(const char *filterQuery,
 		OutputBinaryHeaders(partitionFileArray, fileCount);
 	}
 
+	columnCount = (uint32) SPI_tuptable->tupdesc->natts;
+	valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
+	isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
+
 	while (SPI_processed > 0)
 	{
 		int rowIndex = 0;
@@ -815,19 +811,28 @@ FilterAndPartitionTable(const char *filterQuery,
 				partitionId = 0;
 			}
 
-			OutputRow(row, rowDescriptor, rowOutputState, columnOutputFunctions);
+			/* deconstruct the tuple; this is faster than repeated heap_getattr */
+			heap_deform_tuple(row, rowDescriptor, valueArray, isNullArray);
+
+			AppendCopyRowData(valueArray, isNullArray, rowDescriptor,
+							  rowOutputState, columnOutputFunctions);
+
 			rowText = rowOutputState->fe_msgbuf;
 
 			partitionFile = partitionFileArray[partitionId];
 			FileOutputStreamWrite(partitionFile, rowText);
 
 			resetStringInfo(rowText);
+			MemoryContextReset(rowOutputState->rowcontext);
 		}
 
 		SPI_freetuptable(SPI_tuptable);
 
 		SPI_cursor_fetch(queryPortal, fetchForward, prefetchCount);
 	}
+
+	pfree(valueArray);
+	pfree(isNullArray);
 
 	SPI_cursor_close(queryPortal);
 
@@ -867,44 +872,6 @@ ColumnIndex(TupleDesc rowDescriptor, const char *columnName)
 
 
 /*
- * ColumnOutputFunctions walks over a table's columns, and finds each column's
- * type information. The function then resolves each type's output function,
- * and stores and returns these output functions in an array.
- */
-static FmgrInfo *
-ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
-{
-	uint32 columnCount = (uint32) rowDescriptor->natts;
-	FmgrInfo *columnOutputFunctions = palloc0(columnCount * sizeof(FmgrInfo));
-
-	uint32 columnIndex = 0;
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		FmgrInfo *currentOutputFunction = &columnOutputFunctions[columnIndex];
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
-		Oid columnTypeId = currentColumn->atttypid;
-		Oid outputFunctionId = InvalidOid;
-		bool typeVariableLength = false;
-
-		if (binaryFormat)
-		{
-			getTypeBinaryOutputInfo(columnTypeId, &outputFunctionId, &typeVariableLength);
-		}
-		else
-		{
-			getTypeOutputInfo(columnTypeId, &outputFunctionId, &typeVariableLength);
-		}
-
-		Assert(currentColumn->attisdropped == false);
-
-		fmgr_info(outputFunctionId, currentOutputFunction);
-	}
-
-	return columnOutputFunctions;
-}
-
-
-/*
  * InitRowOutputState creates and initializes a copy state object. This object
  * is internal to the copy command's implementation in Postgres; and we refactor
  * and refer to it here to avoid code duplication. We also only initialize the
@@ -914,11 +881,10 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
  * must match one another. Therefore, any changes to the default values in the
  * copy command must be propagated to this function.
  */
-static PartialCopyState
+static CopyOutState
 InitRowOutputState(void)
 {
-	PartialCopyState rowOutputState =
-		(PartialCopyState) palloc0(sizeof(PartialCopyStateData));
+	CopyOutState rowOutputState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 
 	int fileEncoding = pg_get_client_encoding();
 	int databaseEncoding = GetDatabaseEncoding();
@@ -975,7 +941,7 @@ InitRowOutputState(void)
 
 /* Clears copy state used for outputting row data. */
 static void
-ClearRowOutputState(PartialCopyState rowOutputState)
+ClearRowOutputState(CopyOutState rowOutputState)
 {
 	Assert(rowOutputState != NULL);
 
@@ -991,98 +957,6 @@ ClearRowOutputState(PartialCopyState rowOutputState)
 
 
 /*
- * OutputRow serializes one row using the column output functions,
- * and appends the data to the row output state object's message buffer.
- * This function is modeled after the CopyOneRowTo() function in
- * commands/copy.c, but only implements a subset of that functionality.
- */
-static void
-OutputRow(HeapTuple row, TupleDesc rowDescriptor,
-		  PartialCopyState rowOutputState, FmgrInfo *columnOutputFunctions)
-{
-	MemoryContext oldContext = NULL;
-	uint32 columnIndex = 0;
-
-	uint32 columnCount = (uint32) rowDescriptor->natts;
-	Datum *valueArray = (Datum *) palloc0(columnCount * sizeof(Datum));
-	bool *isNullArray = (bool *) palloc0(columnCount * sizeof(bool));
-
-	/* deconstruct the tuple; this is faster than repeated heap_getattr */
-	heap_deform_tuple(row, rowDescriptor, valueArray, isNullArray);
-
-	/* reset previous tuple's output data, and the temporary memory context */
-	resetStringInfo(rowOutputState->fe_msgbuf);
-
-	MemoryContextReset(rowOutputState->rowcontext);
-	oldContext = MemoryContextSwitchTo(rowOutputState->rowcontext);
-
-	if (rowOutputState->binary)
-	{
-		CopySendInt16(rowOutputState, rowDescriptor->natts);
-	}
-
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		Datum value = valueArray[columnIndex];
-		bool isNull = isNullArray[columnIndex];
-		bool lastColumn = false;
-
-		if (rowOutputState->binary)
-		{
-			if (!isNull)
-			{
-				FmgrInfo *outputFunctionPointer = &columnOutputFunctions[columnIndex];
-				bytea *outputBytes = SendFunctionCall(outputFunctionPointer, value);
-
-				CopySendInt32(rowOutputState, VARSIZE(outputBytes) - VARHDRSZ);
-				CopySendData(rowOutputState, VARDATA(outputBytes),
-							 VARSIZE(outputBytes) - VARHDRSZ);
-			}
-			else
-			{
-				CopySendInt32(rowOutputState, -1);
-			}
-		}
-		else
-		{
-			if (!isNull)
-			{
-				FmgrInfo *outputFunctionPointer = &columnOutputFunctions[columnIndex];
-				char *columnText = OutputFunctionCall(outputFunctionPointer, value);
-
-				CopyAttributeOutText(rowOutputState, columnText);
-			}
-			else
-			{
-				CopySendString(rowOutputState, rowOutputState->null_print_client);
-			}
-
-			lastColumn = ((columnIndex + 1) == columnCount);
-			if (!lastColumn)
-			{
-				CopySendChar(rowOutputState, rowOutputState->delim[0]);
-			}
-		}
-	}
-
-	if (!rowOutputState->binary)
-	{
-		/* append default line termination string depending on the platform */
-#ifndef WIN32
-		CopySendChar(rowOutputState, '\n');
-#else
-		CopySendString(rowOutputState, "\r\n");
-#endif
-	}
-
-	MemoryContextSwitchTo(oldContext);
-
-	pfree(valueArray);
-	pfree(isNullArray);
-}
-
-
-/*
  * Write the header of postgres' binary serialization format to each partition file.
  * This function is used when binary_worker_copy_format is enabled.
  */
@@ -1093,22 +967,14 @@ OutputBinaryHeaders(FileOutputStream *partitionFileArray, uint32 fileCount)
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate header for a binary copy */
-		const int32 zero = 0;
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		PartialCopyStateData headerOutputStateData;
-		PartialCopyState headerOutputState = (PartialCopyState) & headerOutputStateData;
+		CopyOutStateData headerOutputStateData;
+		CopyOutState headerOutputState = (CopyOutState) & headerOutputStateData;
 
-		memset(headerOutputState, 0, sizeof(PartialCopyStateData));
+		memset(headerOutputState, 0, sizeof(CopyOutStateData));
 		headerOutputState->fe_msgbuf = makeStringInfo();
 
-		/* Signature */
-		CopySendData(headerOutputState, BinarySignature, 11);
-
-		/* Flags field (no OIDs) */
-		CopySendInt32(headerOutputState, zero);
-
-		/* No header extension */
-		CopySendInt32(headerOutputState, zero);
+		AppendCopyBinaryHeaders(headerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
 		FileOutputStreamWrite(partitionFile, headerOutputState->fe_msgbuf);
@@ -1127,170 +993,17 @@ OutputBinaryFooters(FileOutputStream *partitionFileArray, uint32 fileCount)
 	for (fileIndex = 0; fileIndex < fileCount; fileIndex++)
 	{
 		/* Generate footer for a binary copy */
-		int16 negative = -1;
 		FileOutputStream partitionFile = { 0, 0, 0 };
-		PartialCopyStateData footerOutputStateData;
-		PartialCopyState footerOutputState = (PartialCopyState) & footerOutputStateData;
+		CopyOutStateData footerOutputStateData;
+		CopyOutState footerOutputState = (CopyOutState) & footerOutputStateData;
 
-		memset(footerOutputState, 0, sizeof(PartialCopyStateData));
+		memset(footerOutputState, 0, sizeof(CopyOutStateData));
 		footerOutputState->fe_msgbuf = makeStringInfo();
 
-		CopySendInt16(footerOutputState, negative);
+		AppendCopyBinaryFooters(footerOutputState);
 
 		partitionFile = partitionFileArray[fileIndex];
 		FileOutputStreamWrite(partitionFile, footerOutputState->fe_msgbuf);
-	}
-}
-
-
-/* *INDENT-OFF* */
-/* Append data to the copy buffer in outputState */
-static void
-CopySendData(PartialCopyState outputState, const void *databuf, int datasize)
-{
-	appendBinaryStringInfo(outputState->fe_msgbuf, databuf, datasize);
-}
-
-
-/* Append a striong to the copy buffer in outputState. */
-static void
-CopySendString(PartialCopyState outputState, const char *str)
-{
-	appendBinaryStringInfo(outputState->fe_msgbuf, str, strlen(str));
-}
-
-
-/* Append a char to the copy buffer in outputState. */
-static void
-CopySendChar(PartialCopyState outputState, char c)
-{
-	appendStringInfoCharMacro(outputState->fe_msgbuf, c);
-}
-
-
-/* Append an int32 to the copy buffer in outputState. */
-static void
-CopySendInt32(PartialCopyState outputState, int32 val)
-{
-	uint32 buf = htonl((uint32) val);
-	CopySendData(outputState, &buf, sizeof(buf));
-}
-
-
-/* Append an int16 to the copy buffer in outputState. */
-static void
-CopySendInt16(PartialCopyState outputState, int16 val)
-{
-	uint16 buf = htons((uint16) val);
-	CopySendData(outputState, &buf, sizeof(buf));
-}
-
-
-/*
- * Send text representation of one column, with conversion and escaping.
- *
- * NB: This function is based on commands/copy.c and doesn't fully conform to
- * our coding style. The function should be kept in sync with copy.c.
- */
-static void
-CopyAttributeOutText(PartialCopyState cstate, char *string)
-{
-	char *pointer = NULL;
-	char *start = NULL;
-	char c = '\0';
-	char delimc = cstate->delim[0];
-
-	if (cstate->need_transcoding)
-	{
-		pointer = pg_server_to_any(string, strlen(string), cstate->file_encoding);
-	}
-	else
-	{
-		pointer = string;
-	}
-
-	/*
-	 * We have to grovel through the string searching for control characters
-	 * and instances of the delimiter character.  In most cases, though, these
-	 * are infrequent.  To avoid overhead from calling CopySendData once per
-	 * character, we dump out all characters between escaped characters in a
-	 * single call.  The loop invariant is that the data from "start" to "pointer"
-	 * can be sent literally, but hasn't yet been.
-	 *
-	 * As all encodings here are safe, i.e. backend supported ones, we can
-	 * skip doing pg_encoding_mblen(), because in valid backend encodings,
-	 * extra bytes of a multibyte character never look like ASCII.
-	 */
-	start = pointer;
-	while ((c = *pointer) != '\0')
-	{
-		if ((unsigned char) c < (unsigned char) 0x20)
-		{
-			/*
-			 * \r and \n must be escaped, the others are traditional. We
-			 * prefer to dump these using the C-like notation, rather than
-			 * a backslash and the literal character, because it makes the
-			 * dump file a bit more proof against Microsoftish data
-			 * mangling.
-			 */
-			switch (c)
-			{
-				case '\b':
-					c = 'b';
-					break;
-				case '\f':
-					c = 'f';
-					break;
-				case '\n':
-					c = 'n';
-					break;
-				case '\r':
-					c = 'r';
-					break;
-				case '\t':
-					c = 't';
-					break;
-				case '\v':
-					c = 'v';
-					break;
-				default:
-					/* If it's the delimiter, must backslash it */
-					if (c == delimc)
-						break;
-					/* All ASCII control chars are length 1 */
-					pointer++;
-					continue;		/* fall to end of loop */
-			}
-			/* if we get here, we need to convert the control char */
-			CopyFlushOutput(cstate, start, pointer);
-			CopySendChar(cstate, '\\');
-			CopySendChar(cstate, c);
-			start = ++pointer;	/* do not include char in next run */
-		}
-		else if (c == '\\' || c == delimc)
-		{
-			CopyFlushOutput(cstate, start, pointer);
-			CopySendChar(cstate, '\\');
-			start = pointer++;	/* we include char in next run */
-		}
-		else
-		{
-			pointer++;
-		}
-	}
-
-	CopyFlushOutput(cstate, start, pointer);
-}
-
-
-/* *INDENT-ON* */
-/* Helper function to send pending copy output */
-static inline void
-CopyFlushOutput(PartialCopyState cstate, char *start, char *pointer)
-{
-	if (pointer > start)
-	{
-		CopySendData(cstate, start, pointer - start);
 	}
 }
 

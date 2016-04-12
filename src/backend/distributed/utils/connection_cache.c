@@ -39,8 +39,6 @@ static HTAB *NodeConnectionHash = NULL;
 
 /* local function forward declarations */
 static HTAB * CreateNodeConnectionHash(void);
-static PGconn * ConnectToNode(char *nodeName, char *nodePort);
-static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
 
 
 /*
@@ -99,10 +97,7 @@ GetOrEstablishConnection(char *nodeName, int32 nodePort)
 
 	if (needNewConnection)
 	{
-		StringInfo nodePortString = makeStringInfo();
-		appendStringInfo(nodePortString, "%d", nodePort);
-
-		connection = ConnectToNode(nodeName, nodePortString->data);
+		connection = ConnectToNode(nodeName, nodePort);
 		if (connection != NULL)
 		{
 			nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
@@ -264,8 +259,8 @@ CreateNodeConnectionHash(void)
  * We attempt to connect up to MAX_CONNECT_ATTEMPT times. After that we give up
  * and return NULL.
  */
-static PGconn *
-ConnectToNode(char *nodeName, char *nodePort)
+PGconn *
+ConnectToNode(char *nodeName, int32 nodePort)
 {
 	PGconn *connection = NULL;
 	const char *clientEncoding = GetDatabaseEncodingName();
@@ -276,10 +271,13 @@ ConnectToNode(char *nodeName, char *nodePort)
 		"host", "port", "fallback_application_name",
 		"client_encoding", "connect_timeout", "dbname", NULL
 	};
+	char nodePortString[12];
 	const char *valueArray[] = {
-		nodeName, nodePort, "citus", clientEncoding,
+		nodeName, nodePortString, "citus", clientEncoding,
 		CLIENT_CONNECT_TIMEOUT_SECONDS, dbname, NULL
 	};
+
+	sprintf(nodePortString, "%d", nodePort);
 
 	Assert(sizeof(keywordArray) == sizeof(valueArray));
 
@@ -313,7 +311,7 @@ ConnectToNode(char *nodeName, char *nodePort)
  * The function returns NULL if the connection has no setting for an option with
  * the provided keyword.
  */
-static char *
+char *
 ConnectionGetOptionValue(PGconn *connection, char *optionKeyword)
 {
 	char *optionValue = NULL;

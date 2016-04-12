@@ -17,6 +17,7 @@
 #include "commands/tablecmds.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_utility.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/transmit.h"
@@ -50,7 +51,7 @@ static bool IsTransmitStmt(Node *parsetree);
 static void VerifyTransmitStmt(CopyStmt *copyStatement);
 
 /* Local functions forward declarations for processing distributed table commands */
-static Node * ProcessCopyStmt(CopyStmt *copyStatement);
+static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag);
 static Node * ProcessIndexStmt(IndexStmt *createIndexStatement,
 							   const char *createIndexCommand);
 static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
@@ -122,7 +123,12 @@ multi_ProcessUtility(Node *parsetree,
 
 	if (IsA(parsetree, CopyStmt))
 	{
-		parsetree = ProcessCopyStmt((CopyStmt *) parsetree);
+		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag);
+
+		if (parsetree == NULL)
+		{
+			return;
+		}
 	}
 
 	if (IsA(parsetree, IndexStmt))
@@ -297,10 +303,12 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 
 /*
  * ProcessCopyStmt handles Citus specific concerns for COPY like supporting
- * COPYing from distributed tables and preventing unsupported actions.
+ * COPYing from distributed tables and preventing unsupported actions. The
+ * function returns a modified COPY statement to be executed, or NULL if no
+ * further processing is needed.
  */
 static Node *
-ProcessCopyStmt(CopyStmt *copyStatement)
+ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag)
 {
 	/*
 	 * We first check if we have a "COPY (query) TO filename". If we do, copy doesn't
@@ -344,9 +352,8 @@ ProcessCopyStmt(CopyStmt *copyStatement)
 		{
 			if (copyStatement->is_from)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot execute COPY FROM on a distributed table "
-									   "on master node")));
+				CitusCopyFrom(copyStatement, completionTag);
+				return NULL;
 			}
 			else if (!copyStatement->is_from)
 			{
@@ -583,6 +590,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 	{
 		RangeVar *relation = createIndexStatement->relation;
 		bool missingOk = false;
+
 		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
