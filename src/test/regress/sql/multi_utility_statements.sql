@@ -104,9 +104,6 @@ COPY nation TO STDOUT;
 -- ensure individual cols can be copied out, too
 COPY nation(n_name) TO STDOUT;
 
--- Ensure that preventing COPY FROM against distributed tables works
-COPY customer FROM STDIN;
-
 -- Test that we can create on-commit drop tables, and also test creating with
 -- oids, along with changing column names
 

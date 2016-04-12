@@ -54,6 +54,8 @@ typedef struct NodeConnectionEntry
 extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
 extern void PurgeConnection(PGconn *connection);
 extern void ReportRemoteError(PGconn *connection, PGresult *result);
+extern PGconn * ConnectToNode(char *nodeName, int nodePort);
+extern char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
 
 
 #endif /* CONNECTION_CACHE_H */

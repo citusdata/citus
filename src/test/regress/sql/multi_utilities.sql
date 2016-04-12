@@ -10,9 +10,6 @@ SELECT master_create_worker_shards('sharded_table', 2, 1);
 COPY sharded_table TO STDOUT;
 COPY (SELECT COUNT(*) FROM sharded_table) TO STDOUT;
 
--- but COPY in is not
-COPY sharded_table FROM STDIN;
-
 -- cursors may not involve distributed tables
 DECLARE all_sharded_rows CURSOR FOR SELECT * FROM sharded_table;
 

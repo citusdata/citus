@@ -20,13 +20,15 @@
 #include "executor/executor.h"
 #include "distributed/master_protocol.h"
 #include "distributed/modify_planner.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_planner.h"
-#include  "distributed/multi_router_executor.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_transaction.h"
 #include "distributed/multi_utility.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
@@ -64,6 +66,12 @@ static const struct config_enum_entry task_executor_type_options[] = {
 static const struct config_enum_entry shard_placement_policy_options[] = {
 	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
 	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
+	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry transaction_manager_options[] = {
+	{ "1pc", TRANSACTION_MANAGER_1PC, false },
+	{ "2pc", TRANSACTION_MANAGER_2PC, false },
 	{ NULL, 0, false }
 };
 
@@ -433,6 +441,21 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&CountDistinctErrorRate,
 		0.0, 0.0, 1.0,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.copy_transaction_manager",
+		gettext_noop("Sets the transaction manager for COPY into distributed tables."),
+		gettext_noop("When a failure occurs during when copying into a distributed "
+					 "table, 2PC is required to ensure data is never lost. Change "
+					 "this setting to '2pc' from its default '1pc' to enable 2PC."
+					 "You must also set max_prepared_transactions on the worker "
+					 "nodes. Recovery from failed 2PCs is currently manual."),
+		&CopyTransactionManager,
+		TRANSACTION_MANAGER_1PC,
+		transaction_manager_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

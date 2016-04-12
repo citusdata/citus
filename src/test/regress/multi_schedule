@@ -121,6 +121,11 @@ test: multi_create_insert_proxy
 test: multi_data_types
 test: multi_repartitioned_subquery_udf
 
+# ---------
+# multi_copy creates hash and range-partitioned tables and performs COPY
+# ---------
+test: multi_copy
+
 # ----------
 # multi_large_shardid stages more shards into lineitem
 # ----------
