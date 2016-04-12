@@ -1,0 +1,17 @@
+--
+-- MULTI_EXTENSION
+--
+-- Tests around extension creation / upgrades
+--
+-- It'd be nice to script generation of this file, but alas, that's
+-- not done yet.
+-- DROP EXTENSION pre-created by the regression suite
+DROP EXTENSION citus;
+\c
+-- Create extension in oldest version, test every upgrade step
+CREATE EXTENSION citus VERSION '5.0';
+ALTER EXTENSION citus UPDATE TO '5.0-1';
+-- drop extension an re-create in newest version
+DROP EXTENSION citus;
+\c
+CREATE EXTENSION citus;

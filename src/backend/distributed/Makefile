@@ -5,8 +5,11 @@ citus_top_builddir = ../../..
 
 MODULE_big = citus
 EXTENSION = citus
-EXTVERSION = 5.0
-DATA_built = $(EXTENSION)--$(EXTVERSION).sql
+EXTVERSIONS = 5.0 5.0-1
+# All citus--*.sql files in the source directory
+DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*--*.sql))
+# Generated files for each version
+DATA_built = $(foreach v,$(EXTVERSIONS),$(EXTENSION)--$(v).sql)
 SCRIPTS = ../../bin/scripts/copy_to_distributed_table
 
 # directories with source files
@@ -20,8 +23,11 @@ OBJS += \
 # be explicit about the default target
 all:
 
-# define build process for latest install file
-$(EXTENSION)--$(EXTVERSION).sql: $(EXTENSION).sql
+# generate each version's file installation file by concatenating
+# previous upgrade scripts
+$(EXTENSION)--5.0.sql: $(EXTENSION).sql
+	cat $^ > $@
+$(EXTENSION)--5.0-1.sql: $(EXTENSION)--5.0.sql $(EXTENSION)--5.0--5.0-1.sql
 	cat $^ > $@
 
 NO_PGXS = 1
