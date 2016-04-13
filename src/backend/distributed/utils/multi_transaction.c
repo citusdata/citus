@@ -135,10 +135,15 @@ AbortRemoteTransactions(List *connectionList)
 
 /*
  * CommitRemoteTransactions commits all transactions on connections in connectionList.
- * On failure, it reports a warning and continues committing all of them.
+ * If stopOnFailure is true, then CommitRemoteTransactions reports an error on
+ * failure, otherwise it reports a warning.
+ * Note that if the caller of this function wants the transactions to roll back
+ * on a failing commit, stopOnFailure should be used as true. On the other hand,
+ * if the caller does not want the transactions to roll back on a failing commit,
+ * stopOnFailure should be used as false.
  */
 void
-CommitRemoteTransactions(List *connectionList)
+CommitRemoteTransactions(List *connectionList, bool stopOnFailure)
 {
 	ListCell *connectionCell = NULL;
 
@@ -166,11 +171,24 @@ CommitRemoteTransactions(List *connectionList)
 				char *nodeName = ConnectionGetOptionValue(connection, "host");
 				char *nodePort = ConnectionGetOptionValue(connection, "port");
 
-				/* log a warning so the user may commit the transaction later */
-				ereport(WARNING, (errmsg("failed to commit prepared transaction '%s'",
-										 transactionName->data),
-								  errhint("Run \"%s\" on %s:%s",
-										  command->data, nodeName, nodePort)));
+				/*
+				 * If stopOnFailure is false, log a warning so the user may
+				 * commit the transaction later.
+				 */
+				if (stopOnFailure)
+				{
+					ereport(ERROR, (errmsg("failed to commit prepared transaction '%s'",
+										   transactionName->data),
+									errhint("Run \"%s\" on %s:%s",
+											command->data, nodeName, nodePort)));
+				}
+				else
+				{
+					ereport(WARNING, (errmsg("failed to commit prepared transaction '%s'",
+											 transactionName->data),
+									  errhint("Run \"%s\" on %s:%s",
+											  command->data, nodeName, nodePort)));
+				}
 			}
 		}
 		else
@@ -178,15 +196,26 @@ CommitRemoteTransactions(List *connectionList)
 			/* we shouldn't be committing if any transactions are not open */
 			Assert(transactionConnection->transactionState == TRANSACTION_STATE_OPEN);
 
-			/* try to commit, if it fails then the user might lose data */
+			/*
+			 * Try to commit, if it fails and stopOnFailure is false then
+			 * the user might lose data.
+			 */
 			result = PQexec(connection, "COMMIT");
 			if (PQresultStatus(result) != PGRES_COMMAND_OK)
 			{
 				char *nodeName = ConnectionGetOptionValue(connection, "host");
 				char *nodePort = ConnectionGetOptionValue(connection, "port");
 
-				ereport(WARNING, (errmsg("failed to commit transaction on %s:%s",
-										 nodeName, nodePort)));
+				if (stopOnFailure)
+				{
+					ereport(ERROR, (errmsg("failed to commit transaction on %s:%s",
+										   nodeName, nodePort)));
+				}
+				else
+				{
+					ereport(WARNING, (errmsg("failed to commit transaction on %s:%s",
+											 nodeName, nodePort)));
+				}
 			}
 		}
 

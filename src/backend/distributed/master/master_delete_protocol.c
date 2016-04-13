@@ -211,7 +211,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
  * We mark shard placements that we couldn't drop as to be deleted later, but
  * we do delete the shard metadadata.
  */
-int
+static int
 DropShards(Oid relationId, char *schemaName, char *relationName,
 		   List *deletableShardIntervalList)
 {
