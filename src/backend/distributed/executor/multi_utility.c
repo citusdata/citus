@@ -315,6 +315,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 		bool isDistributedRelation = false;
 		bool isFrom = copyStatement->is_from;
 
+		/* consider using RangeVarGetRelidExtended to check perms before locking */
 		copiedRelation = heap_openrv(copyStatement->relation,
 									 isFrom ? RowExclusiveLock : AccessShareLock);
 
@@ -330,6 +331,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 		{
 			if (copyStatement->is_from)
 			{
+				/* check permissions, we're bypassing postgres' normal checks */
+				CheckCopyPermissions(copyStatement);
 				CitusCopyFrom(copyStatement, completionTag);
 				return NULL;
 			}
@@ -445,6 +448,12 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
 			lockmode = ShareUpdateExclusiveLock;
 		}
 
+		/*
+		 * XXX: Consider using RangeVarGetRelidExtended with a permission
+		 * checking callback. Right now we'll acquire the lock before having
+		 * checked permissions, and will only fail when executing the actual
+		 * index statements.
+		 */
 		relation = heap_openrv(createIndexStatement->relation, lockmode);
 		relationId = RelationGetRelid(relation);
 
