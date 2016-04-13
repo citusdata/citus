@@ -166,6 +166,13 @@ $sharded_sql$;
 -- test cross-shard queries
 SELECT COUNT(*) FROM articles;
 
+-- test with empty target list
+SELECT FROM articles;
+
+SELECT FROM articles WHERE author_id = 3737;
+
+SELECT FROM articles WHERE word_count = 65500;
+
 -- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
