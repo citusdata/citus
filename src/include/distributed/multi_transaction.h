@@ -51,7 +51,7 @@ typedef struct TransactionConnection
 extern void InitializeDistributedTransaction(void);
 extern void PrepareRemoteTransactions(List *connectionList);
 extern void AbortRemoteTransactions(List *connectionList);
-extern void CommitRemoteTransactions(List *connectionList);
+extern void CommitRemoteTransactions(List *connectionList, bool stopOnFailure);
 extern void CloseConnections(List *connectionList);
 
 
