@@ -13,9 +13,9 @@
  *-------------------------------------------------------------------------
  */
 
-#include "internal/c.h"
+#include "c.h"
 #include "libpq-fe.h"
-#include "internal/libpq-int.h"
+#include "libpq-int.h"
 
 #include "distributed/test_helper_functions.h"
 

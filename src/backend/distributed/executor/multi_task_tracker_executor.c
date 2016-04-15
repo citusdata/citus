@@ -20,6 +20,7 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "commands/dbcommands.h"

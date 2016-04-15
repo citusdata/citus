@@ -17,11 +17,13 @@
 #include "postgres.h"
 #include "funcapi.h"
 
-#include <sys/stat.h>
-#include <unistd.h>
+#include <arpa/inet.h>
 #ifdef HAVE_INTTYPES_H
 #include <inttypes.h>
 #endif
+#include <netinet/in.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "access/hash.h"
 #include "access/htup_details.h"
