@@ -305,7 +305,7 @@ FindRandomNodeNotInList(HTAB *WorkerNodesHash, List *currentNodeList)
 	WorkerNode *workerNode = NULL;
 	HASH_SEQ_STATUS status;
 	uint32 workerNodeCount = 0;
-	uint32 currentNodeCount = 0;
+	uint32 currentNodeCount PG_USED_FOR_ASSERTS_ONLY = 0;
 	bool lookForWorkerNode = true;
 	uint32 workerPosition = 0;
 	uint32 workerIndex = 0;

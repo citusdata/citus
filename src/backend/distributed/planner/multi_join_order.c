@@ -750,7 +750,7 @@ BestJoinOrder(List *candidateJoinOrders)
 	List *bestJoinOrder = NULL;
 	uint32 ruleTypeIndex = 0;
 	uint32 highestValidIndex = JOIN_RULE_LAST - 1;
-	uint32 candidateCount = 0;
+	uint32 candidateCount PG_USED_FOR_ASSERTS_ONLY = 0;
 
 	/*
 	 * We start with the highest ranking rule type (cartesian product), and walk
