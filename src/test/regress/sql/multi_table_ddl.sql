@@ -34,9 +34,6 @@ SELECT * FROM pg_dist_partition;
 SELECT * FROM pg_dist_shard;
 SELECT * FROM pg_dist_shard_placement;
 
--- check that the extension now can be dropped (and recreated). We reconnect
--- before creating the extension to expire extension specific variables which
--- are cached for performance.
+-- check that the extension now can be dropped (and recreated)
 DROP EXTENSION citus;
-\c
 CREATE EXTENSION citus;
