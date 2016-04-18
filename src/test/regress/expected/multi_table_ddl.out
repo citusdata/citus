@@ -11,8 +11,6 @@ SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append'
 
 -- verify that the citus extension can't be dropped while distributed tables exist
 DROP EXTENSION citus;
-WARNING:  could not clean the metadata cache on DROP EXTENSION command
-HINT:  Reconnect to the server again.
 ERROR:  cannot drop extension citus because other objects depend on it
 DETAIL:  table testtableddl depends on extension citus
 HINT:  Use DROP ... CASCADE to drop the dependent objects too.
@@ -62,11 +60,6 @@ SELECT * FROM pg_dist_shard_placement;
 ---------+------------+-------------+----------+----------
 (0 rows)
 
--- check that the extension now can be dropped (and recreated). We reconnect
--- before creating the extension to expire extension specific variables which
--- are cached for performance.
+-- check that the extension now can be dropped (and recreated)
 DROP EXTENSION citus;
-WARNING:  could not clean the metadata cache on DROP EXTENSION command
-HINT:  Reconnect to the server again.
-\c
 CREATE EXTENSION citus;
