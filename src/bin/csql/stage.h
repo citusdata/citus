@@ -39,13 +39,11 @@
 	"SELECT * FROM  master_get_round_robin_candidate_nodes($1::int8)"
 
 #define MASTER_INSERT_SHARD_ROW \
-	"INSERT INTO pg_dist_shard  " \
-	"(logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES  " \
-	"($1::oid, $2::int8, $3::char, $4::text, $5::text)"
+	"SELECT master_stage_shard_row(\
+	$1::oid, $2::int8, $3::\"char\", $4::text, $5::text)"
 #define MASTER_INSERT_PLACEMENT_ROW \
-	"INSERT INTO pg_dist_shard_placement  " \
-	"(shardid, shardstate, shardlength, nodename, nodeport) VALUES  " \
-	"($1::int8, $2::int4, $3::int8, $4::text, $5::int4)"
+	"SELECT master_stage_shard_placement_row(\
+	$1::int8, $2::int4, $3::int8, $4::text, $5::int4)"
 
 /* Column names used to identify response fields as returned from the master. */
 #define LOGICAL_RELID_FIELD "logical_relid"
