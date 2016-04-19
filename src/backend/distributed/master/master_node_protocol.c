@@ -53,7 +53,6 @@ int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 
 
-static char * hostname_client_addr(void);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
 
 
@@ -343,35 +342,11 @@ master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 		currentNodeList = functionContext->user_fctx;
 
-		if (currentNodeCount == 0)
+		candidateNode = WorkerGetLocalFirstCandidateNode(currentNodeList);
+		if (candidateNode == NULL)
 		{
-			/* choose first candidate node to be the client's host */
-			char *remoteHostname = hostname_client_addr();
-
-			/* if hostname is localhost.localdomain, change it to localhost */
-			int nameCompare = strncmp(remoteHostname, "localhost.localdomain",
-									  WORKER_LENGTH);
-			if (nameCompare == 0)
-			{
-				remoteHostname = pstrdup("localhost");
-			}
-
-			candidateNode = WorkerGetNodeWithName(remoteHostname);
-			if (candidateNode == NULL)
-			{
-				ereport(ERROR, (errmsg("could not find worker node for hostname: %s",
-									   remoteHostname)));
-			}
-		}
-		else
-		{
-			/* find a candidate node different from those already selected */
-			candidateNode = WorkerGetCandidateNode(currentNodeList);
-			if (candidateNode == NULL)
-			{
-				ereport(ERROR, (errmsg("could only find %u of %u required nodes",
-									   currentNodeCount, desiredNodeCount)));
-			}
+			ereport(ERROR, (errmsg("could only find %u of %u required nodes",
+								   currentNodeCount, desiredNodeCount)));
 		}
 
 		currentNodeList = lappend(currentNodeList, candidateNode);
@@ -692,56 +667,6 @@ GetTableDDLEvents(Oid relationId)
 	heap_close(pgIndex, AccessShareLock);
 
 	return tableDDLEventList;
-}
-
-
-/*
- * hostname_client_addr allocates memory for the connecting client's fully
- * qualified hostname, and returns this name. If there is no such connection or
- * the connection is over Unix domain socket, the function errors.
- */
-static char *
-hostname_client_addr(void)
-{
-	Port *port = MyProcPort;
-	char *remoteHost = NULL;
-	int remoteHostLen = NI_MAXHOST;
-	int flags = NI_NAMEREQD;    /* require fully qualified hostname */
-	int nameFound = 0;
-
-	if (port == NULL)
-	{
-		ereport(ERROR, (errmsg("cannot find tcp/ip connection to client")));
-	}
-
-	switch (port->raddr.addr.ss_family)
-	{
-		case AF_INET:
-#ifdef HAVE_IPV6
-		case AF_INET6:
-#endif
-			{
-				break;
-			}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("invalid address family in connection")));
-			break;
-		}
-	}
-
-	remoteHost = palloc0(remoteHostLen);
-
-	nameFound = pg_getnameinfo_all(&port->raddr.addr, port->raddr.salen,
-								   remoteHost, remoteHostLen, NULL, 0, flags);
-	if (nameFound != 0)
-	{
-		ereport(ERROR, (errmsg("could not resolve client hostname: %s",
-							   gai_strerror(nameFound))));
-	}
-
-	return remoteHost;
 }
 
 

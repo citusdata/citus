@@ -65,6 +65,7 @@ static const struct config_enum_entry task_executor_type_options[] = {
 static const struct config_enum_entry shard_placement_policy_options[] = {
 	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
 	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
+	{ "random", SHARD_PLACEMENT_RANDOM, false },
 	{ NULL, 0, false }
 };
 
@@ -530,7 +531,8 @@ RegisterCitusConfigVariables(void)
 					 "selecting these nodes. The local-node-first policy places the "
 					 "first replica on the client node and chooses others randomly. "
 					 "The round-robin policy aims to distribute shards evenly across "
-					 "the cluster by selecting nodes in a round-robin fashion."),
+					 "the cluster by selecting nodes in a round-robin fashion."
+					 "The random policy picks all workers randomly."),
 		&ShardPlacementPolicy,
 		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
 		PGC_USERSET,
