@@ -486,7 +486,7 @@ MultiClientQueryStatus(int32 connectionId)
 {
 	PGconn *connection = NULL;
 	PGresult *result = NULL;
-	int tupleCount = 0;
+	int tupleCount PG_USED_FOR_ASSERTS_ONLY = 0;
 	bool copyResults = false;
 	ConnStatusType connStatusType = CONNECTION_OK;
 	ExecStatusType resultStatus = PGRES_COMMAND_OK;

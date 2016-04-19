@@ -368,7 +368,7 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 	CreateStmt *createStatement = NULL;
 	RangeVar *relation = NULL;
 	List *columnDefinitionList = NIL;
-	Oid relationId = InvalidOid;
+	Oid relationId PG_USED_FOR_ASSERTS_ONLY = InvalidOid;
 #if (PG_VERSION_NUM >= 90500)
 	ObjectAddress relationObject;
 #endif
