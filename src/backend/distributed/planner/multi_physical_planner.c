@@ -2858,6 +2858,13 @@ HashableClauseMutator(Node *originalNode, Var *partitionColumn)
 
 		Oid leftHashFunction = InvalidOid;
 		Oid rightHashFunction = InvalidOid;
+
+		/*
+		 * If operatorExpression->opno is NOT the registered '=' operator for
+		 * any hash opfamilies, then get_op_hash_functions will return false.
+		 * This means this function both ensures a hash function exists for the
+		 * types in question AND filters out any clauses lacking equality ops.
+		 */
 		bool hasHashFunction = get_op_hash_functions(operatorExpression->opno,
 													 &leftHashFunction,
 													 &rightHashFunction);
