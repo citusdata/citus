@@ -42,7 +42,7 @@ bool AllModificationsCommutative = false;
 static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
 static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
 static int32 ExecuteDistributedModify(Task *task);
-static void ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 numberTuples,
+static void ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 tupleCount,
 									 Task *task, EState *executorState,
 									 TupleDesc tupleDescriptor,
 									 DestReceiver *destination);
@@ -84,10 +84,10 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	queryDesc->estate = executorState;
 
 	/*
-	* As it's similar to what we're doing, use a MaterialState node to store
-	* our state. This is used to store our tuplestore, so cursors etc. can
-	* work.
-	*/
+	 * As it's similar to what we're doing, use a MaterialState node to store
+	 * our state. This is used to store our tuplestore, so cursors etc. can
+	 * work.
+	 */
 	queryDesc->planstate = (PlanState *) makeNode(MaterialState);
 
 #if (PG_VERSION_NUM < 90500)
@@ -321,7 +321,7 @@ ExecuteDistributedModify(Task *task)
  * given placement, the function attempts it on its replica.
  */
 static void
-ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 numberTuples, Task *task,
+ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 tupleCount, Task *task,
 						 EState *executorState, TupleDesc tupleDescriptor,
 						 DestReceiver *destination)
 {
@@ -364,11 +364,12 @@ ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 numberTuples, Task *task,
 		ExecClearTuple(tupleTableSlot);
 
 		currentTupleCount++;
+
 		/*
 		 * If numberTuples is zero fetch all tuples, otherwise stop after
 		 * count tuples.
 		 */
-		if (numberTuples && numberTuples == currentTupleCount)
+		if (tupleCount > 0 && tupleCount == currentTupleCount)
 		{
 			break;
 		}

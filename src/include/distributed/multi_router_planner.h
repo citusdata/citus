@@ -16,6 +16,7 @@
 
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 
 
@@ -30,6 +31,6 @@
 #endif
 
 extern MultiPlan * MultiRouterPlanCreate(Query *query);
-extern bool MultiRouterPlannableQuery(Query *query);
+extern bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
