@@ -540,7 +540,7 @@ TargetShardInterval(Query *query)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("router executor queries must target exactly one "
-									"shard")));
+								   "shard")));
 		}
 		else
 		{
@@ -664,7 +664,7 @@ RouterSelectTask(Query *query)
 	StringInfo queryString = makeStringInfo();
 	uint64 shardId = INVALID_SHARD_ID;
 	bool upsertQuery = false;
-	CmdType  commandType PG_USED_FOR_ASSERTS_ONLY = query->commandType;
+	CmdType commandType PG_USED_FOR_ASSERTS_ONLY = query->commandType;
 	FromExpr *joinTree = NULL;
 
 	Assert(shardInterval != NULL);
@@ -701,7 +701,8 @@ RouterSelectTask(Query *query)
 
 /*
  * RouterQueryJob creates a Job for the specified query to execute the
- * provided single shard select task.*/
+ * provided single shard select task.
+ */
 static Job *
 RouterQueryJob(Query *query, Task *task)
 {
@@ -737,11 +738,10 @@ RouterQueryJob(Query *query, Task *task)
  * MultiRouterPlannableQuery returns true if given query can be router plannable.
  * The query is router plannable if it is a select query issued on a hash
  * partitioned distributed table, and it has a exact match comparison on the
- * partition column. This feature is enabled if task executor is set to real-time or
- * router.
+ * partition column. This feature is enabled if task executor is set to real-time
  */
 bool
-MultiRouterPlannableQuery(Query *query)
+MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType)
 {
 	uint32 rangeTableId = 1;
 	List *rangeTableList = NIL;
@@ -758,6 +758,17 @@ MultiRouterPlannableQuery(Query *query)
 	int partitionColumnReferenceCount = 0;
 	int shardCount = 0;
 
+	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
+		commandType == CMD_DELETE)
+	{
+		return true;
+	}
+
+	if (taskExecutorType != MULTI_EXECUTOR_REAL_TIME)
+	{
+		return false;
+	}
+
 	Assert(commandType == CMD_SELECT);
 
 	/*
@@ -768,7 +779,7 @@ MultiRouterPlannableQuery(Query *query)
 	 * during RangeTblEntry checks.
 	 */
 	if (query->hasSubLinks == true || query->cteList != NIL || query->hasForUpdate ||
-		query->hasRecursive || query->utilityStmt != NULL)
+		query->hasRecursive)
 	{
 		return false;
 	}

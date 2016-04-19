@@ -59,7 +59,6 @@ static const struct config_enum_entry task_assignment_policy_options[] = {
 static const struct config_enum_entry task_executor_type_options[] = {
 	{ "real-time", MULTI_EXECUTOR_REAL_TIME, false },
 	{ "task-tracker", MULTI_EXECUTOR_TASK_TRACKER, false },
-	{ "router", MULTI_EXECUTOR_ROUTER, false },
 	{ NULL, 0, false }
 };
 
@@ -483,14 +482,13 @@ RegisterCitusConfigVariables(void)
 	DefineCustomEnumVariable(
 		"citus.task_executor_type",
 		gettext_noop("Sets the executor type to be used for distributed queries."),
-		gettext_noop("The master node chooses between three different executor types "
-					 "when executing a distributed query. The router executor is "
-					 "optimal for simple key-value lookups on a single shard. The "
-					 "real-time executor is optimal for queries that involve "
-					 "aggregations and/or co-located joins on multiple shards. The "
-					 "task-tracker executor is optimal for long-running, complex "
-					 "queries that touch thousands of shards and/or that involve "
-					 "table repartitioning."),
+		gettext_noop("The master node chooses between two different executor types "
+					 "when executing a distributed query.The real-time executor is "
+					 "optimal for simple key-value lookup queries and queries that "
+					 "involve aggregations and/or co-located joins on multiple shards. "
+					 "The task-tracker executor is optimal for long-running, complex "
+					 "queries that touch thousands of shards and/or that involve table "
+					 "repartitioning."),
 		&TaskExecutorType,
 		MULTI_EXECUTOR_REAL_TIME,
 		task_executor_type_options,

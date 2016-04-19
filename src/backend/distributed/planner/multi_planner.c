@@ -75,24 +75,12 @@ CreatePhysicalPlan(Query *parse)
 {
 	Query *parseCopy = copyObject(parse);
 	MultiPlan *physicalPlan = NULL;
-	CmdType commandType = parse->commandType;
-	bool routerPlannable = false;
-
-	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
-	{
-		routerPlannable = true;
-	}
-	else if (TaskExecutorType == MULTI_EXECUTOR_REAL_TIME ||
-			TaskExecutorType == MULTI_EXECUTOR_ROUTER)
-	{
-		routerPlannable = MultiRouterPlannableQuery(parseCopy);
-	}
-
+	bool routerPlannable = MultiRouterPlannableQuery(parseCopy, TaskExecutorType);
 	if (routerPlannable)
 	{
 		ereport(DEBUG2, (errmsg("Creating router plan")));
 		physicalPlan = MultiRouterPlanCreate(parseCopy);
+		CheckNodeIsDumpable((Node *) physicalPlan);
 	}
 	else
 	{

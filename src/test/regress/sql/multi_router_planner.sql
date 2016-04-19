@@ -114,9 +114,14 @@ SELECT title, id FROM articles_hash
 	LIMIT 2;
 
 -- find all articles by two authors in same shard
+-- but plan is not router executable due to order by
 SELECT title, author_id FROM articles_hash
 	WHERE author_id = 7 OR author_id = 8
 	ORDER BY author_id ASC, id;
+
+-- same query is router executable with no order by
+SELECT title, author_id FROM articles_hash
+	WHERE author_id = 7 OR author_id = 8;
 
 -- add in some grouping expressions, still on same shard
 -- having queries unsupported in Citus
@@ -163,8 +168,6 @@ ORDER BY articles_hash.id;
 SELECT a.title AS name, (SELECT a2.id FROM authors_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
 
-set citus.task_executor_type to 'router';
-
 -- simple lookup query
 SELECT *
 	FROM articles_hash
@@ -177,6 +180,7 @@ SELECT *
 	WHERE author_id = 1 OR author_id = 17;
 
 -- below query hits two shards, not router plannable + not router executable
+-- handled by real-time executor
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 OR author_id = 18;
@@ -188,6 +192,7 @@ SELECT id as article_id, word_count * id as random_value
 
 -- we can push down co-located joins to a single worker
 -- this is not router plannable but router executable
+-- handled by real-time executor
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
@@ -255,7 +260,8 @@ SELECT *
 	FROM articles_hash a, articles_hash b
 	WHERE a.id = b.id  AND a.author_id = 1;
 
--- error out for queries which hit more than 1 shards
+-- queries which hit more than 1 shards are not router plannable or executable
+-- handled by real-time executor
 SELECT *
 	FROM articles_hash
 	WHERE author_id >= 1 AND author_id <= 3;
@@ -369,6 +375,10 @@ SELECT id, word_count, AVG(word_count) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1;
 
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
+	FROM articles_hash 
+	WHERE author_id = 1;
+
 -- window functions are not supported for not router plannable queries
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
@@ -418,7 +428,7 @@ SELECT *
 	ORDER BY id;
 END;
 
--- cursor queries inside transactions are not router plannable
+-- cursor queries are router plannable
 BEGIN;
 DECLARE test_cursor CURSOR FOR 
 	SELECT *
@@ -496,6 +506,21 @@ END;
 $$ LANGUAGE plpgsql;
 
 SELECT * FROM author_articles_id_word_count();
+
+-- router planner/executor is disabled for task-tracker executor
+-- following query is router plannable, but router planner is disabled
+SET citus.task_executor_type to 'task-tracker';
+SELECT id
+	FROM articles_hash
+	WHERE author_id = 1;
+
+-- insert query is router plannable even under task-tracker
+INSERT INTO articles_hash VALUES (51,  1, 'amateus', 1814);
+
+-- verify insert is successfull (not router plannable and executable)
+SELECT id
+	FROM articles_hash
+	WHERE author_id = 1;
 
 SET client_min_messages to 'NOTICE';
 
