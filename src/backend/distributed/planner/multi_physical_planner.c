@@ -1724,7 +1724,8 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 			SortedShardIntervalArray(shardIntervalList);
 
 		/* this join-type currently doesn't work for hash partitioned tables */
-		char basePartitionMethod = PartitionMethod(baseRelationId);
+		char basePartitionMethod PG_USED_FOR_ASSERTS_ONLY =
+			PartitionMethod(baseRelationId);
 		Assert(basePartitionMethod != DISTRIBUTE_BY_HASH);
 
 		mapMergeJob->partitionType = RANGE_PARTITION_TYPE;

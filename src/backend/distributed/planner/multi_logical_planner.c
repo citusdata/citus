@@ -1560,7 +1560,7 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 	List *applicableJoinClauses = NIL;
 	List *leftTableIdList = OutputTableIdList(leftNode);
 	List *rightTableIdList = OutputTableIdList(rightNode);
-	int rightTableIdCount = 0;
+	int rightTableIdCount PG_USED_FOR_ASSERTS_ONLY = 0;
 	uint32 rightTableId = 0;
 
 	rightTableIdCount = list_length(rightTableIdList);
