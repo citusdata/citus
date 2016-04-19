@@ -1,6 +1,7 @@
 --
 -- MULTI_COPY
 --
+
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,
@@ -188,3 +189,68 @@ FROM customer_copy_range WHERE c_custkey <= 500;
 
 -- Check whether data was copied
 SELECT count(*) FROM customer_copy_range;
+
+-- Create a new append-partitioned table into which to COPY
+CREATE TABLE customer_copy_append (
+        c_custkey integer,
+        c_name varchar(25) not null,
+        c_address varchar(40),
+        c_nationkey integer,
+        c_phone char(15),
+        c_acctbal decimal(15,2),
+        c_mktsegment char(10),
+        c_comment varchar(117));
+SELECT master_create_distributed_table('customer_copy_append', 'c_custkey', 'append');
+
+-- Test syntax error
+COPY customer_copy_append(c_custkey, c_name) FROM STDIN WITH (FORMAT 'csv');
+1,customer1
+2,customer2
+notinteger,customernot
+\.
+
+-- Test that no shard is created for failing copy
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'customer_copy_append'::regclass;
+
+-- Test empty copy
+COPY customer_copy_append FROM STDIN;
+\.
+
+-- Test that no shard is created for copying zero rows
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'customer_copy_append'::regclass;
+
+-- Test proper copy
+COPY customer_copy_append(c_custkey, c_name) FROM STDIN WITH (FORMAT 'csv');
+1,customer1
+2,customer2
+\.
+
+-- Check whether data was copied properly
+SELECT * FROM customer_copy_append;
+
+-- Create lineitem table
+CREATE TABLE lineitem_copy_append (
+        l_orderkey bigint not null,
+        l_partkey integer not null,
+        l_suppkey integer not null,
+        l_linenumber integer not null,
+        l_quantity decimal(15, 2) not null,
+        l_extendedprice decimal(15, 2) not null,
+        l_discount decimal(15, 2) not null,
+        l_tax decimal(15, 2) not null,
+        l_returnflag char(1) not null,
+        l_linestatus char(1) not null,
+        l_shipdate date not null,
+        l_commitdate date not null,
+        l_receiptdate date not null,
+        l_shipinstruct char(25) not null,
+        l_shipmode char(10) not null,
+        l_comment varchar(44) not null);
+SELECT master_create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
+
+-- Test multiple shard creation
+SET citus.shard_max_size TO '256kB';
+
+COPY lineitem_copy_append FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|';
+
+SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'lineitem_copy_append'::regclass;

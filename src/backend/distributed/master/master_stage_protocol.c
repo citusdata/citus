@@ -43,7 +43,7 @@
 static bool WorkerCreateShard(char *nodeName, uint32 nodePort,
 							  uint64 shardId, List *ddlCommandList);
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
-							 char *shardName, uint64 *shardLength,
+							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
 static uint64 WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId,
 							  char *tableName);
@@ -159,14 +159,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	List *succeededPlacementList = NIL;
 	List *failedPlacementList = NIL;
 	ListCell *shardPlacementCell = NULL;
-	ListCell *succeededPlacementCell = NULL;
 	ListCell *failedPlacementCell = NULL;
-	bool statsOK = false;
-	uint64 newShardLength = 0;
+	uint64 newShardSize = 0;
 	uint64 shardMaxSizeInBytes = 0;
 	float4 shardFillLevel = 0.0;
-	text *newMinValue = NULL;
-	text *newMaxValue = NULL;
 	char partitionMethod = 0;
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -264,64 +260,12 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	RESUME_INTERRUPTS();
 
-	/* get appended shard's statistics from a shard placement */
-	foreach(succeededPlacementCell, succeededPlacementList)
-	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(succeededPlacementCell);
-		char *workerName = placement->nodeName;
-		uint32 workerPort = placement->nodePort;
-
-		statsOK = WorkerShardStats(workerName, workerPort, relationId, shardName,
-								   &newShardLength, &newMinValue, &newMaxValue);
-		if (statsOK)
-		{
-			break;
-		}
-	}
-
-	/*
-	 * If for some reason we appended data to a shard, but failed to retrieve
-	 * statistics we just WARN here to avoid losing shard-state updates. Note
-	 * that this means we will return 0 as the shard fill-factor, and this shard
-	 * also won't be pruned as the statistics will be empty. If the failure was
-	 * transient, a subsequent append call will fetch the correct statistics.
-	 */
-	if (!statsOK)
-	{
-		ereport(WARNING, (errmsg("could not get statistics for shard placement"),
-						  errdetail("Setting shard statistics to NULL")));
-	}
-
-	/* make sure we don't process cancel signals */
-	HOLD_INTERRUPTS();
-
-	/* update metadata for each shard placement we appended to */
-	succeededPlacementCell = NULL;
-	foreach(succeededPlacementCell, succeededPlacementList)
-	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(succeededPlacementCell);
-		char *workerName = placement->nodeName;
-		uint32 workerPort = placement->nodePort;
-
-		DeleteShardPlacementRow(shardId, workerName, workerPort);
-		InsertShardPlacementRow(shardId, FILE_FINALIZED, newShardLength,
-								workerName, workerPort);
-	}
-
-	DeleteShardRow(shardId);
-	InsertShardRow(relationId, shardId, storageType, newMinValue, newMaxValue);
-
-	if (QueryCancelPending)
-	{
-		ereport(WARNING, (errmsg("cancel requests are ignored during table appends")));
-		QueryCancelPending = false;
-	}
-
-	RESUME_INTERRUPTS();
+	/* update shard statistics and get new shard size */
+	newShardSize = UpdateShardStatistics(relationId, shardId);
 
 	/* calculate ratio of current shard size compared to shard max size */
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
-	shardFillLevel = ((float4) newShardLength / (float4) shardMaxSizeInBytes);
+	shardFillLevel = ((float4) newShardSize / (float4) shardMaxSizeInBytes);
 
 	PG_RETURN_FLOAT4(shardFillLevel);
 }
@@ -447,12 +391,98 @@ WorkerCreateShard(char *nodeName, uint32 nodePort,
 
 
 /*
+ * UpdateShardStatistics updates metadata for the given shard id and returns
+ * the new shard size.
+ */
+uint64
+UpdateShardStatistics(Oid relationId, int64 shardId)
+{
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	char storageType = shardInterval->storageType;
+	char *shardName = NULL;
+	List *shardPlacementList = NIL;
+	ListCell *shardPlacementCell = NULL;
+	bool statsOK = false;
+	uint64 shardSize = 0;
+	text *minValue = NULL;
+	text *maxValue = NULL;
+
+	/* if shard doesn't have an alias, extend regular table name */
+	shardName = LoadShardAlias(relationId, shardId);
+	if (shardName == NULL)
+	{
+		shardName = get_rel_name(relationId);
+		AppendShardIdToName(&shardName, shardId);
+	}
+
+	shardPlacementList = FinalizedShardPlacementList(shardId);
+
+	/* get shard's statistics from a shard placement */
+	foreach(shardPlacementCell, shardPlacementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+		char *workerName = placement->nodeName;
+		uint32 workerPort = placement->nodePort;
+
+		statsOK = WorkerShardStats(workerName, workerPort, relationId, shardName,
+								   &shardSize, &minValue, &maxValue);
+		if (statsOK)
+		{
+			break;
+		}
+	}
+
+	/*
+	 * If for some reason we appended data to a shard, but failed to retrieve
+	 * statistics we just WARN here to avoid losing shard-state updates. Note
+	 * that this means we will return 0 as the shard fill-factor, and this shard
+	 * also won't be pruned as the statistics will be empty. If the failure was
+	 * transient, a subsequent append call will fetch the correct statistics.
+	 */
+	if (!statsOK)
+	{
+		ereport(WARNING, (errmsg("could not get statistics for shard %s", shardName),
+						  errdetail("Setting shard statistics to NULL")));
+	}
+
+	/* make sure we don't process cancel signals */
+	HOLD_INTERRUPTS();
+
+	/* update metadata for each shard placement we appended to */
+	shardPlacementCell = NULL;
+	foreach(shardPlacementCell, shardPlacementList)
+	{
+		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+		char *workerName = placement->nodeName;
+		uint32 workerPort = placement->nodePort;
+
+		DeleteShardPlacementRow(shardId, workerName, workerPort);
+		InsertShardPlacementRow(shardId, FILE_FINALIZED, shardSize,
+								workerName, workerPort);
+	}
+
+	DeleteShardRow(shardId);
+	InsertShardRow(relationId, shardId, storageType, minValue, maxValue);
+
+	if (QueryCancelPending)
+	{
+		ereport(WARNING, (errmsg("cancel requests are ignored during metadata update")));
+		QueryCancelPending = false;
+	}
+
+	RESUME_INTERRUPTS();
+
+	return shardSize;
+}
+
+
+/*
  * WorkerShardStats queries the worker node, and retrieves shard statistics that
  * we assume have changed after new table data have been appended to the shard.
  */
 static bool
 WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardName,
-				 uint64 *shardLength, text **shardMinValue, text **shardMaxValue)
+				 uint64 *shardSize, text **shardMinValue, text **shardMaxValue)
 {
 	bool shardStatsOK = true;
 
@@ -464,7 +494,7 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 		StringInfo maxValue = WorkerPartitionValue(nodeName, nodePort, relationId,
 												   shardName, SHARD_MAX_VALUE_QUERY);
 
-		(*shardLength) = tableSize;
+		(*shardSize) = tableSize;
 		(*shardMinValue) = cstring_to_text_with_len(minValue->data, minValue->len);
 		(*shardMaxValue) = cstring_to_text_with_len(maxValue->data, maxValue->len);
 	}

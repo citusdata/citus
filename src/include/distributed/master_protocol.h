@@ -85,6 +85,7 @@ extern void CheckDistributedTable(Oid relationId);
 extern void CreateShardPlacements(int64 shardId, List *ddlEventList,
 								  List *workerNodeList, int workerStartIndex,
 								  int replicationFactor);
+extern uint64 UpdateShardStatistics(Oid relationId, int64 shardId);
 
 /* Function declarations for generating metadata for shard creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
