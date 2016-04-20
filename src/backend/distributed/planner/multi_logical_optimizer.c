@@ -2907,7 +2907,8 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 	List *rangetableList = query->rtable;
 	Index rangeTableEntryIndex = 0;
 	RangeTblEntry *rangeTableEntry = NULL;
-	Expr *strippedColumnExpression = strip_implicit_coercions(columnExpression);
+	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
+		(Node *) columnExpression);
 
 	if (IsA(strippedColumnExpression, Var))
 	{
