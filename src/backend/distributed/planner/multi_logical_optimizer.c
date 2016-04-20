@@ -2309,7 +2309,9 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		 * if table is range partitioned.
 		 */
 		partitionMethod = PartitionMethod(relationId);
-		if (partitionMethod == DISTRIBUTE_BY_RANGE)
+
+		if (partitionMethod == DISTRIBUTE_BY_RANGE
+				|| partitionMethod == DISTRIBUTE_BY_HASH)
 		{
 			Var *tablePartitionColumn = tableNode->partitionColumn;
 			bool groupedByPartitionColumn = false;
