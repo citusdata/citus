@@ -89,13 +89,15 @@ DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
  explain statements for distributed queries are currently unsupported
 (1 row)
 
--- Large table joins between varchar columns do not work because of a bug we
--- have. Currently, we require joins to be only on columns. Postgres adds a
--- relabel to typecast varchars to text due to which our check fails and we
--- error out.
+-- Test that large table joins on partition varchar columns work
 EXPLAIN SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
-ERROR:  cannot perform local joins that involve expressions
-DETAIL:  local joins can be performed between columns only
+DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
+DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ explain statements for distributed queries are currently unsupported
+(1 row)
+
 SET client_min_messages TO NOTICE;
