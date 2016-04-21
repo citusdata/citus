@@ -310,12 +310,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 								  relationName)));
 	}
 
-	if (partitionMethod == DISTRIBUTE_BY_APPEND)
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("unsupported partition method %d", partitionMethod)));
-	}
-
 	/* prevent concurrent placement changes and non-commutative DML statements */
 	LockAllShards(shardIntervalList);
 
