@@ -69,6 +69,26 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
+ * ShardIntervalCount returns number of shard intervals for a given distributed table.
+ * The function returns 0 if table is not distributed, or no shards can be found for
+ * the given relation id.
+ */
+int
+ShardIntervalCount(Oid relationId)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	int shardIntervalCount = 0;
+
+	if (cacheEntry->isDistributedTable)
+	{
+		shardIntervalCount = cacheEntry->shardIntervalArrayLength;
+	}
+
+	return shardIntervalCount;
+}
+
+
+/*
  * LoadShardList reads list of shards for given relationId from pg_dist_shard,
  * and returns the list of found shardIds.
  */

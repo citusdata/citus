@@ -5,7 +5,7 @@
 CREATE TABLE articles (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
-	title text NOT NULL,
+	title varchar(20) NOT NULL,
 	word_count integer NOT NULL CHECK (word_count > 0)
 );
 
@@ -188,9 +188,9 @@ SELECT author_id FROM articles
 
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
-SET citus.task_executor_type TO 'router';
 SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO 'DEBUG2';
+SET citus.task_executor_type TO 'real-time';
 
 -- start with the simple lookup query
 SELECT *
@@ -219,7 +219,8 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 
--- now show that JOINs don't work with multiple tables
+-- now show that JOINs with multiple tables are not router executable
+-- they are executed by real-time executor
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
@@ -248,40 +249,15 @@ SELECT avg(word_count)
 	WHERE author_id = 2;
 
 -- max, min, sum, count is somehow implemented
--- differently in distributed planning but, still error out 
+-- differently in distributed planning 
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
 	WHERE author_id = 2;
-
--- error out for queries with ORDER BY
-SELECT *
-	FROM articles
-	WHERE author_id = 1
-	ORDER BY word_count;
-
--- error out for queries with ORDER BY and LIMIT
-SELECT *
-	FROM articles
-	WHERE author_id = 1
-	ORDER BY word_count
-	LIMIT 2;
-
--- error out for queries with aggregates and GROUP BY
-SELECT max(word_count)
-	FROM articles
-	WHERE author_id = 1
-	GROUP BY author_id;
 
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
 
--- error out for queries which hit more than 1 shards
-SELECT *
-	FROM articles
-	WHERE author_id >= 1 AND author_id <= 3;
-
 SET client_min_messages to 'NOTICE';
-SET citus.task_executor_type TO 'real-time';

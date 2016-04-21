@@ -56,6 +56,7 @@ typedef struct ShardPlacement
 
 /* Function declarations to read shard and shard placement data */
 extern List * LoadShardIntervalList(Oid relationId);
+extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern char * LoadShardAlias(Oid relationId, uint64 shardId);
 extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval);

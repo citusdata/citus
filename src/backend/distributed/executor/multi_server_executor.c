@@ -30,6 +30,8 @@ int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 
+static bool RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType);
+
 
 /*
  * JobExecutorType selects the executor type for the given multiPlan using the task
@@ -42,25 +44,20 @@ MultiExecutorType
 JobExecutorType(MultiPlan *multiPlan)
 {
 	Job *job = multiPlan->workerJob;
-	Query *masterQuery = multiPlan->masterQuery;
 	List *workerTaskList = job->taskList;
 	List *workerNodeList = WorkerNodeList();
 	int taskCount = list_length(workerTaskList);
 	int workerNodeCount = list_length(workerNodeList);
 	double tasksPerNode = taskCount / ((double) workerNodeCount);
 	int dependedJobCount = list_length(job->dependedJobList);
-
 	MultiExecutorType executorType = TaskExecutorType;
+	bool routerExecutablePlan = RouterExecutablePlan(multiPlan, executorType);
 
-	/* check if the first task is a modify task, short-circuit if so */
-	if (taskCount > 0)
+	/* check if can switch to router executor */
+	if (routerExecutablePlan)
 	{
-		Task *firstTask = (Task *) linitial(workerTaskList);
-
-		if (firstTask->taskType == MODIFY_TASK)
-		{
-			return MULTI_EXECUTOR_ROUTER;
-		}
+		ereport(DEBUG2, (errmsg("Plan is router executable")));
+		return MULTI_EXECUTOR_ROUTER;
 	}
 
 	if (executorType == MULTI_EXECUTOR_REAL_TIME)
@@ -100,7 +97,7 @@ JobExecutorType(MultiPlan *multiPlan)
 									"\"task-tracker\".")));
 		}
 	}
-	else if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
+	else
 	{
 		/* if we have more tasks per node than what can be tracked, warn the user */
 		if (tasksPerNode >= MaxTrackedTasksPerNode)
@@ -109,61 +106,80 @@ JobExecutorType(MultiPlan *multiPlan)
 									 "configured max_tracked_tasks_per_node limit")));
 		}
 	}
-	else if (executorType == MULTI_EXECUTOR_ROUTER)
-	{
-		Task *workerTask = NULL;
-		List *workerDependentTaskList = NIL;
-		bool masterQueryHasAggregates = false;
-
-		/* if we have repartition jobs with router executor, error out */
-		if (dependedJobCount > 0)
-		{
-			ereport(ERROR, (errmsg("cannot use router executor with repartition jobs"),
-							errhint("Set citus.task_executor_type to "
-									"\"task-tracker\".")));
-		}
-
-		/* if the query hits more than one shards, error out*/
-		if (taskCount != 1)
-		{
-			ereport(ERROR, (errmsg("cannot use router executor with queries that "
-								   "hit multiple shards"),
-							errhint("Set citus.task_executor_type to \"real-time\" or "
-									"\"task-tracker\".")));
-		}
-
-		/* if the query has dependent data fetch tasks */
-		workerTask = list_nth(workerTaskList, 0);
-		workerDependentTaskList = workerTask->dependedTaskList;
-		if (list_length(workerDependentTaskList) > 0)
-		{
-			ereport(ERROR, (errmsg("cannot use router executor with JOINs"),
-							errhint("Set citus.task_executor_type to \"real-time\" or "
-									"\"task-tracker\".")));
-		}
-
-		/* ORDER BY is always applied on the master table with the current planner */
-		if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
-		{
-			ereport(ERROR, (errmsg("cannot use router executor with ORDER BY clauses"),
-							errhint("Set citus.task_executor_type to \"real-time\" or "
-									"\"task-tracker\".")));
-		}
-
-		/*
-		 * Note that worker query having an aggregate means that the master query should have either
-		 * an aggregate or a function expression which has to be executed for the correct results.
-		 */
-		masterQueryHasAggregates = job->jobQuery->hasAggs;
-		if (masterQueryHasAggregates)
-		{
-			ereport(ERROR, (errmsg("cannot use router executor with aggregates"),
-							errhint("Set citus.task_executor_type to \"real-time\" or "
-									"\"task-tracker\".")));
-		}
-	}
 
 	return executorType;
+}
+
+
+/*
+ * RouterExecutablePlan returns whether a multi-plan can be executed using the
+ * router executor. Modify queries are always router executable, select queries
+ * are router executable only if executorType is real time.
+ */
+static bool
+RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
+{
+	Job *job = multiPlan->workerJob;
+	TaskType taskType = TASK_TYPE_INVALID_FIRST;
+	Query *masterQuery = multiPlan->masterQuery;
+	List *workerTaskList = job->taskList;
+	int taskCount = list_length(workerTaskList);
+	int dependedJobCount = list_length(job->dependedJobList);
+	Task *workerTask = NULL;
+	List *workerDependentTaskList = NIL;
+	bool masterQueryHasAggregates = false;
+
+	/* router executor cannot execute queries that hit more than one shard */
+	if (taskCount != 1)
+	{
+		return false;
+	}
+
+	/* check if the first task is a modify or a router task, short-circuit if so */
+	workerTask = (Task *) linitial(workerTaskList);
+	taskType = workerTask->taskType;
+	if (taskType == MODIFY_TASK || taskType == ROUTER_TASK)
+	{
+		return true;
+	}
+
+	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute repartition jobs */
+	if (dependedJobCount > 0)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries with dependent data fetch tasks */
+	workerDependentTaskList = workerTask->dependedTaskList;
+	if (list_length(workerDependentTaskList) > 0)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute queries with order by */
+	if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
+	{
+		return false;
+	}
+
+	/*
+	 * Router executor cannot execute queries with aggregates.
+	 * Note that worker query having an aggregate means that the master query should
+	 * have either an aggregate or a function expression which has to be executed for
+	 * the correct results.
+	 */
+	masterQueryHasAggregates = job->jobQuery->hasAggs;
+	if (masterQueryHasAggregates)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
