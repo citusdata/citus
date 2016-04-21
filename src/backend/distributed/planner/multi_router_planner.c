@@ -559,6 +559,8 @@ TargetShardInterval(Query *query)
 
 		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
 										 shardIntervalList);
+	}
+
 	prunedShardCount = list_length(prunedShardList);
 	if (prunedShardCount != 1)
 	{
