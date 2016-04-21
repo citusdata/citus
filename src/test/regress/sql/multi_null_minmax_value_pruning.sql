@@ -15,8 +15,8 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102009;
 SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 102010;
 
 -- Check that partition and join pruning works when min/max values exist
-
-SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
+-- Adding l_orderkey = 1 to make the query not router executable
+SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;

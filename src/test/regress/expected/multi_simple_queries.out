@@ -4,7 +4,7 @@
 CREATE TABLE articles (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
-	title text NOT NULL,
+	title varchar(20) NOT NULL,
 	word_count integer NOT NULL CHECK (word_count > 0)
 );
 -- this table is used in a CTE test
@@ -315,14 +315,16 @@ ERROR:  cannot perform distributed planning on this query
 DETAIL:  Having qual is currently unsupported
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
-SET citus.task_executor_type TO 'router';
 SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO 'DEBUG2';
+SET citus.task_executor_type TO 'real-time';
 -- start with the simple lookup query
 SELECT *
 	FROM articles
 	WHERE author_id = 1;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
+DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -337,6 +339,7 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 17;
 DEBUG:  predicate pruning for shardId 103094
+DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -350,13 +353,22 @@ DEBUG:  predicate pruning for shardId 103094
 SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 18;
-ERROR:  cannot use router executor with queries that hit multiple shards
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
 -- rename the output columns on a no master query case
 SELECT id as article_id, word_count * id as random_value
 	FROM articles
 	WHERE author_id = 1;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
+DEBUG:  Plan is router executable
  article_id | random_value 
 ------------+--------------
           1 |         9572
@@ -375,6 +387,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 DEBUG:  push down of limit count: 3
 DEBUG:  predicate pruning for shardId 103094
 DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  Plan is router executable
  first_author | second_word_count 
 --------------+-------------------
            10 |             17277
@@ -382,22 +395,29 @@ DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
            10 |              6363
 (3 rows)
 
--- now show that JOINs don't work with multiple tables
+-- now show that JOINs with multiple tables are not router executable
+-- they are executed by real-time executor
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  push down of limit count: 3
 DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with JOINs
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+ first_author | second_word_count 
+--------------+-------------------
+           10 |             19519
+           10 |             19519
+           10 |             19519
+(3 rows)
+
 -- do not create the master query for LIMIT on a single shard SELECT
 SELECT *
 	FROM articles
 	WHERE author_id = 1
 	LIMIT 2;
-DEBUG:  push down of limit count: 2
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
+DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
   1 |         1 | arsenous |       9572
@@ -411,7 +431,9 @@ SELECT id
 	FROM articles
 	WHERE author_id = 1
 	GROUP BY id;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103094
+DEBUG:  Plan is router executable
  id 
 ----
  41
@@ -423,49 +445,34 @@ DEBUG:  predicate pruning for shardId 103094
 
 -- copying from a single shard table does not require the master query
 COPY articles_single_shard TO stdout;
+DEBUG:  Plan is router executable
 50	10	anjanette	19519
 -- error out for queries with aggregates
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103093
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+DEBUG:  Plan is router executable
+        avg         
+--------------------
+ 12356.400000000000
+(1 row)
+
 -- max, min, sum, count is somehow implemented
--- differently in distributed planning but, still error out 
+-- differently in distributed planning 
 SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
 	WHERE author_id = 2;
+DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 103093
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
--- error out for queries with ORDER BY
-SELECT *
-	FROM articles
-	WHERE author_id = 1
-	ORDER BY word_count;
-DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
--- error out for queries with ORDER BY and LIMIT
-SELECT *
-	FROM articles
-	WHERE author_id = 1
-	ORDER BY word_count
-	LIMIT 2;
-DEBUG:  push down of limit count: 2
-DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with ORDER BY clauses
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
--- error out for queries with aggregates and GROUP BY
-SELECT max(word_count)
-	FROM articles
-	WHERE author_id = 1
-	GROUP BY author_id;
-DEBUG:  predicate pruning for shardId 103094
-ERROR:  cannot use router executor with aggregates
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
+DEBUG:  Plan is router executable
+  max  | min  |  sum  | cnt 
+-------+------+-------+-----
+ 18185 | 2728 | 61782 |   5
+(1 row)
+
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles a, articles b
@@ -499,13 +506,6 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 9
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 14
-ERROR:  cannot use router executor with repartition jobs
+ERROR:  cannot use real time executor with repartition jobs
 HINT:  Set citus.task_executor_type to "task-tracker".
--- error out for queries which hit more than 1 shards
-SELECT *
-	FROM articles
-	WHERE author_id >= 1 AND author_id <= 3;
-ERROR:  cannot use router executor with queries that hit multiple shards
-HINT:  Set citus.task_executor_type to "real-time" or "task-tracker".
 SET client_min_messages to 'NOTICE';
-SET citus.task_executor_type TO 'real-time';

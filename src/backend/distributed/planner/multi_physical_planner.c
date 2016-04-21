@@ -130,7 +130,6 @@ static OperatorCacheEntry * LookupOperatorByType(Oid typeId, Oid accessMethodId,
 												 int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static Node * HashableClauseMutator(Node *originalNode, Var *partitionColumn);
-static bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
 static Var * MakeInt4Column(void);
 static Const * MakeInt4Constant(Datum constantValue);
 static OpExpr * MakeHashedOperatorExpression(OpExpr *operatorExpression);
@@ -161,7 +160,6 @@ static uint64 AnchorShardId(List *fragmentList, uint32 anchorRangeTableId);
 static List * PruneSqlTaskDependencies(List *sqlTaskList);
 static List * AssignTaskList(List *sqlTaskList);
 static bool HasMergeTaskDependencies(List *sqlTaskList);
-static List * AssignAnchorShardTaskList(List *taskList);
 static List * GreedyAssignTaskList(List *taskList);
 static Task * GreedyAssignTask(WorkerNode *workerNode, List *taskList,
 							   List *activeShardPlacementLists);
@@ -2945,7 +2943,7 @@ HashableClauseMutator(Node *originalNode, Var *partitionColumn)
  * operator expression which means it is a binary operator expression with
  * operands of a var and a non-null constant.
  */
-static bool
+bool
 OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 {
 	Node *leftOperand = get_leftop((Expr *) operatorExpression);
@@ -4811,7 +4809,7 @@ TaskListUnion(const List *list1, const List *list2)
  * configured task assignment policy. The distributed executor later sends these
  * tasks to their assigned locations for remote execution.
  */
-static List *
+List *
 AssignAnchorShardTaskList(List *taskList)
 {
 	List *assignedTaskList = NIL;

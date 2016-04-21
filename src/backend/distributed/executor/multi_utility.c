@@ -574,7 +574,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 {
 	Oid namespaceId;
 	Oid indexRelationId;
-	char* indexRelationName = createIndexStatement->idxname;
+	char *indexRelationName = createIndexStatement->idxname;
 
 	if (indexRelationName == NULL)
 	{
