@@ -135,3 +135,8 @@ test: multi_router_planner
 # multi_large_shardid stages more shards into lineitem
 # ----------
 test: multi_large_shardid
+
+# ----------
+# multi_drop_extension makes sure we can safely drop and recreate the extension
+# ----------
+test: multi_drop_extension

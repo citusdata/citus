@@ -12,6 +12,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
@@ -34,6 +35,17 @@
 #include "utils/relmapper.h"
 #include "utils/syscache.h"
 
+
+/* state which should be cleared upon DROP EXTENSION */
+static bool extensionLoaded = false;
+static Oid distShardRelationId = InvalidOid;
+static Oid distShardPlacementRelationId = InvalidOid;
+static Oid distPartitionRelationId = InvalidOid;
+static Oid distPartitionLogicalRelidIndexId = InvalidOid;
+static Oid distShardLogicalRelidIndexId = InvalidOid;
+static Oid distShardShardidIndexId = InvalidOid;
+static Oid distShardPlacementShardidIndexId = InvalidOid;
+static Oid extraDataContainerFuncId = InvalidOid;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -297,16 +309,10 @@ LookupDistTableCacheEntry(Oid relationId)
  * CitusHasBeenLoaded returns true if the citus extension has been created
  * in the current database and the extension script has been executed. Otherwise,
  * it returns false. The result is cached as this is called very frequently.
- *
- * NB: The way this is cached means the result will be wrong after the
- * extension is dropped. A reconnect fixes that though, so that seems
- * acceptable.
  */
 bool
 CitusHasBeenLoaded(void)
 {
-	static bool extensionLoaded = false;
-
 	/* recheck presence until citus has been loaded */
 	if (!extensionLoaded)
 	{
@@ -329,6 +335,19 @@ CitusHasBeenLoaded(void)
 		}
 
 		extensionLoaded = extensionPresent && extensionScriptExecuted;
+
+		if (extensionLoaded)
+		{
+			/*
+			 * InvalidateDistRelationCacheCallback resets state such as extensionLoaded
+			 * when it notices changes to pg_dist_partition (which usually indicate
+			 * `DROP EXTENSION citus;` has been run)
+			 *
+			 * Ensure InvalidateDistRelationCacheCallback will notice those changes
+			 * by caching pg_dist_partition's oid.
+			 */
+			DistPartitionRelationId();
+		}
 	}
 
 	return extensionLoaded;
@@ -339,11 +358,9 @@ CitusHasBeenLoaded(void)
 Oid
 DistShardRelationId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_shard", &distShardRelationId);
 
-	CachedRelationLookup("pg_dist_shard", &cachedOid);
-
-	return cachedOid;
+	return distShardRelationId;
 }
 
 
@@ -351,11 +368,9 @@ DistShardRelationId(void)
 Oid
 DistShardPlacementRelationId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_shard_placement", &distShardPlacementRelationId);
 
-	CachedRelationLookup("pg_dist_shard_placement", &cachedOid);
-
-	return cachedOid;
+	return distShardPlacementRelationId;
 }
 
 
@@ -363,11 +378,9 @@ DistShardPlacementRelationId(void)
 Oid
 DistPartitionRelationId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_partition", &distPartitionRelationId);
 
-	CachedRelationLookup("pg_dist_partition", &cachedOid);
-
-	return cachedOid;
+	return distPartitionRelationId;
 }
 
 
@@ -375,11 +388,10 @@ DistPartitionRelationId(void)
 Oid
 DistPartitionLogicalRelidIndexId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_partition_logical_relid_index",
+						 &distPartitionLogicalRelidIndexId);
 
-	CachedRelationLookup("pg_dist_partition_logical_relid_index", &cachedOid);
-
-	return cachedOid;
+	return distPartitionLogicalRelidIndexId;
 }
 
 
@@ -387,11 +399,10 @@ DistPartitionLogicalRelidIndexId(void)
 Oid
 DistShardLogicalRelidIndexId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_shard_logical_relid_index",
+						 &distShardLogicalRelidIndexId);
 
-	CachedRelationLookup("pg_dist_shard_logical_relid_index", &cachedOid);
-
-	return cachedOid;
+	return distShardLogicalRelidIndexId;
 }
 
 
@@ -399,11 +410,9 @@ DistShardLogicalRelidIndexId(void)
 Oid
 DistShardShardidIndexId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_shard_shardid_index", &distShardShardidIndexId);
 
-	CachedRelationLookup("pg_dist_shard_shardid_index", &cachedOid);
-
-	return cachedOid;
+	return distShardShardidIndexId;
 }
 
 
@@ -411,11 +420,10 @@ DistShardShardidIndexId(void)
 Oid
 DistShardPlacementShardidIndexId(void)
 {
-	static Oid cachedOid = InvalidOid;
+	CachedRelationLookup("pg_dist_shard_placement_shardid_index",
+						 &distShardPlacementShardidIndexId);
 
-	CachedRelationLookup("pg_dist_shard_placement_shardid_index", &cachedOid);
-
-	return cachedOid;
+	return distShardPlacementShardidIndexId;
 }
 
 
@@ -423,18 +431,17 @@ DistShardPlacementShardidIndexId(void)
 Oid
 CitusExtraDataContainerFuncId(void)
 {
-	static Oid cachedOid = 0;
 	List *nameList = NIL;
 	Oid paramOids[1] = { INTERNALOID };
 
-	if (cachedOid == InvalidOid)
+	if (extraDataContainerFuncId == InvalidOid)
 	{
 		nameList = list_make2(makeString("pg_catalog"),
 							  makeString("citus_extradata_container"));
-		cachedOid = LookupFuncName(nameList, 1, paramOids, false);
+		extraDataContainerFuncId = LookupFuncName(nameList, 1, paramOids, false);
 	}
 
-	return cachedOid;
+	return extraDataContainerFuncId;
 }
 
 
@@ -677,6 +684,24 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 			cacheEntry->isValid = false;
 		}
 	}
+
+	/*
+	 * If pg_dist_partition is being invalidated drop all state
+	 * This happens pretty rarely, but most importantly happens during
+	 * DROP EXTENSION citus;
+	 */
+	if (relationId != InvalidOid && relationId == distPartitionRelationId)
+	{
+		extensionLoaded = false;
+		distShardRelationId = InvalidOid;
+		distShardPlacementRelationId = InvalidOid;
+		distPartitionRelationId = InvalidOid;
+		distPartitionLogicalRelidIndexId = InvalidOid;
+		distShardLogicalRelidIndexId = InvalidOid;
+		distShardShardidIndexId = InvalidOid;
+		distShardPlacementShardidIndexId = InvalidOid;
+		extraDataContainerFuncId = InvalidOid;
+	}
 }
 
 
@@ -878,10 +903,6 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 /*
  * CachedRelationLookup performs a cached lookup for the relation
  * relationName, with the result cached in *cachedOid.
- *
- * NB: The way this is cached means the result will be wrong after the
- * extension is dropped and reconnect. A reconnect fixes that though, so that
- * seems acceptable.
  */
 static void
 CachedRelationLookup(const char *relationName, Oid *cachedOid)
