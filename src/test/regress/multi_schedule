@@ -71,7 +71,9 @@ test: multi_large_table_task_assignment
 # ----------
 # Tests to check our large record staging and shard deletion behavior
 # ----------
-test: multi_stage_large_records multi_master_delete_protocol
+test: multi_stage_large_records
+test: multi_master_delete_protocol
+test: multi_shard_modify
 
 # ----------
 # Tests around DDL statements run on distributed tables
