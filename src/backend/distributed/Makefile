@@ -5,7 +5,7 @@ citus_top_builddir = ../../..
 
 MODULE_big = citus
 EXTENSION = citus
-EXTVERSIONS = 5.0 5.0-1
+EXTVERSIONS = 5.0 5.0-1 5.0-2
 # All citus--*.sql files in the source directory
 DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*--*.sql))
 # Generated files for each version
@@ -28,6 +28,8 @@ all:
 $(EXTENSION)--5.0.sql: $(EXTENSION).sql
 	cat $^ > $@
 $(EXTENSION)--5.0-1.sql: $(EXTENSION)--5.0.sql $(EXTENSION)--5.0--5.0-1.sql
+	cat $^ > $@
+$(EXTENSION)--5.0-2.sql: $(EXTENSION)--5.0.sql $(EXTENSION)--5.0--5.0-1.sql $(EXTENSION)--5.0-1--5.0-2.sql
 	cat $^ > $@
 
 NO_PGXS = 1

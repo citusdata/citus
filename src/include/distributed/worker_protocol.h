@@ -119,6 +119,8 @@ extern void RemoveJobSchema(StringInfo schemaName);
 extern Datum * DeconstructArrayObject(ArrayType *arrayObject);
 extern int32 ArrayObjectCount(ArrayType *arrayObject);
 extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedureId);
+extern List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
+								  StringInfo tableName);
 
 /* Function declarations shared with the master planner */
 extern StringInfo TaskFilename(StringInfo directoryName, uint32 taskId);

@@ -63,8 +63,6 @@ static bool FetchForeignTable(const char *nodeName, uint32 nodePort,
 							  StringInfo tableName);
 static const char * RemoteTableOwner(const char *nodeName, uint32 nodePort,
 									 StringInfo tableName);
-static List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
-								  StringInfo tableName);
 static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
 								  StringInfo tableName);
 static bool check_log_statement(List *stmt_list);
@@ -870,7 +868,7 @@ RemoteTableOwner(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * DDL commands used in creating the table. If an error occurs during fetching,
  * the function returns an empty list.
  */
-static List *
+List *
 TableDDLCommandList(const char *nodeName, uint32 nodePort, StringInfo tableName)
 {
 	List *ddlCommandList = NIL;

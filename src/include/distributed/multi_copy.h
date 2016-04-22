@@ -41,6 +41,13 @@ typedef struct CopyOutStateData
 
 typedef struct CopyOutStateData *CopyOutState;
 
+/* struct type to keep both hostname and port */
+typedef struct NodeAddress
+{
+	char *nodeName;
+	int32 nodePort;
+} NodeAddress;
+
 
 /* function declarations for copying into a distributed table */
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
@@ -51,6 +58,8 @@ extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
+extern bool IsCopyFromWorker(CopyStmt *copyStatement);
+extern NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
 
 
 #endif /* MULTI_COPY_H */
