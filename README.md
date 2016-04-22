@@ -83,8 +83,8 @@ stay on top of the latest developments.
 </tr>
 <tr>
   <td>Slack</td>
-  <td><a href="https://slack.citusdata.com">Join</a> the Citus
-  development Slack room.</td>
+  <td>Chat with us in our community <a
+  href="https://slack.citusdata.com">Slack channel</a>.</td>
 </tr>
 <tr>
   <td>Github Issues</td>
