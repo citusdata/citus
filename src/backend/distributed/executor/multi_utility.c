@@ -66,7 +66,6 @@ static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
 /* Local functions forward declarations for helper functions */
-static void WarnIfDropCitusExtension(DropStmt *dropStatement);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString);
 static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString,
@@ -143,10 +142,6 @@ multi_ProcessUtility(Node *parsetree,
 		{
 			parsetree = ProcessDropIndexStmt(dropStatement, queryString);
 		}
-		else if (dropStatement->removeType == OBJECT_EXTENSION)
-		{
-			WarnIfDropCitusExtension(dropStatement);
-		}
 	}
 
 	if (IsA(parsetree, AlterTableStmt))
@@ -205,37 +200,6 @@ multi_ProcessUtility(Node *parsetree,
 	/* now drop into standard process utility */
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
-}
-
-
-/*
- * WarnIfDropCitusExtension prints a WARNING if dropStatement includes dropping
- * citus extension.
- */
-static void
-WarnIfDropCitusExtension(DropStmt *dropStatement)
-{
-	ListCell *dropStatementObject = NULL;
-
-	Assert(dropStatement->removeType == OBJECT_EXTENSION);
-
-	foreach(dropStatementObject, dropStatement->objects)
-	{
-		List *objectNameList = lfirst(dropStatementObject);
-		char *objectName = NameListToString(objectNameList);
-
-		/* we're only concerned with the citus extension */
-		if (strncmp("citus", objectName, NAMEDATALEN) == 0)
-		{
-			/*
-			 * Warn the user about the possibility of invalid cache. Also, see
-			 * function comment of CachedRelationLookup().
-			 */
-			ereport(WARNING, (errmsg("could not clean the metadata cache on "
-									 "DROP EXTENSION command"),
-							  errhint("Reconnect to the server again.")));
-		}
-	}
 }
 
 
