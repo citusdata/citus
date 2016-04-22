@@ -1,7 +1,7 @@
 ![Citus Banner](/github-banner.png)
 
 [![Build Status](https://travis-ci.org/citusdata/citus.svg?branch=master)](https://travis-ci.org/citusdata/citus)
-[![Google Group](https://img.shields.io/badge/%E2%9C%89-Google%20Group-blue.svg)](https://groups.google.com/forum/#!forum/citus-users)
+[![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://www.citusdata.com/docs/citus/5.0)
 
 ### What is Citus?
@@ -82,10 +82,9 @@ stay on top of the latest developments.
   Group</a> is our place for detailed questions and discussions.</td>
 </tr>
 <tr>
-  <td>IRC</td>
-  <td>Talk with the Citus development team in realtime on the <a
-  href="https://webchat.freenode.net/?channels=citus">#citus</a> Freenode
-  channel.</td>
+  <td>Slack</td>
+  <td>Chat with us in our community <a
+  href="https://slack.citusdata.com">Slack channel</a>.</td>
 </tr>
 <tr>
   <td>Github Issues</td>
