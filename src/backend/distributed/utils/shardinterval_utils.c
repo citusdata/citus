@@ -79,6 +79,34 @@ CompareShardIntervals(const void *leftElement, const void *rightElement,
 
 
 /*
+ * CompareShardIntervalsById is a comparison function for sort shard
+ * intervals by their shard ID.
+ */
+int
+CompareShardIntervalsById(const void *leftElement, const void *rightElement)
+{
+	ShardInterval *leftInterval = *((ShardInterval **) leftElement);
+	ShardInterval *rightInterval = *((ShardInterval **) rightElement);
+	int64 leftShardId = leftInterval->shardId;
+	int64 rightShardId = rightInterval->shardId;
+
+	/* we compare 64-bit integers, instead of casting their difference to int */
+	if (leftShardId > rightShardId)
+	{
+		return 1;
+	}
+	else if (leftShardId < rightShardId)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
  * FindShardInterval finds a single shard interval in the cache for the
  * given partition column value.
  */

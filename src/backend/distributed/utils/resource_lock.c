@@ -17,8 +17,11 @@
 #include "c.h"
 #include "miscadmin.h"
 
+#include "distributed/listutils.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
 #include "storage/lmgr.h"
 
 
@@ -118,4 +121,31 @@ UnlockJobResource(uint64 jobId, LOCKMODE lockmode)
 	SET_LOCKTAG_JOB_RESOURCE(tag, MyDatabaseId, jobId);
 
 	LockRelease(&tag, lockmode, sessionLock);
+}
+
+
+/*
+ * LockShards takes shared locks on the metadata and the data of all shards in
+ * shardIntervalList. This prevents concurrent placement changes and concurrent
+ * DML statements that require an exclusive lock.
+ */
+void
+LockShards(List *shardIntervalList, LOCKMODE lockMode)
+{
+	ListCell *shardIntervalCell = NULL;
+
+	/* lock shards in order of shard id to prevent deadlock */
+	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		int64 shardId = shardInterval->shardId;
+
+		/* prevent concurrent changes to number of placements */
+		LockShardDistributionMetadata(shardId, lockMode);
+
+		/* prevent concurrent update/delete statements */
+		LockShardResource(shardId, lockMode);
+	}
 }
