@@ -48,6 +48,9 @@
 
 /* Defines that relate to fetching foreign tables */
 #define FOREIGN_CACHED_FILE_PATH "pg_foreign_file/cached/%s"
+#define GET_TABLE_OWNER \
+	"SELECT rolname FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) " \
+	"WHERE pg_class.oid = %s::regclass"
 #define GET_TABLE_DDL_EVENTS "SELECT master_get_table_ddl_events('%s')"
 #define SET_FOREIGN_TABLE_FILENAME "ALTER FOREIGN TABLE %s OPTIONS (SET filename '%s')"
 #define FOREIGN_FILE_PATH_COMMAND "SELECT worker_foreign_file_path('%s')"
@@ -119,7 +122,7 @@ extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedur
 
 /* Function declarations shared with the master planner */
 extern StringInfo TaskFilename(StringInfo directoryName, uint32 taskId);
-extern List * ExecuteRemoteQuery(const char *nodeName, uint32 nodePort,
+extern List * ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
 								 StringInfo queryString);
 extern List * ColumnDefinitionList(List *columnNameList, List *columnTypeList);
 extern CreateStmt * CreateStatement(RangeVar *relation, List *columnDefinitionList);

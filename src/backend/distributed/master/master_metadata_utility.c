@@ -654,6 +654,35 @@ EnsureTableOwner(Oid relationId)
 	}
 }
 
+
+/*
+ * Return a table's owner as a string.
+ */
+char *
+TableOwner(Oid relationId)
+{
+	Oid userId = InvalidOid;
+	HeapTuple tuple;
+
+	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relationId));
+	if (!HeapTupleIsValid(tuple))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE),
+						errmsg("relation with OID %u does not exist", relationId)));
+	}
+
+	userId = ((Form_pg_class) GETSTRUCT(tuple))->relowner;
+
+	ReleaseSysCache(tuple);
+
+#if (PG_VERSION_NUM < 90500)
+	return GetUserNameFromId(userId);
+#else
+	return GetUserNameFromId(userId, false);
+#endif
+}
+
+
 /*
  * master_stage_shard_row() inserts a row into pg_dist_shard, after performing
  * basic permission checks.

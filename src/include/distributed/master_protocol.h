@@ -83,6 +83,7 @@ extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateShardPlacements(int64 shardId, List *ddlEventList,
+								  char *newPlacementOwner,
 								  List *workerNodeList, int workerStartIndex,
 								  int replicationFactor);
 extern uint64 UpdateShardStatistics(Oid relationId, int64 shardId);
