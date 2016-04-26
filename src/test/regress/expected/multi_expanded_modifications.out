@@ -1,0 +1,30 @@
+CREATE TABLE modifications (
+	key VARCHAR,
+	counter INT,
+	time TIMESTAMPTZ
+);
+SELECT master_create_distributed_table('modifications', 'key', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('modifications', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+INSERT INTO modifications VALUES ('one', 0, null);
+UPDATE modifications SET counter = counter + 1;
+ERROR:  distributed modifications must target exactly one shard
+UPDATE modifications SET counter = counter + 1 WHERE key = 'one';
+UPDATE modifications SET time = now() WHERE key = 'one';
+ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+SELECT * FROM modifications;
+ key | counter | time 
+-----+---------+------
+ one |       1 | 
+(1 row)
+
+DROP TABLE modifications;

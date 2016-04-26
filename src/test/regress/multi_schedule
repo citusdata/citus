@@ -141,3 +141,9 @@ test: multi_large_shardid
 # multi_drop_extension makes sure we can safely drop and recreate the extension
 # ----------
 test: multi_drop_extension
+
+# ----------
+# multi_expanded_modifications includes some tests that we can reference columns in
+# UPDATEs
+# ----------
+test: multi_expanded_modifications
