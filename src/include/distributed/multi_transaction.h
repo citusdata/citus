@@ -18,12 +18,12 @@
 #include "nodes/pg_list.h"
 
 
-/* Enumeration that defines the different transaction managers available */
+/* Enumeration that defines the different commit protocols available */
 typedef enum
 {
-	TRANSACTION_MANAGER_1PC = 0,
-	TRANSACTION_MANAGER_2PC = 1
-} TransactionManagerType;
+	COMMIT_PROTOCOL_1PC = 0,
+	COMMIT_PROTOCOL_2PC = 1
+} CommitProtocolType;
 
 /* Enumeration that defines different remote transaction states */
 typedef enum
@@ -45,6 +45,10 @@ typedef struct TransactionConnection
 	TransactionState transactionState;
 	PGconn *connection;
 } TransactionConnection;
+
+
+/* config variable managed via guc.c */
+extern int MultiShardCommitProtocol;
 
 
 /* Functions declarations for transaction and connection management */

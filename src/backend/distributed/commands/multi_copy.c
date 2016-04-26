@@ -25,7 +25,7 @@
  * hash or range-partitioned tables, this can cause a problem when some of the
  * transactions fail to commit while others have succeeded. To ensure no data
  * is lost, COPY can use two-phase commit, by increasing max_prepared_transactions
- * on the worker and setting citus.copy_transaction_manager to '2pc'. The default
+ * on the worker and setting citus.multi_shard_commit_protocol to '2pc'. The default
  * is '1pc'. This is not a problem for append-partitioned tables because new
  * shards are created and in the case of failure, metadata changes are rolled
  * back on the master node.
@@ -124,9 +124,6 @@
 
 #define INITIAL_CONNECTION_CACHE_SIZE 1001
 
-
-/* the transaction manager to use for COPY commands */
-int CopyTransactionManager = TRANSACTION_MANAGER_1PC;
 
 /* constant used in binary protocol */
 static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
@@ -449,7 +446,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		/* close the COPY input on all shard placements */
 		EndRemoteCopy(connectionList, true);
 
-		if (CopyTransactionManager == TRANSACTION_MANAGER_2PC)
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 		{
 			PrepareRemoteTransactions(connectionList);
 		}
