@@ -82,6 +82,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText);
+
+	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
 
 	if (CStoreTable(relationId))
@@ -170,6 +172,9 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	bool cstoreTable = CStoreTable(relationId);
 
 	char storageType = shardInterval->storageType;
+
+	EnsureTablePermissions(relationId, ACL_INSERT);
+
 	if (storageType != SHARD_STORAGE_TABLE && !cstoreTable)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),

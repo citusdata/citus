@@ -76,6 +76,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	bool dataCopied = false;
 	char relationKind = '\0';
 
+	EnsureTableOwner(distributedTableId);
+
 	/*
 	 * By taking an exclusive lock on the shard, we both stop all modifications
 	 * (INSERT, UPDATE, or DELETE) and prevent concurrent repair operations from

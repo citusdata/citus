@@ -112,7 +112,9 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	schemaName = deleteStatement->relation->schemaname;
 	relationName = deleteStatement->relation->relname;
 	relationId = RangeVarGetRelid(deleteStatement->relation, NoLock, failOK);
+
 	CheckDistributedTable(relationId);
+	EnsureTablePermissions(relationId, ACL_DELETE);
 
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 	deleteQuery = (Query *) linitial(queryTreeList);
@@ -187,12 +189,29 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 		/* ensure proper values are used if the table exists */
 		Oid schemaId = get_rel_namespace(relationId);
 		schemaName = get_namespace_name(schemaId);
+
+		/*
+		 * Only allow the owner to drop all shards, this is more akin to DDL
+		 * than DELETE.
+		 */
+		EnsureTableOwner(relationId);
 	}
 	else
 	{
 		/* table has been dropped, rely on user-supplied values */
 		schemaName = text_to_cstring(schemaNameText);
 		relationName = text_to_cstring(relationNameText);
+
+		/*
+		 * Verify that this only is run as superuser - that's how it's used in
+		 * our drop event trigger, and we can't verify permissions for an
+		 * already dropped relation.
+		 */
+		if (!superuser())
+		{
+			ereport(ERROR, (errmsg("cannot drop all shards of a dropped table as "
+								   "non-superuser")));
+		}
 	}
 
 	shardIntervalList = LoadShardIntervalList(relationId);

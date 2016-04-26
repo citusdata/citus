@@ -98,6 +98,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	distributedRelation = relation_open(distributedRelationId, AccessExclusiveLock);
 	distributedRelationName = RelationGetRelationName(distributedRelation);
 
+	EnsureTableOwner(distributedRelationId);
+
 	/* open system catalog and insert new tuple */
 	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
 

@@ -88,6 +88,14 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
 
+	/*
+	 * In contrast to append/range partitioned tables it makes more sense to
+	 * require ownership privileges - shards for hash-partitioned tables are
+	 * only created once, not continually during ingest as for the other
+	 * partitioning types.
+	 */
+	EnsureTableOwner(distributedTableId);
+
 	/* we plan to add shards: get an exclusive metadata lock */
 	LockRelationDistributionMetadata(distributedTableId, ExclusiveLock);
 
