@@ -17,7 +17,7 @@
 
 
 /* config variable managed via guc.c */
-extern int CopyTransactionManager;
+extern int MultiShardCommitProtocol;
 
 
 /*

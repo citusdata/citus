@@ -28,6 +28,10 @@ static uint32 DistributedTransactionId = 0;
 static StringInfo BuildTransactionName(int connectionId);
 
 
+/* the commit protocol to use for COPY commands */
+int MultiShardCommitProtocol = COMMIT_PROTOCOL_1PC;
+
+
 /*
  * InitializeDistributedTransaction prepares the distributed transaction ID
  * used in transaction names.
@@ -41,7 +45,7 @@ InitializeDistributedTransaction(void)
 
 /*
  * PrepareRemoteTransactions prepares all transactions on connections in
- * connectionList for commit if the 2PC transaction manager is enabled.
+ * connectionList for commit if the 2PC commit protocol is enabled.
  * On failure, it reports an error and stops.
  */
 void
