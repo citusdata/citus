@@ -40,8 +40,8 @@
 
 
 /* Local functions forward declarations */
-static bool WorkerCreateShard(char *nodeName, uint32 nodePort,
-							  uint64 shardId, List *ddlCommandList);
+static bool WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
+							  char *newShardOwner, List *ddlCommandList);
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
@@ -82,6 +82,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText);
+	char *relationOwner = TableOwner(relationId);
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -129,8 +130,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeCount++;
 	}
 
-	CreateShardPlacements(shardId, ddlEventList, candidateNodeList, 0,
-						  ShardReplicationFactor);
+	CreateShardPlacements(shardId, ddlEventList, relationOwner,
+						  candidateNodeList, 0, ShardReplicationFactor);
 
 	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
 
@@ -226,7 +227,9 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
-		queryResultList = ExecuteRemoteQuery(workerName, workerPort, workerAppendQuery);
+		/* inserting data should be performed by the current user */
+		queryResultList = ExecuteRemoteQuery(workerName, workerPort, NULL,
+											 workerAppendQuery);
 		if (queryResultList != NIL)
 		{
 			succeededPlacementList = lappend(succeededPlacementList, shardPlacement);
@@ -310,8 +313,8 @@ CheckDistributedTable(Oid relationId)
  * nodes if some DDL commands had been successful).
  */
 void
-CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
-					  int workerStartIndex, int replicationFactor)
+CreateShardPlacements(int64 shardId, List *ddlEventList, char *newPlacementOwner,
+					  List *workerNodeList, int workerStartIndex, int replicationFactor)
 {
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
@@ -331,7 +334,8 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		bool created = WorkerCreateShard(nodeName, nodePort, shardId, ddlEventList);
+		bool created = WorkerCreateShard(nodeName, nodePort, shardId, newPlacementOwner,
+										 ddlEventList);
 		if (created)
 		{
 			const RelayFileState shardState = FILE_FINALIZED;
@@ -367,8 +371,8 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, List *workerNodeList,
  * each DDL command, and could leave the shard in an half-initialized state.
  */
 static bool
-WorkerCreateShard(char *nodeName, uint32 nodePort,
-				  uint64 shardId, List *ddlCommandList)
+WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
+				  char *newShardOwner, List *ddlCommandList)
 {
 	bool shardCreated = true;
 	ListCell *ddlCommandCell = NULL;
@@ -383,7 +387,8 @@ WorkerCreateShard(char *nodeName, uint32 nodePort,
 		appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND,
 						 shardId, escapedDDLCommand);
 
-		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, applyDDLCommand);
+		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
+											 applyDDLCommand);
 		if (queryResultList == NIL)
 		{
 			shardCreated = false;
@@ -537,7 +542,7 @@ WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName
 		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
 	}
 
-	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, tableSizeQuery);
+	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, NULL, tableSizeQuery);
 	if (queryResultList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not receive table size from node "
@@ -583,7 +588,7 @@ WorkerPartitionValue(char *nodeName, uint32 nodePort, Oid relationId,
 	 * simply casts the results to a (char *). If the user partitioned the table
 	 * on a binary byte array, this approach fails and should be fixed.
 	 */
-	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, partitionValueQuery);
+	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, NULL, partitionValueQuery);
 	if (queryResultList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not receive shard min/max values from node "

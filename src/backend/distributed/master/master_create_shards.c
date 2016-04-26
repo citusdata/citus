@@ -76,6 +76,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	Oid distributedTableId = ResolveRelationId(tableNameText);
 	char relationKind = get_rel_relkind(distributedTableId);
 	char *tableName = text_to_cstring(tableNameText);
+	char *relationOwner = NULL;
 	char shardStorageType = '\0';
 	List *workerNodeList = NIL;
 	List *ddlCommandList = NIL;
@@ -98,6 +99,8 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 
 	/* we plan to add shards: get an exclusive metadata lock */
 	LockRelationDistributionMetadata(distributedTableId, ExclusiveLock);
+
+	relationOwner = TableOwner(distributedTableId);
 
 	/* validate that shards haven't already been created for this table */
 	existingShardList = LoadShardList(distributedTableId);
@@ -192,7 +195,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 		 */
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		CreateShardPlacements(shardId, ddlCommandList, workerNodeList,
+		CreateShardPlacements(shardId, ddlCommandList, relationOwner, workerNodeList,
 							  roundRobinNodeIndex, replicationFactor);
 
 		InsertShardRow(distributedTableId, shardId, shardStorageType,

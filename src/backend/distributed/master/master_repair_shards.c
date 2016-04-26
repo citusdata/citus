@@ -68,6 +68,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
+	char *relationOwner = NULL;
 	List *shardPlacementList = NIL;
 	ShardPlacement *sourcePlacement = NULL;
 	ShardPlacement *targetPlacement = NULL;
@@ -91,6 +92,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	 * lock (in exclusive mode) as well.
 	 */
 	LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+	relationOwner = TableOwner(distributedTableId);
 
 	shardPlacementList = ShardPlacementList(shardId);
 	sourcePlacement = SearchShardPlacementInList(shardPlacementList, sourceNodeName,
@@ -131,7 +134,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 							targetPlacement->nodePort);
 
 	/* finally, drop/recreate remote table and add back row (in healthy state) */
-	CreateShardPlacements(shardId, ddlCommandList, list_make1(targetNode), 0, 1);
+	CreateShardPlacements(shardId, ddlCommandList, relationOwner,
+						  list_make1(targetNode), 0, 1);
 
 	HOLD_INTERRUPTS();
 
@@ -256,7 +260,9 @@ CopyDataFromFinalizedPlacement(Oid distributedTableId, int64 shardId,
 					 healthyPlacement->nodePort); /* remote port */
 
 	queryResultList = ExecuteRemoteQuery(placementToRepair->nodeName,
-										 placementToRepair->nodePort, copyRelationQuery);
+										 placementToRepair->nodePort,
+										 NULL, /* current user, just data manipulation */
+										 copyRelationQuery);
 	if (queryResultList != NIL)
 	{
 		copySuccessful = true;

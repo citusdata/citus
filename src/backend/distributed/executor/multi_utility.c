@@ -949,6 +949,7 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString,
 	bool isFirstPlacement = true;
 	ListCell *shardCell = NULL;
 	List *shardList = NIL;
+	char *relationOwner = TableOwner(relationId);
 
 	shardList = LoadShardList(relationId);
 	foreach(shardCell, shardList)
@@ -972,7 +973,7 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString,
 			uint32 workerPort = placement->nodePort;
 
 			List *queryResultList = ExecuteRemoteQuery(workerName, workerPort,
-													   applyCommand);
+													   relationOwner, applyCommand);
 			if (queryResultList == NIL)
 			{
 				/*

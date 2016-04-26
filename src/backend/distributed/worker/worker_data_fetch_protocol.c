@@ -61,6 +61,8 @@ static bool FetchRegularTable(const char *nodeName, uint32 nodePort,
 							  StringInfo tableName);
 static bool FetchForeignTable(const char *nodeName, uint32 nodePort,
 							  StringInfo tableName);
+static const char * RemoteTableOwner(const char *nodeName, uint32 nodePort,
+									 StringInfo tableName);
 static List * TableDDLCommandList(const char *nodeName, uint32 nodePort,
 								  StringInfo tableName);
 static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
@@ -689,6 +691,10 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	char *quotedTableName = NULL;
 	StringInfo queryString = NULL;
 	const char *schemaName = NULL;
+	const char *tableOwner = NULL;
+	Oid tableOwnerId = InvalidOid;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
 
 	/* copy remote table's data to this node in an idempotent manner */
 	shardId = ExtractShardId(tableName);
@@ -707,6 +713,14 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	}
 
 	/* fetch the ddl commands needed to create the table */
+	tableOwner = RemoteTableOwner(nodeName, nodePort, tableName);
+	if (tableOwner == NULL)
+	{
+		return false;
+	}
+	tableOwnerId = get_role_oid(tableOwner, false);
+
+	/* fetch the ddl commands needed to create the table */
 	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableName);
 	if (ddlCommandList == NIL)
 	{
@@ -715,8 +729,13 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 
 	/*
 	 * Apply DDL commands against the database. Note that on failure from here
-	 * on, we immediately error out instead of returning false.
+	 * on, we immediately error out instead of returning false.  Have to do
+	 * this as the table's owner to ensure the local table is created with
+	 * compatible permissions.
 	 */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(tableOwnerId, SECURITY_LOCAL_USERID_CHANGE);
+
 	foreach(ddlCommandCell, ddlCommandList)
 	{
 		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
@@ -726,6 +745,8 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 					   NULL, None_Receiver, NULL);
 		CommandCounterIncrement();
 	}
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	/*
 	 * Copy local file into the relation. We call ProcessUtility() instead of
@@ -818,6 +839,33 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 
 
 /*
+ * RemoteTableOwner takes in the given table name, and fetches the owner of
+ * the table. If an error occurs during fetching, return NULL.
+ */
+static const char *
+RemoteTableOwner(const char *nodeName, uint32 nodePort, StringInfo tableName)
+{
+	List *ownerList = NIL;
+	StringInfo queryString = NULL;
+	const char *escapedTableName = quote_literal_cstr(tableName->data);
+	StringInfo relationOwner;
+
+	queryString = makeStringInfo();
+	appendStringInfo(queryString, GET_TABLE_OWNER, escapedTableName);
+
+	ownerList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
+	if (list_length(ownerList) != 1)
+	{
+		return NULL;
+	}
+
+	relationOwner = (StringInfo) linitial(ownerList);
+
+	return relationOwner->data;
+}
+
+
+/*
  * TableDDLCommandList takes in the given table name, and fetches the list of
  * DDL commands used in creating the table. If an error occurs during fetching,
  * the function returns an empty list.
@@ -831,7 +879,7 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName->data);
 
-	ddlCommandList = ExecuteRemoteQuery(nodeName, nodePort, queryString);
+	ddlCommandList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
 	return ddlCommandList;
 }
 
@@ -851,7 +899,7 @@ ForeignFilePath(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	foreignPathCommand = makeStringInfo();
 	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, tableName->data);
 
-	foreignPathList = ExecuteRemoteQuery(nodeName, nodePort, foreignPathCommand);
+	foreignPathList = ExecuteRemoteQuery(nodeName, nodePort, NULL, foreignPathCommand);
 	if (foreignPathList != NIL)
 	{
 		foreignPath = (StringInfo) linitial(foreignPathList);
@@ -866,9 +914,12 @@ ForeignFilePath(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * sorted list, and returns this list. The function assumes that query results
  * have a single column, and asserts on that assumption. If results are empty,
  * or an error occurs during query runtime, the function returns an empty list.
+ * If asUser is NULL the connection is established as the current user,
+ * otherwise as the specified user.
  */
 List *
-ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, StringInfo queryString)
+ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
+				   StringInfo queryString)
 {
 	int32 connectionId = -1;
 	bool querySent = false;
@@ -880,7 +931,7 @@ ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, StringInfo queryString
 	int columnCount = 0;
 	List *resultList = NIL;
 
-	connectionId = MultiClientConnect(nodeName, nodePort, NULL, NULL);
+	connectionId = MultiClientConnect(nodeName, nodePort, NULL, runAsUser);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		return NIL;
