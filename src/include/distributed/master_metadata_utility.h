@@ -18,6 +18,7 @@
 #include "access/tupdesc.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
+#include "utils/acl.h"
 #include "utils/relcache.h"
 
 
@@ -77,5 +78,7 @@ extern void DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32 wor
 /* Remaining metadata utility functions  */
 extern Node * BuildDistributionKeyFromColumnName(Relation distributedRelation,
 												 char *columnName);
+extern void EnsureTablePermissions(Oid relationId, AclMode mode);
+extern void EnsureTableOwner(Oid relationId);
 
 #endif   /* MASTER_METADATA_UTILITY_H */

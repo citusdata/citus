@@ -12,6 +12,7 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "miscadmin.h"
 
 #include "access/htup_details.h"
 #include "access/xact.h"
@@ -28,6 +29,7 @@
 #include "distributed/worker_manager.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/fmgroids.h"
@@ -610,4 +612,38 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 	ReleaseSysCache(columnTuple);
 
 	return (Node *) column;
+}
+
+
+/*
+ * Check that the current user has `mode` permissions on relationId, error out
+ * if not. Superusers always have such permissions.
+ */
+void
+EnsureTablePermissions(Oid relationId, AclMode mode)
+{
+	AclResult aclresult;
+
+	aclresult = pg_class_aclcheck(relationId, GetUserId(), mode);
+
+	if (aclresult != ACLCHECK_OK)
+	{
+		aclcheck_error(aclresult, ACL_KIND_CLASS,
+					   get_rel_name(relationId));
+	}
+}
+
+
+/*
+ * Check that the current user has owner rights to relationId, error out if
+ * not. Superusers are regarded as owners.
+ */
+void
+EnsureTableOwner(Oid relationId)
+{
+	if (!pg_class_ownercheck(relationId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
+					   get_rel_name(relationId));
+	}
 }

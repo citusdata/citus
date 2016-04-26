@@ -669,6 +669,9 @@ CurrentUserName(void)
  * master_dist_partition_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_partition are changed
  * on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
 master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
@@ -727,6 +730,9 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
  * master_dist_shard_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_shard are changed
  * on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
  */
 Datum
 master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
