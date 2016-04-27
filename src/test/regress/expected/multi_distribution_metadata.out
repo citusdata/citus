@@ -87,7 +87,7 @@ VALUES
 SELECT load_shard_id_array('events_hash');
  load_shard_id_array 
 ---------------------
- {4,3,2,1}
+ {1,2,3,4}
 (1 row)
 
 -- should see array with first shard range

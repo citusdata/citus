@@ -68,6 +68,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -76,6 +77,7 @@
 #include "distributed/multi_transaction.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdesc.h"
 #include "executor/executor.h"
@@ -144,19 +146,6 @@ static void CopyToNewShards(CopyStmt *copyStatement, char *completionTag);
 static void LockAllShards(List *shardIntervalList);
 static HTAB * CreateShardConnectionHash(void);
 static int CompareShardIntervalsById(const void *leftElement, const void *rightElement);
-static bool IsUniformHashDistribution(ShardInterval **shardIntervalArray,
-									  int shardCount);
-static FmgrInfo * ShardIntervalCompareFunction(Var *partitionColumn, char
-											   partitionMethod);
-static ShardInterval * FindShardInterval(Datum partitionColumnValue,
-										 ShardInterval **shardIntervalCache,
-										 int shardCount, char partitionMethod,
-										 FmgrInfo *compareFunction,
-										 FmgrInfo *hashFunction, bool useBinarySearch);
-static ShardInterval * SearchCachedShardInterval(Datum partitionColumnValue,
-												 ShardInterval **shardIntervalCache,
-												 int shardCount,
-												 FmgrInfo *compareFunction);
 static ShardConnections * GetShardConnections(HTAB *shardConnectionHash,
 											  int64 shardId,
 											  bool *shardConnectionsFound);
@@ -250,9 +239,10 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	uint32 columnCount = 0;
 	Datum *columnValues = NULL;
 	bool *columnNulls = NULL;
-	TypeCacheEntry *typeEntry = NULL;
 	FmgrInfo *hashFunction = NULL;
 	FmgrInfo *compareFunction = NULL;
+	bool hasUniformHashDistribution = false;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
 
 	int shardCount = 0;
 	List *shardIntervalList = NULL;
@@ -275,12 +265,11 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	Var *partitionColumn = PartitionColumn(tableId, 0);
 	char partitionMethod = PartitionMethod(tableId);
 
-	/* resolve hash function for partition column */
-	typeEntry = lookup_type_cache(partitionColumn->vartype, TYPECACHE_HASH_PROC_FINFO);
-	hashFunction = &(typeEntry->hash_proc_finfo);
+	/* get hash function for partition column */
+	hashFunction = cacheEntry->hashFunction;
 
-	/* resolve compare function for shard intervals */
-	compareFunction = ShardIntervalCompareFunction(partitionColumn, partitionMethod);
+	/* get compare function for shard intervals */
+	compareFunction = cacheEntry->shardIntervalCompareFunction;
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -311,16 +300,26 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		}
 	}
 
+	/* error if any shard missing min/max values */
+	if (cacheEntry->hasUninitializedShardInterval)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("could not start copy"),
+						errdetail("Distributed relation \"%s\" has shards "
+								  "with missing shardminvalue/shardmaxvalue.",
+								  relationName)));
+	}
+
 	/* prevent concurrent placement changes and non-commutative DML statements */
 	LockAllShards(shardIntervalList);
 
 	/* initialize the shard interval cache */
-	shardCount = list_length(shardIntervalList);
-	shardIntervalCache = SortedShardIntervalArray(shardIntervalList);
+	shardCount = cacheEntry->shardIntervalArrayLength;
+	shardIntervalCache = cacheEntry->sortedShardIntervalArray;
+	hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
 
 	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH ||
-		!IsUniformHashDistribution(shardIntervalCache, shardCount))
+	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
 	{
 		useBinarySearch = true;
 	}
@@ -733,164 +732,6 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 	{
 		return 0;
 	}
-}
-
-
-/*
- * ShardIntervalCompareFunction returns the appropriate compare function for the
- * partition column type. In case of hash-partitioning, it always returns the compare
- * function for integers.
- */
-static FmgrInfo *
-ShardIntervalCompareFunction(Var *partitionColumn, char partitionMethod)
-{
-	FmgrInfo *compareFunction = NULL;
-
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		compareFunction = GetFunctionInfo(INT4OID, BTREE_AM_OID, BTORDER_PROC);
-	}
-	else if (partitionMethod == DISTRIBUTE_BY_RANGE)
-	{
-		compareFunction = GetFunctionInfo(partitionColumn->vartype,
-										  BTREE_AM_OID, BTORDER_PROC);
-	}
-	else
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("unsupported partition method %d", partitionMethod)));
-	}
-
-	return compareFunction;
-}
-
-
-/*
- * IsUniformHashDistribution determines whether the given list of sorted shards
- * has a uniform hash distribution, as produced by master_create_worker_shards.
- */
-static bool
-IsUniformHashDistribution(ShardInterval **shardIntervalArray, int shardCount)
-{
-	uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
-	int shardIndex = 0;
-
-	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
-	{
-		ShardInterval *shardInterval = shardIntervalArray[shardIndex];
-		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
-		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
-
-		if (shardIndex == (shardCount - 1))
-		{
-			shardMaxHashToken = INT32_MAX;
-		}
-
-		if (DatumGetInt32(shardInterval->minValue) != shardMinHashToken ||
-			DatumGetInt32(shardInterval->maxValue) != shardMaxHashToken)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
- * FindShardInterval finds a single shard interval in the cache for the
- * given partition column value.
- */
-static ShardInterval *
-FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-				  int shardCount, char partitionMethod, FmgrInfo *compareFunction,
-				  FmgrInfo *hashFunction, bool useBinarySearch)
-{
-	ShardInterval *shardInterval = NULL;
-
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		int hashedValue = DatumGetInt32(FunctionCall1(hashFunction,
-													  partitionColumnValue));
-		if (useBinarySearch)
-		{
-			shardInterval = SearchCachedShardInterval(Int32GetDatum(hashedValue),
-													  shardIntervalCache, shardCount,
-													  compareFunction);
-		}
-		else
-		{
-			uint64 hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
-			int shardIndex = (uint32) (hashedValue - INT32_MIN) / hashTokenIncrement;
-
-			Assert(shardIndex <= shardCount);
-
-			/*
-			 * If the shard count is not power of 2, the range of the last
-			 * shard becomes larger than others. For that extra piece of range,
-			 * we still need to use the last shard.
-			 */
-			if (shardIndex == shardCount)
-			{
-				shardIndex = shardCount - 1;
-			}
-
-			shardInterval = shardIntervalCache[shardIndex];
-		}
-	}
-	else
-	{
-		shardInterval = SearchCachedShardInterval(partitionColumnValue,
-												  shardIntervalCache, shardCount,
-												  compareFunction);
-	}
-
-	return shardInterval;
-}
-
-
-/*
- * SearchCachedShardInterval performs a binary search for a shard interval matching a
- * given partition column value and returns it.
- */
-static ShardInterval *
-SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-						  int shardCount, FmgrInfo *compareFunction)
-{
-	int lowerBoundIndex = 0;
-	int upperBoundIndex = shardCount;
-
-	while (lowerBoundIndex < upperBoundIndex)
-	{
-		int middleIndex = (lowerBoundIndex + upperBoundIndex) / 2;
-		int maxValueComparison = 0;
-		int minValueComparison = 0;
-
-		minValueComparison = FunctionCall2Coll(compareFunction,
-											   DEFAULT_COLLATION_OID,
-											   partitionColumnValue,
-											   shardIntervalCache[middleIndex]->minValue);
-
-		if (DatumGetInt32(minValueComparison) < 0)
-		{
-			upperBoundIndex = middleIndex;
-			continue;
-		}
-
-		maxValueComparison = FunctionCall2Coll(compareFunction,
-											   DEFAULT_COLLATION_OID,
-											   partitionColumnValue,
-											   shardIntervalCache[middleIndex]->maxValue);
-
-		if (DatumGetInt32(maxValueComparison) <= 0)
-		{
-			return shardIntervalCache[middleIndex];
-		}
-
-		lowerBoundIndex = middleIndex + 1;
-	}
-
-	return NULL;
 }
 
 

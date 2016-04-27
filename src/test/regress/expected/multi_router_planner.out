@@ -105,8 +105,8 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 -- first, test zero-shard SELECT, which should return an empty row
 SELECT COUNT(*) FROM articles_hash WHERE author_id = 1 AND author_id = 2;
-DEBUG:  predicate pruning for shardId 103301
 DEBUG:  predicate pruning for shardId 103300
+DEBUG:  predicate pruning for shardId 103301
  count 
 -------
       
@@ -1120,7 +1120,6 @@ DEBUG:  predicate pruning for shardId 103301
 -- insert query is router plannable even under task-tracker
 INSERT INTO articles_hash VALUES (51,  1, 'amateus', 1814);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
 DEBUG:  Plan is router executable
 -- verify insert is successfull (not router plannable and executable)
 SELECT id
