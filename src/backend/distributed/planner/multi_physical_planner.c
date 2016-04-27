@@ -1965,9 +1965,9 @@ SubquerySqlTaskList(Job *job)
 		List *shardIntervalList = LoadShardIntervalList(relationId);
 		List *finalShardIntervalList = NIL;
 		ListCell *fragmentCombinationCell = NULL;
+		ListCell *shardIntervalCell = NULL;
 		uint32 tableId = rangeTableIndex + 1; /* tableId starts from 1 */
 		uint32 finalShardCount = 0;
-		uint32 shardIndex = 0;
 
 		if (opExpressionList != NIL)
 		{
@@ -1991,9 +1991,9 @@ SubquerySqlTaskList(Job *job)
 
 		fragmentCombinationCell = list_head(fragmentCombinationList);
 
-		for (shardIndex = 0; shardIndex < finalShardCount; shardIndex++)
+		foreach(shardIntervalCell, finalShardIntervalList)
 		{
-			ShardInterval *shardInterval = list_nth(finalShardIntervalList, shardIndex);
+			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 
 			RangeTableFragment *shardFragment = palloc0(fragmentSize);
 			shardFragment->fragmentReference = &(shardInterval->shardId);
