@@ -22,6 +22,7 @@
 #include "access/skey.h"
 #endif
 #include "catalog/pg_type.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
@@ -38,6 +39,7 @@
 /* local function forward declarations */
 static Expr * MakeTextPartitionExpression(Oid distributedTableId, text *value);
 static ArrayType * PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList);
+static ArrayType * SortedShardIntervalArray(Oid distributedTableId);
 
 
 /* declarations for dynamic loading */
@@ -46,6 +48,7 @@ PG_FUNCTION_INFO_V1(prune_using_single_value);
 PG_FUNCTION_INFO_V1(prune_using_either_value);
 PG_FUNCTION_INFO_V1(prune_using_both_values);
 PG_FUNCTION_INFO_V1(debug_equality_expression);
+PG_FUNCTION_INFO_V1(print_sorted_shard_intervals);
 
 
 /*
@@ -141,6 +144,21 @@ debug_equality_expression(PG_FUNCTION_ARGS)
 
 
 /*
+ * print_sorted_shard_intervals prints the sorted shard interval array that is in the
+ * metadata cache. This function aims to test sorting functionality.
+ */
+Datum
+print_sorted_shard_intervals(PG_FUNCTION_ARGS)
+{
+	Oid distributedTableId = PG_GETARG_OID(0);
+
+	ArrayType *shardIdArrayType = SortedShardIntervalArray(distributedTableId);
+
+	PG_RETURN_ARRAYTYPE_P(shardIdArrayType);
+}
+
+
+/*
  * MakeTextPartitionExpression returns an equality expression between the
  * specified table's partition column and the provided values.
  */
@@ -205,6 +223,37 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 
 		shardIdDatumArray[shardIdIndex] = shardIdDatum;
 		shardIdIndex++;
+	}
+
+	shardIdArrayType = DatumArrayToArrayType(shardIdDatumArray, shardIdCount,
+											 shardIdTypeId);
+
+	return shardIdArrayType;
+}
+
+
+/*
+ * SortedShardIntervalArray simply returns the shard interval ids in the sorted shard
+ * interval cache as a datum array.
+ */
+static ArrayType *
+SortedShardIntervalArray(Oid distributedTableId)
+{
+	ArrayType *shardIdArrayType = NULL;
+	int shardIndex = 0;
+	Oid shardIdTypeId = INT8OID;
+
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	int shardIdCount = cacheEntry->shardIntervalArrayLength;
+	Datum *shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));
+
+	for (shardIndex = 0; shardIndex < shardIdCount; ++shardIndex)
+	{
+		ShardInterval *shardId = shardIntervalArray[shardIndex];
+		Datum shardIdDatum = Int64GetDatum(shardId->shardId);
+
+		shardIdDatumArray[shardIndex] = shardIdDatum;
 	}
 
 	shardIdArrayType = DatumArrayToArrayType(shardIdDatumArray, shardIdCount,

@@ -237,7 +237,6 @@ extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitio
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
 
 /* Function declarations for sorting shards. */
-extern ShardInterval ** SortedShardIntervalArray(List *shardList);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 

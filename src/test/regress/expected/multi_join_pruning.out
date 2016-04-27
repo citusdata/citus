@@ -9,12 +9,12 @@ SET client_min_messages TO DEBUG2;
 SET citus.large_table_shard_count TO 2;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
-DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
 DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
+DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
+DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -22,12 +22,12 @@ DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
 DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  17996 | 3.0194630872483221
@@ -37,12 +37,12 @@ DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 -- works as expected in this case.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
-DEBUG:  predicate pruning for shardId 102014
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102012
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 102012
+DEBUG:  predicate pruning for shardId 102013
+DEBUG:  predicate pruning for shardId 102014
  sum | avg 
 -----+-----
      |    
@@ -53,13 +53,13 @@ DEBUG:  predicate pruning for shardId 102009
 -- out all the shards, and leave us with an empty task list.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102010
 DEBUG:  predicate pruning for shardId 102009
+DEBUG:  predicate pruning for shardId 102010
+DEBUG:  predicate pruning for shardId 102011
 DEBUG:  predicate pruning for shardId 102016
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
 DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
+DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
+DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
  sum | avg 
 -----+-----
      |    
@@ -72,8 +72,8 @@ DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 EXPLAIN SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
-DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
 DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
+DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
@@ -82,8 +82,8 @@ DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1
 EXPLAIN SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
-DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
 DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
+DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
@@ -93,8 +93,8 @@ DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
 EXPLAIN SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
-DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
 DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
+DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported

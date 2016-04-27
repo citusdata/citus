@@ -73,25 +73,25 @@ DEBUG:  predicate pruning for shardId 111
 (1 row)
 
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 113
 DEBUG:  predicate pruning for shardId 112
 DEBUG:  predicate pruning for shardId 110
+DEBUG:  predicate pruning for shardId 113
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
 (1 row)
 
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
-DEBUG:  predicate pruning for shardId 111
 DEBUG:  predicate pruning for shardId 110
+DEBUG:  predicate pruning for shardId 111
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
 (1 row)
 
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
-DEBUG:  predicate pruning for shardId 111
 DEBUG:  predicate pruning for shardId 110
+DEBUG:  predicate pruning for shardId 111
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
@@ -99,8 +99,8 @@ DEBUG:  predicate pruning for shardId 110
 
 EXPLAIN SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
 DEBUG:  predicate pruning for shardId 112
-DEBUG:  predicate pruning for shardId 111
 DEBUG:  predicate pruning for shardId 110
+DEBUG:  predicate pruning for shardId 111
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
@@ -231,14 +231,14 @@ DEBUG:  predicate pruning for shardId 111
 EXPLAIN SELECT count(*)
 	FROM orders_hash_partitioned orders1, orders_hash_partitioned orders2
 	WHERE orders1.o_orderkey = orders2.o_orderkey;
-DEBUG:  join prunable for intervals [-1011077333,0] and [1134484726,1134484726]
-DEBUG:  join prunable for intervals [-1011077333,0] and [-1905060026,-1905060026]
 DEBUG:  join prunable for intervals [-1905060026,-28094569] and [1134484726,1134484726]
-DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1011077333,0]
-DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1905060026,-28094569]
-DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1905060026,-1905060026]
 DEBUG:  join prunable for intervals [-1905060026,-1905060026] and [-1011077333,0]
 DEBUG:  join prunable for intervals [-1905060026,-1905060026] and [1134484726,1134484726]
+DEBUG:  join prunable for intervals [-1011077333,0] and [-1905060026,-1905060026]
+DEBUG:  join prunable for intervals [-1011077333,0] and [1134484726,1134484726]
+DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1905060026,-28094569]
+DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1905060026,-1905060026]
+DEBUG:  join prunable for intervals [1134484726,1134484726] and [-1011077333,0]
                               QUERY PLAN                              
 ----------------------------------------------------------------------
  explain statements for distributed queries are currently unsupported
@@ -252,8 +252,8 @@ EXPLAIN SELECT count(*)
 DEBUG:  predicate pruning for shardId 113
 DEBUG:  predicate pruning for shardId 111
 DEBUG:  predicate pruning for shardId 112
-DEBUG:  predicate pruning for shardId 111
 DEBUG:  predicate pruning for shardId 110
+DEBUG:  predicate pruning for shardId 111
 DEBUG:  join prunable for intervals [-1905060026,-1905060026] and [-1011077333,0]
                               QUERY PLAN                              
 ----------------------------------------------------------------------

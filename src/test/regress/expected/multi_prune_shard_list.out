@@ -21,6 +21,10 @@ CREATE FUNCTION debug_equality_expression(regclass)
 	RETURNS cstring
 	AS 'citus'
 	LANGUAGE C STRICT;
+CREATE FUNCTION print_sorted_shard_intervals(regclass)
+	RETURNS text[]
+	AS 'citus'
+	LANGUAGE C STRICT;
 -- ===================================================================
 -- test shard pruning functionality
 -- ===================================================================
@@ -40,7 +44,7 @@ VALUES
 SELECT prune_using_no_values('pruning');
  prune_using_no_values 
 -----------------------
- {13,12,11,10}
+ {10,11,12,13}
 (1 row)
 
 -- with a single value, expect a single shard
@@ -61,7 +65,7 @@ SELECT prune_using_single_value('pruning', NULL);
 SELECT prune_using_either_value('pruning', 'tomato', 'petunia');
  prune_using_either_value 
 --------------------------
- {12,11}
+ {11,12}
 (1 row)
 
 -- an AND clause with incompatible values returns no shards
@@ -83,5 +87,90 @@ SELECT debug_equality_expression('pruning');
                                                                                                                                                                            debug_equality_expression                                                                                                                                                                            
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  {OPEXPR :opno 98 :opfuncid 67 :opresulttype 16 :opretset false :opcollid 0 :inputcollid 100 :args ({VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} {CONST :consttype 25 :consttypmod -1 :constcollid 100 :constlen -1 :constbyval false :constisnull true :location -1 :constvalue <>}) :location -1}
+(1 row)
+
+-- print the initial ordering of shard intervals
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,11,12,13}
+(1 row)
+
+-- update only min value for one shard
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 11;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,12,13,11}
+(1 row)
+
+-- now lets have one more shard without min/max values
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 12;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,13,11,12}
+(1 row)
+
+-- now lets have one more shard without min/max values
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 10;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {13,10,11,12}
+(1 row)
+
+-- all shard placements are uninitialized
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 13;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,11,12,13}
+(1 row)
+
+-- now update the metadata so that the table is a range distributed table
+UPDATE pg_dist_partition SET partmethod = 'r' WHERE logicalrelid = 'pruning'::regclass;
+-- now the comparison is done via the partition column type, which is text
+UPDATE pg_dist_shard SET shardminvalue = 'a', shardmaxvalue = 'b' WHERE shardid = 10;
+UPDATE pg_dist_shard SET shardminvalue = 'c', shardmaxvalue = 'd' WHERE shardid = 11;
+UPDATE pg_dist_shard SET shardminvalue = 'e', shardmaxvalue = 'f' WHERE shardid = 12;
+UPDATE pg_dist_shard SET shardminvalue = 'g', shardmaxvalue = 'h' WHERE shardid = 13;
+-- print the ordering of shard intervals with range partitioning as well
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,11,12,13}
+(1 row)
+
+-- update only min value for one shard
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 11;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,12,13,11}
+(1 row)
+
+-- now lets have one more shard without min/max values
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 12;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,13,11,12}
+(1 row)
+
+-- now lets have one more shard without min/max values
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 10;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {13,10,11,12}
+(1 row)
+
+-- all shard placements are uninitialized
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 13;
+SELECT print_sorted_shard_intervals('pruning');
+ print_sorted_shard_intervals 
+------------------------------
+ {10,11,12,13}
 (1 row)
 

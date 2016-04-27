@@ -11,6 +11,7 @@
 #ifndef METADATA_CACHE_H
 #define METADATA_CACHE_H
 
+#include "fmgr.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
 
@@ -31,6 +32,8 @@ typedef struct
 	bool isValid;
 
 	bool isDistributedTable;
+	bool hasUninitializedShardInterval;
+	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
 
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;
@@ -38,7 +41,10 @@ typedef struct
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
-	ShardInterval *shardIntervalArray;
+	ShardInterval **sortedShardIntervalArray;
+
+	FmgrInfo *shardIntervalCompareFunction; /* NULL if no shard intervals exist */
+	FmgrInfo *hashFunction; /* NULL if table is not distributed by hash */
 } DistTableCacheEntry;
 
 
