@@ -321,14 +321,6 @@ LookupDistTableCacheEntry(Oid relationId)
 													  shardIntervalArrayLength,
 													  shardIntervalCompareFunction);
 
-	/* check the shard distribution for hash partitioned tables */
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		hasUniformHashDistribution =
-			HasUniformHashDistribution(sortedShardIntervalArray,
-									   shardIntervalArrayLength);
-	}
-
 	/* check if there exists any shard intervals with no min/max values */
 	hasUninitializedShardInterval =
 		HasUninitializedShardInterval(sortedShardIntervalArray, shardIntervalArrayLength);
@@ -347,6 +339,11 @@ LookupDistTableCacheEntry(Oid relationId)
 											  sizeof(FmgrInfo));
 
 		fmgr_info_copy(hashFunction, &(typeEntry->hash_proc_finfo), CacheMemoryContext);
+
+		/* check the shard distribution for hash partitioned tables */
+		hasUniformHashDistribution =
+			HasUniformHashDistribution(sortedShardIntervalArray,
+									   shardIntervalArrayLength);
 	}
 
 	cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER, NULL);
