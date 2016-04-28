@@ -317,8 +317,24 @@ WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
 UPDATE limit_orders SET symbol = 'GM';
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Common table expressions are not supported in distributed modifications.
+SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
+ symbol | bidder_id 
+--------+-----------
+ GM     |        18
+(1 row)
+
+-- updates referencing just a var are supported
+UPDATE limit_orders SET bidder_id = id WHERE id = 246;
 -- updates referencing a column are supported
 UPDATE limit_orders SET bidder_id = bidder_id + 1 WHERE id = 246;
+-- pure functions are allowed
+UPDATE limit_orders SET symbol = LOWER(symbol) WHERE id = 246;
+SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
+ symbol | bidder_id 
+--------+-----------
+ gm     |       247
+(1 row)
+
 -- updates referencing an unpure function are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
 ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions

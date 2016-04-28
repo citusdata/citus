@@ -235,8 +235,18 @@ UPDATE limit_orders SET symbol = 'GM' WHERE id = 246 RETURNING *;
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
 UPDATE limit_orders SET symbol = 'GM';
 
+SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
+
+-- updates referencing just a var are supported
+UPDATE limit_orders SET bidder_id = id WHERE id = 246;
+
 -- updates referencing a column are supported
 UPDATE limit_orders SET bidder_id = bidder_id + 1 WHERE id = 246;
+
+-- pure functions are allowed
+UPDATE limit_orders SET symbol = LOWER(symbol) WHERE id = 246;
+
+SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
 
 -- updates referencing an unpure function are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
