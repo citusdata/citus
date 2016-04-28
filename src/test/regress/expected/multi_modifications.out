@@ -155,16 +155,16 @@ SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
-ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
 -- commands with expressions that cannot be collapsed are unsupported
 INSERT INTO limit_orders VALUES (2036, 'GOOG', 5634, now(), 'buy', random());
-ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
 -- commands with mutable functions in their quals
 DELETE FROM limit_orders WHERE id = 246 AND bidder_id = (random() * 1000);
-ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
 -- commands with mutable but non-volatilte functions(ie: stable func.) in their quals
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp;
-ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
 -- commands with multiple rows are unsupported
 INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
 ERROR:  cannot perform distributed planning for the given modification
@@ -337,7 +337,7 @@ SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
 
 -- updates referencing non-IMMUTABLE functions are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
-ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
+ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
 -- cursors are not supported
 UPDATE limit_orders SET symbol = 'GM' WHERE CURRENT OF cursor_name;
 ERROR:  distributed modifications must target exactly one shard
