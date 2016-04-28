@@ -68,9 +68,9 @@ static const struct config_enum_entry shard_placement_policy_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry transaction_manager_options[] = {
-	{ "1pc", TRANSACTION_MANAGER_1PC, false },
-	{ "2pc", TRANSACTION_MANAGER_2PC, false },
+static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
+	{ "1pc", COMMIT_PROTOCOL_1PC, false },
+	{ "2pc", COMMIT_PROTOCOL_2PC, false },
 	{ NULL, 0, false }
 };
 
@@ -448,16 +448,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citus.copy_transaction_manager",
-		gettext_noop("Sets the transaction manager for COPY into distributed tables."),
-		gettext_noop("When a failure occurs during when copying into a distributed "
-					 "table, 2PC is required to ensure data is never lost. Change "
-					 "this setting to '2pc' from its default '1pc' to enable 2PC."
-					 "You must also set max_prepared_transactions on the worker "
-					 "nodes. Recovery from failed 2PCs is currently manual."),
-		&CopyTransactionManager,
-		TRANSACTION_MANAGER_1PC,
-		transaction_manager_options,
+		"citus.multi_shard_commit_protocol",
+		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),
+		gettext_noop("When a failure occurs during commands that modify multiple "
+					 "shards (currently, only COPY on distributed tables modifies more "
+					 "than one shard), two-phase commit is required to ensure data is "
+					 "never lost. Change this setting to '2pc' from its default '1pc' to "
+					 "enable 2 PC. You must also set max_prepared_transactions on the "
+					 "worker nodes. Recovery from failed 2PCs is currently manual."),
+		&MultiShardCommitProtocol,
+		COMMIT_PROTOCOL_1PC,
+		multi_shard_commit_protocol_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
