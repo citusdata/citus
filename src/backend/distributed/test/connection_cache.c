@@ -18,6 +18,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <sys/socket.h>
 
 #include "catalog/pg_type.h"
 #include "distributed/connection_cache.h"
@@ -129,13 +130,16 @@ get_and_purge_connection(PG_FUNCTION_ARGS)
 
 /*
  * set_connection_status_bad does not remove the given connection from the connection hash.
- * It only sets its status to CONNECTION_BAD. On success, it returns true.
+ * It simply shuts down the underlying socket. On success, it returns true.
  */
 Datum
 set_connection_status_bad(PG_FUNCTION_ARGS)
 {
 	char *nodeName = PG_GETARG_CSTRING(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	int socket = -1;
+	int shutdownStatus = 0;
+	int pqStatus PG_USED_FOR_ASSERTS_ONLY = 0;
 
 	PGconn *connection = GetOrEstablishConnection(nodeName, nodePort);
 	if (connection == NULL)
@@ -143,8 +147,18 @@ set_connection_status_bad(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 	}
 
-	/* set the connection status */
-	SetConnectionStatus(connection, CONNECTION_BAD);
+	/* Prevent further reads/writes... */
+	socket = PQsocket(connection);
+	shutdownStatus = shutdown(socket, SHUT_RDWR);
+	if (shutdownStatus != 0)
+	{
+		ereport(ERROR, (errcode_for_socket_access(), errmsg("shutdown failed")));
+	}
+
+	/* ... and make libpq notice by reading data. */
+	pqStatus = PQconsumeInput(connection);
+
+	Assert(pqStatus == 0); /* expect failure */
 
 	PG_RETURN_BOOL(true);
 }
