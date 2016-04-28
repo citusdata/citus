@@ -243,12 +243,12 @@ UPDATE limit_orders SET bidder_id = id WHERE id = 246;
 -- updates referencing a column are supported
 UPDATE limit_orders SET bidder_id = bidder_id + 1 WHERE id = 246;
 
--- pure functions are allowed
+-- IMMUTABLE functions are allowed
 UPDATE limit_orders SET symbol = LOWER(symbol) WHERE id = 246;
 
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
 
--- updates referencing an unpure function are unsupported
+-- updates referencing non-IMMUTABLE functions are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
 
 -- cursors are not supported
