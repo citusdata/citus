@@ -1729,6 +1729,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 		bool hasUninitializedShardInterval = false;
 		uint32 shardCount = cache->shardIntervalArrayLength;
 		ShardInterval **sortedShardIntervalArray = cache->sortedShardIntervalArray;
+		char basePartitionMethod PG_USED_FOR_ASSERTS_ONLY = 0;
 
 		hasUninitializedShardInterval = cache->hasUninitializedShardInterval;
 		if (hasUninitializedShardInterval)
@@ -1737,9 +1738,9 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 								   "missing min/max values")));
 		}
 
+		basePartitionMethod = PartitionMethod(baseRelationId);
+
 		/* this join-type currently doesn't work for hash partitioned tables */
-		char basePartitionMethod PG_USED_FOR_ASSERTS_ONLY =
-			PartitionMethod(baseRelationId);
 		Assert(basePartitionMethod != DISTRIBUTE_BY_HASH);
 
 		mapMergeJob->partitionType = RANGE_PARTITION_TYPE;
