@@ -335,7 +335,7 @@ SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
  gm     |       247
 (1 row)
 
--- updates referencing non-IMMUTABLE function are unsupported
+-- updates referencing non-IMMUTABLE functions are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
 ERROR:  cannot plan sharded modification containing values which are not constants or constant expressions
 -- cursors are not supported
