@@ -272,7 +272,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 				continue;
 			}
 
-			if (!IsA(targetEntry->expr, Const))
+			if (contain_mutable_functions((Node *) targetEntry->expr))
 			{
 				hasNonConstTargetEntryExprs = true;
 			}
@@ -354,8 +354,8 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	if (hasNonConstTargetEntryExprs || hasNonConstQualExprs)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot plan sharded modification containing values "
-							   "which are not constants or constant expressions")));
+						errmsg("functions used in modification queries on distributed "
+							   "tables must be marked IMMUTABLE")));
 	}
 
 	if (specifiesPartitionValue)
