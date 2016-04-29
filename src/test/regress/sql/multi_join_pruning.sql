@@ -6,6 +6,7 @@
 -- we only check for join-pruning between locally partitioned relations. In the
 -- future we want to check for pruning between re-partitioned relations as well.
 
+SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 
 -- Change configuration to treat all tables as large

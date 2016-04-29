@@ -30,8 +30,6 @@ int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
 
-static bool RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType);
-
 
 /*
  * JobExecutorType selects the executor type for the given multiPlan using the task
@@ -116,7 +114,7 @@ JobExecutorType(MultiPlan *multiPlan)
  * router executor. Modify queries are always router executable, select queries
  * are router executable only if executorType is real time.
  */
-static bool
+bool
 RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 {
 	Job *job = multiPlan->workerJob;

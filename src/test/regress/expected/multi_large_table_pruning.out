@@ -57,8 +57,8 @@ WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
 DEBUG:  predicate pruning for shardId 102017
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102033
+DEBUG:  predicate pruning for shardId 102038
+DEBUG:  predicate pruning for shardId 102037
  count 
 -------
       
