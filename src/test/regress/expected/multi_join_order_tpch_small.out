@@ -2,6 +2,7 @@
 -- MULTI_JOIN_ORDER_TPCH_SMALL
 --
 -- Enable configuration to print table join order
+SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 -- Change configuration to treat lineitem and orders tables as large
@@ -17,9 +18,9 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Query #3 from the TPC-H decision support benchmark
@@ -46,9 +47,9 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ broadcast join "customer" ][ local partition join "lineitem" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Query #10 from the TPC-H decision support benchmark
@@ -84,9 +85,9 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ broadcast join "customer" ][ broadcast join "nation" ][ local partition join "lineitem" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
@@ -120,9 +121,9 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ broadcast join "part" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Reset client logging level to its previous value

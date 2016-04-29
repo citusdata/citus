@@ -4,6 +4,7 @@
 
 -- Enable configuration to print table join order
 
+SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 

@@ -2,6 +2,7 @@
 -- MULTI_JOIN_ORDER_ADDITIONAL
 --
 -- Set configuration to print table join order and pruned shards
+SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO DEBUG2;
 -- The following query checks that we can correctly handle self-joins
@@ -36,9 +37,9 @@ DEBUG:  join prunable for intervals [13921,14947] and [2497,4964]
 DEBUG:  join prunable for intervals [13921,14947] and [4965,5986]
 DEBUG:  join prunable for intervals [13921,14947] and [8997,11554]
 DEBUG:  join prunable for intervals [13921,14947] and [11554,13920]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Update configuration to treat lineitem and orders tables as large
@@ -51,9 +52,9 @@ EXPLAIN SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 EXPLAIN SELECT l_quantity FROM lineitem, orders
@@ -72,9 +73,9 @@ UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 EXPLAIN SELECT count(*) FROM orders, lineitem
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ single partition join "lineitem" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Verify we handle local joins between two hash-partitioned tables.
@@ -83,9 +84,9 @@ UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 EXPLAIN SELECT count(*) FROM orders, lineitem
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 UPDATE pg_dist_partition SET partmethod = 'a' WHERE
@@ -98,9 +99,9 @@ UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 EXPLAIN SELECT count(*) FROM customer, nation
 	WHERE c_nationkey = n_nationkey;
 LOG:  join order: [ "customer" ][ broadcast join "nation" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 UPDATE pg_dist_partition SET partmethod = 'a' WHERE
@@ -112,9 +113,9 @@ SET citus.large_table_shard_count TO 1;
 EXPLAIN SELECT count(*) FROM orders, lineitem, customer
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 -- Validate that we don't chose a single-partition join method with a
@@ -124,9 +125,9 @@ UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 EXPLAIN SELECT count(*) FROM orders, customer
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ dual partition join "customer" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 UPDATE pg_dist_partition SET partmethod = 'a' WHERE
@@ -138,9 +139,9 @@ UPDATE pg_dist_partition SET partmethod = 'h' WHERE
 EXPLAIN SELECT count(*) FROM orders, customer
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ single partition join "customer" ]
-                              QUERY PLAN                              
-----------------------------------------------------------------------
- explain statements for distributed queries are currently unsupported
+                         QUERY PLAN                         
+------------------------------------------------------------
+ explain statements for distributed queries are not enabled
 (1 row)
 
 UPDATE pg_dist_partition SET partmethod = 'a' WHERE

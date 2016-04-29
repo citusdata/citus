@@ -42,7 +42,7 @@ SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
 SELECT count(*) FROM customer_delete_protocol;
 
 -- Verify that empty shards are deleted if no condition is provided
-SELECT master_create_empty_shard('customer_delete_protocol');
+SELECT 1 AS one FROM master_create_empty_shard('customer_delete_protocol');
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_custkey > 1000');
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
