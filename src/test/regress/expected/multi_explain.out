@@ -288,7 +288,7 @@ Distributed Query
                     ->  Bitmap Index Scan on lineitem_pkey_102009
                           Index Cond: (l_orderkey = 1)
 -- Test single-shard SELECT
-EXPLAIN 
+EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 Distributed Query into pg_merge_job_0047
   Executor: Router
@@ -296,12 +296,13 @@ Distributed Query into pg_merge_job_0047
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Bitmap Heap Scan on lineitem_102009 lineitem  (cost=4.31..19.58 rows=5 width=18)
+        ->  Bitmap Heap Scan on lineitem_102009 lineitem
               Recheck Cond: (l_orderkey = 5)
-              ->  Bitmap Index Scan on lineitem_pkey_102009  (cost=0.00..4.31 rows=5 width=0)
+              ->  Bitmap Index Scan on lineitem_pkey_102009
                     Index Cond: (l_orderkey = 5)
 -- Test CREATE TABLE ... AS
-EXPLAIN CREATE TABLE explain_result AS
+EXPLAIN (COSTS FALSE)
+	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
 Distributed Query into pg_merge_job_0048
   Executor: Real-Time
@@ -309,9 +310,9 @@ Distributed Query into pg_merge_job_0048
   Tasks Shown: One of 6
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Seq Scan on lineitem_102010 lineitem  (cost=0.00..58.80 rows=980 width=374)
+        ->  Seq Scan on lineitem_102010 lineitem
 Master Query
-  ->  Seq Scan on pg_merge_job_0048  (cost=0.00..0.00 rows=0 width=0)
+  ->  Seq Scan on pg_merge_job_0048
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)

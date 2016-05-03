@@ -57,11 +57,12 @@ EXPLAIN (COSTS FALSE)
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 
 -- Test single-shard SELECT
-EXPLAIN 
+EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 
 -- Test CREATE TABLE ... AS
-EXPLAIN CREATE TABLE explain_result AS
+EXPLAIN (COSTS FALSE)
+	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
 
 -- Test all tasks output
