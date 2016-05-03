@@ -206,18 +206,8 @@ multi_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 
 	if (eflags & EXEC_FLAG_CITUS_ROUTER_EXECUTOR)
 	{
-		Task *task = NULL;
-		PlannedStmt *planStatement = queryDesc->plannedstmt;
-		MultiPlan *multiPlan = GetMultiPlan(planStatement);
-		List *taskList = multiPlan->workerJob->taskList;
-
-		/* router executor can only execute distributed plans with a single task */
-		Assert(list_length(taskList) == 1);
-
-		task = (Task *) linitial(taskList);
-
 		/* drop into the router executor */
-		RouterExecutorRun(queryDesc, direction, count, task);
+		RouterExecutorRun(queryDesc, direction, count);
 	}
 	else
 	{
