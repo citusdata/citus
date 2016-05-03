@@ -154,3 +154,8 @@ test: multi_drop_extension
 # multi_schema_support makes sure we can work with tables in schemas other than public with no problem
 # ----------
 test: multi_schema_support
+
+# ----------
+# multi_function_evaluation tests edge-cases in master-side function pre-evaluation
+# ----------
+test: multi_function_evaluation
