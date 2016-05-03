@@ -11,6 +11,7 @@
 
 #include "access/htup_details.h"
 #include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
@@ -25,11 +26,13 @@
 #include "distributed/transmit.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "foreign/foreign.h"
 #include "executor/executor.h"
 #include "parser/parser.h"
 #include "parser/parse_utilcmd.h"
 #include "storage/lmgr.h"
 #include "tcop/pquery.h"
+#include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
@@ -70,6 +73,7 @@ static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
 /* Local functions forward declarations for helper functions */
+static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString);
 static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString,
@@ -311,28 +315,52 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 	 */
 	if (copyStatement->relation != NULL)
 	{
-		Relation copiedRelation = NULL;
 		bool isDistributedRelation = false;
-		bool isFrom = copyStatement->is_from;
+		bool isCopyFromWorker = IsCopyFromWorker(copyStatement);
 
-		/* consider using RangeVarGetRelidExtended to check perms before locking */
-		copiedRelation = heap_openrv(copyStatement->relation,
-									 isFrom ? RowExclusiveLock : AccessShareLock);
+		if (isCopyFromWorker)
+		{
+			RangeVar *relation = copyStatement->relation;
+			NodeAddress *masterNodeAddress = MasterNodeAddress(copyStatement);
+			char *nodeName = masterNodeAddress->nodeName;
+			int32 nodePort = masterNodeAddress->nodePort;
 
-		isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
+			CreateLocalTable(relation, nodeName, nodePort);
 
-		/* ensure future lookups hit the same relation */
-		copyStatement->relation->schemaname = get_namespace_name(
-			RelationGetNamespace(copiedRelation));
+			/*
+			 * We expect copy from worker to be on a distributed table; otherwise,
+			 * it fails in CitusCopyFrom() while checking the partition method.
+			 */
+			isDistributedRelation = true;
+		}
+		else
+		{
+			bool isFrom = copyStatement->is_from;
+			Relation copiedRelation = NULL;
 
-		heap_close(copiedRelation, NoLock);
+			/* consider using RangeVarGetRelidExtended to check perms before locking */
+			copiedRelation = heap_openrv(copyStatement->relation,
+										 isFrom ? RowExclusiveLock : AccessShareLock);
+
+			isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
+
+			/* ensure future lookups hit the same relation */
+			copyStatement->relation->schemaname = get_namespace_name(
+				RelationGetNamespace(copiedRelation));
+
+			heap_close(copiedRelation, NoLock);
+		}
 
 		if (isDistributedRelation)
 		{
 			if (copyStatement->is_from)
 			{
 				/* check permissions, we're bypassing postgres' normal checks */
-				CheckCopyPermissions(copyStatement);
+				if (!isCopyFromWorker)
+				{
+					CheckCopyPermissions(copyStatement);
+				}
+
 				CitusCopyFrom(copyStatement, completionTag);
 				return NULL;
 			}
@@ -830,6 +858,82 @@ ErrorIfDistributedRenameStmt(RenameStmt *renameStatement)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("renaming distributed tables or their objects is "
 							   "currently unsupported")));
+	}
+}
+
+
+/*
+ * CreateLocalTable gets DDL commands from the remote node for the given
+ * relation. Then, it creates the local relation as temporary and on commit drop.
+ */
+static void
+CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
+{
+	List *ddlCommandList = NIL;
+	ListCell *ddlCommandCell = NULL;
+
+	char *relationName = relation->relname;
+	char *schemaName = relation->schemaname;
+	char *qualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+	/* fetch the ddl commands needed to create the table */
+	StringInfo tableNameStringInfo = makeStringInfo();
+	appendStringInfoString(tableNameStringInfo, qualifiedName);
+
+	/*
+	 * The warning message created in TableDDLCommandList() is descriptive
+	 * enough; therefore, we just throw an error which says that we could not
+	 * run the copy operation.
+	 */
+	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableNameStringInfo);
+	if (ddlCommandList == NIL)
+	{
+		ereport(ERROR, (errmsg("could not run copy from the worker node")));
+	}
+
+	/* apply DDL commands against the local database */
+	foreach(ddlCommandCell, ddlCommandList)
+	{
+		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
+		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
+		bool applyDDLCommand = false;
+
+		if (IsA(ddlCommandNode, CreateStmt) ||
+			IsA(ddlCommandNode, CreateForeignTableStmt))
+		{
+			CreateStmt *createStatement = (CreateStmt *) ddlCommandNode;
+
+			/* create the local relation as temporary and on commit drop */
+			createStatement->relation->relpersistence = RELPERSISTENCE_TEMP;
+			createStatement->oncommit = ONCOMMIT_DROP;
+
+			/* temporarily strip schema name */
+			createStatement->relation->schemaname = NULL;
+
+			applyDDLCommand = true;
+		}
+		else if (IsA(ddlCommandNode, CreateForeignServerStmt))
+		{
+			CreateForeignServerStmt *createServerStmt =
+				(CreateForeignServerStmt *) ddlCommandNode;
+			if (GetForeignServerByName(createServerStmt->servername, true) == NULL)
+			{
+				/* create server if not exists */
+				applyDDLCommand = true;
+			}
+		}
+		else if ((IsA(ddlCommandNode, CreateExtensionStmt)))
+		{
+			applyDDLCommand = true;
+		}
+
+		/* run only a selected set of DDL commands */
+		if (applyDDLCommand)
+		{
+			ProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
+						   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+			CommandCounterIncrement();
+		}
 	}
 }
 

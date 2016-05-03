@@ -54,6 +54,7 @@ static StringInfo WorkerPartitionValue(char *nodeName, uint32 nodePort, Oid rela
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
 PG_FUNCTION_INFO_V1(master_append_table_to_shard);
+PG_FUNCTION_INFO_V1(master_update_shard_statistics);
 
 
 /*
@@ -269,13 +270,29 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	RESUME_INTERRUPTS();
 
 	/* update shard statistics and get new shard size */
-	newShardSize = UpdateShardStatistics(relationId, shardId);
+	newShardSize = UpdateShardStatistics(shardId);
 
 	/* calculate ratio of current shard size compared to shard max size */
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 	shardFillLevel = ((float4) newShardSize / (float4) shardMaxSizeInBytes);
 
 	PG_RETURN_FLOAT4(shardFillLevel);
+}
+
+
+/*
+ * master_update_shard_statistics updates metadata (shard size and shard min/max
+ * values) of the given shard and returns the updated shard size.
+ */
+Datum
+master_update_shard_statistics(PG_FUNCTION_ARGS)
+{
+	int64 shardId = PG_GETARG_INT64(0);
+	uint64 shardSize = 0;
+
+	shardSize = UpdateShardStatistics(shardId);
+
+	PG_RETURN_INT64(shardSize);
 }
 
 
@@ -401,15 +418,16 @@ WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
 
 
 /*
- * UpdateShardStatistics updates metadata for the given shard id and returns
- * the new shard size.
+ * UpdateShardStatistics updates metadata (shard size and shard min/max values)
+ * of the given shard and returns the updated shard size.
  */
 uint64
-UpdateShardStatistics(Oid relationId, int64 shardId)
+UpdateShardStatistics(int64 shardId)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid relationId = shardInterval->relationId;
 	char storageType = shardInterval->storageType;
-	char *shardName = NULL;
+	char *shardQualifiedName = NULL;
 	List *shardPlacementList = NIL;
 	ListCell *shardPlacementCell = NULL;
 	bool statsOK = false;
@@ -418,11 +436,17 @@ UpdateShardStatistics(Oid relationId, int64 shardId)
 	text *maxValue = NULL;
 
 	/* if shard doesn't have an alias, extend regular table name */
-	shardName = LoadShardAlias(relationId, shardId);
-	if (shardName == NULL)
+	shardQualifiedName = LoadShardAlias(relationId, shardId);
+	if (shardQualifiedName == NULL)
 	{
-		shardName = get_rel_name(relationId);
-		AppendShardIdToName(&shardName, shardId);
+		char *relationName = get_rel_name(relationId);
+
+		Oid schemaId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(schemaId);
+
+		shardQualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+		AppendShardIdToName(&shardQualifiedName, shardId);
 	}
 
 	shardPlacementList = FinalizedShardPlacementList(shardId);
@@ -434,7 +458,7 @@ UpdateShardStatistics(Oid relationId, int64 shardId)
 		char *workerName = placement->nodeName;
 		uint32 workerPort = placement->nodePort;
 
-		statsOK = WorkerShardStats(workerName, workerPort, relationId, shardName,
+		statsOK = WorkerShardStats(workerName, workerPort, relationId, shardQualifiedName,
 								   &shardSize, &minValue, &maxValue);
 		if (statsOK)
 		{
@@ -451,7 +475,8 @@ UpdateShardStatistics(Oid relationId, int64 shardId)
 	 */
 	if (!statsOK)
 	{
-		ereport(WARNING, (errmsg("could not get statistics for shard %s", shardName),
+		ereport(WARNING, (errmsg("could not get statistics for shard %s",
+								 shardQualifiedName),
 						  errdetail("Setting shard statistics to NULL")));
 	}
 
