@@ -2007,12 +2007,12 @@ SubquerySqlTaskList(Job *job)
 		{
 			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 
-			tableSize += ShardLength(shardInterval->shardId);
-
 			RangeTableFragment *shardFragment = palloc0(fragmentSize);
 			shardFragment->fragmentReference = &(shardInterval->shardId);
 			shardFragment->fragmentType = CITUS_RTE_RELATION;
 			shardFragment->rangeTableId = tableId;
+
+			tableSize += ShardLength(shardInterval->shardId);
 
 			if (tableId == 1)
 			{
