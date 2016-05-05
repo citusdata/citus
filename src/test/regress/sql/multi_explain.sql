@@ -4,6 +4,7 @@
 
 \a\t
 
+SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
 
 -- Test Text format
