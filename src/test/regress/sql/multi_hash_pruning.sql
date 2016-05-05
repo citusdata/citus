@@ -27,11 +27,38 @@ SET client_min_messages TO DEBUG2;
 -- Check that we can prune shards for simple cases, boolean expressions and
 -- immutable functions.
 
+
+-- Since router plans are not triggered for task-tracker executor type,
+-- we need to run the tests that triggers router planning seperately for
+-- both executors. Otherwise, check-full fails on the task-tracker.
+-- Later, we need to switch back to the actual task executor
+-- to contuinue with correct executor type for check-full.
+SELECT quote_literal(current_setting('citus.task_executor_type')) AS actual_task_executor
+\gset
+
+SET citus.task_executor_type TO 'real-time';
 SELECT count(*) FROM orders_hash_partitioned;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
+
+
+SET citus.task_executor_type TO 'task-tracker';
+SELECT count(*) FROM orders_hash_partitioned;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
+SELECT count(*) FROM orders_hash_partitioned
+	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
+SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
+
+SET citus.task_executor_type TO :actual_task_executor;
+
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
@@ -41,15 +68,11 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_clerk = 'aaa';
 SELECT count(*) FROM orders_hash_partitioned
-	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
-SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
 SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
-
-SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
 -- Check that we don't support pruning for ANY (array expression) and give
 -- a notice message when used with the partition column
