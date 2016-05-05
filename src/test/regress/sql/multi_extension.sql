@@ -14,6 +14,7 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '5.0';
 ALTER EXTENSION citus UPDATE TO '5.0-1';
 ALTER EXTENSION citus UPDATE TO '5.0-2';
+ALTER EXTENSION citus UPDATE TO '5.1-1';
 
 -- drop extension an re-create in newest version
 DROP EXTENSION citus;
