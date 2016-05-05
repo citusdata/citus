@@ -29,7 +29,7 @@ $(EXTENSION)--5.0.sql: $(EXTENSION).sql
 	cat $^ > $@
 $(EXTENSION)--5.0-1.sql: $(EXTENSION)--5.0.sql $(EXTENSION)--5.0--5.0-1.sql
 	cat $^ > $@
-$(EXTENSION)--5.0-2.sql: $(EXTENSION)--5.0.sql $(EXTENSION)--5.0--5.0-1.sql $(EXTENSION)--5.0-1--5.0-2.sql
+$(EXTENSION)--5.0-2.sql: $(EXTENSION)--5.0-1.sql $(EXTENSION)--5.0-1--5.0-2.sql
 	cat $^ > $@
 
 NO_PGXS = 1
