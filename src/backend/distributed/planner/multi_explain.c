@@ -182,6 +182,8 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		return;
 	}
 
+	ExplainOpenGroup("Distributed Query", NULL, true, es);
+
 	if (es->format == EXPLAIN_FORMAT_TEXT)
 	{
 		appendStringInfoSpaces(es->str, es->indent * 2);
@@ -195,10 +197,6 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		appendStringInfo(es->str, "\n");
 
 		es->indent += 1;
-	}
-	else if (es->format == EXPLAIN_FORMAT_JSON)
-	{
-		ExplainOpenGroup("Distributed Query", NULL, true, es);
 	}
 
 	routerExecutablePlan = RouterExecutablePlan(multiPlan, TaskExecutorType);
@@ -249,15 +247,12 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 			appendStringInfo(es->str, "Master Query\n");
 			es->indent += 1;
 		}
-		else if (es->format == EXPLAIN_FORMAT_JSON)
-		{
-			ExplainJSONLineEnding(es);
-			appendStringInfoSpaces(es->str, es->indent * 2);
-			appendStringInfo(es->str, "\"Master Query\":");
-			es->grouping_stack = lcons_int(0, es->grouping_stack);
-		}
+
+		ExplainOpenGroup("Master Query", "Master Query", false, es);
 
 		ExplainMasterPlan(masterPlan, into, es, queryString, params, &planDuration);
+
+		ExplainCloseGroup("Master Query", "Master Query", false, es);
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
@@ -265,10 +260,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		}
 	}
 
-	if (es->format == EXPLAIN_FORMAT_JSON)
-	{
-		ExplainCloseGroup("Distributed Query", NULL, true, es);
-	}
+	ExplainCloseGroup("Distributed Query", NULL, true, es);
 }
 
 
@@ -439,19 +431,25 @@ ExplainJob(Job *job, ExplainState *es)
 
 		ExplainCloseGroup("Tasks", "Tasks", false, es);
 	}
+	else
+	{
+		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
+
+		/* show explain output for depended jobs, if any */
+		foreach(dependedJobCell, dependedJobList)
+		{
+			Job *dependedJob = (Job *) lfirst(dependedJobCell);
+
+			if (CitusIsA(dependedJob, MapMergeJob))
+			{
+				ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
+			}
+		}
+
+		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
+	}
 
 	ExplainCloseGroup("Job", "Job", true, es);
-
-	/* show explain output for depended jobs, if any */
-	foreach(dependedJobCell, dependedJobList)
-	{
-		Job *dependedJob = (Job *) lfirst(dependedJobCell);
-
-		if (CitusIsA(dependedJob, MapMergeJob))
-		{
-			ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
-		}
-	}
 }
 
 
@@ -465,6 +463,7 @@ static void
 ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 {
 	List *dependedJobList = mapMergeJob->job.dependedJobList;
+	int dependedJobCount = list_length(dependedJobList);
 	ListCell *dependedJobCell = NULL;
 	int mapTaskCount = list_length(mapMergeJob->mapTaskList);
 	int mergeTaskCount = list_length(mapMergeJob->mergeTaskList);
@@ -481,17 +480,24 @@ ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es)
 	ExplainPropertyInteger("Map Task Count", mapTaskCount, es);
 	ExplainPropertyInteger("Merge Task Count", mergeTaskCount, es);
 
-	ExplainCloseGroup("Job", NULL, true, es);
-
-	foreach(dependedJobCell, dependedJobList)
+	if (dependedJobCount > 0)
 	{
-		Job *dependedJob = (Job *) lfirst(dependedJobCell);
+		ExplainOpenGroup("Depended Jobs", "Depended Jobs", false, es);
 
-		if (CitusIsA(dependedJob, MapMergeJob))
+		foreach(dependedJobCell, dependedJobList)
 		{
-			ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
+			Job *dependedJob = (Job *) lfirst(dependedJobCell);
+
+			if (CitusIsA(dependedJob, MapMergeJob))
+			{
+				ExplainMapMergeJob((MapMergeJob *) dependedJob, es);
+			}
 		}
+
+		ExplainCloseGroup("Depended Jobs", "Depended Jobs", false, es);
 	}
+
+	ExplainCloseGroup("MapMergeJob", NULL, true, es);
 
 	if (es->format == EXPLAIN_FORMAT_TEXT)
 	{
