@@ -196,6 +196,10 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 
 		es->indent += 1;
 	}
+	else if (es->format == EXPLAIN_FORMAT_JSON)
+	{
+		ExplainOpenGroup("Distributed Query", NULL, true, es);
+	}
 
 	routerExecutablePlan = RouterExecutablePlan(multiPlan, TaskExecutorType);
 
@@ -245,6 +249,13 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 			appendStringInfo(es->str, "Master Query\n");
 			es->indent += 1;
 		}
+		else if (es->format == EXPLAIN_FORMAT_JSON)
+		{
+			ExplainJSONLineEnding(es);
+			appendStringInfoSpaces(es->str, es->indent * 2);
+			appendStringInfo(es->str, "\"Master Query\":");
+			es->grouping_stack = lcons_int(0, es->grouping_stack);
+		}
 
 		ExplainMasterPlan(masterPlan, into, es, queryString, params, &planDuration);
 
@@ -252,6 +263,11 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		{
 			es->indent -= 1;
 		}
+	}
+
+	if (es->format == EXPLAIN_FORMAT_JSON)
+	{
+		ExplainCloseGroup("Distributed Query", NULL, true, es);
 	}
 }
 
@@ -390,7 +406,7 @@ ExplainJob(Job *job, ExplainState *es)
 	List *taskList = job->taskList;
 	int taskCount = list_length(taskList);
 
-	ExplainOpenGroup("Job", NULL, true, es);
+	ExplainOpenGroup("Job", "Job", true, es);
 
 	ExplainPropertyInteger("Task Count", taskCount, es);
 
@@ -424,7 +440,7 @@ ExplainJob(Job *job, ExplainState *es)
 		ExplainCloseGroup("Tasks", "Tasks", false, es);
 	}
 
-	ExplainCloseGroup("Job", NULL, true, es);
+	ExplainCloseGroup("Job", "Job", true, es);
 
 	/* show explain output for depended jobs, if any */
 	foreach(dependedJobCell, dependedJobList)
