@@ -4,6 +4,28 @@
 \a\t
 SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
+-- Function that parses explain output as JSON
+CREATE FUNCTION explain_json(query text)
+RETURNS jsonb
+AS $BODY$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE format('EXPLAIN (FORMAT JSON) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
+-- Function that parses explain output as XML
+CREATE FUNCTION explain_xml(query text)
+RETURNS xml
+AS $BODY$
+DECLARE
+  result xml;
+BEGIN
+  EXECUTE format('EXPLAIN (FORMAT XML) %s', query) INTO result;
+  RETURN result;
+END;
+$BODY$ LANGUAGE plpgsql;
 -- Test Text format
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -28,165 +50,185 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 [
-  "Executor": "Real-Time",
   {
-    "Task Count": 6,
-    "Tasks Shown": "One of 6",
-    "Tasks": [
-      {
-        "Node": "host=localhost port=57637 dbname=regression",
-        "Remote Plan": [
-          [
-            {
-              "Plan": {
-                "Node Type": "Aggregate",
-                "Strategy": "Hashed",
-                "Group Key": ["l_quantity"],
-                "Plans": [
-                  {
-                    "Node Type": "Seq Scan",
-                    "Parent Relationship": "Outer",
-                    "Relation Name": "lineitem_102010",
-                    "Alias": "lineitem"
-                  }
-                ]
-              }
-            }
-          ]
-
-        ]
-      }
-    ]
-  },
-  {
-    "Plan": {
-      "Node Type": "Sort",
-      "Sort Key": ["(sum(((sum(intermediate_column_41_1))::bigint)))::bigint", "intermediate_column_41_0"],
-      "Plans": [
+    "Executor": "Real-Time",
+    "Job": {
+      "Task Count": 6,
+      "Tasks Shown": "One of 6",
+      "Tasks": [
         {
-          "Node Type": "Aggregate",
-          "Strategy": "Hashed",
-          "Parent Relationship": "Outer",
-          "Group Key": ["intermediate_column_41_0"],
-          "Plans": [
-            {
-              "Node Type": "Seq Scan",
-              "Parent Relationship": "Outer",
-              "Relation Name": "pg_merge_job_0041",
-              "Alias": "pg_merge_job_0041"
-            }
+          "Node": "host=localhost port=57637 dbname=regression",
+          "Remote Plan": [
+            [
+              {
+                "Plan": {
+                  "Node Type": "Aggregate",
+                  "Strategy": "Hashed",
+                  "Group Key": ["l_quantity"],
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Relation Name": "lineitem_102010",
+                      "Alias": "lineitem"
+                    }
+                  ]
+                }
+              }
+            ]
+
           ]
         }
       ]
-    }
+    },
+    "Master Query": [
+      {
+        "Plan": {
+          "Node Type": "Sort",
+          "Sort Key": ["(sum(((sum(intermediate_column_41_1))::bigint)))::bigint", "intermediate_column_41_0"],
+          "Plans": [
+            {
+              "Node Type": "Aggregate",
+              "Strategy": "Hashed",
+              "Parent Relationship": "Outer",
+              "Group Key": ["intermediate_column_41_0"],
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Relation Name": "pg_merge_job_0041",
+                  "Alias": "pg_merge_job_0041"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
   }
 ]
+-- Validate JSON format
+SELECT true AS valid FROM explain_json($$
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+t
 -- Test XML format
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 <explain xmlns="http://www.postgresql.org/2009/explain">
-  <Executor>Real-Time</Executor>
-  <Job>
-    <Task-Count>6</Task-Count>
-    <Tasks-Shown>One of 6</Tasks-Shown>
-    <Tasks>
-      <Task>
-        <Node>host=localhost port=57637 dbname=regression</Node>
-        <Remote-Plan>
-          <explain xmlns="http://www.postgresql.org/2009/explain">
-            <Query>
-              <Plan>
-                <Node-Type>Aggregate</Node-Type>
-                <Strategy>Hashed</Strategy>
-                <Group-Key>
-                  <Item>l_quantity</Item>
-                </Group-Key>
-                <Plans>
-                  <Plan>
-                    <Node-Type>Seq Scan</Node-Type>
-                    <Parent-Relationship>Outer</Parent-Relationship>
-                    <Relation-Name>lineitem_102010</Relation-Name>
-                    <Alias>lineitem</Alias>
-                  </Plan>
-                </Plans>
-              </Plan>
-            </Query>
-          </explain>
-        </Remote-Plan>
-      </Task>
-    </Tasks>
-  </Job>
-  <Query>
-    <Plan>
-      <Node-Type>Sort</Node-Type>
-      <Sort-Key>
-        <Item>(sum(((sum(intermediate_column_42_1))::bigint)))::bigint</Item>
-        <Item>intermediate_column_42_0</Item>
-      </Sort-Key>
-      <Plans>
+  <Distributed-Query>
+    <Executor>Real-Time</Executor>
+    <Job>
+      <Task-Count>6</Task-Count>
+      <Tasks-Shown>One of 6</Tasks-Shown>
+      <Tasks>
+        <Task>
+          <Node>host=localhost port=57637 dbname=regression</Node>
+          <Remote-Plan>
+            <explain xmlns="http://www.postgresql.org/2009/explain">
+              <Query>
+                <Plan>
+                  <Node-Type>Aggregate</Node-Type>
+                  <Strategy>Hashed</Strategy>
+                  <Group-Key>
+                    <Item>l_quantity</Item>
+                  </Group-Key>
+                  <Plans>
+                    <Plan>
+                      <Node-Type>Seq Scan</Node-Type>
+                      <Parent-Relationship>Outer</Parent-Relationship>
+                      <Relation-Name>lineitem_102010</Relation-Name>
+                      <Alias>lineitem</Alias>
+                    </Plan>
+                  </Plans>
+                </Plan>
+              </Query>
+            </explain>
+          </Remote-Plan>
+        </Task>
+      </Tasks>
+    </Job>
+    <Master-Query>
+      <Query>
         <Plan>
-          <Node-Type>Aggregate</Node-Type>
-          <Strategy>Hashed</Strategy>
-          <Parent-Relationship>Outer</Parent-Relationship>
-          <Group-Key>
-            <Item>intermediate_column_42_0</Item>
-          </Group-Key>
+          <Node-Type>Sort</Node-Type>
+          <Sort-Key>
+            <Item>(sum(((sum(intermediate_column_43_1))::bigint)))::bigint</Item>
+            <Item>intermediate_column_43_0</Item>
+          </Sort-Key>
           <Plans>
             <Plan>
-              <Node-Type>Seq Scan</Node-Type>
+              <Node-Type>Aggregate</Node-Type>
+              <Strategy>Hashed</Strategy>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Relation-Name>pg_merge_job_0042</Relation-Name>
-              <Alias>pg_merge_job_0042</Alias>
+              <Group-Key>
+                <Item>intermediate_column_43_0</Item>
+              </Group-Key>
+              <Plans>
+                <Plan>
+                  <Node-Type>Seq Scan</Node-Type>
+                  <Parent-Relationship>Outer</Parent-Relationship>
+                  <Relation-Name>pg_merge_job_0043</Relation-Name>
+                  <Alias>pg_merge_job_0043</Alias>
+                </Plan>
+              </Plans>
             </Plan>
           </Plans>
         </Plan>
-      </Plans>
-    </Plan>
-  </Query>
+      </Query>
+    </Master-Query>
+  </Distributed-Query>
 </explain>
+-- Validate XML format
+SELECT true AS valid FROM explain_xml($$
+	SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
+t
 -- Test YAML format
 EXPLAIN (COSTS FALSE, FORMAT YAML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
-Executor: "Real-Time"
-- Task Count: 6
-  Tasks Shown: "One of 6"
-  Tasks: 
-    - Node: "host=localhost port=57637 dbname=regression"
-      Remote Plan: 
-        - Plan: 
-            Node Type: "Aggregate"
+- Executor: "Real-Time"
+  Job: 
+    Task Count: 6
+    Tasks Shown: "One of 6"
+    Tasks: 
+      - Node: "host=localhost port=57637 dbname=regression"
+        Remote Plan: 
+          - Plan: 
+              Node Type: "Aggregate"
+              Strategy: "Hashed"
+              Group Key: 
+                - "l_quantity"
+              Plans: 
+                - Node Type: "Seq Scan"
+                  Parent Relationship: "Outer"
+                  Relation Name: "lineitem_102010"
+                  Alias: "lineitem"
+
+  Master Query: 
+    - Plan: 
+        Node Type: "Sort"
+        Sort Key: 
+          - "(sum(((sum(intermediate_column_45_1))::bigint)))::bigint"
+          - "intermediate_column_45_0"
+        Plans: 
+          - Node Type: "Aggregate"
             Strategy: "Hashed"
+            Parent Relationship: "Outer"
             Group Key: 
-              - "l_quantity"
+              - "intermediate_column_45_0"
             Plans: 
               - Node Type: "Seq Scan"
                 Parent Relationship: "Outer"
-                Relation Name: "lineitem_102010"
-                Alias: "lineitem"
-
-- Plan: 
-    Node Type: "Sort"
-    Sort Key: 
-      - "(sum(((sum(intermediate_column_43_1))::bigint)))::bigint"
-      - "intermediate_column_43_0"
-    Plans: 
-      - Node Type: "Aggregate"
-        Strategy: "Hashed"
-        Parent Relationship: "Outer"
-        Group Key: 
-          - "intermediate_column_43_0"
-        Plans: 
-          - Node Type: "Seq Scan"
-            Parent Relationship: "Outer"
-            Relation Name: "pg_merge_job_0043"
-            Alias: "pg_merge_job_0043"
+                Relation Name: "pg_merge_job_0045"
+                Alias: "pg_merge_job_0045"
 -- Test Text format
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
-Distributed Query into pg_merge_job_0044
+Distributed Query into pg_merge_job_0046
   Executor: Real-Time
   Task Count: 6
   Tasks Shown: One of 6
@@ -197,14 +239,14 @@ Distributed Query into pg_merge_job_0044
               ->  Seq Scan on lineitem_102010 lineitem
 Master Query
   ->  Sort
-        Sort Key: (sum(((sum(intermediate_column_44_1))::bigint)))::bigint, intermediate_column_44_0
+        Sort Key: (sum(((sum(intermediate_column_46_1))::bigint)))::bigint, intermediate_column_46_0
         ->  HashAggregate
-              Group Key: intermediate_column_44_0
-              ->  Seq Scan on pg_merge_job_0044
+              Group Key: intermediate_column_46_0
+              ->  Seq Scan on pg_merge_job_0046
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
-Distributed Query into pg_merge_job_0045
+Distributed Query into pg_merge_job_0047
   Executor: Real-Time
   Task Count: 6
   Tasks Shown: One of 6
@@ -216,15 +258,15 @@ Distributed Query into pg_merge_job_0045
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  Aggregate
-        Output: (sum(intermediate_column_45_0) / (sum(intermediate_column_45_1) / sum(intermediate_column_45_2)))
-        ->  Seq Scan on pg_temp_2.pg_merge_job_0045
-              Output: intermediate_column_45_0, intermediate_column_45_1, intermediate_column_45_2
+        Output: (sum(intermediate_column_47_0) / (sum(intermediate_column_47_1) / sum(intermediate_column_47_2)))
+        ->  Seq Scan on pg_temp_2.pg_merge_job_0047
+              Output: intermediate_column_47_0, intermediate_column_47_1, intermediate_column_47_2
 -- Test join
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM lineitem
 	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5
 	ORDER BY l_quantity DESC LIMIT 10;
-Distributed Query into pg_merge_job_0046
+Distributed Query into pg_merge_job_0048
   Executor: Real-Time
   Task Count: 6
   Tasks Shown: One of 6
@@ -242,8 +284,8 @@ Distributed Query into pg_merge_job_0046
 Master Query
   ->  Limit
         ->  Sort
-              Sort Key: intermediate_column_46_4 DESC
-              ->  Seq Scan on pg_merge_job_0046
+              Sort Key: intermediate_column_48_4 DESC
+              ->  Seq Scan on pg_merge_job_0048
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES(1,0);
@@ -291,7 +333,7 @@ Distributed Query
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Distributed Query into pg_merge_job_0047
+Distributed Query into pg_merge_job_0049
   Executor: Router
   Task Count: 1
   Tasks Shown: All
@@ -301,11 +343,17 @@ Distributed Query into pg_merge_job_0047
               Recheck Cond: (l_orderkey = 5)
               ->  Bitmap Index Scan on lineitem_pkey_102009
                     Index Cond: (l_orderkey = 5)
+SELECT true AS valid FROM explain_xml($$
+	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5$$);
+t
+SELECT true AS valid FROM explain_json($$
+	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5$$);
+t
 -- Test CREATE TABLE ... AS
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
-Distributed Query into pg_merge_job_0048
+Distributed Query into pg_merge_job_0052
   Executor: Real-Time
   Task Count: 6
   Tasks Shown: One of 6
@@ -313,12 +361,12 @@ Distributed Query into pg_merge_job_0048
         Node: host=localhost port=57637 dbname=regression
         ->  Seq Scan on lineitem_102010 lineitem
 Master Query
-  ->  Seq Scan on pg_merge_job_0048
+  ->  Seq Scan on pg_merge_job_0052
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-Distributed Query into pg_merge_job_0049
+Distributed Query into pg_merge_job_0053
   Executor: Real-Time
   Task Count: 3
   Tasks Shown: All
@@ -339,13 +387,19 @@ Distributed Query into pg_merge_job_0049
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_0049
+        ->  Seq Scan on pg_merge_job_0053
+SELECT true AS valid FROM explain_xml($$
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
+t
+SELECT true AS valid FROM explain_json($$
+	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
+t
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
-Distributed Query into pg_merge_job_0050
+Distributed Query into pg_merge_job_0056
   Executor: Task-Tracker
   Task Count: 3
   Tasks Shown: One of 3
@@ -356,7 +410,7 @@ Distributed Query into pg_merge_job_0050
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_0050
+        ->  Seq Scan on pg_merge_job_0056
 -- Test re-partition join
 SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
@@ -365,7 +419,7 @@ EXPLAIN (COSTS FALSE)
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
-Distributed Query into pg_merge_job_0053
+Distributed Query into pg_merge_job_0059
   Executor: Task-Tracker
   Task Count: 1
   Tasks Shown: None, not supported for re-partition queries
@@ -377,4 +431,129 @@ Distributed Query into pg_merge_job_0053
               Merge Task Count: 1
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_0053
+        ->  Seq Scan on pg_merge_job_0059
+EXPLAIN (COSTS FALSE, FORMAT JSON)
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+[
+  {
+    "Executor": "Task-Tracker",
+    "Job": {
+      "Task Count": 1,
+      "Tasks Shown": "None, not supported for re-partition queries",
+      "Depended Jobs": [
+        {
+          "Map Task Count": 1,
+          "Merge Task Count": 1,
+          "Depended Jobs": [
+            {
+              "Map Task Count": 6,
+              "Merge Task Count": 1
+            }
+          ]
+        }
+      ]
+    },
+    "Master Query": [
+      {
+        "Plan": {
+          "Node Type": "Aggregate",
+          "Strategy": "Plain",
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Relation Name": "pg_merge_job_0062",
+              "Alias": "pg_merge_job_0062"
+            }
+          ]
+        }
+      }
+    ]
+  }
+]
+SELECT true AS valid FROM explain_json($$
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey$$);
+t
+EXPLAIN (COSTS FALSE, FORMAT XML)
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+<explain xmlns="http://www.postgresql.org/2009/explain">
+  <Distributed-Query>
+    <Executor>Task-Tracker</Executor>
+    <Job>
+      <Task-Count>1</Task-Count>
+      <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
+      <Depended-Jobs>
+        <MapMergeJob>
+          <Map-Task-Count>1</Map-Task-Count>
+          <Merge-Task-Count>1</Merge-Task-Count>
+          <Depended-Jobs>
+            <MapMergeJob>
+              <Map-Task-Count>6</Map-Task-Count>
+              <Merge-Task-Count>1</Merge-Task-Count>
+            </MapMergeJob>
+          </Depended-Jobs>
+        </MapMergeJob>
+      </Depended-Jobs>
+    </Job>
+    <Master-Query>
+      <Query>
+        <Plan>
+          <Node-Type>Aggregate</Node-Type>
+          <Strategy>Plain</Strategy>
+          <Plans>
+            <Plan>
+              <Node-Type>Seq Scan</Node-Type>
+              <Parent-Relationship>Outer</Parent-Relationship>
+              <Relation-Name>pg_merge_job_0068</Relation-Name>
+              <Alias>pg_merge_job_0068</Alias>
+            </Plan>
+          </Plans>
+        </Plan>
+      </Query>
+    </Master-Query>
+  </Distributed-Query>
+</explain>
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey$$);
+t
+EXPLAIN (COSTS FALSE, FORMAT YAML)
+	SELECT count(*)
+	FROM lineitem, orders, customer, supplier
+	WHERE l_orderkey = o_orderkey
+	AND o_custkey = c_custkey
+	AND l_suppkey = s_suppkey;
+- Executor: "Task-Tracker"
+  Job: 
+    Task Count: 1
+    Tasks Shown: "None, not supported for re-partition queries"
+    Depended Jobs: 
+      - Map Task Count: 1
+        Merge Task Count: 1
+        Depended Jobs: 
+          - Map Task Count: 6
+            Merge Task Count: 1
+  Master Query: 
+    - Plan: 
+        Node Type: "Aggregate"
+        Strategy: "Plain"
+        Plans: 
+          - Node Type: "Seq Scan"
+            Parent Relationship: "Outer"
+            Relation Name: "pg_merge_job_0074"
+            Alias: "pg_merge_job_0074"
