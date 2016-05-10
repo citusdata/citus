@@ -11,3 +11,4 @@
 
 # ignore latest install file
 citus--5.0.sql
+citus--5.?-*.sql
