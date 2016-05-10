@@ -3,6 +3,7 @@
 /multi_alter_table_statements.out
 /multi_alter_table_statements_0.out
 /multi_append_table_to_shard.out
+/multi_copy.out
 /multi_create_schema.out
 /multi_fdw_large_shardid.out
 /multi_fdw_stage_data.out
