@@ -1,3 +1,13 @@
+### citus v5.1.0-rc.2 (May 10, 2016) ###
+
+* Fix test failures
+
+* Fix EXPLAIN output when FORMAT JSON in use
+
+### citus v5.1.0-rc.1 (May 4, 2016) ###
+
+* Initial 5.1.0 candidate
+
 ### citus v5.0.1 (April 15, 2016) ###
 
 * Fixes issues on 32-bit systems
