@@ -15,7 +15,7 @@
 
 
 /* Function declarations for transmitting files between two nodes */
-extern void ReceiveRegularFile(const char *filename);
+extern void RedirectCopyDataToRegularFile(const char *filename);
 extern void SendRegularFile(const char *filename);
 
 /* Function declaration local to commands and worker modules */
