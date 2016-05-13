@@ -928,15 +928,8 @@ IsJoinClause(Node *clause)
 		bool equiJoin = false;
 		bool joinBetweenDifferentTables = false;
 
-		/*
-		 * We accept all column types that can be joined with an equals sign as
-		 * valid. These include columns that have cross-type equals operators
-		 * (such as int48eq) and columns that can be casted at run-time (such as
-		 * from numeric to int4).
-		 */
-		char *operatorName = get_opname(operatorExpression->opno);
-		int equalsOperator = strncmp(operatorName, EQUAL_OPERATOR_STRING, NAMEDATALEN);
-		if (equalsOperator == 0)
+		bool equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
+		if (equalsOperator)
 		{
 			equiJoin = true;
 		}
@@ -1955,4 +1948,30 @@ MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry)
 	subqueryTableNode->referenceNames = subqueryRangeTableEntry->eref;
 
 	return subqueryTableNode;
+}
+
+
+/*
+ * OperatorImplementsEquality returns true if the given opno represents an
+ * equality operator. The function retrieves btree interpretation list for this
+ * opno and check if BTEqualStrategyNumber strategy is present.
+ */
+bool
+OperatorImplementsEquality(Oid opno)
+{
+	bool equalityOperator = false;
+	List *btreeIntepretationList = get_op_btree_interpretation(opno);
+	ListCell *btreeInterpretationCell = NULL;
+	foreach(btreeInterpretationCell, btreeIntepretationList)
+	{
+		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
+													lfirst(btreeInterpretationCell);
+		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+		{
+			equalityOperator = true;
+			break;
+		}
+	}
+
+	return equalityOperator;
 }
