@@ -19,6 +19,7 @@
 
 #include "commands/dbcommands.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/connection_cache.h"
 #include "distributed/multi_client_executor.h"
 
 #include <errno.h>
@@ -49,9 +50,6 @@ static PostgresPollingStatusType ClientPollingStatusArray[MAX_CONNECTION_COUNT];
 static void ClearRemainingResults(PGconn *connection);
 static bool ClientConnectionReady(PGconn *connection,
 								  PostgresPollingStatusType pollingStatus);
-static void ReportRemoteError(PGconn *connection, PGresult *result);
-static void ReportConnectionError(PGconn *connection);
-static char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
 
 
 /* AllocateConnectionId returns a connection id from the connection pool. */
@@ -142,7 +140,7 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 	}
 	else
 	{
-		ReportConnectionError(connection);
+    ReportRemoteError(connection, NULL);
 
 		PQfinish(connection);
 		connectionId = INVALID_CONNECTION_ID;
@@ -195,7 +193,7 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	}
 	else
 	{
-		ReportConnectionError(connection);
+		ReportRemoteError(connection, NULL);
 
 		PQfinish(connection);
 		connectionId = INVALID_CONNECTION_ID;
@@ -244,7 +242,7 @@ MultiClientConnectPoll(int32 connectionId)
 	}
 	else if (pollingStatus == PGRES_POLLING_FAILED)
 	{
-		ReportConnectionError(connection);
+		ReportRemoteError(connection, NULL);
 
 		connectStatus = CLIENT_CONNECTION_BAD;
 	}
@@ -680,7 +678,7 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		/* received an error */
 		copyStatus = CLIENT_COPY_FAILED;
 
-		ReportConnectionError(connection);
+    ReportRemoteError(connection, NULL);
 	}
 
 	/* if copy out completed, make sure we drain all results from libpq */
@@ -805,98 +803,4 @@ ClientConnectionReady(PGconn *connection, PostgresPollingStatusType pollingStatu
 	}
 
 	return clientConnectionReady;
-}
-
-
-/*
- * ReportRemoteError retrieves various error fields from the a remote result and
- * produces an error report at the WARNING level.
- */
-static void
-ReportRemoteError(PGconn *connection, PGresult *result)
-{
-	char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-	char *remoteMessage = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
-	char *nodeName = ConnectionGetOptionValue(connection, "host");
-	char *nodePort = ConnectionGetOptionValue(connection, "port");
-	char *errorPrefix = "could not connect to node";
-	int sqlState = ERRCODE_CONNECTION_FAILURE;
-
-	if (sqlStateString != NULL)
-	{
-		sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
-								 sqlStateString[3], sqlStateString[4]);
-
-		/* use more specific error prefix for result failures */
-		if (sqlState != ERRCODE_CONNECTION_FAILURE)
-		{
-			errorPrefix = "could not receive query results from";
-		}
-	}
-
-	/*
-	 * If the PGresult did not contain a message, the connection may provide a
-	 * suitable top level one. At worst, this is an empty string.
-	 */
-	if (remoteMessage == NULL)
-	{
-		char *lastNewlineIndex = NULL;
-
-		remoteMessage = PQerrorMessage(connection);
-		lastNewlineIndex = strrchr(remoteMessage, '\n');
-
-		/* trim trailing newline, if any */
-		if (lastNewlineIndex != NULL)
-		{
-			*lastNewlineIndex = '\0';
-		}
-	}
-
-	ereport(WARNING, (errcode(sqlState),
-					  errmsg("%s %s:%s", errorPrefix, nodeName, nodePort),
-					  errdetail("Client error: %s", remoteMessage)));
-}
-
-
-/*
- * ReportConnectionError raises a WARNING and reports that we could not
- * establish the given connection.
- */
-static void
-ReportConnectionError(PGconn *connection)
-{
-	char *nodeName = ConnectionGetOptionValue(connection, "host");
-	char *nodePort = ConnectionGetOptionValue(connection, "port");
-	char *errorMessage = PQerrorMessage(connection);
-
-	ereport(WARNING, (errcode(ERRCODE_CONNECTION_FAILURE),
-					  errmsg("could not connect to node %s:%s", nodeName, nodePort),
-					  errdetail("Client error: %s", errorMessage)));
-}
-
-
-/*
- * ConnectionGetOptionValue inspects the provided connection for an option with
- * a given keyword and returns a new palloc'd string with that options's value.
- * The function returns NULL if the connection has no setting for an option with
- * the provided keyword.
- */
-static char *
-ConnectionGetOptionValue(PGconn *connection, char *optionKeyword)
-{
-	char *optionValue = NULL;
-	PQconninfoOption *option = NULL;
-	PQconninfoOption *conninfoOptions = PQconninfo(connection);
-
-	for (option = conninfoOptions; option->keyword != NULL; option++)
-	{
-		if (strncmp(option->keyword, optionKeyword, NAMEDATALEN) == 0)
-		{
-			optionValue = pstrdup(option->val);
-		}
-	}
-
-	PQconninfoFree(conninfoOptions);
-
-	return optionValue;
 }

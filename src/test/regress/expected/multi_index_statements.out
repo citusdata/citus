@@ -137,12 +137,12 @@ ERROR:  creating unique indexes on append-partitioned tables is currently unsupp
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 ERROR:  relation "lineitem_orderkey_index" already exists
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
-WARNING:  could not receive query results from localhost:57637
-DETAIL:  Client error: data type bigint has no default operator class for access method "gist"
+WARNING:  Bad result from localhost:57637
+DETAIL:  Remote message: data type bigint has no default operator class for access method "gist"
 ERROR:  could not execute DDL command on worker node shards
 CREATE INDEX try_index ON lineitem (non_existent_column);
-WARNING:  could not receive query results from localhost:57637
-DETAIL:  Client error: column "non_existent_column" does not exist
+WARNING:  Bad result from localhost:57637
+DETAIL:  Remote message: column "non_existent_column" does not exist
 ERROR:  could not execute DDL command on worker node shards
 CREATE INDEX ON lineitem (l_orderkey);
 ERROR:  creating index without a name on a distributed table is currently unsupported
