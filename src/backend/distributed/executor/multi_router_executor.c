@@ -33,6 +33,7 @@
 #include "utils/errcodes.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
+#include "utils/int8.h"
 
 
 /* controls use of locks to enforce safe commutativity */
@@ -41,7 +42,7 @@ bool AllModificationsCommutative = false;
 
 static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
 static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
-static int32 ExecuteDistributedModify(Task *task);
+static int64 ExecuteDistributedModify(Task *task);
 static void ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 tupleCount,
 									 Task *task, EState *executorState,
 									 TupleDesc tupleDescriptor,
@@ -203,7 +204,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 	if (operation == CMD_INSERT || operation == CMD_UPDATE ||
 		operation == CMD_DELETE)
 	{
-		int32 affectedRowCount = ExecuteDistributedModify(task);
+		int64 affectedRowCount = ExecuteDistributedModify(task);
 		estate->es_processed = affectedRowCount;
 	}
 	else if (operation == CMD_SELECT)
@@ -236,10 +237,10 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
  * of modified rows in that case and errors in all others. This function will
  * also generate warnings for individual placement failures.
  */
-static int32
+static int64
 ExecuteDistributedModify(Task *task)
 {
-	int32 affectedTupleCount = -1;
+	int64 affectedTupleCount = -1;
 	ListCell *taskPlacementCell = NULL;
 	List *failedPlacementList = NIL;
 	ListCell *failedPlacementCell = NULL;
@@ -253,7 +254,7 @@ ExecuteDistributedModify(Task *task)
 		PGconn *connection = NULL;
 		PGresult *result = NULL;
 		char *currentAffectedTupleString = NULL;
-		int32 currentAffectedTupleCount = -1;
+		int64 currentAffectedTupleCount = -1;
 
 		Assert(taskPlacement->shardState == FILE_FINALIZED);
 
@@ -294,7 +295,7 @@ ExecuteDistributedModify(Task *task)
 		}
 
 		currentAffectedTupleString = PQcmdTuples(result);
-		currentAffectedTupleCount = pg_atoi(currentAffectedTupleString, sizeof(int32), 0);
+		scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
 
 		if ((affectedTupleCount == -1) ||
 			(affectedTupleCount == currentAffectedTupleCount))
@@ -303,7 +304,7 @@ ExecuteDistributedModify(Task *task)
 		}
 		else
 		{
-			ereport(WARNING, (errmsg("modified %d tuples, but expected to modify %d",
+			ereport(WARNING, (errmsg("modified %ld tuples, but expected to modify %ld",
 									 currentAffectedTupleCount, affectedTupleCount),
 							  errdetail("modified placement on %s:%d",
 										nodeName, nodePort)));
