@@ -36,20 +36,12 @@ CREATE FUNCTION print_sorted_shard_intervals(regclass)
 -- test shard pruning functionality
 -- ===================================================================
 
--- create distributed table metadata to observe shard pruning
+-- create distributed table observe shard pruning
 CREATE TABLE pruning ( species text, last_pruned date, plant_id integer );
+SELECT master_create_distributed_table('pruning', 'species', 'hash');
 
-INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey)
-VALUES
-	('pruning'::regclass, 'h', column_name_to_column('pruning'::regclass, 'species'));
-
-INSERT INTO pg_dist_shard
-	(shardid, logicalrelid, shardstorage, shardminvalue, shardmaxvalue)
-VALUES
-	(10, 'pruning'::regclass, 't', '-2147483648', '-1073741826'),
-	(11, 'pruning'::regclass, 't', '-1073741825', '-3'),
-	(12, 'pruning'::regclass, 't', '-2', '1073741820'),
-	(13, 'pruning'::regclass, 't', '1073741821', '2147483647');
+-- create worker shards
+SELECT master_create_worker_shards('pruning', 4, 1);
 
 -- with no values, expect all shards
 SELECT prune_using_no_values('pruning');
@@ -76,45 +68,52 @@ SELECT debug_equality_expression('pruning');
 SELECT print_sorted_shard_intervals('pruning');
 
 -- update only min value for one shard
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 11;
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103071;
 SELECT print_sorted_shard_intervals('pruning');
 
 -- now lets have one more shard without min/max values
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 12;
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103072;
 SELECT print_sorted_shard_intervals('pruning');
 
 -- now lets have one more shard without min/max values
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 10;
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103070;
 SELECT print_sorted_shard_intervals('pruning');
 
 -- all shard placements are uninitialized
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 13;
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103073;
 SELECT print_sorted_shard_intervals('pruning');
 
--- now update the metadata so that the table is a range distributed table
-UPDATE pg_dist_partition SET partmethod = 'r' WHERE logicalrelid = 'pruning'::regclass;
+-- create range distributed table observe shard pruning
+CREATE TABLE pruning_range ( species text, last_pruned date, plant_id integer );
+SELECT master_create_distributed_table('pruning_range', 'species', 'range');
+
+-- create worker shards
+SELECT master_create_empty_shard('pruning_range');
+SELECT master_create_empty_shard('pruning_range');
+SELECT master_create_empty_shard('pruning_range');
+SELECT master_create_empty_shard('pruning_range');
 
 -- now the comparison is done via the partition column type, which is text
-UPDATE pg_dist_shard SET shardminvalue = 'a', shardmaxvalue = 'b' WHERE shardid = 10;
-UPDATE pg_dist_shard SET shardminvalue = 'c', shardmaxvalue = 'd' WHERE shardid = 11;
-UPDATE pg_dist_shard SET shardminvalue = 'e', shardmaxvalue = 'f' WHERE shardid = 12;
-UPDATE pg_dist_shard SET shardminvalue = 'g', shardmaxvalue = 'h' WHERE shardid = 13;
+UPDATE pg_dist_shard SET shardminvalue = 'a', shardmaxvalue = 'b' WHERE shardid = 103074;
+UPDATE pg_dist_shard SET shardminvalue = 'c', shardmaxvalue = 'd' WHERE shardid = 103075;
+UPDATE pg_dist_shard SET shardminvalue = 'e', shardmaxvalue = 'f' WHERE shardid = 103076;
+UPDATE pg_dist_shard SET shardminvalue = 'g', shardmaxvalue = 'h' WHERE shardid = 103077;
 
 -- print the ordering of shard intervals with range partitioning as well
-SELECT print_sorted_shard_intervals('pruning');
+SELECT print_sorted_shard_intervals('pruning_range');
 
 -- update only min value for one shard
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 11;
-SELECT print_sorted_shard_intervals('pruning');
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103075;
+SELECT print_sorted_shard_intervals('pruning_range');
 
 -- now lets have one more shard without min/max values
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 12;
-SELECT print_sorted_shard_intervals('pruning');
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103076;
+SELECT print_sorted_shard_intervals('pruning_range');
 
 -- now lets have one more shard without min/max values
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 10;
-SELECT print_sorted_shard_intervals('pruning');
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103074;
+SELECT print_sorted_shard_intervals('pruning_range');
 
 -- all shard placements are uninitialized
-UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 13;
-SELECT print_sorted_shard_intervals('pruning');
+UPDATE pg_dist_shard set shardminvalue = NULL, shardmaxvalue = NULL WHERE shardid = 103077;
+SELECT print_sorted_shard_intervals('pruning_range');
