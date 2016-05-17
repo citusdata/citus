@@ -39,9 +39,9 @@ DEBUG:  pruning merge fetch taskId 4
 DETAIL:  Creating dependency on merge taskId 8
 DEBUG:  pruning merge fetch taskId 7
 DETAIL:  Creating dependency on merge taskId 11
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 9 to node localhost:57637
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  CommitTransactionCommand
  count 
 -------
@@ -64,12 +64,12 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  assigned task 9 to node localhost:57637
-DEBUG:  assigned task 3 to node localhost:57638
-DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 15 to node localhost:57637
-DEBUG:  assigned task 18 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 18 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 9 to node localhost:57637
+DEBUG:  assigned task 12 to node localhost:57638
 DEBUG:  join prunable for intervals [1,2496] and [2497,4964]
 DEBUG:  join prunable for intervals [1,2496] and [4965,5986]
 DEBUG:  join prunable for intervals [1,2496] and [8997,11554]
@@ -160,9 +160,9 @@ DEBUG:  assigned task 8 to node localhost:57637
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 12 to node localhost:57637
 DEBUG:  assigned task 10 to node localhost:57638
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3

@@ -16,6 +16,14 @@ CREATE TABLE multi_append_table_to_shard_left
 );
 SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
 
+CREATE TABLE multi_append_table_to_shard_right_hash
+(
+	right_number INTEGER not null,
+	right_text TEXT not null
+);
+SELECT master_create_distributed_table('multi_append_table_to_shard_right_hash', 'right_number', 'hash');
+SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 1);
+
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
 \STAGE multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
@@ -70,19 +78,12 @@ FROM	multi_append_table_to_shard_left,
 WHERE	left_number = right_number;
 
 -- Check that we error out if we try to append data to a hash partitioned table.
-
-UPDATE pg_dist_partition SET partmethod = 'h' WHERE
-	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
-
-SELECT master_create_empty_shard('multi_append_table_to_shard_right');
+SELECT master_create_empty_shard('multi_append_table_to_shard_right_hash');
 
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
-WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
-
-UPDATE pg_dist_partition SET partmethod = 'a' WHERE
-	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
+WHERE	'multi_append_table_to_shard_right_hash'::regclass::oid = logicalrelid;
 
 -- Clean up after test
 SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
