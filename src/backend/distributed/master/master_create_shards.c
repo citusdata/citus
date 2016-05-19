@@ -158,7 +158,15 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	/* set shard storage type according to relation type */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
-		shardStorageType = SHARD_STORAGE_FOREIGN;
+		bool cstoreTable = CStoreTable(distributedTableId);
+		if (cstoreTable)
+		{
+			shardStorageType = SHARD_STORAGE_COLUMNAR;
+		}
+		else
+		{
+			shardStorageType = SHARD_STORAGE_FOREIGN;
+		}
 	}
 	else
 	{
