@@ -11,6 +11,7 @@
 test: multi_fdw_create_table
 test: multi_fdw_master_protocol
 test: multi_fdw_stage_data
+test: multi_fdw_storage_type
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior

@@ -1,0 +1,63 @@
+--
+-- MULTI_FDW_STORAGE_TYPE
+--
+-- Create two tables one regular and one foreign, then check whether
+-- shardstorage is correct
+-- explicitly set shard id
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 400000;
+-- create regular table
+CREATE TABLE people (
+	id bigint not null,
+	firstname char(10) not null,
+	lastname char(10) not null,
+	age integer not null);
+-- create distributed table
+SELECT master_create_distributed_table('people', 'id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- create worker shards
+SELECT master_create_empty_shard('people');
+ master_create_empty_shard 
+---------------------------
+                    400000
+(1 row)
+
+-- check shardstorage
+SELECT shardstorage FROM pg_dist_shard WHERE shardid = 400000;
+ shardstorage 
+--------------
+ t
+(1 row)
+
+-- create foreign table
+CREATE FOREIGN TABLE people_foreign (
+	id bigint not null,
+	firstname char(10) not null,
+	lastname char(10) not null,
+	age integer not null)
+SERVER file_server 
+OPTIONS (format 'text', filename '', delimiter '|', null '');
+-- create distributed table
+SELECT master_create_distributed_table('people_foreign', 'id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- create worker shards
+SELECT master_create_empty_shard('people_foreign');
+ master_create_empty_shard 
+---------------------------
+                    400001
+(1 row)
+
+-- check shardstorage
+SELECT shardstorage FROM pg_dist_shard WHERE shardid = 400001;
+ shardstorage 
+--------------
+ f
+(1 row)
+
