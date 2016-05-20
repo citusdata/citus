@@ -52,6 +52,7 @@
 #include "plpgsql.h"
 
 #include <string.h>
+#include <netinet/in.h>
 
 #include "access/heapam.h"
 #include "access/htup_details.h"
