@@ -51,6 +51,8 @@
 #include "miscadmin.h"
 #include "plpgsql.h"
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <string.h>
 
 #include "access/heapam.h"
