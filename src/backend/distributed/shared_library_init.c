@@ -308,6 +308,16 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_ddl_propagation",
+		gettext_noop("Enables propagating DDL statements to worker shards"),
+		NULL,
+		&EnableDDLPropagation,
+		true,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),

@@ -40,6 +40,8 @@
 #include "utils/syscache.h"
 
 
+bool EnableDDLPropagation = true; /* ddl propagation is enabled */
+
 /*
  * This struct defines the state for the callback for drop statements.
  * It is copied as it is from commands/tablecmds.c in Postgres source.
@@ -145,39 +147,43 @@ multi_ProcessUtility(Node *parsetree,
 		}
 	}
 
-	if (IsA(parsetree, IndexStmt))
+	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
+	if (EnableDDLPropagation)
 	{
-		parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString);
-	}
-
-	if (IsA(parsetree, DropStmt))
-	{
-		DropStmt *dropStatement = (DropStmt *) parsetree;
-		if (dropStatement->removeType == OBJECT_INDEX)
+		if (IsA(parsetree, IndexStmt))
 		{
-			parsetree = ProcessDropIndexStmt(dropStatement, queryString);
+			parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString);
 		}
-	}
 
-	if (IsA(parsetree, AlterTableStmt))
-	{
-		AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-		if (alterTableStmt->relkind == OBJECT_TABLE)
+		if (IsA(parsetree, DropStmt))
 		{
-			parsetree = ProcessAlterTableStmt(alterTableStmt, queryString);
+			DropStmt *dropStatement = (DropStmt *) parsetree;
+			if (dropStatement->removeType == OBJECT_INDEX)
+			{
+				parsetree = ProcessDropIndexStmt(dropStatement, queryString);
+			}
 		}
-	}
 
-	/*
-	 * ALTER TABLE ... RENAME statements have their node type as RenameStmt and
-	 * not AlterTableStmt. So, we intercept RenameStmt to tackle these commands.
-	 */
-	if (IsA(parsetree, RenameStmt))
-	{
-		RenameStmt *renameStmt = (RenameStmt *) parsetree;
-		if (IsAlterTableRenameStmt(renameStmt))
+		if (IsA(parsetree, AlterTableStmt))
 		{
-			ErrorIfDistributedRenameStmt(renameStmt);
+			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
+			if (alterTableStmt->relkind == OBJECT_TABLE)
+			{
+				parsetree = ProcessAlterTableStmt(alterTableStmt, queryString);
+			}
+		}
+
+		/*
+		 * ALTER TABLE ... RENAME statements have their node type as RenameStmt and
+		 * not AlterTableStmt. So, we intercept RenameStmt to tackle these commands.
+		 */
+		if (IsA(parsetree, RenameStmt))
+		{
+			RenameStmt *renameStmt = (RenameStmt *) parsetree;
+			if (IsAlterTableRenameStmt(renameStmt))
+			{
+				ErrorIfDistributedRenameStmt(renameStmt);
+			}
 		}
 	}
 
