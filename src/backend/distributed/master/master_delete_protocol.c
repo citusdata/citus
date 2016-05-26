@@ -163,7 +163,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 
 /*
- * master_drop_shards attempts to drop all shards for a given relation.
+ * master_drop_all_shards attempts to drop all shards for a given relation.
  * Unlike master_apply_delete_command, this function can be called even
  * if the table has already been dropped.
  */

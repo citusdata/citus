@@ -67,7 +67,6 @@
 	"SELECT master_update_shard_statistics(%ld)"
 #define PARTITION_METHOD_QUERY "SELECT part_method FROM master_get_table_metadata('%s');"
 
-
 /* Enumeration that defines the shard placement policy to use while staging */
 typedef enum
 {
@@ -107,6 +106,7 @@ extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
 extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
 extern Datum master_update_shard_statistics(PG_FUNCTION_ARGS);
 extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
+extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 
 /* function declarations for shard creation functionality */

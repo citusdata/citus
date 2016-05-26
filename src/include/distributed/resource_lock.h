@@ -13,6 +13,7 @@
 #include "postgres.h" /* IWYU pragma: keep */
 #include "c.h"
 
+#include "nodes/pg_list.h"
 #include "storage/lock.h"
 
 
@@ -74,5 +75,6 @@ extern void UnlockShardResource(uint64 shardId, LOCKMODE lockmode);
 extern void LockJobResource(uint64 jobId, LOCKMODE lockmode);
 extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 
+extern void LockShards(List *shardIntervalList, LOCKMODE lockMode);
 
 #endif /* RESOURCE_LOCK_H */

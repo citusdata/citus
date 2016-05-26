@@ -56,7 +56,6 @@
 
 
 /* planner functions forward declarations */
-static void ErrorIfModifyQueryNotSupported(Query *queryTree);
 static Task * RouterModifyTask(Query *query);
 #if (PG_VERSION_NUM >= 90500)
 static OnConflictExpr * RebuildOnConflict(Oid relationId,
@@ -124,7 +123,7 @@ MultiRouterPlanCreate(Query *query)
  * ErrorIfModifyQueryNotSupported checks if the query contains unsupported features,
  * and errors out if it does.
  */
-static void
+void
 ErrorIfModifyQueryNotSupported(Query *queryTree)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);

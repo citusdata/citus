@@ -47,6 +47,14 @@ typedef struct TransactionConnection
 } TransactionConnection;
 
 
+/* ShardConnections represents a set of connections for each placement of a shard */
+typedef struct ShardConnections
+{
+	int64 shardId;
+	List *connectionList;
+} ShardConnections;
+
+
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
 
@@ -57,6 +65,11 @@ extern void PrepareRemoteTransactions(List *connectionList);
 extern void AbortRemoteTransactions(List *connectionList);
 extern void CommitRemoteTransactions(List *connectionList, bool stopOnFailure);
 extern void CloseConnections(List *connectionList);
+extern HTAB * CreateShardConnectionHash(void);
+extern ShardConnections * GetShardConnections(HTAB *shardConnectionHash,
+											  int64 shardId,
+											  bool *shardConnectionsFound);
+extern List * ConnectionList(HTAB *connectionHash);
 
 
 #endif /* MULTI_TRANSACTION_H */

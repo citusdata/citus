@@ -20,6 +20,7 @@ SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 
 \STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
 \STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
 \STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
+-- Testing master_apply_delete_command
 -- Check that we don't support conditions on columns other than partition key.
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_acctbal > 0.0');

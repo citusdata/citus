@@ -25,11 +25,11 @@ typedef struct ShardIntervalCompareFunctionCacheEntry
 
 extern int CompareShardIntervals(const void *leftElement, const void *rightElement,
 								 FmgrInfo *typeCompareFunction);
+extern int CompareShardIntervalsById(const void *leftElement, const void *rightElement);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 ShardInterval **shardIntervalCache,
 										 int shardCount, char partitionMethod,
 										 FmgrInfo *compareFunction,
 										 FmgrInfo *hashFunction, bool useBinarySearch);
-
 
 #endif /* SHARDINTERVAL_UTILS_H_ */
