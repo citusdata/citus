@@ -123,7 +123,7 @@ multi_ProcessUtility(Node *parsetree,
 		/* ->relation->relname is the target file in our overloaded COPY */
 		if (copyStatement->is_from)
 		{
-			ReceiveRegularFile(copyStatement->relation->relname);
+			RedirectCopyDataToRegularFile(copyStatement->relation->relname);
 		}
 		else
 		{

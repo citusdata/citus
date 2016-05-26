@@ -31,12 +31,12 @@ static bool ReceiveCopyData(StringInfo copyData);
 
 
 /*
- * ReceiveRegularFile receives data from stdin using the standard copy
+ * RedirectCopyDataToRegularFile receives data from stdin using the standard copy
  * protocol. The function then creates or truncates a file with the given
  * filename, and appends received data to this file.
  */
 void
-ReceiveRegularFile(const char *filename)
+RedirectCopyDataToRegularFile(const char *filename)
 {
 	StringInfo copyData = makeStringInfo();
 	bool copyDone = false;
