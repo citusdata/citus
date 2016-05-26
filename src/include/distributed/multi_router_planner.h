@@ -31,6 +31,7 @@
 #endif
 
 extern MultiPlan * MultiRouterPlanCreate(Query *query);
+extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
 extern bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
