@@ -370,7 +370,9 @@ master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 			if (candidateNode == NULL)
 			{
 				ereport(ERROR, (errmsg("could only find %u of %u required nodes",
-									   currentNodeCount, desiredNodeCount)));
+									   currentNodeCount, desiredNodeCount),
+							          errhint("If you're running a development cluster, consider running"
+																" SET citus.shard_replication_factor = %u;", currentNodeCount)));
 			}
 		}
 
@@ -460,7 +462,9 @@ master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
 		if (candidateNode == NULL)
 		{
 			ereport(ERROR, (errmsg("could only find %u of %u required nodes",
-								   currentNodeCount, desiredNodeCount)));
+								   currentNodeCount, desiredNodeCount),
+							        errhint("If you're running a development cluster, consider running"
+														  " SET citus.shard_replication_factor = %u;", currentNodeCount)));
 		}
 
 		candidateDatum = WorkerNodeGetDatum(candidateNode, functionContext->tuple_desc);

@@ -124,7 +124,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		if (candidateNode == NULL)
 		{
 			ereport(ERROR, (errmsg("could only find %u of %u possible nodes",
-								   candidateNodeCount, attemptableNodeCount)));
+								   candidateNodeCount, attemptableNodeCount),
+  					          errhint("If this is a development cluster, consider running"
+														  " SET citus.shard_replication_factor = %u;", candidateNodeCount)));
 		}
 
 		candidateNodeList = lappend(candidateNodeList, candidateNode);
