@@ -69,13 +69,14 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 {
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
+	List *workerNodeList = WorkerNodeList();
 	Datum shardIdDatum = 0;
 	int64 shardId = INVALID_SHARD_ID;
 	List *ddlEventList = NULL;
 	uint32 attemptableNodeCount = 0;
 	uint32 liveNodeCount = 0;
 
-	uint32 candidateNodeCount = 0;
+	uint32 candidateNodeIndex = 0;
 	List *candidateNodeList = NIL;
 	text *nullMinValue = NULL;
 	text *nullMaxValue = NULL;
@@ -118,17 +119,36 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	/* first retrieve a list of random nodes for shard placements */
-	while (candidateNodeCount < attemptableNodeCount)
+	while (candidateNodeIndex < attemptableNodeCount)
 	{
-		WorkerNode *candidateNode = WorkerGetCandidateNode(candidateNodeList);
+		WorkerNode *candidateNode = NULL;
+
+		if (ShardPlacementPolicy == SHARD_PLACEMENT_LOCAL_NODE_FIRST)
+		{
+			candidateNode = WorkerGetLocalFirstCandidateNode(candidateNodeList);
+		}
+		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
+		{
+			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
+															 candidateNodeIndex);
+		}
+		else if (ShardPlacementPolicy == SHARD_PLACEMENT_RANDOM)
+		{
+			candidateNode = WorkerGetRandomCandidateNode(candidateNodeList);
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("unrecognized shard placement policy")));
+		}
+
 		if (candidateNode == NULL)
 		{
 			ereport(ERROR, (errmsg("could only find %u of %u possible nodes",
-								   candidateNodeCount, attemptableNodeCount)));
+								   candidateNodeIndex, attemptableNodeCount)));
 		}
 
 		candidateNodeList = lappend(candidateNodeList, candidateNode);
-		candidateNodeCount++;
+		candidateNodeIndex++;
 	}
 
 	CreateShardPlacements(shardId, ddlEventList, relationOwner,

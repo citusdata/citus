@@ -18,6 +18,8 @@
 #include "distributed/worker_manager.h"
 #include "distributed/multi_client_executor.h"
 #include "libpq/hba.h"
+#include "libpq/ip.h"
+#include "libpq/libpq-be.h"
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"
 #include "storage/ipc.h"
@@ -36,6 +38,7 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 
 /* Local functions forward declarations */
+static char * ClientHostAddress(StringInfo remoteHostStringInfo);
 static bool OddNumber(uint32 number);
 static WorkerNode * FindRandomNodeNotInList(HTAB *WorkerNodesHash,
 											List *currentNodeList);
@@ -55,8 +58,8 @@ static bool WorkerNodeResponsive(const char *workerName, uint32 workerPort);
  */
 
 /*
- * WorkerGetCandidateNode takes in a list of worker nodes, and then allocates a
- * new worker node. The allocation is performed according to the following
+ * WorkerGetRandomCandidateNode takes in a list of worker nodes, and then allocates
+ * a new worker node. The allocation is performed according to the following
  * policy: if the list is empty, a random node is allocated; if the list has one
  * node (or an odd number of nodes), the new node is allocated on a different
  * rack than the first node; and if the list has two nodes (or an even number of
@@ -69,7 +72,7 @@ static bool WorkerNodeResponsive(const char *workerName, uint32 workerPort);
  * contain enough nodes to allocate a new worker node.
  */
 WorkerNode *
-WorkerGetCandidateNode(List *currentNodeList)
+WorkerGetRandomCandidateNode(List *currentNodeList)
 {
 	WorkerNode *workerNode = NULL;
 	bool wantSameRack = false;
@@ -161,6 +164,120 @@ WorkerGetRoundRobinCandidateNode(List *workerNodeList, uint64 shardId,
 	}
 
 	return candidateNode;
+}
+
+
+/*
+ * WorkerGetLocalFirstCandidateNode takes in a list of worker nodes, and then
+ * allocates a new worker node. The allocation is performed according to the
+ * following policy: if the list is empty, the node where the caller is connecting
+ * from is allocated; if the list is not empty, a node is allocated according
+ * to random policy.
+ */
+WorkerNode *
+WorkerGetLocalFirstCandidateNode(List *currentNodeList)
+{
+	WorkerNode *candidateNode = NULL;
+	uint32 currentNodeCount = list_length(currentNodeList);
+
+	/* choose first candidate node to be the client's host */
+	if (currentNodeCount == 0)
+	{
+		StringInfo clientHostStringInfo = makeStringInfo();
+		char *clientHost = NULL;
+		char *errorMessage = ClientHostAddress(clientHostStringInfo);
+
+		if (errorMessage != NULL)
+		{
+			ereport(ERROR, (errmsg("%s", errorMessage),
+							errdetail("Could not find the first worker "
+									  "node for local-node-first policy."),
+							errhint("Make sure that you are not on the "
+									"master node.")));
+		}
+
+		/* if hostname is localhost.localdomain, change it to localhost */
+		clientHost = clientHostStringInfo->data;
+		if (strncmp(clientHost, "localhost.localdomain", WORKER_LENGTH) == 0)
+		{
+			clientHost = pstrdup("localhost");
+		}
+
+		candidateNode = WorkerGetNodeWithName(clientHost);
+		if (candidateNode == NULL)
+		{
+			ereport(ERROR, (errmsg("could not find worker node for "
+								   "host: %s", clientHost)));
+		}
+	}
+	else
+	{
+		/* find a candidate node different from those already selected */
+		candidateNode = WorkerGetRandomCandidateNode(currentNodeList);
+	}
+
+	return candidateNode;
+}
+
+
+/*
+ * ClientHostAddress appends the connecting client's fully qualified hostname
+ * to the given StringInfo. If there is no such connection or the connection is
+ * over Unix domain socket, the function fills the error message and returns it.
+ * On success, it just returns NULL.
+ */
+static char *
+ClientHostAddress(StringInfo clientHostStringInfo)
+{
+	Port *port = MyProcPort;
+	char *clientHost = NULL;
+	char *errorMessage = NULL;
+	int clientHostLength = NI_MAXHOST;
+	int flags = NI_NAMEREQD;    /* require fully qualified hostname */
+	int nameFound = 0;
+
+	if (port == NULL)
+	{
+		errorMessage = "cannot find tcp/ip connection to client";
+		return errorMessage;
+	}
+
+	switch (port->raddr.addr.ss_family)
+	{
+		case AF_INET:
+#ifdef HAVE_IPV6
+		case AF_INET6:
+#endif
+			{
+				break;
+			}
+
+		default:
+		{
+			errorMessage = "invalid address family in connection";
+			return errorMessage;
+		}
+	}
+
+	clientHost = palloc0(clientHostLength);
+
+	nameFound = pg_getnameinfo_all(&port->raddr.addr, port->raddr.salen,
+								   clientHost, clientHostLength, NULL, 0, flags);
+	if (nameFound == 0)
+	{
+		appendStringInfo(clientHostStringInfo, "%s", clientHost);
+	}
+	else
+	{
+		StringInfo errorMessageStringInfo = makeStringInfo();
+		appendStringInfo(errorMessageStringInfo, "could not resolve client host: %s",
+						 gai_strerror(nameFound));
+
+		errorMessage = errorMessageStringInfo->data;
+		return errorMessage;
+	}
+
+	return errorMessage;
 }
 
 
