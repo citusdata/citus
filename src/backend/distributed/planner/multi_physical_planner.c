@@ -4343,13 +4343,16 @@ MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList, uint32 taskIdIndex)
 		{
 			StringInfo mergeTableQueryString =
 				MergeTableQueryString(taskIdIndex, targetEntryList);
+			char *escapedMergeTableQueryString =
+				quote_literal_cstr(mergeTableQueryString->data);
 			StringInfo intermediateTableQueryString =
 				IntermediateTableQueryString(jobId, taskIdIndex, reduceQuery);
-
+			char *escapedIntermediateTableQueryString =
+				quote_literal_cstr(intermediateTableQueryString->data);
 			StringInfo mergeAndRunQueryString = makeStringInfo();
 			appendStringInfo(mergeAndRunQueryString, MERGE_FILES_AND_RUN_QUERY_COMMAND,
-							 jobId, taskIdIndex, mergeTableQueryString->data,
-							 intermediateTableQueryString->data);
+							 jobId, taskIdIndex, escapedMergeTableQueryString,
+							 escapedIntermediateTableQueryString);
 
 			mergeTask = CreateBasicTask(jobId, mergeTaskId, MERGE_TASK,
 										mergeAndRunQueryString->data);

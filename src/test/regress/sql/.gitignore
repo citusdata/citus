@@ -14,3 +14,4 @@
 /multi_stage_more_data.sql
 /multi_subquery.sql
 /worker_copy.sql
+/multi_complex_count_distinct.sql
