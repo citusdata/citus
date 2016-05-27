@@ -140,7 +140,7 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 	}
 	else
 	{
-    ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL);
 
 		PQfinish(connection);
 		connectionId = INVALID_CONNECTION_ID;
@@ -678,7 +678,7 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		/* received an error */
 		copyStatus = CLIENT_COPY_FAILED;
 
-    ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL);
 	}
 
 	/* if copy out completed, make sure we drain all results from libpq */
