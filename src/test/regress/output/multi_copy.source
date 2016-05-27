@@ -1,6 +1,7 @@
 --
 -- MULTI_COPY
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,
@@ -45,7 +46,7 @@ SELECT count(*) FROM customer_copy_hash;
 -- Test primary key violation
 COPY customer_copy_hash (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
-ERROR:  duplicate key value violates unique constraint "customer_copy_hash_pkey_103160"
+ERROR:  duplicate key value violates unique constraint "customer_copy_hash_pkey_560048"
 DETAIL:  Key (c_custkey)=(2) already exists.
 -- Confirm that no data was copied
 SELECT count(*) FROM customer_copy_hash;
@@ -303,6 +304,31 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid = 'lineitem_copy_append'::
 -------
      5
 (1 row)
+
+-- Test round robin shard policy
+SET citus.shard_replication_factor TO 1;
+COPY lineitem_copy_append FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|';
+SELECT
+        pg_dist_shard_placement.shardid,
+        pg_dist_shard_placement.nodeport
+FROM
+        pg_dist_shard,
+        pg_dist_shard_placement
+WHERE
+        pg_dist_shard.shardid = pg_dist_shard_placement.shardid AND
+        logicalrelid = 'lineitem_copy_append'::regclass
+ORDER BY
+        pg_dist_shard.shardid DESC
+LIMIT
+        5;
+ shardid | nodeport 
+---------+----------
+  560141 |    57637
+  560140 |    57638
+  560139 |    57637
+  560138 |    57638
+  560137 |    57637
+(5 rows)
 
 -- Create customer table for the worker copy with constraint and index
 CREATE TABLE customer_worker_copy_append (
