@@ -64,8 +64,8 @@ PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 
 
 /*
- * master_modify_multiple_shards takes in a DELETE or UPDATE query string and 
- * pushes the query to shards. It finds shards that match the criteria defined 
+ * master_modify_multiple_shards takes in a DELETE or UPDATE query string and
+ * pushes the query to shards. It finds shards that match the criteria defined
  * in the delete command, generates the same delete query string for each of the
  * found shards with distributed table name replaced with the shard name and
  * sends the queries to the workers. It uses one-phase or two-phase commit
