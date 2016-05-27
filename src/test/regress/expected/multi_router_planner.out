@@ -920,9 +920,20 @@ SELECT
 		articles_hash
  	GROUP BY
 		author_id;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  aggregate (distinct) on complex expressions is unsupported
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+ c 
+---
+ 4
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+(10 rows)
+
 -- queries inside transactions can be router plannable
 BEGIN;
 SELECT *

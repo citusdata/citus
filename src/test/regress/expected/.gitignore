@@ -16,3 +16,4 @@
 /multi_subquery.out
 /multi_subquery_0.out
 /worker_copy.out
+/multi_complex_count_distinct.out
