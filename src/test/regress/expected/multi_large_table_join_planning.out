@@ -104,12 +104,12 @@ DETAIL:  Creating dependency on merge taskId 13
 DEBUG:  assigned task 9 to node localhost:57637
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 3 to node localhost:57637
-DEBUG:  completed cleanup query for job 1252 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1252 on node "localhost:57637"
-DEBUG:  completed cleanup query for job 1251 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1251 on node "localhost:57637"
-DEBUG:  completed cleanup query for job 1250 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1250 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1252
+DEBUG:  completed cleanup query for job 1252
+DEBUG:  completed cleanup query for job 1251
+DEBUG:  completed cleanup query for job 1251
+DEBUG:  completed cleanup query for job 1250
+DEBUG:  completed cleanup query for job 1250
 DEBUG:  CommitTransactionCommand
  l_partkey | o_orderkey | count 
 -----------+------------+-------
@@ -221,12 +221,12 @@ DEBUG:  assigned task 3 to node localhost:57638
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 9 to node localhost:57638
 DEBUG:  assigned task 12 to node localhost:57637
-DEBUG:  completed cleanup query for job 1255 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1255 on node "localhost:57637"
-DEBUG:  completed cleanup query for job 1253 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1253 on node "localhost:57637"
-DEBUG:  completed cleanup query for job 1254 on node "localhost:57638"
-DEBUG:  completed cleanup query for job 1254 on node "localhost:57637"
+DEBUG:  completed cleanup query for job 1255
+DEBUG:  completed cleanup query for job 1255
+DEBUG:  completed cleanup query for job 1253
+DEBUG:  completed cleanup query for job 1253
+DEBUG:  completed cleanup query for job 1254
+DEBUG:  completed cleanup query for job 1254
 DEBUG:  CommitTransactionCommand
  l_partkey | o_orderkey | count 
 -----------+------------+-------
