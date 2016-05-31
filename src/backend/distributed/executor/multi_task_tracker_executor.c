@@ -850,7 +850,9 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 			{
 				taskTracker->trackerStatus = TRACKER_CONNECTED;
 			}
-			else if (pollStatus == CLIENT_CONNECTION_BUSY)
+			else if (pollStatus == CLIENT_CONNECTION_BUSY ||
+					 pollStatus == CLIENT_CONNECTION_BUSY_READ ||
+					 pollStatus == CLIENT_CONNECTION_BUSY_WRITE)
 			{
 				taskTracker->trackerStatus = TRACKER_CONNECT_POLL;
 			}
@@ -864,7 +866,8 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 
 			/* now check if we have been trying to connect for too long */
 			taskTracker->connectPollCount++;
-			if (pollStatus == CLIENT_CONNECTION_BUSY)
+			if (pollStatus == CLIENT_CONNECTION_BUSY_READ ||
+				pollStatus == CLIENT_CONNECTION_BUSY_WRITE)
 			{
 				uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
 				uint32 currentCount = taskTracker->connectPollCount;

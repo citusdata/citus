@@ -14,7 +14,6 @@
 #ifndef MULTI_CLIENT_EXECUTOR_H
 #define MULTI_CLIENT_EXECUTOR_H
 
-
 #define INVALID_CONNECTION_ID -1  /* identifies an invalid connection */
 #define CLIENT_CONNECT_TIMEOUT 5  /* connection timeout in seconds */
 #define MAX_CONNECTION_COUNT 2048 /* simultaneous client connection count */
@@ -28,7 +27,9 @@ typedef enum
 	CLIENT_INVALID_CONNECT = 0,
 	CLIENT_CONNECTION_BAD = 1,
 	CLIENT_CONNECTION_BUSY = 2,
-	CLIENT_CONNECTION_READY = 3
+	CLIENT_CONNECTION_BUSY_READ = 3,
+	CLIENT_CONNECTION_BUSY_WRITE = 4,
+	CLIENT_CONNECTION_READY = 5
 } ConnectStatus;
 
 
@@ -72,6 +73,29 @@ typedef enum
 } BatchQueryStatus;
 
 
+/* Enumeration to track whether a task is ready to run and, if not, what it's blocked on*/
+typedef enum TaskExecutionStatus
+{
+	TASK_STATUS_INVALID = 0,
+	TASK_STATUS_ERROR, /* error occured */
+	TASK_STATUS_READY, /* task ready to be processed further */
+	TASK_STATUS_SOCKET_READ, /* waiting for connection to become ready for reads */
+	TASK_STATUS_SOCKET_WRITE /* waiting for connection to become ready for writes */
+} TaskExecutionStatus;
+
+
+struct pollfd; /* forward declared, to avoid having to include poll.h */
+
+typedef struct WaitInfo
+{
+	int maxWaiters;
+	struct pollfd *pollfds;
+	int registeredWaiters;
+	bool haveReadyWaiter;
+	bool haveFailedWaiter;
+} WaitInfo;
+
+
 /* Function declarations for executing client-side (libpq) logic. */
 extern int32 MultiClientConnect(const char *nodeName, uint32 nodePort,
 								const char *nodeDatabase, const char *nodeUser);
@@ -91,6 +115,13 @@ extern BatchQueryStatus MultiClientBatchResult(int32 connectionId, void **queryR
 											   int *rowCount, int *columnCount);
 extern char * MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex);
 extern void MultiClientClearResult(void *queryResult);
+extern WaitInfo * MultiClientCreateWaitInfo(int maxConnections);
+
+extern void MultiClientResetWaitInfo(WaitInfo *waitInfo);
+extern void MultiClientFreeWaitInfo(WaitInfo *waitInfo);
+extern void MultiClientRegisterWait(WaitInfo *waitInfo, TaskExecutionStatus waitStatus,
+									int32 connectionId);
+extern void MultiClientWait(WaitInfo *waitInfo);
 
 
 #endif /* MULTI_CLIENT_EXECUTOR_H */
