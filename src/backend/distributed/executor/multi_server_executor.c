@@ -226,7 +226,7 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;
-	taskExecution->connectPollCount = 0;
+	taskExecution->connectStartTime = 0;
 	taskExecution->currentNodeIndex = 0;
 	taskExecution->dataFetchTaskIndex = -1;
 	taskExecution->failureCount = 0;
