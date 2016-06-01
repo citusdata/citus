@@ -141,3 +141,92 @@ SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
  
 (1 row)
 
+-- Check jsonb_concat_agg() aggregate which is used to implement jsonb_agg()
+SELECT jsonb_concat_agg(i) FROM (
+    VALUES ('[1,2]'::jsonb), ('[]'::jsonb), ('[{"a":"b"}]'::jsonb)) AS t(i);
+  jsonb_concat_agg  
+--------------------
+ [1, 2, {"a": "b"}]
+(1 row)
+
+-- Check jsonb_agg()
+SELECT jsonb_pretty(jsonb_agg(row_to_json(lineitem))) FROM lineitem
+    WHERE l_receiptdate = '1994-06-03' AND l_linenumber = 1;
+                          jsonb_pretty                           
+-----------------------------------------------------------------
+ [                                                              +
+     {                                                          +
+         "l_tax": 0.01,                                         +
+         "l_comment": "endencies. sl",                          +
+         "l_partkey": 92865,                                    +
+         "l_suppkey": 7884,                                     +
+         "l_discount": 0.06,                                    +
+         "l_orderkey": 9156,                                    +
+         "l_quantity": 5.00,                                    +
+         "l_shipdate": "1994-05-31",                            +
+         "l_shipmode": "REG AIR   ",                            +
+         "l_commitdate": "1994-03-20",                          +
+         "l_linenumber": 1,                                     +
+         "l_linestatus": "F",                                   +
+         "l_returnflag": "A",                                   +
+         "l_receiptdate": "1994-06-03",                         +
+         "l_shipinstruct": "NONE                     ",         +
+         "l_extendedprice": 9289.30                             +
+     },                                                         +
+     {                                                          +
+         "l_tax": 0.00,                                         +
+         "l_comment": "ages sleep according to th",             +
+         "l_partkey": 132438,                                   +
+         "l_suppkey": 9978,                                     +
+         "l_discount": 0.01,                                    +
+         "l_orderkey": 9894,                                    +
+         "l_quantity": 23.00,                                   +
+         "l_shipdate": "1994-05-06",                            +
+         "l_shipmode": "SHIP      ",                            +
+         "l_commitdate": "1994-04-26",                          +
+         "l_linenumber": 1,                                     +
+         "l_linestatus": "F",                                   +
+         "l_returnflag": "A",                                   +
+         "l_receiptdate": "1994-06-03",                         +
+         "l_shipinstruct": "DELIVER IN PERSON        ",         +
+         "l_extendedprice": 33819.89                            +
+     },                                                         +
+     {                                                          +
+         "l_tax": 0.00,                                         +
+         "l_comment": " regular decoys wake fluffily. theodoli",+
+         "l_partkey": 113938,                                   +
+         "l_suppkey": 3939,                                     +
+         "l_discount": 0.03,                                    +
+         "l_orderkey": 14274,                                   +
+         "l_quantity": 44.00,                                   +
+         "l_shipdate": "1994-05-05",                            +
+         "l_shipmode": "TRUCK     ",                            +
+         "l_commitdate": "1994-03-12",                          +
+         "l_linenumber": 1,                                     +
+         "l_linestatus": "F",                                   +
+         "l_returnflag": "A",                                   +
+         "l_receiptdate": "1994-06-03",                         +
+         "l_shipinstruct": "NONE                     ",         +
+         "l_extendedprice": 85884.92                            +
+     },                                                         +
+     {                                                          +
+         "l_tax": 0.07,                                         +
+         "l_comment": "cajole. silent accounts nod iron",       +
+         "l_partkey": 20029,                                    +
+         "l_suppkey": 30,                                       +
+         "l_discount": 0.04,                                    +
+         "l_orderkey": 14916,                                   +
+         "l_quantity": 25.00,                                   +
+         "l_shipdate": "1994-05-07",                            +
+         "l_shipmode": "FOB       ",                            +
+         "l_commitdate": "1994-04-20",                          +
+         "l_linenumber": 1,                                     +
+         "l_linestatus": "F",                                   +
+         "l_returnflag": "A",                                   +
+         "l_receiptdate": "1994-06-03",                         +
+         "l_shipinstruct": "TAKE BACK RETURN         ",         +
+         "l_extendedprice": 23725.50                            +
+     }                                                          +
+ ]
+(1 row)
+

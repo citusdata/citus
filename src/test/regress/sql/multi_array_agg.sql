@@ -62,3 +62,11 @@ SELECT array_agg(case when l_quantity > 20 then l_quantity else NULL end)
 -- Check that we return NULL in case there are no input rows to array_agg()
 
 SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
+
+-- Check jsonb_concat_agg() aggregate which is used to implement jsonb_agg()
+SELECT jsonb_concat_agg(i) FROM (
+    VALUES ('[1,2]'::jsonb), ('[]'::jsonb), ('[{"a":"b"}]'::jsonb)) AS t(i);
+
+-- Check jsonb_agg()
+SELECT jsonb_pretty(jsonb_agg(row_to_json(lineitem))) FROM lineitem
+    WHERE l_receiptdate = '1994-06-03' AND l_linenumber = 1;
