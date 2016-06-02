@@ -121,7 +121,7 @@ struct TaskExecution
 	TransmitExecStatus *transmitStatusArray;
 	int32 *connectionIdArray;
 	int32 *fileDescriptorArray;
-	uint32 connectPollCount;
+	TimestampTz connectStartTime;
 	uint32 nodeCount;
 	uint32 currentNodeIndex;
 	uint32 querySourceNodeIndex; /* only applies to map fetch tasks */
