@@ -6,6 +6,11 @@
 -- we don't set citus.large_table_shard_count here, and instead use the default value
 -- coming from postgresql.conf or multi_task_tracker_executor.conf.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 940000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 940000;
+
+
 SELECT
 	l_orderkey,
 	sum(l_extendedprice * (1 - l_discount)) as revenue,

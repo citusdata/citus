@@ -1,3 +1,5 @@
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 250000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 250000;
 CREATE SCHEMA tpch
 CREATE TABLE nation (
 	n_nationkey integer not null,

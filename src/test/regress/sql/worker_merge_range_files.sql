@@ -2,6 +2,11 @@
 -- WORKER_MERGE_RANGE_FILES
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1150000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1150000;
+
+
 \set JobId 201010
 \set TaskId 101101
 \set Task_Table_Name public.task_101101

@@ -3,6 +3,11 @@
 -- create, distribute, INSERT, SELECT and UPDATE
 -- ===================================================================
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 530000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 530000;
+
+
 -- create a custom type...
 CREATE TYPE test_composite_type AS (
     i integer,

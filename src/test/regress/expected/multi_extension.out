@@ -5,6 +5,8 @@
 --
 -- It'd be nice to script generation of this file, but alas, that's
 -- not done yet.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 580000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
 \c

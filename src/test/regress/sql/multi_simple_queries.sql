@@ -1,3 +1,8 @@
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 850000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 850000;
+
+
 -- ===================================================================
 -- test end-to-end query functionality
 -- ===================================================================

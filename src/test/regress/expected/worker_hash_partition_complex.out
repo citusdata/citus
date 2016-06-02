@@ -1,6 +1,8 @@
 --
 -- WORKER_HASH_PARTITION_COMPLEX
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1120000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1120000;
 \set JobId 201010
 \set TaskId 101104
 \set Partition_Column l_partkey

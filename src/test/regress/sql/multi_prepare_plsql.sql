@@ -6,6 +6,11 @@
 -- and converted into both plain SQL and PL/pgsql functions, which
 -- use prepared statements internally.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 780000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 780000;
+
+
 CREATE FUNCTION sql_test_no_1() RETURNS bigint AS '
 	SELECT
 		count(*)

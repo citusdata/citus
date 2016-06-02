@@ -6,6 +6,11 @@
 -- distributed tables. Currently we only support CREATE TABLE AS (SELECT..),
 -- DECLARE CURSOR, and COPY ... TO statements.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1000000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1000000;
+
+
 CREATE TEMP TABLE lineitem_pricing_summary AS 
 (
      SELECT

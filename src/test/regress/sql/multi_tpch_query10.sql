@@ -6,6 +6,11 @@
 -- we don't set citus.large_table_shard_count here, and instead use the default value
 -- coming from postgresql.conf or multi_task_tracker_executor.conf.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 900000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 900000;
+
+
 SELECT
 	c_custkey,
 	c_name,

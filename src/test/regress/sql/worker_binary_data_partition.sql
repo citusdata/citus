@@ -2,6 +2,11 @@
 -- WORKER_BINARY_DATA_PARTITION
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1090000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1090000;
+
+
 \set JobId 201010
 \set TaskId 101105
 \set Partition_Column textcolumn
