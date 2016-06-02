@@ -14,6 +14,7 @@
 #ifndef MULTI_PHYSICAL_PLANNER_H
 #define MULTI_PHYSICAL_PLANNER_H
 
+#include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
