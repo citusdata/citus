@@ -1,6 +1,8 @@
 --
 -- MULTI_AGG_TYPE_CONVERSION
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 210000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 210000;
 -- Test aggregate type conversions using sums of integers and division operator
 SELECT sum(l_suppkey) FROM lineitem;
    sum    

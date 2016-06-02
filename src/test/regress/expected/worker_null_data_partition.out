@@ -1,6 +1,8 @@
 --
 -- WORKER_NULL_DATA_PARTITION
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1180000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1180000;
 \set JobId 201010
 \set Range_TaskId 101106
 \set Partition_Column s_nationkey

@@ -1,6 +1,8 @@
 --
 -- MULTI_AGG_DISTINCT
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 200000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 200000;
 -- Create a new range partitioned lineitem table and stage data into it
 CREATE TABLE lineitem_range (
 	l_orderkey bigint not null,

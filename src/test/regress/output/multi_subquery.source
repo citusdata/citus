@@ -1,6 +1,8 @@
 --
 -- MULTI_SUBQUERY
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 270000;
 -- Create tables for subquery tests
 CREATE TABLE lineitem_subquery (
 	l_orderkey bigint not null,
@@ -103,7 +105,7 @@ FROM
 ERROR:  cannot push down this subquery
 DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
 -- Update metadata in order to make all shards equal.
-UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 102024;
+UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 270003;
 -- If group by is not on partition column then we error out.
 SELECT
 	avg(order_count)
@@ -349,9 +351,9 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
 AS foo;
-DEBUG:  predicate pruning for shardId 102026
-DEBUG:  predicate pruning for shardId 102027
-DEBUG:  predicate pruning for shardId 102029
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)
@@ -359,9 +361,9 @@ DEBUG:  predicate pruning for shardId 102029
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 102026
-DEBUG:  predicate pruning for shardId 102028
-DEBUG:  predicate pruning for shardId 102029
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)
@@ -400,4 +402,3 @@ AS foo;
 (0 rows)
 
 DROP TABLE subquery_pruning_varchar_test_table;
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102026;

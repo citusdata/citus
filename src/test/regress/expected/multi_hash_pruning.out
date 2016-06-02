@@ -2,6 +2,8 @@
 -- MULTI_HASH_PRUNING
 --
 -- Tests for shard and join pruning logic on hash partitioned tables.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 630000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 630000;
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then stage data to this table and update shard min max values with
 -- hashed ones. Hash value of 1, 2, 3  and 4 are consecutively -1905060026,
@@ -47,9 +49,9 @@ SELECT count(*) FROM orders_hash_partitioned;
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Plan is router executable
  count 
 -------
@@ -58,9 +60,9 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
 DEBUG:  Plan is router executable
  count 
 -------
@@ -69,9 +71,9 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Plan is router executable
  count 
 -------
@@ -80,9 +82,9 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Plan is router executable
  count 
 -------
@@ -92,9 +94,9 @@ DEBUG:  Plan is router executable
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Plan is router executable
  count 
 -------
@@ -103,9 +105,9 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Plan is router executable
  count 
 -------
@@ -120,36 +122,36 @@ SELECT count(*) FROM orders_hash_partitioned;
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -157,18 +159,18 @@ DEBUG:  predicate pruning for shardId 102036
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -176,9 +178,9 @@ DEBUG:  predicate pruning for shardId 102036
 
 SET citus.task_executor_type TO :actual_task_executor;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -198,8 +200,8 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
  count 
 -------
      0
@@ -214,8 +216,8 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -223,8 +225,8 @@ DEBUG:  predicate pruning for shardId 102036
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -232,9 +234,9 @@ DEBUG:  predicate pruning for shardId 102036
 
 SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -285,9 +287,9 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() AND o_orderkey = 1;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -319,12 +321,12 @@ SELECT count(*)
 	WHERE orders1.o_orderkey = orders2.o_orderkey
 	AND orders1.o_orderkey = 1
 	AND orders2.o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102035
-DEBUG:  predicate pruning for shardId 102036
-DEBUG:  predicate pruning for shardId 102033
-DEBUG:  predicate pruning for shardId 102034
-DEBUG:  predicate pruning for shardId 102036
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630002
+DEBUG:  predicate pruning for shardId 630003
+DEBUG:  predicate pruning for shardId 630000
+DEBUG:  predicate pruning for shardId 630001
+DEBUG:  predicate pruning for shardId 630003
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
  count 
 -------

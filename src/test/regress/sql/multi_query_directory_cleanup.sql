@@ -7,6 +7,11 @@
 -- the resource owner should automatically clean up these intermediate query
 -- result files.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 810000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 810000;
+
+
 BEGIN;
 
 -- pg_ls_dir() displays jobids. We explicitly set the jobId sequence

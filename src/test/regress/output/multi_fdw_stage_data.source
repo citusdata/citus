@@ -1,6 +1,8 @@
 --
 -- MULTI_FDW_STAGE_DATA
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 330000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 330000;
 -- Tests for staging foreign data in a distributed cluster.
 \STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data'
 NOTICE:  extension "file_fdw" already exists, skipping

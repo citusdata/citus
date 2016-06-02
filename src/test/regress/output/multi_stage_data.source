@@ -5,6 +5,8 @@
 -- of shards uploaded depends on two config values: citus.shard_replication_factor and
 -- citus.shard_max_size. These values are set in pg_regress_multi.pl. Shard placement
 -- policy is left to the default value (round-robin) to test the common install case.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 290000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
 \STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 \STAGE orders FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'

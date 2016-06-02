@@ -4,6 +4,11 @@
 
 -- Tests for shard and join pruning logic on hash partitioned tables.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 630000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 630000;
+
+
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then stage data to this table and update shard min max values with
 -- hashed ones. Hash value of 1, 2, 3  and 4 are consecutively -1905060026,

@@ -4,6 +4,8 @@
 -- Tests for staging data with large records (i.e. greater than the read buffer
 -- size, which is 32kB) in a distributed cluster. These tests make sure that we
 -- are creating shards of correct size even when records are large.
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 300000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 300000;
 SET citus.shard_max_size TO "256kB";
 CREATE TABLE large_records_table (data_id integer, data text);
 SELECT master_create_distributed_table('large_records_table', 'data_id', 'append');

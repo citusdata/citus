@@ -1,3 +1,8 @@
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 380000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 380000;
+
+
 -- ===================================================================
 -- test INSERT proxy creation functionality
 -- ===================================================================

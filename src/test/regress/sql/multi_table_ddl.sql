@@ -3,6 +3,11 @@
 --
 -- Tests around changing the schema and dropping of a distributed table
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 870000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 870000;
+
+
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
 

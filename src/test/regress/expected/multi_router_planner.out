@@ -1,7 +1,8 @@
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 840000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 840000;
 -- ===================================================================
 -- test router planner functionality for single shard select queries
 -- ===================================================================
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103300;
 CREATE TABLE articles_hash (
 	id bigint NOT NULL,
 	author_id bigint NOT NULL,
@@ -105,8 +106,8 @@ DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
 -- first, test zero-shard SELECT, which should return an empty row
 SELECT COUNT(*) FROM articles_hash WHERE author_id = 1 AND author_id = 2;
-DEBUG:  predicate pruning for shardId 103300
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840000
+DEBUG:  predicate pruning for shardId 840001
  count 
 -------
       
@@ -116,7 +117,7 @@ DEBUG:  predicate pruning for shardId 103301
 -- test simple select for a single row
 SELECT * FROM articles_hash WHERE author_id = 10 AND id = 50;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |   title   | word_count 
 ----+-----------+-----------+------------
@@ -126,7 +127,7 @@ DEBUG:  Plan is router executable
 -- get all titles by a single author
 SELECT title FROM articles_hash WHERE author_id = 10;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
    title    
 ------------
@@ -142,7 +143,7 @@ SELECT title, word_count FROM articles_hash
 	WHERE author_id = 10
 	ORDER BY word_count DESC NULLS LAST;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
    title    | word_count 
 ------------+------------
@@ -159,7 +160,7 @@ SELECT title, id FROM articles_hash
 	ORDER BY id
 	LIMIT 2;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
   title  | id 
 ---------+----
@@ -172,7 +173,7 @@ DEBUG:  Plan is router executable
 SELECT title, author_id FROM articles_hash
 	WHERE author_id = 7 OR author_id = 8
 	ORDER BY author_id ASC, id;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
     title    | author_id 
 -------------+-----------
  aseptic     |         7
@@ -190,7 +191,7 @@ DEBUG:  predicate pruning for shardId 103301
 -- same query is router executable with no order by
 SELECT title, author_id FROM articles_hash
 	WHERE author_id = 7 OR author_id = 8;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
     title    | author_id 
 -------------+-----------
@@ -222,7 +223,7 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash
 	HAVING sum(word_count) > 1000
 	ORDER BY sum(word_count) DESC;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  author_id | corpus_size 
 -----------+-------------
@@ -320,7 +321,7 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -336,7 +337,7 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 OR author_id = 17;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -366,7 +367,7 @@ SELECT id as article_id, word_count * id as random_value
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  article_id | random_value 
 ------------+--------------
@@ -385,7 +386,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  push down of limit count: 3
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
 DEBUG:  Plan is router executable
  first_author | second_word_count 
@@ -401,7 +402,7 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
 DEBUG:  push down of limit count: 3
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
  first_author | second_word_count 
 --------------+-------------------
            10 |             19519
@@ -415,7 +416,7 @@ SELECT *
 	WHERE author_id = 1
 	LIMIT 3;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -431,7 +432,7 @@ SELECT *
 	LIMIT 2
 	OFFSET 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -447,7 +448,7 @@ SELECT *
 	LIMIT 2
 	OFFSET 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -462,7 +463,7 @@ SELECT id
 	WHERE author_id = 1
 	GROUP BY id;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id 
 ----
@@ -478,7 +479,7 @@ SELECT distinct id
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id 
 ----
@@ -494,7 +495,7 @@ SELECT avg(word_count)
 	FROM articles_hash
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103300
+DEBUG:  predicate pruning for shardId 840000
 DEBUG:  Plan is router executable
         avg         
 --------------------
@@ -507,7 +508,7 @@ SELECT max(word_count) as max, min(word_count) as min,
 	FROM articles_hash
 	WHERE author_id = 2;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103300
+DEBUG:  predicate pruning for shardId 840000
 DEBUG:  Plan is router executable
   max  | min  |  sum  | cnt 
 -------+------+-------+-----
@@ -520,7 +521,7 @@ SELECT max(word_count)
 	WHERE author_id = 1
 	GROUP BY author_id;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
   max  
 -------
@@ -566,7 +567,7 @@ SET client_min_messages to 'DEBUG2';
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and author_id >= 1;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -596,7 +597,7 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and (id = 1 or id = 41);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -609,7 +610,7 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and (id = random()::int  * 0);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id | title | word_count 
 ----+-----------+-------+------------
@@ -647,7 +648,7 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = abs(-1);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -689,7 +690,7 @@ SELECT *
 	FROM articles_hash
 	WHERE author_id = 1 and (id = abs(id - 2));
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -714,7 +715,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (author_id = 1) = true;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -730,7 +731,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (author_id = 1) and id between 0 and 20;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -743,7 +744,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (author_id = 1) and (id = 1 or id = 31) and title like '%s';
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -756,7 +757,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (id = 1 or id = 31) and title like '%s' and (author_id = 1);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -769,7 +770,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (title like '%s' or title like 'a%') and (author_id = 1);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -785,7 +786,7 @@ SELECT *
 	FROM articles_hash
 	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
 ----+-----------+----------+------------
@@ -799,7 +800,7 @@ SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
    prev   |  title   | word_count 
 ----------+----------+------------
@@ -815,7 +816,7 @@ SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	WHERE author_id = 5
 	ORDER BY word_count DESC;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
    prev   |  title   | word_count 
 ----------+----------+------------
@@ -830,7 +831,7 @@ SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | min 
 ----+-----
@@ -845,7 +846,7 @@ SELECT id, word_count, AVG(word_count) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | word_count |          avg          
 ----+------------+-----------------------
@@ -860,7 +861,7 @@ SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
 	FROM articles_hash 
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  word_count | rank 
 ------------+------
@@ -899,7 +900,7 @@ SELECT
 	WHERE
 		author_id = 5;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  c 
 ---
@@ -941,7 +942,7 @@ SELECT *
 	WHERE author_id = 1
 	ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -961,7 +962,7 @@ DECLARE test_cursor CURSOR FOR
 		WHERE author_id = 1
 		ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
 FETCH test_cursor;
  id | author_id |  title   | word_count 
@@ -983,7 +984,7 @@ COPY (
 	WHERE author_id = 1
 	ORDER BY id) TO STDOUT;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
 1	1	arsenous	9572
 11	1	alamo	1347
@@ -998,14 +999,14 @@ CREATE TEMP TABLE temp_articles_hash as
 	WHERE author_id = 1
 	ORDER BY id;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
 -- router plannable queries may include filter for aggragates
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  count | count 
 -------+-------
@@ -1028,7 +1029,7 @@ PREPARE author_1_articles as
 	WHERE author_id = 1;
 EXECUTE author_1_articles;
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -1046,7 +1047,7 @@ PREPARE author_articles(int) as
 	WHERE author_id = $1;
 EXECUTE author_articles(1);
 DEBUG:  Creating router plan
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
@@ -1073,7 +1074,7 @@ DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash ah
 		WHERE author_id = 1"
 PL/pgSQL function author_articles_max_id() line 5 at SQL statement
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash ah
 		WHERE author_id = 1"
 PL/pgSQL function author_articles_max_id() line 5 at SQL statement
@@ -1103,7 +1104,7 @@ CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash ah
 		WHERE author_id = 1"
 PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash ah
 		WHERE author_id = 1"
@@ -1118,7 +1119,7 @@ SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
  id 
 ----
   1
@@ -1136,7 +1137,7 @@ DEBUG:  Plan is router executable
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 103301
+DEBUG:  predicate pruning for shardId 840001
  id 
 ----
   1

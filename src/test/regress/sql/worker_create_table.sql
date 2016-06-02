@@ -6,6 +6,11 @@
 -- node execution logic. For now,the tests include range and hash partitioning
 -- of existing tables.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1110000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1110000;
+
+
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
 	l_partkey integer not null,

@@ -2,6 +2,11 @@
 -- WORKER_CHECK_INVALID_ARGUMENTS
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1100000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1100000;
+
+
 \set JobId 201010
 \set TaskId 101108
 \set Table_Name simple_binary_data_table
