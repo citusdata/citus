@@ -3,6 +3,8 @@ dist: trusty
 language: c
 cache: apt
 env:
+  global:
+    secure: degV+qb2xHiea7E2dGk/WLvmYjq4ZsBn6ZPko+YhRcNm2GRXRaU3FqMBIecPtsEEFYaL5GwCQq/CgBf9aQxgDQ+t2CrmtGTtI9AGAbVBl//amNeJOoLe6QvrDpSQX5pUxwDLCng8cvoQK7ZxGlNCzDKiu4Ep4DUWgQVpauJkQ9nHjtSMZvUqCoI9h1lBy9Mxh7YFfHPW2PAXCqpV4VlNiIYF84UKdX3MXKLy9Yt0JBSNTWLZFp/fFw2qNwzFvN94rF3ZvFSD7Wp6CIhT6R5/6k6Zx8YQIrjWhgm6OVy1osUA8X7W79h2ISPqKqMNVJkjJ+N8S4xuQU0kfejnQ74Ie/uJiHCmbW5W2TjpL1aU3FQpPsGwR8h0rSeHhJAJzd8Ma+z8vvnnQHDyvetPBB0WgA/VMQCu8uEutyfYw2hDmB2+l2dDwkViaI7R95bReAGrpd5uNqklAXuR7yOeArz0ZZpHV0aZHGcNBxznMaZExSVZ5DVPW38UPn7Kgse8BnOWeLgnA1hJVp6CmBCtu+hKYt+atBPgRbM8IUINnKKZf/Sk6HeJIJZs662jD8/X93vFi0ZtyV2jEKJpouWw8j4vrGGsaDzTEUcyJgDqZj7tPJptM2L5B3BcFJmkGj2HO3N+LGDarJrVBBSiEjhTgx4NnLiKZnUbMx547mCRg2akk2w=
   matrix:
     - PGVERSION=9.5
     - PGVERSION=9.4
@@ -13,3 +15,4 @@ before_install:
 install:
   - tools/travis/install_pg.sh
 script: tools/travis/pg_travis_multi_test.sh
+after_success: tools/travis/sync_to_enterprise
