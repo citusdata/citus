@@ -24,6 +24,23 @@ SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left
  
 (1 row)
 
+CREATE TABLE multi_append_table_to_shard_right_hash
+(
+	right_number INTEGER not null,
+	right_text TEXT not null
+);
+SELECT master_create_distributed_table('multi_append_table_to_shard_right_hash', 'right_number', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
  set_config 
@@ -107,19 +124,15 @@ WHERE	left_number = right_number;
 (1 row)
 
 -- Check that we error out if we try to append data to a hash partitioned table.
-UPDATE pg_dist_partition SET partmethod = 'h' WHERE
-	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
-SELECT master_create_empty_shard('multi_append_table_to_shard_right');
-ERROR:  relation "multi_append_table_to_shard_right" is a hash partitioned table
+SELECT master_create_empty_shard('multi_append_table_to_shard_right_hash');
+ERROR:  relation "multi_append_table_to_shard_right_hash" is a hash partitioned table
 DETAIL:  We currently don't support creating shards on hash-partitioned tables
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
 		pg_dist_shard
-WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
-ERROR:  cannot append to shardId 103013
+WHERE	'multi_append_table_to_shard_right_hash'::regclass::oid = logicalrelid;
+ERROR:  cannot append to shardId 103011
 DETAIL:  We currently don't support appending to shards in hash-partitioned tables
-UPDATE pg_dist_partition SET partmethod = 'a' WHERE
-	logicalrelid = 'multi_append_table_to_shard_right'::regclass::oid;
 -- Clean up after test
 SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
  master_apply_delete_command 
