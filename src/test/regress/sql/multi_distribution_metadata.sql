@@ -71,67 +71,54 @@ CREATE FUNCTION column_name_to_column(regclass, text)
 -- test distribution metadata functionality
 -- ===================================================================
 
--- create table to be distributed
+-- create hash distributed table
 CREATE TABLE events_hash (
 	id bigint,
 	name text
 );
+SELECT master_create_distributed_table('events_hash', 'name', 'hash');
 
--- for this table we'll "distribute" manually but verify using function calls
-INSERT INTO pg_dist_shard
-	(shardid, logicalrelid, shardstorage, shardminvalue, shardmaxvalue)
-VALUES
-	(1, 'events_hash'::regclass, 't', '0', '10'),
-	(2, 'events_hash'::regclass, 't', '10', '20'),
-	(3, 'events_hash'::regclass, 't', '20', '30'),
-	(4, 'events_hash'::regclass, 't', '30', '40');
+-- create worker shards
+SELECT master_create_worker_shards('events_hash', 4, 2);
 
-INSERT INTO pg_dist_shard_placement
-	(nodename, nodeport, shardid, shardstate, shardlength)
-VALUES
-	('cluster-worker-01', 5432, 1, 0, 0),
-	('cluster-worker-01', 5432, 2, 0, 0),
-	('cluster-worker-02', 5433, 3, 0, 0),
-	('cluster-worker-02', 5433, 4, 0, 0),
-	('cluster-worker-03', 5434, 1, 1, 0),
-	('cluster-worker-03', 5434, 2, 1, 0),
-	('cluster-worker-04', 5435, 3, 1, 0),
-	('cluster-worker-04', 5435, 4, 1, 0);
-
-INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey)
-VALUES
-	('events_hash'::regclass, 'h', column_name_to_column('events_hash'::regclass, 'name'));
+-- set shardstate of one replication from each shard to 0 (invalid value)
+UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 103025 AND 103028;
 
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
 
 -- should see array with first shard range
-SELECT load_shard_interval_array(1, 0);
+SELECT load_shard_interval_array(103025, 0);
 
 -- should even work for range-partitioned shards
-BEGIN;
-	UPDATE pg_dist_shard SET
-		shardminvalue = 'Aardvark',
-		shardmaxvalue = 'Zebra'
-	WHERE shardid = 1;
+-- create range distributed table
+CREATE TABLE events_range (
+	id bigint,
+	name text
+);
+SELECT master_create_distributed_table('events_range', 'name', 'range');
 
-	UPDATE pg_dist_partition SET partmethod = 'r'
-	WHERE logicalrelid = 'events_hash'::regclass;
+-- create empty shard
+SELECT master_create_empty_shard('events_range');
 
-	SELECT load_shard_interval_array(1, ''::text);
-ROLLBACK;
+UPDATE pg_dist_shard SET
+	shardminvalue = 'Aardvark',
+	shardmaxvalue = 'Zebra'
+WHERE shardid = 103029;
+
+SELECT load_shard_interval_array(103029, ''::text);
 
 -- should see error for non-existent shard
-SELECT load_shard_interval_array(5, 0);
+SELECT load_shard_interval_array(103030, 0);
 
 -- should see two placements
-SELECT load_shard_placement_array(2, false);
+SELECT load_shard_placement_array(103026, false);
 
 -- only one of which is finalized
-SELECT load_shard_placement_array(2, true);
+SELECT load_shard_placement_array(103026, true);
 
 -- should see error for non-existent shard
-SELECT load_shard_placement_array(6, false);
+SELECT load_shard_placement_array(103031, false);
 
 -- should see column id of 'name'
 SELECT partition_column_id('events_hash');
@@ -152,9 +139,11 @@ SELECT column_name_to_column_id('events_hash', 'non_existent');
 
 -- drop shard rows (must drop placements first)
 DELETE FROM pg_dist_shard_placement
-	WHERE shardid BETWEEN 1 AND 4;
+	WHERE shardid BETWEEN 103025 AND 103029;
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_hash'::regclass;
+DELETE FROM pg_dist_shard
+	WHERE logicalrelid = 'events_range'::regclass;
 
 -- verify that an eager load shows them missing
 SELECT load_shard_id_array('events_hash');
