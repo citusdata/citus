@@ -12,6 +12,7 @@
 
 #include "tcop/utility.h"
 
+extern bool EnableDDLPropagation;
 
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,

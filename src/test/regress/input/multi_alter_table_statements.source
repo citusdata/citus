@@ -162,7 +162,56 @@ FROM
 ORDER BY attnum;
 \c - - - :master_port
 
+-- verify that we don't intercept DDL commands if propagation is turned off
+SET citus.enable_ddl_propagation to false;
+
+-- table rename statement can be performed now
+ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
+-- verify rename is performed
+SELECT relname FROM pg_class WHERE relname = 'lineitem_alter' or relname = 'lineitem_renamed';
+
+-- revert it to original name
+ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
+
+-- this column is added to master table and not workers
+ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
+
+-- verify newly added column is not present in a worker shard
+\c - - - :worker_1_port
+SELECT column_only_added_to_master FROM lineitem_alter_103000 LIMIT 0;
+\c - - - :master_port
+
+-- ddl propagation flag is reset to default, disable it again
+SET citus.enable_ddl_propagation to false;
+
+-- following query succeeds since it accesses an previously existing column
+SELECT l_orderkey FROM lineitem_alter LIMIT 0;
+
+-- make master and workers have the same schema again
+ALTER TABLE lineitem_alter DROP COLUMN column_only_added_to_master;
+-- now this should succeed
+SELECT * FROM lineitem_alter LIMIT 0;
+
+-- previously unsupported statements are accepted by postgresql now
+ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
+ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
+ALTER TABLE lineitem_alter SET WITHOUT OIDS;
+
+-- even distribution column can be dropped however postgresql prevents this.
+ALTER TABLE lineitem_alter DROP COLUMN l_orderkey;
+
+-- Even unique indexes on l_partkey (non-partition column) are allowed.
+-- Citus would have prevented that.
+CREATE UNIQUE INDEX unique_lineitem_partkey on lineitem_alter(l_partkey);
+SELECT  indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+
+-- verify index is not created on worker
+\c - - - :worker_1_port
+SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alter_%';
+\c - - - :master_port
+
 -- Cleanup the table and its shards
+SET citus.enable_ddl_propagation to true;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers
