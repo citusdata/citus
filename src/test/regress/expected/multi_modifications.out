@@ -276,8 +276,9 @@ WHERE  nodename = 'localhost' AND
 	   nodeport = :worker_1_port;
 -- Fourth: Perform the same INSERT (primary key violation)
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: duplicate key value violates unique constraint "limit_orders_pkey_750001"
+WARNING:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
+DETAIL:  Key (id)=(275) already exists.
+CONTEXT:  Error occurred on remote connection to localhost:57638.
 -- Last: Verify the insert worked but the placement with the PK violation is now unhealthy
 SELECT count(*) FROM limit_orders WHERE id = 275;
  count 

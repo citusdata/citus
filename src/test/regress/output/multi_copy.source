@@ -455,8 +455,8 @@ COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.1.data' with (
 COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|', master_host 'localhost', master_port 57636);
 -- Test if there is no relation to copy data with the worker copy
 COPY lineitem_copy_none FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-WARNING:  Bad result from localhost:57636
-DETAIL:  Remote message: relation "lineitem_copy_none" does not exist
+WARNING:  relation "lineitem_copy_none" does not exist
+CONTEXT:  Error occurred on remote connection to localhost:57636.
 ERROR:  could not run copy from the worker node
 -- Connect back to the master node
 \c - - - 57636
