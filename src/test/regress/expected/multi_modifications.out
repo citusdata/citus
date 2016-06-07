@@ -151,12 +151,12 @@ INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'se
 								 -5.00);
 ERROR:  new row for relation "limit_orders_750000" violates check constraint "limit_orders_limit_price_check"
 DETAIL:  Failing row contains (18811, BUD, 14962, 2014-04-05 08:32:16, sell, -5.00).
-CONTEXT:  Error occurred on remote connection to localhost:57637.
+CONTEXT:  while executing command on localhost:57637
 -- INSERT violating primary key constraint
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
 DETAIL:  Key (id)=(32743) already exists.
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
@@ -270,7 +270,7 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 ERROR:  duplicate key value violates unique constraint "limit_orders_pkey_750001"
 DETAIL:  Key (id)=(275) already exists.
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 -- Test that shards which miss a modification are marked unhealthy
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
@@ -281,7 +281,7 @@ DROP TABLE limit_orders_750000;
 -- Fourth: Perform an INSERT on the remaining node
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
 WARNING:  relation "limit_orders_750000" does not exist
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 -- Last: Verify the insert worked but the deleted placement is now unhealthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
  count 
