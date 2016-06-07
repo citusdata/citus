@@ -298,7 +298,7 @@ ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError)
 							 messageDetail ? errdetail("%s", messageDetail) : 0,
 							 messageHint ? errhint("%s", messageHint) : 0,
 							 messageContext ? errcontext("%s", messageContext) : 0,
-							 errcontext("Error occurred on remote connection to %s:%s.",
+							 errcontext("while executing command on %s:%s",
 										nodeName, nodePort)));
 	}
 }

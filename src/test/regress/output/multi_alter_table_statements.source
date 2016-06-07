@@ -262,7 +262,7 @@ NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 WARNING:  column "non_existent_column" of relation "lineitem_alter_220000" does not exist
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
@@ -362,15 +362,15 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subc
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 WARNING:  type "non_existent_type" does not exist
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 WARNING:  column "null_column" contains null values
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 WARNING:  invalid input syntax for integer: "a"
-CONTEXT:  Error occurred on remote connection to localhost:57638.
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 -- Verify that we error out on statements involving RENAME
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
