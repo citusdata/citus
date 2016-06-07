@@ -198,34 +198,31 @@ void
 ReportRemoteError(PGconn *connection, PGresult *result)
 {
 	char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-	char *remoteMessage = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
+	char *messagePrimary = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
+	char *messageDetail = PQresultErrorField(result, PG_DIAG_MESSAGE_DETAIL);
+	char *messageHint = PQresultErrorField(result, PG_DIAG_MESSAGE_HINT);
+	char *messageContext = PQresultErrorField(result, PG_DIAG_CONTEXT);
+
 	char *nodeName = ConnectionGetOptionValue(connection, "host");
 	char *nodePort = ConnectionGetOptionValue(connection, "port");
-	char *errorPrefix = "Connection failed to";
 	int sqlState = ERRCODE_CONNECTION_FAILURE;
 
 	if (sqlStateString != NULL)
 	{
 		sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
 								 sqlStateString[3], sqlStateString[4]);
-
-		/* use more specific error prefix for result failures */
-		if (sqlState != ERRCODE_CONNECTION_FAILURE)
-		{
-			errorPrefix = "Bad result from";
-		}
 	}
 
 	/*
 	 * If the PGresult did not contain a message, the connection may provide a
 	 * suitable top level one. At worst, this is an empty string.
 	 */
-	if (remoteMessage == NULL)
+	if (messagePrimary == NULL)
 	{
 		char *lastNewlineIndex = NULL;
 
-		remoteMessage = PQerrorMessage(connection);
-		lastNewlineIndex = strrchr(remoteMessage, '\n');
+		messagePrimary = PQerrorMessage(connection);
+		lastNewlineIndex = strrchr(messagePrimary, '\n');
 
 		/* trim trailing newline, if any */
 		if (lastNewlineIndex != NULL)
@@ -234,9 +231,21 @@ ReportRemoteError(PGconn *connection, PGresult *result)
 		}
 	}
 
-	ereport(WARNING, (errcode(sqlState),
-					  errmsg("%s %s:%s", errorPrefix, nodeName, nodePort),
-					  errdetail("Remote message: %s", remoteMessage)));
+	if (sqlState == ERRCODE_CONNECTION_FAILURE)
+	{
+		ereport(WARNING, (errcode(sqlState),
+						  errmsg("connection failed to %s:%s", nodeName, nodePort),
+						  errdetail("%s", messagePrimary)));
+	}
+	else
+	{
+		ereport(WARNING, (errcode(sqlState), errmsg("%s", messagePrimary),
+						  messageDetail ? errdetail("%s", messageDetail) : 0,
+						  messageHint ? errhint("%s", messageHint) : 0,
+						  messageContext ? errcontext("%s", messageContext) : 0,
+						  errcontext("Error occurred on remote connection to %s:%s.",
+									 nodeName, nodePort)));
+	}
 }
 
 
