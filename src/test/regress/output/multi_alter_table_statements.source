@@ -261,8 +261,8 @@ ALTER TABLE IF EXISTS non_existent_table ADD COLUMN new_column INTEGER;
 NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
-WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: column "non_existent_column" of relation "lineitem_alter_220000" does not exist
+WARNING:  column "non_existent_column" of relation "lineitem_alter_220000" does not exist
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
@@ -361,16 +361,16 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subc
 -- Verify that we error out in case of postgres errors on supported statement
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
-WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: type "non_existent_type" does not exist
+WARNING:  type "non_existent_type" does not exist
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
-WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: column "null_column" contains null values
+WARNING:  column "null_column" contains null values
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
-WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: invalid input syntax for integer: "a"
+WARNING:  invalid input syntax for integer: "a"
+CONTEXT:  while executing command on localhost:57638
 ERROR:  could not execute DDL command on worker node shards
 -- Verify that we error out on statements involving RENAME
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;

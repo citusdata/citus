@@ -75,7 +75,7 @@ PrepareRemoteTransactions(List *connectionList)
 			/* a failure to prepare is an implicit rollback */
 			transactionConnection->transactionState = TRANSACTION_STATE_CLOSED;
 
-			ReportRemoteError(connection, result);
+			WarnRemoteError(connection, result);
 			PQclear(result);
 
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
