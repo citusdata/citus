@@ -141,7 +141,7 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 	}
 	else
 	{
-		ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL, false);
 
 		PQfinish(connection);
 		connectionId = INVALID_CONNECTION_ID;
@@ -194,7 +194,7 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	}
 	else
 	{
-		ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL, false);
 
 		PQfinish(connection);
 		connectionId = INVALID_CONNECTION_ID;
@@ -249,7 +249,7 @@ MultiClientConnectPoll(int32 connectionId)
 	}
 	else if (pollingStatus == PGRES_POLLING_FAILED)
 	{
-		ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL, false);
 
 		connectStatus = CLIENT_CONNECTION_BAD;
 	}
@@ -433,7 +433,7 @@ MultiClientQueryResult(int32 connectionId, void **queryResult, int *rowCount,
 	}
 	else
 	{
-		ReportRemoteError(connection, result);
+		ReportRemoteError(connection, result, false);
 		PQclear(result);
 	}
 
@@ -500,7 +500,7 @@ MultiClientBatchResult(int32 connectionId, void **queryResult, int *rowCount,
 	}
 	else
 	{
-		ReportRemoteError(connection, result);
+		ReportRemoteError(connection, result, false);
 		PQclear(result);
 		queryStatus = CLIENT_BATCH_QUERY_FAILED;
 	}
@@ -585,7 +585,7 @@ MultiClientQueryStatus(int32 connectionId)
 			copyResults = true;
 		}
 
-		ReportRemoteError(connection, result);
+		ReportRemoteError(connection, result, false);
 	}
 
 	/* clear the result object */
@@ -675,7 +675,7 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		{
 			copyStatus = CLIENT_COPY_FAILED;
 
-			ReportRemoteError(connection, result);
+			ReportRemoteError(connection, result, false);
 		}
 
 		PQclear(result);
@@ -685,7 +685,7 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		/* received an error */
 		copyStatus = CLIENT_COPY_FAILED;
 
-		ReportRemoteError(connection, NULL);
+		ReportRemoteError(connection, NULL, false);
 	}
 
 	/* if copy out completed, make sure we drain all results from libpq */

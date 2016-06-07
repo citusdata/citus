@@ -191,11 +191,35 @@ PurgeConnection(PGconn *connection)
 
 
 /*
+ * SqlStateMatchesCategory returns true if the given sql state is in the given
+ * error category. Note that we use ERRCODE_TO_CATEGORY macro to determine error
+ * category of the sql state and expect the caller to use the same macro for the
+ * error category.
+ */
+bool
+SqlStateMatchesCategory(char *sqlStateString, int category)
+{
+	bool sqlStateMatchesCategory = false;
+	int sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
+								 sqlStateString[3], sqlStateString[4]);
+
+	int sqlStateCategory = ERRCODE_TO_CATEGORY(sqlState);
+	if (sqlStateCategory == category)
+	{
+		sqlStateMatchesCategory = true;
+	}
+
+	return sqlStateMatchesCategory;
+}
+
+
+/*
  * ReportRemoteError retrieves various error fields from the a remote result and
- * produces an error report at the WARNING level.
+ * produces an error report at the WARNING level or at the ERROR level if raise
+ * error is set.
  */
 void
-ReportRemoteError(PGconn *connection, PGresult *result)
+ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError)
 {
 	char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
 	char *messagePrimary = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
@@ -206,11 +230,17 @@ ReportRemoteError(PGconn *connection, PGresult *result)
 	char *nodeName = ConnectionGetOptionValue(connection, "host");
 	char *nodePort = ConnectionGetOptionValue(connection, "port");
 	int sqlState = ERRCODE_CONNECTION_FAILURE;
+	int errorLevel = WARNING;
 
 	if (sqlStateString != NULL)
 	{
 		sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
 								 sqlStateString[3], sqlStateString[4]);
+	}
+
+	if (raiseError)
+	{
+		errorLevel = ERROR;
 	}
 
 	/*
@@ -233,18 +263,18 @@ ReportRemoteError(PGconn *connection, PGresult *result)
 
 	if (sqlState == ERRCODE_CONNECTION_FAILURE)
 	{
-		ereport(WARNING, (errcode(sqlState),
-						  errmsg("connection failed to %s:%s", nodeName, nodePort),
-						  errdetail("%s", messagePrimary)));
+		ereport(errorLevel, (errcode(sqlState),
+							 errmsg("connection failed to %s:%s", nodeName, nodePort),
+							 errdetail("%s", messagePrimary)));
 	}
 	else
 	{
-		ereport(WARNING, (errcode(sqlState), errmsg("%s", messagePrimary),
-						  messageDetail ? errdetail("%s", messageDetail) : 0,
-						  messageHint ? errhint("%s", messageHint) : 0,
-						  messageContext ? errcontext("%s", messageContext) : 0,
-						  errcontext("Error occurred on remote connection to %s:%s.",
-									 nodeName, nodePort)));
+		ereport(errorLevel, (errcode(sqlState), errmsg("%s", messagePrimary),
+							 messageDetail ? errdetail("%s", messageDetail) : 0,
+							 messageHint ? errhint("%s", messageHint) : 0,
+							 messageContext ? errcontext("%s", messageContext) : 0,
+							 errcontext("Error occurred on remote connection to %s:%s.",
+										nodeName, nodePort)));
 	}
 }
 
@@ -316,7 +346,7 @@ ConnectToNode(char *nodeName, int32 nodePort, char *nodeUser)
 			/* warn if still erroring on final attempt */
 			if (attemptIndex == MAX_CONNECT_ATTEMPTS - 1)
 			{
-				ReportRemoteError(connection, NULL);
+				ReportRemoteError(connection, NULL, false);
 			}
 
 			PQfinish(connection);

@@ -827,7 +827,7 @@ MasterPartitionMethod(RangeVar *relation)
 	}
 	else
 	{
-		ReportRemoteError(masterConnection, queryResult);
+		ReportRemoteError(masterConnection, queryResult, false);
 		ereport(ERROR, (errmsg("could not get the partition method of the "
 							   "distributed table")));
 	}
@@ -924,7 +924,7 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 		result = PQexec(connection, "BEGIN");
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
-			ReportRemoteError(connection, result);
+			ReportRemoteError(connection, result, false);
 			failedPlacementList = lappend(failedPlacementList, placement);
 
 			PQclear(result);
@@ -937,7 +937,7 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 		result = PQexec(connection, copyCommand->data);
 		if (PQresultStatus(result) != PGRES_COPY_IN)
 		{
-			ReportRemoteError(connection, result);
+			ReportRemoteError(connection, result, false);
 			failedPlacementList = lappend(failedPlacementList, placement);
 
 			PQclear(result);
@@ -1504,7 +1504,7 @@ RemoteCreateEmptyShard(char *relationName)
 	}
 	else
 	{
-		ReportRemoteError(masterConnection, queryResult);
+		ReportRemoteError(masterConnection, queryResult, false);
 		ereport(ERROR, (errmsg("could not create a new empty shard on the remote node")));
 	}
 
