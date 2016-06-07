@@ -2,8 +2,12 @@
 -- MULTI_SUBQUERY
 --
 
--- Create tables for subquery tests
 
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 270000;
+
+
+-- Create tables for subquery tests
 CREATE TABLE lineitem_subquery (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -101,7 +105,7 @@ FROM
 
 -- Update metadata in order to make all shards equal.
 
-UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 102024;
+UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 270003;
 
 -- If group by is not on partition column then we error out.
 
@@ -350,5 +354,3 @@ SELECT * FROM
 AS foo;
 
 DROP TABLE subquery_pruning_varchar_test_table;
-
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102026;

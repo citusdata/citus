@@ -1,6 +1,7 @@
 --
 -- MULTI_JOIN_PRUNING
 --
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 680000;
 -- Check that join-pruning works for joins between two large relations. For now
 -- we only check for join-pruning between locally partitioned relations. In the
 -- future we want to check for pruning between re-partitioned relations as well.
@@ -23,9 +24,9 @@ DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
-DEBUG:  predicate pruning for shardId 102009
-DEBUG:  predicate pruning for shardId 102010
-DEBUG:  predicate pruning for shardId 102011
+DEBUG:  predicate pruning for shardId 290000
+DEBUG:  predicate pruning for shardId 290001
+DEBUG:  predicate pruning for shardId 290002
 DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
 DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
@@ -38,12 +39,12 @@ DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
 -- works as expected in this case.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
-DEBUG:  predicate pruning for shardId 102009
-DEBUG:  predicate pruning for shardId 102010
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102012
-DEBUG:  predicate pruning for shardId 102013
-DEBUG:  predicate pruning for shardId 102014
+DEBUG:  predicate pruning for shardId 290000
+DEBUG:  predicate pruning for shardId 290001
+DEBUG:  predicate pruning for shardId 290002
+DEBUG:  predicate pruning for shardId 290003
+DEBUG:  predicate pruning for shardId 290004
+DEBUG:  predicate pruning for shardId 290005
  sum | avg 
 -----+-----
      |    
@@ -54,10 +55,10 @@ DEBUG:  predicate pruning for shardId 102014
 -- out all the shards, and leave us with an empty task list.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-DEBUG:  predicate pruning for shardId 102009
-DEBUG:  predicate pruning for shardId 102010
-DEBUG:  predicate pruning for shardId 102011
-DEBUG:  predicate pruning for shardId 102016
+DEBUG:  predicate pruning for shardId 290000
+DEBUG:  predicate pruning for shardId 290001
+DEBUG:  predicate pruning for shardId 290002
+DEBUG:  predicate pruning for shardId 290007
 DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
 DEBUG:  join prunable for intervals [13921,14947] and [1,5986]

@@ -2,6 +2,11 @@
 -- MULTI_CREATE_TABLE
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 360000;
+
+
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
 

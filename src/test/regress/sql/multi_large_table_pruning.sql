@@ -1,10 +1,14 @@
 --
 -- MULTI_LARGE_TABLE_PRUNING
 --
-
 -- Tests covering partition and join-pruning for large table joins. Note that we
 -- set executor type to task tracker executor here, as we cannot run repartition
 -- jobs with real time executor.
+
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 700000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 700000;
+
 
 SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO DEBUG2;

@@ -2,11 +2,14 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 220000;
+
+
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
 -- aren't affected by changes to the previous tests.
-
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
 CREATE TABLE lineitem_alter (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -178,7 +181,7 @@ ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
 
 -- verify newly added column is not present in a worker shard
 \c - - - :worker_1_port
-SELECT column_only_added_to_master FROM lineitem_alter_103000 LIMIT 0;
+SELECT column_only_added_to_master FROM lineitem_alter_220000 LIMIT 0;
 \c - - - :master_port
 
 -- ddl propagation flag is reset to default, disable it again

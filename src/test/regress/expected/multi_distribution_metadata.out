@@ -1,6 +1,8 @@
 -- ===================================================================
 -- create test functions
 -- ===================================================================
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 540000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 540000;
 CREATE FUNCTION load_shard_id_array(regclass)
 	RETURNS bigint[]
 	AS 'citus'
@@ -75,16 +77,16 @@ SELECT master_create_worker_shards('events_hash', 4, 2);
 (1 row)
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
-UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 103025 AND 103028;
+UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 540000 AND 540003;
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
       load_shard_id_array      
 -------------------------------
- {103025,103026,103027,103028}
+ {540000,540001,540002,540003}
 (1 row)
 
 -- should see array with first shard range
-SELECT load_shard_interval_array(103025, 0);
+SELECT load_shard_interval_array(540000, 0);
  load_shard_interval_array 
 ---------------------------
  {-2147483648,-1073741825}
@@ -106,42 +108,41 @@ SELECT master_create_distributed_table('events_range', 'name', 'range');
 SELECT master_create_empty_shard('events_range');
  master_create_empty_shard 
 ---------------------------
-                    103029
+                    540004
 (1 row)
 
 UPDATE pg_dist_shard SET
 	shardminvalue = 'Aardvark',
 	shardmaxvalue = 'Zebra'
-WHERE shardid = 103029;
-SELECT load_shard_interval_array(103029, ''::text);
+WHERE shardid = 540004;
+SELECT load_shard_interval_array(540004, ''::text);
  load_shard_interval_array 
 ---------------------------
  {Aardvark,Zebra}
 (1 row)
 
 -- should see error for non-existent shard
-SELECT load_shard_interval_array(103030, 0);
-ERROR:  could not find valid entry for shard 103030
+SELECT load_shard_interval_array(540005, 0);
+ERROR:  could not find valid entry for shard 540005
 -- should see two placements
-SELECT load_shard_placement_array(103026, false);
+SELECT load_shard_placement_array(540001, false);
     load_shard_placement_array     
 -----------------------------------
  {localhost:57637,localhost:57638}
 (1 row)
 
 -- only one of which is finalized
-SELECT load_shard_placement_array(103026, true);
+SELECT load_shard_placement_array(540001, true);
  load_shard_placement_array 
 ----------------------------
  {localhost:57637}
 (1 row)
 
 -- should see error for non-existent shard
-SELECT load_shard_placement_array(103031, false);
-WARNING:  could not find any shard placements for shardId 103031
- load_shard_placement_array 
-----------------------------
- {}
+SELECT load_shard_placement_array(540001, false);
+    load_shard_placement_array     
+-----------------------------------
+ {localhost:57637,localhost:57638}
 (1 row)
 
 -- should see column id of 'name'
@@ -192,7 +193,7 @@ SELECT column_name_to_column_id('events_hash', 'non_existent');
 ERROR:  column "non_existent" of relation "events_hash" does not exist
 -- drop shard rows (must drop placements first)
 DELETE FROM pg_dist_shard_placement
-	WHERE shardid BETWEEN 103025 AND 103029;
+	WHERE shardid BETWEEN 540000 AND 540004;
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_hash'::regclass;
 DELETE FROM pg_dist_shard
@@ -275,9 +276,9 @@ WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
 
 -- deleting or updating a non-existent row should fail
 SELECT delete_shard_placement_row(:new_shard_id, 'wrong_localhost', 5432);
-ERROR:  could not find valid entry for shard placement 103030 on node "wrong_localhost:5432"
+ERROR:  could not find valid entry for shard placement 540005 on node "wrong_localhost:5432"
 SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
-ERROR:  could not find valid entry for shard placement 103030 on node "localhost:5432"
+ERROR:  could not find valid entry for shard placement 540005 on node "localhost:5432"
 -- now we'll even test our lock methods...
 -- use transaction to bound how long we hold the lock
 BEGIN;

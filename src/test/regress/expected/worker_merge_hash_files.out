@@ -1,6 +1,8 @@
 --
 -- WORKER_MERGE_HASH_FILES
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1140000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1140000;
 \set JobId 201010
 \set TaskId 101103
 \set Task_Table_Name public.task_101103

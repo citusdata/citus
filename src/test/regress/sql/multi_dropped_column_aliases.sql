@@ -2,6 +2,11 @@
 -- Tests that check that our query functionality behaves as expected when the
 -- table schema is modified via ALTER statements.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 620000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 620000;
+
+
 SELECT count(*) FROM customer;
 SELECT * FROM customer LIMIT 2;
 

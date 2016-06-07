@@ -1,6 +1,8 @@
 --
 -- WORKER_RANGE_PARTITION_COMPLEX
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1170000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1170000;
 \set JobId 201010
 \set TaskId 101102
 \set Partition_Column l_partkey

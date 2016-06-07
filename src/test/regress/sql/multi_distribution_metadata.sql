@@ -2,6 +2,11 @@
 -- create test functions
 -- ===================================================================
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 540000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 540000;
+
+
 CREATE FUNCTION load_shard_id_array(regclass)
 	RETURNS bigint[]
 	AS 'citus'
@@ -82,13 +87,13 @@ SELECT master_create_distributed_table('events_hash', 'name', 'hash');
 SELECT master_create_worker_shards('events_hash', 4, 2);
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
-UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 103025 AND 103028;
+UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 540000 AND 540003;
 
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
 
 -- should see array with first shard range
-SELECT load_shard_interval_array(103025, 0);
+SELECT load_shard_interval_array(540000, 0);
 
 -- should even work for range-partitioned shards
 -- create range distributed table
@@ -104,21 +109,21 @@ SELECT master_create_empty_shard('events_range');
 UPDATE pg_dist_shard SET
 	shardminvalue = 'Aardvark',
 	shardmaxvalue = 'Zebra'
-WHERE shardid = 103029;
+WHERE shardid = 540004;
 
-SELECT load_shard_interval_array(103029, ''::text);
+SELECT load_shard_interval_array(540004, ''::text);
 
 -- should see error for non-existent shard
-SELECT load_shard_interval_array(103030, 0);
+SELECT load_shard_interval_array(540005, 0);
 
 -- should see two placements
-SELECT load_shard_placement_array(103026, false);
+SELECT load_shard_placement_array(540001, false);
 
 -- only one of which is finalized
-SELECT load_shard_placement_array(103026, true);
+SELECT load_shard_placement_array(540001, true);
 
 -- should see error for non-existent shard
-SELECT load_shard_placement_array(103031, false);
+SELECT load_shard_placement_array(540001, false);
 
 -- should see column id of 'name'
 SELECT partition_column_id('events_hash');
@@ -139,7 +144,7 @@ SELECT column_name_to_column_id('events_hash', 'non_existent');
 
 -- drop shard rows (must drop placements first)
 DELETE FROM pg_dist_shard_placement
-	WHERE shardid BETWEEN 103025 AND 103029;
+	WHERE shardid BETWEEN 540000 AND 540004;
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_hash'::regclass;
 DELETE FROM pg_dist_shard
