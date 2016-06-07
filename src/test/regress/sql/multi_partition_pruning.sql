@@ -5,6 +5,11 @@
 -- Tests to verify that we correctly prune unreferenced shards. For this, we
 -- need to increase the logging verbosity of messages displayed on the client.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 770000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 770000;
+
+
 SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 

@@ -2,6 +2,11 @@
 -- note that output of this file for postgresql 9.4 will
 -- be full syntax errors, which is expected.
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 980000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 980000;
+
+
 CREATE TABLE upsert_test
 (
 	part_key int UNIQUE,

@@ -1,10 +1,14 @@
 --
 -- MULTI_AVERAGE_EXPRESSION_ORDER
 --
-
 -- This test checks that the group-by columns don't need to be above an average
 -- expression, and can be anywhere in the projection order. This is in response
 -- to a bug we had due to the average expression introducing new columns.
+
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 450000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 450000;
+
 
 SELECT
 	sum(l_quantity) as sum_qty,

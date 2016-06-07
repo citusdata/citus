@@ -2,6 +2,11 @@
 -- WORKER_COPY
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 260000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 260000;
+
+
 COPY lineitem FROM '@abs_srcdir@/data/lineitem.1.data' WITH DELIMITER '|';
 COPY lineitem FROM '@abs_srcdir@/data/lineitem.2.data' WITH DELIMITER '|';
 

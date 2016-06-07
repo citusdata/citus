@@ -1,10 +1,11 @@
 --
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 220000;
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
 -- aren't affected by changes to the previous tests.
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
 CREATE TABLE lineitem_alter (
 	l_orderkey bigint not null,
 	l_partkey integer not null,
@@ -166,10 +167,10 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 ERROR:  null value in column "int_column2" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 03-13-1996, 02-12-1996, 03-22-1996, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
-CONTEXT:  COPY lineitem_alter_103006, line 1: "1|155190|7706|1|17|21168.23|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-03-22|DELIVER IN PERSON|TRUCK|e..."
+CONTEXT:  COPY lineitem_alter_220006, line 1: "1|155190|7706|1|17|21168.23|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-03-22|DELIVER IN PERSON|TRUCK|e..."
 ERROR:  null value in column "int_column2" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 03-13-1996, 02-12-1996, 03-22-1996, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
-CONTEXT:  COPY lineitem_alter_103006, line 1: "1|155190|7706|1|17|21168.23|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-03-22|DELIVER IN PERSON|TRUCK|e..."
+CONTEXT:  COPY lineitem_alter_220006, line 1: "1|155190|7706|1|17|21168.23|0.04|0.02|N|O|1996-03-13|1996-02-12|1996-03-22|DELIVER IN PERSON|TRUCK|e..."
 \stage: failed to replicate shard to enough replicas
 -- Verify that DROP NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
@@ -261,7 +262,7 @@ NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 WARNING:  Bad result from localhost:57638
-DETAIL:  Remote message: column "non_existent_column" of relation "lineitem_alter_103000" does not exist
+DETAIL:  Remote message: column "non_existent_column" of relation "lineitem_alter_220000" does not exist
 ERROR:  could not execute DDL command on worker node shards
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
@@ -469,9 +470,9 @@ ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 ALTER TABLE lineitem_alter ADD COLUMN column_only_added_to_master int;
 -- verify newly added column is not present in a worker shard
 \c - - - :worker_1_port
-SELECT column_only_added_to_master FROM lineitem_alter_103000 LIMIT 0;
+SELECT column_only_added_to_master FROM lineitem_alter_220000 LIMIT 0;
 ERROR:  column "column_only_added_to_master" does not exist
-LINE 1: SELECT column_only_added_to_master FROM lineitem_alter_10300...
+LINE 1: SELECT column_only_added_to_master FROM lineitem_alter_22000...
                ^
 \c - - - :master_port
 -- ddl propagation flag is reset to default, disable it again

@@ -2,6 +2,11 @@
 -- MULTI_BINARY_MASTER_COPY
 --
 
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 430000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 430000;
+
+
 -- Try binary master copy for different executors
 
 SET citus.binary_master_copy_format TO 'on';
