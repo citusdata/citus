@@ -152,7 +152,7 @@ SELECT max(l_suppkey) FROM
                 l_suppkey,
                 count(*)
             FROM
-                lineitem_subquery
+                lineitem
             WHERE
                 l_orderkey < 20000
             GROUP BY
