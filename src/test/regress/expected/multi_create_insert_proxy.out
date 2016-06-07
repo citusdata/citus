@@ -68,7 +68,7 @@ INSERT INTO pg_temp.:"proxy_tablename" (id) VALUES (1);
 -- test copy with bad row in middle
 \set VERBOSITY terse
 COPY pg_temp.:"proxy_tablename" FROM stdin;
-ERROR:  could not modify any active placements
+ERROR:  null value in column "data" violates not-null constraint
 \set VERBOSITY default
 -- verify rows were copied to distributed table
 SELECT * FROM insert_target ORDER BY id ASC;

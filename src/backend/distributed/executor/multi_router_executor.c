@@ -267,7 +267,26 @@ ExecuteDistributedModify(Task *task)
 		result = PQexec(connection, task->queryString);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
-			ReportRemoteError(connection, result);
+			char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+			int category = 0;
+			bool raiseError = false;
+
+			/*
+			 * If the error code is in constraint violation class, we want to
+			 * fail fast because we must get the same error from all shard
+			 * placements.
+			 */
+			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
+			raiseError = SqlStateMatchesCategory(sqlStateString, category);
+
+			if (raiseError)
+			{
+				ReraiseRemoteError(connection, result);
+			}
+			else
+			{
+				WarnRemoteError(connection, result);
+			}
 			PQclear(result);
 
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
@@ -451,14 +470,14 @@ SendQueryInSingleRowMode(PGconn *connection, char *query)
 	querySent = PQsendQuery(connection, query);
 	if (querySent == 0)
 	{
-		ReportRemoteError(connection, NULL);
+		WarnRemoteError(connection, NULL);
 		return false;
 	}
 
 	singleRowMode = PQsetSingleRowMode(connection);
 	if (singleRowMode == 0)
 	{
-		ReportRemoteError(connection, NULL);
+		WarnRemoteError(connection, NULL);
 		return false;
 	}
 
@@ -505,7 +524,7 @@ StoreQueryResult(PGconn *connection, TupleDesc tupleDescriptor,
 		resultStatus = PQresultStatus(result);
 		if ((resultStatus != PGRES_SINGLE_TUPLE) && (resultStatus != PGRES_TUPLES_OK))
 		{
-			ReportRemoteError(connection, result);
+			WarnRemoteError(connection, result);
 			PQclear(result);
 
 			return false;

@@ -59,7 +59,7 @@ initialize_remote_temp_table(PG_FUNCTION_ARGS)
 	result = PQexec(connection, POPULATE_TEMP_TABLE);
 	if (PQresultStatus(result) != PGRES_COMMAND_OK)
 	{
-		ReportRemoteError(connection, result);
+		WarnRemoteError(connection, result);
 	}
 
 	PQclear(result);
@@ -90,7 +90,7 @@ count_remote_temp_table_rows(PG_FUNCTION_ARGS)
 	result = PQexec(connection, COUNT_TEMP_TABLE);
 	if (PQresultStatus(result) != PGRES_TUPLES_OK)
 	{
-		ReportRemoteError(connection, result);
+		WarnRemoteError(connection, result);
 	}
 	else
 	{
