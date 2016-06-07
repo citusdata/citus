@@ -371,14 +371,14 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 		result = PQexec(connection, "BEGIN");
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
-			ReportRemoteError(connection, result);
+			ReportRemoteError(connection, result, false);
 			ereport(ERROR, (errmsg("could not send query to shard placement")));
 		}
 
 		result = PQexec(connection, shardQueryString);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
-			ReportRemoteError(connection, result);
+			ReportRemoteError(connection, result, false);
 			ereport(ERROR, (errmsg("could not send query to shard placement")));
 		}
 
