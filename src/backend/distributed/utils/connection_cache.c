@@ -41,6 +41,7 @@ static HTAB *NodeConnectionHash = NULL;
 
 /* local function forward declarations */
 static HTAB * CreateNodeConnectionHash(void);
+static void ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError);
 
 
 /*
@@ -214,11 +215,35 @@ SqlStateMatchesCategory(char *sqlStateString, int category)
 
 
 /*
- * ReportRemoteError retrieves various error fields from the a remote result and
- * produces an error report at the WARNING level or at the ERROR level if raise
- * error is set.
+ * WarnRemoteError retrieves error fields from a remote result and produces an
+ * error report at the WARNING level after amending the error with a CONTEXT
+ * field containing the remote node host and port information.
  */
 void
+WarnRemoteError(PGconn *connection, PGresult *result)
+{
+	ReportRemoteError(connection, result, false);
+}
+
+
+/*
+ * ReraiseRemoteError retrieves error fields from a remote result and re-raises
+ * the error after amending it with a CONTEXT field containing the remote node
+ * host and port information.
+ */
+void
+ReraiseRemoteError(PGconn *connection, PGresult *result)
+{
+	ReportRemoteError(connection, result, true);
+}
+
+
+/*
+ * ReportRemoteError is an internal helper function which implements logic
+ * needed by both WarnRemoteError and ReraiseRemoteError. They wrap this
+ * function to provide explicit names for the possible behaviors.
+ */
+static void
 ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError)
 {
 	char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
@@ -346,7 +371,7 @@ ConnectToNode(char *nodeName, int32 nodePort, char *nodeUser)
 			/* warn if still erroring on final attempt */
 			if (attemptIndex == MAX_CONNECT_ATTEMPTS - 1)
 			{
-				ReportRemoteError(connection, NULL, false);
+				WarnRemoteError(connection, NULL);
 			}
 
 			PQfinish(connection);

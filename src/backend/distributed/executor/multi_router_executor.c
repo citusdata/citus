@@ -279,7 +279,14 @@ ExecuteDistributedModify(Task *task)
 			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
 			raiseError = SqlStateMatchesCategory(sqlStateString, category);
 
-			ReportRemoteError(connection, result, raiseError);
+			if (raiseError)
+			{
+				ReraiseRemoteError(connection, result);
+			}
+			else
+			{
+				WarnRemoteError(connection, result);
+			}
 			PQclear(result);
 
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
@@ -463,14 +470,14 @@ SendQueryInSingleRowMode(PGconn *connection, char *query)
 	querySent = PQsendQuery(connection, query);
 	if (querySent == 0)
 	{
-		ReportRemoteError(connection, NULL, false);
+		WarnRemoteError(connection, NULL);
 		return false;
 	}
 
 	singleRowMode = PQsetSingleRowMode(connection);
 	if (singleRowMode == 0)
 	{
-		ReportRemoteError(connection, NULL, false);
+		WarnRemoteError(connection, NULL);
 		return false;
 	}
 
@@ -517,7 +524,7 @@ StoreQueryResult(PGconn *connection, TupleDesc tupleDescriptor,
 		resultStatus = PQresultStatus(result);
 		if ((resultStatus != PGRES_SINGLE_TUPLE) && (resultStatus != PGRES_TUPLES_OK))
 		{
-			ReportRemoteError(connection, result, false);
+			WarnRemoteError(connection, result);
 			PQclear(result);
 
 			return false;
