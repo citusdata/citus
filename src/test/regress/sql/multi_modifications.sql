@@ -199,8 +199,8 @@ INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 -- First: Connect to the second worker node
 \c - - - :worker_2_port
 
--- Second: Drop limit_orders shard on the second worker node
-DROP TABLE limit_orders_750000;
+-- Second: Move aside limit_orders shard on the second worker node
+ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 
 -- Third: Connect back to master node
 \c - - - :master_port
@@ -210,6 +210,7 @@ INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell',
 
 -- Last: Verify the insert worked but the deleted placement is now unhealthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
+
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
@@ -218,6 +219,41 @@ AND    sp.nodename = 'localhost'
 AND    sp.nodeport = :worker_2_port
 AND    sp.shardstate = 3
 AND    s.logicalrelid = 'limit_orders'::regclass;
+
+-- Test that if all shards miss a modification, no state change occurs
+
+-- First: Connect to the first worker node
+\c - - - :worker_1_port
+
+-- Second: Move aside limit_orders shard on the second worker node
+ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
+
+-- Third: Connect back to master node
+\c - - - :master_port
+
+-- Fourth: Perform an INSERT on the remaining node
+INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
+
+-- Last: Verify worker is still healthy
+SELECT count(*)
+FROM   pg_dist_shard_placement AS sp,
+	   pg_dist_shard           AS s
+WHERE  sp.shardid = s.shardid
+AND    sp.nodename = 'localhost'
+AND    sp.nodeport = :worker_1_port
+AND    sp.shardstate = 1
+AND    s.logicalrelid = 'limit_orders'::regclass;
+
+-- Undo our change...
+
+-- First: Connect to the first worker node
+\c - - - :worker_1_port
+
+-- Second: Move aside limit_orders shard on the second worker node
+ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
+
+-- Third: Connect back to master node
+\c - - - :master_port
 
 -- commands with no constraints on the partition key are not supported
 UPDATE limit_orders SET limit_price = 0.00;
