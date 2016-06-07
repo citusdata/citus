@@ -110,6 +110,15 @@ SELECT count(*) FROM customer_copy_hash;
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
 
+-- Make sure that master_update_shard_statistics() only updates shard length for
+-- hash-partitioned tables
+SELECT master_update_shard_statistics(560000);
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560000;
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560000;
+
+
 -- Create a new hash-partitioned table with default now() function
 CREATE TABLE customer_with_default(
         c_custkey integer,
@@ -195,6 +204,24 @@ FROM customer_copy_range WHERE c_custkey <= 500;
 -- Check whether data was copied
 SELECT count(*) FROM customer_copy_range;
 
+-- Manipulate min/max values and check shard statistics for new shard
+UPDATE pg_dist_shard SET shardminvalue = 1501, shardmaxvalue = 2000
+WHERE shardid = :new_shard_id;
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = :new_shard_id;
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = :new_shard_id;
+
+-- Update shard statistics for range-partitioned shard and check that only the
+-- shard length is updated.
+SELECT master_update_shard_statistics(:new_shard_id);
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = :new_shard_id;
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = :new_shard_id;
+
+-- Revert back min/max value updates
+UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
+WHERE shardid = :new_shard_id;
+
 -- Create a new append-partitioned table into which to COPY
 CREATE TABLE customer_copy_append (
         c_custkey integer,
@@ -232,6 +259,19 @@ COPY customer_copy_append(c_custkey, c_name) FROM STDIN WITH (FORMAT 'csv');
 
 -- Check whether data was copied properly
 SELECT * FROM customer_copy_append;
+
+-- Manipulate manipulate and check shard statistics for append-partitioned table shard
+UPDATE pg_dist_shard SET shardminvalue = 1501, shardmaxvalue = 2000 WHERE shardid = 560131;
+UPDATE pg_dist_shard_placement SET shardlength = 0 WHERE shardid = 560131;
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560131;
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560131;
+
+-- Update shard statistics for append-partitioned shard
+SELECT master_update_shard_statistics(560131);
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560131;
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560131;
 
 -- Create lineitem table
 CREATE TABLE lineitem_copy_append (

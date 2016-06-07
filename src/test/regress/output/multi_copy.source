@@ -126,6 +126,26 @@ SELECT count(*) FROM customer_copy_hash;
   2006
 (1 row)
 
+-- Make sure that master_update_shard_statistics() only updates shard length for
+-- hash-partitioned tables
+SELECT master_update_shard_statistics(560000);
+ master_update_shard_statistics 
+--------------------------------
+                           8192
+(1 row)
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560000;
+ shardid | shardminvalue | shardmaxvalue 
+---------+---------------+---------------
+  560000 | -2147483648   | -2080374785
+(1 row)
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560000;
+ shardid | shardlength 
+---------+-------------
+  560000 |        8192
+(1 row)
+
 -- Create a new hash-partitioned table with default now() function
 CREATE TABLE customer_with_default(
         c_custkey integer,
@@ -227,6 +247,46 @@ SELECT count(*) FROM customer_copy_range;
   1000
 (1 row)
 
+-- Manipulate min/max values and check shard statistics for new shard
+UPDATE pg_dist_shard SET shardminvalue = 1501, shardmaxvalue = 2000
+WHERE shardid = :new_shard_id;
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = :new_shard_id;
+ shardid | shardminvalue | shardmaxvalue 
+---------+---------------+---------------
+  560129 | 1501          | 2000
+(1 row)
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = :new_shard_id;
+ shardid | shardlength 
+---------+-------------
+  560129 |           0
+  560129 |           0
+(2 rows)
+
+-- Update shard statistics for range-partitioned shard and check that only the
+-- shard length is updated.
+SELECT master_update_shard_statistics(:new_shard_id);
+ master_update_shard_statistics 
+--------------------------------
+                         131072
+(1 row)
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = :new_shard_id;
+ shardid | shardminvalue | shardmaxvalue 
+---------+---------------+---------------
+  560129 | 1501          | 2000
+(1 row)
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = :new_shard_id;
+ shardid | shardlength 
+---------+-------------
+  560129 |      131072
+  560129 |      131072
+(2 rows)
+
+-- Revert back min/max value updates
+UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
+WHERE shardid = :new_shard_id;
 -- Create a new append-partitioned table into which to COPY
 CREATE TABLE customer_copy_append (
         c_custkey integer,
@@ -271,6 +331,42 @@ SELECT * FROM customer_copy_append;
 -----------+-----------+-----------+-------------+---------+-----------+--------------+-----------
          1 | customer1 |           |             |         |           |              | 
          2 | customer2 |           |             |         |           |              | 
+(2 rows)
+
+-- Manipulate manipulate and check shard statistics for append-partitioned table shard
+UPDATE pg_dist_shard SET shardminvalue = 1501, shardmaxvalue = 2000 WHERE shardid = 560131;
+UPDATE pg_dist_shard_placement SET shardlength = 0 WHERE shardid = 560131;
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560131;
+ shardid | shardminvalue | shardmaxvalue 
+---------+---------------+---------------
+  560131 | 1501          | 2000
+(1 row)
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560131;
+ shardid | shardlength 
+---------+-------------
+  560131 |           0
+  560131 |           0
+(2 rows)
+
+-- Update shard statistics for append-partitioned shard
+SELECT master_update_shard_statistics(560131);
+ master_update_shard_statistics 
+--------------------------------
+                           8192
+(1 row)
+
+SELECT shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid = 560131;
+ shardid | shardminvalue | shardmaxvalue 
+---------+---------------+---------------
+  560131 | 1             | 2
+(1 row)
+
+SELECT shardid, shardlength FROM pg_dist_shard_placement WHERE shardid = 560131;
+ shardid | shardlength 
+---------+-------------
+  560131 |        8192
+  560131 |        8192
 (2 rows)
 
 -- Create lineitem table
