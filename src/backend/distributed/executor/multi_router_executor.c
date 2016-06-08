@@ -42,7 +42,7 @@ bool AllModificationsCommutative = false;
 
 static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
 static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
-static int64 ExecuteDistributedModify(Task *task);
+static uint64 ExecuteDistributedModify(Task *task);
 static void ExecuteSingleShardSelect(QueryDesc *queryDesc, uint64 tupleCount,
 									 Task *task, EState *executorState,
 									 TupleDesc tupleDescriptor,
@@ -204,7 +204,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
 	if (operation == CMD_INSERT || operation == CMD_UPDATE ||
 		operation == CMD_DELETE)
 	{
-		int64 affectedRowCount = ExecuteDistributedModify(task);
+		uint64 affectedRowCount = ExecuteDistributedModify(task);
 		estate->es_processed = affectedRowCount;
 	}
 	else if (operation == CMD_SELECT)
@@ -237,7 +237,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Tas
  * of modified rows in that case and errors in all others. This function will
  * also generate warnings for individual placement failures.
  */
-static int64
+static uint64
 ExecuteDistributedModify(Task *task)
 {
 	int64 affectedTupleCount = -1;
@@ -295,7 +295,18 @@ ExecuteDistributedModify(Task *task)
 		}
 
 		currentAffectedTupleString = PQcmdTuples(result);
+
+		/* May throw out of range errors if the tuple
+		 * count is greater than MAX_INT64.
+		 */
 		scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
+		Assert(currentAffectedTupleCount >= 0);
+
+#if (PG_VERSION_NUM < 90600)
+
+		/* make sure that prior version workers don't overflow */
+		Assert(currentAffectedTupleCount <= PG_UINT32_MAX);
+#endif
 
 		if ((affectedTupleCount == -1) ||
 			(affectedTupleCount == currentAffectedTupleCount))
@@ -304,8 +315,10 @@ ExecuteDistributedModify(Task *task)
 		}
 		else
 		{
-			ereport(WARNING, (errmsg("modified %ld tuples, but expected to modify %ld",
-									 currentAffectedTupleCount, affectedTupleCount),
+			ereport(WARNING, (errmsg(
+								  "modified " INT64_FORMAT
+								  " tuples, but expected to modify " INT64_FORMAT,
+								  currentAffectedTupleCount, affectedTupleCount),
 							  errdetail("modified placement on %s:%d",
 										nodeName, nodePort)));
 		}
@@ -331,7 +344,7 @@ ExecuteDistributedModify(Task *task)
 								failedPlacement->nodeName, failedPlacement->nodePort);
 	}
 
-	return affectedTupleCount;
+	return (uint64) affectedTupleCount;
 }
 
 
