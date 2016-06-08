@@ -296,15 +296,13 @@ ExecuteDistributedModify(Task *task)
 
 		currentAffectedTupleString = PQcmdTuples(result);
 
-		/* May throw out of range errors if the tuple
-		 * count is greater than MAX_INT64.
-		 */
+		/* could throw error if input > MAX_INT64 */
 		scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
 		Assert(currentAffectedTupleCount >= 0);
 
 #if (PG_VERSION_NUM < 90600)
 
-		/* make sure that prior version workers don't overflow */
+		/* before 9.6, PostgreSQL used a uint32 for this field, so check */
 		Assert(currentAffectedTupleCount <= PG_UINT32_MAX);
 #endif
 
@@ -315,12 +313,10 @@ ExecuteDistributedModify(Task *task)
 		}
 		else
 		{
-			ereport(WARNING, (errmsg(
-								  "modified " INT64_FORMAT
-								  " tuples, but expected to modify " INT64_FORMAT,
-								  currentAffectedTupleCount, affectedTupleCount),
-							  errdetail("modified placement on %s:%d",
-										nodeName, nodePort)));
+			ereport(WARNING,
+					(errmsg("modified " INT64_FORMAT " tuples, but expected to modify "
+							INT64_FORMAT, currentAffectedTupleCount, affectedTupleCount),
+					 errdetail("modified placement on %s:%d", nodeName, nodePort)));
 		}
 
 		PQclear(result);
