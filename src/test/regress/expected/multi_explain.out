@@ -266,8 +266,8 @@ Master Query
 -- Test join
 EXPLAIN (COSTS FALSE)
 	SELECT * FROM lineitem
-	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5
-	ORDER BY l_quantity DESC LIMIT 10;
+	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5.0
+	ORDER BY l_quantity LIMIT 10;
 Distributed Query into pg_merge_job_570008
   Executor: Real-Time
   Task Count: 6
@@ -276,17 +276,17 @@ Distributed Query into pg_merge_job_570008
         Node: host=localhost port=57637 dbname=regression
         ->  Limit
               ->  Sort
-                    Sort Key: lineitem.l_quantity DESC
+                    Sort Key: lineitem.l_quantity
                     ->  Hash Join
                           Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
                           ->  Seq Scan on lineitem_290000 lineitem
-                                Filter: (l_quantity < '5'::numeric)
+                                Filter: (l_quantity < 5.0)
                           ->  Hash
                                 ->  Seq Scan on orders_290006 orders
 Master Query
   ->  Limit
         ->  Sort
-              Sort Key: intermediate_column_570008_4 DESC
+              Sort Key: intermediate_column_570008_4
               ->  Seq Scan on pg_merge_job_570008
 -- Test insert
 EXPLAIN (COSTS FALSE)
