@@ -84,14 +84,30 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText);
+	char relationKind = get_rel_relkind(relationId);
 	char *relationOwner = TableOwner(relationId);
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
 
-	if (CStoreTable(relationId))
+	/*
+	 * We check whether the table is a foreign table or not. If it is, we set
+	 * storage type as foreign also. Only exception is if foreign table is a
+	 * foreign cstore table, in this case we set storage type as columnar.
+	 *
+	 * i.e. While setting storage type, columnar has priority over foreign.
+	 */
+	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
-		storageType = SHARD_STORAGE_COLUMNAR;
+		bool cstoreTable = cstoreTable = CStoreTable(relationId);
+		if (cstoreTable)
+		{
+			storageType = SHARD_STORAGE_COLUMNAR;
+		}
+		else
+		{
+			storageType = SHARD_STORAGE_FOREIGN;
+		}
 	}
 
 	partitionMethod = PartitionMethod(relationId);
