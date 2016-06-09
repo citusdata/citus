@@ -1360,9 +1360,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		walkerContext->repartitionSubquery)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
-		List *aggTargetEntryList = aggregate->args;
-		TargetEntry *distinctTargetEntry = linitial(aggTargetEntryList);
-		List *varList = pull_var_clause_default((Node *) distinctTargetEntry->expr);
+		List *varList = pull_var_clause_default((Node *) aggregate);
 		ListCell *varCell = NULL;
 		List *uniqueVarList = NIL;
 		int startColumnCount = walkerContext->columnId;
@@ -1878,22 +1876,12 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		walkerContext->repartitionSubquery)
 	{
 		Aggref *aggregate = (Aggref *) copyObject(originalAggregate);
-		List *aggTargetEntryList = aggregate->args;
-		TargetEntry *distinctTargetEntry = (TargetEntry *) linitial(aggTargetEntryList);
-		List *columnList = pull_var_clause_default((Node *) distinctTargetEntry);
+		List *columnList = pull_var_clause_default((Node *) aggregate);
 		ListCell *columnCell = NULL;
-		List *processedColumnList = NIL;
-
 		foreach(columnCell, columnList)
 		{
 			Var *column = (Var *) lfirst(columnCell);
-			if (list_member(processedColumnList, column))
-			{
-				continue;
-			}
-
-			processedColumnList = lappend(processedColumnList, column);
-			workerAggregateList = lappend(workerAggregateList, copyObject(column));
+			workerAggregateList = list_append_unique(workerAggregateList, column);
 		}
 
 		walkerContext->createGroupByClause = true;
