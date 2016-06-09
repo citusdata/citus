@@ -76,6 +76,34 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
+-- there is a known issue with aggregates with filters in non-repartition queries (#395)
+SELECT
+	l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+-- filter column already exists in target list
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_orderkey > 100)
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+-- filter column does not exist in target list
+SELECT *
+	FROM (
+		SELECT
+			l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+			FROM lineitem_hash
+			GROUP BY l_orderkey) sub
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
 -- case expr in count distinct is supported.
 -- count orders partkeys if l_shipmode is air
 SELECT *
