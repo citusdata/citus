@@ -158,3 +158,70 @@ SELECT count(*) FROM lineitem JOIN orders ON l_orderkey = o_orderkey
 -- Check that we make sure local joins are between columns only.
 
 SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
+
+-- Check that we can issue limit/offset queries
+
+-- OFFSET in subqueries are not supported
+-- Error in the planner when subquery pushdown is off
+SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
+SET citus.subquery_pushdown TO true;
+
+-- Error in the optimizer when subquery pushdown is on
+SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
+SET citus.subquery_pushdown TO false;
+
+-- Simple LIMIT/OFFSET with ORDER BY
+SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
+
+-- LIMIT/OFFSET with a subquery
+SET client_min_messages TO 'debug1';
+SET citus.task_executor_type TO 'task-tracker';
+
+SELECT 
+	customer_keys.o_custkey,
+	SUM(order_count) AS total_order_count 
+FROM 
+	(SELECT o_custkey, o_orderstatus, COUNT(*) AS order_count 
+	 FROM orders GROUP BY o_custkey, o_orderstatus ) customer_keys
+GROUP BY 
+	customer_keys.o_custkey
+ORDER BY 
+	customer_keys.o_custkey DESC
+LIMIT 10 OFFSET 20;
+
+SET citus.task_executor_type TO 'real-time';
+
+-- Ensure that we push down LIMIT and OFFSET properly
+-- No Group-By -> Push Down
+CREATE TEMP TABLE temp_limit_test_1 AS
+SELECT o_custkey FROM orders LIMIT 10 OFFSET 15;
+
+-- GROUP BY without ORDER BY -> No push-down
+CREATE TEMP TABLE temp_limit_test_2 AS
+SELECT o_custkey FROM orders GROUP BY o_custkey LIMIT 10 OFFSET 15;
+
+-- GROUP BY and ORDER BY non-aggregate -> push-down
+CREATE TEMP TABLE temp_limit_test_3 AS
+SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey LIMIT 10 OFFSET 15;
+
+-- GROUP BY and ORDER BY aggregate -> No push-down
+CREATE TEMP TABLE temp_limit_test_4 AS
+SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt DESC LIMIT 10 OFFSET 15;
+
+-- OFFSET without LIMIT
+SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
+
+-- LIMIT/OFFSET with Joins
+SELECT 
+	li.l_partkey,
+	o.o_custkey,
+	li.l_quantity
+FROM 
+	lineitem li JOIN orders o ON li.l_orderkey = o.o_orderkey
+WHERE 
+	li.l_quantity > 25
+ORDER BY
+	li.l_quantity
+LIMIT 10 OFFSET 20;
+
+RESET client_min_messages;
