@@ -382,12 +382,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		errorDetail = "Window functions are currently unsupported";
 	}
 
-	if (queryTree->limitOffset)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Limit Offset clause is currently unsupported";
-	}
-
 	if (queryTree->setOperations)
 	{
 		preconditionsSatisfied = false;
@@ -560,6 +554,12 @@ ErrorIfSubqueryNotSupported(Query *subqueryTree)
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "Subqueries with limit are not supported yet";
+	}
+
+	if (subqueryTree->limitOffset != NULL)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Subqueries with offset are not supported yet";
 	}
 
 	/* finally check and error out if not satisfied */

@@ -246,7 +246,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 	}
 
 	/* (5) add a limit plan if needed */
-	if (masterQuery->limitCount)
+	if (masterQuery->limitCount || masterQuery->limitOffset)
 	{
 		Node *limitCount = masterQuery->limitCount;
 		Node *limitOffset = masterQuery->limitOffset;
