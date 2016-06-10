@@ -1705,9 +1705,10 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 	AttrNumber targetProjectionNumber = 1;
 	WorkerAggregateWalkerContext *walkerContext =
 		palloc0(sizeof(WorkerAggregateWalkerContext));
+	Index nextSortGroupRefIndex = 0;
+
 	walkerContext->repartitionSubquery = false;
 	walkerContext->expressionList = NIL;
-	Index nextSortGroupRefIndex = 0;
 
 	if (CitusIsA(parentNode, MultiTable) && CitusIsA(childNode, MultiCollect))
 	{
@@ -2501,6 +2502,7 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		Oid relationId = tableNode->relationId;
 		bool tableDistinctSupported = false;
 		char partitionMethod = 0;
+		List *shardList = NIL;
 
 		if (relationId == SUBQUERY_RELATION_ID)
 		{
@@ -2508,7 +2510,7 @@ TablePartitioningSupportsDistinct(List *tableNodeList, MultiExtendedOp *opNode,
 		}
 
 		/* if table has one shard, task results don't overlap */
-		List *shardList = LoadShardList(relationId);
+		shardList = LoadShardList(relationId);
 		if (list_length(shardList) == 1)
 		{
 			continue;
