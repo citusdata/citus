@@ -36,13 +36,12 @@ WHERE
 	l_partkey = p_partkey AND
 	c_custkey = o_custkey AND
         (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
-        p_size > 8 AND o_totalprice > 10 AND
-        c_acctbal < 5000.0
+        p_size > 8 AND o_totalprice > 10.0 AND
+        c_acctbal < 5000.0 AND l_partkey < 1000
 GROUP BY
 	l_partkey, o_orderkey
 ORDER BY
-	l_partkey, o_orderkey
-LIMIT 30;
+	l_partkey, o_orderkey;
 
 SELECT
 	l_partkey, o_orderkey, count(*)

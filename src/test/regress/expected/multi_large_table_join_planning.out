@@ -38,15 +38,13 @@ WHERE
 	l_partkey = p_partkey AND
 	c_custkey = o_custkey AND
         (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
-        p_size > 8 AND o_totalprice > 10 AND
-        c_acctbal < 5000.0
+        p_size > 8 AND o_totalprice > 10.0 AND
+        c_acctbal < 5000.0 AND l_partkey < 1000
 GROUP BY
 	l_partkey, o_orderkey
 ORDER BY
-	l_partkey, o_orderkey
-LIMIT 30;
+	l_partkey, o_orderkey;
 DEBUG:  StartTransactionCommand
-DEBUG:  push down of limit count: 30
 DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
 DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
 DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
@@ -54,17 +52,17 @@ DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
 DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
 DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
 DEBUG:  generated sql query for job 1250 and task 3
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290000 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290000 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  generated sql query for job 1250 and task 6
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290001 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290001 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  generated sql query for job 1250 and task 9
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290002 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290002 lineitem JOIN orders_290006 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  generated sql query for job 1250 and task 12
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290003 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290003 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  generated sql query for job 1250 and task 15
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290004 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290004 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  generated sql query for job 1250 and task 18
-DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290005 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE (orders.o_totalprice > '10'::numeric)"
+DETAIL:  query string: "SELECT lineitem.l_partkey, orders.o_orderkey, lineitem.l_quantity, lineitem.l_extendedprice, orders.o_custkey FROM (lineitem_290005 lineitem JOIN orders_290007 orders ON ((lineitem.l_orderkey = orders.o_orderkey))) WHERE ((lineitem.l_partkey < 1000) AND (orders.o_totalprice > 10.0))"
 DEBUG:  assigned task 3 to node localhost:57637
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 9 to node localhost:57637
@@ -90,11 +88,11 @@ DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
 DEBUG:  generated sql query for job 1252 and task 3
-DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000007".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000007 "pg_merge_job_1251.task_000007" JOIN customer_290008 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000007".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000007".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000007".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1, "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 LIMIT '30'::bigint"
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000007".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000007".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000007 "pg_merge_job_1251.task_000007" JOIN customer_290008 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000007".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000007".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000007".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000007".intermediate_column_1251_0, "pg_merge_job_1251.task_000007".intermediate_column_1251_1"
 DEBUG:  generated sql query for job 1252 and task 6
-DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000010".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000010 "pg_merge_job_1251.task_000010" JOIN customer_280001 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000010".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000010".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000010".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1, "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 LIMIT '30'::bigint"
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000010".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000010".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000010 "pg_merge_job_1251.task_000010" JOIN customer_280001 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000010".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000010".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000010".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000010".intermediate_column_1251_0, "pg_merge_job_1251.task_000010".intermediate_column_1251_1"
 DEBUG:  generated sql query for job 1252 and task 9
-DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000013".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000013 "pg_merge_job_1251.task_000013" JOIN customer_280000 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000013".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000013".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000013".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 ORDER BY "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1, "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 LIMIT '30'::bigint"
+DETAIL:  query string: "SELECT "pg_merge_job_1251.task_000013".intermediate_column_1251_0 AS l_partkey, "pg_merge_job_1251.task_000013".intermediate_column_1251_1 AS o_orderkey, count(*) AS count FROM (pg_merge_job_1251.task_000013 "pg_merge_job_1251.task_000013" JOIN customer_280000 customer ON ((customer.c_custkey = "pg_merge_job_1251.task_000013".intermediate_column_1251_4))) WHERE ((("pg_merge_job_1251.task_000013".intermediate_column_1251_2 > 5.0) OR ("pg_merge_job_1251.task_000013".intermediate_column_1251_3 > 1200.0)) AND (customer.c_acctbal < 5000.0)) GROUP BY "pg_merge_job_1251.task_000013".intermediate_column_1251_0, "pg_merge_job_1251.task_000013".intermediate_column_1251_1"
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 7
 DEBUG:  pruning merge fetch taskId 4
@@ -142,8 +140,7 @@ DEBUG:  CommitTransactionCommand
        957 |       4293 |     1
        960 |      10980 |     1
        963 |       4580 |     1
-      6014 |       4614 |     1
-(30 rows)
+(29 rows)
 
 SELECT
 	l_partkey, o_orderkey, count(*)
