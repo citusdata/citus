@@ -192,6 +192,7 @@ extern bool BinaryOperator(MultiNode *node);
 extern List * OutputTableIdList(MultiNode *multiNode);
 extern List * FindNodesOfType(MultiNode *node, int type);
 extern List * JoinClauseList(List *whereClauseList);
+extern bool IsJoinClause(Node *clause);
 extern List * SubqueryEntryList(Query *queryTree);
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 extern List * WhereClauseList(FromExpr *fromExpr);
