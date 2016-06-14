@@ -108,6 +108,14 @@ WHERE
 	r_custkey = 5;
 
 
+-- Apply a filter before the join
+SELECT
+	count(l_custkey), count(r_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	ON (l_custkey = r_custkey AND r_custkey = 5);
+
+
 -- Right join should be disallowed in this case
 SELECT
 	min(r_custkey), max(r_custkey)
@@ -184,6 +192,14 @@ FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21;
+
+
+-- Apply a filter before the join
+SELECT
+	count(l_custkey), count(r_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	ON (l_custkey = r_custkey AND r_custkey = 21);
 
 
 -- Right join should be allowed in this case
