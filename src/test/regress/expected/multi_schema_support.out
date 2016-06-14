@@ -1,0 +1,109 @@
+--
+-- MULTI_SCHEMA_SUPPORT
+--
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1190000;
+-- test master_append_table_to_shard with schema
+CREATE SCHEMA test_schema_support;
+NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
+CREATE TABLE test_schema_support.nation_append(
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152)
+);
+SELECT master_create_distributed_table('test_schema_support.nation_append', 'n_nationkey', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_empty_shard('test_schema_support.nation_append');
+ master_create_empty_shard 
+---------------------------
+                   1190000
+(1 row)
+
+-- create table to append
+CREATE TABLE public.nation_local(
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152)
+);
+\COPY public.nation_local FROM STDIN with delimiter '|';
+-- append table to shard
+SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+ master_append_table_to_shard 
+------------------------------
+                    0.0266667
+(1 row)
+
+-- verify table actually appended to shard
+SELECT COUNT(*) FROM test_schema_support.nation_append;
+ count 
+-------
+     6
+(1 row)
+
+-- test with shard name contains special characters
+CREATE TABLE test_schema_support."nation._'append" (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+SELECT master_create_distributed_table('test_schema_support."nation._''append"', 'n_nationkey', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_empty_shard('test_schema_support."nation._''append"');
+ master_create_empty_shard 
+---------------------------
+                   1190001
+(1 row)
+
+SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+ master_append_table_to_shard 
+------------------------------
+                    0.0266667
+(1 row)
+
+-- verify table actually appended to shard
+SELECT COUNT(*) FROM test_schema_support."nation._'append";
+ count 
+-------
+     6
+(1 row)
+
+-- test with search_path is set
+SET search_path TO test_schema_support;
+SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+ master_append_table_to_shard 
+------------------------------
+                    0.0266667
+(1 row)
+
+-- verify table actually appended to shard
+SELECT COUNT(*) FROM nation_append;
+ count 
+-------
+    12
+(1 row)
+
+-- test with search_path is set and shard name contains special characters
+SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+ master_append_table_to_shard 
+------------------------------
+                    0.0266667
+(1 row)
+
+-- verify table actually appended to shard
+SELECT COUNT(*) FROM "nation._'append";
+ count 
+-------
+    12
+(1 row)
+
