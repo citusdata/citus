@@ -1,0 +1,33 @@
+# ----------
+# $Id$
+#
+# Regression tests that test binary mode data transfer between workers.
+# No new tests are expected here unless they are specifically testing for changes
+# in binary mode data transfer
+#
+# ----------
+
+# ---
+# Tests around schema changes, these are run first, so there's no preexisting objects.
+# ---
+test: multi_extension
+test: multi_table_ddl
+
+# ----------
+# The following distributed tests depend on creating a partitioned table and
+# uploading data to it.
+# ----------
+test: multi_create_table
+test: multi_stage_data
+
+test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
+test: multi_single_relation_subquery
+test: multi_binary_master_copy_format
+
+test: multi_simple_queries
+
+# ---------
+# multi_copy creates hash and range-partitioned tables and performs COPY
+# ---------
+test: multi_copy
+
