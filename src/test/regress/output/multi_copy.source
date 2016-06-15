@@ -500,3 +500,53 @@ SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM append.cust
    1 | 7000 | 4443.8028800000000000 |  2000
 (1 row)
 
+-- Test with table name which contains special character
+CREATE TABLE "customer_with_special_\\_character"(
+        c_custkey integer,
+        c_name varchar(25) not null);
+SELECT master_create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('"customer_with_special_\\_character"', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+COPY "customer_with_special_\\_character" (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+-- Confirm that data was copied
+SELECT count(*) FROM "customer_with_special_\\_character";
+ count 
+-------
+     2
+(1 row)
+
+-- Test with table name which starts with number
+CREATE TABLE "1_customer"(
+        c_custkey integer,
+        c_name varchar(25) not null);
+SELECT master_create_distributed_table('"1_customer"', 'c_custkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('"1_customer"', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+COPY "1_customer" (c_custkey, c_name) FROM STDIN
+WITH (FORMAT 'csv');
+-- Confirm that data was copied
+SELECT count(*) FROM "1_customer";
+ count 
+-------
+     2
+(1 row)
+
