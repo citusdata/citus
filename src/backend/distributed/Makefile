@@ -15,7 +15,7 @@ DATA_built = $(foreach v,$(EXTVERSIONS),$(EXTENSION)--$(v).sql)
 SCRIPTS = ../../bin/scripts/copy_to_distributed_table
 
 # directories with source files
-SUBDIRS = . commands executor master planner relay test utils worker
+SUBDIRS = . commands executor master planner relay test transaction utils worker
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS

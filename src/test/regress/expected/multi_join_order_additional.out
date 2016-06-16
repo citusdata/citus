@@ -42,9 +42,14 @@ SELECT master_create_worker_shards('lineitem_hash', 2, 1);
 (1 row)
 
 CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
+DEBUG:  switching to 2PC for the transaction
 DEBUG:  applied command on shard 650000 on node localhost:57637
 DEBUG:  applied command on shard 650001 on node localhost:57638
 DEBUG:  building index "lineitem_hash_time_index" on table "lineitem_hash"
+DEBUG:  sent PREPARE TRANSACTION over connection 650000
+DEBUG:  sent PREPARE TRANSACTION over connection 650001
+DEBUG:  sent COMMIT PREPARED over connection 650000
+DEBUG:  sent COMMIT PREPARED over connection 650001
 CREATE TABLE orders_hash (
 	o_orderkey bigint not null,
 	o_custkey integer not null,

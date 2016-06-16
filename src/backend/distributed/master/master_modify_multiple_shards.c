@@ -26,6 +26,7 @@
 #include "commands/event_trigger.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
@@ -36,7 +37,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_transaction.h"
+#include "distributed/multi_shard_transaction.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
@@ -51,13 +52,12 @@
 #include "utils/datum.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 
 
 static void LockShardsForModify(List *shardIntervalList);
 static bool HasReplication(List *shardIntervalList);
-static int SendQueryToShards(Query *query, List *shardIntervalList);
-static HTAB * OpenConnectionsToAllShardPlacements(List *shardIntervalList);
-static void OpenConnectionsToShardPlacements(uint64 shardId, HTAB *shardConnectionHash);
+static int SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId);
 static int SendQueryToPlacements(char *shardQueryString,
 								 ShardConnections *shardConnections);
 
@@ -137,7 +137,8 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	LockShardsForModify(prunedShardIntervalList);
 
-	affectedTupleCount = SendQueryToShards(modifyQuery, prunedShardIntervalList);
+	affectedTupleCount = SendQueryToShards(modifyQuery, prunedShardIntervalList,
+										   relationId);
 
 	PG_RETURN_INT32(affectedTupleCount);
 }
@@ -162,7 +163,7 @@ LockShardsForModify(List *shardIntervalList)
 	{
 		lockMode = ShareLock;
 	}
-	else if (!HasReplication(shardIntervalList)) /* check if any shards have >1 replica */
+	else if (!HasReplication(shardIntervalList))
 	{
 		lockMode = ShareLock;
 	}
@@ -209,153 +210,55 @@ HasReplication(List *shardIntervalList)
  * the shards when necessary before calling SendQueryToShards.
  */
 static int
-SendQueryToShards(Query *query, List *shardIntervalList)
+SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 {
 	int affectedTupleCount = 0;
-	HTAB *shardConnectionHash = OpenConnectionsToAllShardPlacements(shardIntervalList);
-	List *allShardsConnectionList = ConnectionList(shardConnectionHash);
+	char *relationOwner = TableOwner(relationId);
+	HTAB *shardConnectionHash = NULL;
+	ListCell *shardIntervalCell = NULL;
 
-	PG_TRY();
+	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
+
+	shardConnectionHash = OpenTransactionsToAllShardPlacements(shardIntervalList,
+															   relationOwner);
+
+	MemoryContextSwitchTo(oldContext);
+
+	foreach(shardIntervalCell, shardIntervalList)
 	{
-		ListCell *shardIntervalCell = NULL;
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(
+			shardIntervalCell);
+		Oid relationId = shardInterval->relationId;
+		uint64 shardId = shardInterval->shardId;
+		bool shardConnectionsFound = false;
+		ShardConnections *shardConnections = NULL;
+		StringInfo shardQueryString = makeStringInfo();
+		char *shardQueryStringData = NULL;
+		int shardAffectedTupleCount = -1;
 
-		foreach(shardIntervalCell, shardIntervalList)
-		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(
-				shardIntervalCell);
-			Oid relationId = shardInterval->relationId;
-			uint64 shardId = shardInterval->shardId;
-			bool shardConnectionsFound = false;
-			ShardConnections *shardConnections = NULL;
-			StringInfo shardQueryString = makeStringInfo();
-			char *shardQueryStringData = NULL;
-			int shardAffectedTupleCount = -1;
+		shardConnections = GetShardConnections(shardConnectionHash,
+											   shardId,
+											   &shardConnectionsFound);
+		Assert(shardConnectionsFound);
 
-			shardConnections = GetShardConnections(shardConnectionHash,
-												   shardId,
-												   &shardConnectionsFound);
-			Assert(shardConnectionsFound);
-
-			deparse_shard_query(query, relationId, shardId, shardQueryString);
-			shardQueryStringData = shardQueryString->data;
-			shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
-															shardConnections);
-			affectedTupleCount += shardAffectedTupleCount;
-		}
-
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			PrepareRemoteTransactions(allShardsConnectionList);
-		}
-
-		/* check for cancellation one last time before returning */
-		CHECK_FOR_INTERRUPTS();
+		deparse_shard_query(query, relationId, shardId, shardQueryString);
+		shardQueryStringData = shardQueryString->data;
+		shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
+														shardConnections);
+		affectedTupleCount += shardAffectedTupleCount;
 	}
-	PG_CATCH();
-	{
-		/* roll back all transactions */
-		AbortRemoteTransactions(allShardsConnectionList);
-		CloseConnections(allShardsConnectionList);
 
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-
-	CommitRemoteTransactions(allShardsConnectionList, false);
-	CloseConnections(allShardsConnectionList);
+	/* check for cancellation one last time before returning */
+	CHECK_FOR_INTERRUPTS();
 
 	return affectedTupleCount;
 }
 
 
 /*
- * OpenConnectionsToAllShardPlacement opens connections to all placements of
- * the given shard list and returns the hash table containing the connections.
- * The resulting hash table maps shardId to ShardConnection struct.
- */
-static HTAB *
-OpenConnectionsToAllShardPlacements(List *shardIntervalList)
-{
-	HTAB *shardConnectionHash = CreateShardConnectionHash();
-
-	ListCell *shardIntervalCell = NULL;
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
-
-		OpenConnectionsToShardPlacements(shardId, shardConnectionHash);
-	}
-
-	return shardConnectionHash;
-}
-
-
-/*
- * OpenConnectionsToShardPlacements opens connections to all placements of the
- * shard with the given shardId and populates the shardConnectionHash table
- * accordingly.
- */
-static void
-OpenConnectionsToShardPlacements(uint64 shardId, HTAB *shardConnectionHash)
-{
-	bool shardConnectionsFound = false;
-
-	/* get existing connections to the shard placements, if any */
-	ShardConnections *shardConnections = GetShardConnections(shardConnectionHash,
-															 shardId,
-															 &shardConnectionsFound);
-
-	List *shardPlacementList = FinalizedShardPlacementList(shardId);
-	ListCell *shardPlacementCell = NULL;
-	List *connectionList = NIL;
-
-	Assert(!shardConnectionsFound);
-
-	if (shardPlacementList == NIL)
-	{
-		ereport(ERROR, (errmsg("could not find any shard placements for the shard "
-							   UINT64_FORMAT, shardId)));
-	}
-
-	foreach(shardPlacementCell, shardPlacementList)
-	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(
-			shardPlacementCell);
-		char *workerName = shardPlacement->nodeName;
-		uint32 workerPort = shardPlacement->nodePort;
-		char *nodeUser = CurrentUserName();
-		PGconn *connection = ConnectToNode(workerName, workerPort, nodeUser);
-		TransactionConnection *transactionConnection = NULL;
-
-		if (connection == NULL)
-		{
-			List *abortConnectionList = ConnectionList(shardConnectionHash);
-			CloseConnections(abortConnectionList);
-
-			ereport(ERROR, (errmsg("could not establish a connection to all "
-								   "placements")));
-		}
-
-		transactionConnection = palloc0(sizeof(TransactionConnection));
-
-		transactionConnection->connectionId = shardConnections->shardId;
-		transactionConnection->transactionState = TRANSACTION_STATE_INVALID;
-		transactionConnection->connection = connection;
-
-		connectionList = lappend(connectionList, transactionConnection);
-	}
-
-	shardConnections->connectionList = connectionList;
-}
-
-
-/*
  * SendQueryToPlacements sends the given query string to all given placement
- * connections of a shard. The query is sent with a BEGIN before the the actual
- * query so, CommitRemoteTransactions or AbortRemoteTransactions should be
- * called after all queries have been sent successfully.
+ * connections of a shard. CommitRemoteTransactions or AbortRemoteTransactions
+ * should be called after all queries have been sent successfully.
  */
 static int
 SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections)
@@ -379,13 +282,6 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 		CHECK_FOR_INTERRUPTS();
 
 		/* send the query */
-		result = PQexec(connection, "BEGIN");
-		if (PQresultStatus(result) != PGRES_COMMAND_OK)
-		{
-			WarnRemoteError(connection, result);
-			ereport(ERROR, (errmsg("could not send query to shard placement")));
-		}
-
 		result = PQexec(connection, shardQueryString);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK)
 		{
