@@ -1,6 +1,6 @@
-DROP FUNCTION master_update_shard_statistics(shard_id bigint);
+DROP FUNCTION IF EXISTS public.master_update_shard_statistics(shard_id bigint);
 
-CREATE FUNCTION pg_catalog.master_update_shard_statistics(shard_id bigint)
+CREATE OR REPLACE FUNCTION pg_catalog.master_update_shard_statistics(shard_id bigint)
     RETURNS bigint
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$master_update_shard_statistics$$;
