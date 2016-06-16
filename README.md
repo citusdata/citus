@@ -70,9 +70,9 @@ stay on top of the latest developments.
 <tr>
   <td>Documentation</td>
   <td>Try the <a
-  href="https://www.citusdata.com/docs/citus/5.0/tutorials/tut-real-time.html">Citus
+  href="https://www.citusdata.com/docs/citus/5.1/tutorials/tut-real-time.html">Citus
   tutorials</a> for a hands-on introduction or <br/>the <a
-  href="https://www.citusdata.com/docs/citus/5.0">documentation</a> for
+  href="https://www.citusdata.com/docs/citus/5.1">documentation</a> for
   a more comprehensive reference.</td>
 </tr>
 <tr>
