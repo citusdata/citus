@@ -3601,17 +3601,16 @@ FragmentInterval(RangeTableFragment *fragment)
 bool
 ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterval)
 {
-	Oid typeId = InvalidOid;
-	FmgrInfo *comparisonFunction = NULL;
 	bool nonOverlap = false;
+	DistTableCacheEntry *intervalRelation =
+		DistributedTableCacheEntry(firstInterval->relationId);
+	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
 
 	Datum firstMin = 0;
 	Datum firstMax = 0;
 	Datum secondMin = 0;
 	Datum secondMax = 0;
 
-	typeId = firstInterval->valueTypeId;
-	comparisonFunction = GetFunctionInfo(typeId, BTREE_AM_OID, BTORDER_PROC);
 
 	firstMin = firstInterval->minValue;
 	firstMax = firstInterval->maxValue;
