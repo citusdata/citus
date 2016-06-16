@@ -156,6 +156,30 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
     20 |     1
 (1 row)
 
+-- Apply a filter before the join (no matches right)
+SELECT
+	count(l_custkey), count(r_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
+LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+ count | count 
+-------+-------
+    20 |     0
+(1 row)
+
+-- Apply a filter before the join (no matches left)
+SELECT
+	count(l_custkey), count(r_custkey)
+FROM
+	multi_outer_join_left a LEFT JOIN multi_outer_join_right b
+	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
+LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_right" ]
+ count | count 
+-------+-------
+    20 |     0
+(1 row)
+
 -- Right join should be disallowed in this case
 SELECT
 	min(r_custkey), max(r_custkey)
