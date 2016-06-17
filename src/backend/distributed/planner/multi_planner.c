@@ -72,15 +72,8 @@ MultiPlan *
 CreatePhysicalPlan(Query *parse)
 {
 	Query *parseCopy = copyObject(parse);
-	MultiPlan *physicalPlan = NULL;
-	bool routerPlannable = MultiRouterPlannableQuery(parseCopy, TaskExecutorType);
-	if (routerPlannable)
-	{
-		ereport(DEBUG2, (errmsg("Creating router plan")));
-		physicalPlan = MultiRouterPlanCreate(parseCopy);
-		CheckNodeIsDumpable((Node *) physicalPlan);
-	}
-	else
+	MultiPlan *physicalPlan = MultiRouterPlanCreate(parseCopy, TaskExecutorType);
+	if (physicalPlan == NULL)
 	{
 		/* Create and optimize logical plan */
 		MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(parseCopy);
