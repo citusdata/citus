@@ -550,3 +550,124 @@ SELECT count(*) FROM "1_customer";
      2
 (1 row)
 
+-- Test COPY with types having different Oid at master and workers
+CREATE TYPE number_pack AS (
+        number1 integer,
+        number2 integer
+);
+CREATE TYPE super_number_pack AS (
+        packed_number1 number_pack,
+        packed_number2 number_pack
+);
+-- Create same types in worker1
+\c - - - :worker_1_port
+CREATE TYPE number_pack AS (
+        number1 integer,
+        number2 integer
+);
+CREATE TYPE super_number_pack AS (
+        packed_number1 number_pack,
+        packed_number2 number_pack
+);
+-- Create same types in worker2
+\c - - - :worker_2_port
+CREATE TYPE number_pack AS (
+        number1 integer,
+        number2 integer
+);
+CREATE TYPE super_number_pack AS (
+        packed_number1 number_pack,
+        packed_number2 number_pack
+);
+-- Connect back to master
+\c - - - :master_port
+-- Test array of user-defined type with hash distribution
+CREATE TABLE packed_numbers_hash (
+        id integer,
+        packed_numbers number_pack[]
+);
+SELECT master_create_distributed_table('packed_numbers_hash', 'id', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('packed_numbers_hash', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+COPY (SELECT 1, ARRAY[ROW(42, 42), ROW(42, 42)]) TO '/tmp/copy_test_array_of_composite';
+COPY packed_numbers_hash FROM '/tmp/copy_test_array_of_composite';
+-- Verify data is actually copied
+SELECT * FROM packed_numbers_hash;
+ id |    packed_numbers     
+----+-----------------------
+  1 | {"(42,42)","(42,42)"}
+(1 row)
+
+-- Test composite type containing an element with different Oid with hash distribution
+CREATE TABLE super_packed_numbers_hash (
+        id integer,
+        super_packed_number super_number_pack
+);
+SELECT master_create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('super_packed_numbers_hash', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+COPY (SELECT 1, ROW(ROW(42, 42), ROW(42, 42))) TO '/tmp/copy_test_composite_of_composite';
+COPY super_packed_numbers_hash FROM '/tmp/copy_test_composite_of_composite';
+-- Verify data is actually copied
+SELECT * FROM super_packed_numbers_hash;
+ id |  super_packed_number  
+----+-----------------------
+  1 | ("(42,42)","(42,42)")
+(1 row)
+
+-- Test array of user-defined type with append distribution
+CREATE TABLE packed_numbers_append (
+        id integer,
+        packed_numbers number_pack[]
+);
+SELECT master_create_distributed_table('packed_numbers_append', 'id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+COPY packed_numbers_append FROM '/tmp/copy_test_array_of_composite';
+-- Verify data is actually copied
+SELECT * FROM packed_numbers_append;
+ id |    packed_numbers     
+----+-----------------------
+  1 | {"(42,42)","(42,42)"}
+(1 row)
+
+-- Test composite type containing an element with different Oid with append distribution
+CREATE TABLE super_packed_numbers_append (
+        id integer,
+        super_packed_number super_number_pack
+);
+SELECT master_create_distributed_table('super_packed_numbers_append', 'id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+COPY super_packed_numbers_append FROM '/tmp/copy_test_composite_of_composite';
+-- Verify data is actually copied
+SELECT * FROM super_packed_numbers_append;
+ id |  super_packed_number  
+----+-----------------------
+  1 | ("(42,42)","(42,42)")
+(1 row)
+
