@@ -1,3 +1,15 @@
+### citus v5.1.1 (June 17, 2016) ###
+
+* Adds complex count distinct expression support in repartitioned subqueries
+
+* Improves task tracker job cleanup logic, addressing a memory leak
+
+* Fixes bug that generated incorrect results for LEFT JOIN queries
+
+* Improves compatibility with Debian's reproducible builds project
+
+* Fixes build issues on FreeBSD platforms
+
 ### citus v5.1.0 (May 17, 2016) ###
 
 * Adds distributed COPY to rapidly populate distributed tables
