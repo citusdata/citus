@@ -602,6 +602,7 @@ LocalTableSize(Oid relationId)
 		{
 			char *relationName = get_rel_name(relationId);
 			struct stat fileStat;
+
 			int statOK = 0;
 
 			StringInfo localFilePath = makeStringInfo();
@@ -1031,61 +1032,75 @@ ParseTreeNode(const char *ddlCommand)
 Datum
 worker_append_table_to_shard(PG_FUNCTION_ARGS)
 {
-	text *shardNameText = PG_GETARG_TEXT_P(0);
-	text *remoteTableNameText = PG_GETARG_TEXT_P(1);
-	text *nodeNameText = PG_GETARG_TEXT_P(2);
-	uint32 nodePort = PG_GETARG_UINT32(3);
+	text *shardQualifiedNameText = PG_GETARG_TEXT_P(0);
+	text *sourceQualifiedNameText = PG_GETARG_TEXT_P(1);
+	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
+	uint32 sourceNodePort = PG_GETARG_UINT32(3);
 
-	char *shardName = text_to_cstring(shardNameText);
-	char *remoteTableName = text_to_cstring(remoteTableNameText);
-	char *nodeName = text_to_cstring(nodeNameText);
+	List *shardQualifiedNameList = textToQualifiedNameList(shardQualifiedNameText);
+	List *sourceQualifiedNameList = textToQualifiedNameList(sourceQualifiedNameText);
+	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
+
+	char *shardTableName = NULL;
+	char *shardSchemaName = NULL;
+	char *shardQualifiedName = NULL;
+	char *sourceSchemaName = NULL;
+	char *sourceTableName = NULL;
+	char *sourceQualifiedName = NULL;
 
 	StringInfo shardNameString = NULL;
 	StringInfo localFilePath = NULL;
-	StringInfo remoteCopyCommand = NULL;
+	StringInfo sourceCopyCommand = NULL;
 	CopyStmt *localCopyCommand = NULL;
 	RangeVar *localTable = NULL;
 	uint64 shardId = INVALID_SHARD_ID;
 	bool received = false;
-	char *quotedTableName = NULL;
 	StringInfo queryString = NULL;
-	const char *schemaName = NULL;
 
-	/* copy remote table's data to this node */
-	shardNameString = makeStringInfo();
-	appendStringInfoString(shardNameString, shardName);
+	/* We extract schema names and table names from qualified names */
+	DeconstructQualifiedName(shardQualifiedNameList, &shardSchemaName, &shardTableName);
+
+	DeconstructQualifiedName(sourceQualifiedNameList, &sourceSchemaName,
+							 &sourceTableName);
 
 	/*
 	 * We lock on the shardId, but do not unlock. When the function returns, and
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
+	shardNameString = makeStringInfo();
+	appendStringInfoString(shardNameString, shardTableName);
+
 	shardId = ExtractShardId(shardNameString);
 	LockShardResource(shardId, AccessExclusiveLock);
 
+	/* copy remote table's data to this node */
 	localFilePath = makeStringInfo();
 	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
 					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
 
-	quotedTableName = quote_qualified_identifier(NULL, remoteTableName);
-	remoteCopyCommand = makeStringInfo();
-	appendStringInfo(remoteCopyCommand, COPY_OUT_COMMAND, quotedTableName);
+	sourceQualifiedName = quote_qualified_identifier(sourceSchemaName, sourceTableName);
+	sourceCopyCommand = makeStringInfo();
+	appendStringInfo(sourceCopyCommand, COPY_OUT_COMMAND, sourceQualifiedName);
 
-	received = ReceiveRegularFile(nodeName, nodePort, remoteCopyCommand, localFilePath);
+	received = ReceiveRegularFile(sourceNodeName, sourceNodePort, sourceCopyCommand,
+								  localFilePath);
 	if (!received)
 	{
 		ereport(ERROR, (errmsg("could not copy table \"%s\" from \"%s:%u\"",
-							   remoteTableName, nodeName, nodePort)));
+							   sourceTableName, sourceNodeName, sourceNodePort)));
 	}
 
 	/* copy local file into the given shard */
-	localTable = makeRangeVar((char *) schemaName, shardNameString->data, -1);
+	localTable = makeRangeVar(shardSchemaName, shardTableName, -1);
 	localCopyCommand = CopyStatement(localTable, localFilePath->data);
 
-	quotedTableName = quote_qualified_identifier(schemaName, shardNameString->data);
+	shardQualifiedName = quote_qualified_identifier(shardSchemaName,
+													shardTableName);
 
 	queryString = makeStringInfo();
-	appendStringInfo(queryString, COPY_IN_COMMAND, quotedTableName, localFilePath->data);
+	appendStringInfo(queryString, COPY_IN_COMMAND, shardQualifiedName,
+					 localFilePath->data);
 
 	ProcessUtility((Node *) localCopyCommand, queryString->data,
 				   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);

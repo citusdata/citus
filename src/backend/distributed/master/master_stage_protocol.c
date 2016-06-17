@@ -191,10 +191,14 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	text *sourceTableNameText = PG_GETARG_TEXT_P(1);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
 	uint32 sourceNodePort = PG_GETARG_UINT32(3);
+
 	char *sourceTableName = text_to_cstring(sourceTableNameText);
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 
-	char *shardName = NULL;
+	Oid shardSchemaOid = 0;
+	char *shardSchemaName = NULL;
+	char *shardTableName = NULL;
+	char *shardQualifiedName = NULL;
 	List *shardPlacementList = NIL;
 	List *succeededPlacementList = NIL;
 	List *failedPlacementList = NIL;
@@ -234,13 +238,19 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	 */
 	LockShardResource(shardId, AccessExclusiveLock);
 
+	/* get schame name of the target shard */
+	shardSchemaOid = get_rel_namespace(relationId);
+	shardSchemaName = get_namespace_name(shardSchemaOid);
+
 	/* if shard doesn't have an alias, extend regular table name */
-	shardName = LoadShardAlias(relationId, shardId);
-	if (shardName == NULL)
+	shardTableName = LoadShardAlias(relationId, shardId);
+	if (shardTableName == NULL)
 	{
-		shardName = get_rel_name(relationId);
-		AppendShardIdToName(&shardName, shardId);
+		shardTableName = get_rel_name(relationId);
+		AppendShardIdToName(&shardTableName, shardId);
 	}
+
+	shardQualifiedName = quote_qualified_identifier(shardSchemaName, shardTableName);
 
 	shardPlacementList = FinalizedShardPlacementList(shardId);
 	if (shardPlacementList == NIL)
@@ -260,7 +270,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 		StringInfo workerAppendQuery = makeStringInfo();
 		appendStringInfo(workerAppendQuery, WORKER_APPEND_TABLE_TO_SHARD,
-						 quote_literal_cstr(shardName),
+						 quote_literal_cstr(shardQualifiedName),
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
@@ -299,7 +309,8 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 								workerName, workerPort);
 
 		ereport(WARNING, (errmsg("could not append table to shard \"%s\" on node "
-								 "\"%s:%u\"", shardName, workerName, workerPort),
+								 "\"%s:%u\"", shardQualifiedName, workerName,
+								 workerPort),
 						  errdetail("Marking this shard placement as inactive")));
 	}
 
@@ -596,16 +607,18 @@ WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName
 	List *queryResultList = NIL;
 	StringInfo tableSizeString = NULL;
 	char *tableSizeStringEnd = NULL;
+	char *quotedTableName = quote_literal_cstr(tableName);
 	bool cstoreTable = CStoreTable(relationId);
 	StringInfo tableSizeQuery = makeStringInfo();
 
+
 	if (cstoreTable)
 	{
-		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, tableName);
+		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, quotedTableName);
 	}
 	else
 	{
-		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, tableName);
+		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, quotedTableName);
 	}
 
 	queryResultList = ExecuteRemoteQuery(nodeName, nodePort, NULL, tableSizeQuery);
@@ -622,7 +635,7 @@ WorkerTableSize(char *nodeName, uint32 nodePort, Oid relationId, char *tableName
 	if (errno != 0 || (*tableSizeStringEnd) != '\0')
 	{
 		ereport(ERROR, (errmsg("could not extract table size for table \"%s\"",
-							   tableName)));
+							   quotedTableName)));
 	}
 
 	return tableSize;
