@@ -59,7 +59,6 @@ static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static void ValidateClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node, List **qualifierList);
-static bool IsJoinClause(Node *clause);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
 static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
@@ -834,8 +833,13 @@ ExtractFromExpressionWalker(Node *node, List **qualifierList)
 		List *joinQualifierList = NIL;
 		JoinExpr *joinExpression = (JoinExpr *) node;
 		Node *joinQualifiersNode = joinExpression->quals;
+		JoinType joinType = joinExpression->jointype;
 
-		if (joinQualifiersNode != NULL)
+		/*
+		 * We only extract qualifiers from inner join clauses, which can be
+		 * treated as WHERE clauses.
+		 */
+		if (joinQualifiersNode != NULL && joinType == JOIN_INNER)
 		{
 			if (IsA(joinQualifiersNode, List))
 			{
@@ -888,7 +892,7 @@ ExtractFromExpressionWalker(Node *node, List **qualifierList)
  * criteria. Our criteria defines a join clause as an equi join operator between
  * two columns that belong to two different tables.
  */
-static bool
+bool
 IsJoinClause(Node *clause)
 {
 	bool isJoinClause = false;
