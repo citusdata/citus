@@ -70,25 +70,34 @@ static Oid ExtractFirstDistributedTableId(Query *query);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
 static Task * RouterSelectTask(Query *query);
 static Job * RouterQueryJob(Query *query, Task *task);
+static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType);
 static bool ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column);
 static void SetRangeTablesInherited(Query *query);
 
 
 /*
- * MultiRouterPlanCreate creates a physical plan for given router plannable query.
- * Created plan is either a modify task that changes a single shard, or a router task
- * that returns query results from a single shard. Supported modify queries
- * (insert/update/delete) are router plannble by default. The caller is expected to call
- * MultiRouterPlannableQuery to see if the query is router plannable for select queries.
+ * MultiRouterPlanCreate creates a physical plan for given query. The created plan is
+ * either a modify task that changes a single shard, or a router task that returns
+ * query results from a single shard. Supported modify queries (insert/update/delete)
+ * are router plannable by default. If query is not router plannable then the function
+ * returns NULL.
  */
 MultiPlan *
-MultiRouterPlanCreate(Query *query)
+MultiRouterPlanCreate(Query *query, MultiExecutorType taskExecutorType)
 {
 	Task *task = NULL;
 	Job *job = NULL;
 	MultiPlan *multiPlan = NULL;
 	CmdType commandType = query->commandType;
 	bool modifyTask = false;
+
+	bool routerPlannable = MultiRouterPlannableQuery(query, taskExecutorType);
+	if (!routerPlannable)
+	{
+		return NULL;
+	}
+
+	ereport(DEBUG2, (errmsg("Creating router plan")));
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
