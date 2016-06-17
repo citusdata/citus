@@ -3286,12 +3286,22 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 		foreach(nextJoinClauseCell, nextJoinClauseList)
 		{
 			OpExpr *nextJoinClause = (OpExpr *) lfirst(nextJoinClauseCell);
-			Var *leftColumn = LeftColumn(nextJoinClause);
-			Var *rightColumn = RightColumn(nextJoinClause);
-			Index leftRangeTableId = leftColumn->varno;
-			Index rightRangeTableId = rightColumn->varno;
+			Var *leftColumn = NULL;
+			Var *rightColumn = NULL;
+			Index leftRangeTableId = 0;
+			Index rightRangeTableId = 0;
 			bool leftPartitioned = false;
 			bool rightPartitioned = false;
+
+			if (!IsJoinClause((Node *) nextJoinClause))
+			{
+				continue;
+			}
+
+			leftColumn = LeftColumn(nextJoinClause);
+			rightColumn = RightColumn(nextJoinClause);
+			leftRangeTableId = leftColumn->varno;
+			rightRangeTableId = rightColumn->varno;
 
 			/*
 			 * We have a table from the existing join list joining with the next
