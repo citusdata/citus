@@ -16,6 +16,7 @@
 
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 
@@ -29,7 +30,8 @@
 
 
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
-										 MultiExecutorType taskExecutorType);
+										 MultiExecutorType taskExecutorType,
+										 RelationRestrictionContext *restrictionContext);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

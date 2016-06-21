@@ -23,10 +23,6 @@ CREATE TABLE articles_single_shard (LIKE articles);
 SELECT master_create_distributed_table('articles', 'author_id', 'hash');
 SELECT master_create_distributed_table('articles_single_shard', 'author_id', 'hash');
 
-
--- test when a table is distributed but no shards created yet
-SELECT count(*) from articles;
-
 SELECT master_create_worker_shards('articles', 2, 1);
 SELECT master_create_worker_shards('articles_single_shard', 1, 1);
 
@@ -85,9 +81,6 @@ INSERT INTO articles VALUES (50, 10, 'anjanette', 19519);
 -- insert a single row for the test
 INSERT INTO articles_single_shard VALUES (50, 10, 'anjanette', 19519);
 
--- first, test zero-shard SELECT, which should return an empty row
-SELECT COUNT(*) FROM articles WHERE author_id = 1 AND author_id = 2;
-
 -- zero-shard modifications should fail
 UPDATE articles SET title = '' WHERE author_id = 1 AND author_id = 2;
 DELETE FROM articles WHERE author_id = 1 AND author_id = 2;
@@ -116,17 +109,19 @@ SELECT title, author_id FROM articles
 	WHERE author_id = 7 OR author_id = 8
 	ORDER BY author_id ASC, id;
 
--- add in some grouping expressions, still on same shard
+-- add in some grouping expressions.
+-- it is supported if it is on the same shard, but not supported if it
+-- involves multiple shards.
 -- having queries unsupported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
-	WHERE author_id = 1 OR author_id = 7 OR author_id = 8 OR author_id = 10
+	WHERE author_id = 1 OR author_id = 2 OR author_id = 8 OR author_id = 10
 	GROUP BY author_id
 	HAVING sum(word_count) > 40000
 	ORDER BY sum(word_count) DESC;
 
--- UNION/INTERSECT queries are unsupported
+-- UNION/INTERSECT queries are unsupported if on multiple shards
 SELECT * FROM articles WHERE author_id = 10 UNION
-SELECT * FROM articles WHERE author_id = 1; 
+SELECT * FROM articles WHERE author_id = 2; 
 
 -- queries using CTEs are unsupported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
