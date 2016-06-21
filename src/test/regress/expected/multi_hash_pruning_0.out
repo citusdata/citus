@@ -199,8 +199,6 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
 DEBUG:  predicate pruning for shardId 630001
 DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
  count 
 -------
      0
@@ -215,8 +213,6 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  predicate pruning for shardId 630002
 DEBUG:  predicate pruning for shardId 630003
  count 
@@ -236,8 +232,6 @@ SELECT count(*) FROM
 DEBUG:  predicate pruning for shardId 630001
 DEBUG:  predicate pruning for shardId 630002
 DEBUG:  predicate pruning for shardId 630003
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count 
 -------
      0
@@ -247,8 +241,6 @@ DEBUG:  Plan is router executable
 -- a notice message when used with the partition column
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = ANY ('{1,2,3}');
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
 HINT:  Consider rewriting the expression with OR/AND clauses.
  count 
@@ -293,8 +285,6 @@ SELECT count(*) FROM orders_hash_partitioned
 DEBUG:  predicate pruning for shardId 630001
 DEBUG:  predicate pruning for shardId 630002
 DEBUG:  predicate pruning for shardId 630003
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
  count 
 -------
      0
@@ -329,11 +319,9 @@ SELECT count(*)
 DEBUG:  predicate pruning for shardId 630001
 DEBUG:  predicate pruning for shardId 630002
 DEBUG:  predicate pruning for shardId 630003
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
  count 
 -------
      0

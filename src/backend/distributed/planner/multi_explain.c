@@ -107,6 +107,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	instr_time planStart;
 	instr_time planDuration;
 	Query *originalQuery = NULL;
+	RelationRestrictionContext *restrictionContext = NULL;
 
 	/* if local query, run the standard explain and return */
 	bool localQuery = !NeedsDistributedPlanning(query);
@@ -137,22 +138,35 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	/* measure the full planning time to display in EXPLAIN ANALYZE */
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	/* call standard planner to modify the query structure before multi planning */
-	initialPlan = standard_planner(query, 0, params);
+	restrictionContext = CreateAndPushRestrictionContext();
 
-	commandType = initialPlan->commandType;
-	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
+	PG_TRY();
 	{
-		if (es->analyze)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("Using ANALYZE for INSERT/UPDATE/DELETE on "
-								   "distributed tables is not supported.")));
-		}
-	}
+		/* call standard planner to modify the query structure before multi planning */
+		initialPlan = standard_planner(query, 0, params);
 
-	multiPlan = CreatePhysicalPlan(originalQuery, query);
+		commandType = initialPlan->commandType;
+		if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
+			commandType == CMD_DELETE)
+		{
+			if (es->analyze)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("Using ANALYZE for INSERT/UPDATE/DELETE on "
+									   "distributed tables is not supported.")));
+			}
+		}
+
+		multiPlan = CreatePhysicalPlan(originalQuery, query, restrictionContext);
+	}
+	PG_CATCH();
+	{
+		PopRestrictionContext();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	PopRestrictionContext();
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);

@@ -31,6 +31,10 @@
 
 #include "utils/memutils.h"
 
+
+static List *relationRestrictionContextList = NIL;
+
+
 /* local function forward declarations */
 static void CheckNodeIsDumpable(Node *node);
 
@@ -46,6 +50,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
 	Query *originalQuery = NULL;
+	RelationRestrictionContext *restrictionContext = NULL;
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the
@@ -56,19 +61,36 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		originalQuery = copyObject(parse);
 	}
 
-	/*
-	 * First call into standard planner. This is required because the Citus
-	 * planner relies on parse tree transformations made by postgres' planner.
-	 */
-	result = standard_planner(parse, cursorOptions, boundParams);
+	/* create a restriction context and put it at the end if context list */
+	restrictionContext = CreateAndPushRestrictionContext();
 
-	if (needsDistributedPlanning)
+	PG_TRY();
 	{
-		MultiPlan *physicalPlan = CreatePhysicalPlan(originalQuery, parse);
+		/*
+		 * First call into standard planner. This is required because the Citus
+		 * planner relies on parse tree transformations made by postgres' planner.
+		 */
 
-		/* store required data into the planned statement */
-		result = MultiQueryContainerNode(result, physicalPlan);
+		result = standard_planner(parse, cursorOptions, boundParams);
+
+		if (needsDistributedPlanning)
+		{
+			MultiPlan *physicalPlan = CreatePhysicalPlan(originalQuery, parse,
+														 restrictionContext);
+
+			/* store required data into the planned statement */
+			result = MultiQueryContainerNode(result, physicalPlan);
+		}
 	}
+	PG_CATCH();
+	{
+		PopRestrictionContext();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	/* remove the context from the context list */
+	PopRestrictionContext();
 
 	return result;
 }
@@ -82,10 +104,11 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
  * physical plan process needed to produce distributed query plans.
  */
 MultiPlan *
-CreatePhysicalPlan(Query *originalQuery, Query *query)
+CreatePhysicalPlan(Query *originalQuery, Query *query,
+				   RelationRestrictionContext *restrictionContext)
 {
 	MultiPlan *physicalPlan = MultiRouterPlanCreate(originalQuery, query,
-													TaskExecutorType);
+													TaskExecutorType, restrictionContext);
 	if (physicalPlan == NULL)
 	{
 		/* Create and optimize logical plan */
@@ -295,4 +318,91 @@ CheckNodeIsDumpable(Node *node)
 	char *out = CitusNodeToString(node);
 	pfree(out);
 #endif
+}
+
+
+/*
+ * multi_relation_restriction_hook is a hook called by postgresql standard planner
+ * to notify us about various planning information regarding a relation. We use
+ * it to retrieve restrictions on relations.
+ */
+void
+multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index index,
+								RangeTblEntry *rte)
+{
+	RelationRestrictionContext *restrictionContext = NULL;
+	RelationRestriction *relationRestriction = NULL;
+	bool distributedTable = false;
+	bool localTable = false;
+
+	if (rte->rtekind != RTE_RELATION)
+	{
+		return;
+	}
+
+	distributedTable = IsDistributedTable(rte->relid);
+	localTable = !distributedTable;
+
+	restrictionContext = CurrentRestrictionContext();
+	Assert(restrictionContext != NULL);
+
+	relationRestriction = palloc0(sizeof(RelationRestriction));
+	relationRestriction->index = index;
+	relationRestriction->relationId = rte->relid;
+	relationRestriction->rte = rte;
+	relationRestriction->relOptInfo = relOptInfo;
+	relationRestriction->distributedRelation = distributedTable;
+	relationRestriction->plannerInfo = root;
+	relationRestriction->prunedShardIntervalList = NIL;
+
+	restrictionContext->hasDistributedRelation |= distributedTable;
+	restrictionContext->hasLocalRelation |= localTable;
+
+	restrictionContext->relationRestrictionList =
+		lappend(restrictionContext->relationRestrictionList, relationRestriction);
+}
+
+
+/*
+ * CreateAndPushRestrictionContext creates a new restriction context, inserts it to the
+ * beginning of the context list, and returns the newly created context.
+ */
+RelationRestrictionContext *
+CreateAndPushRestrictionContext(void)
+{
+	RelationRestrictionContext *restrictionContext =
+		palloc0(sizeof(RelationRestrictionContext));
+	relationRestrictionContextList = lcons(restrictionContext,
+										   relationRestrictionContextList);
+
+	return restrictionContext;
+}
+
+
+/*
+ * CurrentRestrictionContext returns the the last restriction context from the
+ * list.
+ */
+RelationRestrictionContext *
+CurrentRestrictionContext(void)
+{
+	RelationRestrictionContext *restrictionContext = NULL;
+
+	Assert(relationRestrictionContextList != NIL);
+
+	restrictionContext =
+		(RelationRestrictionContext *) linitial(relationRestrictionContextList);
+
+	return restrictionContext;
+}
+
+
+/*
+ * PopRestrictionContext removes the most recently added restriction context from
+ * context list. The function assumes the list is not empty.
+ */
+void
+PopRestrictionContext(void)
+{
+	relationRestrictionContextList = list_delete_first(relationRestrictionContextList);
 }
