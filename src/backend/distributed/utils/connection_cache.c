@@ -263,11 +263,6 @@ ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError)
 								 sqlStateString[3], sqlStateString[4]);
 	}
 
-	if (raiseError)
-	{
-		errorLevel = ERROR;
-	}
-
 	/*
 	 * If the PGresult did not contain a message, the connection may provide a
 	 * suitable top level one. At worst, this is an empty string.
@@ -284,6 +279,16 @@ ReportRemoteError(PGconn *connection, PGresult *result, bool raiseError)
 		{
 			*lastNewlineIndex = '\0';
 		}
+	}
+
+	/*
+	 * If requested, actually raise an error. This necessitates purging the
+	 * connection so it doesn't remain in the hash in an invalid state.
+	 */
+	if (raiseError)
+	{
+		errorLevel = ERROR;
+		PurgeConnection(connection);
 	}
 
 	if (sqlState == ERRCODE_CONNECTION_FAILURE)
