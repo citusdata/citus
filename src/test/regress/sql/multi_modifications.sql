@@ -18,16 +18,24 @@ CREATE TABLE limit_orders (
 	limit_price decimal NOT NULL DEFAULT 0.00 CHECK (limit_price >= 0.00)
 );
 
+
+CREATE TABLE multiple_hash (
+	category text NOT NULL,
+	data text NOT NULL
+);
+
 CREATE TABLE insufficient_shards ( LIKE limit_orders );
 CREATE TABLE range_partitioned ( LIKE limit_orders );
 CREATE TABLE append_partitioned ( LIKE limit_orders );
 
 SELECT master_create_distributed_table('limit_orders', 'id', 'hash');
+SELECT master_create_distributed_table('multiple_hash', 'category', 'hash');
 SELECT master_create_distributed_table('insufficient_shards', 'id', 'hash');
 SELECT master_create_distributed_table('range_partitioned', 'id', 'range');
 SELECT master_create_distributed_table('append_partitioned', 'id', 'append');
 
 SELECT master_create_worker_shards('limit_orders', 2, 2);
+SELECT master_create_worker_shards('multiple_hash', 2, 2);
 
 -- make a single shard that covers no partition values
 SELECT master_create_worker_shards('insufficient_shards', 1, 1);
@@ -292,3 +300,29 @@ UPDATE limit_orders SET placed_at = now() WHERE id = 246;
 
 -- cursors are not supported
 UPDATE limit_orders SET symbol = 'GM' WHERE CURRENT OF cursor_name;
+
+
+-- ensure returned row counters are correct
+\set QUIET off
+INSERT INTO multiple_hash VALUES ('1', '1');
+INSERT INTO multiple_hash VALUES ('1', '2');
+INSERT INTO multiple_hash VALUES ('1', '3');
+INSERT INTO multiple_hash VALUES ('2', '1');
+INSERT INTO multiple_hash VALUES ('2', '2');
+INSERT INTO multiple_hash VALUES ('2', '3');
+
+-- check that update return the right number of rows
+-- one row
+UPDATE multiple_hash SET data = data ||'-1' WHERE category = '1' AND data = '1';
+-- three rows
+UPDATE multiple_hash SET data = data ||'-2' WHERE category = '1';
+-- check
+SELECT * FROM multiple_hash WHERE category = '1' ORDER BY category, data;
+
+-- check that deletes return the right number of rows
+-- one row
+DELETE FROM multiple_hash WHERE category = '2' AND data = '1';
+-- two rows
+DELETE FROM multiple_hash WHERE category = '2';
+-- check
+SELECT * FROM multiple_hash WHERE category = '2' ORDER BY category, data;
