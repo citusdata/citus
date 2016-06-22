@@ -36,7 +36,9 @@ override CPPFLAGS := -I$(client_includes) -I$(libpq_srcdir) -I$(citus_abs_top_sr
 # psqlscan is compiled as part of mainloop
 mainloop.o: psqlscan.c
 psqlscan.c: FLEXFLAGS = -Cfe -p -p
-psqlscan.c: FLEX_NO_BACKUP=yes
+
+psqlscan.c: psqlscan.l
+	$(FLEX) $(FLEXFLAGS) -o'$@' $<
 
 clean: csql-clean
 csql-clean:
