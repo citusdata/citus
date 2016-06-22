@@ -116,6 +116,14 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	ErrorIfModifyQueryNotSupported(modifyQuery);
 
+	/* reject queries with a returning list */
+	if (list_length(modifyQuery->returningList) > 0)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("master_modify_multiple_shards() does not support RETURNING")));
+	}
+
 	shardIntervalList = LoadShardIntervalList(relationId);
 	restrictClauseList = WhereClauseList(modifyQuery->jointree);
 

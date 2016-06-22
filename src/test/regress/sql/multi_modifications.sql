@@ -143,10 +143,6 @@ INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
 -- INSERT ... SELECT ... FROM commands are unsupported
 INSERT INTO limit_orders SELECT * FROM limit_orders;
 
--- commands with a RETURNING clause are unsupported
-INSERT INTO limit_orders VALUES (7285, 'AMZN', 3278, '2016-01-05 02:07:36', 'sell', 0.00)
-						 RETURNING *;
-
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (DELETE FROM limit_orders RETURNING *)
 INSERT INTO limit_orders DEFAULT VALUES;
@@ -173,9 +169,6 @@ CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 											 limit_orders.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
-
--- commands with a RETURNING clause are unsupported
-DELETE FROM limit_orders WHERE id = 246 RETURNING *;
 
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
@@ -274,9 +267,6 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders.id = 246 AND
 						  limit_orders.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
-
--- commands with a RETURNING clause are unsupported
-UPDATE limit_orders SET symbol = 'GM' WHERE id = 246 RETURNING *;
 
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
