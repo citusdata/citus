@@ -138,6 +138,19 @@ SELECT * FROM upsert_test;
         1 |         1 |          
 (1 row)
 
+-- Test upsert, with returning:
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+ERROR:  syntax error at or near "ON"
+LINE 2:  ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+         ^
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+ERROR:  syntax error at or near "ON"
+LINE 2:  ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+         ^
 -- create another table
 CREATE TABLE upsert_test_2
 (

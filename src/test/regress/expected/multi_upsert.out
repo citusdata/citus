@@ -105,6 +105,23 @@ SELECT * FROM upsert_test;
         1 |         5 |       872
 (1 row)
 
+-- Test upsert, with returning:
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+ part_key | other_col | third_col 
+----------+-----------+-----------
+        2 |         2 |          
+(1 row)
+
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+ part_key | other_col | third_col 
+----------+-----------+-----------
+        2 |         3 |          
+(1 row)
+
 -- create another table
 CREATE TABLE upsert_test_2
 (
