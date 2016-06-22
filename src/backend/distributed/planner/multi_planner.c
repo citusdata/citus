@@ -185,6 +185,9 @@ MultiQueryContainerNode(PlannedStmt *result, MultiPlan *multiPlan)
 	fauxFunctionScan = makeNode(FunctionScan);
 	fauxFunctionScan->functions = lappend(fauxFunctionScan->functions, fauxFunction);
 
+	/* copy original targetlist, accessed for RETURNING queries  */
+	fauxFunctionScan->scan.plan.targetlist = copyObject(result->planTree->targetlist);
+
 	/*
 	 * Add set returning function to target list if the original (postgres
 	 * created) plan doesn't support backward scans; doing so prevents
