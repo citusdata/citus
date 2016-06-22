@@ -62,8 +62,7 @@ ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Joins are not supported in distributed modifications.
 -- commands with a RETURNING clause are unsupported
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 3 RETURNING *');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  RETURNING clauses are not supported in distributed modifications.
+ERROR:  master_modify_multiple_shards() does not support RETURNING
 -- commands containing a CTE are unsupported
 SELECT master_modify_multiple_shards('WITH deleted_stuff AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) DELETE FROM multi_shard_modify_test');
 ERROR:  cannot perform distributed planning for the given modification
@@ -205,8 +204,7 @@ ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Joins are not supported in distributed modifications.
 -- commands with a RETURNING clause are unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=''FAIL'' WHERE t_key=4 RETURNING *');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  RETURNING clauses are not supported in distributed modifications.
+ERROR:  master_modify_multiple_shards() does not support RETURNING
 -- commands containing a CTE are unsupported
 SELECT master_modify_multiple_shards('WITH t AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) UPDATE multi_shard_modify_test SET t_name = ''FAIL'' ');
 ERROR:  cannot perform distributed planning for the given modification

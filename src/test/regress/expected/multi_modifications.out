@@ -195,11 +195,6 @@ DETAIL:  Multi-row INSERTs to distributed tables are not supported.
 INSERT INTO limit_orders SELECT * FROM limit_orders;
 ERROR:  cannot perform distributed planning for the given modifications
 DETAIL:  Subqueries are not supported in distributed modifications.
--- commands with a RETURNING clause are unsupported
-INSERT INTO limit_orders VALUES (7285, 'AMZN', 3278, '2016-01-05 02:07:36', 'sell', 0.00)
-						 RETURNING *;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  RETURNING clauses are not supported in distributed modifications.
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (DELETE FROM limit_orders RETURNING *)
 INSERT INTO limit_orders DEFAULT VALUES;
@@ -244,10 +239,6 @@ DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 											 limit_orders.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
 ERROR:  cannot plan queries that include both regular and partitioned relations
--- commands with a RETURNING clause are unsupported
-DELETE FROM limit_orders WHERE id = 246 RETURNING *;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  RETURNING clauses are not supported in distributed modifications.
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
 DELETE FROM limit_orders;
@@ -363,10 +354,6 @@ UPDATE limit_orders SET limit_price = 0.00 FROM bidders
 						  limit_orders.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
 ERROR:  cannot plan queries that include both regular and partitioned relations
--- commands with a RETURNING clause are unsupported
-UPDATE limit_orders SET symbol = 'GM' WHERE id = 246 RETURNING *;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  RETURNING clauses are not supported in distributed modifications.
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
 UPDATE limit_orders SET symbol = 'GM';
