@@ -56,6 +56,14 @@ ifneq (@CC@,)
     override CC=@CC@
 endif
 
+# If detected by our configure script, override the FLEX postgres
+# detected.  That allows to compile citus against a postgres which was
+# built without flex available (possible because generated files are
+# included)
+ifneq (@FLEX@,)
+    override FLEX=@FLEX@
+endif
+
 # Add options passed to configure or computed therein, to CFLAGS/CPPFLAGS/...
 override CFLAGS += @CFLAGS@ @CITUS_CFLAGS@
 override CPPFLAGS := @CPPFLAGS@ -I '${citus_abs_top_srcdir}/src/include' $(CPPFLAGS)

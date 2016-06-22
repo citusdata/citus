@@ -10,6 +10,11 @@ AC_COPYRIGHT([Copyright (c) 2012-2016, Citus Data, Inc.])
 
 AC_PROG_SED
 
+# Re-check for flex. That allows to compile citus against a postgres
+# which was built without flex available (possible because generated
+# files are included)
+AC_PATH_PROG([FLEX], [flex])
+
 # Locate pg_config binary
 AC_ARG_VAR([PG_CONFIG], [Location to find pg_config for target PostgreSQL instalation (default PATH)])
 AC_ARG_VAR([PATH], [PATH for target PostgreSQL install pg_config])
