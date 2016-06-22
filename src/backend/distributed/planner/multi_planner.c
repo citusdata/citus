@@ -25,6 +25,8 @@
 
 #include "executor/executor.h"
 
+#include "nodes/makefuncs.h"
+
 #include "optimizer/planner.h"
 
 #include "utils/memutils.h"
@@ -196,11 +198,17 @@ MultiQueryContainerNode(PlannedStmt *result, MultiPlan *multiPlan)
 	if (!ExecSupportsBackwardScan(result->planTree))
 	{
 		FuncExpr *funcExpr = makeNode(FuncExpr);
+		TargetEntry *targetEntry = NULL;
+		bool resjunkAttribute = true;
+
 		funcExpr->funcretset = true;
+
+		targetEntry = makeTargetEntry((Expr *) funcExpr, InvalidAttrNumber, NULL,
+									  resjunkAttribute);
 
 		fauxFunctionScan->scan.plan.targetlist =
 			lappend(fauxFunctionScan->scan.plan.targetlist,
-					funcExpr);
+					targetEntry);
 	}
 
 	result->planTree = (Plan *) fauxFunctionScan;
