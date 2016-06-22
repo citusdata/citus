@@ -69,6 +69,9 @@ INSERT INTO limit_orders VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'bu
 								 20.69);
 SELECT COUNT(*) FROM limit_orders WHERE id = 32743;
 
+-- basic single-row INSERT with RETURNING
+INSERT INTO limit_orders VALUES (32744, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy', 20.69) RETURNING *;
+
 -- try a single-row INSERT with no shard to receive it
 INSERT INTO insufficient_shards VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 										20.69);
@@ -118,9 +121,15 @@ INSERT INTO limit_orders VALUES (NULL, 'T', 975234, DEFAULT);
 -- INSERT violating column constraint
 INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'sell',
 								 -5.00);
-
 -- INSERT violating primary key constraint
 INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58);
+
+-- INSERT violating primary key constraint, with RETURNING specified.
+INSERT INTO limit_orders VALUES (32743, 'LUV', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING *;
+
+-- INSERT, with RETURNING specified, failing with a non-constraint error
+INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
+
 
 SET client_min_messages TO DEFAULT;
 
@@ -154,6 +163,10 @@ SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 DELETE FROM limit_orders WHERE id = 246;
 SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 
+-- test simple DELETE with RETURNING
+DELETE FROM limit_orders WHERE id = 430 RETURNING *;
+SELECT COUNT(*) FROM limit_orders WHERE id = 430;
+
 -- DELETE with expression in WHERE clause
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 SELECT COUNT(*) FROM limit_orders WHERE id = 246;
@@ -183,13 +196,22 @@ INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell'
 UPDATE limit_orders SET symbol = 'GM' WHERE id = 246;
 SELECT symbol FROM limit_orders WHERE id = 246;
 
+-- simple UPDATE with RETURNING
+UPDATE limit_orders SET symbol = 'GM' WHERE id = 246 RETURNING *;
+
 -- expression UPDATE
 UPDATE limit_orders SET bidder_id = 6 * 3 WHERE id = 246;
 SELECT bidder_id FROM limit_orders WHERE id = 246;
 
+-- expression UPDATE with RETURNING
+UPDATE limit_orders SET bidder_id = 6 * 5 WHERE id = 246 RETURNING *;
+
 -- multi-column UPDATE
 UPDATE limit_orders SET (kind, limit_price) = ('buy', DEFAULT) WHERE id = 246;
 SELECT kind, limit_price FROM limit_orders WHERE id = 246;
+
+-- multi-column UPDATE with RETURNING
+UPDATE limit_orders SET (kind, limit_price) = ('buy', 999) WHERE id = 246 RETURNING *;
 
 -- Test that on unique contraint violations, we fail fast
 INSERT INTO limit_orders VALUES (275, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
@@ -285,12 +307,28 @@ UPDATE limit_orders SET symbol = LOWER(symbol) WHERE id = 246;
 
 SELECT symbol, bidder_id FROM limit_orders WHERE id = 246;
 
+-- IMMUTABLE functions are allowed -- even in returning
+UPDATE limit_orders SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, LOWER(symbol), symbol;
+
 -- updates referencing non-IMMUTABLE functions are unsupported
 UPDATE limit_orders SET placed_at = now() WHERE id = 246;
+
+-- even in RETURNING
+UPDATE limit_orders SET placed_at = placed_at WHERE id = 246 RETURNING NOW();
 
 -- cursors are not supported
 UPDATE limit_orders SET symbol = 'GM' WHERE CURRENT OF cursor_name;
 
+-- check that multi-row UPDATE/DELETEs with RETURNING work
+INSERT INTO multiple_hash VALUES ('0', '1');
+INSERT INTO multiple_hash VALUES ('0', '2');
+INSERT INTO multiple_hash VALUES ('0', '3');
+INSERT INTO multiple_hash VALUES ('0', '4');
+INSERT INTO multiple_hash VALUES ('0', '5');
+INSERT INTO multiple_hash VALUES ('0', '6');
+
+UPDATE multiple_hash SET data = data ||'-1' WHERE category = '0' RETURNING *;
+DELETE FROM multiple_hash WHERE category = '0' RETURNING *;
 
 -- ensure returned row counters are correct
 \set QUIET off
@@ -300,12 +338,15 @@ INSERT INTO multiple_hash VALUES ('1', '3');
 INSERT INTO multiple_hash VALUES ('2', '1');
 INSERT INTO multiple_hash VALUES ('2', '2');
 INSERT INTO multiple_hash VALUES ('2', '3');
+INSERT INTO multiple_hash VALUES ('2', '3') RETURNING *;
 
 -- check that update return the right number of rows
 -- one row
 UPDATE multiple_hash SET data = data ||'-1' WHERE category = '1' AND data = '1';
 -- three rows
 UPDATE multiple_hash SET data = data ||'-2' WHERE category = '1';
+-- three rows, with RETURNING
+UPDATE multiple_hash SET data = data ||'-2' WHERE category = '1' RETURNING category;
 -- check
 SELECT * FROM multiple_hash WHERE category = '1' ORDER BY category, data;
 
@@ -314,5 +355,8 @@ SELECT * FROM multiple_hash WHERE category = '1' ORDER BY category, data;
 DELETE FROM multiple_hash WHERE category = '2' AND data = '1';
 -- two rows
 DELETE FROM multiple_hash WHERE category = '2';
+-- three rows, with RETURNING
+DELETE FROM multiple_hash WHERE category = '1' RETURNING category;
 -- check
+SELECT * FROM multiple_hash WHERE category = '1' ORDER BY category, data;
 SELECT * FROM multiple_hash WHERE category = '2' ORDER BY category, data;
