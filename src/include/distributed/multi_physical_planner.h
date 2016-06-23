@@ -14,6 +14,9 @@
 #ifndef MULTI_PHYSICAL_PLANNER_H
 #define MULTI_PHYSICAL_PLANNER_H
 
+#include "postgres.h"
+#include "c.h"
+
 #include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/master_metadata_utility.h"

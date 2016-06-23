@@ -94,6 +94,13 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 	char *effectiveDatabaseName = NULL;
 	char *effectiveUserName = NULL;
 
+	if (IsModifyingTransaction)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
+	}
+
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
@@ -172,6 +179,13 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	{
 		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
 		return connectionId;
+	}
+
+	if (IsModifyingTransaction)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
 	}
 
 	/* transcribe connection paremeters to string */
