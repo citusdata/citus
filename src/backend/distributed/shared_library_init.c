@@ -147,6 +147,9 @@ _PG_init(void)
 
 	/* initialize worker node manager */
 	WorkerNodeRegister();
+
+	/* initialize router executor callbacks */
+	InstallRouterExecutorShmemHook();
 }
 
 
