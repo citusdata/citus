@@ -62,10 +62,10 @@ FROM
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
 -- Left table is a large table
-\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-10.data' with delimiter '|'
-\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
+\COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-10.data' with delimiter '|'
+\COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
 -- Right table is a small table
-\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
 -- Make sure we do not crash if one table has no shards
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -84,7 +84,7 @@ LOG:  join order: [ "multi_outer_join_third" ][ broadcast join "multi_outer_join
 (1 row)
 
 -- Third table is a single shard table with all data
-\STAGE multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
+\COPY multi_outer_join_third FROM '@abs_srcdir@/data/customer-1-30.data' with delimiter '|'
 -- Regular outer join should return results for all rows
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -202,7 +202,7 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
 (1 row)
 
 -- Turn the right table into a large table
-\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+\COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
 -- Shards do not have 1-1 matching. We should error here.
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -224,10 +224,10 @@ SELECT * FROM master_apply_delete_command('DELETE FROM multi_outer_join_right');
 (1 row)
 
 -- reload shards with 1-1 matching
-\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
-\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
-\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
-\STAGE multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+\COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-1-15.data' with delimiter '|'
+\COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
+\COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-11-20.data' with delimiter '|'
+\COPY multi_outer_join_right FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
 -- multi_outer_join_third is a single shard table
 -- Regular left join should work as expected
 SELECT
@@ -754,7 +754,7 @@ LIMIT 20;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries in outer joins are not supported
 -- Add a shard to the left table that overlaps with multiple shards in the right
-\STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\COPY multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
 -- All outer joins should error out
 SELECT
 	min(l_custkey), max(l_custkey)

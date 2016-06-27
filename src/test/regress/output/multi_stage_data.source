@@ -7,25 +7,11 @@
 -- policy is left to the default value (round-robin) to test the common install case.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 290000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
-\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
-\STAGE orders FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\STAGE orders FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
-\STAGE customer FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
-\STAGE nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
-\STAGE part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
-\STAGE supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
--- check that we error out if we try to stage into a hash partitioned table
-CREATE TABLE nation_hash_partitioned (
-	n_nationkey integer not null,
-	n_name char(25) not null,
-	n_regionkey integer not null,
-	n_comment varchar(152));
-SELECT master_create_distributed_table('nation_hash_partitioned', 'n_nationkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-\STAGE nation_hash_partitioned FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
-\stage: staging data into hash partitioned tables is not supported
+\COPY lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\COPY lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\COPY orders FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\COPY orders FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\COPY customer FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\COPY nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+\COPY part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
+\COPY supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'

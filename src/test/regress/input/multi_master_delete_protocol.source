@@ -19,9 +19,9 @@ CREATE TABLE customer_delete_protocol (
         c_comment varchar(117) not null);
 SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 'append');
 
-\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
-\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
-\STAGE customer_delete_protocol FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
+\COPY customer_delete_protocol FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\COPY customer_delete_protocol FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
+\COPY customer_delete_protocol FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
 
 -- Testing master_apply_delete_command
 -- Check that we don't support conditions on columns other than partition key.

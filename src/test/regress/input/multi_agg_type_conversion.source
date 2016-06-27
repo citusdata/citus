@@ -24,7 +24,7 @@ CREATE TABLE aggregate_type (
        interval_value interval not null);
 SELECT master_create_distributed_table('aggregate_type', 'float_value', 'append');
 
-\STAGE aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
+\COPY aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
 
 -- Test conversions using aggregates on floats and division
 
