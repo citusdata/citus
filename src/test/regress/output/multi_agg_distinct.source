@@ -27,9 +27,17 @@ SELECT master_create_distributed_table('lineitem_range', 'l_orderkey', 'range');
  
 (1 row)
 
+SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
+WHERE shardid = :new_shard_id;
+SELECT master_create_empty_shard('lineitem_range') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
+WHERE shardid = :new_shard_id;
 SET citus.shard_max_size TO "500MB";
-\STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\STAGE lineitem_range FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\COPY lineitem_range FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\COPY lineitem_range FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 RESET citus.shard_max_size;
 -- Run aggregate(distinct) on partition column for range partitioned table
 SELECT count(distinct l_orderkey) FROM lineitem_range;

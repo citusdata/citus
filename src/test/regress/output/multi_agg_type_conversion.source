@@ -41,7 +41,7 @@ SELECT master_create_distributed_table('aggregate_type', 'float_value', 'append'
  
 (1 row)
 
-\STAGE aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
+\COPY aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
 -- Test conversions using aggregates on floats and division
 SELECT min(float_value), max(float_value),
        sum(float_value), count(float_value), avg(float_value)

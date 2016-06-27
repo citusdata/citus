@@ -390,7 +390,7 @@ ORDER BY
 	customer_keys.o_custkey DESC
 LIMIT 10 OFFSET 20;
 DEBUG:  push down of limit count: 30
-DEBUG:  building index "pg_toast_16992_index" on table "pg_toast_16992"
+DEBUG:  building index "pg_toast_17021_index" on table "pg_toast_17021"
  o_custkey | total_order_count 
 -----------+-------------------
       1466 |                 1

@@ -13,8 +13,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 9000000;
 
 -- Stage additional data to start using large shard identifiers.
 
-\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\STAGE lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\COPY lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\COPY lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 
 -- Query #1 from the TPC-H decision support benchmark.
 

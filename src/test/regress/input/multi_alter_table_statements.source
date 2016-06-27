@@ -29,7 +29,7 @@ CREATE TABLE lineitem_alter (
 	l_comment varchar(44) not null
 	);
 SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
-\STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\COPY lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 -- Verify that we can add columns
 
@@ -57,8 +57,8 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 
--- \stage to verify that default values take effect
-\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \COPY to verify that default values take effect
+\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
@@ -71,16 +71,17 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 
--- \stage should fail because it will try to insert NULLs for a NOT NULL column
-\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \COPY should fail because it will try to insert NULLs for a NOT NULL column
+-- Note, this operation will create a table on the workers but it won't be in the metadata
+\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 -- Verify that DROP NOT NULL works
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 \d lineitem_alter
 
--- \stage should succeed now 
-\STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \COPY should succeed now 
+\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 SELECT count(*) from lineitem_alter;
 
 -- Verify that SET DATA TYPE works
@@ -258,7 +259,8 @@ DROP TABLESPACE super_fast_ssd;
 SET citus.enable_ddl_propagation to true;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
--- check that nothing's left over on workers
+-- check that nothing's left over on workers, other than the leftover shard created
+-- during the unsuccessful COPY
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 \c - - - :master_port
