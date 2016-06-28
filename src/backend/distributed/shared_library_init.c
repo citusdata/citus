@@ -48,6 +48,7 @@ static void RegisterCitusConfigVariables(void);
 static void NormalizeWorkerListPath(void);
 
 
+/* *INDENT-OFF* */
 /* GUC enum definitions */
 static const struct config_enum_entry task_assignment_policy_options[] = {
 	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
@@ -74,6 +75,8 @@ static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
 	{ "2pc", COMMIT_PROTOCOL_2PC, false },
 	{ NULL, 0, false }
 };
+
+/* *INDENT-ON* */
 
 
 /* shared library initialization function */
