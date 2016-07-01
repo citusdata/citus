@@ -45,6 +45,7 @@ my %dataTypes = ();
 my %fdws = ();
 my %fdwServers = ();
 my %functions = ();
+my %operators = ();
 
 GetOptions(
     'bindir=s' => \$bindir,
@@ -112,7 +113,11 @@ for my $option (@userPgOptions)
                'bug_status', ' ENUM (\'new\', \'open\', \'closed\')');
 
 # define functions as signature->definition
-%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;');
+%functions = ('fake_fdw_handler()', 'fdw_handler AS \'citus\' LANGUAGE C STRICT;',
+               'equal_test_composite_type_function(test_composite_type, test_composite_type)', 'boolean AS \'select $1.i = $2.i AND $1.i2 = $2.i2;\' LANGUAGE SQL IMMUTABLE RETURNS NULL ON NULL INPUT;');
+
+
+%operators = ('=', '(LEFTARG = test_composite_type, RIGHTARG = test_composite_type, PROCEDURE = equal_test_composite_type_function, HASHES)');
 
 #define fdws as name->handler name
 %fdws = ('fake_fdw', 'fake_fdw_handler');
@@ -255,6 +260,14 @@ for my $port (@workerPorts)
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
             or die "Could not create FUNCTION $function on worker";
+    }
+
+    foreach my $operator (keys %operators)
+    {
+        system("$bindir/psql",
+                ('-h', $host, '-p', $port, '-U', $user, "regression",
+                 '-c', "CREATE OPERATOR $operator $operators{$operator};")) == 0
+            or die "Could not create OPERATOR $operator on worker";
     }
 
     foreach my $fdw (keys %fdws)

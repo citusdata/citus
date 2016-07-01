@@ -229,51 +229,67 @@ pg_get_tableschemadef_string(Oid tableRelationId)
 	AttrNumber constraintIndex = 0;
 	AttrNumber constraintCount = 0;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
+	OverrideSearchPath *overridePath = NULL;
 
 	/*
-	 * Instead of retrieving values from system catalogs as other functions in
-	 * ruleutils.c do, we follow an unusual approach here: we open the relation,
-	 * and fetch the relation's tuple descriptor. We do this because the tuple
-	 * descriptor already contains information harnessed from pg_attrdef,
-	 * pg_attribute, pg_constraint, and pg_class; and therefore using the
-	 * descriptor saves us from a lot of additional work.
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
 	 */
-	relation = relation_open(tableRelationId, AccessShareLock);
-	relationName = generate_relation_name(tableRelationId, NIL);
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
-	relationKind = relation->rd_rel->relkind;
-	if (relationKind != RELKIND_RELATION && relationKind != RELKIND_FOREIGN_TABLE)
+	PG_TRY();
 	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("%s is not a regular or foreign table", relationName)));
-	}
+		/*
+		 * Instead of retrieving values from system catalogs as other functions in
+		 * ruleutils.c do, we follow an unusual approach here: we open the relation,
+		 * and fetch the relation's tuple descriptor. We do this because the tuple
+		 * descriptor already contains information harnessed from pg_attrdef,
+		 * pg_attribute, pg_constraint, and pg_class; and therefore using the
+		 * descriptor saves us from a lot of additional work.
+		 */
+		relation = relation_open(tableRelationId, AccessShareLock);
+		relationName = generate_relation_name(tableRelationId, NIL);
 
-	initStringInfo(&buffer);
-	if (relationKind == RELKIND_RELATION)
-	{
-		appendStringInfo(&buffer, "CREATE TABLE %s (", relationName);
-	}
-	else
-	{
-		appendStringInfo(&buffer, "CREATE FOREIGN TABLE %s (", relationName);
-	}
-
-	/*
-	 * Iterate over the table's columns. If a particular column is not dropped
-	 * and is not inherited from another table, print the column's name and its
-	 * formatted type.
-	 */
-	tupleDescriptor = RelationGetDescr(relation);
-	tupleConstraints = tupleDescriptor->constr;
-
-	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
-	{
-		Form_pg_attribute attributeForm = tupleDescriptor->attrs[attributeIndex];
-		const char *attributeName = NULL;
-		const char *attributeTypeName = NULL;
-
-		if (!attributeForm->attisdropped && attributeForm->attinhcount == 0)
+		relationKind = relation->rd_rel->relkind;
+		if (relationKind != RELKIND_RELATION && relationKind != RELKIND_FOREIGN_TABLE)
 		{
+			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+							errmsg("%s is not a regular or foreign table", relationName)));
+		}
+
+		initStringInfo(&buffer);
+		if (relationKind == RELKIND_RELATION)
+		{
+			appendStringInfo(&buffer, "CREATE TABLE %s (", relationName);
+		}
+		else
+		{
+			appendStringInfo(&buffer, "CREATE FOREIGN TABLE %s (", relationName);
+		}
+
+		/*
+		 * Iterate over the table's columns. If a particular column is not dropped
+		 * and is not inherited from another table, print the column's name and its
+		 * formatted type.
+		 */
+		tupleDescriptor = RelationGetDescr(relation);
+		tupleConstraints = tupleDescriptor->constr;
+
+		for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
+		{
+			Form_pg_attribute attributeForm = tupleDescriptor->attrs[attributeIndex];
+			const char *attributeName = NULL;
+			const char *attributeTypeName = NULL;
+
+			if (attributeForm->attisdropped || attributeForm->attinhcount != 0)
+			{
+				continue;
+			}
+
 			if (firstAttributePrinted)
 			{
 				appendStringInfoString(&buffer, ", ");
@@ -325,64 +341,75 @@ pg_get_tableschemadef_string(Oid tableRelationId)
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
 		}
-	}
 
-	/*
-	 * Now check if the table has any constraints. If it does, set the number of
-	 * check constraints here. Then iterate over all check constraints and print
-	 * them.
-	 */
-	if (tupleConstraints != NULL)
-	{
-		constraintCount = tupleConstraints->num_check;
-	}
-
-	for (constraintIndex = 0; constraintIndex < constraintCount; constraintIndex++)
-	{
-		ConstrCheck *checkConstraintList = tupleConstraints->check;
-		ConstrCheck *checkConstraint = &(checkConstraintList[constraintIndex]);
-
-		Node *checkNode = NULL;
-		List *checkContext = NULL;
-		char *checkString = NULL;
-
-		/* if an attribute or constraint has been printed, format properly */
-		if (firstAttributePrinted || constraintIndex > 0)
+		/*
+		 * Now check if the table has any constraints. If it does, set the number of
+		 * check constraints here. Then iterate over all check constraints and print
+		 * them.
+		 */
+		if (tupleConstraints != NULL)
 		{
-			appendStringInfoString(&buffer, ", ");
+			constraintCount = tupleConstraints->num_check;
 		}
 
-		appendStringInfo(&buffer, "CONSTRAINT %s CHECK ",
-						 quote_identifier(checkConstraint->ccname));
+		for (constraintIndex = 0; constraintIndex < constraintCount; constraintIndex++)
+		{
+			ConstrCheck *checkConstraintList = tupleConstraints->check;
+			ConstrCheck *checkConstraint = &(checkConstraintList[constraintIndex]);
 
-		/* convert expression to node tree, and prepare deparse context */
-		checkNode = (Node *) stringToNode(checkConstraint->ccbin);
-		checkContext = deparse_context_for(relationName, tableRelationId);
+			Node *checkNode = NULL;
+			List *checkContext = NULL;
+			char *checkString = NULL;
 
-		/* deparse check constraint string */
-		checkString = deparse_expression(checkNode, checkContext, false, false);
+			/* if an attribute or constraint has been printed, format properly */
+			if (firstAttributePrinted || constraintIndex > 0)
+			{
+				appendStringInfoString(&buffer, ", ");
+			}
 
-		appendStringInfoString(&buffer, checkString);
+			appendStringInfo(&buffer, "CONSTRAINT %s CHECK ",
+							 quote_identifier(checkConstraint->ccname));
+
+			/* convert expression to node tree, and prepare deparse context */
+			checkNode = (Node *) stringToNode(checkConstraint->ccbin);
+			checkContext = deparse_context_for(relationName, tableRelationId);
+
+			/* deparse check constraint string */
+			checkString = deparse_expression(checkNode, checkContext, false, false);
+
+			appendStringInfoString(&buffer, checkString);
+		}
+
+		/* close create table's outer parentheses */
+		appendStringInfoString(&buffer, ")");
+
+		/*
+		 * If the relation is a foreign table, append the server name and options to
+		 * the create table statement.
+		 */
+		if (relationKind == RELKIND_FOREIGN_TABLE)
+		{
+			ForeignTable *foreignTable = GetForeignTable(tableRelationId);
+			ForeignServer *foreignServer = GetForeignServer(foreignTable->serverid);
+
+			char *serverName = foreignServer->servername;
+			appendStringInfo(&buffer, " SERVER %s", quote_identifier(serverName));
+			AppendOptionListToString(&buffer, foreignTable->options);
+		}
 	}
-
-	/* close create table's outer parentheses */
-	appendStringInfoString(&buffer, ")");
-
-	/*
-	 * If the relation is a foreign table, append the server name and options to
-	 * the create table statement.
-	 */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
+	PG_CATCH();
 	{
-		ForeignTable *foreignTable = GetForeignTable(tableRelationId);
-		ForeignServer *foreignServer = GetForeignServer(foreignTable->serverid);
+		/* close the connection */
+		relation_close(relation, AccessShareLock);
+		PopOverrideSearchPath();
 
-		char *serverName = foreignServer->servername;
-		appendStringInfo(&buffer, " SERVER %s", quote_identifier(serverName));
-		AppendOptionListToString(&buffer, foreignTable->options);
+		PG_RE_THROW();
 	}
+	PG_END_TRY();
 
+	/* close the connection */
 	relation_close(relation, AccessShareLock);
+	PopOverrideSearchPath();
 
 	return (buffer.data);
 }
