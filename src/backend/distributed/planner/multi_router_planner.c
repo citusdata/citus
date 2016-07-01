@@ -255,16 +255,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 								  "supported.")));
 	}
 
-	/* reject queries with a returning list */
-	if (list_length(queryTree->returningList) > 0)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("RETURNING clauses are not supported in distributed "
-								  "modifications.")));
-	}
-
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
@@ -297,6 +287,11 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		if (joinTree != NULL && contain_mutable_functions(joinTree->quals))
 		{
 			hasNonConstQualExprs = true;
+		}
+
+		if (contain_mutable_functions((Node *) queryTree->returningList))
+		{
+			hasNonConstTargetEntryExprs = true;
 		}
 	}
 

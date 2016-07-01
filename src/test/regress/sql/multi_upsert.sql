@@ -85,6 +85,15 @@ INSERT INTO upsert_test as ups_test (part_key, other_col) VALUES (1, 1) ON CONFL
 -- see the results
 SELECT * FROM upsert_test;
 
+-- Test upsert, with returning:
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+
+INSERT INTO upsert_test (part_key, other_col) VALUES (2, 2)
+	ON CONFLICT (part_key) DO UPDATE SET other_col = 3
+        RETURNING *;
+
 -- create another table
 CREATE TABLE upsert_test_2
 (
