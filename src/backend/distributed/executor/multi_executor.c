@@ -59,9 +59,9 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		{
 			Task *task = NULL;
 			List *taskList = workerJob->taskList;
+			TupleDesc tupleDescriptor = ExecCleanTypeFromTL(
+				planStatement->planTree->targetlist, false);
 			List *dependendJobList PG_USED_FOR_ASSERTS_ONLY = workerJob->dependedJobList;
-			List *workerTargetList = multiPlan->workerJob->jobQuery->targetList;
-			TupleDesc tupleDescriptor = ExecCleanTypeFromTL(workerTargetList, false);
 
 			/* router executor can only execute distributed plans with a single task */
 			Assert(list_length(taskList) == 1);
