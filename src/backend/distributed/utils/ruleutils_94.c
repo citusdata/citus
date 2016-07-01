@@ -1731,6 +1731,8 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	deparse_context context;
 	deparse_namespace dpns;
 
+	OverrideSearchPath *overridePath = NULL;
+
 	/* Guard against excessively long or deeply-nested queries */
 	CHECK_FOR_INTERRUPTS();
 	check_stack_depth();
@@ -1746,51 +1748,73 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	 */
 	AcquireRewriteLocks(query, false, false);
 
-	context.buf = buf;
-	context.namespaces = lcons(&dpns, list_copy(parentnamespace));
-	context.windowClause = NIL;
-	context.windowTList = NIL;
-	context.varprefix = (parentnamespace != NIL ||
-						 list_length(query->rtable) != 1);
-	context.prettyFlags = prettyFlags;
-	context.wrapColumn = wrapColumn;
-	context.indentLevel = startIndent;
-	context.distrelid = distrelid;
-	context.shardid = shardid;
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
-	set_deparse_for_query(&dpns, query, parentnamespace);
-
-	switch (query->commandType)
+	PG_TRY();
 	{
-		case CMD_SELECT:
-			get_select_query_def(query, &context, resultDesc);
-			break;
+		context.buf = buf;
+		context.namespaces = lcons(&dpns, list_copy(parentnamespace));
+		context.windowClause = NIL;
+		context.windowTList = NIL;
+		context.varprefix = (parentnamespace != NIL ||
+							 list_length(query->rtable) != 1);
+		context.prettyFlags = prettyFlags;
+		context.wrapColumn = wrapColumn;
+		context.indentLevel = startIndent;
+		context.distrelid = distrelid;
+		context.shardid = shardid;
 
-		case CMD_UPDATE:
-			get_update_query_def(query, &context);
-			break;
+		set_deparse_for_query(&dpns, query, parentnamespace);
 
-		case CMD_INSERT:
-			get_insert_query_def(query, &context);
-			break;
+		switch (query->commandType)
+		{
+			case CMD_SELECT:
+				get_select_query_def(query, &context, resultDesc);
+				break;
 
-		case CMD_DELETE:
-			get_delete_query_def(query, &context);
-			break;
+			case CMD_UPDATE:
+				get_update_query_def(query, &context);
+				break;
 
-		case CMD_NOTHING:
-			appendStringInfoString(buf, "NOTHING");
-			break;
+			case CMD_INSERT:
+				get_insert_query_def(query, &context);
+				break;
 
-		case CMD_UTILITY:
-			get_utility_query_def(query, &context);
-			break;
+			case CMD_DELETE:
+				get_delete_query_def(query, &context);
+				break;
 
-		default:
-			elog(ERROR, "unrecognized query command type: %d",
-				 query->commandType);
-			break;
+			case CMD_NOTHING:
+				appendStringInfoString(buf, "NOTHING");
+				break;
+
+			case CMD_UTILITY:
+				get_utility_query_def(query, &context);
+				break;
+
+			default:
+				elog(ERROR, "unrecognized query command type: %d",
+					 query->commandType);
+				break;
+		}
 	}
+	PG_CATCH();
+	{
+		/* close the connection */
+		PopOverrideSearchPath();
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	PopOverrideSearchPath();
 }
 
 /* ----------
@@ -6395,14 +6419,17 @@ generate_relation_or_shard_name(Oid relid, Oid distrelid, int64 shardid,
 
 	if (relid == distrelid)
 	{
-		/* XXX: this is where we would--but don't yet--handle schema-prefixing */
 		relname = get_relation_name(relid);
 
 		if (shardid > 0)
 		{
+			Oid schemaOid = get_rel_namespace(relid);
+			char *schemaName = get_namespace_name(schemaOid);
+
 			AppendShardIdToName(&relname, shardid);
 
-			relname = (char *) quote_identifier(relname);
+			relname = quote_qualified_identifier(schemaName, relname);
+
 		}
 	}
 	else

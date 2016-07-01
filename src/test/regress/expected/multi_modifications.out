@@ -280,7 +280,7 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 -- Fourth: Perform an INSERT on the remaining node
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-WARNING:  relation "limit_orders_750000" does not exist
+WARNING:  relation "public.limit_orders_750000" does not exist
 CONTEXT:  while executing command on localhost:57638
 -- Last: Verify the insert worked but the deleted placement is now unhealthy
 SELECT count(*) FROM limit_orders WHERE id = 276;
@@ -311,7 +311,7 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 -- Fourth: Perform an INSERT on the remaining node
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-WARNING:  relation "limit_orders_750000" does not exist
+WARNING:  relation "public.limit_orders_750000" does not exist
 CONTEXT:  while executing command on localhost:57637
 ERROR:  could not modify any active placements
 -- Last: Verify worker is still healthy
