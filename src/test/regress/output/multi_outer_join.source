@@ -762,3 +762,46 @@ FROM
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+-- simple test to ensure anti-joins work with hash-partitioned tables
+CREATE TABLE left_values(val int);
+SELECT master_create_distributed_table('left_values', 'val', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('left_values', 16, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+\copy left_values from stdin
+CREATE TABLE right_values(val int);
+SELECT master_create_distributed_table('right_values', 'val', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('right_values', 16, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+\copy right_values from stdin
+SELECT
+    *
+FROM
+    left_values AS l
+    LEFT JOIN right_values AS r ON l.val = r.val
+WHERE
+    r.val IS NULL;
+LOG:  join order: [ "left_values" ][ local partition join "right_values" ]
+ val | val 
+-----+-----
+   1 |    
+   5 |    
+(2 rows)
+
