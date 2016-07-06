@@ -134,7 +134,6 @@ static Node * HashableClauseMutator(Node *originalNode, Var *partitionColumn);
 static Var * MakeInt4Column(void);
 static Const * MakeInt4Constant(Datum constantValue);
 static OpExpr * MakeHashedOperatorExpression(OpExpr *operatorExpression);
-static OpExpr * MakeOpExpressionWithZeroConst(void);
 static List * BuildRestrictInfoList(List *qualList);
 static List * FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 									  List *dependedJobList);
@@ -2838,24 +2837,6 @@ HashableClauseMutator(Node *originalNode, Var *partitionColumn)
 			newNode = (Node *) hashedOperatorExpression;
 		}
 	}
-	else if (IsA(originalNode, NullTest))
-	{
-		NullTest *nullTest = (NullTest *) originalNode;
-		Var *column = NULL;
-
-		Expr *nullTestOperand = nullTest->arg;
-		if (IsA(nullTestOperand, Var))
-		{
-			column = (Var *) nullTestOperand;
-		}
-
-		if ((column != NULL) && equal(column, partitionColumn) &&
-			(nullTest->nulltesttype == IS_NULL))
-		{
-			OpExpr *opExpressionWithZeroConst = MakeOpExpressionWithZeroConst();
-			newNode = (Node *) opExpressionWithZeroConst;
-		}
-	}
 	else if (IsA(originalNode, ScalarArrayOpExpr))
 	{
 		ScalarArrayOpExpr *arrayOperatorExpression = (ScalarArrayOpExpr *) originalNode;
@@ -3031,23 +3012,6 @@ MakeInt4Constant(Datum constantValue)
 									constantLength, constantValue, constantIsNull,
 									constantByValue);
 	return int4Constant;
-}
-
-
-/*
- * MakeOpExpressionWithZeroConst creates a new operator expression with equality
- * check to zero and returns it.
- */
-static OpExpr *
-MakeOpExpressionWithZeroConst()
-{
-	Var *int4Column = MakeInt4Column();
-	OpExpr *operatorExpression = MakeOpExpression(int4Column, BTEqualStrategyNumber);
-	Const *constant = (Const *) get_rightop((Expr *) operatorExpression);
-	constant->constvalue = Int32GetDatum(0);
-	constant->constisnull = false;
-
-	return operatorExpression;
 }
 
 
