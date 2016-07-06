@@ -59,11 +59,11 @@ SELECT prune_using_single_value('pruning', 'tomato');
  {800002}
 (1 row)
 
--- the above is true even if that value is null
+-- null values should result in no pruning
 SELECT prune_using_single_value('pruning', NULL);
- prune_using_single_value 
---------------------------
- {800002}
+   prune_using_single_value    
+-------------------------------
+ {800000,800001,800002,800003}
 (1 row)
 
 -- build an OR clause and expect more than one sahrd
