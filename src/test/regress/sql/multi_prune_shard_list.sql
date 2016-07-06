@@ -54,7 +54,7 @@ SELECT prune_using_no_values('pruning');
 -- with a single value, expect a single shard
 SELECT prune_using_single_value('pruning', 'tomato');
 
--- the above is true even if that value is null
+-- null values should result in no pruning
 SELECT prune_using_single_value('pruning', NULL);
 
 -- build an OR clause and expect more than one sahrd

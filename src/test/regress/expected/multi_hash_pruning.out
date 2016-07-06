@@ -178,9 +178,6 @@ DEBUG:  predicate pruning for shardId 630003
 
 SET citus.task_executor_type TO :actual_task_executor;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -225,8 +222,6 @@ DEBUG:  predicate pruning for shardId 630003
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -324,12 +319,11 @@ SELECT count(*)
 DEBUG:  predicate pruning for shardId 630001
 DEBUG:  predicate pruning for shardId 630002
 DEBUG:  predicate pruning for shardId 630003
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630003
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
 DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
  count 
 -------
-      
+     0
 (1 row)
 
