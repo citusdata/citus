@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * citus_clauses.h
- * 	Routines roughly equivalent to postgres' util/clauses. 
+ *  Routines roughly equivalent to postgres' util/clauses.
  *
  * Copyright (c) 2012-2016, Citus Data, Inc.
  *
@@ -14,6 +14,6 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
-extern void ExecuteFunctions(Query *query);
+extern void ExecuteMasterEvaluableFunctions(Query *query);
 
 #endif /* CITUS_NODEFUNCS_H */

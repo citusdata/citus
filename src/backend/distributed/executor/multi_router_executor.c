@@ -44,6 +44,7 @@
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
 
+
 static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
 static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
 static bool ExecuteTaskAndStoreResults(QueryDesc *queryDesc,
@@ -331,7 +332,7 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 		Query *query = multiPlan->workerJob->jobQuery;
 		StringInfo queryStringInfo = makeStringInfo();
 
-		ExecuteFunctions(query);
+		ExecuteMasterEvaluableFunctions(query);
 		DeparseShardQuery(query, task, queryStringInfo);
 		queryString = queryStringInfo->data;
 
