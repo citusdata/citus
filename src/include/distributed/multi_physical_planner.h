@@ -141,6 +141,9 @@ typedef struct MapMergeJob
  * as compute tasks; and shard fetch, map fetch, and merge fetch tasks are data
  * fetch tasks. We also forward declare the task execution struct here to avoid
  * including the executor header files.
+ *
+ * NB: Changing this requires also changing _outTask in citus_outfuncs and _readTask
+ * in citus_readfuncs to correctly (de)serialize this struct.
  */
 typedef struct TaskExecution TaskExecution;
 
@@ -156,12 +159,13 @@ typedef struct Task
 	List *dependedTaskList;     /* only applies to compute tasks */
 
 	uint32 partitionId;
-	uint32 upstreamTaskId;        /* only applies to data fetch tasks */
-	ShardInterval *shardInterval; /* only applies to merge tasks */
-	bool assignmentConstrained;   /* only applies to merge tasks */
-	uint64 shardId;               /* only applies to shard fetch tasks */
-	TaskExecution *taskExecution; /* used by task tracker executor */
-	bool upsertQuery;             /* only applies to modify tasks */
+	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
+	ShardInterval *shardInterval;  /* only applies to merge tasks */
+	bool assignmentConstrained;    /* only applies to merge tasks */
+	uint64 shardId;                /* only applies to shard fetch tasks */
+	TaskExecution *taskExecution;  /* used by task tracker executor */
+	bool upsertQuery;              /* only applies to modify tasks */
+	bool requiresMasterEvaluation; /* only applies to modify tasks */
 } Task;
 
 

@@ -14,6 +14,7 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
+extern bool RequiresMasterEvaluation(Query *query);
 extern void ExecuteMasterEvaluableFunctions(Query *query);
 
 #endif /* CITUS_NODEFUNCS_H */

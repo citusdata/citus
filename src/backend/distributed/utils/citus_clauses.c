@@ -29,6 +29,32 @@ static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typm
 
 
 /*
+ * Whether the executor needs to reparse and try to execute this query.
+ */
+bool
+RequiresMasterEvaluation(Query *query)
+{
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+
+		if (contain_mutable_functions((Node *) targetEntry->expr))
+		{
+			return true;
+		}
+	}
+
+	if (query->jointree && query->jointree->quals)
+	{
+		return contain_mutable_functions((Node *) query->jointree->quals);
+	}
+
+	return false;
+}
+
+/*
  * Looks at each TargetEntry of the query and the jointree quals, evaluating
  * any sub-expressions which don't include Vars.
  */
