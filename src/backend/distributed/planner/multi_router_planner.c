@@ -21,6 +21,7 @@
 #include "access/skey.h"
 #endif
 #include "access/xact.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -710,6 +711,7 @@ RouterModifyTask(Query *query)
 	StringInfo queryString = makeStringInfo();
 	Task *modifyTask = NULL;
 	bool upsertQuery = false;
+	bool requiresMasterEvaluation = RequiresMasterEvaluation(query);
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -772,6 +774,7 @@ RouterModifyTask(Query *query)
 	modifyTask->anchorShardId = shardId;
 	modifyTask->dependedTaskList = NIL;
 	modifyTask->upsertQuery = upsertQuery;
+	modifyTask->requiresMasterEvaluation = requiresMasterEvaluation;
 
 	return modifyTask;
 }
@@ -1132,6 +1135,7 @@ RouterSelectTask(Query *query)
 	task->anchorShardId = shardId;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
+	task->requiresMasterEvaluation = false;
 
 	return task;
 }

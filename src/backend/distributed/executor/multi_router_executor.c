@@ -325,7 +325,7 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	bool gotResults = false;
 	char *queryString = task->queryString;
 
-	if (isModificationQuery)
+	if (isModificationQuery && task->requiresMasterEvaluation)
 	{
 		PlannedStmt *planStatement = queryDesc->plannedstmt;
 		MultiPlan *multiPlan = GetMultiPlan(planStatement);
