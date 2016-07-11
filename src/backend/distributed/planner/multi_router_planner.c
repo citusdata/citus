@@ -260,10 +260,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	/* reject queries which involve multi-row inserts */
 	if (hasValuesScan)
 	{
-		/* 
-		 * if you remove this check you must also change the checks further in this
+		/*
+		 * NB: If you remove this check you must also change the checks further in this
 		 * method and ensure that VOLATILE function calls aren't allowed in INSERT
-		 * statements. Currently they're allowed, but the function call is replaced
+		 * statements. Currently they're allowed but the function call is replaced
 		 * with a constant, and if you're inserting multiple rows at once the function
 		 * should return a different value for each row.
 		 */
@@ -548,8 +548,8 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM <= 90599, "When porting to a newer PG this section"
-											  " needs to be reviewed.");
+	StaticAssertStmt(PG_VERSION_NUM < 90600, "When porting to a newer PG this section"
+											 " needs to be reviewed.");
 
 	if (IsA(expression, OpExpr))
 	{
