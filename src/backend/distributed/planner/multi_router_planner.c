@@ -56,7 +56,8 @@
 #include "optimizer/planmain.h"
 
 
-typedef struct {
+typedef struct
+{
 	bool containsVar;
 	bool varArgument;
 	bool badCoalesce;
@@ -64,9 +65,9 @@ typedef struct {
 
 
 /* planner functions forward declarations */
-static bool ContainsDisallowedFunctionCalls(Node *expression, bool *varArgument,
+static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 											bool *badCoalesce);
-static bool ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state);
+static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static char MostPermissiveVolatileFlag(char left, char right);
 static Task * RouterModifyTask(Query *query);
 #if (PG_VERSION_NUM >= 90500)
@@ -258,6 +259,13 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	/* reject queries which involve multi-row inserts */
 	if (hasValuesScan)
 	{
+		/* 
+		 * if you remove this check you must also change the checks further in this
+		 * method and ensure that VOLATILE function calls aren't allowed in INSERT
+		 * statements. Currently they're allowed, but the function call is replaced
+		 * with a constant, and if you're inserting multiple rows at once the function
+		 * should return a different value for each row.
+		 */
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given"
 							   " modification"),
@@ -288,7 +296,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("functions used in UPDATE queries on distributed "
-										 "tables must not be VOLATILE")));
+									   "tables must not be VOLATILE")));
 			}
 
 			if (commandType == CMD_UPDATE &&
@@ -306,8 +314,8 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 
 			if (commandType == CMD_UPDATE &&
-				ContainsDisallowedFunctionCalls((Node *) targetEntry->expr,
-												&hasVarArgument, &hasBadCoalesce))
+				MasterIrreducibleExpression((Node *) targetEntry->expr,
+											&hasVarArgument, &hasBadCoalesce))
 			{
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
@@ -319,11 +327,12 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			if (contain_volatile_functions(joinTree->quals))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("functions used in the WHERE clause of modification "
-										 "queries on distributed tables must not be VOLATILE")));
+								errmsg("functions used in the WHERE clause of "
+									   "modification queries on distributed tables "
+									   "must not be VOLATILE")));
 			}
-			else if (ContainsDisallowedFunctionCalls(joinTree->quals, &hasVarArgument,
-													 &hasBadCoalesce))
+			else if (MasterIrreducibleExpression(joinTree->quals, &hasVarArgument,
+												 &hasBadCoalesce))
 			{
 				Assert(hasVarArgument || hasBadCoalesce);
 			}
@@ -399,8 +408,9 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			else if (contain_mutable_functions((Node *) setTargetEntry->expr))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("functions used in the DO UPDATE SET clause of INSERTs "
-										 "on distributed tables must be marked IMMUTABLE")));
+								errmsg("functions used in the DO UPDATE SET clause of "
+									   "INSERTs on distributed tables must be marked "
+									   "IMMUTABLE")));
 			}
 		}
 	}
@@ -412,7 +422,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("functions used in the WHERE clause of the ON CONFLICT "
 							   "clause of INSERTs on distributed tables must be marked "
-								 "IMMUTABLE")));
+							   "IMMUTABLE")));
 	}
 #endif
 
@@ -441,13 +451,13 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
  * easier.
  */
 static bool
-ContainsDisallowedFunctionCalls(Node *expression, bool *varArgument, bool *badCoalesce)
+MasterIrreducibleExpression(Node *expression, bool *varArgument, bool *badCoalesce)
 {
 	bool result;
 	WalkerState data;
 	data.containsVar = data.varArgument = data.badCoalesce = false;
 
-	result = ContainsDisallowedFunctionCallsWalker(expression, &data);
+	result = MasterIrreducibleExpressionWalker(expression, &data);
 
 	*varArgument |= data.varArgument;
 	*badCoalesce |= data.badCoalesce;
@@ -456,7 +466,7 @@ ContainsDisallowedFunctionCalls(Node *expression, bool *varArgument, bool *badCo
 
 
 static bool
-ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
+MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 {
 	char volatileFlag = 0;
 	WalkerState childState;
@@ -471,7 +481,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 
 	if (IsA(expression, CoalesceExpr))
 	{
-		CoalesceExpr* expr = (CoalesceExpr *) expression;
+		CoalesceExpr *expr = (CoalesceExpr *) expression;
 
 		if (contain_mutable_functions((Node *) (expr->args)))
 		{
@@ -490,7 +500,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 
 	if (IsA(expression, CaseExpr))
 	{
-		CaseExpr* expr = (CaseExpr *) expression;
+		CaseExpr *expr = (CaseExpr *) expression;
 		ListCell *temp;
 
 		/*
@@ -516,7 +526,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 			return true;
 		}
 
-		return ContainsDisallowedFunctionCallsWalker((Node *) (expr->arg), state);
+		return MasterIrreducibleExpressionWalker((Node *) (expr->arg), state);
 	}
 
 	if (IsA(expression, Var))
@@ -537,7 +547,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM <= 90503, "When porting to a newer PG this section"
+	StaticAssertStmt(PG_VERSION_NUM <= 90599, "When porting to a newer PG this section"
 											  " needs to be reviewed.");
 
 	if (IsA(expression, OpExpr))
@@ -641,7 +651,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 	{
 		containsDisallowedFunction =
 			expression_tree_walker(expression,
-								   ContainsDisallowedFunctionCallsWalker,
+								   MasterIrreducibleExpressionWalker,
 								   &childState);
 
 		if (childState.containsVar)
@@ -657,7 +667,7 @@ ContainsDisallowedFunctionCallsWalker(Node *expression, WalkerState *state)
 
 	/* keep traversing */
 	return expression_tree_walker(expression,
-								  ContainsDisallowedFunctionCallsWalker,
+								  MasterIrreducibleExpressionWalker,
 								  state);
 }
 
@@ -932,10 +942,10 @@ FastShardPruningPossible(CmdType commandType, char partitionMethod)
 
 
 /*
- * FastShardPruning is a higher level API for FindShardInterval function. Given the relationId
- * of the distributed table and partitionValue, FastShardPruning function finds the corresponding
- * shard interval that the partitionValue should be in. FastShardPruning returns NULL if no
- * ShardIntervals exist for the given partitionValue.
+ * FastShardPruning is a higher level API for FindShardInterval function. Given the
+ * relationId of the distributed table and partitionValue, FastShardPruning function finds
+ * the corresponding shard interval that the partitionValue should be in. FastShardPruning
+ * returns NULL if no ShardIntervals exist for the given partitionValue.
  */
 static ShardInterval *
 FastShardPruning(Oid distributedTableId, Const *partitionValue)

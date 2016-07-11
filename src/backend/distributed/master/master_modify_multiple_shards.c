@@ -125,7 +125,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 				 errmsg("master_modify_multiple_shards() does not support RETURNING")));
 	}
 
-	ExecuteFunctions(modifyQuery);
+	ExecuteMasterEvaluableFunctions(modifyQuery);
 
 	shardIntervalList = LoadShardIntervalList(relationId);
 	restrictClauseList = WhereClauseList(modifyQuery->jointree);

@@ -1,7 +1,7 @@
 /*
  * citus_clauses.c
  *
- * Routines roughly equivalent to postgres' util/clauses. 
+ * Routines roughly equivalent to postgres' util/clauses.
  *
  * Copyright (c) 2016-2016, Citus Data, Inc.
  */
@@ -23,16 +23,17 @@
 
 static Node * PartiallyEvaluateExpression(Node *expression);
 static Node * EvaluateNodeIfReferencesFunction(Node *expression);
-static Node * PartiallyEvaluateExpressionWalker(Node *expression, bool *containsVar);
+static Node * PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 								  Oid result_collation);
 
 
 /*
- * Walks each TargetEntry of the query, evaluates sub-expressions without Vars.
+ * Looks at each TargetEntry of the query and the jointree quals, evaluating
+ * any sub-expressions which don't include Vars.
  */
 void
-ExecuteFunctions(Query *query)
+ExecuteMasterEvaluableFunctions(Query *query)
 {
 	CmdType commandType = query->commandType;
 	ListCell *targetEntryCell = NULL;
@@ -65,7 +66,7 @@ ExecuteFunctions(Query *query)
 		targetEntry->expr = (Expr *) modifiedNode;
 	}
 
-	if(query->jointree)
+	if (query->jointree)
 	{
 		Assert(!contain_mutable_functions((Node *) (query->jointree->quals)));
 	}
@@ -81,21 +82,21 @@ static Node *
 PartiallyEvaluateExpression(Node *expression)
 {
 	bool unused;
-	return PartiallyEvaluateExpressionWalker(expression, &unused);
+	return PartiallyEvaluateExpressionMutator(expression, &unused);
 }
 
 
 /*
- * When you find a function call evaluate it, the planner made sure there were no Vars
+ * When you find a function call evaluate it, the planner made sure there were no Vars.
  *
- * Tell the parent whether you are a Var. If your child was a var tell your parent
+ * Tell your parent if either you or one if your children is a Var.
  *
  * A little inefficient. It goes to the bottom of the tree then calls EvaluateExpression
  * on each function on the way back up. Say we had an expression with no Vars, we could
  * only call EvaluateExpression on the top-most level and get the same result.
  */
 static Node *
-PartiallyEvaluateExpressionWalker(Node *expression, bool *containsVar)
+PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar)
 {
 	bool childContainsVar = false;
 	Node *copy = NULL;
@@ -109,7 +110,7 @@ PartiallyEvaluateExpressionWalker(Node *expression, bool *containsVar)
 	if (IsA(expression, List))
 	{
 		return expression_tree_mutator(expression,
-									   PartiallyEvaluateExpressionWalker,
+									   PartiallyEvaluateExpressionMutator,
 									   containsVar);
 	}
 
@@ -119,12 +120,12 @@ PartiallyEvaluateExpressionWalker(Node *expression, bool *containsVar)
 
 		/* makes a copy for us */
 		return expression_tree_mutator(expression,
-									   PartiallyEvaluateExpressionWalker,
+									   PartiallyEvaluateExpressionMutator,
 									   containsVar);
 	}
 
 	copy = expression_tree_mutator(expression,
-								   PartiallyEvaluateExpressionWalker,
+								   PartiallyEvaluateExpressionMutator,
 								   &childContainsVar);
 
 	if (childContainsVar)
