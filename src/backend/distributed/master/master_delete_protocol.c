@@ -113,6 +113,13 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	relationName = deleteStatement->relation->relname;
 	relationId = RangeVarGetRelid(deleteStatement->relation, NoLock, failOK);
 
+	/* schema-prefix if it is not specified already */
+	if (schemaName == NULL)
+	{
+		Oid schemaId = get_rel_namespace(relationId);
+		schemaName = get_namespace_name(schemaId);
+	}
+
 	CheckDistributedTable(relationId);
 	EnsureTablePermissions(relationId, ACL_DELETE);
 
