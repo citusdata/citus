@@ -801,3 +801,28 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid = 1190000;
  1190000 |          1 |           0 | localhost |    57637
 (2 rows)
 
+-- test master_apply_delete_command with schemas
+SET search_path TO public;
+SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
+-- verify shard is dropped
+\c - - - :worker_1_port
+\d test_schema_support.nation_append_119*
+\c - - - :master_port
+-- test with search_path is set
+SET search_path TO test_schema_support;
+\COPY nation_append FROM STDIN with delimiter '|';
+SELECT master_apply_delete_command('DELETE FROM nation_append') ;
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
+-- verify shard is dropped
+\c - - - :worker_1_port
+\d test_schema_support.nation_append_119*
+\c - - - :master_port
