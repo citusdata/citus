@@ -8,8 +8,8 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef CITUS_NODEFUNCS_H
-#define CITUS_NODEFUNCS_H
+#ifndef CITUS_CLAUSES_H
+#define CITUS_CLAUSES_H
 
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
@@ -17,4 +17,4 @@
 extern bool RequiresMasterEvaluation(Query *query);
 extern void ExecuteMasterEvaluableFunctions(Query *query);
 
-#endif /* CITUS_NODEFUNCS_H */
+#endif /* CITUS_CLAUSES_H */

@@ -101,8 +101,8 @@ ExecuteMasterEvaluableFunctions(Query *query)
 
 
 /*
- * Walks the expression, evaluating any STABLE or IMMUTABLE functions so long as they
- * don't reference Vars.
+ * Walks the expression evaluating any node which invokes a function as long as a Var
+ * doesn't show up in the parameter list.
  */
 static Node *
 PartiallyEvaluateExpression(Node *expression)
@@ -195,20 +195,8 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 		/* structural equivalence */
 		OpExpr *expr = (OpExpr *) expression;
 
-		/* typemod is always -1? */
-
 		return (Node *) citus_evaluate_expr((Expr *) expr,
 											expr->opresulttype, -1,
-											expr->opcollid);
-	}
-
-	if (IsA(expression, DistinctExpr))
-	{
-		DistinctExpr *expr = (DistinctExpr *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr,
-											expr->opresulttype,
-											exprTypmod((Node *) expr),
 											expr->opcollid);
 	}
 
@@ -233,7 +221,6 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 
 	if (IsA(expression, ScalarArrayOpExpr))
 	{
-		/* TODO: Test this! */
 		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) expression;
 
 		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid);
@@ -241,7 +228,6 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 
 	if (IsA(expression, RowCompareExpr))
 	{
-		/* TODO: Test this! */
 		RowCompareExpr *expr = (RowCompareExpr *) expression;
 
 		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid);

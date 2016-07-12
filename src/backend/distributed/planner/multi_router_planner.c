@@ -57,7 +57,7 @@
 #include "optimizer/planmain.h"
 
 
-typedef struct
+typedef struct WalkerState
 {
 	bool containsVar;
 	bool varArgument;
@@ -470,10 +470,8 @@ static bool
 MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 {
 	char volatileFlag = 0;
-	WalkerState childState;
+	WalkerState childState = {false, false, false};
 	bool containsDisallowedFunction = false;
-
-	childState.containsVar = childState.varArgument = childState.badCoalesce = false;
 
 	if (expression == NULL)
 	{
@@ -501,33 +499,13 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 
 	if (IsA(expression, CaseExpr))
 	{
-		CaseExpr *expr = (CaseExpr *) expression;
-		ListCell *temp;
-
-		/*
-		 * contain_mutable_functions doesn't know what to do with CaseWhen so we
-		 * have to break it out ourselves
-		 */
-		foreach(temp, expr->args)
-		{
-			CaseWhen *when = (CaseWhen *) lfirst(temp);
-			Assert(IsA(when, CaseWhen));
-
-			if (contain_mutable_functions((Node *) when->expr) ||
-				contain_mutable_functions((Node *) when->result))
-			{
-				state->badCoalesce = true;
-				return true;
-			}
-		}
-
-		if (contain_mutable_functions((Node *) expr->defresult))
+		if (contain_mutable_functions(expression))
 		{
 			state->badCoalesce = true;
 			return true;
 		}
 
-		return MasterIrreducibleExpressionWalker((Node *) (expr->arg), state);
+		return false;
 	}
 
 	if (IsA(expression, Var))

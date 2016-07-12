@@ -336,8 +336,8 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 		DeparseShardQuery(query, task, queryStringInfo);
 		queryString = queryStringInfo->data;
 
-		elog(DEBUG4, "old query: %s", task->queryString);
-		elog(DEBUG4, "new query: %s", queryString);
+		elog(DEBUG4, "query before master evaluation: %s", task->queryString);
+		elog(DEBUG4, "query after master evaluation:  %s", queryString);
 	}
 
 	/*
