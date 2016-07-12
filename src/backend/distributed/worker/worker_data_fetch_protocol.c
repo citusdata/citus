@@ -400,13 +400,15 @@ Datum
 worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 {
 	uint64 shardId = PG_GETARG_INT64(0);
-	text *ddlCommandText = PG_GETARG_TEXT_P(1);
+	text *schemaNameText = PG_GETARG_TEXT_P(1);
+	text *ddlCommandText = PG_GETARG_TEXT_P(2);
 
+	char *schemaName = text_to_cstring(schemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
 
 	/* extend names in ddl command and apply extended command */
-	RelayEventExtendNames(ddlCommandNode, shardId);
+	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
 	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
 				   NULL, None_Receiver, NULL);
 
