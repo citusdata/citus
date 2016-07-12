@@ -53,20 +53,21 @@ static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
 static void DeleteFile(const char *filename);
-static void FetchTableCommon(text *tableName, uint64 remoteTableSize,
-							 ArrayType *nodeNameObject, ArrayType *nodePortObject,
+static void FetchTableCommon(text *tableSchemaNameText, text *tableName,
+							 uint64 remoteTableSize, ArrayType *nodeNameObject,
+							 ArrayType *nodePortObject,
 							 bool (*FetchTableFunction)(const char *, uint32,
-														StringInfo));
+														const char *, const char *));
 static uint64 LocalTableSize(Oid relationId);
-static uint64 ExtractShardId(StringInfo tableName);
+static uint64 ExtractShardId(const char *tableName);
 static bool FetchRegularTable(const char *nodeName, uint32 nodePort,
-							  StringInfo tableName);
+							  const char *schemaName, const char *tableName);
 static bool FetchForeignTable(const char *nodeName, uint32 nodePort,
-							  StringInfo tableName);
+							  const char *schemaName, const char *tableName);
 static const char * RemoteTableOwner(const char *nodeName, uint32 nodePort,
-									 StringInfo tableName);
+									 const char *schemaName, const char *tableName);
 static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
-								  StringInfo tableName);
+								  const char *schemaName, const char *tableName);
 static bool check_log_statement(List *stmt_list);
 
 
@@ -426,16 +427,17 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 Datum
 worker_fetch_regular_table(PG_FUNCTION_ARGS)
 {
-	text *regularTableName = PG_GETARG_TEXT_P(0);
-	uint64 generationStamp = PG_GETARG_INT64(1);
-	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
-	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
+	text *regularSchemaName = PG_GETARG_TEXT_P(0);
+	text *regularTableName = PG_GETARG_TEXT_P(1);
+	uint64 generationStamp = PG_GETARG_INT64(2);
+	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(3);
+	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(4);
 
 	/*
 	 * Run common logic to fetch the remote table, and use the provided function
 	 * pointer to perform the actual table fetching.
 	 */
-	FetchTableCommon(regularTableName, generationStamp,
+	FetchTableCommon(regularSchemaName, regularTableName, generationStamp,
 					 nodeNameObject, nodePortObject, &FetchRegularTable);
 
 	PG_RETURN_VOID();
@@ -450,16 +452,17 @@ worker_fetch_regular_table(PG_FUNCTION_ARGS)
 Datum
 worker_fetch_foreign_file(PG_FUNCTION_ARGS)
 {
-	text *foreignTableName = PG_GETARG_TEXT_P(0);
-	uint64 foreignFileSize = PG_GETARG_INT64(1);
-	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
-	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
+	text *foreignSchemaName = PG_GETARG_TEXT_P(0);
+	text *foreignTableName = PG_GETARG_TEXT_P(1);
+	uint64 foreignFileSize = PG_GETARG_INT64(2);
+	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(3);
+	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(4);
 
 	/*
 	 * Run common logic to fetch the remote table, and use the provided function
 	 * pointer to perform the actual table fetching.
 	 */
-	FetchTableCommon(foreignTableName, foreignFileSize,
+	FetchTableCommon(foreignSchemaName, foreignTableName, foreignFileSize,
 					 nodeNameObject, nodePortObject, &FetchForeignTable);
 
 	PG_RETURN_VOID();
@@ -473,12 +476,14 @@ worker_fetch_foreign_file(PG_FUNCTION_ARGS)
  * are retried in case of node failures.
  */
 static void
-FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
+FetchTableCommon(text *tableSchemaNameText, text *tableNameText, uint64 remoteTableSize,
 				 ArrayType *nodeNameObject, ArrayType *nodePortObject,
-				 bool (*FetchTableFunction)(const char *, uint32, StringInfo))
+				 bool (*FetchTableFunction)(const char *, uint32, const char *,
+											const char *))
 {
-	StringInfo tableName = NULL;
-	char *tableNameCString = NULL;
+	char *schemaName = NULL;
+	char *tableName = NULL;
+	Oid schemaId = InvalidOid;
 	uint64 shardId = INVALID_SHARD_ID;
 	Oid relationId = InvalidOid;
 	uint32 nodeIndex = 0;
@@ -496,9 +501,8 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 							   " do not match", nodeNameCount, nodePortCount)));
 	}
 
-	tableName = makeStringInfo();
-	tableNameCString = text_to_cstring(tableNameText);
-	appendStringInfoString(tableName, tableNameCString);
+	schemaName = text_to_cstring(tableSchemaNameText);
+	tableName = text_to_cstring(tableNameText);
 
 	/*
 	 * We lock on the shardId, but do not unlock. When the function returns, and
@@ -510,7 +514,8 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	/* check if we already fetched the table */
-	relationId = RelnameGetRelid(tableName->data);
+	schemaId = get_namespace_oid(schemaName, true);
+	relationId = get_relname_relid(tableName, schemaId);
 	if (relationId != InvalidOid)
 	{
 		uint64 localTableSize = 0;
@@ -561,7 +566,7 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 		char *nodeName = TextDatumGetCString(nodeNameDatum);
 		uint32 nodePort = DatumGetUInt32(nodePortDatum);
 
-		tableFetched = (*FetchTableFunction)(nodeName, nodePort, tableName);
+		tableFetched = (*FetchTableFunction)(nodeName, nodePort, schemaName, tableName);
 
 		nodeIndex++;
 	}
@@ -569,7 +574,7 @@ FetchTableCommon(text *tableNameText, uint64 remoteTableSize,
 	/* error out if we tried all nodes and could not fetch the table */
 	if (!tableFetched)
 	{
-		ereport(ERROR, (errmsg("could not fetch relation: \"%s\"", tableName->data)));
+		ereport(ERROR, (errmsg("could not fetch relation: \"%s\"", tableName)));
 	}
 }
 
@@ -646,18 +651,18 @@ LocalTableSize(Oid relationId)
 
 /* Extracts shard id from the given table name, and returns it. */
 static uint64
-ExtractShardId(StringInfo tableName)
+ExtractShardId(const char *tableName)
 {
 	uint64 shardId = 0;
 	char *shardIdString = NULL;
 	char *shardIdStringEnd = NULL;
 
 	/* find the last underscore and increment for shardId string */
-	shardIdString = strrchr(tableName->data, SHARD_NAME_SEPARATOR);
+	shardIdString = strrchr(tableName, SHARD_NAME_SEPARATOR);
 	if (shardIdString == NULL)
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
-							   tableName->data)));
+							   tableName)));
 	}
 	shardIdString++;
 
@@ -668,7 +673,7 @@ ExtractShardId(StringInfo tableName)
 	if (errno != 0 || (*shardIdStringEnd != '\0'))
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
-							   tableName->data)));
+							   tableName)));
 	}
 #else
 	ereport(ERROR, (errmsg("could not extract shardId from table name"),
@@ -688,7 +693,8 @@ ExtractShardId(StringInfo tableName)
  * false. On other types of failures, the function errors out.
  */
 static bool
-FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
+FetchRegularTable(const char *nodeName, uint32 nodePort, const char *schemaName,
+				  const char *tableName)
 {
 	StringInfo localFilePath = NULL;
 	StringInfo remoteCopyCommand = NULL;
@@ -700,7 +706,6 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	bool received = false;
 	char *quotedTableName = NULL;
 	StringInfo queryString = NULL;
-	const char *schemaName = NULL;
 	const char *tableOwner = NULL;
 	Oid tableOwnerId = InvalidOid;
 	Oid savedUserId = InvalidOid;
@@ -712,7 +717,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
 					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
 
-	quotedTableName = quote_qualified_identifier(schemaName, tableName->data);
+	quotedTableName = quote_qualified_identifier(schemaName, tableName);
 	remoteCopyCommand = makeStringInfo();
 	appendStringInfo(remoteCopyCommand, COPY_OUT_COMMAND, quotedTableName);
 
@@ -723,7 +728,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	}
 
 	/* fetch the ddl commands needed to create the table */
-	tableOwner = RemoteTableOwner(nodeName, nodePort, tableName);
+	tableOwner = RemoteTableOwner(nodeName, nodePort, schemaName, tableName);
 	if (tableOwner == NULL)
 	{
 		return false;
@@ -731,7 +736,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	tableOwnerId = get_role_oid(tableOwner, false);
 
 	/* fetch the ddl commands needed to create the table */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableName);
+	ddlCommandList = TableDDLCommandList(nodeName, nodePort, schemaName, tableName);
 	if (ddlCommandList == NIL)
 	{
 		return false;
@@ -763,7 +768,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	 * directly calling DoCopy() because some extensions (e.g. cstore_fdw) hook
 	 * into process utility to provide their custom COPY behavior.
 	 */
-	localTable = makeRangeVar((char *) schemaName, tableName->data, -1);
+	localTable = makeRangeVar((char *) schemaName, (char *) tableName, -1);
 	localCopyCommand = CopyStatement(localTable, localFilePath->data);
 
 	queryString = makeStringInfo();
@@ -788,8 +793,10 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * commands against the local database, the function errors out.
  */
 static bool
-FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
+FetchForeignTable(const char *nodeName, uint32 nodePort, const char *schemaName,
+				  const char *tableName)
 {
+	char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
 	StringInfo localFilePath = NULL;
 	StringInfo remoteFilePath = NULL;
 	StringInfo transmitCommand = NULL;
@@ -798,11 +805,16 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	List *ddlCommandList = NIL;
 	ListCell *ddlCommandCell = NULL;
 
-	/* fetch foreign file to this node in an idempotent manner */
+	/*
+	 * Fetch a foreign file to this node in an idempotent manner. It's OK that
+	 * this file name lacks the schema, as the table name will have a shard id
+	 * attached to it, which is unique (so conflicts are avoided even if two
+	 * tables in different schemas have the same name).
+	 */
 	localFilePath = makeStringInfo();
-	appendStringInfo(localFilePath, FOREIGN_CACHED_FILE_PATH, tableName->data);
+	appendStringInfo(localFilePath, FOREIGN_CACHED_FILE_PATH, tableName);
 
-	remoteFilePath = ForeignFilePath(nodeName, nodePort, tableName);
+	remoteFilePath = ForeignFilePath(nodeName, nodePort, schemaName, tableName);
 	if (remoteFilePath == NULL)
 	{
 		return false;
@@ -818,7 +830,7 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 	}
 
 	/* fetch the ddl commands needed to create the table */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, tableName);
+	ddlCommandList = TableDDLCommandList(nodeName, nodePort, schemaName, tableName);
 	if (ddlCommandList == NIL)
 	{
 		return false;
@@ -826,7 +838,7 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
 
 	alterTableCommand = makeStringInfo();
 	appendStringInfo(alterTableCommand, SET_FOREIGN_TABLE_FILENAME,
-					 tableName->data, localFilePath->data);
+					 qualifiedTableName, localFilePath->data);
 
 	ddlCommandList = lappend(ddlCommandList, alterTableCommand);
 
@@ -853,15 +865,16 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * the table. If an error occurs during fetching, return NULL.
  */
 static const char *
-RemoteTableOwner(const char *nodeName, uint32 nodePort, StringInfo tableName)
+RemoteTableOwner(const char *nodeName, uint32 nodePort, const char *schemaName,
+				 const char *tableName)
 {
 	List *ownerList = NIL;
 	StringInfo queryString = NULL;
-	const char *escapedTableName = quote_literal_cstr(tableName->data);
+	const char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
 	StringInfo relationOwner;
 
 	queryString = makeStringInfo();
-	appendStringInfo(queryString, GET_TABLE_OWNER, escapedTableName);
+	appendStringInfo(queryString, GET_TABLE_OWNER, qualifiedTableName);
 
 	ownerList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
 	if (list_length(ownerList) != 1)
@@ -881,13 +894,15 @@ RemoteTableOwner(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * the function returns an empty list.
  */
 List *
-TableDDLCommandList(const char *nodeName, uint32 nodePort, StringInfo tableName)
+TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *schemaName,
+					const char *tableName)
 {
+	const char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
 	List *ddlCommandList = NIL;
 	StringInfo queryString = NULL;
 
 	queryString = makeStringInfo();
-	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName->data);
+	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, qualifiedTableName);
 
 	ddlCommandList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
 	return ddlCommandList;
@@ -900,14 +915,16 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, StringInfo tableName)
  * null.
  */
 static StringInfo
-ForeignFilePath(const char *nodeName, uint32 nodePort, StringInfo tableName)
+ForeignFilePath(const char *nodeName, uint32 nodePort, const char *schemaName,
+				const char *tableName)
 {
+	const char *qualifiedTableName = quote_qualified_identifier(schemaName, tableName);
 	List *foreignPathList = NIL;
 	StringInfo foreignPathCommand = NULL;
 	StringInfo foreignPath = NULL;
 
 	foreignPathCommand = makeStringInfo();
-	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, tableName->data);
+	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, qualifiedTableName);
 
 	foreignPathList = ExecuteRemoteQuery(nodeName, nodePort, NULL, foreignPathCommand);
 	if (foreignPathList != NIL)
@@ -1059,7 +1076,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *sourceTableName = NULL;
 	char *sourceQualifiedName = NULL;
 
-	StringInfo shardNameString = NULL;
 	StringInfo localFilePath = NULL;
 	StringInfo sourceCopyCommand = NULL;
 	CopyStmt *localCopyCommand = NULL;
@@ -1079,10 +1095,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	 * the transaction for this function commits, this lock will automatically
 	 * be released. This ensures appends to a shard happen in a serial manner.
 	 */
-	shardNameString = makeStringInfo();
-	appendStringInfoString(shardNameString, shardTableName);
-
-	shardId = ExtractShardId(shardNameString);
+	shardId = ExtractShardId(shardTableName);
 	LockShardResource(shardId, AccessExclusiveLock);
 
 	/* copy remote table's data to this node */

@@ -198,7 +198,12 @@ SearchShardPlacementInList(List *shardPlacementList, text *nodeNameText, uint32 
 static List *
 RecreateTableDDLCommandList(Oid relationId)
 {
-	char *relationName = get_rel_name(relationId);
+	const char *relationName = get_rel_name(relationId);
+	Oid relationSchemaId = get_rel_namespace(relationId);
+	const char *relationSchemaName = get_namespace_name(relationSchemaId);
+	const char *qualifiedRelationName = quote_qualified_identifier(relationSchemaName,
+																   relationName);
+
 	StringInfo dropCommand = makeStringInfo();
 	List *createCommandList = NIL;
 	List *dropCommandList = NIL;
@@ -209,12 +214,12 @@ RecreateTableDDLCommandList(Oid relationId)
 	if (relationKind == RELKIND_RELATION)
 	{
 		appendStringInfo(dropCommand, DROP_REGULAR_TABLE_COMMAND,
-						 quote_identifier(relationName));
+						 qualifiedRelationName);
 	}
 	else if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		appendStringInfo(dropCommand, DROP_FOREIGN_TABLE_COMMAND,
-						 quote_identifier(relationName));
+						 qualifiedRelationName);
 	}
 	else
 	{
