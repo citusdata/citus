@@ -826,3 +826,222 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 \c - - - :worker_1_port
 \d test_schema_support.nation_append_119*
 \c - - - :master_port
+-- check joins of tables which are in schemas other than public
+-- we create new tables with replication factor of 1
+-- so that we guarantee to have repartitions when necessary
+-- create necessary objects and load data to them
+CREATE SCHEMA test_schema_support_join_1;
+NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
+CREATE SCHEMA test_schema_support_join_2;
+NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
+DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
+CREATE TABLE test_schema_support_join_1.nation_hash (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+CREATE TABLE test_schema_support_join_1.nation_hash_2 (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+CREATE TABLE test_schema_support_join_2.nation_hash (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+\COPY test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
+SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+\COPY test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
+SELECT master_create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('test_schema_support_join_2.nation_hash', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+\COPY test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+ count 
+-------
+     6
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+ count 
+-------
+     6
+(1 row)
+
+-- check when search_path is public,
+-- join of two tables which are in same schemas,
+-- join on partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_1.nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+ count 
+-------
+     6
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+ count 
+-------
+     6
+(1 row)
+
+-- single repartition joins
+SET citus.task_executor_type TO "task-tracker";
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on partition column and non-partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+ count 
+-------
+     6
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on partition column and non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+ count 
+-------
+     6
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on partition column and non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+ count 
+-------
+     6
+(1 row)
+
+-- hash repartition joins 
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on non-partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+ count 
+-------
+    14
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+ count 
+-------
+    14
+(1 row)
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+ count 
+-------
+    14
+(1 row)
+
+-- set task_executor back to real-time
+SET citus.task_executor_type TO "real-time";

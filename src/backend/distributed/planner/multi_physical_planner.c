@@ -3750,6 +3750,7 @@ ShardFetchQueryString(uint64 shardId)
 	/* check storage type to create the correct query string */
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	char storageType = shardInterval->storageType;
+	char *shardSchemaName = NULL;
 	char *shardTableName = NULL;
 
 	/*
@@ -3766,7 +3767,10 @@ ShardFetchQueryString(uint64 shardId)
 	else
 	{
 		/* construct the shard name */
+		Oid shardSchemaId = get_rel_namespace(shardInterval->relationId);
 		char *tableName = get_rel_name(shardInterval->relationId);
+
+		shardSchemaName = get_namespace_name(shardSchemaId);
 		shardTableName = pstrdup(tableName);
 		AppendShardIdToName(&shardTableName, shardId);
 	}
@@ -3776,13 +3780,13 @@ ShardFetchQueryString(uint64 shardId)
 		storageType == SHARD_STORAGE_COLUMNAR)
 	{
 		appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND,
-						 shardTableName, shardLength,
+						 shardSchemaName, shardTableName, shardLength,
 						 nodeNameArrayString->data, nodePortArrayString->data);
 	}
 	else if (storageType == SHARD_STORAGE_FOREIGN)
 	{
 		appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND,
-						 shardTableName, shardLength,
+						 shardSchemaName, shardTableName, shardLength,
 						 nodeNameArrayString->data, nodePortArrayString->data);
 	}
 
