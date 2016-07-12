@@ -1106,6 +1106,8 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
 	char *tableOwner = TableOwner(relationId);
 	HTAB *shardConnectionHash = NULL;
 	ListCell *shardIntervalCell = NULL;
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
 
 	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
@@ -1113,7 +1115,6 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
 
 	shardConnectionHash = OpenTransactionsToAllShardPlacements(shardIntervalList,
 															   tableOwner);
-
 	MemoryContextSwitchTo(oldContext);
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -1122,7 +1123,8 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
 		uint64 shardId = shardInterval->shardId;
 		ShardConnections *shardConnections = NULL;
 		bool shardConnectionsFound = false;
-		char *escapedCommandString = NULL;
+		char *escapedSchemaName = quote_literal_cstr(schemaName);
+		char *escapedCommandString = quote_literal_cstr(commandString);
 		StringInfo applyCommand = makeStringInfo();
 
 		shardConnections = GetShardConnections(shardConnectionHash,
@@ -1131,9 +1133,8 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
 		Assert(shardConnectionsFound);
 
 		/* build the shard ddl command */
-		escapedCommandString = quote_literal_cstr(commandString);
 		appendStringInfo(applyCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
-						 escapedCommandString);
+						 escapedSchemaName, escapedCommandString);
 
 		ExecuteCommandOnShardPlacements(applyCommand, shardId, shardConnections);
 
