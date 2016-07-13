@@ -458,6 +458,7 @@ _outTask(StringInfo str, const Task *node)
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
+	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 }
 
 
