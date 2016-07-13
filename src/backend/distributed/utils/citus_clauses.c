@@ -54,6 +54,7 @@ RequiresMasterEvaluation(Query *query)
 	return false;
 }
 
+
 /*
  * Looks at each TargetEntry of the query and the jointree quals, evaluating
  * any sub-expressions which don't include Vars.
