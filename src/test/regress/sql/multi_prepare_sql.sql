@@ -152,5 +152,62 @@ EXECUTE prepared_test_6(155);
 -- FIXME: temporarily disabled
 -- EXECUTE prepared_test_6(1555);
 
+-- test router executor with parameterized non-partition columns
+
+-- create a custom type which also exists on worker nodes
+CREATE TYPE test_composite_type AS (
+    i integer,
+    i2 integer
+);
+
+CREATE TABLE router_executor_table (
+    id bigint NOT NULL,
+    comment varchar(20),
+    stats test_composite_type
+);
+
+SELECT master_create_distributed_table('router_executor_table', 'id', 'hash');
+SELECT master_create_worker_shards('router_executor_table', 2, 2);
+
+-- test parameterized inserts
+PREPARE prepared_insert(varchar(20)) AS
+	INSERT INTO router_executor_table VALUES (1, $1, $2);
+
+EXECUTE prepared_insert('comment-1', '(1, 10)');
+EXECUTE prepared_insert('comment-2', '(2, 20)');
+EXECUTE prepared_insert('comment-3', '(3, 30)');
+EXECUTE prepared_insert('comment-4', '(4, 40)');
+EXECUTE prepared_insert('comment-5', '(5, 50)');
+EXECUTE prepared_insert('comment-6', '(6, 60)');
+
+SELECT * FROM router_executor_table ORDER BY comment;
+
+-- test parameterized selects
+PREPARE prepared_select(integer, integer) AS
+	SELECT count(*) FROM router_executor_table
+		WHERE id = 1 AND stats = ROW($1, $2)::test_composite_type;
+
+EXECUTE prepared_select(1, 10);
+EXECUTE prepared_select(2, 20);
+EXECUTE prepared_select(3, 30);
+EXECUTE prepared_select(4, 40);
+EXECUTE prepared_select(5, 50);
+EXECUTE prepared_select(6, 60);
+
+-- test that we don't crash on failing parameterized insert on the partition column
+
+PREPARE prepared_partition_column_insert(bigint) AS
+INSERT INTO router_executor_table VALUES ($1, 'arsenous', '(1,10)');
+
+-- we error out on the 6th execution
+EXECUTE prepared_partition_column_insert(1);
+EXECUTE prepared_partition_column_insert(2);
+EXECUTE prepared_partition_column_insert(3);
+EXECUTE prepared_partition_column_insert(4);
+EXECUTE prepared_partition_column_insert(5);
+EXECUTE prepared_partition_column_insert(6);
+
+DROP TYPE test_composite_type CASCADE;
+
 -- clean-up prepared statements
 DEALLOCATE ALL;
