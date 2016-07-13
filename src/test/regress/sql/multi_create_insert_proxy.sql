@@ -60,11 +60,9 @@ SELECT create_insert_proxy_for_table('insert_target', 'rows_inserted') AS proxy_
 \gset
 
 -- insert to proxy, again relying on default value
--- will be fixed with another PR
--- INSERT INTO pg_temp.:"proxy_tablename" (id) VALUES (1);
+INSERT INTO pg_temp.:"proxy_tablename" (id) VALUES (1);
 
 -- test copy with bad row in middle
--- will be fixed with another PR
 \set VERBOSITY terse
 COPY pg_temp.:"proxy_tablename" FROM stdin;
 2	dolor sit amet
@@ -78,11 +76,9 @@ COPY pg_temp.:"proxy_tablename" FROM stdin;
 \set VERBOSITY default
 
 -- verify rows were copied to distributed table
--- will be fixed with another PR
 SELECT * FROM insert_target ORDER BY id ASC;
 
 -- the counter should match the number of rows stored
--- will be fixed with another PR
 SELECT currval('rows_inserted');
 
 SET client_min_messages TO DEFAULT;

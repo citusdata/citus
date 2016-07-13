@@ -475,7 +475,6 @@ PREPARE author_1_articles as
 EXECUTE author_1_articles;
 
 -- parametric prepare queries can be router plannable
--- it will be fixed with another pr
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
