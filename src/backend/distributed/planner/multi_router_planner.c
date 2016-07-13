@@ -842,6 +842,13 @@ RouterQueryJob(Query *query, Task *task)
 	job->jobQuery = query;
 	job->taskList = taskList;
 
+	/*
+	 * Router query jobs do not require jobQuery's target list. Setting it to NIL
+	 * enables us not to serialize/de-serialize while the query is passed to the
+	 * executor. This improves planning times significantly.
+	 */
+	job->jobQuery->targetList = NIL;
+
 	return job;
 }
 
