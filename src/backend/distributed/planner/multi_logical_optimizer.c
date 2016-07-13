@@ -1501,17 +1501,21 @@ MasterAggregateExpression(Aggref *originalAggregate,
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
-	else if (aggregateType == AGGREGATE_ARRAY_AGG)
+	else if (aggregateType == AGGREGATE_ARRAY_AGG ||
+			 aggregateType == AGGREGATE_JSONB_AGG)
 	{
 		/*
 		 * Array aggregates are handled in two steps. First, we compute array_agg()
 		 * on the worker nodes. Then, we gather the arrays on the master and
-		 * compute the array_cat_agg() aggregate on them to get the final array.
+		 * compute the array_cat_agg() aggregate on them to get the final array,
+		 * or use the equivalent functions for jsonb_agg().
 		 */
 		Var *column = NULL;
 		TargetEntry *arrayCatAggArgument = NULL;
 		Aggref *newMasterAggregate = NULL;
 		Oid aggregateFunctionId = InvalidOid;
+		char *masterAggregateName = NULL;
+		Oid masterArgumentTypeId = InvalidOid;
 
 		/* worker aggregate and original aggregate have same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1522,9 +1526,19 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Assert(!originalAggregate->aggorder);
 		Assert(!originalAggregate->aggdistinct);
 
-		/* array_cat_agg() takes anyarray as input */
-		aggregateFunctionId = AggregateFunctionOid(ARRAY_CAT_AGGREGATE_NAME,
-												   ANYARRAYOID);
+		if (aggregateType == AGGREGATE_JSONB_AGG)
+		{
+			masterAggregateName = JSONB_CONCAT_AGGREGATE_NAME;
+			masterArgumentTypeId = JSONBOID;
+		}
+		else
+		{
+			masterAggregateName = ARRAY_CAT_AGGREGATE_NAME;
+			masterArgumentTypeId = ANYARRAYOID;
+		}
+
+		aggregateFunctionId = AggregateFunctionOid(masterAggregateName,
+												   masterArgumentTypeId);
 
 		/* create argument for the array_cat_agg() aggregate */
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,

@@ -23,6 +23,7 @@
 #define DISABLE_LIMIT_APPROXIMATION -1
 #define DISABLE_DISTINCT_APPROXIMATION 0.0
 #define ARRAY_CAT_AGGREGATE_NAME "array_cat_agg"
+#define JSONB_CONCAT_AGGREGATE_NAME "jsonb_concat_agg"
 #define WORKER_COLUMN_FORMAT "worker_column_%d"
 
 /* Definitions related to count(distinct) approximations */
@@ -54,7 +55,8 @@ typedef enum
 	AGGREGATE_MAX = 3,
 	AGGREGATE_SUM = 4,
 	AGGREGATE_COUNT = 5,
-	AGGREGATE_ARRAY_AGG = 6
+	AGGREGATE_ARRAY_AGG = 6,
+	AGGREGATE_JSONB_AGG = 7
 } AggregateType;
 
 
@@ -96,7 +98,7 @@ typedef enum
  */
 static const char *const AggregateNames[] = {
 	"invalid", "avg", "min", "max", "sum",
-	"count", "array_agg"
+	"count", "array_agg", "jsonb_agg"
 };
 
 
