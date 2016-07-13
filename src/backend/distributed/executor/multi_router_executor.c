@@ -19,21 +19,26 @@
 #include "miscadmin.h"
 
 #include "access/xact.h"
+#include "distributed/citus_clauses.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/resource_lock.h"
-#include "executor/executor.h"
 #include "nodes/pg_list.h"
+#include "optimizer/clauses.h"
 #include "utils/builtins.h"
-
 #include "utils/elog.h"
 #include "utils/errcodes.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/int8.h"
+#if (PG_VERSION_NUM >= 90500)
+#include "utils/ruleutils.h"
+#endif
 
 
 /* controls use of locks to enforce safe commutativity */
@@ -49,6 +54,7 @@ static bool ExecuteTaskAndStoreResults(QueryDesc *queryDesc,
 static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
 									   DestReceiver *destination,
 									   Tuplestorestate *tupleStore);
+static void DeparseShardQuery(Query *query, Task *task, StringInfo queryString);
 static bool SendQueryInSingleRowMode(PGconn *connection, char *query);
 static bool StoreQueryResult(MaterialState *routerState, PGconn *connection,
 							 TupleDesc tupleDescriptor, int64 *rows);
@@ -179,14 +185,22 @@ AcquireExecutorShardLock(Task *task, LOCKMODE lockMode)
  * RouterExecutorRun actually executes a single task on a worker.
  */
 void
-RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count, Task *task)
+RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 {
+	PlannedStmt *planStatement = queryDesc->plannedstmt;
+	MultiPlan *multiPlan = GetMultiPlan(planStatement);
+	List *taskList = multiPlan->workerJob->taskList;
+	Task *task = NULL;
 	EState *estate = queryDesc->estate;
 	CmdType operation = queryDesc->operation;
 	MemoryContext oldcontext = NULL;
 	DestReceiver *destination = queryDesc->dest;
 	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
 	bool sendTuples = operation == CMD_SELECT || queryDesc->plannedstmt->hasReturning;
+
+	/* router executor can only execute distributed plans with a single task */
+	Assert(list_length(taskList) == 1);
+	task = (Task *) linitial(taskList);
 
 	Assert(estate != NULL);
 	Assert(!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY));
@@ -309,6 +323,22 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	ListCell *failedPlacementCell = NULL;
 	int64 affectedTupleCount = -1;
 	bool gotResults = false;
+	char *queryString = task->queryString;
+
+	if (isModificationQuery && task->requiresMasterEvaluation)
+	{
+		PlannedStmt *planStatement = queryDesc->plannedstmt;
+		MultiPlan *multiPlan = GetMultiPlan(planStatement);
+		Query *query = multiPlan->workerJob->jobQuery;
+		StringInfo queryStringInfo = makeStringInfo();
+
+		ExecuteMasterEvaluableFunctions(query);
+		DeparseShardQuery(query, task, queryStringInfo);
+		queryString = queryStringInfo->data;
+
+		elog(DEBUG4, "query before master evaluation: %s", task->queryString);
+		elog(DEBUG4, "query after master evaluation:  %s", queryString);
+	}
 
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
@@ -329,7 +359,7 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 			continue;
 		}
 
-		queryOK = SendQueryInSingleRowMode(connection, task->queryString);
+		queryOK = SendQueryInSingleRowMode(connection, queryString);
 		if (!queryOK)
 		{
 			PurgeConnection(connection);
@@ -422,6 +452,16 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	}
 
 	return resultsOK;
+}
+
+
+static void
+DeparseShardQuery(Query *query, Task *task, StringInfo queryString)
+{
+	uint64 shardId = task->anchorShardId;
+	Oid relid = ((RangeTblEntry *) linitial(query->rtable))->relid;
+
+	deparse_shard_query(query, relid, shardId, queryString);
 }
 
 

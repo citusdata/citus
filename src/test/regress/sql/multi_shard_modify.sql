@@ -60,10 +60,6 @@ SELECT master_modify_multiple_shards('DELETE FROM temporary_nondistributed_table
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = (random() * 1000)');
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_value = (random() * 1000)');
 
--- commands with stable functions in their quals
-CREATE FUNCTION temp_stable_func() RETURNS integer AS 'SELECT 10;' LANGUAGE SQL STABLE;
-SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = temp_stable_func()');
-
 -- commands with immutable functions in their quals
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = abs(-3)');
 
@@ -140,6 +136,8 @@ SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = t_value + 37 WHERE t_key = 10');
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 
+CREATE FUNCTION temp_stable_func() RETURNS integer AS 'SELECT 10;' LANGUAGE SQL STABLE;
+
 -- updates referencing non-IMMUTABLE functions are unsupported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name = ''FAIL!'' WHERE t_key = temp_stable_func()');
 
@@ -147,10 +145,13 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name 
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = abs(-78) WHERE t_key = 10');
 SELECT t_value FROM multi_shard_modify_test WHERE t_key=10;
 
--- updates referencing STABLE functions in SET section are not supported
+-- updates referencing STABLE functions in SET section are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = temp_stable_func() * 2 WHERE t_key = 10');
 
 -- updates referencing VOLATILE functions in SET section are not supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value = random() WHERE t_key = 10');
+
+-- commands with stable functions in their quals are allowed
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = temp_stable_func()');
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102046;

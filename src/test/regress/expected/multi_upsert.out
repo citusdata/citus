@@ -242,15 +242,15 @@ DETAIL:  Subqueries are not supported in distributed modifications.
 -- non mutable function call in the SET
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET other_col = random()::int;
-ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
+ERROR:  functions used in the DO UPDATE SET clause of INSERTs on distributed tables must be marked IMMUTABLE
 -- non mutable function call in the WHERE
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET other_col = 5 WHERE upsert_test.other_col = random()::int;
-ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
+ERROR:  functions used in the WHERE clause of the ON CONFLICT clause of INSERTs on distributed tables must be marked IMMUTABLE
 -- non mutable function call in the arbiter WHERE
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key)  WHERE part_key = random()::int
 	DO UPDATE SET other_col = 5;
-ERROR:  functions used in modification queries on distributed tables must be marked IMMUTABLE
+ERROR:  functions used in the WHERE clause of the ON CONFLICT clause of INSERTs on distributed tables must be marked IMMUTABLE
 -- error out on attempt to update the partition key
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key) DO
 	UPDATE SET part_key = 15;

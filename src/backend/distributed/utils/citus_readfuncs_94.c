@@ -1418,6 +1418,7 @@ _readTask(void)
 	READ_BOOL_FIELD(assignmentConstrained);
 	READ_NODE_FIELD(taskExecution);
 	READ_BOOL_FIELD(upsertQuery);
+	READ_BOOL_FIELD(requiresMasterEvaluation);
 
 	READ_DONE();
 }

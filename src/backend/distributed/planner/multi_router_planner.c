@@ -21,6 +21,7 @@
 #include "access/skey.h"
 #endif
 #include "access/xact.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -51,11 +52,24 @@
 #include "utils/errcodes.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
-#include "utils/relcache.h"
-#include "utils/typcache.h"
+
+#include "catalog/pg_proc.h"
+#include "optimizer/planmain.h"
+
+
+typedef struct WalkerState
+{
+	bool containsVar;
+	bool varArgument;
+	bool badCoalesce;
+} WalkerState;
 
 
 /* planner functions forward declarations */
+static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
+										bool *badCoalesce);
+static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
+static char MostPermissiveVolatileFlag(char left, char right);
 static Task * RouterModifyTask(Query *query);
 #if (PG_VERSION_NUM >= 90500)
 static OnConflictExpr * RebuildOnConflict(Oid relationId,
@@ -143,8 +157,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	ListCell *rangeTableCell = NULL;
 	bool hasValuesScan = false;
 	uint32 queryTableCount = 0;
-	bool hasNonConstTargetEntryExprs = false;
-	bool hasNonConstQualExprs = false;
 	bool specifiesPartitionValue = false;
 #if (PG_VERSION_NUM >= 90500)
 	ListCell *setTargetCell = NULL;
@@ -248,6 +260,13 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	/* reject queries which involve multi-row inserts */
 	if (hasValuesScan)
 	{
+		/*
+		 * NB: If you remove this check you must also change the checks further in this
+		 * method and ensure that VOLATILE function calls aren't allowed in INSERT
+		 * statements. Currently they're allowed but the function call is replaced
+		 * with a constant, and if you're inserting multiple rows at once the function
+		 * should return a different value for each row.
+		 */
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given"
 							   " modification"),
@@ -258,6 +277,8 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
+		bool hasVarArgument = false; /* A STABLE function is passed a Var argument */
+		bool hasBadCoalesce = false; /* CASE/COALESCE passed a mutable function */
 		FromExpr *joinTree = NULL;
 		ListCell *targetEntryCell = NULL;
 
@@ -271,9 +292,12 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 				continue;
 			}
 
-			if (contain_mutable_functions((Node *) targetEntry->expr))
+			if (commandType == CMD_UPDATE &&
+				contain_volatile_functions((Node *) targetEntry->expr))
 			{
-				hasNonConstTargetEntryExprs = true;
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("functions used in UPDATE queries on distributed "
+									   "tables must not be VOLATILE")));
 			}
 
 			if (commandType == CMD_UPDATE &&
@@ -281,17 +305,59 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			{
 				specifiesPartitionValue = true;
 			}
+
+			if (targetEntry->resno == partitionColumn->varattno &&
+				!IsA(targetEntry->expr, Const))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("values given for the partition column must be"
+									   " constants or constant expressions")));
+			}
+
+			if (commandType == CMD_UPDATE &&
+				MasterIrreducibleExpression((Node *) targetEntry->expr,
+											&hasVarArgument, &hasBadCoalesce))
+			{
+				Assert(hasVarArgument || hasBadCoalesce);
+			}
 		}
 
 		joinTree = queryTree->jointree;
-		if (joinTree != NULL && contain_mutable_functions(joinTree->quals))
+		if (joinTree != NULL)
 		{
-			hasNonConstQualExprs = true;
+			if (contain_volatile_functions(joinTree->quals))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("functions used in the WHERE clause of "
+									   "modification queries on distributed tables "
+									   "must not be VOLATILE")));
+			}
+			else if (MasterIrreducibleExpression(joinTree->quals, &hasVarArgument,
+												 &hasBadCoalesce))
+			{
+				Assert(hasVarArgument || hasBadCoalesce);
+			}
+		}
+
+		if (hasVarArgument)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("STABLE functions used in UPDATE queries"
+								   " cannot be called with column references")));
+		}
+
+		if (hasBadCoalesce)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("non-IMMUTABLE functions are not allowed in CASE or"
+								   " COALESCE statements")));
 		}
 
 		if (contain_mutable_functions((Node *) queryTree->returningList))
 		{
-			hasNonConstTargetEntryExprs = true;
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("non-IMMUTABLE functions are not allowed in the"
+								   " RETURNING clause")));
 		}
 	}
 
@@ -342,7 +408,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 			else if (contain_mutable_functions((Node *) setTargetEntry->expr))
 			{
-				hasNonConstTargetEntryExprs = true;
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("functions used in the DO UPDATE SET clause of "
+									   "INSERTs on distributed tables must be marked "
+									   "IMMUTABLE")));
 			}
 		}
 	}
@@ -351,21 +420,257 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	if (contain_mutable_functions((Node *) arbiterWhere) ||
 		contain_mutable_functions((Node *) onConflictWhere))
 	{
-		hasNonConstQualExprs = true;
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("functions used in the WHERE clause of the ON CONFLICT "
+							   "clause of INSERTs on distributed tables must be marked "
+							   "IMMUTABLE")));
 	}
 #endif
-
-	if (hasNonConstTargetEntryExprs || hasNonConstQualExprs)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("functions used in modification queries on distributed "
-							   "tables must be marked IMMUTABLE")));
-	}
 
 	if (specifiesPartitionValue)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("modifying the partition value of rows is not allowed")));
+	}
+}
+
+
+/*
+ * If the expression contains STABLE functions which accept any parameters derived from a
+ * Var returns true and sets varArgument.
+ *
+ * If the expression contains a CASE or COALESCE which invoke non-IMMUTABLE functions
+ * returns true and sets badCoalesce.
+ *
+ * Assumes the expression contains no VOLATILE functions.
+ *
+ * Var's are allowed, but only if they are passed solely to IMMUTABLE functions
+ *
+ * We special-case CASE/COALESCE because those are evaluated lazily. We could evaluate
+ * CASE/COALESCE expressions which don't reference Vars, or partially evaluate some
+ * which do, but for now we just error out. That makes both the code and user-education
+ * easier.
+ */
+static bool
+MasterIrreducibleExpression(Node *expression, bool *varArgument, bool *badCoalesce)
+{
+	bool result;
+	WalkerState data;
+	data.containsVar = data.varArgument = data.badCoalesce = false;
+
+	result = MasterIrreducibleExpressionWalker(expression, &data);
+
+	*varArgument |= data.varArgument;
+	*badCoalesce |= data.badCoalesce;
+	return result;
+}
+
+
+static bool
+MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
+{
+	char volatileFlag = 0;
+	WalkerState childState = { false, false, false };
+	bool containsDisallowedFunction = false;
+
+	if (expression == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(expression, CoalesceExpr))
+	{
+		CoalesceExpr *expr = (CoalesceExpr *) expression;
+
+		if (contain_mutable_functions((Node *) (expr->args)))
+		{
+			state->badCoalesce = true;
+			return true;
+		}
+		else
+		{
+			/*
+			 * There's no need to recurse. Since there are no STABLE functions
+			 * varArgument will never be set.
+			 */
+			return false;
+		}
+	}
+
+	if (IsA(expression, CaseExpr))
+	{
+		if (contain_mutable_functions(expression))
+		{
+			state->badCoalesce = true;
+			return true;
+		}
+
+		return false;
+	}
+
+	if (IsA(expression, Var))
+	{
+		state->containsVar = true;
+		return false;
+	}
+
+	/*
+	 * In order for statement replication to give us consistent results it's important
+	 * that we either disallow or evaluate on the master anything which has a volatility
+	 * category above IMMUTABLE. Newer versions of postgres might add node types which
+	 * should be checked in this function.
+	 *
+	 * Look through contain_mutable_functions_walker or future PG's equivalent for new
+	 * node types before bumping this version number to fix compilation.
+	 *
+	 * Once you've added them to this check, make sure you also evaluate them in the
+	 * executor!
+	 */
+	StaticAssertStmt(PG_VERSION_NUM < 90600, "When porting to a newer PG this section"
+											 " needs to be reviewed.");
+
+	if (IsA(expression, OpExpr))
+	{
+		OpExpr *expr = (OpExpr *) expression;
+
+		set_opfuncid(expr);
+		volatileFlag = func_volatile(expr->opfuncid);
+	}
+	else if (IsA(expression, FuncExpr))
+	{
+		FuncExpr *expr = (FuncExpr *) expression;
+
+		volatileFlag = func_volatile(expr->funcid);
+	}
+	else if (IsA(expression, DistinctExpr))
+	{
+		/*
+		 * to exercise this, you need to create a custom type for which the '=' operator
+		 * is STABLE/VOLATILE
+		 */
+		DistinctExpr *expr = (DistinctExpr *) expression;
+
+		set_opfuncid((OpExpr *) expr);  /* rely on struct equivalence */
+		volatileFlag = func_volatile(expr->opfuncid);
+	}
+	else if (IsA(expression, NullIfExpr))
+	{
+		/*
+		 * same as above, exercising this requires a STABLE/VOLATILE '=' operator
+		 */
+		NullIfExpr *expr = (NullIfExpr *) expression;
+
+		set_opfuncid((OpExpr *) expr);  /* rely on struct equivalence */
+		volatileFlag = func_volatile(expr->opfuncid);
+	}
+	else if (IsA(expression, ScalarArrayOpExpr))
+	{
+		/*
+		 * to exercise this you need to CREATE OPERATOR with a binary predicate
+		 * and use it within an ANY/ALL clause.
+		 */
+		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) expression;
+
+		set_sa_opfuncid(expr);
+		volatileFlag = func_volatile(expr->opfuncid);
+	}
+	else if (IsA(expression, CoerceViaIO))
+	{
+		/*
+		 * to exercise this you need to use a type with a STABLE/VOLATILE intype or
+		 * outtype.
+		 */
+		CoerceViaIO *expr = (CoerceViaIO *) expression;
+		Oid iofunc;
+		Oid typioparam;
+		bool typisvarlena;
+
+		/* check the result type's input function */
+		getTypeInputInfo(expr->resulttype,
+						 &iofunc, &typioparam);
+		volatileFlag = MostPermissiveVolatileFlag(volatileFlag, func_volatile(iofunc));
+
+		/* check the input type's output function */
+		getTypeOutputInfo(exprType((Node *) expr->arg),
+						  &iofunc, &typisvarlena);
+		volatileFlag = MostPermissiveVolatileFlag(volatileFlag, func_volatile(iofunc));
+	}
+	else if (IsA(expression, ArrayCoerceExpr))
+	{
+		ArrayCoerceExpr *expr = (ArrayCoerceExpr *) expression;
+
+		if (OidIsValid(expr->elemfuncid))
+		{
+			volatileFlag = func_volatile(expr->elemfuncid);
+		}
+	}
+	else if (IsA(expression, RowCompareExpr))
+	{
+		RowCompareExpr *rcexpr = (RowCompareExpr *) expression;
+		ListCell *opid;
+
+		foreach(opid, rcexpr->opnos)
+		{
+			volatileFlag = MostPermissiveVolatileFlag(volatileFlag,
+													  op_volatile(lfirst_oid(opid)));
+		}
+	}
+	else if (IsA(expression, Query))
+	{
+		/* subqueries aren't allowed and fail before control reaches this point */
+		Assert(false);
+	}
+
+	if (volatileFlag == PROVOLATILE_VOLATILE)
+	{
+		/* the caller should have already checked for this */
+		Assert(false);
+	}
+	else if (volatileFlag == PROVOLATILE_STABLE)
+	{
+		containsDisallowedFunction =
+			expression_tree_walker(expression,
+								   MasterIrreducibleExpressionWalker,
+								   &childState);
+
+		if (childState.containsVar)
+		{
+			state->varArgument = true;
+		}
+
+		state->badCoalesce |= childState.badCoalesce;
+		state->varArgument |= childState.varArgument;
+
+		return (containsDisallowedFunction || childState.containsVar);
+	}
+
+	/* keep traversing */
+	return expression_tree_walker(expression,
+								  MasterIrreducibleExpressionWalker,
+								  state);
+}
+
+
+/*
+ * Return the most-pessimistic volatility flag of the two params.
+ *
+ * for example: given two flags, if one is stable and one is volatile, an expression
+ * involving both is volatile.
+ */
+char
+MostPermissiveVolatileFlag(char left, char right)
+{
+	if (left == PROVOLATILE_VOLATILE || right == PROVOLATILE_VOLATILE)
+	{
+		return PROVOLATILE_VOLATILE;
+	}
+	else if (left == PROVOLATILE_STABLE || right == PROVOLATILE_STABLE)
+	{
+		return PROVOLATILE_STABLE;
+	}
+	else
+	{
+		return PROVOLATILE_IMMUTABLE;
 	}
 }
 
@@ -384,6 +689,7 @@ RouterModifyTask(Query *query)
 	StringInfo queryString = makeStringInfo();
 	Task *modifyTask = NULL;
 	bool upsertQuery = false;
+	bool requiresMasterEvaluation = RequiresMasterEvaluation(query);
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -446,6 +752,7 @@ RouterModifyTask(Query *query)
 	modifyTask->anchorShardId = shardId;
 	modifyTask->dependedTaskList = NIL;
 	modifyTask->upsertQuery = upsertQuery;
+	modifyTask->requiresMasterEvaluation = requiresMasterEvaluation;
 
 	return modifyTask;
 }
@@ -616,10 +923,10 @@ FastShardPruningPossible(CmdType commandType, char partitionMethod)
 
 
 /*
- * FastShardPruning is a higher level API for FindShardInterval function. Given the relationId
- * of the distributed table and partitionValue, FastShardPruning function finds the corresponding
- * shard interval that the partitionValue should be in. FastShardPruning returns NULL if no
- * ShardIntervals exist for the given partitionValue.
+ * FastShardPruning is a higher level API for FindShardInterval function. Given the
+ * relationId of the distributed table and partitionValue, FastShardPruning function finds
+ * the corresponding shard interval that the partitionValue should be in. FastShardPruning
+ * returns NULL if no ShardIntervals exist for the given partitionValue.
  */
 static ShardInterval *
 FastShardPruning(Oid distributedTableId, Const *partitionValue)
@@ -806,6 +1113,7 @@ RouterSelectTask(Query *query)
 	task->anchorShardId = shardId;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
+	task->requiresMasterEvaluation = false;
 
 	return task;
 }
