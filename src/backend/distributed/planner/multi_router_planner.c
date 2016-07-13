@@ -67,7 +67,7 @@ typedef struct WalkerState
 
 /* planner functions forward declarations */
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
-											bool *badCoalesce);
+										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static char MostPermissiveVolatileFlag(char left, char right);
 static Task * RouterModifyTask(Query *query);
@@ -470,7 +470,7 @@ static bool
 MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 {
 	char volatileFlag = 0;
-	WalkerState childState = {false, false, false};
+	WalkerState childState = { false, false, false };
 	bool containsDisallowedFunction = false;
 
 	if (expression == NULL)
