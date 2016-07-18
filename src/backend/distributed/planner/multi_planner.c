@@ -44,6 +44,17 @@ PlannedStmt *
 multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
 	PlannedStmt *result = NULL;
+	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
+	Query *originalQuery = NULL;
+
+	/*
+	 * standard_planner scribbles on it's input, but for deparsing we need the
+	 * unmodified form. So copy once we're sure it's a distributed query.
+	 */
+	if (needsDistributedPlanning)
+	{
+		originalQuery = copyObject(parse);
+	}
 
 	/*
 	 * First call into standard planner. This is required because the Citus
@@ -51,9 +62,9 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	 */
 	result = standard_planner(parse, cursorOptions, boundParams);
 
-	if (NeedsDistributedPlanning(parse))
+	if (needsDistributedPlanning)
 	{
-		MultiPlan *physicalPlan = CreatePhysicalPlan(parse);
+		MultiPlan *physicalPlan = CreatePhysicalPlan(originalQuery, parse);
 
 		/* store required data into the planned statement */
 		result = MultiQueryContainerNode(result, physicalPlan);
@@ -71,14 +82,14 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
  * physical plan process needed to produce distributed query plans.
  */
 MultiPlan *
-CreatePhysicalPlan(Query *parse)
+CreatePhysicalPlan(Query *originalQuery, Query *query)
 {
-	Query *parseCopy = copyObject(parse);
-	MultiPlan *physicalPlan = MultiRouterPlanCreate(parseCopy, TaskExecutorType);
+	MultiPlan *physicalPlan = MultiRouterPlanCreate(originalQuery, query,
+													TaskExecutorType);
 	if (physicalPlan == NULL)
 	{
 		/* Create and optimize logical plan */
-		MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(parseCopy);
+		MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
 		MultiLogicalPlanOptimize(logicalPlan);
 
 		/*

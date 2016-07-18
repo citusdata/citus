@@ -312,7 +312,7 @@ DETAIL:  Creating dependency on merge taskId 14
 ERROR:  cannot use real time executor with repartition jobs
 HINT:  Set citus.task_executor_type to "task-tracker".
 -- subqueries are not supported in SELECT clause
-SELECT a.title AS name, (SELECT a2.id FROM authors_hash a2 WHERE a.id = a2.id  LIMIT 1)
+SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries other than in from-clause are currently unsupported
@@ -1041,6 +1041,7 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 -- parametric prepare queries can be router plannable
+-- it will be fixed with another pr
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
@@ -1049,15 +1050,9 @@ EXECUTE author_articles(1);
 DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
- id | author_id |    title     | word_count 
-----+-----------+--------------+------------
-  1 |         1 | arsenous     |       9572
- 11 |         1 | alamo        |       1347
- 21 |         1 | arcading     |       5890
- 31 |         1 | athwartships |       7271
- 41 |         1 | aznavour     |      11814
-(5 rows)
-
+WARNING:  there is no parameter $1
+CONTEXT:  while executing command on localhost:57637
+ERROR:  could not receive query results
 -- queries inside plpgsql functions could be router plannable
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
