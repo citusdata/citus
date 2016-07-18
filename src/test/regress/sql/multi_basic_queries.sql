@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 440000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 440000;
 
 
 -- Execute simple sum, average, and count queries on data recently uploaded to
