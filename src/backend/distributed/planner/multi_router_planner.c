@@ -70,11 +70,7 @@ static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static char MostPermissiveVolatileFlag(char left, char right);
-static Task * RouterModifyTask(Query *query);
-#if (PG_VERSION_NUM >= 90500)
-static OnConflictExpr * RebuildOnConflict(Oid relationId,
-										  OnConflictExpr *originalOnConflict);
-#endif
+static Task * RouterModifyTask(Query *originalQuery, Query *query);
 static ShardInterval * TargetShardInterval(Query *query);
 static List * QueryRestrictList(Query *query);
 static bool FastShardPruningPossible(CmdType commandType, char partitionMethod);
@@ -82,11 +78,10 @@ static ShardInterval * FastShardPruning(Oid distributedTableId,
 										Const *partionColumnValue);
 static Oid ExtractFirstDistributedTableId(Query *query);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
-static Task * RouterSelectTask(Query *query);
+static Task * RouterSelectTask(Query *originalQuery, Query *query);
 static Job * RouterQueryJob(Query *query, Task *task);
 static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType);
 static bool ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column);
-static void SetRangeTablesInherited(Query *query);
 
 
 /*
@@ -97,7 +92,8 @@ static void SetRangeTablesInherited(Query *query);
  * returns NULL.
  */
 MultiPlan *
-MultiRouterPlanCreate(Query *query, MultiExecutorType taskExecutorType)
+MultiRouterPlanCreate(Query *originalQuery, Query *query,
+					  MultiExecutorType taskExecutorType)
 {
 	Task *task = NULL;
 	Job *job = NULL;
@@ -122,17 +118,17 @@ MultiRouterPlanCreate(Query *query, MultiExecutorType taskExecutorType)
 	if (modifyTask)
 	{
 		ErrorIfModifyQueryNotSupported(query);
-		task = RouterModifyTask(query);
+		task = RouterModifyTask(originalQuery, query);
 	}
 	else
 	{
 		Assert(commandType == CMD_SELECT);
 
-		task = RouterSelectTask(query);
+		task = RouterSelectTask(originalQuery, query);
 	}
 
 
-	job = RouterQueryJob(query, task);
+	job = RouterQueryJob(originalQuery, task);
 
 	multiPlan = CitusMakeNode(MultiPlan);
 	multiPlan->workerJob = job;
@@ -681,53 +677,33 @@ MostPermissiveVolatileFlag(char left, char right)
  * shard-extended deparsed SQL to be run during execution.
  */
 static Task *
-RouterModifyTask(Query *query)
+RouterModifyTask(Query *originalQuery, Query *query)
 {
 	ShardInterval *shardInterval = TargetShardInterval(query);
 	uint64 shardId = shardInterval->shardId;
-	FromExpr *joinTree = NULL;
 	StringInfo queryString = makeStringInfo();
 	Task *modifyTask = NULL;
 	bool upsertQuery = false;
-	bool requiresMasterEvaluation = RequiresMasterEvaluation(query);
+	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
 
-	/*
-	 * Convert the qualifiers to an explicitly and'd clause, which is needed
-	 * before we deparse the query. This applies to SELECT, UPDATE and
-	 * DELETE statements.
-	 */
-	joinTree = query->jointree;
-	if ((joinTree != NULL) && (joinTree->quals != NULL))
-	{
-		Node *whereClause = joinTree->quals;
-		if (IsA(whereClause, List))
-		{
-			joinTree->quals = (Node *) make_ands_explicit((List *) whereClause);
-		}
-	}
-
 #if (PG_VERSION_NUM >= 90500)
-	if (query->onConflict != NULL)
+	if (originalQuery->onConflict != NULL)
 	{
 		RangeTblEntry *rangeTableEntry = NULL;
-		Oid relationId = shardInterval->relationId;
 
 		/* set the flag */
 		upsertQuery = true;
 
 		/* setting an alias simplifies deparsing of UPSERTs */
-		rangeTableEntry = linitial(query->rtable);
+		rangeTableEntry = linitial(originalQuery->rtable);
 		if (rangeTableEntry->alias == NULL)
 		{
 			Alias *alias = makeAlias(UPSERT_ALIAS, NIL);
 			rangeTableEntry->alias = alias;
 		}
-
-		/* some fields in onConflict expression needs to be updated for deparsing */
-		query->onConflict = RebuildOnConflict(relationId, query->onConflict);
 	}
 #else
 
@@ -735,13 +711,7 @@ RouterModifyTask(Query *query)
 	upsertQuery = false;
 #endif
 
-	/*
-	 * We set inh flag of all range tables entries to true so that deparser will not
-	 * add ONLY keyword to resulting query string.
-	 */
-	SetRangeTablesInherited(query);
-
-	deparse_shard_query(query, shardInterval->relationId, shardId, queryString);
+	deparse_shard_query(originalQuery, shardInterval->relationId, shardId, queryString);
 	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
 
 	modifyTask = CitusMakeNode(Task);
@@ -756,67 +726,6 @@ RouterModifyTask(Query *query)
 
 	return modifyTask;
 }
-
-
-#if (PG_VERSION_NUM >= 90500)
-
-/*
- * RebuildOnConflict rebuilds OnConflictExpr for correct deparsing. The function
- * makes WHERE clause elements explicit and filters dropped columns
- * from the target list.
- */
-static OnConflictExpr *
-RebuildOnConflict(Oid relationId, OnConflictExpr *originalOnConflict)
-{
-	OnConflictExpr *updatedOnConflict = copyObject(originalOnConflict);
-	Node *onConflictWhere = updatedOnConflict->onConflictWhere;
-	List *onConflictSet = updatedOnConflict->onConflictSet;
-	TupleDesc distributedRelationDesc = NULL;
-	ListCell *targetEntryCell = NULL;
-	List *filteredOnConflictSet = NIL;
-	Form_pg_attribute *tableAttributes = NULL;
-	Relation distributedRelation = RelationIdGetRelation(relationId);
-
-	/* Convert onConflictWhere qualifiers to an explicitly and'd clause */
-	updatedOnConflict->onConflictWhere =
-		(Node *) make_ands_explicit((List *) onConflictWhere);
-
-	/*
-	 * Here we handle dropped columns on the distributed table. onConflictSet
-	 * includes the table attributes even if they are dropped,
-	 * since the it is expanded via expand_targetlist() on standard planner.
-	 */
-
-	/* get the relation tuple descriptor and table attributes */
-	distributedRelationDesc = RelationGetDescr(distributedRelation);
-	tableAttributes = distributedRelationDesc->attrs;
-
-	foreach(targetEntryCell, onConflictSet)
-	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-		FormData_pg_attribute *tableAttribute = tableAttributes[targetEntry->resno - 1];
-
-		/* skip dropped columns */
-		if (tableAttribute->attisdropped)
-		{
-			continue;
-		}
-
-		/* we only want to deparse non-dropped columns */
-		filteredOnConflictSet = lappend(filteredOnConflictSet, targetEntry);
-	}
-
-	/* close distributedRelation to prevent leaks */
-	RelationClose(distributedRelation);
-
-	/* set onConflictSet again with the filtered list */
-	updatedOnConflict->onConflictSet = filteredOnConflictSet;
-
-	return updatedOnConflict;
-}
-
-
-#endif
 
 
 /*
@@ -1070,7 +979,7 @@ ExtractInsertPartitionValue(Query *query, Var *partitionColumn)
 
 /* RouterSelectTask builds a Task to represent a single shard select query */
 static Task *
-RouterSelectTask(Query *query)
+RouterSelectTask(Query *originalQuery, Query *query)
 {
 	Task *task = NULL;
 	ShardInterval *shardInterval = TargetShardInterval(query);
@@ -1078,31 +987,13 @@ RouterSelectTask(Query *query)
 	uint64 shardId = INVALID_SHARD_ID;
 	bool upsertQuery = false;
 	CmdType commandType PG_USED_FOR_ASSERTS_ONLY = query->commandType;
-	FromExpr *joinTree = NULL;
 
 	Assert(shardInterval != NULL);
 	Assert(commandType == CMD_SELECT);
 
 	shardId = shardInterval->shardId;
 
-	/*
-	 * Convert the qualifiers to an explicitly and'd clause, which is needed
-	 * before we deparse the query.
-	 */
-	joinTree = query->jointree;
-	if ((joinTree != NULL) && (joinTree->quals != NULL))
-	{
-		Node *whereClause = (Node *) make_ands_explicit((List *) joinTree->quals);
-		joinTree->quals = whereClause;
-	}
-
-	/*
-	 * We set inh flag of all range tables entries to true so that deparser will not
-	 * add ONLY keyword to resulting query string.
-	 */
-	SetRangeTablesInherited(query);
-
-	deparse_shard_query(query, shardInterval->relationId, shardId, queryString);
+	deparse_shard_query(originalQuery, shardInterval->relationId, shardId, queryString);
 	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
 
 	task = CitusMakeNode(Task);
@@ -1362,25 +1253,4 @@ ColumnMatchExpressionAtTopLevelConjunction(Node *node, Var *column)
 	}
 
 	return false;
-}
-
-
-/*
- * RouterSetRangeTablesInherited sets inh flag of all range table entries to true.
- * We basically iterate over all range table entries and set their inh flag.
- */
-static void
-SetRangeTablesInherited(Query *query)
-{
-	List *rangeTableList = query->rtable;
-	ListCell *rangeTableCell = NULL;
-
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		if (rangeTableEntry->rtekind == RTE_RELATION)
-		{
-			rangeTableEntry->inh = true;
-		}
-	}
 }

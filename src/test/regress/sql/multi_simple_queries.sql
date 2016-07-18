@@ -144,7 +144,7 @@ FROM articles, (SELECT id, word_count FROM articles) AS test WHERE test.id = art
 ORDER BY articles.id;
 
 -- subqueries are not supported in SELECT clause
-SELECT a.title AS name, (SELECT a2.id FROM authors a2 WHERE a.id = a2.id  LIMIT 1)
+SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
 
 -- joins are not supported between local and distributed tables
