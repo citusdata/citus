@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * multi_transaction.c
+ * commit_protocol.c
  *     This file contains functions for managing 1PC or 2PC transactions
  *     across many shard placements.
  *
@@ -9,18 +9,17 @@
  *-------------------------------------------------------------------------
  */
 
+
 #include "postgres.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
-#include "access/xact.h"
+#include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
-#include "distributed/multi_transaction.h"
+#include "distributed/master_metadata_utility.h"
+#include "distributed/multi_shard_transaction.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
-
-
-#define INITIAL_CONNECTION_CACHE_SIZE 1001
 
 
 /* Local functions forward declarations */
@@ -43,6 +42,66 @@ void
 InitializeDistributedTransaction(void)
 {
 	DistributedTransactionId++;
+}
+
+
+/*
+ * CompleteShardPlacementTransactions commits or aborts pending shard placement
+ * transactions when the local transaction commits or aborts.
+ */
+void
+CompleteShardPlacementTransactions(XactEvent event, void *arg)
+{
+	if (shardPlacementConnectionList == NIL)
+	{
+		/* nothing to do */
+		return;
+	}
+	else if (event == XACT_EVENT_PRE_COMMIT)
+	{
+		/*
+		 * Any failure here will cause local changes to be rolled back,
+		 * and remote changes to either roll back (1PC) or, in case of
+		 * connection or node failure, leave a prepared transaction
+		 * (2PC).
+		 */
+
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+		{
+			PrepareRemoteTransactions(shardPlacementConnectionList);
+		}
+
+		return;
+	}
+	else if (event == XACT_EVENT_COMMIT)
+	{
+		/*
+		 * A failure here will cause some remote changes to either
+		 * roll back (1PC) or, in case of connection or node failure,
+		 * leave a prepared transaction (2PC). However, the local
+		 * changes have already been committed.
+		 */
+
+		CommitRemoteTransactions(shardPlacementConnectionList, false);
+	}
+	else if (event == XACT_EVENT_ABORT)
+	{
+		/*
+		 * A failure here will cause some remote changes to either
+		 * roll back (1PC) or, in case of connection or node failure,
+		 * leave a prepared transaction (2PC). The local changes have
+		 * already been rolled back.
+		 */
+
+		AbortRemoteTransactions(shardPlacementConnectionList);
+	}
+	else
+	{
+		return;
+	}
+
+	CloseConnections(shardPlacementConnectionList);
+	shardPlacementConnectionList = NIL;
 }
 
 
@@ -81,6 +140,9 @@ PrepareRemoteTransactions(List *connectionList)
 			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 							errmsg("failed to prepare transaction")));
 		}
+
+		ereport(DEBUG2, (errmsg("sent PREPARE TRANSACTION over connection %ld",
+								connectionId)));
 
 		PQclear(result);
 
@@ -125,6 +187,8 @@ AbortRemoteTransactions(List *connectionList)
 								  errhint("Run \"%s\" on %s:%s",
 										  command->data, nodeName, nodePort)));
 			}
+
+			ereport(DEBUG2, (errmsg("sent ROLLBACK over connection %ld", connectionId)));
 
 			PQclear(result);
 		}
@@ -197,6 +261,9 @@ CommitRemoteTransactions(List *connectionList, bool stopOnFailure)
 											  command->data, nodeName, nodePort)));
 				}
 			}
+
+			ereport(DEBUG2, (errmsg("sent COMMIT PREPARED over connection %ld",
+									connectionId)));
 		}
 		else
 		{
@@ -224,6 +291,8 @@ CommitRemoteTransactions(List *connectionList, bool stopOnFailure)
 											 nodeName, nodePort)));
 				}
 			}
+
+			ereport(DEBUG2, (errmsg("sent COMMIT over connection %ld", connectionId)));
 		}
 
 		PQclear(result);
@@ -252,98 +321,4 @@ BuildTransactionName(int connectionId)
 					 DistributedTransactionId, connectionId);
 
 	return commandString;
-}
-
-
-/*
- * CloseConnections closes all connections in connectionList.
- */
-void
-CloseConnections(List *connectionList)
-{
-	ListCell *connectionCell = NULL;
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-
-		PQfinish(connection);
-	}
-}
-
-
-/*
- * CreateShardConnectionHash constructs a hash table used for shardId->Connection
- * mapping.
- */
-HTAB *
-CreateShardConnectionHash(void)
-{
-	HTAB *shardConnectionsHash = NULL;
-	int hashFlags = 0;
-	HASHCTL info;
-
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(int64);
-	info.entrysize = sizeof(ShardConnections);
-	info.hash = tag_hash;
-
-	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT;
-	shardConnectionsHash = hash_create("Shard Connections Hash",
-									   INITIAL_CONNECTION_CACHE_SIZE, &info,
-									   hashFlags);
-
-	return shardConnectionsHash;
-}
-
-
-/*
- * GetShardConnections finds existing connections for a shard in the hash.
- * If not found, then a ShardConnections structure with empty connectionList
- * is returned.
- */
-ShardConnections *
-GetShardConnections(HTAB *shardConnectionHash, int64 shardId,
-					bool *shardConnectionsFound)
-{
-	ShardConnections *shardConnections = NULL;
-
-	shardConnections = (ShardConnections *) hash_search(shardConnectionHash,
-														&shardId,
-														HASH_ENTER,
-														shardConnectionsFound);
-	if (!*shardConnectionsFound)
-	{
-		shardConnections->shardId = shardId;
-		shardConnections->connectionList = NIL;
-	}
-
-	return shardConnections;
-}
-
-
-/*
- * ConnectionList flattens the connection hash to a list of placement connections.
- */
-List *
-ConnectionList(HTAB *connectionHash)
-{
-	List *connectionList = NIL;
-	HASH_SEQ_STATUS status;
-	ShardConnections *shardConnections = NULL;
-
-	hash_seq_init(&status, connectionHash);
-
-	shardConnections = (ShardConnections *) hash_seq_search(&status);
-	while (shardConnections != NULL)
-	{
-		List *shardConnectionsList = list_copy(shardConnections->connectionList);
-		connectionList = list_concat(connectionList, shardConnectionsList);
-
-		shardConnections = (ShardConnections *) hash_seq_search(&status);
-	}
-
-	return connectionList;
 }

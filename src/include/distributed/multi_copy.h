@@ -15,11 +15,6 @@
 
 #include "nodes/parsenodes.h"
 
-
-/* config variable managed via guc.c */
-extern int MultiShardCommitProtocol;
-
-
 /*
  * A smaller version of copy.c's CopyStateData, trimmed to the elements
  * necessary to copy out results. While it'd be a bit nicer to share code,
