@@ -1014,7 +1014,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	bool executionOK = false;
 	bool allPlacementsAccessible = false;
 
-	PreventTransactionChain(true, "distributed DDL commands");
+	PreventTransactionChain(isTopLevel, "distributed DDL commands");
 	SetLocalCommitProtocolTo2PC();
 
 	allPlacementsAccessible = AllFinalizedPlacementsAccessible(relationId);
