@@ -22,6 +22,7 @@ extern char * pg_get_tableschemadef_string(Oid tableRelationId);
 extern char * pg_get_tablecolumnoptionsdef_string(Oid tableRelationId);
 extern char * pg_get_indexclusterdef_string(Oid indexRelationId);
 extern List * pg_get_table_grants(Oid relationId);
+extern Oid get_extension_schema(Oid ext_oid);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
 extern void pg_get_query_def(Query *query, StringInfo buffer);
