@@ -112,6 +112,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	bool routerExecutablePlan = false;
 	instr_time planStart;
 	instr_time planDuration;
+	Query *originalQuery = NULL;
 
 	/* if local query, run the standard explain and return */
 	bool localQuery = !NeedsDistributedPlanning(query);
@@ -133,6 +134,12 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		return;
 	}
 
+	/*
+	 * standard_planner scribbles on it's input, but for deparsing we need the
+	 * unmodified form. So copy once we're sure it's a distributed query.
+	 */
+	originalQuery = copyObject(query);
+
 	/* measure the full planning time to display in EXPLAIN ANALYZE */
 	INSTR_TIME_SET_CURRENT(planStart);
 
@@ -151,7 +158,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		}
 	}
 
-	multiPlan = CreatePhysicalPlan(query);
+	multiPlan = CreatePhysicalPlan(originalQuery, query);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);

@@ -168,7 +168,7 @@ FROM articles_hash, (SELECT id, word_count FROM articles_hash) AS test WHERE tes
 ORDER BY articles_hash.id;
 
 -- subqueries are not supported in SELECT clause
-SELECT a.title AS name, (SELECT a2.id FROM authors_hash a2 WHERE a.id = a2.id  LIMIT 1)
+SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
 
 -- simple lookup query
@@ -475,6 +475,7 @@ PREPARE author_1_articles as
 EXECUTE author_1_articles;
 
 -- parametric prepare queries can be router plannable
+-- it will be fixed with another pr
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash

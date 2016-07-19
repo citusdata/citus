@@ -254,7 +254,7 @@ ORDER BY articles.id;
 (50 rows)
 
 -- subqueries are not supported in SELECT clause
-SELECT a.title AS name, (SELECT a2.id FROM authors a2 WHERE a.id = a2.id  LIMIT 1)
+SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries other than in from-clause are currently unsupported
