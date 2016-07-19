@@ -156,6 +156,42 @@ ALTER TABLE IF EXISTS lineitem_alter RENAME l_orderkey TO l_orderkey_renamed;
 -- node
 \d lineitem_alter
 
+-- verify that non-propagated ddl commands are allowed inside a transaction block
+SET citus.enable_ddl_propagation to false;
+BEGIN;
+CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
+COMMIT;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+DROP INDEX temp_index_1;
+
+-- verify that distributed ddl commands are not allowed inside a transaction block
+SET citus.enable_ddl_propagation to true;
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+COMMIT;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+DROP INDEX temp_index_2;
+
+-- verify that distributed ddl commands use 2PC, even the value of citus.multi_shard_commit_protocol is '1pc'
+SET citus.multi_shard_commit_protocol TO '1pc';
+SET client_min_messages TO DEBUG2;
+CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);
+RESET client_min_messages;
+DROP INDEX temp_index_3;
+
+-- verify that citus.multi_shard_commit_protocol value is not changed
+SHOW citus.multi_shard_commit_protocol;
+
+-- verify that not any of shard placements are marked as failed when a query failure occurs
+CREATE TABLE test_ab (a int, b int);
+SELECT master_create_distributed_table('test_ab', 'a', 'hash');
+SELECT master_create_worker_shards('test_ab', 8, 2);
+INSERT INTO test_ab VALUES (2, 10);
+INSERT INTO test_ab VALUES (2, 11);
+CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
+SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
+WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
+
 -- Check that the schema on the worker still looks reasonable
 \c - - - :worker_1_port
 SELECT attname, atttypid::regtype

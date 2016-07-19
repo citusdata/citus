@@ -18,6 +18,7 @@
 
 #include "commands/explain.h"
 #include "executor/executor.h"
+#include "distributed/commit_protocol.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
@@ -28,7 +29,6 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_transaction.h"
 #include "distributed/multi_utility.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"

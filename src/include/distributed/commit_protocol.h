@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * multi_transaction.h
+ * commit_protocol.h
  *	  Type and function declarations used in performing transactions across
  *	  shard placements.
  *
@@ -9,10 +9,11 @@
  *-------------------------------------------------------------------------
  */
 
-#ifndef MULTI_TRANSACTION_H
-#define MULTI_TRANSACTION_H
+#ifndef COMMIT_PROTOCOL_H
+#define COMMIT_PROTOCOL_H
 
 
+#include "access/xact.h"
 #include "libpq-fe.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -47,29 +48,15 @@ typedef struct TransactionConnection
 } TransactionConnection;
 
 
-/* ShardConnections represents a set of connections for each placement of a shard */
-typedef struct ShardConnections
-{
-	int64 shardId;
-	List *connectionList;
-} ShardConnections;
-
-
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
 
 
 /* Functions declarations for transaction and connection management */
 extern void InitializeDistributedTransaction(void);
+extern void CompleteShardPlacementTransactions(XactEvent event, void *arg);
 extern void PrepareRemoteTransactions(List *connectionList);
 extern void AbortRemoteTransactions(List *connectionList);
 extern void CommitRemoteTransactions(List *connectionList, bool stopOnFailure);
-extern void CloseConnections(List *connectionList);
-extern HTAB * CreateShardConnectionHash(void);
-extern ShardConnections * GetShardConnections(HTAB *shardConnectionHash,
-											  int64 shardId,
-											  bool *shardConnectionsFound);
-extern List * ConnectionList(HTAB *connectionHash);
 
-
-#endif /* MULTI_TRANSACTION_H */
+#endif /* COMMIT_PROTOCOL_H */
