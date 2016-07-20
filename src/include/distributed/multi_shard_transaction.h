@@ -13,7 +13,6 @@
 #define MULTI_SHARD_TRANSACTION_H
 
 
-#include "access/xact.h"
 #include "utils/hsearch.h"
 #include "nodes/pg_list.h"
 
@@ -26,9 +25,6 @@ typedef struct ShardConnections
 } ShardConnections;
 
 
-extern List *shardPlacementConnectionList;
-
-
 extern HTAB * OpenTransactionsToAllShardPlacements(List *shardIdList,
 												   char *relationOwner);
 extern HTAB * CreateShardConnectionHash(void);
@@ -39,5 +35,6 @@ extern ShardConnections * GetShardConnections(HTAB *shardConnectionHash,
 											  bool *shardConnectionsFound);
 extern List * ConnectionList(HTAB *connectionHash);
 extern void CloseConnections(List *connectionList);
+
 
 #endif /* MULTI_SHARD_TRANSACTION_H */
