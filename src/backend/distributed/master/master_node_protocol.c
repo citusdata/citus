@@ -557,6 +557,16 @@ GetTableDDLEvents(Oid relationId)
 	int scanKeyCount = 1;
 	HeapTuple heapTuple = NULL;
 
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	OverrideSearchPath *overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
+
 	/* if foreign table, fetch extension and server definitions */
 	tableType = get_rel_relkind(relationId);
 	if (tableType == RELKIND_FOREIGN_TABLE)
@@ -665,6 +675,9 @@ GetTableDDLEvents(Oid relationId)
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
 	heap_close(pgIndex, AccessShareLock);
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
 
 	return tableDDLEventList;
 }

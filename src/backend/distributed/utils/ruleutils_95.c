@@ -1838,6 +1838,8 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	deparse_context context;
 	deparse_namespace dpns;
 
+	OverrideSearchPath *overridePath = NULL;
+
 	/* Guard against excessively long or deeply-nested queries */
 	CHECK_FOR_INTERRUPTS();
 	check_stack_depth();
@@ -1852,6 +1854,16 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 	 * only need AccessShareLock on the relations it mentions.
 	 */
 	AcquireRewriteLocks(query, false, false);
+
+	/*
+	 * Set search_path to NIL so that all objects outside of pg_catalog will be
+	 * schema-prefixed. pg_catalog will be added automatically when we call
+	 * PushOverrideSearchPath(), since we set addCatalog to true;
+	 */
+	overridePath = GetOverrideSearchPath(CurrentMemoryContext);
+	overridePath->schemas = NIL;
+	overridePath->addCatalog = true;
+	PushOverrideSearchPath(overridePath);
 
 	context.buf = buf;
 	context.namespaces = lcons(&dpns, list_copy(parentnamespace));
@@ -1899,6 +1911,9 @@ get_query_def_extended(Query *query, StringInfo buf, List *parentnamespace,
 				 query->commandType);
 			break;
 	}
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
 }
 
 /* ----------
@@ -6975,14 +6990,16 @@ generate_relation_or_shard_name(Oid relid, Oid distrelid, int64 shardid,
 
 	if (relid == distrelid)
 	{
-		/* XXX: this is where we would--but don't yet--handle schema-prefixing */
 		relname = get_relation_name(relid);
 
 		if (shardid > 0)
 		{
+			Oid schemaOid = get_rel_namespace(relid);
+			char *schemaName = get_namespace_name(schemaOid);
+
 			AppendShardIdToName(&relname, shardid);
 
-			relname = (char *) quote_identifier(relname);
+			relname = quote_qualified_identifier(schemaName, relname);
 		}
 	}
 	else
