@@ -163,9 +163,20 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		TableEntry *nextTable = NULL;
 		JoinOrderNode *nextJoinNode = NULL;
 		List *candidateShardList = NIL;
+		Node *rightArg = joinExpr->rarg;
 
 		/* get the table on the right hand side of the join */
-		nextRangeTableRef = (RangeTblRef *) joinExpr->rarg;
+		if (IsA(rightArg, RangeTblRef))
+		{
+			nextRangeTableRef = (RangeTblRef *) rightArg;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning on this query"),
+							errdetail("Subqueries in outer joins are not supported")));
+		}
+
 		nextTable = FindTableEntry(tableEntryList, nextRangeTableRef->rtindex);
 
 		if (joinType == JOIN_INNER)

@@ -388,6 +388,24 @@ FROM
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
 
+-- flattened out subqueries with outer joins are not supported
+SELECT
+  l1.l_custkey,
+  count(*) as cnt
+FROM (
+  SELECT l_custkey, l_nationkey
+  FROM multi_outer_join_left
+  WHERE l_comment like '%a%'
+) l1
+LEFT JOIN (
+  SELECT r_custkey, r_name
+  FROM multi_outer_join_right
+  WHERE r_comment like '%b%'
+) l2 ON l1.l_custkey = l2.r_custkey
+GROUP BY l1.l_custkey
+ORDER BY cnt DESC, l1.l_custkey DESC
+LIMIT 20;
+
 -- Add a shard to the left table that overlaps with multiple shards in the right
 \STAGE multi_outer_join_left FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
 
