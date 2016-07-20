@@ -46,66 +46,6 @@ InitializeDistributedTransaction(void)
 
 
 /*
- * CompleteShardPlacementTransactions commits or aborts pending shard placement
- * transactions when the local transaction commits or aborts.
- */
-void
-CompleteShardPlacementTransactions(XactEvent event, void *arg)
-{
-	if (shardPlacementConnectionList == NIL)
-	{
-		/* nothing to do */
-		return;
-	}
-	else if (event == XACT_EVENT_PRE_COMMIT)
-	{
-		/*
-		 * Any failure here will cause local changes to be rolled back,
-		 * and remote changes to either roll back (1PC) or, in case of
-		 * connection or node failure, leave a prepared transaction
-		 * (2PC).
-		 */
-
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			PrepareRemoteTransactions(shardPlacementConnectionList);
-		}
-
-		return;
-	}
-	else if (event == XACT_EVENT_COMMIT)
-	{
-		/*
-		 * A failure here will cause some remote changes to either
-		 * roll back (1PC) or, in case of connection or node failure,
-		 * leave a prepared transaction (2PC). However, the local
-		 * changes have already been committed.
-		 */
-
-		CommitRemoteTransactions(shardPlacementConnectionList, false);
-	}
-	else if (event == XACT_EVENT_ABORT)
-	{
-		/*
-		 * A failure here will cause some remote changes to either
-		 * roll back (1PC) or, in case of connection or node failure,
-		 * leave a prepared transaction (2PC). The local changes have
-		 * already been rolled back.
-		 */
-
-		AbortRemoteTransactions(shardPlacementConnectionList);
-	}
-	else
-	{
-		return;
-	}
-
-	CloseConnections(shardPlacementConnectionList);
-	shardPlacementConnectionList = NIL;
-}
-
-
-/*
  * PrepareRemoteTransactions prepares all transactions on connections in
  * connectionList for commit if the 2PC commit protocol is enabled.
  * On failure, it reports an error and stops.
