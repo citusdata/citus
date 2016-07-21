@@ -203,8 +203,8 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 		 */
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		CreateShardPlacements(shardId, ddlCommandList, relationOwner, workerNodeList,
-							  roundRobinNodeIndex, replicationFactor);
+		CreateShardPlacements(distributedTableId, shardId, ddlCommandList, relationOwner,
+							  workerNodeList, roundRobinNodeIndex, replicationFactor);
 
 		InsertShardRow(distributedTableId, shardId, shardStorageType,
 					   minHashTokenText, maxHashTokenText);

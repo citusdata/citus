@@ -40,8 +40,8 @@
 
 
 /* Local functions forward declarations */
-static bool WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
-							  char *newShardOwner, List *ddlCommandList);
+static bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
+							  uint64 shardId, char *newShardOwner, List *ddlCommandList);
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
@@ -167,7 +167,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		candidateNodeIndex++;
 	}
 
-	CreateShardPlacements(shardId, ddlEventList, relationOwner,
+	CreateShardPlacements(relationId, shardId, ddlEventList, relationOwner,
 						  candidateNodeList, 0, ShardReplicationFactor);
 
 	InsertShardRow(relationId, shardId, storageType, nullMinValue, nullMaxValue);
@@ -377,8 +377,9 @@ CheckDistributedTable(Oid relationId)
  * nodes if some DDL commands had been successful).
  */
 void
-CreateShardPlacements(int64 shardId, List *ddlEventList, char *newPlacementOwner,
-					  List *workerNodeList, int workerStartIndex, int replicationFactor)
+CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
+					  char *newPlacementOwner, List *workerNodeList,
+					  int workerStartIndex, int replicationFactor)
 {
 	int attemptCount = replicationFactor;
 	int workerNodeCount = list_length(workerNodeList);
@@ -398,8 +399,8 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, char *newPlacementOwner
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		bool created = WorkerCreateShard(nodeName, nodePort, shardId, newPlacementOwner,
-										 ddlEventList);
+		bool created = WorkerCreateShard(relationId, nodeName, nodePort, shardId,
+										 newPlacementOwner, ddlEventList);
 		if (created)
 		{
 			const RelayFileState shardState = FILE_FINALIZED;
@@ -435,9 +436,12 @@ CreateShardPlacements(int64 shardId, List *ddlEventList, char *newPlacementOwner
  * each DDL command, and could leave the shard in an half-initialized state.
  */
 static bool
-WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
-				  char *newShardOwner, List *ddlCommandList)
+WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
+				  uint64 shardId, char *newShardOwner, List *ddlCommandList)
 {
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	bool shardCreated = true;
 	ListCell *ddlCommandCell = NULL;
 
@@ -446,10 +450,10 @@ WorkerCreateShard(char *nodeName, uint32 nodePort, uint64 shardId,
 		char *ddlCommand = (char *) lfirst(ddlCommandCell);
 		char *escapedDDLCommand = quote_literal_cstr(ddlCommand);
 		List *queryResultList = NIL;
-
 		StringInfo applyDDLCommand = makeStringInfo();
-		appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND,
-						 shardId, escapedDDLCommand);
+
+		appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
+						 escapedSchemaName, escapedDDLCommand);
 
 		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
 											 applyDDLCommand);

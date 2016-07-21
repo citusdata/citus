@@ -1387,15 +1387,23 @@ static bool
 ApplyShardDDLCommand(PGconn *workerNode, uint64 shardId, const char *ddlCommand)
 {
 	const char *remoteCommand = APPLY_SHARD_DDL_COMMAND;
-	const char *parameterValue[2];
-	const int parameterCount = 2;
+	const char *parameterValue[3];
+	const int parameterCount = 3;
 	PGresult *ddlResult = NULL;
 
 	char shardIdString[NAMEDATALEN];
 	snprintf(shardIdString, NAMEDATALEN, UINT64_FORMAT, shardId);
 
+	/*
+	 * We changed worker_apply_shard_ddl_command and now it requires schema name. Since
+	 * \STAGE will be deprecated anyway, we use public schema for everything to make it
+	 * work with worker_apply_shard_ddl_command. Please note that if user specifies
+	 * schema name, this will not override it, because we prioritize schema names given
+	 * in the query in worker_apply_shard_ddl_command.
+	 */
 	parameterValue[0] = shardIdString;
-	parameterValue[1] = ddlCommand;
+	parameterValue[1] = "public";
+	parameterValue[2] = ddlCommand;
 
 	ddlResult = ExecuteRemoteCommand(workerNode, remoteCommand,
 									 parameterValue, parameterCount);

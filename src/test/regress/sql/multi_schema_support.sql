@@ -19,7 +19,7 @@ CREATE TABLE public.nation_local(
 );
 
 \COPY public.nation_local FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -86,7 +86,7 @@ CREATE TABLE nation_append_search_path(
 SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
 
 \COPY nation_append_search_path FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -102,7 +102,7 @@ CREATE TABLE test_schema_support.nation_hash(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 1);
+SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
 
 
 -- test cursors
@@ -147,7 +147,7 @@ SELECT * FROM nation_hash WHERE n_nationkey = 7;
 SET search_path TO public;
 
 \COPY test_schema_support.nation_hash FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -335,10 +335,10 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 1);
+SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 2);
 
 \COPY test_schema_support.nation_hash_collation FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -358,10 +358,10 @@ CREATE TABLE nation_hash_collation_search_path(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('nation_hash_collation_search_path', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 1);
+SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 2);
 
 \COPY nation_hash_collation_search_path FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
@@ -393,11 +393,11 @@ CREATE TABLE test_schema_support.nation_hash_composite_types(
     test_col test_schema_support.new_composite_type
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash_composite_types', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, 1);
+SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, 2);
 
 -- insert some data to verify composite type queries
 \COPY test_schema_support.nation_hash_composite_types FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai|(a,a)
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai|(a,a)
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon|(a,b)
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special |(a,c)
 3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold|(a,d)
@@ -411,3 +411,108 @@ SELECT * FROM test_schema_support.nation_hash_composite_types WHERE test_col = '
 SET search_path TO test_schema_support;
 SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composite_type;
 
+
+-- test ALTER TABLE ADD/DROP queries with schemas
+SET search_path TO public;
+ALTER TABLE test_schema_support.nation_hash ADD COLUMN new_col INT;
+
+-- verify column is added
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS non_existent_column;
+ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
+
+-- verify column is dropped
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+--test with search_path is set
+SET search_path TO test_schema_support;
+ALTER TABLE nation_hash ADD COLUMN new_col INT;
+
+-- verify column is added
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+SET search_path TO test_schema_support;
+ALTER TABLE nation_hash DROP COLUMN IF EXISTS non_existent_column;
+ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
+
+-- verify column is dropped
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+
+-- test CREATE/DROP INDEX with schemas
+SET search_path TO public;
+
+-- CREATE index
+CREATE INDEX index1 ON test_schema_support.nation_hash(n_name);
+
+--verify INDEX is created
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+-- DROP index
+DROP INDEX test_schema_support.index1;
+
+--verify INDEX is dropped
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+--test with search_path is set
+SET search_path TO test_schema_support;
+
+-- CREATE index
+CREATE INDEX index1 ON nation_hash(n_name);
+
+--verify INDEX is created
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+-- DROP index
+SET search_path TO test_schema_support;
+DROP INDEX index1;
+
+--verify INDEX is dropped
+\d test_schema_support.nation_hash;
+\c - - - :worker_1_port
+\d test_schema_support.nation_hash_1190003;
+\c - - - :master_port
+
+
+-- test master_copy_shard_placement with schemas
+SET search_path TO public;
+
+-- mark shard as inactive
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
+SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
+-- verify shardstate
+SELECT * FROM pg_dist_shard_placement WHERE shardid = 1190000;
+
+
+--test with search_path is set
+SET search_path TO test_schema_support;
+
+-- mark shard as inactive
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and nodeport = :worker_1_port;
+SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
+-- verify shardstate
+SELECT * FROM pg_dist_shard_placement WHERE shardid = 1190000;
