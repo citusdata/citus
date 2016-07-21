@@ -516,3 +516,34 @@ SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localh
 
 -- verify shardstate
 SELECT * FROM pg_dist_shard_placement WHERE shardid = 1190000;
+
+
+-- test master_apply_delete_command with schemas
+SET search_path TO public;
+SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
+
+-- verify shard is dropped
+\c - - - :worker_1_port
+\d test_schema_support.nation_append_119*
+
+\c - - - :master_port
+
+-- test with search_path is set
+SET search_path TO test_schema_support;
+
+\COPY nation_append FROM STDIN with delimiter '|';
+0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
+
+SELECT master_apply_delete_command('DELETE FROM nation_append') ;
+
+-- verify shard is dropped
+\c - - - :worker_1_port
+\d test_schema_support.nation_append_119*
+
+\c - - - :master_port
