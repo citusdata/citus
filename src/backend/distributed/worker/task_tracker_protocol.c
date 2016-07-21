@@ -313,13 +313,13 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 	/* enter the worker task into shared hash and initialize the task */
 	workerTask = WorkerTasksHashEnter(jobId, taskId);
 	workerTask->assignedAt = assignmentTime;
-	strncpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+	strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
 
 	workerTask->taskStatus = TASK_ASSIGNED;
 	workerTask->connectionId = INVALID_CONNECTION_ID;
 	workerTask->failureCount = 0;
-	strncpy(workerTask->databaseName, databaseName, NAMEDATALEN);
-	strncpy(workerTask->userName, userName, NAMEDATALEN);
+	strlcpy(workerTask->databaseName, databaseName, NAMEDATALEN);
+	strlcpy(workerTask->userName, userName, NAMEDATALEN);
 }
 
 
@@ -350,13 +350,13 @@ UpdateTask(WorkerTask *workerTask, char *taskCallString)
 	}
 	else if (taskStatus == TASK_PERMANENTLY_FAILED)
 	{
-		strncpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+		strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
 		workerTask->failureCount = 0;
 		workerTask->taskStatus = TASK_ASSIGNED;
 	}
 	else
 	{
-		strncpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+		strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
 		workerTask->failureCount = 0;
 	}
 }

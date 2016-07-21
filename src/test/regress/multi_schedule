@@ -129,6 +129,7 @@ test: multi_utilities
 test: multi_create_insert_proxy
 test: multi_data_types
 test: multi_repartitioned_subquery_udf
+test: multi_modifying_xacts
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY

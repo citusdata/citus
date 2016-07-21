@@ -399,8 +399,8 @@ TrackerCleanupJobSchemas(void)
 		cleanupTask->assignedAt = HIGH_PRIORITY_TASK_TIME;
 		cleanupTask->taskStatus = TASK_ASSIGNED;
 
-		strncpy(cleanupTask->taskCallString, JOB_SCHEMA_CLEANUP, TASK_CALL_STRING_SIZE);
-		strncpy(cleanupTask->databaseName, databaseName, NAMEDATALEN);
+		strlcpy(cleanupTask->taskCallString, JOB_SCHEMA_CLEANUP, TASK_CALL_STRING_SIZE);
+		strlcpy(cleanupTask->databaseName, databaseName, NAMEDATALEN);
 
 		/* zero out all other fields */
 		cleanupTask->connectionId = INVALID_CONNECTION_ID;
