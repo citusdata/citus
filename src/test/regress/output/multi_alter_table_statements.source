@@ -639,6 +639,16 @@ SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alte
 (0 rows)
 
 \c - - - :master_port
+-- test ALTER TABLE ALL IN TABLESPACE
+-- we expect that it will warn out
+CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';
+ALTER TABLE ALL IN TABLESPACE pg_default SET TABLESPACE super_fast_ssd;
+WARNING:  not propagating ALTER TABLE ALL IN TABLESPACE commands to worker nodes
+HINT:  Connect to worker nodes directly to manually move all tables.
+ALTER TABLE ALL IN TABLESPACE super_fast_ssd SET TABLESPACE pg_default;
+WARNING:  not propagating ALTER TABLE ALL IN TABLESPACE commands to worker nodes
+HINT:  Connect to worker nodes directly to manually move all tables.
+DROP TABLESPACE super_fast_ssd;
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
