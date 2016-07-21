@@ -32,6 +32,9 @@
 #include "utils/palloc.h"
 
 
+/* state needed to prevent new connections during modifying transactions */
+bool IsModifyingTransaction = false;
+
 /*
  * NodeConnectionHash is the connection hash itself. It begins uninitialized.
  * The first call to GetOrEstablishConnection triggers hash creation.
@@ -81,9 +84,9 @@ GetOrEstablishConnection(char *nodeName, int32 nodePort)
 	}
 
 	memset(&nodeConnectionKey, 0, sizeof(nodeConnectionKey));
-	strncpy(nodeConnectionKey.nodeName, nodeName, MAX_NODE_LENGTH);
+	strlcpy(nodeConnectionKey.nodeName, nodeName, MAX_NODE_LENGTH + 1);
 	nodeConnectionKey.nodePort = nodePort;
-	strncpy(nodeConnectionKey.nodeUser, userName, NAMEDATALEN);
+	strlcpy(nodeConnectionKey.nodeUser, userName, NAMEDATALEN);
 
 	nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
 									  HASH_FIND, &entryFound);
@@ -124,11 +127,10 @@ void
 PurgeConnection(PGconn *connection)
 {
 	NodeConnectionKey nodeConnectionKey;
-	NodeConnectionEntry *nodeConnectionEntry = NULL;
-	bool entryFound = false;
 	char *nodeNameString = NULL;
 	char *nodePortString = NULL;
 	char *nodeUserString = NULL;
+	PGconn *purgedConnection = NULL;
 
 	nodeNameString = ConnectionGetOptionValue(connection, "host");
 	if (nodeNameString == NULL)
@@ -152,42 +154,54 @@ PurgeConnection(PGconn *connection)
 	}
 
 	memset(&nodeConnectionKey, 0, sizeof(nodeConnectionKey));
-	strncpy(nodeConnectionKey.nodeName, nodeNameString, MAX_NODE_LENGTH);
+	strlcpy(nodeConnectionKey.nodeName, nodeNameString, MAX_NODE_LENGTH + 1);
 	nodeConnectionKey.nodePort = pg_atoi(nodePortString, sizeof(int32), 0);
-	strncpy(nodeConnectionKey.nodeUser, nodeUserString, NAMEDATALEN);
+	strlcpy(nodeConnectionKey.nodeUser, nodeUserString, NAMEDATALEN);
 
 	pfree(nodeNameString);
 	pfree(nodePortString);
 	pfree(nodeUserString);
 
-	nodeConnectionEntry = hash_search(NodeConnectionHash, &nodeConnectionKey,
-									  HASH_REMOVE, &entryFound);
+	purgedConnection = PurgeConnectionByKey(&nodeConnectionKey);
+
+	/*
+	 * It's possible the provided connection matches the host and port for
+	 * an entry in the hash without being precisely the same connection. In
+	 * that case, we will want to close the provided connection in addition
+	 * to the one from the hash (which was closed by PurgeConnectionByKey).
+	 */
+	if (purgedConnection != connection)
+	{
+		ereport(WARNING, (errmsg("hash entry for \"%s:%d\" contained different "
+								 "connection than that provided by caller",
+								 nodeConnectionKey.nodeName,
+								 nodeConnectionKey.nodePort)));
+		PQfinish(connection);
+	}
+}
+
+
+PGconn *
+PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey)
+{
+	bool entryFound = false;
+	NodeConnectionEntry *nodeConnectionEntry = NULL;
+
+	nodeConnectionEntry = hash_search(NodeConnectionHash, nodeConnectionKey, HASH_REMOVE,
+									  &entryFound);
 	if (entryFound)
 	{
-		/*
-		 * It's possible the provided connection matches the host and port for
-		 * an entry in the hash without being precisely the same connection. In
-		 * that case, we will want to close the hash's connection (because the
-		 * entry has already been removed) in addition to the provided one.
-		 */
-		if (nodeConnectionEntry->connection != connection)
-		{
-			ereport(WARNING, (errmsg("hash entry for \"%s:%d\" contained different "
-									 "connection than that provided by caller",
-									 nodeConnectionKey.nodeName,
-									 nodeConnectionKey.nodePort)));
-			PQfinish(nodeConnectionEntry->connection);
-		}
+		PQfinish(nodeConnectionEntry->connection);
 	}
 	else
 	{
 		ereport(WARNING, (errcode(ERRCODE_NO_DATA),
 						  errmsg("could not find hash entry for connection to \"%s:%d\"",
-								 nodeConnectionKey.nodeName,
-								 nodeConnectionKey.nodePort)));
+								 nodeConnectionKey->nodeName,
+								 nodeConnectionKey->nodePort)));
 	}
 
-	PQfinish(connection);
+	return nodeConnectionEntry->connection;
 }
 
 
@@ -369,6 +383,13 @@ ConnectToNode(char *nodeName, int32 nodePort, char *nodeUser)
 	};
 
 	sprintf(nodePortString, "%d", nodePort);
+
+	if (IsModifyingTransaction)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
+	}
 
 	Assert(sizeof(keywordArray) == sizeof(valueArray));
 

@@ -53,9 +53,14 @@ typedef struct NodeConnectionEntry
 } NodeConnectionEntry;
 
 
+/* state needed to prevent new connections during modifying transactions */
+extern bool IsModifyingTransaction;
+
+
 /* function declarations for obtaining and using a connection */
 extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
 extern void PurgeConnection(PGconn *connection);
+extern PGconn * PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 extern void WarnRemoteError(PGconn *connection, PGresult *result);
 extern void ReraiseRemoteError(PGconn *connection, PGresult *result);
