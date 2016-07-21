@@ -1041,7 +1041,6 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 -- parametric prepare queries can be router plannable
--- it will be fixed with another pr
 PREPARE author_articles(int) as
 	SELECT *
 	FROM articles_hash
@@ -1050,9 +1049,15 @@ EXECUTE author_articles(1);
 DEBUG:  Creating router plan
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  Plan is router executable
-WARNING:  there is no parameter $1
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
 -- queries inside plpgsql functions could be router plannable
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
