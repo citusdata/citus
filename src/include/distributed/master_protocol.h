@@ -50,7 +50,7 @@
 
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \
-	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
+	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s, %s)"
 #define WORKER_APPEND_TABLE_TO_SHARD \
 	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
 #define SHARD_MIN_VALUE_QUERY "SELECT min(%s) FROM %s"
@@ -88,10 +88,9 @@ extern bool CStoreTable(Oid relationId);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
-extern void CreateShardPlacements(int64 shardId, List *ddlEventList,
-								  char *newPlacementOwner,
-								  List *workerNodeList, int workerStartIndex,
-								  int replicationFactor);
+extern void CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
+								  char *newPlacementOwner, List *workerNodeList,
+								  int workerStartIndex, int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
 
 /* Function declarations for generating metadata for shard creation */
