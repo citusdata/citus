@@ -53,7 +53,6 @@
 #include "utils/typcache.h"
 #include "utils/xml.h"
 
-static Oid get_extension_schema(Oid ext_oid);
 static void AppendOptionListToString(StringInfo stringData, List *options);
 static const char * convert_aclright_to_string(int aclright);
 
@@ -101,7 +100,7 @@ pg_get_extensiondef_string(Oid tableRelationId)
  *
  * Returns InvalidOid if no such extension.
  */
-static Oid
+Oid
 get_extension_schema(Oid ext_oid)
 {
 	/* *INDENT-OFF* */

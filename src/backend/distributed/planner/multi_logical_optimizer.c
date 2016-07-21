@@ -26,6 +26,7 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
@@ -125,6 +126,7 @@ static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
 static AggregateType GetAggregateType(Oid aggFunctionId);
 static Oid AggregateArgumentType(Aggref *aggregate);
 static Oid AggregateFunctionOid(const char *functionName, Oid inputType);
+static Oid TypeOid(Oid schemaId, const char *typeName);
 
 /* Local functions forward declarations for count(distinct) approximations */
 static char * CountDistinctHashFunctionName(Oid argumentType);
@@ -1419,11 +1421,18 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		Aggref *unionAggregate = NULL;
 		FuncExpr *cardinalityExpression = NULL;
 
-		Oid unionFunctionId = FunctionOid(HLL_UNION_AGGREGATE_NAME, argCount);
-		Oid cardinalityFunctionId = FunctionOid(HLL_CARDINALITY_FUNC_NAME, argCount);
+		/* extract schema name of hll */
+		Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
+		Oid hllSchemaOid = get_extension_schema(hllId);
+		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
+
+		Oid unionFunctionId = FunctionOid(hllSchemaName, HLL_UNION_AGGREGATE_NAME,
+										  argCount);
+		Oid cardinalityFunctionId = FunctionOid(hllSchemaName, HLL_CARDINALITY_FUNC_NAME,
+												argCount);
 		Oid cardinalityReturnType = get_func_rettype(cardinalityFunctionId);
 
-		Oid hllType = TypenameGetTypid(HLL_TYPE_NAME);
+		Oid hllType = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
 		Oid hllTypeCollationId = get_typcollation(hllType);
 		Var *hllColumn = makeVar(masterTableId, walkerContext->columnId, hllType,
 								 defaultTypeMod,
@@ -1911,13 +1920,20 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		TargetEntry *argument = (TargetEntry *) linitial(originalAggregate->args);
 		Expr *argumentExpression = copyObject(argument->expr);
 
+		/* extract schema name of hll */
+		Oid hllId = get_extension_oid(HLL_EXTENSION_NAME, false);
+		Oid hllSchemaOid = get_extension_schema(hllId);
+		const char *hllSchemaName = get_namespace_name(hllSchemaOid);
+
 		char *hashFunctionName = CountDistinctHashFunctionName(argumentType);
-		Oid hashFunctionId = FunctionOid(hashFunctionName, hashArgumentCount);
+		Oid hashFunctionId = FunctionOid(hllSchemaName, hashFunctionName,
+										 hashArgumentCount);
 		Oid hashFunctionReturnType = get_func_rettype(hashFunctionId);
 
 		/* init hll_add_agg() related variables */
-		Oid addFunctionId = FunctionOid(HLL_ADD_AGGREGATE_NAME, addArgumentCount);
-		Oid hllType = TypenameGetTypid(HLL_TYPE_NAME);
+		Oid addFunctionId = FunctionOid(hllSchemaName, HLL_ADD_AGGREGATE_NAME,
+										addArgumentCount);
+		Oid hllType = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
 		int logOfStorageSize = CountDistinctStorageSize(CountDistinctErrorRate);
 		Const *logOfStorageSizeConst = MakeIntegerConst(logOfStorageSize);
 
@@ -2103,18 +2119,19 @@ AggregateFunctionOid(const char *functionName, Oid inputType)
  * of arguments, and returns the corresponding function's oid.
  */
 Oid
-FunctionOid(const char *functionName, int argumentCount)
+FunctionOid(const char *schemaName, const char *functionName, int argumentCount)
 {
 	FuncCandidateList functionList = NULL;
 	Oid functionOid = InvalidOid;
 
-	List *qualifiedFunctionName = stringToQualifiedNameList(functionName);
+	char *qualifiedFunctionName = quote_qualified_identifier(schemaName, functionName);
+	List *qualifiedFunctionNameList = stringToQualifiedNameList(qualifiedFunctionName);
 	List *argumentList = NIL;
 	const bool findVariadics = false;
 	const bool findDefaults = false;
 	const bool missingOK = true;
 
-	functionList = FuncnameGetCandidates(qualifiedFunctionName, argumentCount,
+	functionList = FuncnameGetCandidates(qualifiedFunctionNameList, argumentCount,
 										 argumentList, findVariadics,
 										 findDefaults, missingOK);
 
@@ -2132,6 +2149,22 @@ FunctionOid(const char *functionName, int argumentCount)
 	/* get function oid from function list's head */
 	functionOid = functionList->oid;
 	return functionOid;
+}
+
+
+/*
+ * TypeOid looks for a type that has the given name and schema, and returns the
+ * corresponding type's oid.
+ */
+static Oid
+TypeOid(Oid schemaId, const char *typeName)
+{
+	Oid typeOid;
+
+	typeOid = GetSysCacheOid2(TYPENAMENSP, PointerGetDatum(typeName),
+							  ObjectIdGetDatum(schemaId));
+
+	return typeOid;
 }
 
 
@@ -4393,9 +4426,21 @@ static bool
 HasOrderByHllType(List *sortClauseList, List *targetList)
 {
 	bool hasOrderByHllType = false;
-	Oid hllTypeId = TypenameGetTypid(HLL_TYPE_NAME);
-
+	Oid hllId = InvalidOid;
+	Oid hllSchemaOid = InvalidOid;
+	Oid hllTypeId = InvalidOid;
 	ListCell *sortClauseCell = NULL;
+
+	/* check whether HLL is loaded */
+	hllId = get_extension_oid(HLL_EXTENSION_NAME, true);
+	if (!OidIsValid(hllId))
+	{
+		return hasOrderByHllType;
+	}
+
+	hllSchemaOid = get_extension_schema(hllId);
+	hllTypeId = TypeOid(hllSchemaOid, HLL_TYPE_NAME);
+
 	foreach(sortClauseCell, sortClauseList)
 	{
 		SortGroupClause *sortClause = (SortGroupClause *) lfirst(sortClauseCell);

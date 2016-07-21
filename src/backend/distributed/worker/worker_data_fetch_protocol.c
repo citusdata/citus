@@ -23,6 +23,8 @@
 #include "catalog/namespace.h"
 #include "commands/copy.h"
 #include "commands/dbcommands.h"
+#include "commands/extension.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -592,8 +594,15 @@ LocalTableSize(Oid relationId)
 		bool cstoreTable = CStoreTable(relationId);
 		if (cstoreTable)
 		{
+			/* extract schema name of cstore */
+			Oid cstoreId = get_extension_oid(CSTORE_FDW_NAME, false);
+			Oid cstoreSchemaOid = get_extension_schema(cstoreId);
+			const char *cstoreSchemaName = get_namespace_name(cstoreSchemaOid);
+
 			const int tableSizeArgumentCount = 1;
-			Oid tableSizeFunctionOid = FunctionOid(CSTORE_TABLE_SIZE_FUNCTION_NAME,
+
+			Oid tableSizeFunctionOid = FunctionOid(cstoreSchemaName,
+												   CSTORE_TABLE_SIZE_FUNCTION_NAME,
 												   tableSizeArgumentCount);
 			Datum tableSizeDatum = OidFunctionCall1(tableSizeFunctionOid,
 													relationIdDatum);
