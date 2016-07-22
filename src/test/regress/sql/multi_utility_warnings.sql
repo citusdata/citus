@@ -12,8 +12,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1010000;
 
 CREATE DATABASE new_database;
 
-CREATE SCHEMA new_schema;
-
 CREATE ROLE new_role;
 
 CREATE USER new_user;

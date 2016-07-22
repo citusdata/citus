@@ -469,8 +469,6 @@ SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM customer_wo
 
 -- Test schema support on append partitioned tables
 CREATE SCHEMA append;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 CREATE TABLE append.customer_copy (
         c_custkey integer ,
         c_name varchar(25) not null,

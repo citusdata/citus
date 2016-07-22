@@ -105,8 +105,6 @@ SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM linei
 -- Check that approximate count(distinct) works at a table in a schema other than public
 -- create necessary objects
 CREATE SCHEMA test_count_distinct_schema;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 CREATE TABLE test_count_distinct_schema.nation_hash(
     n_nationkey integer not null,
     n_name char(25) not null,

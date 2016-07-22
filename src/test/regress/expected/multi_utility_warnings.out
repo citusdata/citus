@@ -9,9 +9,6 @@ CREATE DATABASE new_database;
 NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
 DETAIL:  Citus does not propagate CREATE DATABASE command to workers
 HINT:  You can manually create a database and its extensions on workers.
-CREATE SCHEMA new_schema;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 CREATE ROLE new_role;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
