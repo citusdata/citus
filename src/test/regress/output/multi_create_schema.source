@@ -6,8 +6,6 @@ CREATE TABLE nation (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
  master_create_distributed_table 
 ---------------------------------
@@ -15,10 +13,6 @@ SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
 (1 row)
 
 \STAGE tpch.nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 SELECT count(*) from tpch.nation;
  count 
 -------
