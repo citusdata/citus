@@ -728,3 +728,9 @@ WHERE
 
 -- set task_executor back to real-time
 SET citus.task_executor_type TO "real-time";
+
+
+-- test ALTER TABLE SET SCHEMA
+-- we expect that it will warn out
+SET search_path TO public;
+ALTER TABLE test_schema_support.nation_hash SET SCHEMA public;
