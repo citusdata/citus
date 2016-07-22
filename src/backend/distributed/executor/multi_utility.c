@@ -243,13 +243,6 @@ multi_ProcessUtility(Node *parsetree,
 						 errhint("You can manually create a database and its "
 								 "extensions on workers.")));
 	}
-	else if (IsA(parsetree, CreateSchemaStmt) && CitusHasBeenLoaded())
-	{
-		ereport(NOTICE, (errmsg("Citus partially supports CREATE SCHEMA "
-								"for distributed databases"),
-						 errdetail("schema usage in joins and in some UDFs "
-								   "provided by Citus are not supported yet")));
-	}
 	else if (IsA(parsetree, CreateRoleStmt) && CitusHasBeenLoaded())
 	{
 		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"

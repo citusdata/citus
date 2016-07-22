@@ -5,8 +5,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1190000;
 -- create schema to test schema support
 CREATE SCHEMA test_schema_support;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 -- test master_append_table_to_shard with schema
 -- create local table to append
 CREATE TABLE public.nation_local(
@@ -831,11 +829,7 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 -- so that we guarantee to have repartitions when necessary
 -- create necessary objects and load data to them
 CREATE SCHEMA test_schema_support_join_1;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 CREATE SCHEMA test_schema_support_join_2;
-NOTICE:  Citus partially supports CREATE SCHEMA for distributed databases
-DETAIL:  schema usage in joins and in some UDFs provided by Citus are not supported yet
 CREATE TABLE test_schema_support_join_1.nation_hash (
     n_nationkey integer not null,
     n_name char(25) not null,
