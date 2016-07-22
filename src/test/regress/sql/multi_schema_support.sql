@@ -547,3 +547,184 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 \d test_schema_support.nation_append_119*
 
 \c - - - :master_port
+
+
+-- check joins of tables which are in schemas other than public
+-- we create new tables with replication factor of 1
+-- so that we guarantee to have repartitions when necessary
+
+-- create necessary objects and load data to them
+CREATE SCHEMA test_schema_support_join_1;
+CREATE SCHEMA test_schema_support_join_2;
+
+CREATE TABLE test_schema_support_join_1.nation_hash (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+
+CREATE TABLE test_schema_support_join_1.nation_hash_2 (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+
+CREATE TABLE test_schema_support_join_2.nation_hash (
+    n_nationkey integer not null,
+    n_name char(25) not null,
+    n_regionkey integer not null,
+    n_comment varchar(152));
+
+SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey', 'hash');
+SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 1);
+
+\COPY test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
+
+SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey', 'hash');
+SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4, 1);
+
+\COPY test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
+
+SELECT master_create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey', 'hash');
+SELECT master_create_worker_shards('test_schema_support_join_2.nation_hash', 4, 1);
+
+\COPY test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
+
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+
+-- check when search_path is public,
+-- join of two tables which are in same schemas,
+-- join on partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_1.nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_nationkey;
+
+-- single repartition joins
+SET citus.task_executor_type TO "task-tracker";
+
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on partition column and non-partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on partition column and non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on partition column and non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_nationkey = n2.n_regionkey;
+
+-- hash repartition joins 
+
+-- check when search_path is public,
+-- join of two tables which are in different schemas,
+-- join on non-partition column
+SET search_path TO public;
+SELECT 
+    count (*)
+FROM
+    test_schema_support_join_1.nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in different schemas,
+-- join on non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, test_schema_support_join_2.nation_hash n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+
+-- check when search_path is different than public,
+-- join of two tables which are in same schemas,
+-- join on non-partition column
+SET search_path TO test_schema_support_join_1;
+SELECT 
+    count (*)
+FROM
+    nation_hash n1, nation_hash_2 n2 
+WHERE
+    n1.n_regionkey = n2.n_regionkey;
+
+-- set task_executor back to real-time
+SET citus.task_executor_type TO "real-time";
