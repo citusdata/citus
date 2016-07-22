@@ -73,6 +73,9 @@ static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
 								   const char *dropIndexCommand, bool isTopLevel);
 static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 									const char *alterTableCommand, bool isTopLevel);
+static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
+										   const char *alterObjectSchemaCommand,
+										   bool isTopLevel);
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -197,6 +200,30 @@ multi_ProcessUtility(Node *parsetree,
 			{
 				ErrorIfDistributedRenameStmt(renameStmt);
 			}
+		}
+
+		/*
+		 * ALTER ... SET SCHEMA statements have their node type as AlterObjectSchemaStmt.
+		 * So, we intercept AlterObjectSchemaStmt to tackle these commands.
+		 */
+		if (IsA(parsetree, AlterObjectSchemaStmt))
+		{
+			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
+			parsetree = ProcessAlterObjectSchemaStmt(setSchemaStmt, queryString,
+													 isTopLevel);
+		}
+
+		/*
+		 * ALTER TABLE ALL IN TABLESPACE statements have their node type as
+		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
+		 * the distributed environment. We warn out here.
+		 */
+		if (IsA(parsetree, AlterTableMoveAllStmt) && CitusHasBeenLoaded())
+		{
+			ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
+									 "commands to worker nodes"),
+							  errhint("Connect to worker nodes directly to manually "
+									  "move all tables.")));
 		}
 	}
 
@@ -643,6 +670,46 @@ ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTabl
 	}
 
 	return (Node *) alterTableStatement;
+}
+
+
+/*
+ * ProcessAlterObjectSchemaStmt processes ALTER ... SET SCHEMA statements for distributed
+ * objects. The function first checks if the statement belongs to a distributed objects
+ * or not. If it does, then it checks whether given object is a table. If it is, we warn
+ * out, since we do not support ALTER ... SET SCHEMA
+ */
+static Node *
+ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
+							 const char *alterObjectSchemaCommand, bool isTopLevel)
+{
+
+	Oid relationId = InvalidOid;
+	bool noWait = false;
+
+	if (alterObjectSchemaStmt->relation == NULL)
+	{
+		return (Node *) alterObjectSchemaStmt;
+	}
+
+	relationId = RangeVarGetRelidExtended(alterObjectSchemaStmt->relation,
+										  AccessExclusiveLock,
+										  alterObjectSchemaStmt->missing_ok,
+										  noWait, NULL, NULL);
+
+	/* first check whether a distributed relation is affected */
+	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	{
+		return (Node *) alterObjectSchemaStmt;
+	}
+
+	/* warn out if a distributed relation is affected */
+	ereport(WARNING, (errmsg("not propagating ALTER ... SET SCHEMA commands to "
+							 "worker nodes"),
+					  errhint("Connect to worker nodes directly to manually "
+							  "change schemas of affected objects.")));
+
+	return (Node *) alterObjectSchemaStmt;
 }
 
 
