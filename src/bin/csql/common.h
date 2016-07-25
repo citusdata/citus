@@ -19,14 +19,7 @@
 extern bool openQueryOutputFile(const char *fname, FILE **fout, bool *is_pipe);
 extern bool setQFout(const char *fname);
 
-#if (PG_VERSION_NUM >= 90500)
 extern void psql_error(const char *fmt,...) pg_attribute_printf(1, 2);
-#else
-extern void
-psql_error(const char *fmt,...)
-/* This lets gcc check the format string for consistency. */
-__attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
-#endif
 
 extern void NoticeProcessor(void *arg, const char *message);
 

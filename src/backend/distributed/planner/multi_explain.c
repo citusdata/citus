@@ -43,12 +43,6 @@
 #include "utils/snapmgr.h"
 
 
-#if (PG_VERSION_NUM >= 90400 && PG_VERSION_NUM < 90500)
-
-/* Crude hack to avoid changing sizeof(ExplainState) in released branches (explain.c) */
-#define grouping_stack extra->groupingstack
-#endif
-
 /* OR-able flags for ExplainXMLTag() (explain.c) */
 #define X_OPENING 0
 #define X_CLOSING 1

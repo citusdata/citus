@@ -16,11 +16,7 @@
 
 #include <string.h>
 
-#if (PG_VERSION_NUM >= 90500 && PG_VERSION_NUM < 90600)
 #include "access/stratnum.h"
-#else
-#include "access/skey.h"
-#endif
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/master_metadata_utility.h"

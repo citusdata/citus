@@ -675,11 +675,7 @@ TableOwner(Oid relationId)
 
 	ReleaseSysCache(tuple);
 
-#if (PG_VERSION_NUM < 90500)
-	return GetUserNameFromId(userId);
-#else
 	return GetUserNameFromId(userId, false);
-#endif
 }
 
 

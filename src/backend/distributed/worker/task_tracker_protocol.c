@@ -265,11 +265,7 @@ CreateJobSchema(StringInfo schemaName)
 	/* build a CREATE SCHEMA statement */
 	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
 	createSchemaStmt->schemaname = schemaName->data;
-#if (PG_VERSION_NUM >= 90500)
 	createSchemaStmt->authrole = NULL;
-#else
-	createSchemaStmt->authid = NULL;
-#endif
 	createSchemaStmt->schemaElts = NIL;
 
 	/* allow schema names that start with pg_ */

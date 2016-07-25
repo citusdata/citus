@@ -40,9 +40,7 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
-#if (PG_VERSION_NUM >= 90500)
 #include "utils/ruleutils.h"
-#endif
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 
@@ -646,11 +644,7 @@ GetTableDDLEvents(Oid relationId)
 			Oid constraintId = get_index_constraint(indexId);
 			Assert(constraintId != InvalidOid);
 
-#if (PG_VERSION_NUM >= 90500)
 			statementDef = pg_get_constraintdef_command(constraintId);
-#else
-			statementDef = pg_get_constraintdef_string(constraintId);
-#endif
 		}
 		else
 		{

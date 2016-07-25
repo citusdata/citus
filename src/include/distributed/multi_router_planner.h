@@ -24,11 +24,9 @@
 #define INVALID_JOB_ID 0
 #define INVALID_TASK_ID 0
 
-#if (PG_VERSION_NUM >= 90500)
-
 /* reserved alias name for UPSERTs */
 #define UPSERT_ALIAS "citus_table_alias"
-#endif
+
 
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType);
