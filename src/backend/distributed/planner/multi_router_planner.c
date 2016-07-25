@@ -15,11 +15,7 @@
 
 #include <stddef.h>
 
-#if (PG_VERSION_NUM >= 90500 && PG_VERSION_NUM < 90600)
 #include "access/stratnum.h"
-#else
-#include "access/skey.h"
-#endif
 #include "access/xact.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_nodes.h"
@@ -37,9 +33,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "executor/execdesc.h"
 #include "lib/stringinfo.h"
-#if (PG_VERSION_NUM >= 90500)
 #include "nodes/makefuncs.h"
-#endif
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
@@ -154,12 +148,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	bool hasValuesScan = false;
 	uint32 queryTableCount = 0;
 	bool specifiesPartitionValue = false;
-#if (PG_VERSION_NUM >= 90500)
 	ListCell *setTargetCell = NULL;
 	List *onConflictSet = NIL;
 	Node *arbiterWhere = NULL;
 	Node *onConflictWhere = NULL;
-#endif
 
 	CmdType commandType = queryTree->commandType;
 	Assert(commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -357,7 +349,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		}
 	}
 
-#if (PG_VERSION_NUM >= 90500)
 	if (commandType == CMD_INSERT && queryTree->onConflict != NULL)
 	{
 		onConflictSet = queryTree->onConflict->onConflictSet;
@@ -421,7 +412,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 							   "clause of INSERTs on distributed tables must be marked "
 							   "IMMUTABLE")));
 	}
-#endif
 
 	if (specifiesPartitionValue)
 	{
@@ -689,7 +679,6 @@ RouterModifyTask(Query *originalQuery, Query *query)
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
 
-#if (PG_VERSION_NUM >= 90500)
 	if (originalQuery->onConflict != NULL)
 	{
 		RangeTblEntry *rangeTableEntry = NULL;
@@ -705,11 +694,6 @@ RouterModifyTask(Query *originalQuery, Query *query)
 			rangeTableEntry->alias = alias;
 		}
 	}
-#else
-
-	/* always set to false for PG_VERSION_NUM < 90500 */
-	upsertQuery = false;
-#endif
 
 	deparse_shard_query(originalQuery, shardInterval->relationId, shardId, queryString);
 	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
@@ -1095,12 +1079,10 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType)
 		return false;
 	}
 
-#if (PG_VERSION_NUM >= 90500)
 	if (query->groupingSets)
 	{
 		return false;
 	}
-#endif
 
 	/* only hash partitioned tables are supported */
 	distributedTableId = ExtractFirstDistributedTableId(query);
@@ -1127,12 +1109,10 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType)
 		return false;
 	}
 
-#if (PG_VERSION_NUM >= 90500)
 	if (rangeTableEntry->tablesample)
 	{
 		return false;
 	}
-#endif
 
 	if (joinTree == NULL)
 	{

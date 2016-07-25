@@ -369,9 +369,7 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 	RangeVar *relation = NULL;
 	List *columnDefinitionList = NIL;
 	Oid relationId PG_USED_FOR_ASSERTS_ONLY = InvalidOid;
-#if (PG_VERSION_NUM >= 90500)
 	ObjectAddress relationObject;
-#endif
 
 	Assert(schemaName != NULL);
 	Assert(relationName != NULL);
@@ -386,12 +384,8 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 
 	createStatement = CreateStatement(relation, columnDefinitionList);
 
-#if (PG_VERSION_NUM >= 90500)
 	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL);
 	relationId = relationObject.objectId;
-#else
-	relationId = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid);
-#endif
 
 	Assert(relationId != InvalidOid);
 	CommandCounterIncrement();

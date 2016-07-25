@@ -50,9 +50,7 @@ static MultiNode * MultiPlanTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static void ErrorIfSubqueryNotSupported(Query *subqueryTree);
-#if (PG_VERSION_NUM >= 90500)
 static bool HasTablesample(Query *queryTree);
-#endif
 static bool HasOuterJoin(Query *queryTree);
 static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
 static bool HasComplexJoinOrder(Query *queryTree);
@@ -356,9 +354,7 @@ static void
 ErrorIfQueryNotSupported(Query *queryTree)
 {
 	char *errorDetail = NULL;
-#if (PG_VERSION_NUM >= 90500)
 	bool hasTablesample = false;
-#endif
 	bool hasUnsupportedJoin = false;
 	bool hasComplexJoinOrder = false;
 	bool hasComplexRangeTableType = false;
@@ -412,7 +408,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		errorDetail = "Distinct clause is currently unsupported";
 	}
 
-#if (PG_VERSION_NUM >= 90500)
 	if (queryTree->groupingSets)
 	{
 		preconditionsSatisfied = false;
@@ -425,7 +420,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		preconditionsSatisfied = false;
 		errorDetail = "Tablesample is currently unsupported";
 	}
-#endif
 
 	hasUnsupportedJoin = HasUnsupportedJoinWalker((Node *) queryTree->jointree, NULL);
 	if (hasUnsupportedJoin)
@@ -458,8 +452,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 }
 
 
-#if (PG_VERSION_NUM >= 90500)
-
 /* HasTablesample returns tree if the query contains tablesample */
 static bool
 HasTablesample(Query *queryTree)
@@ -480,9 +472,6 @@ HasTablesample(Query *queryTree)
 
 	return hasTablesample;
 }
-
-
-#endif
 
 
 /*
