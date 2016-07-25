@@ -315,6 +315,53 @@ MultiClientConnectionUp(int32 connectionId)
 }
 
 
+/* MultiClientExecute synchronously executes a query over the given connection. */
+bool
+MultiClientExecute(int32 connectionId, const char *query, void **queryResult,
+				   int *rowCount, int *columnCount)
+{
+	bool querySent = false;
+	bool queryReady = false;
+	bool queryOK = false;
+	WaitInfo *waitInfo = NULL;
+
+	querySent = MultiClientSendQuery(connectionId, query);
+	if (!querySent)
+	{
+		return false;
+	}
+
+	waitInfo = MultiClientCreateWaitInfo(1);
+
+	while (!queryReady)
+	{
+		ResultStatus resultStatus = MultiClientResultStatus(connectionId);
+		if (resultStatus == CLIENT_RESULT_READY)
+		{
+			queryReady = true;
+		}
+		else if (resultStatus == CLIENT_RESULT_BUSY)
+		{
+			/* wait for results, errors, or interrupts */
+			MultiClientResetWaitInfo(waitInfo);
+			MultiClientRegisterWait(waitInfo, TASK_STATUS_SOCKET_READ, connectionId);
+			MultiClientWait(waitInfo);
+		}
+		else
+		{
+			MultiClientFreeWaitInfo(waitInfo);
+			return false;
+		}
+	}
+
+	queryOK = MultiClientQueryResult(connectionId, queryResult, rowCount, columnCount);
+
+	MultiClientFreeWaitInfo(waitInfo);
+
+	return queryOK;
+}
+
+
 /* MultiClientSendQuery sends the given query over the given connection. */
 bool
 MultiClientSendQuery(int32 connectionId, const char *query)
@@ -529,6 +576,15 @@ MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex)
 {
 	char *value = PQgetvalue((PGresult *) queryResult, rowIndex, columnIndex);
 	return value;
+}
+
+
+/* MultiClientValueIsNull returns whether the value at the given position is null. */
+bool
+MultiClientValueIsNull(void *queryResult, int rowIndex, int columnIndex)
+{
+	bool isNull = PQgetisnull((PGresult *) queryResult, rowIndex, columnIndex);
+	return isNull;
 }
 
 

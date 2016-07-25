@@ -104,6 +104,8 @@ extern int32 MultiClientConnectStart(const char *nodeName, uint32 nodePort,
 extern ConnectStatus MultiClientConnectPoll(int32 connectionId);
 extern void MultiClientDisconnect(int32 connectionId);
 extern bool MultiClientConnectionUp(int32 connectionId);
+extern bool MultiClientExecute(int32 connectionId, const char *query, void **queryResult,
+							   int *rowCount, int *columnCount);
 extern bool MultiClientSendQuery(int32 connectionId, const char *query);
 extern bool MultiClientCancel(int32 connectionId);
 extern ResultStatus MultiClientResultStatus(int32 connectionId);
@@ -114,6 +116,7 @@ extern bool MultiClientQueryResult(int32 connectionId, void **queryResult,
 extern BatchQueryStatus MultiClientBatchResult(int32 connectionId, void **queryResult,
 											   int *rowCount, int *columnCount);
 extern char * MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex);
+extern bool MultiClientValueIsNull(void *queryResult, int rowIndex, int columnIndex);
 extern void MultiClientClearResult(void *queryResult);
 extern WaitInfo * MultiClientCreateWaitInfo(int maxConnections);
 
