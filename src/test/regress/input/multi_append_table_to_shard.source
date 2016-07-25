@@ -97,3 +97,46 @@ SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left
 DROP TABLE multi_append_table_to_shard_stage;
 DROP TABLE multi_append_table_to_shard_right;
 DROP TABLE multi_append_table_to_shard_left;
+
+-- Check partitioning by date
+CREATE TABLE multi_append_table_to_shard_date
+(
+	event_date DATE,
+	value INT
+);
+SELECT master_create_distributed_table('multi_append_table_to_shard_date', 'event_date', 'append');
+
+-- Create an empty shard and check that we can query the table
+SELECT master_create_empty_shard('multi_append_table_to_shard_date');
+
+SELECT * FROM multi_append_table_to_shard_date;
+
+-- Stage an empty table and check that we can query the distributed table
+CREATE TABLE multi_append_table_to_shard_stage (LIKE multi_append_table_to_shard_date);
+SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+FROM
+		pg_dist_shard
+WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
+
+SELECT * FROM multi_append_table_to_shard_date;
+
+-- Stage NULL values and check that we can query the table
+INSERT INTO multi_append_table_to_shard_stage VALUES (NULL, NULL);
+SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+FROM
+		pg_dist_shard
+WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
+
+SELECT * FROM multi_append_table_to_shard_date;
+
+-- Stage regular values and check that we can query the table
+INSERT INTO multi_append_table_to_shard_stage VALUES ('2016-01-01', 3);
+SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+FROM
+		pg_dist_shard
+WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
+
+SELECT * FROM multi_append_table_to_shard_date;
+
+DROP TABLE multi_append_table_to_shard_stage;
+DROP TABLE multi_append_table_to_shard_date;
