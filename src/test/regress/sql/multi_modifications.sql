@@ -401,3 +401,13 @@ DELETE FROM multiple_hash WHERE category = '1' RETURNING category;
 -- check
 SELECT * FROM multiple_hash WHERE category = '1' ORDER BY category, data;
 SELECT * FROM multiple_hash WHERE category = '2' ORDER BY category, data;
+
+-- verify interaction of default values, SERIAL, and RETURNING
+\set QUIET on
+CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
+SELECT master_create_distributed_table('app_analytics_events', 'app_id', 'hash');
+SELECT master_create_worker_shards('app_analytics_events', 4, 1);
+
+INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
+INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;
+INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *;

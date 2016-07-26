@@ -12,15 +12,25 @@
  */
 
 #include "postgres.h"
-
+#include "c.h"
+#include "fmgr.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 
+#include <string.h>
+
+#include "access/attnum.h"
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/htup.h"
 #include "access/htup_details.h"
-#include "catalog/catalog.h"
+#include "access/skey.h"
+#include "access/stratnum.h"
+#include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_index.h"
 #include "catalog/pg_type.h"
 #include "commands/sequence.h"
@@ -28,21 +38,20 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_partition.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
-#include "libpq/ip.h"
-#include "libpq/libpq-be.h"
+#include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/palloc.h"
+#include "utils/relcache.h"
 #include "utils/ruleutils.h"
-#include "utils/syscache.h"
-#include "utils/tqual.h"
 
 
 /* Shard related configuration */
@@ -544,6 +553,8 @@ GetTableDDLEvents(Oid relationId)
 {
 	List *tableDDLEventList = NIL;
 	char tableType = 0;
+	List *sequenceIdlist = getOwnedSequences(relationId);
+	ListCell *sequenceIdCell;
 	char *tableSchemaDef = NULL;
 	char *tableColumnOptionsDef = NULL;
 	char *schemaName = NULL;
@@ -588,6 +599,15 @@ GetTableDDLEvents(Oid relationId)
 		appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, schemaName);
 
 		tableDDLEventList = lappend(tableDDLEventList, schemaNameDef->data);
+	}
+
+	/* create sequences if needed */
+	foreach(sequenceIdCell, sequenceIdlist)
+	{
+		Oid sequenceRelid = lfirst_oid(sequenceIdCell);
+		char *sequenceDef = pg_get_sequencedef_string(sequenceRelid);
+
+		tableDDLEventList = lappend(tableDDLEventList, sequenceDef);
 	}
 
 	/* fetch table schema and column option definitions */

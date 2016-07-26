@@ -14,7 +14,10 @@
 #ifndef MASTER_PROTOCOL_H
 #define MASTER_PROTOCOL_H
 
+#include "postgres.h"
+#include "c.h"
 #include "fmgr.h"
+
 #include "nodes/pg_list.h"
 
 
@@ -108,6 +111,7 @@ extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
 extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
 extern Datum master_update_shard_statistics(PG_FUNCTION_ARGS);
 extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
+extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum master_drop_all_shards(PG_FUNCTION_ARGS);
 
