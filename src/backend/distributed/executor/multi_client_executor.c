@@ -800,14 +800,14 @@ MultiClientRegisterWait(WaitInfo *waitInfo, TaskExecutionStatus executionStatus,
 void
 MultiClientWait(WaitInfo *waitInfo)
 {
-	long sleepIntervalPerCycle = RemoteTaskCheckInterval * 1000L;
-
 	/*
 	 * If we had a failure, we always want to sleep for a bit, to prevent
 	 * flooding the other system, probably making the situation worse.
 	 */
 	if (waitInfo->haveFailedWaiter)
 	{
+		long sleepIntervalPerCycle = RemoteTaskCheckInterval * 1000L;
+
 		pg_usleep(sleepIntervalPerCycle);
 		return;
 	}
@@ -828,7 +828,7 @@ MultiClientWait(WaitInfo *waitInfo)
 		 * times as long.
 		 */
 		int rc = poll(waitInfo->pollfds, waitInfo->registeredWaiters,
-					  sleepIntervalPerCycle * 10);
+					  RemoteTaskCheckInterval * 10);
 
 		if (rc < 0)
 		{
