@@ -167,12 +167,6 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	 */
 	queryDesc->planstate = (PlanState *) makeNode(MaterialState);
 
-#if (PG_VERSION_NUM < 90500)
-
-	/* make sure that upsertQuery is false for versions that UPSERT is not available */
-	Assert(task->upsertQuery == false);
-#endif
-
 	lockMode = CommutativityRuleToLockMode(commandType, task->upsertQuery);
 
 	if (lockMode != NoLock)
@@ -322,14 +316,7 @@ CreateXactParticipantHash(void)
 	info.keysize = sizeof(NodeConnectionKey);
 	info.entrysize = sizeof(NodeConnectionEntry);
 	info.hcxt = TopTransactionContext;
-	hashFlags = (HASH_ELEM | HASH_CONTEXT);
-
-#if (PG_VERSION_NUM >= 90500)
-	hashFlags |= HASH_BLOBS;
-#else
-	hashFlags |= HASH_FUNCTION;
-	info.hash = tag_hash;
-#endif
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
 	xactParticipantHash = hash_create("citus xact participant hash", 32, &info,
 									  hashFlags);
@@ -1190,17 +1177,13 @@ RouterTransactionCallback(XactEvent event, void *arg)
 
 	switch (event)
 	{
-#if (PG_VERSION_NUM >= 90500)
 		case XACT_EVENT_PARALLEL_COMMIT:
-#endif
 		case XACT_EVENT_COMMIT:
 		{
 			break;
 		}
 
-#if (PG_VERSION_NUM >= 90500)
 		case XACT_EVENT_PARALLEL_ABORT:
-#endif
 		case XACT_EVENT_ABORT:
 		{
 			bool commit = false;
@@ -1221,9 +1204,7 @@ RouterTransactionCallback(XactEvent event, void *arg)
 			break;
 		}
 
-#if (PG_VERSION_NUM >= 90500)
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
-#endif
 		case XACT_EVENT_PRE_COMMIT:
 		{
 			bool commit = true;

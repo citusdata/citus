@@ -1036,19 +1036,10 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 	{
 		isAlterTableRenameStmt = true;
 	}
-
-#if (PG_VERSION_NUM >= 90500)
 	else if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
 	{
 		isAlterTableRenameStmt = true;
 	}
-#else
-	else if (renameStmt->renameType == OBJECT_CONSTRAINT &&
-			 renameStmt->relationType == OBJECT_TABLE)
-	{
-		isAlterTableRenameStmt = true;
-	}
-#endif
 
 	return isAlterTableRenameStmt;
 }
@@ -1113,21 +1104,12 @@ SetLocalCommitProtocolTo2PC(void)
 	{
 		ereport(DEBUG2, (errmsg("switching to 2PC for the transaction")));
 
-#if (PG_VERSION_NUM >= 90500)
 		set_config_option("citus.multi_shard_commit_protocol",
 						  "2pc",
 						  PGC_USERSET,
 						  PGC_S_SESSION,
 						  GUC_ACTION_LOCAL,
 						  true, 0, false);
-#else
-		set_config_option("citus.multi_shard_commit_protocol",
-						  "2pc",
-						  PGC_USERSET,
-						  PGC_S_SESSION,
-						  GUC_ACTION_LOCAL,
-						  true, 0);
-#endif
 	}
 }
 
@@ -1429,11 +1411,7 @@ CheckCopyPermissions(CopyStmt *copyStatement)
 
 		if (is_from)
 		{
-#if (PG_VERSION_NUM >= 90500)
 			rte->insertedCols = bms_add_member(rte->insertedCols, attno);
-#else
-			rte->modifiedCols = bms_add_member(rte->modifiedCols, attno);
-#endif
 		}
 		else
 		{
@@ -1595,11 +1573,7 @@ ReplicateGrantStmt(Node *parsetree)
 	isFirst = true;
 	foreach(granteeCell, grantStmt->grantees)
 	{
-#if (PG_VERSION_NUM >= 90500)
 		RoleSpec *spec = lfirst(granteeCell);
-#else
-		PrivGrantee *spec = lfirst(granteeCell);
-#endif
 
 		if (!isFirst)
 		{
@@ -1607,7 +1581,6 @@ ReplicateGrantStmt(Node *parsetree)
 		}
 		isFirst = false;
 
-#if (PG_VERSION_NUM >= 90500)
 		if (spec->roletype == ROLESPEC_CSTRING)
 		{
 			appendStringInfoString(&granteesString, quote_identifier(spec->rolename));
@@ -1624,16 +1597,6 @@ ReplicateGrantStmt(Node *parsetree)
 		{
 			appendStringInfoString(&granteesString, "PUBLIC");
 		}
-#else
-		if (spec->rolname)
-		{
-			appendStringInfoString(&granteesString, quote_identifier(spec->rolname));
-		}
-		else
-		{
-			appendStringInfoString(&granteesString, "PUBLIC");
-		}
-#endif
 	}
 
 	/*

@@ -725,11 +725,7 @@ CurrentUserName(void)
 {
 	Oid userId = GetUserId();
 
-#if (PG_VERSION_NUM < 90500)
-	return GetUserNameFromId(userId);
-#else
 	return GetUserNameFromId(userId, false);
-#endif
 }
 
 

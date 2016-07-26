@@ -167,15 +167,9 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-#if (PG_VERSION_NUM >= 90500)
 	aggregatePlan = make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
 							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
 							 groupColumnOpArray, NIL, rowEstimate, subPlan);
-#else
-	aggregatePlan = make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
-							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
-							 groupColumnOpArray, rowEstimate, subPlan);
-#endif
 
 	return aggregatePlan;
 }
