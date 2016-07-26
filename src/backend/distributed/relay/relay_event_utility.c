@@ -341,7 +341,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		{
 			ReindexStmt *reindexStmt = (ReindexStmt *) parseTree;
 
-#if (PG_VERSION_NUM >= 90500)
 			ReindexObjectType objectType = reindexStmt->kind;
 			if (objectType == REINDEX_OBJECT_TABLE || objectType == REINDEX_OBJECT_INDEX)
 			{
@@ -357,23 +356,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				ereport(ERROR, (errmsg("cannot extend name for multi-relation reindex")));
 			}
-#else
-			ObjectType objectType = reindexStmt->kind;
-			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX)
-			{
-				char **objectName = &(reindexStmt->relation->relname);
-				char **objectSchemaName = &(reindexStmt->relation->schemaname);
-
-				/* prefix with schema name if it is not added already */
-				SetSchemaNameIfNotExist(objectSchemaName, schemaName);
-
-				AppendShardIdToName(objectName, shardId);
-			}
-			else if (objectType == OBJECT_DATABASE)
-			{
-				ereport(ERROR, (errmsg("cannot extend name for multi-relation reindex")));
-			}
-#endif
 			else
 			{
 				ereport(ERROR, (errmsg("invalid object type in reindex statement"),

@@ -12,13 +12,7 @@
 #include "settings.h"
 #include "common.h"
 
-#if (PG_VERSION_NUM >= 90500)
 static void print_lo_result(const char *fmt,...) pg_attribute_printf(1, 2);
-#else
-static void
-print_lo_result(const char *fmt,...)
-__attribute__((format(PG_PRINTF_ATTRIBUTE, 1, 2)));
-#endif
 
 static void
 print_lo_result(const char *fmt,...)
