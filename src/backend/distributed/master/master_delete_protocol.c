@@ -13,34 +13,43 @@
  *-------------------------------------------------------------------------
  */
 
-
 #include "postgres.h"
-#include "funcapi.h"
+#include "c.h"
+#include "fmgr.h"
 #include "miscadmin.h"
+#include "port.h"
+
+#include <stddef.h>
 
 #include "access/xact.h"
 #include "catalog/namespace.h"
-#include "catalog/pg_class.h"
 #include "commands/dbcommands.h"
-#include "commands/event_trigger.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
-#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/relay_utility.h"
 #include "distributed/worker_protocol.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+#include "nodes/relation.h"
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
-#include "optimizer/var.h"
-#include "nodes/makefuncs.h"
+#include "storage/lock.h"
 #include "tcop/tcopprot.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
-#include "utils/datum.h"
-#include "utils/inval.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
 #include "utils/lsyscache.h"
 
 
@@ -59,6 +68,7 @@ static bool ExecuteRemoteCommand(const char *nodeName, uint32 nodePort,
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_apply_delete_command);
 PG_FUNCTION_INFO_V1(master_drop_all_shards);
+PG_FUNCTION_INFO_V1(master_drop_sequences);
 
 
 /*
@@ -226,6 +236,61 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 								   shardIntervalList);
 
 	PG_RETURN_INT32(droppedShardCount);
+}
+
+
+/*
+ * master_drop_sequences attempts to drop a list of sequences on a specified
+ * node. The "IF EXISTS" clause is used to permit dropping sequences even if
+ * they may not exist. Returns true on success, false on failure.
+ */
+Datum
+master_drop_sequences(PG_FUNCTION_ARGS)
+{
+	ArrayType *sequenceNamesArray = PG_GETARG_ARRAYTYPE_P(0);
+	text *nodeText = PG_GETARG_TEXT_P(1);
+	int64 nodePort = PG_GETARG_INT64(2);
+	bool dropSuccessful = false;
+	char *nodeName = TextDatumGetCString(nodeText);
+
+	ArrayIterator sequenceIterator = NULL;
+	Datum sequenceText = 0;
+	bool isNull = false;
+
+	StringInfo dropSeqCommand = makeStringInfo();
+
+	/* iterate over sequence names to build single command to DROP them all */
+	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
+	while (array_iterate(sequenceIterator, &sequenceText, &isNull))
+	{
+		if (isNull)
+		{
+			ereport(ERROR, (errmsg("unexpected NULL sequence name"),
+							errcode(ERRCODE_INVALID_PARAMETER_VALUE)));
+		}
+
+		/* append command portion if we haven't added any sequence names yet */
+		if (dropSeqCommand->len == 0)
+		{
+			appendStringInfoString(dropSeqCommand, "DROP SEQUENCE IF EXISTS");
+		}
+		else
+		{
+			/* otherwise, add a comma to separate subsequent sequence names */
+			appendStringInfoChar(dropSeqCommand, ',');
+		}
+
+		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceText));
+	}
+
+	dropSuccessful = ExecuteRemoteCommand(nodeName, nodePort, dropSeqCommand);
+	if (!dropSuccessful)
+	{
+		ereport(WARNING, (errmsg("could not delete sequences from node \"%s:" INT64_FORMAT
+								 "\"", nodeName, nodePort)));
+	}
+
+	PG_RETURN_BOOL(dropSuccessful);
 }
 
 

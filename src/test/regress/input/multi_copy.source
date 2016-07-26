@@ -319,6 +319,19 @@ ORDER BY
 LIMIT
         5;
 
+-- Ensure that copy from worker node of table with serial column fails
+CREATE TABLE customer_worker_copy_append_seq (id integer, seq serial);
+SELECT master_create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
+
+-- Connect to the first worker node
+\c - - - 57637
+
+-- Test copy from the worker node
+COPY customer_worker_copy_append_seq FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
+
+-- Connect back to the master node
+\c - - - 57636
+
 -- Create customer table for the worker copy with constraint and index
 CREATE TABLE customer_worker_copy_append (
         c_custkey integer ,
