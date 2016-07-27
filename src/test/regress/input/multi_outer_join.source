@@ -105,12 +105,13 @@ WHERE
 
 
 -- This query is an INNER JOIN in disguise since there cannot be NULL results
+-- Added extra filter to make query not router plannable
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
-	r_custkey = 5;
+	r_custkey = 5 or r_custkey > 15;
 
 
 -- Apply a filter before the join
@@ -204,12 +205,13 @@ WHERE
 
 
 -- This query is an INNER JOIN in disguise since there cannot be NULL results (21)
+-- Added extra filter to make query not router plannable
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey)
 WHERE
-	r_custkey = 21;
+	r_custkey = 21 or r_custkey < 10;
 
 
 -- Apply a filter before the join

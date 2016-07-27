@@ -63,7 +63,7 @@ CREATE TABLE customer_hash (
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
 SELECT master_create_distributed_table('customer_hash', 'c_custkey', 'hash');
-SELECT master_create_worker_shards('customer_hash', 1, 1);
+SELECT master_create_worker_shards('customer_hash', 2, 1);
 
 -- The following query checks that we can correctly handle self-joins
 
