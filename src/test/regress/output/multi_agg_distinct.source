@@ -85,14 +85,14 @@ SELECT count(distinct p_mfgr) FROM part;
      5
 (1 row)
 
-SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr;
+SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mfgr;
           p_mfgr           | count 
 ---------------------------+-------
  Manufacturer#1            |   193
- Manufacturer#3            |   228
- Manufacturer#5            |   185
  Manufacturer#2            |   190
+ Manufacturer#3            |   228
  Manufacturer#4            |   204
+ Manufacturer#5            |   185
 (5 rows)
 
 -- We don't support count(distinct) queries if table is append partitioned and

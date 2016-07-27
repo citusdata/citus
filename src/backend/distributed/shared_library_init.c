@@ -35,6 +35,7 @@
 #include "distributed/worker_protocol.h"
 #include "postmaster/postmaster.h"
 #include "optimizer/planner.h"
+#include "optimizer/paths.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
 
@@ -141,6 +142,9 @@ _PG_init(void)
 
 	/* register utility hook */
 	ProcessUtility_hook = multi_ProcessUtility;
+
+	/* register for planner hook */
+	set_rel_pathlist_hook = multi_relation_restriction_hook;
 
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
