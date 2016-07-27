@@ -3779,15 +3779,33 @@ ShardFetchQueryString(uint64 shardId)
 	if (storageType == SHARD_STORAGE_TABLE || storageType == SHARD_STORAGE_RELAY ||
 		storageType == SHARD_STORAGE_COLUMNAR)
 	{
-		appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND,
-						 shardSchemaName, shardTableName, shardLength,
-						 nodeNameArrayString->data, nodePortArrayString->data);
+		if (strcmp(shardSchemaName, "public") != 0)
+		{
+			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, shardSchemaName,
+							 shardTableName, shardLength, nodeNameArrayString->data,
+							 nodePortArrayString->data);
+		}
+		else
+		{
+			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND_WITHOUT_SCHEMA,
+							 shardTableName, shardLength, nodeNameArrayString->data,
+							 nodePortArrayString->data);
+		}
 	}
 	else if (storageType == SHARD_STORAGE_FOREIGN)
 	{
-		appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND,
-						 shardSchemaName, shardTableName, shardLength,
-						 nodeNameArrayString->data, nodePortArrayString->data);
+		if (strcmp(shardSchemaName, "public") != 0)
+		{
+			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, shardSchemaName,
+							 shardTableName, shardLength, nodeNameArrayString->data,
+							 nodePortArrayString->data);
+		}
+		else
+		{
+			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND_WITHOUT_SCHEMA,
+							 shardTableName, shardLength, nodeNameArrayString->data,
+							 nodePortArrayString->data);
+		}
 	}
 
 	return shardFetchQuery;

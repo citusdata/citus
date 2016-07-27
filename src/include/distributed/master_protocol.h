@@ -51,6 +51,8 @@
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \
 	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s, %s)"
+#define WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA \
+	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
 #define WORKER_APPEND_TABLE_TO_SHARD \
 	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
 #define SHARD_MIN_VALUE_QUERY "SELECT min(%s) FROM %s"
