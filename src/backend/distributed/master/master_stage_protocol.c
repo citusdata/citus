@@ -441,7 +441,6 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 {
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
-	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	bool shardCreated = true;
 	ListCell *ddlCommandCell = NULL;
 
@@ -452,8 +451,19 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 		List *queryResultList = NIL;
 		StringInfo applyDDLCommand = makeStringInfo();
 
-		appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
-						 escapedSchemaName, escapedDDLCommand);
+		if (strcmp(schemaName, "public") != 0)
+		{
+			char *escapedSchemaName = quote_literal_cstr(schemaName);
+
+			appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
+							 escapedSchemaName, escapedDDLCommand);
+		}
+		else
+		{
+			appendStringInfo(applyDDLCommand,
+							 WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA, shardId,
+							 escapedDDLCommand);
+		}
 
 		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
 											 applyDDLCommand);

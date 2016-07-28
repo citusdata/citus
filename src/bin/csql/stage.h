@@ -65,7 +65,7 @@
 	"SELECT * FROM (SELECT (pg_options_to_table(ftoptions)).* FROM pg_foreign_table " \
 	"WHERE ftrelid = %u) AS Q WHERE option_name = 'filename';"
 #define APPLY_SHARD_DDL_COMMAND \
-	"SELECT * FROM worker_apply_shard_ddl_command ($1::int8, $2::text, $3::text)"
+	"SELECT * FROM worker_apply_shard_ddl_command ($1::int8, $2::text)"
 #define REMOTE_FILE_SIZE_COMMAND "SELECT size FROM pg_stat_file('%s')"
 #define SHARD_COLUMNAR_TABLE_SIZE_COMMAND "SELECT cstore_table_size('%s')"
 
