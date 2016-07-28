@@ -3781,14 +3781,17 @@ ShardFetchQueryString(uint64 shardId)
 	{
 		if (strcmp(shardSchemaName, "public") != 0)
 		{
-			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, shardSchemaName,
-							 shardTableName, shardLength, nodeNameArrayString->data,
+			char *qualifiedTableName = quote_qualified_identifier(shardSchemaName,
+																  shardTableName);
+
+			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, qualifiedTableName,
+							 shardLength, nodeNameArrayString->data,
 							 nodePortArrayString->data);
 		}
 		else
 		{
-			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND_WITHOUT_SCHEMA,
-							 shardTableName, shardLength, nodeNameArrayString->data,
+			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, shardTableName,
+							 shardLength, nodeNameArrayString->data,
 							 nodePortArrayString->data);
 		}
 	}
@@ -3796,14 +3799,17 @@ ShardFetchQueryString(uint64 shardId)
 	{
 		if (strcmp(shardSchemaName, "public") != 0)
 		{
-			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, shardSchemaName,
-							 shardTableName, shardLength, nodeNameArrayString->data,
+			char *qualifiedTableName = quote_qualified_identifier(shardSchemaName,
+																  shardTableName);
+
+			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, qualifiedTableName,
+							 shardLength, nodeNameArrayString->data,
 							 nodePortArrayString->data);
 		}
 		else
 		{
-			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND_WITHOUT_SCHEMA,
-							 shardTableName, shardLength, nodeNameArrayString->data,
+			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, shardTableName,
+							 shardLength, nodeNameArrayString->data,
 							 nodePortArrayString->data);
 		}
 	}
