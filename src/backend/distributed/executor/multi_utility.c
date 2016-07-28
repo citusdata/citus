@@ -954,13 +954,14 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 
 	char *relationName = relation->relname;
 	char *schemaName = relation->schemaname;
+	char *qualifiedRelationName = quote_qualified_identifier(schemaName, relationName);
 
 	/*
 	 * The warning message created in TableDDLCommandList() is descriptive
 	 * enough; therefore, we just throw an error which says that we could not
 	 * run the copy operation.
 	 */
-	ddlCommandList = TableDDLCommandList(nodeName, nodePort, schemaName, relationName);
+	ddlCommandList = TableDDLCommandList(nodeName, nodePort, qualifiedRelationName);
 	if (ddlCommandList == NIL)
 	{
 		ereport(ERROR, (errmsg("could not run copy from the worker node")));
