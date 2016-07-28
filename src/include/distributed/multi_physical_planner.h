@@ -33,12 +33,8 @@
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
 #define TABLE_FETCH_COMMAND "SELECT worker_fetch_regular_table \
- ('%s', '%s', " UINT64_FORMAT ", '%s', '%s')"
-#define TABLE_FETCH_COMMAND_WITHOUT_SCHEMA "SELECT worker_fetch_regular_table \
  ('%s', " UINT64_FORMAT ", '%s', '%s')"
 #define FOREIGN_FETCH_COMMAND "SELECT worker_fetch_foreign_file \
- ('%s', '%s', " UINT64_FORMAT ", '%s', '%s')"
-#define FOREIGN_FETCH_COMMAND_WITHOUT_SCHEMA "SELECT worker_fetch_foreign_file \
  ('%s', " UINT64_FORMAT ", '%s', '%s')"
 #define MAP_OUTPUT_FETCH_COMMAND "SELECT worker_fetch_partition_file \
  (" UINT64_FORMAT ", %u, %u, %u, '%s', %u)"
