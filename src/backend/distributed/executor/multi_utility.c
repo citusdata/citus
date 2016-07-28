@@ -676,7 +676,6 @@ static Node *
 ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							 const char *alterObjectSchemaCommand, bool isTopLevel)
 {
-
 	Oid relationId = InvalidOid;
 	bool noWait = false;
 
@@ -1071,9 +1070,6 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 								  "to execute DDL commands on distributed tables.")));
 	}
 
-	/* make sure we don't process cancel signals */
-	HOLD_INTERRUPTS();
-
 	executionOK = ExecuteCommandOnWorkerShards(relationId, ddlCommandString);
 
 	/* if command could not be executed on any finalized shard placement, error out */
@@ -1081,14 +1077,6 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	{
 		ereport(ERROR, (errmsg("could not execute DDL command on worker node shards")));
 	}
-
-	if (QueryCancelPending)
-	{
-		ereport(WARNING, (errmsg("cancel requests are ignored during DDL commands")));
-		QueryCancelPending = false;
-	}
-
-	RESUME_INTERRUPTS();
 }
 
 
@@ -1226,6 +1214,8 @@ ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
 		PQclear(result);
 
 		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
+
+		CHECK_FOR_INTERRUPTS();
 	}
 }
 
