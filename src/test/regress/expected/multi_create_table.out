@@ -33,6 +33,8 @@ HINT:  Consider using hash partitioning.
 (1 row)
 
 CREATE INDEX lineitem_time_index ON lineitem (l_shipdate);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE TABLE orders (
 	o_orderkey bigint not null,
 	o_custkey integer not null,
