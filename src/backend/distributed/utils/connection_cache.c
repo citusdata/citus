@@ -14,16 +14,14 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
-
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "commands/dbcommands.h"
 #include "distributed/connection_cache.h"
 #include "distributed/metadata_cache.h"
-#include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
-#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
@@ -172,10 +170,6 @@ PurgeConnection(PGconn *connection)
 	 */
 	if (purgedConnection != connection)
 	{
-		ereport(WARNING, (errmsg("hash entry for \"%s:%d\" contained different "
-								 "connection than that provided by caller",
-								 nodeConnectionKey.nodeName,
-								 nodeConnectionKey.nodePort)));
 		PQfinish(connection);
 	}
 }
@@ -186,22 +180,21 @@ PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey)
 {
 	bool entryFound = false;
 	NodeConnectionEntry *nodeConnectionEntry = NULL;
+	PGconn *connection = NULL;
 
-	nodeConnectionEntry = hash_search(NodeConnectionHash, nodeConnectionKey, HASH_REMOVE,
-									  &entryFound);
+	if (NodeConnectionHash != NULL)
+	{
+		nodeConnectionEntry = hash_search(NodeConnectionHash, nodeConnectionKey,
+										  HASH_REMOVE, &entryFound);
+	}
+
 	if (entryFound)
 	{
+		connection = nodeConnectionEntry->connection;
 		PQfinish(nodeConnectionEntry->connection);
 	}
-	else
-	{
-		ereport(WARNING, (errcode(ERRCODE_NO_DATA),
-						  errmsg("could not find hash entry for connection to \"%s:%d\"",
-								 nodeConnectionKey->nodeName,
-								 nodeConnectionKey->nodePort)));
-	}
 
-	return nodeConnectionEntry->connection;
+	return connection;
 }
 
 
