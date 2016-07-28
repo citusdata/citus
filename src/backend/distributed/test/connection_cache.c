@@ -13,7 +13,6 @@
 #include "postgres.h"
 #include "c.h"
 #include "fmgr.h"
-
 #include "libpq-fe.h"
 
 #include <stddef.h>
@@ -22,7 +21,9 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/connection_cache.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
+#include "utils/elog.h"
 #include "utils/lsyscache.h"
 
 
@@ -34,6 +35,7 @@ static Datum ExtractIntegerDatum(char *input);
 PG_FUNCTION_INFO_V1(initialize_remote_temp_table);
 PG_FUNCTION_INFO_V1(count_remote_temp_table_rows);
 PG_FUNCTION_INFO_V1(get_and_purge_connection);
+PG_FUNCTION_INFO_V1(connect_and_purge_connection);
 PG_FUNCTION_INFO_V1(set_connection_status_bad);
 
 
@@ -117,6 +119,30 @@ get_and_purge_connection(PG_FUNCTION_ARGS)
 	int32 nodePort = PG_GETARG_INT32(1);
 
 	PGconn *connection = GetOrEstablishConnection(nodeName, nodePort);
+	if (connection == NULL)
+	{
+		PG_RETURN_BOOL(false);
+	}
+
+	PurgeConnection(connection);
+
+	PG_RETURN_BOOL(true);
+}
+
+
+/*
+ * get_and_purge_connection first gets a connection using the provided hostname
+ * and port before immediately passing that connection to PurgeConnection. This
+ * is to test PurgeConnection behvaior when circumventing the cache.
+ */
+Datum
+connect_and_purge_connection(PG_FUNCTION_ARGS)
+{
+	char *nodeName = PG_GETARG_CSTRING(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeUser = CurrentUserName();
+
+	PGconn *connection = ConnectToNode(nodeName, nodePort, nodeUser);
 	if (connection == NULL)
 	{
 		PG_RETURN_BOOL(false);
