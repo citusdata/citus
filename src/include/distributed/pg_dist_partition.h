@@ -23,7 +23,9 @@ typedef struct FormData_pg_dist_partition
 {
 	Oid logicalrelid;              /* logical relation id; references pg_class oid */
 	char partmethod;               /* partition method; see codes below */
+#ifdef CATALOG_VARLEN              /* variable-length fields start here */
 	text partkey;                  /* partition key expression */
+#endif
 } FormData_pg_dist_partition;
 
 /* ----------------
