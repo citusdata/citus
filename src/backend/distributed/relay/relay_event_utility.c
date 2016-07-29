@@ -13,24 +13,33 @@
  */
 
 #include "postgres.h"
+#include "c.h"
+
+#include <stdio.h>
+#include <string.h>
 
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/htup.h"
 #include "access/skey.h"
-#include "access/xact.h"
+#include "access/stratnum.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
-#include "commands/defrem.h"
 #include "distributed/relay_utility.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
-#include "parser/parse_utilcmd.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+#include "nodes/value.h"
 #include "storage/lock.h"
-#include "tcop/utility.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
 #include "utils/fmgroids.h"
-#include "utils/lsyscache.h"
-#include "utils/tqual.h"
+#include "utils/palloc.h"
+#include "utils/relcache.h"
 
 
 /* Local functions forward declarations */
@@ -43,43 +52,31 @@ static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
 
 /*
  * RelayEventExtendNames extends relation names in the given parse tree for
- * certain utility commands. The function more specifically extends table,
- * sequence, and index names in the parse tree by appending the given shardId;
- * thereby avoiding name collisions in the database among sharded tables. This
- * function has the side effect of extending relation names in the parse tree.
+ * certain utility commands. The function more specifically extends table and
+ * index names in the parse tree by appending the given shardId; thereby
+ * avoiding name collisions in the database among sharded tables. This function
+ * has the side effect of extending relation names in the parse tree.
  */
 void
 RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 {
 	/* we don't extend names in extension or schema commands */
 	NodeTag nodeType = nodeTag(parseTree);
-	if (nodeType == T_CreateExtensionStmt || nodeType == T_CreateSchemaStmt)
+	if (nodeType == T_CreateExtensionStmt || nodeType == T_CreateSchemaStmt ||
+		nodeType == T_CreateSeqStmt || nodeType == T_AlterSeqStmt)
 	{
 		return;
 	}
 
 	switch (nodeType)
 	{
-		case T_AlterSeqStmt:
-		{
-			AlterSeqStmt *alterSeqStmt = (AlterSeqStmt *) parseTree;
-			char **sequenceName = &(alterSeqStmt->sequence->relname);
-			char **sequenceSchemaName = &(alterSeqStmt->sequence->schemaname);
-
-			/* prefix with schema name if it is not added already */
-			SetSchemaNameIfNotExist(sequenceSchemaName, schemaName);
-
-			AppendShardIdToName(sequenceName, shardId);
-			break;
-		}
-
 		case T_AlterTableStmt:
 		{
 			/*
-			 * We append shardId to the very end of table, sequence and index
-			 * names to avoid name collisions. We usually do not touch
-			 * constraint names, except for cases where they refer to index
-			 * names. In those cases, we also append to constraint names.
+			 * We append shardId to the very end of table and index names to
+			 * avoid name collisions. We usually do not touch constraint names,
+			 * except for cases where they refer to index names. In such cases,
+			 * we also append to constraint names.
 			 */
 
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
@@ -144,19 +141,6 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
-		case T_CreateSeqStmt:
-		{
-			CreateSeqStmt *createSeqStmt = (CreateSeqStmt *) parseTree;
-			char **sequenceName = &(createSeqStmt->sequence->relname);
-			char **sequenceSchemaName = &(createSeqStmt->sequence->schemaname);
-
-			/* prefix with schema name if it is not added already */
-			SetSchemaNameIfNotExist(sequenceSchemaName, schemaName);
-
-			AppendShardIdToName(sequenceName, shardId);
-			break;
-		}
-
 		case T_CreateForeignServerStmt:
 		{
 			CreateForeignServerStmt *serverStmt = (CreateForeignServerStmt *) parseTree;
@@ -198,9 +182,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			DropStmt *dropStmt = (DropStmt *) parseTree;
 			ObjectType objectType = dropStmt->removeType;
 
-			if (objectType == OBJECT_TABLE || objectType == OBJECT_SEQUENCE ||
-				objectType == OBJECT_INDEX || objectType == OBJECT_FOREIGN_TABLE ||
-				objectType == OBJECT_FOREIGN_SERVER)
+			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX ||
+				objectType == OBJECT_FOREIGN_TABLE || objectType == OBJECT_FOREIGN_SERVER)
 			{
 				List *relationNameList = NULL;
 				int relationNameListLength = 0;
@@ -216,11 +199,11 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				}
 
 				/*
-				 * We now need to extend a single relation, sequence or index
-				 * name. To be able to do this extension, we need to extract the
-				 * names' addresses from the value objects they are stored in.
-				 * Otherwise, the repalloc called in AppendShardIdToName() will
-				 * not have the correct memory address for the name.
+				 * We now need to extend a single relation or index name. To be
+				 * able to do this extension, we need to extract the names'
+				 * addresses from the value objects they are stored in. Other-
+				 * wise, the repalloc called in AppendShardIdToName() will not
+				 * have the correct memory address for the name.
 				 */
 
 				relationNameList = (List *) linitial(dropStmt->objects);
@@ -370,8 +353,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			RenameStmt *renameStmt = (RenameStmt *) parseTree;
 			ObjectType objectType = renameStmt->renameType;
 
-			if (objectType == OBJECT_TABLE || objectType == OBJECT_SEQUENCE ||
-				objectType == OBJECT_INDEX)
+			if (objectType == OBJECT_TABLE || objectType == OBJECT_INDEX)
 			{
 				char **oldRelationName = &(renameStmt->relation->relname);
 				char **newRelationName = &(renameStmt->newname);

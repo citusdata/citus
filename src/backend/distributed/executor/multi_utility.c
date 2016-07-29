@@ -7,41 +7,68 @@
  */
 
 #include "postgres.h"
+#include "c.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
+#include "port.h"
 
+#include <string.h>
+
+#include "access/attnum.h"
+#include "access/heapam.h"
+#include "access/htup.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
+#include "access/tupdesc.h"
 #include "access/xact.h"
 #include "catalog/catalog.h"
+#include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_attribute.h"
+#include "catalog/pg_class.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
-#include "distributed/multi_utility.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_shard_transaction.h"
+#include "distributed/multi_utility.h" /* IWYU pragma: keep */
+#include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
-#include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
-#include "foreign/foreign.h"
 #include "executor/executor.h"
-#include "parser/parser.h"
-#include "parser/parse_utilcmd.h"
+#include "foreign/foreign.h"
+#include "lib/stringinfo.h"
+#include "nodes/bitmapset.h"
+#include "nodes/nodes.h"
+#include "nodes/params.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "nodes/primnodes.h"
+#include "nodes/value.h"
 #include "storage/lmgr.h"
-#include "tcop/pquery.h"
+#include "storage/lock.h"
+#include "tcop/dest.h"
 #include "tcop/utility.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
+#include "utils/guc.h"
+#include "utils/hsearch.h"
 #include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/palloc.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
 #include "utils/syscache.h"
 
 
@@ -81,6 +108,9 @@ static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSch
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
+static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
+static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
+static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
 /* Local functions forward declarations for helper functions */
@@ -156,6 +186,16 @@ multi_ProcessUtility(Node *parsetree,
 		{
 			return;
 		}
+	}
+
+	if (IsA(parsetree, CreateSeqStmt))
+	{
+		ErrorIfUnsupportedSeqStmt((CreateSeqStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, AlterSeqStmt))
+	{
+		ErrorIfDistributedAlterSeqOwnedBy((AlterSeqStmt *) parsetree);
 	}
 
 	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
@@ -848,6 +888,33 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 		{
 			case AT_AddColumn:
 			{
+				if (IsA(command->def, ColumnDef))
+				{
+					ColumnDef *column = (ColumnDef *) command->def;
+
+					/*
+					 * Check for SERIAL pseudo-types. The structure of this
+					 * check is copied from transformColumnDefinition.
+					 */
+					if (column->typeName && list_length(column->typeName->names) == 1 &&
+						!column->typeName->pct_type)
+					{
+						char *typeName = strVal(linitial(column->typeName->names));
+
+						if (strcmp(typeName, "smallserial") == 0 ||
+							strcmp(typeName, "serial2") == 0 ||
+							strcmp(typeName, "serial") == 0 ||
+							strcmp(typeName, "serial4") == 0 ||
+							strcmp(typeName, "bigserial") == 0 ||
+							strcmp(typeName, "serial8") == 0)
+						{
+							ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+											errmsg("cannot execute ADD COLUMN commands "
+												   "involving serial pseudotypes")));
+						}
+					}
+				}
+
 				break;
 			}
 
@@ -898,6 +965,126 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 		}
 	}
+}
+
+
+/*
+ * ErrorIfUnsupportedSeqStmt errors out if the provided create sequence
+ * statement specifies a distributed table in its OWNED BY clause.
+ */
+static void
+ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt)
+{
+	Oid ownedByTableId = InvalidOid;
+
+	/* create is easy: just prohibit any distributed OWNED BY */
+	if (OptionsSpecifyOwnedBy(createSeqStmt->options, &ownedByTableId))
+	{
+		if (IsDistributedTable(ownedByTableId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create sequences that specify a distributed "
+								   "table in their OWNED BY option"),
+							errhint("Use a sequence in a distributed table by specifying "
+									"a serial column type before creating any shards.")));
+		}
+	}
+}
+
+
+/*
+ * ErrorIfDistributedAlterSeqOwnedBy errors out if the provided alter sequence
+ * statement attempts to change the owned by property of a distributed sequence
+ * or attempt to change a local sequence to be owned by a distributed table.
+ */
+static void
+ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
+{
+	Oid sequenceId = RangeVarGetRelid(alterSeqStmt->sequence, AccessShareLock,
+									  alterSeqStmt->missing_ok);
+	Oid ownedByTableId = InvalidOid;
+	Oid newOwnedByTableId = InvalidOid;
+	int32 ownedByColumnId = 0;
+	bool hasDistributedOwner = false;
+
+	/* alter statement referenced nonexistent sequence; return */
+	if (sequenceId == InvalidOid)
+	{
+		return;
+	}
+
+	/* see whether the sequences is already owned by a distributed table */
+	if (sequenceIsOwned(sequenceId, &ownedByTableId, &ownedByColumnId))
+	{
+		hasDistributedOwner = IsDistributedTable(ownedByTableId);
+	}
+
+	if (OptionsSpecifyOwnedBy(alterSeqStmt->options, &newOwnedByTableId))
+	{
+		/* if a distributed sequence tries to change owner, error */
+		if (hasDistributedOwner && ownedByTableId != newOwnedByTableId)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot alter OWNED BY option of a sequence "
+								   "already owned by a distributed table")));
+		}
+		else if (!hasDistributedOwner && IsDistributedTable(newOwnedByTableId))
+		{
+			/* and don't let local sequences get a distributed OWNED BY */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot associate an existing sequence with a "
+								   "distributed table"),
+							errhint("Use a sequence in a distributed table by specifying "
+									"a serial column type before creating any shards.")));
+		}
+	}
+}
+
+
+/*
+ * OptionsSpecifyOwnedBy processes the options list of either a CREATE or ALTER
+ * SEQUENCE command, extracting the first OWNED BY option it encounters. The
+ * identifier for the specified table is placed in the Oid out parameter before
+ * returning true. Returns false if no such option is found. Still returns true
+ * for OWNED BY NONE, but leaves the out paramter set to InvalidOid.
+ */
+static bool
+OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
+{
+	ListCell *optionCell = NULL;
+
+	foreach(optionCell, optionList)
+	{
+		DefElem *defElem = (DefElem *) lfirst(optionCell);
+		if (strcmp(defElem->defname, "owned_by") == 0)
+		{
+			List *ownedByNames = defGetQualifiedName(defElem);
+			int nameCount = list_length(ownedByNames);
+
+			/* if only one name is present, this is OWNED BY NONE */
+			if (nameCount == 1)
+			{
+				*ownedByTableId = InvalidOid;
+				return true;
+			}
+			else
+			{
+				/*
+				 * Otherwise, we have a list of schema, table, column, which we
+				 * need to truncate to simply the schema and table to determine
+				 * the relevant relation identifier.
+				 */
+				List *relNameList = list_truncate(list_copy(ownedByNames), nameCount - 1);
+				RangeVar *rangeVar = makeRangeVarFromNameList(relNameList);
+				bool failOK = true;
+
+				*ownedByTableId = RangeVarGetRelid(rangeVar, NoLock, failOK);
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 
@@ -1001,6 +1188,13 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 		else if ((IsA(ddlCommandNode, CreateExtensionStmt)))
 		{
 			applyDDLCommand = true;
+		}
+		else if ((IsA(ddlCommandNode, CreateSeqStmt)))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot copy to table with serial column from worker"),
+							errhint("Connect to the master node to COPY to tables which "
+									"use serial column types.")));
 		}
 
 		/* run only a selected set of DDL commands */
@@ -1449,7 +1643,6 @@ ReplicateGrantStmt(Node *parsetree)
 	StringInfoData ddlString;
 	ListCell *granteeCell = NULL;
 	ListCell *objectCell = NULL;
-	ListCell *privilegeCell = NULL;
 	bool isFirst = true;
 
 	initStringInfo(&privsString);
@@ -1474,6 +1667,8 @@ ReplicateGrantStmt(Node *parsetree)
 	}
 	else
 	{
+		ListCell *privilegeCell = NULL;
+
 		isFirst = true;
 		foreach(privilegeCell, grantStmt->privileges)
 		{

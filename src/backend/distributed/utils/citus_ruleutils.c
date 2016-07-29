@@ -8,48 +8,51 @@
  */
 
 #include "postgres.h"
+#include "c.h"
+#include "miscadmin.h"
 
-#include <unistd.h>
-#include <fcntl.h>
+#include <stddef.h>
 
+#include "access/attnum.h"
+#include "access/genam.h"
+#include "access/heapam.h"
+#include "access/htup.h"
 #include "access/htup_details.h"
+#include "access/skey.h"
+#include "access/stratnum.h"
 #include "access/sysattr.h"
+#include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
-#include "catalog/pg_aggregate.h"
+#include "catalog/pg_attribute.h"
 #include "catalog/pg_authid.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
-#include "catalog/pg_opclass.h"
-#include "catalog/pg_operator.h"
-#include "catalog/pg_proc.h"
-#include "catalog/pg_type.h"
-#include "distributed/citus_nodefuncs.h"
-#include "distributed/citus_ruleutils.h"
+#include "catalog/pg_index.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
+#include "distributed/citus_ruleutils.h"
 #include "foreign/foreign.h"
-#include "funcapi.h"
-#include "mb/pg_wchar.h"
-#include "miscadmin.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "optimizer/tlist.h"
-#include "parser/keywords.h"
-#include "parser/parse_agg.h"
-#include "parser/parse_func.h"
-#include "parser/parse_oper.h"
-#include "parser/parser.h"
-#include "parser/parsetree.h"
-#include "rewrite/rewriteHandler.h"
+#include "lib/stringinfo.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
+#include "nodes/pg_list.h"
+#include "storage/lock.h"
+#include "utils/acl.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
+#include "utils/elog.h"
+#include "utils/errcodes.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/palloc.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
-#include "utils/typcache.h"
-#include "utils/xml.h"
+
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
 static const char * convert_aclright_to_string(int aclright);
@@ -207,6 +210,59 @@ AppendOptionListToString(StringInfo stringBuffer, List *optionList)
 
 
 /*
+ * pg_get_sequencedef_string returns the definition of a given sequence. This
+ * definition includes explicit values for all CREATE SEQUENCE options.
+ */
+char *
+pg_get_sequencedef_string(Oid sequenceRelationId)
+{
+	char *qualifiedSequenceName = NULL;
+	char *sequenceDef = NULL;
+	Form_pg_sequence pgSequenceForm = NULL;
+	Relation sequenceRel = NULL;
+	AclResult permissionCheck = ACLCHECK_NO_PRIV;
+	SysScanDesc scanDescriptor = NULL;
+	HeapTuple heapTuple = NULL;
+
+	/* open and lock sequence */
+	sequenceRel = heap_open(sequenceRelationId, AccessShareLock);
+
+	/* check permissions to read sequence attributes */
+	permissionCheck = pg_class_aclcheck(sequenceRelationId, GetUserId(),
+										ACL_SELECT | ACL_USAGE);
+	if (permissionCheck != ACLCHECK_OK)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						errmsg("permission denied for sequence %s",
+							   RelationGetRelationName(sequenceRel))));
+	}
+
+	/* retrieve attributes from first tuple */
+	scanDescriptor = systable_beginscan(sequenceRel, InvalidOid, false, NULL, 0, NULL);
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find specified sequence")));
+	}
+
+	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
+
+	/* build our DDL command */
+	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
+	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
+						   pgSequenceForm->max_value, pgSequenceForm->cache_value,
+						   pgSequenceForm->is_cycled ? "" : "NO ");
+
+	systable_endscan(scanDescriptor);
+
+	heap_close(sequenceRel, AccessShareLock);
+
+	return sequenceDef;
+}
+
+
+/*
  * pg_get_tableschemadef_string returns the definition of a given table. This
  * definition includes table's schema, default column values, not null and check
  * constraints. The definition does not include constraints that trigger index
@@ -266,11 +322,12 @@ pg_get_tableschemadef_string(Oid tableRelationId)
 	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
 	{
 		Form_pg_attribute attributeForm = tupleDescriptor->attrs[attributeIndex];
-		const char *attributeName = NULL;
-		const char *attributeTypeName = NULL;
 
 		if (!attributeForm->attisdropped && attributeForm->attinhcount == 0)
 		{
+			const char *attributeName = NULL;
+			const char *attributeTypeName = NULL;
+
 			if (firstAttributePrinted)
 			{
 				appendStringInfoString(&buffer, ", ");
@@ -399,7 +456,6 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	char relationKind = 0;
 	TupleDesc tupleDescriptor = NULL;
 	AttrNumber attributeIndex = 0;
-	char *columnOptionStatement = NULL;
 	List *columnOptionList = NIL;
 	ListCell *columnOptionCell = NULL;
 	bool firstOptionPrinted = false;
@@ -511,6 +567,8 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	 */
 	foreach(columnOptionCell, columnOptionList)
 	{
+		char *columnOptionStatement = NULL;
+
 		if (!firstOptionPrinted)
 		{
 			initStringInfo(&buffer);
@@ -591,9 +649,7 @@ pg_get_table_grants(Oid relationId)
 	List *defs = NIL;
 	HeapTuple classTuple = NULL;
 	Datum aclDatum = 0;
-	Acl *acl = NULL;
 	bool isNull = false;
-	int offtype = 0;
 
 	relation = relation_open(relationId, AccessShareLock);
 	relationName = generate_relation_name(relationId, NIL);
@@ -619,7 +675,8 @@ pg_get_table_grants(Oid relationId)
 	{
 		int i = 0;
 		AclItem *aidat = NULL;
-
+		Acl *acl = NULL;
+		int offtype = 0;
 
 		/*
 		 * First revoke all default permissions, so we can start adding the
