@@ -118,7 +118,7 @@ static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 										 bool isTopLevel);
-static void SetLocalCommitProtocolTo2PC(void);
+static void ShowNoticeIfNotUsing2PC(void);
 static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString);
 static void ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
 											ShardConnections *shardConnections);
@@ -126,6 +126,9 @@ static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid ol
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+
+
+static bool warnedUserAbout2PC = false;
 
 
 /*
@@ -1240,11 +1243,11 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 
 /*
  * ExecuteDistributedDDLCommand applies a given DDL command to the given
- * distributed table in a distributed transaction. For the transaction, the value of
- * citus.multi_shard_commit_protocol is set to '2pc' so that two phase commit mechanism
- * is used, regardless of the actual value of citus.multi_shard_commit_protocol. In
- * the commit protocol, a BEGIN is sent after connection to each shard placement
- * and COMMIT/ROLLBACK is handled by CompleteShardPlacementTransactions function.
+ * distributed table in a distributed transaction. If the multi shard commit protocol is
+ * in its default value of '1pc', then a notice message indicating that '2pc' might be
+ * used for extra safety. In the commit protocol, a BEGIN is sent after connection to
+ * each shard placement and COMMIT/ROLLBACK is handled by
+ * CompleteShardPlacementTransactions function.
  */
 static void
 ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
@@ -1253,7 +1256,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	bool executionOK = false;
 
 	PreventTransactionChain(isTopLevel, "distributed DDL commands");
-	SetLocalCommitProtocolTo2PC();
+	ShowNoticeIfNotUsing2PC();
 
 	executionOK = ExecuteCommandOnWorkerShards(relationId, ddlCommandString);
 
@@ -1266,23 +1269,20 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 
 
 /*
- * SwitchTo2PCForTransaction sets the citus.multi_shard_commit_protocol value
- * to '2pc' for the current transaction, in order to force 2PC even the value
- * of citus.multi_shard_commit_protocol is '1pc';
+ * ShowNoticeIfNotUsing2PC shows a notice message about using 2PC by setting
+ * citus.multi_shard_commit_protocol to 2PC. The notice message is shown only once in a
+ * session
  */
 static void
-SetLocalCommitProtocolTo2PC(void)
+ShowNoticeIfNotUsing2PC(void)
 {
-	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
+	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC && !warnedUserAbout2PC)
 	{
-		ereport(DEBUG2, (errmsg("switching to 2PC for the transaction")));
+		ereport(NOTICE, (errmsg("using one-phase commit for distributed DDL commands"),
+						 errhint("You can enable two-phase commit for extra safety with: "
+								 "SET citus.multi_shard_commit_protocol TO '2pc'")));
 
-		set_config_option("citus.multi_shard_commit_protocol",
-						  "2pc",
-						  PGC_USERSET,
-						  PGC_S_SESSION,
-						  GUC_ACTION_LOCAL,
-						  true, 0, false);
+		warnedUserAbout2PC = true;
 	}
 }
 

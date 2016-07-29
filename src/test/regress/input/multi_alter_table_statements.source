@@ -172,15 +172,13 @@ COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_2;
 
--- verify that distributed ddl commands use 2PC, even the value of citus.multi_shard_commit_protocol is '1pc'
-SET citus.multi_shard_commit_protocol TO '1pc';
-SET client_min_messages TO DEBUG2;
+--- verify that distributed ddl commands can be used with 2pc
+SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);
-RESET client_min_messages;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_3;
-
--- verify that citus.multi_shard_commit_protocol value is not changed
-SHOW citus.multi_shard_commit_protocol;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+RESET citus.multi_shard_commit_protocol;
 
 -- verify that not any of shard placements are marked as failed when a query failure occurs
 CREATE TABLE test_ab (a int, b int);

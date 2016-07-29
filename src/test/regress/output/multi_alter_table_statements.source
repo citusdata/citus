@@ -33,6 +33,8 @@ SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append')
 \STAGE lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 -- Verify that we can add columns
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER DEFAULT 1;
 ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
@@ -116,6 +118,8 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 -- \stage to verify that default values take effect
 \STAGE lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
@@ -437,75 +441,22 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 
 DROP INDEX temp_index_2;
 ERROR:  index "temp_index_2" does not exist
--- verify that distributed ddl commands use 2PC, even the value of citus.multi_shard_commit_protocol is '1pc'
-SET citus.multi_shard_commit_protocol TO '1pc';
-SET client_min_messages TO DEBUG2;
+--- verify that distributed ddl commands can be used with 2pc
+SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);
-DEBUG:  switching to 2PC for the transaction
-DEBUG:  applied command on shard 220000 on node localhost:57638
-DEBUG:  applied command on shard 220000 on node localhost:57637
-DEBUG:  applied command on shard 220003 on node localhost:57637
-DEBUG:  applied command on shard 220003 on node localhost:57638
-DEBUG:  applied command on shard 220007 on node localhost:57637
-DEBUG:  applied command on shard 220007 on node localhost:57638
-DEBUG:  applied command on shard 220004 on node localhost:57638
-DEBUG:  applied command on shard 220004 on node localhost:57637
-DEBUG:  applied command on shard 220008 on node localhost:57638
-DEBUG:  applied command on shard 220008 on node localhost:57637
-DEBUG:  applied command on shard 220001 on node localhost:57637
-DEBUG:  applied command on shard 220001 on node localhost:57638
-DEBUG:  applied command on shard 220002 on node localhost:57638
-DEBUG:  applied command on shard 220002 on node localhost:57637
-DEBUG:  applied command on shard 220005 on node localhost:57637
-DEBUG:  applied command on shard 220005 on node localhost:57638
-DEBUG:  applied command on shard 220009 on node localhost:57637
-DEBUG:  applied command on shard 220009 on node localhost:57638
-DEBUG:  building index "temp_index_3" on table "lineitem_alter"
-DEBUG:  sent PREPARE TRANSACTION over connection 220007
-DEBUG:  sent PREPARE TRANSACTION over connection 220007
-DEBUG:  sent PREPARE TRANSACTION over connection 220002
-DEBUG:  sent PREPARE TRANSACTION over connection 220002
-DEBUG:  sent PREPARE TRANSACTION over connection 220004
-DEBUG:  sent PREPARE TRANSACTION over connection 220004
-DEBUG:  sent PREPARE TRANSACTION over connection 220000
-DEBUG:  sent PREPARE TRANSACTION over connection 220000
-DEBUG:  sent PREPARE TRANSACTION over connection 220008
-DEBUG:  sent PREPARE TRANSACTION over connection 220008
-DEBUG:  sent PREPARE TRANSACTION over connection 220009
-DEBUG:  sent PREPARE TRANSACTION over connection 220009
-DEBUG:  sent PREPARE TRANSACTION over connection 220001
-DEBUG:  sent PREPARE TRANSACTION over connection 220001
-DEBUG:  sent PREPARE TRANSACTION over connection 220005
-DEBUG:  sent PREPARE TRANSACTION over connection 220005
-DEBUG:  sent PREPARE TRANSACTION over connection 220003
-DEBUG:  sent PREPARE TRANSACTION over connection 220003
-DEBUG:  sent COMMIT PREPARED over connection 220007
-DEBUG:  sent COMMIT PREPARED over connection 220007
-DEBUG:  sent COMMIT PREPARED over connection 220002
-DEBUG:  sent COMMIT PREPARED over connection 220002
-DEBUG:  sent COMMIT PREPARED over connection 220004
-DEBUG:  sent COMMIT PREPARED over connection 220004
-DEBUG:  sent COMMIT PREPARED over connection 220000
-DEBUG:  sent COMMIT PREPARED over connection 220000
-DEBUG:  sent COMMIT PREPARED over connection 220008
-DEBUG:  sent COMMIT PREPARED over connection 220008
-DEBUG:  sent COMMIT PREPARED over connection 220009
-DEBUG:  sent COMMIT PREPARED over connection 220009
-DEBUG:  sent COMMIT PREPARED over connection 220001
-DEBUG:  sent COMMIT PREPARED over connection 220001
-DEBUG:  sent COMMIT PREPARED over connection 220005
-DEBUG:  sent COMMIT PREPARED over connection 220005
-DEBUG:  sent COMMIT PREPARED over connection 220003
-DEBUG:  sent COMMIT PREPARED over connection 220003
-RESET client_min_messages;
-DROP INDEX temp_index_3;
--- verify that citus.multi_shard_commit_protocol value is not changed
-SHOW citus.multi_shard_commit_protocol;
- citus.multi_shard_commit_protocol 
------------------------------------
- 1pc
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+  indexname   |   tablename    
+--------------+----------------
+ temp_index_3 | lineitem_alter
 (1 row)
 
+DROP INDEX temp_index_3;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+ indexname | tablename 
+-----------+-----------
+(0 rows)
+
+RESET citus.multi_shard_commit_protocol;
 -- verify that not any of shard placements are marked as failed when a query failure occurs
 CREATE TABLE test_ab (a int, b int);
 SELECT master_create_distributed_table('test_ab', 'a', 'hash');

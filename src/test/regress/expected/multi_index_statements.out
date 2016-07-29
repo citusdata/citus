@@ -65,6 +65,8 @@ SELECT master_create_empty_shard('index_test_append');
 --
 -- Verify that we can create different types of indexes
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX lineitem_partkey_desc_index ON lineitem (l_partkey DESC);
 CREATE INDEX lineitem_partial_index ON lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
@@ -139,6 +141,8 @@ ERROR:  creating unique indexes on append-partitioned tables is currently unsupp
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 ERROR:  relation "lineitem_orderkey_index" already exists
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 WARNING:  data type bigint has no default operator class for access method "gist"
 HINT:  You must specify an operator class for the index or define a default operator class for the data type.
 CONTEXT:  while executing command on localhost:57638
