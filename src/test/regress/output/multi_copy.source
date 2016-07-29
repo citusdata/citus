@@ -175,6 +175,8 @@ SELECT count(*) FROM customer_with_default where c_time IS NOT NULL;
 
 -- Add columns to the table and perform a COPY
 ALTER TABLE customer_copy_hash ADD COLUMN extra1 INT DEFAULT 0;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE customer_copy_hash ADD COLUMN extra2 INT DEFAULT 0;
 COPY customer_copy_hash (c_custkey, c_name, extra1, extra2) FROM STDIN CSV;
 SELECT * FROM customer_copy_hash WHERE extra1 = 1;
