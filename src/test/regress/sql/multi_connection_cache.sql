@@ -22,6 +22,11 @@ CREATE FUNCTION get_and_purge_connection(cstring, integer)
 	AS 'citus'
 	LANGUAGE C STRICT;
 
+CREATE FUNCTION connect_and_purge_connection(cstring, integer)
+	RETURNS bool
+	AS 'citus'
+	LANGUAGE C STRICT;
+
 CREATE FUNCTION set_connection_status_bad(cstring, integer)
 	RETURNS bool
 	AS 'citus'
@@ -76,3 +81,8 @@ SELECT count_remote_temp_table_rows('localhost', :worker_port);
 SELECT get_and_purge_connection('localhost', :worker_port);
 
 SET client_min_messages TO DEFAULT;
+
+\c
+
+-- purge existing connection to localhost
+SELECT connect_and_purge_connection('localhost', :worker_port);
