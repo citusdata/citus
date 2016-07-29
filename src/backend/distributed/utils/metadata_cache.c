@@ -78,7 +78,7 @@ static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArr
 static void InitializeDistTableCache(void);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
-static HeapTuple LookupDistPartitionTuple(Oid relationId);
+static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
@@ -227,6 +227,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	bool hasUninitializedShardInterval = false;
 	bool hasUniformHashDistribution = false;
 	void *hashKey = (void *) &relationId;
+	Relation pgDistPartition = NULL;
 
 	if (DistTableCacheHash == NULL)
 	{
@@ -247,15 +248,23 @@ LookupDistTableCacheEntry(Oid relationId)
 		ResetDistTableCacheEntry(cacheEntry);
 	}
 
-	distPartitionTuple = LookupDistPartitionTuple(relationId);
+	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+	distPartitionTuple = LookupDistPartitionTuple(pgDistPartition, relationId);
 	if (distPartitionTuple != NULL)
 	{
 		Form_pg_dist_partition partitionForm =
 			(Form_pg_dist_partition) GETSTRUCT(distPartitionTuple);
-		Datum partitionKeyDatum = PointerGetDatum(&partitionForm->partkey);
+		Datum partitionKeyDatum = 0;
+		MemoryContext oldContext = NULL;
+		bool isNull = false;
 
-		MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+		partitionKeyDatum = heap_getattr(distPartitionTuple,
+										 Anum_pg_dist_partition_partkey,
+										 RelationGetDescr(pgDistPartition),
+										 &isNull);
+		Assert(!isNull);
 
+		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 		partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 		partitionMethod = partitionForm->partmethod;
 
@@ -263,6 +272,8 @@ LookupDistTableCacheEntry(Oid relationId)
 
 		heap_freetuple(distPartitionTuple);
 	}
+
+	heap_close(pgDistPartition, NoLock);
 
 	distShardTupleList = LookupDistShardTuples(relationId);
 	shardIntervalArrayLength = list_length(distShardTupleList);
@@ -1015,15 +1026,12 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
  * and returns that or, if no matching entry was found, NULL.
  */
 static HeapTuple
-LookupDistPartitionTuple(Oid relationId)
+LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
 {
-	Relation pgDistPartition = NULL;
 	HeapTuple distPartitionTuple = NULL;
 	HeapTuple currentPartitionTuple = NULL;
 	SysScanDesc scanDescriptor;
 	ScanKeyData scanKey[1];
-
-	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
 
 	/* copy scankey to local copy, it will be modified during the scan */
 	memcpy(scanKey, DistPartitionScanKey, sizeof(DistPartitionScanKey));
@@ -1044,8 +1052,6 @@ LookupDistPartitionTuple(Oid relationId)
 	}
 
 	systable_endscan(scanDescriptor);
-
-	heap_close(pgDistPartition, NoLock);
 
 	return distPartitionTuple;
 }
