@@ -315,6 +315,26 @@ MultiClientConnectionUp(int32 connectionId)
 }
 
 
+/* MultiClientExecute synchronously executes a query over the given connection. */
+bool
+MultiClientExecute(int32 connectionId, const char *query, void **queryResult,
+				   int *rowCount, int *columnCount)
+{
+	bool querySent = false;
+	bool queryOK = false;
+
+	querySent = MultiClientSendQuery(connectionId, query);
+	if (!querySent)
+	{
+		return false;
+	}
+
+	queryOK = MultiClientQueryResult(connectionId, queryResult, rowCount, columnCount);
+
+	return queryOK;
+}
+
+
 /* MultiClientSendQuery sends the given query over the given connection. */
 bool
 MultiClientSendQuery(int32 connectionId, const char *query)
@@ -529,6 +549,15 @@ MultiClientGetValue(void *queryResult, int rowIndex, int columnIndex)
 {
 	char *value = PQgetvalue((PGresult *) queryResult, rowIndex, columnIndex);
 	return value;
+}
+
+
+/* MultiClientValueIsNull returns whether the value at the given position is null. */
+bool
+MultiClientValueIsNull(void *queryResult, int rowIndex, int columnIndex)
+{
+	bool isNull = PQgetisnull((PGresult *) queryResult, rowIndex, columnIndex);
+	return isNull;
 }
 
 

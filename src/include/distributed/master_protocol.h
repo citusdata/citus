@@ -58,8 +58,7 @@
 	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
 #define WORKER_APPEND_TABLE_TO_SHARD \
 	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
-#define SHARD_MIN_VALUE_QUERY "SELECT min(%s) FROM %s"
-#define SHARD_MAX_VALUE_QUERY "SELECT max(%s) FROM %s"
+#define SHARD_RANGE_QUERY "SELECT min(%s), max(%s) FROM %s"
 #define SHARD_TABLE_SIZE_QUERY "SELECT pg_table_size(%s)"
 #define SHARD_CSTORE_TABLE_SIZE_QUERY "SELECT cstore_table_size(%s)"
 #define DROP_REGULAR_TABLE_COMMAND "DROP TABLE IF EXISTS %s"
