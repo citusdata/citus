@@ -39,6 +39,7 @@ extern Datum fake_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum initialize_remote_temp_table(PG_FUNCTION_ARGS);
 extern Datum count_remote_temp_table_rows(PG_FUNCTION_ARGS);
 extern Datum get_and_purge_connection(PG_FUNCTION_ARGS);
+extern Datum connect_and_purge_connection(PG_FUNCTION_ARGS);
 extern Datum set_connection_status_bad(PG_FUNCTION_ARGS);
 
 /* function declarations for exercising metadata functions */
