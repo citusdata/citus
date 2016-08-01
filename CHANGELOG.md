@@ -1,3 +1,7 @@
+### citus v5.2.0-rc.1 (August 1, 2016) ###
+
+* Initial 5.2.0 candidate
+
 ### citus v5.1.1 (June 17, 2016) ###
 
 * Adds complex count distinct expression support in repartitioned subqueries
