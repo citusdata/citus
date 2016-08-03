@@ -15,5 +15,5 @@ before_install:
   - tools/travis/nuke_pg.sh
 install:
   - tools/travis/install_pg.sh
-script: tools/travis/pg_travis_multi_test.sh
+script: CFLAGS=-Werror tools/travis/pg_travis_multi_test.sh
 after_success: tools/travis/sync_to_enterprise
