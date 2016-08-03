@@ -18,5 +18,5 @@ install:
   - install_uncrustify
   - install_pg
 before_script: citus_indent --quiet --check
-script: pg_travis_multi_test
+script: CFLAGS=-Werror pg_travis_multi_test
 after_success: sync_to_enterprise
