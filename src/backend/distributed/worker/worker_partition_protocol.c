@@ -18,9 +18,6 @@
 #include "funcapi.h"
 
 #include <arpa/inet.h>
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -449,20 +446,12 @@ StringInfo
 JobDirectoryName(uint64 jobId)
 {
 	/*
-	 * We use the default tablespace in {datadir}/base. Further, we need to
-	 * apply padding on our 64-bit job id, and hence can't use UINT64_FORMAT.
+	 * We use the default tablespace in {datadir}/base.
 	 */
-#ifdef HAVE_INTTYPES_H
 	StringInfo jobDirectoryName = makeStringInfo();
-	appendStringInfo(jobDirectoryName, "base/%s/%s%0*" PRIu64,
+	appendStringInfo(jobDirectoryName, "base/%s/%s%0*" INT64_MODIFIER "u",
 					 PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX,
 					 MIN_JOB_DIRNAME_WIDTH, jobId);
-#else
-	StringInfo jobDirectoryName = makeStringInfo();
-	appendStringInfo(jobDirectoryName, "base/%s/%s%0*llu",
-					 PG_JOB_CACHE_DIR, JOB_DIRECTORY_PREFIX,
-					 MIN_JOB_DIRNAME_WIDTH, jobId);
-#endif
 
 	return jobDirectoryName;
 }
