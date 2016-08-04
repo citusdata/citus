@@ -424,19 +424,51 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 (1 row)
 
 DROP INDEX temp_index_1;
--- verify that distributed ddl commands are not allowed inside a transaction block
+-- verify that single distributed ddl commands are allowed inside a transaction block
 SET citus.enable_ddl_propagation to true;
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
-ERROR:  distributed DDL commands cannot run inside a transaction block
+COMMIT;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+  indexname   |   tablename    
+--------------+----------------
+ temp_index_2 | lineitem_alter
+(1 row)
+
+DROP INDEX temp_index_2;
+-- but that multiple ddl statements in a block results in ROLLBACK
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+ALTER TABLE lineitem_alter ADD COLUMN first integer;
+ERROR:  distributed DDL commands must not appear within transaction blocks containing other modifications
 COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
  indexname | tablename 
 -----------+-----------
 (0 rows)
 
+-- and distributed SELECTs cannot appear after ALTER
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+SELECT l_orderkey FROM lineitem_alter LIMIT 0;
+ERROR:  cannot open new connections after the first modification command within a transaction
+COMMIT;
+-- but are allowed before
+BEGIN;
+SELECT l_orderkey FROM lineitem_alter LIMIT 0;
+ l_orderkey 
+------------
+(0 rows)
+
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+COMMIT;
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+  indexname   |   tablename    
+--------------+----------------
+ temp_index_2 | lineitem_alter
+(1 row)
+
 DROP INDEX temp_index_2;
-ERROR:  index "temp_index_2" does not exist
 --- verify that distributed ddl commands can be used with 2pc
 SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE INDEX temp_index_3 ON lineitem_alter(l_orderkey);

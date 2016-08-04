@@ -1255,7 +1255,13 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 {
 	bool executionOK = false;
 
-	PreventTransactionChain(isTopLevel, "distributed DDL commands");
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("distributed DDL commands must not appear within "
+							   "transaction blocks containing other modifications")));
+	}
+
 	ShowNoticeIfNotUsing2PC();
 
 	executionOK = ExecuteCommandOnWorkerShards(relationId, ddlCommandString);
@@ -1265,6 +1271,8 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	{
 		ereport(ERROR, (errmsg("could not execute DDL command on worker node shards")));
 	}
+
+	XactModificationLevel = XACT_MODIFICATION_SCHEMA;
 }
 
 

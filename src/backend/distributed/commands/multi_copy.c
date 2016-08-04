@@ -233,6 +233,8 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 							errmsg("unsupported partition method")));
 		}
 	}
+
+	XactModificationLevel = XACT_MODIFICATION_DATA;
 }
 
 

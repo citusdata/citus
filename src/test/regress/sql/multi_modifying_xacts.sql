@@ -78,6 +78,7 @@ SELECT name FROM researchers WHERE lab_id = 4;
 BEGIN;
 DO $$
 BEGIN
+	INSERT INTO researchers VALUES (11, 11, 'Whitfield Diffie');
 	INSERT INTO researchers VALUES (NULL, 10, 'Edsger Dijkstra');
 EXCEPTION
     WHEN not_null_violation THEN
@@ -122,12 +123,23 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
 ABORT;
 
--- applies to DDL or COPY, too
+-- applies to DDL, too
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
-ALTER TABLE labs ADD COLUMN text motto;
+ALTER TABLE labs ADD COLUMN motto text;
 COMMIT;
 
+-- whether it occurs first or second
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+INSERT INTO labs VALUES (6, 'Bell Labs');
+COMMIT;
+
+-- but the DDL should correctly roll back
+\d labs
+SELECT * FROM labs WHERE id = 6;
+
+-- COPY can't happen second,
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
@@ -135,7 +147,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 \.
 COMMIT;
 
--- though the copy will work if before any modifications
+-- though it will work if before any modifications
 BEGIN;
 \copy labs from stdin delimiter ','
 10,Weyland-Yutani
@@ -143,6 +155,42 @@ BEGIN;
 SELECT name FROM labs WHERE id = 10;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
+
+-- but a double-copy isn't allowed (the first will persist)
+BEGIN;
+\copy labs from stdin delimiter ','
+11,Planet Express
+\.
+\copy labs from stdin delimiter ','
+12,fsociety
+\.
+COMMIT;
+
+SELECT name FROM labs WHERE id = 11;
+
+-- finally, ALTER and copy aren't compatible
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+\copy labs from stdin delimiter ','
+12,fsociety,lol
+\.
+COMMIT;
+
+-- but the DDL should correctly roll back
+\d labs
+SELECT * FROM labs WHERE id = 12;
+
+-- and if the copy is before the ALTER...
+BEGIN;
+\copy labs from stdin delimiter ','
+12,fsociety
+\.
+ALTER TABLE labs ADD COLUMN motto text;
+COMMIT;
+
+-- the DDL fails, but copy persists
+\d labs
+SELECT * FROM labs WHERE id = 12;
 
 -- now, for some special failures...
 CREATE TABLE objects (

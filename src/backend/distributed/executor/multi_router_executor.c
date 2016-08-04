@@ -138,6 +138,14 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	{
 		eflags |= EXEC_FLAG_SKIP_TRIGGERS;
 
+		if (XactModificationLevel == XACT_MODIFICATION_SCHEMA)
+		{
+			ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+							errmsg("distributed data modifications must not appear in "
+								   "transaction blocks which contain distributed DDL "
+								   "commands")));
+		}
+
 		/*
 		 * We could naturally handle function-based transactions (i.e. those
 		 * using PL/pgSQL or similar) by checking the type of queryDesc->dest,
@@ -228,7 +236,7 @@ InitTransactionStateForTask(Task *task)
 		participantEntry->connection = connection;
 	}
 
-	IsModifyingTransaction = true;
+	XactModificationLevel = XACT_MODIFICATION_DATA;
 }
 
 
@@ -1178,7 +1186,7 @@ RegisterRouterExecutorXactCallbacks(void)
 static void
 RouterTransactionCallback(XactEvent event, void *arg)
 {
-	if (xactParticipantHash == NULL)
+	if (XactModificationLevel != XACT_MODIFICATION_DATA)
 	{
 		return;
 	}
@@ -1235,7 +1243,7 @@ RouterTransactionCallback(XactEvent event, void *arg)
 	}
 
 	/* reset transaction state */
-	IsModifyingTransaction = false;
+	XactModificationLevel = XACT_MODIFICATION_NONE;
 	xactParticipantHash = NULL;
 	xactShardConnSetList = NIL;
 	subXactAbortAttempted = false;
@@ -1274,6 +1282,11 @@ ExecuteTransactionEnd(bool commit)
 	HASH_SEQ_STATUS scan;
 	NodeConnectionEntry *participant;
 	bool completed = !commit; /* aborts are assumed completed */
+
+	if (xactParticipantHash == NULL)
+	{
+		return;
+	}
 
 	hash_seq_init(&scan, xactParticipantHash);
 	while ((participant = (NodeConnectionEntry *) hash_seq_search(&scan)))
