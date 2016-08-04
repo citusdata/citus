@@ -110,6 +110,7 @@ static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
+static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
@@ -199,6 +200,11 @@ multi_ProcessUtility(Node *parsetree,
 	if (IsA(parsetree, AlterSeqStmt))
 	{
 		ErrorIfDistributedAlterSeqOwnedBy((AlterSeqStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, TruncateStmt))
+	{
+		ErrorIfUnsupportedTruncateStmt((TruncateStmt *) parsetree);
 	}
 
 	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
@@ -1039,6 +1045,33 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 								   "distributed table"),
 							errhint("Use a sequence in a distributed table by specifying "
 									"a serial column type before creating any shards.")));
+		}
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedTruncateStmt errors out if the command attempts to
+ * truncate a distributed foreign table.
+ */
+static void
+ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
+{
+	List *relationList = truncateStatement->relations;
+	ListCell *relationCell = NULL;
+	foreach(relationCell, relationList)
+	{
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, true);
+		char relationKind = get_rel_relkind(relationId);
+		if (IsDistributedTable(relationId) &&
+			relationKind == RELKIND_FOREIGN_TABLE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("truncating distributed foreign tables is "
+								   "currently unsupported"),
+							errhint("Use master_drop_all_shards to remove "
+									"foreign table's shards.")));
 		}
 	}
 }
