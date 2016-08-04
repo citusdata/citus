@@ -32,7 +32,6 @@
 /* SQL statement for testing */
 #define TEST_SQL "DO $$ BEGIN RAISE EXCEPTION 'Raised remotely!'; END $$"
 
-
 /*
  * NodeConnectionKey acts as the key to index into the (process-local) hash
  * keeping track of open connections. Node name and port are sufficient.
@@ -53,8 +52,18 @@ typedef struct NodeConnectionEntry
 } NodeConnectionEntry;
 
 
+/* describes what kind of modifications have occurred in the current transaction */
+typedef enum
+{
+	XACT_MODIFICATION_INVALID = 0, /* placeholder initial value */
+	XACT_MODIFICATION_NONE,        /* no modifications have taken place */
+	XACT_MODIFICATION_DATA,        /* data modifications (DML) have occurred */
+	XACT_MODIFICATION_SCHEMA       /* schema modifications (DDL) have occurred */
+} XactModificationType;
+
+
 /* state needed to prevent new connections during modifying transactions */
-extern bool IsModifyingTransaction;
+extern XactModificationType XactModificationLevel;
 
 
 /* function declarations for obtaining and using a connection */
