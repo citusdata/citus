@@ -172,6 +172,8 @@ COMMIT;
 --------+--------+-----------
  id     | bigint | not null
  name   | text   | not null
+Triggers:
+    "citus_truncate_trigger_on_public.labs" BEFORE TRUNCATE ON labs FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 SELECT * FROM labs WHERE id = 6;
  id | name 
@@ -223,6 +225,8 @@ COMMIT;
 --------+--------+-----------
  id     | bigint | not null
  name   | text   | not null
+Triggers:
+    "citus_truncate_trigger_on_public.labs" BEFORE TRUNCATE ON labs FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 SELECT * FROM labs WHERE id = 12;
  id | name 
@@ -242,6 +246,8 @@ COMMIT;
 --------+--------+-----------
  id     | bigint | not null
  name   | text   | not null
+Triggers:
+    "citus_truncate_trigger_on_public.labs" BEFORE TRUNCATE ON labs FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 SELECT * FROM labs WHERE id = 12;
  id |   name   
