@@ -294,7 +294,10 @@ AcquireExecutorShardLock(Task *task, LOCKMODE lockMode)
 {
 	int64 shardId = task->anchorShardId;
 
-	LockShardResource(shardId, lockMode);
+	if (shardId != INVALID_SHARD_ID)
+	{
+		LockShardResource(shardId, lockMode);
+	}
 }
 
 
