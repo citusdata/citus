@@ -821,7 +821,12 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
 			(*parameterTypes)[parameterIndex] = parameterData->ptype;
 		}
 
-		if (parameterData->isnull)
+		/*
+		 * If the parameter is NULL, or is not referenced / used (ptype == 0
+		 * would otherwise have errored out inside standard_planner()),
+		 * don't pass a value to the remote side.
+		 */
+		if (parameterData->isnull || parameterData->ptype == 0)
 		{
 			(*parameterValues)[parameterIndex] = NULL;
 			continue;
