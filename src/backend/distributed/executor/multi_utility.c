@@ -53,6 +53,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/value.h"
+#include "server/fmgr.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "tcop/dest.h"
@@ -103,6 +104,7 @@ static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
+static Node * ProcessTruncateStmt(TruncateStmt *truncateStatement);
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -199,6 +201,16 @@ multi_ProcessUtility(Node *parsetree,
 	if (IsA(parsetree, AlterSeqStmt))
 	{
 		ErrorIfDistributedAlterSeqOwnedBy((AlterSeqStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, TruncateStmt))
+	{
+		parsetree = ProcessTruncateStmt((TruncateStmt *) parsetree);
+
+		if (parsetree == NULL)
+		{
+			return;
+		}
 	}
 
 	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
@@ -744,6 +756,112 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return (Node *) alterObjectSchemaStmt;
+}
+
+
+/*
+ * ProcessTruncateStmt processes truncate statement for distributed relations.
+ * The function first checks if the truncate statement is issued on a distributed
+ * relation, and bails out if it cannot find one. It expects to find a single
+ * distributed relation to be truncated. the function errors out if there are more
+ * than one distributed relation, or there is a mixture of distributed/local
+ * relations in the truncate target list.
+ *
+ * Actual truncate operation differs based on the distribution method. The function
+ * calls master_drop_all_shards to for append distributed relation to drop all shards.
+ * Truncate on hash or range distributed tables is handled by the function
+ * master_modify_multiple_shards with truncate table statement as a parameter.
+ *
+ * The function disregards any parameters that truncate command may have.
+ */
+static Node *
+ProcessTruncateStmt(TruncateStmt *truncateStatement)
+{
+	List *relationList = truncateStatement->relations;
+	List *distributedRelationList = NIL;
+	ListCell *relationCell = NULL;
+	RangeVar *relationRangeVar = NULL;
+	bool missingOK = false;
+	Oid relationId = InvalidOid;
+	char partitionMethod = '\0';
+	char *schemaName = NULL;
+	Oid schemaId = InvalidOid;
+	char *relationName = NULL;
+
+	foreach(relationCell, relationList)
+	{
+		RangeVar *rangeVar = (RangeVar *) lfirst(relationCell);
+		relationId = RangeVarGetRelid(rangeVar, NoLock, true);
+		if (IsDistributedTable(relationId))
+		{
+			distributedRelationList = lappend(distributedRelationList, rangeVar);
+		}
+	}
+
+	/* nothing to do if no distributed table is present */
+	if (distributedRelationList == NIL)
+	{
+		return (Node *) truncateStatement;
+	}
+
+	/* error if there are more than one table to be truncated */
+	if (list_length(distributedRelationList) != 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("truncate on multiple distributed relations is "
+							   "currently unsupported"),
+						errhint("Truncate one distributed table at a time.")));
+	}
+
+	/* distributed table must be the only table in the truncate command */
+	if (list_length(relationList) != 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("truncate including distributed and regular relations is "
+							   "currently unsupported"),
+						errhint("Truncate them separately.")));
+	}
+
+	relationRangeVar = (RangeVar *) linitial(distributedRelationList);
+
+	/* verify relation exists */
+	relationId = RangeVarGetRelid(relationRangeVar, NoLock, missingOK);
+
+	schemaId = get_rel_namespace(relationId);
+	schemaName = get_namespace_name(schemaId);
+
+	relationName = get_rel_name(relationId);
+
+	partitionMethod = PartitionMethod(relationId);
+
+	if (partitionMethod == DISTRIBUTE_BY_APPEND)
+	{
+		text *relationNameText = cstring_to_text(relationName);
+		Datum relationNameDatum = PointerGetDatum(relationNameText);
+		text *schemaNameText = cstring_to_text(schemaName);
+		Datum schemaNameDatum = PointerGetDatum(schemaNameText);
+		Datum relationIdDatum = ObjectIdGetDatum(relationId);
+
+		DirectFunctionCall3(master_drop_all_shards, relationIdDatum, relationNameDatum,
+							schemaNameDatum);
+	}
+	else
+	{
+		StringInfo truncateString = makeStringInfo();
+		char *qualifiedName = NULL;
+		text *truncateText = NULL;
+		Datum truncateTextDatum = Int32GetDatum(0);
+
+		qualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+		appendStringInfo(truncateString, "TRUNCATE TABLE %s", qualifiedName);
+		truncateText = cstring_to_text(truncateString->data);
+		truncateTextDatum = PointerGetDatum(truncateText);
+
+		DirectFunctionCall1(master_modify_multiple_shards, truncateTextDatum);
+	}
+
+	return NULL;
 }
 
 
