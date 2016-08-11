@@ -32,12 +32,12 @@ SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 
 
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
-\COPY multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
-\COPY multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 
 -- Place 'right' table only on the primary worker
 SELECT set_config('citus.shard_replication_factor', '1', false);
-\COPY multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
 
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);

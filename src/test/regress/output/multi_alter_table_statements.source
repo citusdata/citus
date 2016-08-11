@@ -30,7 +30,7 @@ SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append')
  
 (1 row)
 
-\COPY lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 -- Verify that we can add columns
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
 NOTICE:  using one-phase commit for distributed DDL commands
@@ -121,8 +121,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
--- \COPY to verify that default values take effect
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \copy to verify that default values take effect
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
  float_column | count 
 --------------+-------
@@ -167,9 +167,9 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
--- \COPY should fail because it will try to insert NULLs for a NOT NULL column
+-- \copy should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 ERROR:  null value in column "int_column2" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 1996-03-13, 1996-02-12, 1996-03-22, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
 -- Verify that DROP NOT NULL works
@@ -200,8 +200,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
  int_column2     | integer               | 
  null_column     | integer               | 
 
--- \COPY should succeed now 
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \copy should succeed now 
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 SELECT count(*) from lineitem_alter;
  count 
 -------

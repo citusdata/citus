@@ -101,11 +101,11 @@ WHERE shardid = :new_shard_id;
 
 SET citus.shard_max_size TO "1MB";
 
-\COPY lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\COPY lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 
-\COPY orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\COPY orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
 
 -- Check that we error out if shard min/max values are not exactly same.
 

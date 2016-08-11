@@ -12,7 +12,7 @@ SELECT master_create_distributed_table('tpch.nation', 'n_nationkey', 'append');
  
 (1 row)
 
-\COPY tpch.nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+\copy tpch.nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
 SELECT count(*) from tpch.nation;
  count 
 -------
