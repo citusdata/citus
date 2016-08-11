@@ -11,6 +11,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 280000;
 -- staging causes the planner to consider customer and part tables as large, and
 -- evaluate plans where some of the underlying tables need to be repartitioned.
 
-\COPY customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
-\COPY customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
-\COPY part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'
+\copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
+\copy customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
+\copy part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'

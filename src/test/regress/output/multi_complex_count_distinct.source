@@ -34,8 +34,8 @@ SELECT master_create_worker_shards('lineitem_hash', 8, 1);
  
 (1 row)
 
-\COPY lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\COPY lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
 -- is a grouping on the partition key	

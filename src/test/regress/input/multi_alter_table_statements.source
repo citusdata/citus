@@ -29,7 +29,7 @@ CREATE TABLE lineitem_alter (
 	l_comment varchar(44) not null
 	);
 SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
-\COPY lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 -- Verify that we can add columns
 
@@ -57,8 +57,8 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 
--- \COPY to verify that default values take effect
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \copy to verify that default values take effect
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
@@ -71,17 +71,17 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 
--- \COPY should fail because it will try to insert NULLs for a NOT NULL column
+-- \copy should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 
 -- Verify that DROP NOT NULL works
 
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 \d lineitem_alter
 
--- \COPY should succeed now 
-\COPY lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \copy should succeed now 
+\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 SELECT count(*) from lineitem_alter;
 
 -- Verify that SET DATA TYPE works
