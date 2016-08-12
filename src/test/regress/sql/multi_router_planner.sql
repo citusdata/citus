@@ -654,12 +654,10 @@ CREATE MATERIALIZED VIEW mv_articles_hash AS
 
 SELECT * FROM mv_articles_hash;
 
+DROP MATERIALIZED VIEW mv_articles_hash;
+
 CREATE MATERIALIZED VIEW mv_articles_hash_error AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
-
--- materialized views with (NO DATA) is still not supported
-CREATE MATERIALIZED VIEW mv_articles_hash AS
-	SELECT * FROM articles_hash WHERE author_id = 1 WITH NO DATA;
 	
 -- router planner/executor is disabled for task-tracker executor
 -- following query is router plannable, but router planner is disabled
@@ -681,7 +679,6 @@ SET client_min_messages to 'NOTICE';
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 
-DROP MATERIALIZED VIEW mv_articles_hash;
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
