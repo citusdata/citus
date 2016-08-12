@@ -319,7 +319,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		ListCell *lingeringPlacementCell = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		char *shardAlias = NULL;
 		char *quotedShardName = NULL;
 		StringInfo shardName = makeStringInfo();
 
