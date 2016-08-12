@@ -1,3 +1,5 @@
-/* citus--5.1-8--5.2-1.sql */
+/* citus--5.2-1--5.3-0.sql */
 
-/* empty, but required to update the extension version */
+ALTER TABLE pg_catalog.pg_dist_shard
+DROP COLUMN IF EXISTS shardalias;
+
