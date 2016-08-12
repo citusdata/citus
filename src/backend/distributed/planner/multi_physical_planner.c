@@ -3753,27 +3753,13 @@ ShardFetchQueryString(uint64 shardId)
 	char *shardSchemaName = NULL;
 	char *shardTableName = NULL;
 
-	/*
-	 * If user specified a shard alias in pg_dist_shard, error out and display a
-	 * message explaining the limitation.
-	 */
-	char *shardAliasName = LoadShardAlias(shardInterval->relationId, shardId);
-	if (shardAliasName != NULL)
-	{
-		ereport(ERROR, (errmsg("cannot fetch shard " UINT64_FORMAT, shardId),
-						errdetail("Fetching shards with aliases is currently "
-								  "unsupported")));
-	}
-	else
-	{
-		/* construct the shard name */
-		Oid shardSchemaId = get_rel_namespace(shardInterval->relationId);
-		char *tableName = get_rel_name(shardInterval->relationId);
+	/* construct the shard name */
+	Oid shardSchemaId = get_rel_namespace(shardInterval->relationId);
+	char *tableName = get_rel_name(shardInterval->relationId);
 
-		shardSchemaName = get_namespace_name(shardSchemaId);
-		shardTableName = pstrdup(tableName);
-		AppendShardIdToName(&shardTableName, shardId);
-	}
+	shardSchemaName = get_namespace_name(shardSchemaId);
+	shardTableName = pstrdup(tableName);
+	AppendShardIdToName(&shardTableName, shardId);
 
 	shardFetchQuery = makeStringInfo();
 	if (storageType == SHARD_STORAGE_TABLE || storageType == SHARD_STORAGE_RELAY ||
@@ -3986,21 +3972,11 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 		aliasName = relationName;
 
 		/*
-		 * If user specified a shard name in pg_dist_shard, use that name in alias.
-		 * Otherwise, set shard name in alias to <relation_name>_<shard_id>.
+		 * Set shard name in alias to <relation_name>_<shard_id>.
 		 */
-		shardAliasName = LoadShardAlias(relationId, shardId);
-		if (shardAliasName != NULL)
-		{
-			fragmentName = shardAliasName;
-		}
-		else
-		{
-			char *shardName = pstrdup(relationName);
-			AppendShardIdToName(&shardName, shardId);
-
-			fragmentName = shardName;
-		}
+		char *shardName = pstrdup(relationName);
+		AppendShardIdToName(&shardName, shardId);
+		fragmentName = shardName;
 	}
 	else if (fragmentType == CITUS_RTE_REMOTE_QUERY)
 	{

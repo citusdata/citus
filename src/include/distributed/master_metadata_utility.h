@@ -59,7 +59,6 @@ typedef struct ShardPlacement
 extern List * LoadShardIntervalList(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
-extern char * LoadShardAlias(Oid relationId, uint64 shardId);
 extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern List * FinalizedShardPlacementList(uint64 shardId);

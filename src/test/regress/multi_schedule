@@ -44,7 +44,6 @@ test: multi_query_directory_cleanup
 test: multi_task_assignment_policy
 test: multi_utility_statements
 test: multi_dropped_column_aliases
-test: multi_verify_no_join_with_alias
 test: multi_binary_master_copy_format
 test: multi_prepare_sql multi_prepare_plsql
 

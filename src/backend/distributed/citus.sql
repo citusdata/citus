@@ -42,7 +42,6 @@ CREATE TABLE citus.pg_dist_shard(
     logicalrelid oid NOT NULL,
     shardid int8 NOT NULL,
     shardstorage "char" NOT NULL,
-    shardalias text,
     shardminvalue text,
     shardmaxvalue text
 );

@@ -325,18 +325,9 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 		Assert(shardInterval->relationId == relationId);
 
-		/* if shard doesn't have an alias, extend regular table name */
-		shardAlias = LoadShardAlias(relationId, shardId);
-		if (shardAlias == NULL)
-		{
-			appendStringInfoString(shardName, relationName);
-			AppendShardIdToStringInfo(shardName, shardId);
-		}
-		else
-		{
-			appendStringInfoString(shardName, shardAlias);
-		}
-
+		/* Build shard relation name. */
+		appendStringInfoString(shardName, relationName);
+		AppendShardIdToStringInfo(shardName, shardId);
 		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);
 
 		shardPlacementList = ShardPlacementList(shardId);

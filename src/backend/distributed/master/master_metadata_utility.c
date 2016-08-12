@@ -139,72 +139,6 @@ AllocateUint64(uint64 value)
 
 
 /*
- * LoadShardAlias finds the row for given relation and shardId in pg_dist_shard,
- * finds the shard alias in this row if any, and then deep copies this alias.
- */
-char *
-LoadShardAlias(Oid relationId, uint64 shardId)
-{
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
-	Datum shardAliasDatum = 0;
-	bool shardAliasNull = false;
-	char *shardAlias = NULL;
-
-	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistShard);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
-				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
-
-	scanDescriptor = systable_beginscan(pgDistShard,
-										DistShardShardidIndexId(), true,
-										NULL, scanKeyCount, scanKey);
-
-	/*
-	 * Normally, we should have at most one tuple here as we have a unique index
-	 * on shardId. However, if users want to drop this uniqueness constraint,
-	 * and look up the shardalias based on the relation and shardId pair, we
-	 * still allow that. We don't have any users relaying on this feature. Thus,
-	 * we may consider to remove this check.
-	 */
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_dist_shard pgDistShardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
-		if (pgDistShardForm->logicalrelid == relationId)
-		{
-			break;
-		}
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	/* if no tuple found, error out */
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for relationId: %u "
-							   "and shard " UINT64_FORMAT, relationId, shardId)));
-	}
-
-	/* if shard alias exists, deep copy cstring */
-	shardAliasDatum = heap_getattr(heapTuple, Anum_pg_dist_shard_shardalias,
-								   tupleDescriptor, &shardAliasNull);
-	if (!shardAliasNull)
-	{
-		shardAlias = TextDatumGetCString(shardAliasDatum);
-	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, AccessShareLock);
-
-	return shardAlias;
-}
-
-
-/*
  * CopyShardInterval copies fields from the specified source ShardInterval
  * into the fields of the provided destination ShardInterval.
  */
@@ -405,15 +339,11 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	{
 		values[Anum_pg_dist_shard_shardminvalue - 1] = PointerGetDatum(shardMinValue);
 		values[Anum_pg_dist_shard_shardmaxvalue - 1] = PointerGetDatum(shardMaxValue);
-
-		/* we always set shard alias to null */
-		isNulls[Anum_pg_dist_shard_shardalias - 1] = true;
 	}
 	else
 	{
 		isNulls[Anum_pg_dist_shard_shardminvalue - 1] = true;
 		isNulls[Anum_pg_dist_shard_shardmaxvalue - 1] = true;
-		isNulls[Anum_pg_dist_shard_shardalias - 1] = true;
 	}
 
 	/* open shard relation and insert new tuple */

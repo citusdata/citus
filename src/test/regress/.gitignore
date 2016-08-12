@@ -5,3 +5,5 @@
 /tmp_check/
 /results/
 /log/
+/regression.out
+/regression.diffs
