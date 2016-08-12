@@ -3951,7 +3951,6 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 	CitusRTEKind fragmentType = fragment->fragmentType;
 	if (fragmentType == CITUS_RTE_RELATION)
 	{
-		char *shardAliasName = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) fragment->fragmentReference;
 		uint64 shardId = shardInterval->shardId;
 
@@ -3974,9 +3973,8 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 		/*
 		 * Set shard name in alias to <relation_name>_<shard_id>.
 		 */
-		char *shardName = pstrdup(relationName);
-		AppendShardIdToName(&shardName, shardId);
-		fragmentName = shardName;
+		fragmentName = pstrdup(relationName);
+		AppendShardIdToName(&fragmentName, shardId);
 	}
 	else if (fragmentType == CITUS_RTE_REMOTE_QUERY)
 	{
