@@ -1530,6 +1530,11 @@ SELECT * FROM mv_articles_hash;
  41 |         1 | aznavour     |      11814
 (5 rows)
 
+DROP MATERIALIZED VIEW mv_articles_hash;
+DEBUG:  drop auto-cascades to type mv_articles_hash
+DEBUG:  drop auto-cascades to type mv_articles_hash[]
+DEBUG:  drop auto-cascades to rule _RETURN on materialized view mv_articles_hash
+DEBUG:  EventTriggerInvoke 16727
 CREATE MATERIALIZED VIEW mv_articles_hash_error AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
 NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
@@ -1537,13 +1542,6 @@ HINT:  Consider rewriting the expression with OR/AND clauses.
 NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
 HINT:  Consider rewriting the expression with OR/AND clauses.
 ERROR:  cannot create temporary table within security-restricted operation
--- materialized views with (NO DATA) is still not supported
-CREATE MATERIALIZED VIEW mv_articles_hash AS
-	SELECT * FROM articles_hash WHERE author_id = 1 WITH NO DATA;
-DEBUG:  predicate pruning for shardId 840001
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
-ERROR:  scan directions other than forward scans are unsupported
 	
 -- router planner/executor is disabled for task-tracker executor
 -- following query is router plannable, but router planner is disabled
@@ -1583,7 +1581,6 @@ DEBUG:  predicate pruning for shardId 840001
 SET client_min_messages to 'NOTICE';
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
-DROP MATERIALIZED VIEW mv_articles_hash;
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
