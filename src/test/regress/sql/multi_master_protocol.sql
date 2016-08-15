@@ -15,8 +15,6 @@ SELECT * FROM master_get_table_ddl_events('lineitem');
 
 SELECT * FROM master_get_new_shardid();
 
-SELECT * FROM master_get_local_first_candidate_nodes();
-
 SELECT * FROM master_get_round_robin_candidate_nodes(1);
 
 SELECT * FROM master_get_round_robin_candidate_nodes(2);
