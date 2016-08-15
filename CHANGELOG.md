@@ -1,3 +1,69 @@
+### citus v5.2.0 (August 15, 2016) ###
+
+* Drops support for PostgreSQL 9.4; PostgreSQL 9.5 is required
+
+* Adds schema support for tables, other named objects (types, operators, etc.)
+
+* Evaluates non-immutable functions on master in all modification commands
+
+* Adds support for SERIAL types in non-partition columns
+
+* Adds support for RETURNING clause in INSERT, UPDATE, and DELETE commands
+
+* Adds support for multi-statement transactions involving a fixed set of nodes
+
+* Full SQL support for SELECT queries which can be executed on a single worker
+
+* Adds option to perform DDL changes using prepared transactions (2PC)
+
+* Adds an `enable_ddl_propagation` parameter to control DDL propagation
+
+* Accelerates shard pruning during merges
+
+* Adds `master_modify_multiple_shards` UDF to modify many shards at once
+
+* Adds COPY support for arrays of user-defined types
+
+* Now supports parameterized prepared statements for certain use cases
+
+* Extends LIMIT/OFFSET support to all executor types
+
+* Constraint violations now fail fast rather than hitting all placements
+
+* Makes `master_create_empty_shard` aware of shard placement policy
+
+* Reduces unnecessary sleep during queries processed by real-time executor
+
+* Improves task tracker executor's task cleanup logic
+
+* Relaxes restrictions on cancellation of DDL commands
+
+* Removes ONLY keyword from worker SELECT queries
+
+* Error message improvements and standardization
+
+* Moves `master_update_shard_statistics` function to `pg_catalog` schema
+
+* Fixes a bug where hash-partitioned anti-joins could return incorrect results
+
+* Now sets storage type correctly for foreign table-backed shards
+
+* Fixes `master_update_shard_statistics` issue with hash-partitioned tables
+
+* Fixes an issue related to extending table names that require escaping
+
+* Reduces risk of row counter overflows during modifications
+
+* Fixes a crash related to FILTER clause use in COUNT DISTINCT subqueries
+
+* Fixes crashes related to partition columns with high attribute numbers
+
+* Fixes certain subquery and join crashes
+
+* Detects flex for build even if PostgreSQL was built without it
+
+* Fixes assert-enabled crash when `all_modifications_commutative` is true
+
 ### citus v5.2.0-rc.1 (August 1, 2016) ###
 
 * Initial 5.2.0 candidate
