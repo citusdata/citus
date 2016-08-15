@@ -441,7 +441,31 @@ ClosePartitionFiles(FileOutputStream *partitionFileArray, uint32 fileCount)
 }
 
 
-/* Constructs a standardized job directory path for the given job id. */
+/*
+ * MasterJobDirectoryName constructs a standardized job
+ * directory path for the given job id on the master node.
+ */
+StringInfo
+MasterJobDirectoryName(uint64 jobId)
+{
+	StringInfo jobDirectoryName = makeStringInfo();
+
+	/*
+	 * We use the default tablespace in {datadir}/base. Further, we need to
+	 * apply padding on our 64-bit job id, and hence can't use UINT64_FORMAT.
+	 */
+	appendStringInfo(jobDirectoryName, "base/%s/%s%0*" INT64_MODIFIER "u",
+					 PG_JOB_CACHE_DIR, MASTER_JOB_DIRECTORY_PREFIX,
+					 MIN_JOB_DIRNAME_WIDTH, jobId);
+
+	return jobDirectoryName;
+}
+
+
+/*
+ * JobDirectoryName Constructs a standardized job
+ * directory path for the given job id on the worker nodes.
+ */
 StringInfo
 JobDirectoryName(uint64 jobId)
 {

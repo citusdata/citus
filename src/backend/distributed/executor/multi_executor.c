@@ -87,7 +87,7 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			 * We create a directory on the master node to keep task execution results.
 			 * We also register this directory for automatic cleanup on portal delete.
 			 */
-			jobDirectoryName = JobDirectoryName(workerJob->jobId);
+			jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
 			CreateDirectory(jobDirectoryName);
 
 			ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
