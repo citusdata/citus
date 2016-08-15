@@ -347,7 +347,7 @@ MasterNodeCopyStatementList(MultiPlan *multiPlan)
 	foreach(workerTaskCell, workerTaskList)
 	{
 		Task *workerTask = (Task *) lfirst(workerTaskCell);
-		StringInfo jobDirectoryName = JobDirectoryName(workerTask->jobId);
+		StringInfo jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
 		StringInfo taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
 		RangeVar *relation = makeRangeVar(NULL, tableName, -1);
