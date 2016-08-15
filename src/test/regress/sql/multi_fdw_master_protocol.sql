@@ -15,5 +15,3 @@ SELECT part_storage_type, part_key, part_replica_count, part_max_size,
 SELECT * FROM master_get_table_ddl_events('lineitem');
 
 SELECT * FROM master_get_new_shardid();
-
-SELECT node_name FROM master_get_local_first_candidate_nodes();
