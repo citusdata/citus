@@ -17,10 +17,6 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 
-#ifdef HAVE_INTTYPES_H
-#include <inttypes.h>
-#endif
-
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
@@ -253,19 +249,9 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 StringInfo
 JobSchemaName(uint64 jobId)
 {
-	/*
-	 * We need to apply padding on our 64-bit job id, and therefore cannot use
-	 * UINT64_FORMAT here.
-	 */
-#ifdef HAVE_INTTYPES_H
 	StringInfo jobSchemaName = makeStringInfo();
-	appendStringInfo(jobSchemaName, "%s%0*" PRIu64, JOB_SCHEMA_PREFIX,
+	appendStringInfo(jobSchemaName, "%s%0*" INT64_MODIFIER "u", JOB_SCHEMA_PREFIX,
 					 MIN_JOB_DIRNAME_WIDTH, jobId);
-#else
-	StringInfo jobSchemaName = makeStringInfo();
-	appendStringInfo(jobSchemaName, "%s%0*llu",
-					 JOB_SCHEMA_PREFIX, MIN_JOB_DIRNAME_WIDTH, jobId);
-#endif
 
 	return jobSchemaName;
 }
