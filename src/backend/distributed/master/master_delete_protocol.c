@@ -24,7 +24,6 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
-#include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_join_order.h"
@@ -319,24 +318,14 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		ListCell *lingeringPlacementCell = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		char *shardAlias = NULL;
 		char *quotedShardName = NULL;
 		StringInfo shardName = makeStringInfo();
 
 		Assert(shardInterval->relationId == relationId);
 
-		/* if shard doesn't have an alias, extend regular table name */
-		shardAlias = LoadShardAlias(relationId, shardId);
-		if (shardAlias == NULL)
-		{
-			appendStringInfoString(shardName, relationName);
-			AppendShardIdToStringInfo(shardName, shardId);
-		}
-		else
-		{
-			appendStringInfoString(shardName, shardAlias);
-		}
-
+		/* Build shard relation name. */
+		appendStringInfoString(shardName, relationName);
+		AppendShardIdToStringInfo(shardName, shardId);
 		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);
 
 		shardPlacementList = ShardPlacementList(shardId);

@@ -238,13 +238,9 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	shardSchemaOid = get_rel_namespace(relationId);
 	shardSchemaName = get_namespace_name(shardSchemaOid);
 
-	/* if shard doesn't have an alias, extend regular table name */
-	shardTableName = LoadShardAlias(relationId, shardId);
-	if (shardTableName == NULL)
-	{
-		shardTableName = get_rel_name(relationId);
-		AppendShardIdToName(&shardTableName, shardId);
-	}
+	/* Build shard table name. */
+	shardTableName = get_rel_name(relationId);
+	AppendShardIdToName(&shardTableName, shardId);
 
 	shardQualifiedName = quote_qualified_identifier(shardSchemaName, shardTableName);
 
@@ -493,19 +489,14 @@ UpdateShardStatistics(int64 shardId)
 	text *minValue = NULL;
 	text *maxValue = NULL;
 
-	/* if shard doesn't have an alias, extend regular table name */
-	shardQualifiedName = LoadShardAlias(relationId, shardId);
-	if (shardQualifiedName == NULL)
-	{
-		char *shardName = get_rel_name(relationId);
+	/* Build shard qualified name. */
+	char *shardName = get_rel_name(relationId);
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
 
-		Oid schemaId = get_rel_namespace(relationId);
-		char *schemaName = get_namespace_name(schemaId);
+	AppendShardIdToName(&shardName, shardId);
 
-		AppendShardIdToName(&shardName, shardId);
-
-		shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
-	}
+	shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 
 	shardPlacementList = FinalizedShardPlacementList(shardId);
 
