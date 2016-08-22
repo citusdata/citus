@@ -77,7 +77,7 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
--- Stage data to tables.
+-- Load data into tables.
 
 SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset

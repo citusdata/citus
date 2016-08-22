@@ -9,7 +9,7 @@ SET citus.log_multi_join_order TO TRUE;
 SET client_min_messages TO LOG;
 -- Change configuration to treat lineitem, orders, customer, and part tables as
 -- large. The following queries are basically the same as the ones in tpch_small
--- except that more data has been staged to customer and part tables. Therefore,
+-- except that more data has been loaded into customer and part tables. Therefore,
 -- we will apply different distributed join strategies for these queries.
 SET citus.large_table_shard_count TO 2;
 -- Query #6 from the TPC-H decision support benchmark

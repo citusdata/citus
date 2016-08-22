@@ -1,7 +1,7 @@
 --
 -- MULTI_STAGE_LARGE_RECORDS
 --
--- Tests for staging data with large records (i.e. greater than the read buffer
+-- Tests for loading data with large records (i.e. greater than the read buffer
 -- size, which is 32kB) in a distributed cluster. These tests make sure that we
 -- are creating shards of correct size even when records are large.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 300000;

@@ -82,7 +82,7 @@ FROM
     
 (1 row)
 
--- Stage data to tables.
+-- Load data into tables.
 SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
