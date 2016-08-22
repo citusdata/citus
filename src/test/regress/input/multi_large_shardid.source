@@ -2,7 +2,7 @@
 -- MULTI_LARGE_SHARDID
 --
 
--- Stage data to distributed tables, and run TPC-H query #1 and #6. This test
+-- Load data into distributed tables, and run TPC-H query #1 and #6. This test
 -- differs from previous tests in that it modifies the *internal* shardId
 -- generator, forcing the distributed database to use 64-bit shard identifiers.
 
@@ -11,7 +11,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 100200300400500;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 9000000;
 
 
--- Stage additional data to start using large shard identifiers.
+-- Load additional data to start using large shard identifiers.
 
 \copy lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \copy lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'

@@ -7,8 +7,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 280000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 280000;
 
 
--- We stage more data to customer and part tables to test distributed joins. The
--- staging causes the planner to consider customer and part tables as large, and
+-- We load more data to customer and part tables to test distributed joins. The
+-- loading causes the planner to consider customer and part tables as large, and
 -- evaluate plans where some of the underlying tables need to be repartitioned.
 
 \copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
