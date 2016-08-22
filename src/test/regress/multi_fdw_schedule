@@ -20,6 +20,7 @@ test: multi_tpch_query1 multi_tpch_query3 multi_tpch_query6 multi_tpch_query10
 test: multi_tpch_query12 multi_tpch_query14 multi_tpch_query19
 
 # ----------
-# multi_fdw_large_shardid stages more shards into lineitem, and must come last
+# multi_fdw_large_shardid loads more lineitem data using high shard identifiers, and must
+# come last
 # ----------
 test: multi_fdw_large_shardid
