@@ -238,7 +238,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	shardSchemaOid = get_rel_namespace(relationId);
 	shardSchemaName = get_namespace_name(shardSchemaOid);
 
-	/* Build shard table name. */
+	/* build shard table name */
 	shardTableName = get_rel_name(relationId);
 	AppendShardIdToName(&shardTableName, shardId);
 
@@ -489,7 +489,7 @@ UpdateShardStatistics(int64 shardId)
 	text *minValue = NULL;
 	text *maxValue = NULL;
 
-	/* Build shard qualified name. */
+	/* build shard qualified name */
 	char *shardName = get_rel_name(relationId);
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);

@@ -323,7 +323,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 		Assert(shardInterval->relationId == relationId);
 
-		/* Build shard relation name. */
+		/* build shard relation name */
 		appendStringInfoString(shardName, relationName);
 		AppendShardIdToStringInfo(shardName, shardId);
 		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);

@@ -115,7 +115,7 @@ static uint32 HashPartitionCount(void);
 static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 									uint32 shardIntervalCount);
 
-/* Local functions forward declarations for task list creation */
+/* local function forward declarations for task list creation */
 static Job * BuildJobTreeTaskList(Job *jobTree);
 static List * SubquerySqlTaskList(Job *job);
 static List * SqlTaskList(Job *job);
@@ -3969,9 +3969,7 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 
 		aliasName = relationName;
 
-		/*
-		 * Set shard name in alias to <relation_name>_<shard_id>.
-		 */
+		/* set shard name in alias to <relation_name>_<shard_id> */
 		fragmentName = pstrdup(relationName);
 		AppendShardIdToName(&fragmentName, shardId);
 	}
