@@ -34,8 +34,8 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Distributed Query into pg_merge_job_570000
   Executor: Real-Time
-  Task Count: 6
-  Tasks Shown: One of 6
+  Task Count: 8
+  Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  HashAggregate
@@ -55,8 +55,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
   {
     "Executor": "Real-Time",
     "Job": {
-      "Task Count": 6,
-      "Tasks Shown": "One of 6",
+      "Task Count": 8,
+      "Tasks Shown": "One of 8",
       "Tasks": [
         {
           "Node": "host=localhost port=57637 dbname=regression",
@@ -122,8 +122,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
   <Distributed-Query>
     <Executor>Real-Time</Executor>
     <Job>
-      <Task-Count>6</Task-Count>
-      <Tasks-Shown>One of 6</Tasks-Shown>
+      <Task-Count>8</Task-Count>
+      <Tasks-Shown>One of 8</Tasks-Shown>
       <Tasks>
         <Task>
           <Node>host=localhost port=57637 dbname=regression</Node>
@@ -193,8 +193,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 - Executor: "Real-Time"
   Job: 
-    Task Count: 6
-    Tasks Shown: "One of 6"
+    Task Count: 8
+    Tasks Shown: "One of 8"
     Tasks: 
       - Node: "host=localhost port=57637 dbname=regression"
         Remote Plan: 
@@ -232,8 +232,8 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Distributed Query into pg_merge_job_570006
   Executor: Real-Time
-  Task Count: 6
-  Tasks Shown: One of 6
+  Task Count: 8
+  Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  HashAggregate
@@ -250,8 +250,8 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 Distributed Query into pg_merge_job_570007
   Executor: Real-Time
-  Task Count: 6
-  Tasks Shown: One of 6
+  Task Count: 8
+  Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  Aggregate
@@ -270,8 +270,8 @@ EXPLAIN (COSTS FALSE)
 	ORDER BY l_quantity LIMIT 10;
 Distributed Query into pg_merge_job_570008
   Executor: Real-Time
-  Task Count: 6
-  Tasks Shown: One of 6
+  Task Count: 8
+  Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  Limit
@@ -282,7 +282,7 @@ Distributed Query into pg_merge_job_570008
                           ->  Seq Scan on lineitem_290000 lineitem
                                 Filter: (l_quantity < 5.0)
                           ->  Hash
-                                ->  Seq Scan on orders_290006 orders
+                                ->  Seq Scan on orders_290008 orders
 Master Query
   ->  Limit
         ->  Sort
@@ -357,8 +357,8 @@ EXPLAIN (COSTS FALSE)
 	SELECT * FROM lineitem;
 Distributed Query into pg_merge_job_570012
   Executor: Real-Time
-  Task Count: 6
-  Tasks Shown: One of 6
+  Task Count: 8
+  Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  Seq Scan on lineitem_290000 lineitem
@@ -370,7 +370,7 @@ EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Distributed Query into pg_merge_job_570013
   Executor: Real-Time
-  Task Count: 3
+  Task Count: 4
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
@@ -380,12 +380,17 @@ Distributed Query into pg_merge_job_570013
   ->  Task
         Node: host=localhost port=57638 dbname=regression
         ->  Aggregate
-              ->  Seq Scan on lineitem_290003 lineitem
+              ->  Seq Scan on lineitem_290005 lineitem
                     Filter: (l_orderkey > 9030)
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  Aggregate
-              ->  Seq Scan on lineitem_290005 lineitem
+              ->  Seq Scan on lineitem_290006 lineitem
+                    Filter: (l_orderkey > 9030)
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Aggregate
+              ->  Seq Scan on lineitem_290007 lineitem
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
@@ -403,8 +408,8 @@ EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Distributed Query into pg_merge_job_570016
   Executor: Task-Tracker
-  Task Count: 3
-  Tasks Shown: One of 3
+  Task Count: 4
+  Tasks Shown: One of 4
   ->  Task
         Node: host=localhost port=57637 dbname=regression
         ->  Aggregate
@@ -429,7 +434,7 @@ Distributed Query into pg_merge_job_570019
         Map Task Count: 1
         Merge Task Count: 1
         ->  MapMergeJob
-              Map Task Count: 6
+              Map Task Count: 8
               Merge Task Count: 1
 Master Query
   ->  Aggregate
@@ -452,7 +457,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Merge Task Count": 1,
           "Depended Jobs": [
             {
-              "Map Task Count": 6,
+              "Map Task Count": 8,
               "Merge Task Count": 1
             }
           ]
@@ -502,7 +507,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Merge-Task-Count>1</Merge-Task-Count>
           <Depended-Jobs>
             <MapMergeJob>
-              <Map-Task-Count>6</Map-Task-Count>
+              <Map-Task-Count>8</Map-Task-Count>
               <Merge-Task-Count>1</Merge-Task-Count>
             </MapMergeJob>
           </Depended-Jobs>
@@ -548,7 +553,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
       - Map Task Count: 1
         Merge Task Count: 1
         Depended Jobs: 
-          - Map Task Count: 6
+          - Map Task Count: 8
             Merge Task Count: 1
   Master Query: 
     - Plan: 

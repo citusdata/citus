@@ -41,8 +41,8 @@ DEBUG:  push down of limit count: 600
     153937 | 2761321906
     199283 | 2726988572
     185925 | 2672114100
+    196629 | 2622637602
     157064 | 2614644408
-    189336 | 2596175232
 (10 rows)
 
 -- Disable limit optimization for our second test. This time, we have a query
@@ -81,15 +81,15 @@ DEBUG:  push down of limit count: 150
  c_custkey |       c_name       | lineitem_count 
 -----------+--------------------+----------------
         43 | Customer#000000043 |             42
-       370 | Customer#000000370 |             36
+       370 | Customer#000000370 |             38
+        79 | Customer#000000079 |             37
        689 | Customer#000000689 |             36
+       472 | Customer#000000472 |             35
+       685 | Customer#000000685 |             35
+       643 | Customer#000000643 |             34
        226 | Customer#000000226 |             33
        496 | Customer#000000496 |             32
-       685 | Customer#000000685 |             32
        304 | Customer#000000304 |             31
-       472 | Customer#000000472 |             31
-        79 | Customer#000000079 |             30
-       145 | Customer#000000145 |             30
 (10 rows)
 
 RESET citus.large_table_shard_count;

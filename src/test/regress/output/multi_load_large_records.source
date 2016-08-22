@@ -1,24 +1,27 @@
 --
 -- MULTI_STAGE_LARGE_RECORDS
 --
--- Tests for staging data with large records (i.e. greater than the read buffer
+-- Tests for loading data with large records (i.e. greater than the read buffer
 -- size, which is 32kB) in a distributed cluster. These tests make sure that we
 -- are creating shards of correct size even when records are large.
-
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 300000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 300000;
-
-
 SET citus.shard_max_size TO "256kB";
-
 CREATE TABLE large_records_table (data_id integer, data text);
 SELECT master_create_distributed_table('large_records_table', 'data_id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
 
-\STAGE large_records_table FROM '@abs_srcdir@/data/large_records.data' with delimiter '|'
-
+\copy large_records_table FROM '@abs_srcdir@/data/large_records.data' with delimiter '|'
 SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard, pg_class 
 	WHERE pg_class.oid=logicalrelid AND relname='large_records_table'
 	ORDER BY shardid;
+ shardminvalue | shardmaxvalue 
+---------------+---------------
+ 1             | 1
+ 2             | 2
+(2 rows)
 
 RESET citus.shard_max_size;

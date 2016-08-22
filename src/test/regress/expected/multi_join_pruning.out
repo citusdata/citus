@@ -11,12 +11,14 @@ SET client_min_messages TO DEBUG2;
 SET citus.large_table_shard_count TO 2;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [1,2496] and [8997,14946]
-DEBUG:  join prunable for intervals [2497,4964] and [8997,14946]
-DEBUG:  join prunable for intervals [4965,5986] and [8997,14946]
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  join prunable for intervals [1,1509] and [8997,14946]
+DEBUG:  join prunable for intervals [1509,2951] and [8997,14946]
+DEBUG:  join prunable for intervals [2951,4455] and [8997,14946]
+DEBUG:  join prunable for intervals [4480,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
+DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
+DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
+DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -27,9 +29,11 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 DEBUG:  predicate pruning for shardId 290000
 DEBUG:  predicate pruning for shardId 290001
 DEBUG:  predicate pruning for shardId 290002
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  predicate pruning for shardId 290003
+DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
+DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
+DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
+DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  17996 | 3.0194630872483221
@@ -45,6 +49,8 @@ DEBUG:  predicate pruning for shardId 290002
 DEBUG:  predicate pruning for shardId 290003
 DEBUG:  predicate pruning for shardId 290004
 DEBUG:  predicate pruning for shardId 290005
+DEBUG:  predicate pruning for shardId 290006
+DEBUG:  predicate pruning for shardId 290007
  sum | avg 
 -----+-----
      |    
@@ -58,10 +64,12 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 DEBUG:  predicate pruning for shardId 290000
 DEBUG:  predicate pruning for shardId 290001
 DEBUG:  predicate pruning for shardId 290002
-DEBUG:  predicate pruning for shardId 290007
-DEBUG:  join prunable for intervals [8997,11554] and [1,5986]
-DEBUG:  join prunable for intervals [11554,13920] and [1,5986]
-DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
+DEBUG:  predicate pruning for shardId 290003
+DEBUG:  predicate pruning for shardId 290009
+DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
+DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
+DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
+DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
  sum | avg 
 -----+-----
      |    

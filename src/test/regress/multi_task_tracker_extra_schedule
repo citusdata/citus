@@ -22,7 +22,7 @@ test: multi_table_ddl
 # ----------
 test: multi_create_table
 test: multi_master_protocol
-test: multi_stage_data
+test: multi_load_data
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
@@ -48,28 +48,28 @@ test: multi_tpch_query12 multi_tpch_query14 multi_tpch_query19
 test: multi_tpch_query7 multi_tpch_query7_nested
 
 # ----------
-# Parallel tests to check our join order planning logic. Note that we stage data
+# Parallel tests to check our join order planning logic. Note that we load data
 # below; and therefore these tests should come after the execution tests.
 # ----------
 test: multi_join_order_tpch_small multi_join_order_additional
-test: multi_stage_more_data
+test: multi_load_more_data
 test: multi_join_order_tpch_large
 
 # ----------
-# Tests to check our large record staging and shard deletion behavior
+# Tests to check our large record loading and shard deletion behavior
 # ----------
-test: multi_stage_large_records
+test: multi_load_large_records
 test: multi_master_delete_protocol
 test: multi_shard_modify
 
 # ----------
-# multi_create_schema tests creation, staging and querying of a table in a new
+# multi_create_schema tests creation, loading, and querying of a table in a new
 # schema (namespace).
 # ----------
 test: multi_create_schema
 
 # ---------
-# multi_outer_join stages shards to create different mappings for outer joins
+# multi_outer_join loads data to create shards to test outer join mappings
 # ---------
 test: multi_outer_join
 
@@ -99,7 +99,7 @@ test: multi_data_types
 test: multi_copy
 
 # ----------
-# multi_large_shardid stages more shards into lineitem
+# multi_large_shardid loads more lineitem data using high shard identifiers
 # ----------
 test: multi_large_shardid
 

@@ -65,7 +65,7 @@ CREATE TABLE test_count_distinct_schema.nation_hash(
 SELECT master_create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_count_distinct_schema.nation_hash', 4, 2);
 
-\COPY test_count_distinct_schema.nation_hash FROM STDIN with delimiter '|';
+\copy test_count_distinct_schema.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
