@@ -24,7 +24,7 @@ test: multi_table_ddl
 # ----------
 test: multi_create_table
 test: multi_master_protocol
-test: multi_stage_data
+test: multi_load_data
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
@@ -59,7 +59,7 @@ test: multi_tpch_query7 multi_tpch_query7_nested
 # below; and therefore these tests should come after the execution tests.
 # ----------
 test: multi_join_order_tpch_small multi_join_order_additional
-test: multi_stage_more_data
+test: multi_load_more_data
 test: multi_join_order_tpch_large
 
 # ----------
@@ -74,7 +74,7 @@ test: multi_large_table_task_assignment
 # ----------
 # Tests to check our large record loading and shard deletion behavior
 # ----------
-test: multi_stage_large_records
+test: multi_load_large_records
 test: multi_master_delete_protocol
 test: multi_shard_modify
 
