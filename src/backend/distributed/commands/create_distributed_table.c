@@ -28,6 +28,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
+#include "executor/spi.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
@@ -48,6 +49,7 @@ static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 												  Node *distributionKey);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
+static bool LocalTableEmpty(Oid tableId);
 
 
 /* exports for SQL callable functions */
@@ -120,6 +122,17 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 							   distributedRelationName),
 						errdetail("Distributed relations must be regular or "
 								  "foreign tables.")));
+	}
+
+	/* check that the relation does not contain any rows */
+	if (!LocalTableEmpty(distributedRelationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("cannot distribute relation \"%s\"",
+							   distributedRelationName),
+						errdetail("Relation \"%s\" contains data.",
+								  distributedRelationName),
+						errhint("Empty your table before distributing it.")));
 	}
 
 	distributionKey = BuildDistributionKeyFromColumnName(distributedRelation,
@@ -376,4 +389,60 @@ SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 										   supportFunctionNumber);
 
 	return supportFunctionOid;
+}
+
+
+/*
+ * LocalTableEmpty function checks whether given local table contains any row and
+ * returns false if there is any data. This function is only for local tables and
+ * should not be called for distributed tables.
+ */
+static bool
+LocalTableEmpty(Oid tableId)
+{
+	Oid schemaId = get_rel_namespace(tableId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *tableName = get_rel_name(tableId);
+	char *tableQualifiedName = quote_qualified_identifier(schemaName, tableName);
+
+	int spiConnectionResult = 0;
+	int spiQueryResult = 0;
+	StringInfo selectExistQueryString = makeStringInfo();
+
+	HeapTuple tuple = NULL;
+	Datum hasDataDatum = 0;
+	bool localTableEmpty = false;
+	bool columnNull = false;
+	bool readOnly = true;
+
+	int rowId = 0;
+	int attributeId = 1;
+
+	AssertArg(!IsDistributedTable(tableId));
+
+	spiConnectionResult = SPI_connect();
+	if (spiConnectionResult != SPI_OK_CONNECT)
+	{
+		ereport(ERROR, (errmsg("could not connect to SPI manager")));
+	}
+
+	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, tableQualifiedName);
+
+	spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
+	if (spiQueryResult != SPI_OK_SELECT)
+	{
+		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
+							   selectExistQueryString->data)));
+	}
+
+	/* we expect that SELECT EXISTS query will return single value in a single row */
+	Assert(SPI_processed == 1);
+
+	tuple = SPI_tuptable->vals[rowId];
+	hasDataDatum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, attributeId, &columnNull);
+	localTableEmpty = !DatumGetBool(hasDataDatum);
+
+	SPI_finish();
+
+	return localTableEmpty;
 }

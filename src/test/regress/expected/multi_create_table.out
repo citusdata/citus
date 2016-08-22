@@ -75,6 +75,12 @@ CREATE TABLE nation (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
+\COPY nation FROM STDIN WITH CSV
+SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
+ERROR:  cannot distribute relation "nation"
+DETAIL:  Relation "nation" contains data.
+HINT:  Empty your table before distributing it.
+TRUNCATE nation;
 SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
  master_create_distributed_table 
 ---------------------------------

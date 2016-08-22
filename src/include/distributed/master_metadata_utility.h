@@ -24,6 +24,7 @@
 
 /* total number of hash tokens (2^32) */
 #define HASH_TOKEN_COUNT INT64CONST(4294967296)
+#define SELECT_EXIST_QUERY "SELECT EXISTS (SELECT 1 FROM %s)"
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
