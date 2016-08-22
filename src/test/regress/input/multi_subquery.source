@@ -77,15 +77,35 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
--- Stage data to tables.
+-- Load data into tables.
+
+SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14946
+WHERE shardid = :new_shard_id;
 
 SET citus.shard_max_size TO "1MB";
 
-\STAGE lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\STAGE lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 
-\STAGE orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
-\STAGE orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
 
 -- Check that we error out if shard min/max values are not exactly same.
 
@@ -280,10 +300,13 @@ SELECT max(l_orderkey) FROM
   ) z
 ) y;
 
--- Load more data to one relation, then test if we error out because of different
+-- Add one more shard to one relation, then test if we error out because of different
 -- shard counts for joining relations.
 
-\STAGE orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = 15000, shardmaxvalue = 20000
+WHERE shardid = :new_shard_id;
 
 SELECT
 	avg(unit_price)

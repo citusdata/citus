@@ -32,12 +32,12 @@ SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 
 
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
-\STAGE multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
-\STAGE multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 
 -- Place 'right' table only on the primary worker
 SELECT set_config('citus.shard_replication_factor', '1', false);
-\STAGE multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
 
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
@@ -111,7 +111,7 @@ SELECT master_create_empty_shard('multi_append_table_to_shard_date');
 
 SELECT * FROM multi_append_table_to_shard_date;
 
--- Stage an empty table and check that we can query the distributed table
+-- Create an empty distributed table and check that we can query it
 CREATE TABLE multi_append_table_to_shard_stage (LIKE multi_append_table_to_shard_date);
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
@@ -120,7 +120,7 @@ WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
 
 SELECT * FROM multi_append_table_to_shard_date;
 
--- Stage NULL values and check that we can query the table
+-- INSERT NULL values and check that we can query the table
 INSERT INTO multi_append_table_to_shard_stage VALUES (NULL, NULL);
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM
@@ -129,7 +129,7 @@ WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
 
 SELECT * FROM multi_append_table_to_shard_date;
 
--- Stage regular values and check that we can query the table
+-- INSERT regular values and check that we can query the table
 INSERT INTO multi_append_table_to_shard_stage VALUES ('2016-01-01', 3);
 SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
 FROM

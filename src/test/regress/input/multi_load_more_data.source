@@ -1,0 +1,16 @@
+--
+-- MULTI_STAGE_MORE_DATA
+--
+
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 280000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 280000;
+
+
+-- We load more data to customer and part tables to test distributed joins. The
+-- loading causes the planner to consider customer and part tables as large, and
+-- evaluate plans where some of the underlying tables need to be repartitioned.
+
+\copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
+\copy customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
+\copy part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'

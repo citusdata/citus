@@ -14,7 +14,7 @@ SELECT sum(l_suppkey) / 2::numeric FROM lineitem;
 SELECT sum(l_suppkey)::int8 / 2 FROM lineitem;
 
 
--- Create a new table to test type conversions on different types, and stage
+-- Create a new table to test type conversions on different types, and load
 -- data into this table. Then, apply aggregate functions and divide / multiply
 -- the results to test type conversions.
 
@@ -24,7 +24,7 @@ CREATE TABLE aggregate_type (
        interval_value interval not null);
 SELECT master_create_distributed_table('aggregate_type', 'float_value', 'append');
 
-\STAGE aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
+\copy aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
 
 -- Test conversions using aggregates on floats and division
 

@@ -42,8 +42,8 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
-DEBUG:  predicate pruning for shardId 290006
-DEBUG:  predicate pruning for shardId 290007
+DEBUG:  predicate pruning for shardId 290008
+DEBUG:  predicate pruning for shardId 290009
  count 
 -------
       
@@ -58,7 +58,7 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
-DEBUG:  predicate pruning for shardId 290008
+DEBUG:  predicate pruning for shardId 290010
 DEBUG:  predicate pruning for shardId 280001
 DEBUG:  predicate pruning for shardId 280000
  count 
@@ -88,19 +88,19 @@ DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 13
+DETAIL:  Creating dependency on merge taskId 17
 DEBUG:  pruning merge fetch taskId 2
 DETAIL:  Creating dependency on merge taskId 7
 DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 20
+DETAIL:  Creating dependency on merge taskId 26
 DEBUG:  pruning merge fetch taskId 5
 DETAIL:  Creating dependency on merge taskId 11
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 27
+DETAIL:  Creating dependency on merge taskId 35
 DEBUG:  pruning merge fetch taskId 8
 DETAIL:  Creating dependency on merge taskId 15
 DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 34
+DETAIL:  Creating dependency on merge taskId 44
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 19
  count 
@@ -123,6 +123,8 @@ DEBUG:  predicate pruning for shardId 290002
 DEBUG:  predicate pruning for shardId 290003
 DEBUG:  predicate pruning for shardId 290004
 DEBUG:  predicate pruning for shardId 290005
+DEBUG:  predicate pruning for shardId 290006
+DEBUG:  predicate pruning for shardId 290007
  count 
 -------
       

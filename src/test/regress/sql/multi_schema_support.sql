@@ -18,7 +18,7 @@ CREATE TABLE public.nation_local(
     n_comment varchar(152)
 );
 
-\COPY public.nation_local FROM STDIN with delimiter '|';
+\copy public.nation_local FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -85,7 +85,7 @@ CREATE TABLE nation_append_search_path(
 );
 SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
 
-\COPY nation_append_search_path FROM STDIN with delimiter '|';
+\copy nation_append_search_path FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -146,7 +146,7 @@ SELECT * FROM nation_hash WHERE n_nationkey = 7;
 -- test UDFs with schemas
 SET search_path TO public;
 
-\COPY test_schema_support.nation_hash FROM STDIN with delimiter '|';
+\copy test_schema_support.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -337,7 +337,7 @@ CREATE TABLE test_schema_support.nation_hash_collation(
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 2);
 
-\COPY test_schema_support.nation_hash_collation FROM STDIN with delimiter '|';
+\copy test_schema_support.nation_hash_collation FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -360,7 +360,7 @@ CREATE TABLE nation_hash_collation_search_path(
 SELECT master_create_distributed_table('nation_hash_collation_search_path', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 2);
 
-\COPY nation_hash_collation_search_path FROM STDIN with delimiter '|';
+\copy nation_hash_collation_search_path FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -396,7 +396,7 @@ SELECT master_create_distributed_table('test_schema_support.nation_hash_composit
 SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, 2);
 
 -- insert some data to verify composite type queries
-\COPY test_schema_support.nation_hash_composite_types FROM STDIN with delimiter '|';
+\copy test_schema_support.nation_hash_composite_types FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai|(a,a)
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon|(a,b)
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special |(a,c)
@@ -531,7 +531,7 @@ SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_appen
 -- test with search_path is set
 SET search_path TO test_schema_support;
 
-\COPY nation_append FROM STDIN with delimiter '|';
+\copy nation_append FROM STDIN with delimiter '|';
 0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -578,7 +578,7 @@ CREATE TABLE test_schema_support_join_2.nation_hash (
 SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 1);
 
-\COPY test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
+\copy test_schema_support_join_1.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -590,7 +590,7 @@ SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash', 4, 
 SELECT master_create_distributed_table('test_schema_support_join_1.nation_hash_2', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4, 1);
 
-\COPY test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
+\copy test_schema_support_join_1.nation_hash_2 FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 
@@ -602,7 +602,7 @@ SELECT master_create_worker_shards('test_schema_support_join_1.nation_hash_2', 4
 SELECT master_create_distributed_table('test_schema_support_join_2.nation_hash', 'n_nationkey', 'hash');
 SELECT master_create_worker_shards('test_schema_support_join_2.nation_hash', 4, 1);
 
-\COPY test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
+\copy test_schema_support_join_2.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special 

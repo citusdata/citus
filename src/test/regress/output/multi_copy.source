@@ -118,7 +118,7 @@ SELECT count(*) FROM customer_copy_hash;
 (1 row)
 
 -- Test client-side copy from file
-\COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.3.data' WITH (DELIMITER '|');
+\copy customer_copy_hash FROM '@abs_srcdir@/data/customer.3.data' WITH (DELIMITER '|');
 -- Confirm that data was copied
 SELECT count(*) FROM customer_copy_hash;
  count 
