@@ -59,7 +59,10 @@ static void LockShardsForModify(List *shardIntervalList);
 static bool HasReplication(List *shardIntervalList);
 static int SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId);
 static int SendQueryToPlacements(char *shardQueryString,
-								 ShardConnections *shardConnections);
+								 ShardConnections *shardConnections,
+								 bool returnTupleCount);
+static void deparse_truncate_query(Query *query, Oid distrelid, int64 shardid, StringInfo
+								   buffer);
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 
@@ -88,6 +91,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	List *shardIntervalList = NIL;
 	List *prunedShardIntervalList = NIL;
 	int32 affectedTupleCount = 0;
+	bool validateModifyQuery = true;
 
 	PreventTransactionChain(isTopLevel, "master_modify_multiple_shards");
 
@@ -104,10 +108,29 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		relationId = RangeVarGetRelid(updateStatement->relation, NoLock, failOK);
 		EnsureTablePermissions(relationId, ACL_UPDATE);
 	}
+	else if (IsA(queryTreeNode, TruncateStmt))
+	{
+		TruncateStmt *truncateStatement = (TruncateStmt *) queryTreeNode;
+		List *relationList = truncateStatement->relations;
+		RangeVar *rangeVar = NULL;
+
+		if (list_length(relationList) != 1)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("master_modify_multiple_shards() can truncate only "
+							"one table")));
+		}
+
+		rangeVar = (RangeVar *) linitial(relationList);
+		relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
+		EnsureTablePermissions(relationId, ACL_TRUNCATE);
+		validateModifyQuery = false;
+	}
 	else
 	{
-		ereport(ERROR, (errmsg("query \"%s\" is not a delete nor update statement",
-							   queryString)));
+		ereport(ERROR, (errmsg("query \"%s\" is not a delete, update, or truncate "
+							   "statement", queryString)));
 	}
 
 	CheckDistributedTable(relationId);
@@ -115,7 +138,10 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 	modifyQuery = (Query *) linitial(queryTreeList);
 
-	ErrorIfModifyQueryNotSupported(modifyQuery);
+	if (validateModifyQuery)
+	{
+		ErrorIfModifyQueryNotSupported(modifyQuery);
+	}
 
 	/* reject queries with a returning list */
 	if (list_length(modifyQuery->returningList) > 0)
@@ -216,6 +242,9 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 	char *relationOwner = TableOwner(relationId);
 	HTAB *shardConnectionHash = NULL;
 	ListCell *shardIntervalCell = NULL;
+	bool truncateCommand = false;
+	bool requestTupleCount = true;
+
 
 	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
@@ -223,6 +252,12 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 															   relationOwner);
 
 	MemoryContextSwitchTo(oldContext);
+
+	if (query->commandType == CMD_UTILITY && IsA(query->utilityStmt, TruncateStmt))
+	{
+		truncateCommand = true;
+		requestTupleCount = false;
+	}
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
@@ -241,10 +276,19 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 											   &shardConnectionsFound);
 		Assert(shardConnectionsFound);
 
-		deparse_shard_query(query, relationId, shardId, shardQueryString);
+		if (truncateCommand)
+		{
+			deparse_truncate_query(query, relationId, shardId, shardQueryString);
+		}
+		else
+		{
+			deparse_shard_query(query, relationId, shardId, shardQueryString);
+		}
+
 		shardQueryStringData = shardQueryString->data;
 		shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
-														shardConnections);
+														shardConnections,
+														requestTupleCount);
 		affectedTupleCount += shardAffectedTupleCount;
 	}
 
@@ -256,12 +300,40 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 
 
 /*
+ * deparse_truncate_query creates sql representation of a truncate statement. The
+ * function only generated basic truncate statement of the form
+ * 'truncate table <table_name>' it ignores all options. It also assumes that
+ * there is only one relation in the relation list.
+ */
+void
+deparse_truncate_query(Query *query, Oid distrelid, int64 shardid, StringInfo buffer)
+{
+	TruncateStmt *truncateStatement = NULL;
+	RangeVar *relation = NULL;
+	char *qualifiedName = NULL;
+
+	Assert(query->commandType == CMD_UTILITY);
+	Assert(IsA(query->utilityStmt, TruncateStmt));
+
+	truncateStatement = (TruncateStmt *) query->utilityStmt;
+
+	Assert(list_length(truncateStatement->relations) == 1);
+
+	relation = (RangeVar *) linitial(truncateStatement->relations);
+	qualifiedName = quote_qualified_identifier(relation->schemaname,
+											   relation->relname);
+	appendStringInfo(buffer, "TRUNCATE TABLE %s_" UINT64_FORMAT, qualifiedName, shardid);
+}
+
+
+/*
  * SendQueryToPlacements sends the given query string to all given placement
  * connections of a shard. CommitRemoteTransactions or AbortRemoteTransactions
  * should be called after all queries have been sent successfully.
  */
 static int
-SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections)
+SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections,
+					  bool returnTupleCount)
 {
 	uint64 shardId = shardConnections->shardId;
 	List *connectionList = shardConnections->connectionList;
@@ -269,6 +341,11 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 	int32 shardAffectedTupleCount = -1;
 
 	Assert(connectionList != NIL);
+
+	if (!returnTupleCount)
+	{
+		shardAffectedTupleCount = 0;
+	}
 
 	foreach(connectionCell, connectionList)
 	{
@@ -290,21 +367,25 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 		}
 
 		placementAffectedTupleString = PQcmdTuples(result);
-		placementAffectedTupleCount = pg_atoi(placementAffectedTupleString,
-											  sizeof(int32), 0);
 
-		if ((shardAffectedTupleCount == -1) ||
-			(shardAffectedTupleCount == placementAffectedTupleCount))
+		if (returnTupleCount)
 		{
-			shardAffectedTupleCount = placementAffectedTupleCount;
-		}
-		else
-		{
-			ereport(ERROR,
-					(errmsg("modified %d tuples, but expected to modify %d",
-							placementAffectedTupleCount, shardAffectedTupleCount),
-					 errdetail("Affected tuple counts at placements of shard "
-							   UINT64_FORMAT " are different.", shardId)));
+			placementAffectedTupleCount = pg_atoi(placementAffectedTupleString,
+												  sizeof(int32), 0);
+
+			if ((shardAffectedTupleCount == -1) ||
+				(shardAffectedTupleCount == placementAffectedTupleCount))
+			{
+				shardAffectedTupleCount = placementAffectedTupleCount;
+			}
+			else
+			{
+				ereport(ERROR,
+						(errmsg("modified %d tuples, but expected to modify %d",
+								placementAffectedTupleCount, shardAffectedTupleCount),
+						 errdetail("Affected tuple counts at placements of shard "
+								   UINT64_FORMAT " are different.", shardId)));
+			}
 		}
 
 		PQclear(result);
