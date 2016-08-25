@@ -30,6 +30,7 @@
 #include "distributed/relay_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -41,14 +42,13 @@
 #include "utils/palloc.h"
 #include "utils/relcache.h"
 
-
 /* Local functions forward declarations */
 static bool TypeAddIndexConstraint(const AlterTableCmd *command);
 static bool TypeDropIndexConstraint(const AlterTableCmd *command,
 									const RangeVar *relation, uint64 shardId);
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
-
+static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
 
 /*
  * RelayEventExtendNames extends relation names in the given parse tree for
@@ -312,6 +312,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				ereport(ERROR, (errmsg("cannot extend name for null index name")));
 			}
 
+			/* extend ColumnRef nodes in the IndexStmt with the shardId */
+			UpdateWholeRowColumnReferencesWalker((Node *) indexStmt->indexParams,
+												 &shardId);
+
 			/* prefix with schema name if it is not added already */
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
 
@@ -533,6 +537,64 @@ AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId)
 		char **constraintName = &(command->name);
 		AppendShardIdToName(constraintName, shardId);
 	}
+}
+
+
+/*
+ * UpdateWholeRowColumnReferencesWalker extends ColumnRef nodes that end with A_Star
+ * with the given shardId.
+ *
+ * ColumnRefs that don't reference A_Star are not extended as catalog access isn't
+ * allowed here and we don't otherwise have enough context to disambiguate a
+ * field name that is identical to the table name.
+ */
+static bool
+UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId)
+{
+	bool walkIsComplete = false;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, IndexElem))
+	{
+		IndexElem *indexElem = (IndexElem *) node;
+
+		walkIsComplete = raw_expression_tree_walker(indexElem->expr,
+													UpdateWholeRowColumnReferencesWalker,
+													shardId);
+	}
+	else if (IsA(node, ColumnRef))
+	{
+		ColumnRef *columnRef = (ColumnRef *) node;
+		Node *lastField = llast(columnRef->fields);
+
+		if (IsA(lastField, A_Star))
+		{
+			/*
+			 * ColumnRef fields list ends with an A_Star, so we can blindly
+			 * extend the penultimate element with the shardId.
+			 */
+			int colrefFieldCount = list_length(columnRef->fields);
+			Value *relnameValue = list_nth(columnRef->fields, colrefFieldCount - 2);
+			Assert(IsA(relnameValue, String));
+
+			AppendShardIdToName(&relnameValue->val.str, *shardId);
+		}
+
+		/* might be more than one ColumnRef to visit */
+		walkIsComplete = false;
+	}
+	else
+	{
+		walkIsComplete = raw_expression_tree_walker(node,
+													UpdateWholeRowColumnReferencesWalker,
+													shardId);
+	}
+
+	return walkIsComplete;
 }
 
 
