@@ -3624,7 +3624,7 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	else
 	{
 		/* System column - name is fixed, get it from the catalog */
-		attname = get_rte_attribute_name(rte, attnum);
+		attname = get_relid_attribute_name(rte->relid, attnum);
 	}
 
 	if (refname && (context->varprefix || attname == NULL))

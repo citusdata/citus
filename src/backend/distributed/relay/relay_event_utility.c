@@ -30,6 +30,7 @@
 #include "distributed/relay_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -41,6 +42,13 @@
 #include "utils/palloc.h"
 #include "utils/relcache.h"
 
+/* expression tree walker context for rewriting row references */
+typedef struct
+{
+	char *relationName;
+	uint64 shardId;
+} RowRefWalkerState;
+
 
 /* Local functions forward declarations */
 static bool TypeAddIndexConstraint(const AlterTableCmd *command);
@@ -48,7 +56,9 @@ static bool TypeDropIndexConstraint(const AlterTableCmd *command,
 									const RangeVar *relation, uint64 shardId);
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
-
+static bool ExtendRowReferencesWalker(Node *node, RowRefWalkerState *state);
+static void AppendShardIdToRowReferences(IndexStmt *statement, char *relationName, uint64
+										 shardId);
 
 /*
  * RelayEventExtendNames extends relation names in the given parse tree for
@@ -315,6 +325,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			/* prefix with schema name if it is not added already */
 			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
 
+			AppendShardIdToRowReferences(indexStmt, *relationName, shardId);
 			AppendShardIdToName(relationName, shardId);
 			AppendShardIdToName(indexName, shardId);
 			break;
@@ -533,6 +544,70 @@ AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId)
 		char **constraintName = &(command->name);
 		AppendShardIdToName(constraintName, shardId);
 	}
+}
+
+
+static bool
+ExtendRowReferencesWalker(Node *node, RowRefWalkerState *state)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, IndexElem))
+	{
+		IndexElem *indexElem = (IndexElem *) node;
+
+		return raw_expression_tree_walker(indexElem->expr, ExtendRowReferencesWalker,
+										  state);
+	}
+	else if (IsA(node, ColumnRef))
+	{
+		ColumnRef *columnRef = (ColumnRef *) node;
+		ListCell *fieldsCell;
+
+		/*
+		 * Append the shardId to any ColumnRef String values that are
+		 * equal to the relationName.  These are actually ROW(relname)
+		 * references.
+		 */
+		foreach(fieldsCell, columnRef->fields)
+		{
+			Value *fieldValue = (Value *) lfirst(fieldsCell);
+
+			if (IsA(fieldValue, String))
+			{
+				char *columnName = strVal(fieldValue);
+
+				if (strncmp(columnName, state->relationName, NAMEDATALEN) == 0)
+				{
+					AppendShardIdToName(&columnName, state->shardId);
+					fieldsCell->data.ptr_value = makeString(columnName);
+				}
+			}
+		}
+	}
+
+	return raw_expression_tree_walker(node, ExtendRowReferencesWalker, (void *) state);
+}
+
+
+/*
+ * AppendShardIdToRowReferences finds ColumnRef nodes that directly reference
+ * a column with the same name as the relation and extends those names with the
+ * given shardId.
+ */
+static void
+AppendShardIdToRowReferences(IndexStmt *indexStmt, char *relationName, uint64 shardId)
+{
+	RowRefWalkerState state;
+
+	state.relationName = relationName;
+	state.shardId = shardId;
+
+	raw_expression_tree_walker((Node *) indexStmt->indexParams, ExtendRowReferencesWalker,
+							   &state);
 }
 
 
