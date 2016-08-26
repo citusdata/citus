@@ -10,7 +10,7 @@ env:
   matrix:
     - PGVERSION=9.5
 before_install:
-  - git clone -b v0.4.0 --depth 1 https://github.com/citusdata/tools.git
+  - git clone -b v0.4.1 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
   - nuke_pg
@@ -18,5 +18,5 @@ install:
   - install_uncrustify
   - install_pg
 before_script: citus_indent --quiet --check
-script: CFLAGS=-Werror pg_travis_multi_test
+script: CFLAGS=-Werror pg_travis_multi_test check-multi check-worker check-multi-fdw
 after_success: sync_to_enterprise
