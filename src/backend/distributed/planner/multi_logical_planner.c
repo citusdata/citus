@@ -38,6 +38,14 @@
 bool SubqueryPushdown = false; /* is subquery pushdown enabled */
 
 
+/* Struct to differentiate different qualifier types in an expression tree walker */
+typedef struct QualifierWalkerContext
+{
+	List *baseQualifierList;
+	List *outerJoinQualifierList;
+} QualifierWalkerContext;
+
+
 /* Function pointer type definition for apply join rule functions */
 typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNode,
 										 Var *partitionColumn, JoinType joinType,
@@ -56,7 +64,8 @@ static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
 static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static void ValidateClauseList(List *clauseList);
-static bool ExtractFromExpressionWalker(Node *node, List **qualifierList);
+static bool ExtractFromExpressionWalker(Node *node,
+										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
 static List * AddMultiCollectNodes(List *tableNodeList);
 static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
@@ -720,20 +729,45 @@ ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 /*
  * WhereClauseList walks over the FROM expression in the query tree, and builds
  * a list of all clauses from the expression tree. The function checks for both
- * implicitly and explicitly defined clauses. Explicit clauses are expressed as
- * "SELECT ... FROM R1 INNER JOIN R2 ON R1.A = R2.A". Implicit joins differ in
- * that they live in the WHERE clause, and are expressed as "SELECT ... FROM
- * ... WHERE R1.a = R2.a".
+ * implicitly and explicitly defined clauses, but only selects INNER join
+ * explicit clauses, and skips any outer-join clauses. Explicit clauses are
+ * expressed as "SELECT ... FROM R1 INNER JOIN R2 ON R1.A = R2.A". Implicit
+ * joins differ in that they live in the WHERE clause, and are expressed as
+ * "SELECT ... FROM ... WHERE R1.a = R2.a".
  */
 List *
 WhereClauseList(FromExpr *fromExpr)
 {
 	FromExpr *fromExprCopy = copyObject(fromExpr);
+	QualifierWalkerContext *walkerContext = palloc0(sizeof(QualifierWalkerContext));
 	List *whereClauseList = NIL;
 
-	ExtractFromExpressionWalker((Node *) fromExprCopy, &whereClauseList);
+	ExtractFromExpressionWalker((Node *) fromExprCopy, walkerContext);
+	whereClauseList = walkerContext->baseQualifierList;
 
 	return whereClauseList;
+}
+
+
+/*
+ * QualifierList walks over the FROM expression in the query tree, and builds
+ * a list of all qualifiers from the expression tree. The function checks for
+ * both implicitly and explicitly defined qualifiers. Note that this function
+ * is very similar to WhereClauseList(), but QualifierList() also includes
+ * outer-join clauses.
+ */
+List *
+QualifierList(FromExpr *fromExpr)
+{
+	FromExpr *fromExprCopy = copyObject(fromExpr);
+	QualifierWalkerContext *walkerContext = palloc0(sizeof(QualifierWalkerContext));
+	List *qualifierList = NIL;
+
+	ExtractFromExpressionWalker((Node *) fromExprCopy, walkerContext);
+	qualifierList = list_concat(qualifierList, walkerContext->baseQualifierList);
+	qualifierList = list_concat(qualifierList, walkerContext->outerJoinQualifierList);
+
+	return qualifierList;
 }
 
 
@@ -790,8 +824,15 @@ JoinClauseList(List *whereClauseList)
 
 /*
  * ExtractFromExpressionWalker walks over a FROM expression, and finds all
- * explicit qualifiers in the expression. The function looks at join and from
- * expression nodes to find explicit qualifiers, and returns these qualifiers.
+ * implicit and explicit qualifiers in the expression. The function looks at
+ * join and from expression nodes to find qualifiers, and returns these
+ * qualifiers.
+ *
+ * Note that we don't want outer join clauses in regular outer join planning,
+ * but we need outer join clauses in subquery pushdown prerequisite checks.
+ * Therefore, outer join qualifiers are returned in a different list than other
+ * qualifiers inside the given walker context. For this reason, we return two
+ * qualifier lists.
  *
  * Note that we check if the qualifier node in join and from expression nodes
  * is a list node. If it is not a list node which is the case for subqueries,
@@ -803,7 +844,7 @@ JoinClauseList(List *whereClauseList)
  * query tree.
  */
 static bool
-ExtractFromExpressionWalker(Node *node, List **qualifierList)
+ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
 {
 	bool walkerResult = false;
 	if (node == NULL)
@@ -824,11 +865,7 @@ ExtractFromExpressionWalker(Node *node, List **qualifierList)
 		Node *joinQualifiersNode = joinExpression->quals;
 		JoinType joinType = joinExpression->jointype;
 
-		/*
-		 * We only extract qualifiers from inner join clauses, which can be
-		 * treated as WHERE clauses.
-		 */
-		if (joinQualifiersNode != NULL && joinType == JOIN_INNER)
+		if (joinQualifiersNode != NULL)
 		{
 			if (IsA(joinQualifiersNode, List))
 			{
@@ -841,8 +878,18 @@ ExtractFromExpressionWalker(Node *node, List **qualifierList)
 				joinClause = (Node *) canonicalize_qual((Expr *) joinClause);
 				joinQualifierList = make_ands_implicit((Expr *) joinClause);
 			}
+		}
 
-			(*qualifierList) = list_concat(*qualifierList, joinQualifierList);
+		/* return outer join clauses in a separate list */
+		if (joinType == JOIN_INNER)
+		{
+			walkerContext->baseQualifierList =
+				list_concat(walkerContext->baseQualifierList, joinQualifierList);
+		}
+		else if (IS_OUTER_JOIN(joinType))
+		{
+			walkerContext->outerJoinQualifierList =
+				list_concat(walkerContext->outerJoinQualifierList, joinQualifierList);
 		}
 	}
 	else if (IsA(node, FromExpr))
@@ -865,12 +912,13 @@ ExtractFromExpressionWalker(Node *node, List **qualifierList)
 				fromQualifierList = make_ands_implicit((Expr *) fromClause);
 			}
 
-			(*qualifierList) = list_concat(*qualifierList, fromQualifierList);
+			walkerContext->baseQualifierList =
+				list_concat(walkerContext->baseQualifierList, fromQualifierList);
 		}
 	}
 
 	walkerResult = expression_tree_walker(node, ExtractFromExpressionWalker,
-										  (void *) qualifierList);
+										  (void *) walkerContext);
 
 	return walkerResult;
 }
@@ -1867,8 +1915,8 @@ static MultiNode *
 SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 {
 	List *targetEntryList = queryTree->targetList;
-	List *whereClauseList = NIL;
-	List *whereClauseColumnList = NIL;
+	List *qualifierList = NIL;
+	List *qualifierColumnList = NIL;
 	List *targetListColumnList = NIL;
 	List *columnList = NIL;
 	ListCell *columnCell = NULL;
@@ -1884,9 +1932,9 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	ErrorIfQueryNotSupported(queryTree);
 	ErrorIfSubqueryJoin(queryTree);
 
-	/* extract where clause qualifiers and verify we can plan for them */
-	whereClauseList = WhereClauseList(queryTree->jointree);
-	ValidateClauseList(whereClauseList);
+	/* extract qualifiers and verify we can plan for them */
+	qualifierList = QualifierList(queryTree->jointree);
+	ValidateClauseList(qualifierList);
 
 	/*
 	 * We disregard pulled subqueries. This changes order of range table list.
@@ -1897,10 +1945,10 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	 */
 	Assert(list_length(subqueryEntryList) == 1);
 
-	whereClauseColumnList = pull_var_clause_default((Node *) whereClauseList);
+	qualifierColumnList = pull_var_clause_default((Node *) qualifierList);
 	targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
 
-	columnList = list_concat(whereClauseColumnList, targetListColumnList);
+	columnList = list_concat(qualifierColumnList, targetListColumnList);
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
@@ -1915,7 +1963,7 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	currentTopNode = (MultiNode *) subqueryCollectNode;
 
 	/* build select node if the query has selection criteria */
-	selectNode = MultiSelectNode(whereClauseList);
+	selectNode = MultiSelectNode(qualifierList);
 	if (selectNode != NULL)
 	{
 		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
