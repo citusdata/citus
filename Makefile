@@ -10,7 +10,7 @@ endif
 
 include Makefile.global
 
-all: extension csql
+all: extension
 
 # build extension
 extension:
@@ -29,18 +29,6 @@ clean-extension:
 # Add to generic targets
 install: install-extension install-headers
 clean: clean-extension
-
-# build csql binary
-csql:
-	$(MAKE) -C src/bin/csql/ all
-install-csql: csql
-	$(MAKE) -C src/bin/csql/ install
-clean-csql:
-	$(MAKE) -C src/bin/csql/ clean
-.PHONY: csql install-csql clean-csql
-# Add to generic targets
-install: install-csql
-clean: clean-csql
 
 # apply or check style
 reindent:
