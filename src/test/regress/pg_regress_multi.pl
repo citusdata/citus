@@ -135,14 +135,13 @@ for my $port (@workerPorts)
     system("rm", ('-rf', "tmp_check/worker.$port")) == 0 or die "Could not remove worker directory";
 }
 
-# Prepare directory in which 'psql' is a wrapper around 'csql', which
-# also adds some variables to csql.
+# Prepare directory in which 'psql' has some helpful variables for locating the workers
 system("mkdir", ('-p', "tmp_check/tmp-bin")) == 0
 	or die "Could not create tmp-bin directory";
 sysopen my $fh, "tmp_check/tmp-bin/psql", O_CREAT|O_TRUNC|O_RDWR, 0700
 	or die "Could not create psql wrapper";
 print $fh "#!/bin/bash\n";
-print $fh "exec $bindir/csql ";
+print $fh "exec $bindir/psql ";
 print $fh "--variable=master_port=$masterPort ";
 for my $workeroff (0 .. $#workerPorts)
 {
