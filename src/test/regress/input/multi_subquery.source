@@ -377,3 +377,541 @@ SELECT * FROM
 AS foo;
 
 DROP TABLE subquery_pruning_varchar_test_table;
+
+-- Create composite type to use in subquery pushdown
+CREATE TYPE user_composite_type AS
+(
+	tenant_id BIGINT,
+	user_id BIGINT
+);
+
+\c - - - :worker_1_port
+
+CREATE TYPE user_composite_type AS
+(
+	tenant_id BIGINT,
+	user_id BIGINT
+);
+
+\c - - - :worker_2_port
+
+CREATE TYPE user_composite_type AS
+(
+	tenant_id BIGINT,
+	user_id BIGINT
+);
+
+\c - - - :master_port
+
+
+CREATE TABLE events (
+	composite_id user_composite_type,
+	event_id bigint,
+	event_type character varying(255),
+	event_time bigint
+);
+SELECT master_create_distributed_table('events', 'composite_id', 'range');
+
+SELECT master_create_empty_shard('events') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('events') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('events') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('events') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
+WHERE shardid = :new_shard_id;
+
+\COPY events FROM STDIN WITH CSV
+"(1,1001)",20001,click,1472807012
+"(1,1001)",20002,submit,1472807015
+"(1,1001)",20003,pay,1472807020
+"(1,1002)",20010,click,1472807022
+"(1,1002)",20011,click,1472807023
+"(1,1002)",20012,submit,1472807025
+"(1,1002)",20013,pay,1472807030
+"(1,1003)",20014,click,1472807032
+"(1,1003)",20015,click,1472807033
+"(1,1003)",20016,click,1472807034
+"(1,1003)",20017,submit,1472807035
+\.
+
+CREATE TABLE users (
+	composite_id user_composite_type,
+	lastseen bigint
+);
+SELECT master_create_distributed_table('users', 'composite_id', 'range');
+
+SELECT master_create_empty_shard('users') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('users') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('users') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('users') AS new_shard_id
+\gset
+UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
+WHERE shardid = :new_shard_id;
+
+\COPY users FROM STDIN WITH CSV
+"(1,1001)",1472807115
+"(1,1002)",1472807215
+"(1,1003)",1472807315
+\.
+
+
+SET citus.subquery_pushdown TO TRUE;
+
+-- Simple join subquery pushdown
+SELECT
+	avg(array_length(events, 1)) AS event_average
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		array_agg(event_type ORDER BY event_time) AS events
+	FROM
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			event_type,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type IN ('click', 'submit', 'pay')) AS subquery
+	GROUP BY
+		tenant_id,
+		user_id) AS subquery;
+
+-- Union and left join subquery pushdown
+SELECT
+	avg(array_length(events, 1)) AS event_average,
+	hasdone
+FROM
+	(SELECT
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		array_agg(event ORDER BY event_time) AS events,
+		COALESCE(hasdone, 'Has not done paying') AS hasdone
+	FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+	(SELECT
+		DISTINCT ON ((composite_id).tenant_id, (composite_id).user_id) composite_id,
+		(composite_id).tenant_id,
+		(composite_id).user_id,
+		'Has done paying'::TEXT AS hasdone
+	FROM
+		events
+	WHERE
+		events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+		event_type = 'pay') AS subquery_2
+	ON
+		subquery_1.tenant_id = subquery_2.tenant_id AND
+		subquery_1.user_id = subquery_2.user_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		hasdone) AS subquery_top
+GROUP BY
+	hasdone;
+
+-- Union, left join and having subquery pushdown
+SELECT
+	avg(array_length(events, 1)) AS event_average,
+	count_pay
+	FROM (
+  SELECT
+	subquery_1.tenant_id,
+	subquery_1.user_id,
+	array_agg(event ORDER BY event_time) AS events,
+	COALESCE(count_pay, 0) AS count_pay
+  FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			COUNT(*) AS count_pay
+		FROM
+			events
+		WHERE
+			events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'pay'
+		GROUP BY
+			tenant_id,
+			user_id
+		HAVING
+			COUNT(*) > 2) AS subquery_2
+	ON
+		subquery_1.tenant_id = subquery_2.tenant_id AND
+		subquery_1.user_id = subquery_2.user_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		count_pay) AS subquery_top
+WHERE
+	array_ndims(events) > 0
+GROUP BY
+	count_pay
+ORDER BY
+	count_pay;
+
+-- Lateral join subquery pushdown
+SELECT
+	tenant_id,
+	user_id,
+	user_lastseen,
+	event_array
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		max(lastseen) as user_lastseen,
+		array_agg(event_type ORDER BY event_time) AS event_array
+	FROM
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			lastseen
+		FROM
+			users
+		WHERE
+			composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			composite_id <= '(1, 9223372036854775807)'::user_composite_type
+		ORDER BY
+			lastseen DESC
+		LIMIT
+			10
+		) AS subquery_top
+		LEFT JOIN LATERAL
+			(SELECT
+				event_type,
+				event_time
+			FROM
+				events
+			WHERE
+				(composite_id).tenant_id = subquery_top.tenant_id AND
+				(composite_id).user_id = subquery_top.user_id
+			ORDER BY
+				event_time DESC
+			LIMIT
+				99) AS subquery_lateral
+		ON
+			true
+		GROUP BY
+			tenant_id,
+			user_id
+	) AS shard_union
+ORDER BY
+	user_lastseen DESC
+LIMIT
+	10;
+
+
+-- Same queries above with explain
+SET client_min_messages TO DEBUG2;
+
+-- Simple join subquery pushdown
+EXPLAIN SELECT
+	avg(array_length(events, 1)) AS event_average
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		array_agg(event_type ORDER BY event_time) AS events
+	FROM
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			event_type,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type IN ('click', 'submit', 'pay')) AS subquery
+	GROUP BY
+		tenant_id,
+		user_id) AS subquery;
+
+-- Union and left join subquery pushdown
+EXPLAIN SELECT
+	avg(array_length(events, 1)) AS event_average,
+	hasdone
+FROM
+	(SELECT
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		array_agg(event ORDER BY event_time) AS events,
+		COALESCE(hasdone, 'Has not done paying') AS hasdone
+	FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+	(SELECT
+		DISTINCT ON ((composite_id).tenant_id, (composite_id).user_id) composite_id,
+		(composite_id).tenant_id,
+		(composite_id).user_id,
+		'Has done paying'::TEXT AS hasdone
+	FROM
+		events
+	WHERE
+		events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+		event_type = 'pay') AS subquery_2
+	ON
+		subquery_1.tenant_id = subquery_2.tenant_id AND
+		subquery_1.user_id = subquery_2.user_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		hasdone) AS subquery_top
+GROUP BY
+	hasdone;
+
+-- Union, left join and having subquery pushdown
+EXPLAIN SELECT
+	avg(array_length(events, 1)) AS event_average,
+	count_pay
+	FROM (
+  SELECT
+	subquery_1.tenant_id,
+	subquery_1.user_id,
+	array_agg(event ORDER BY event_time) AS events,
+	COALESCE(count_pay, 0) AS count_pay
+  FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
+			(users.composite_id).user_id = (events.composite_id).user_id AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			COUNT(*) AS count_pay
+		FROM
+			events
+		WHERE
+			events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'pay'
+		GROUP BY
+			tenant_id,
+			user_id
+		HAVING
+			COUNT(*) > 2) AS subquery_2
+	ON
+		subquery_1.tenant_id = subquery_2.tenant_id AND
+		subquery_1.user_id = subquery_2.user_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		count_pay) AS subquery_top
+WHERE
+	array_ndims(events) > 0
+GROUP BY
+	count_pay
+ORDER BY
+	count_pay;
+
+-- Lateral join subquery pushdown
+EXPLAIN SELECT
+	tenant_id,
+	user_id,
+	user_lastseen,
+	event_array
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		max(lastseen) as user_lastseen,
+		array_agg(event_type ORDER BY event_time) AS event_array
+	FROM
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			lastseen
+		FROM
+			users
+		WHERE
+			composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			composite_id <= '(1, 9223372036854775807)'::user_composite_type
+		ORDER BY
+			lastseen DESC
+		LIMIT
+			10
+		) AS subquery_top
+		LEFT JOIN LATERAL
+			(SELECT
+				event_type,
+				event_time
+			FROM
+				events
+			WHERE
+				(composite_id).tenant_id = subquery_top.tenant_id AND
+				(composite_id).user_id = subquery_top.user_id
+			ORDER BY
+				event_time DESC
+			LIMIT
+				99) AS subquery_lateral
+		ON
+			true
+		GROUP BY
+			tenant_id,
+			user_id
+	) AS shard_union
+ORDER BY
+	user_lastseen DESC
+LIMIT
+	10;
+
+SET citusdb.task_executor_type TO 'real-time';
+SET client_min_messages TO NOTICE;
