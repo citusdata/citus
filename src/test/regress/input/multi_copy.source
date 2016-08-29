@@ -523,3 +523,18 @@ COPY super_packed_numbers_append FROM '/tmp/copy_test_composite_of_composite';
 
 -- Verify data is actually copied
 SELECT * FROM super_packed_numbers_append;
+
+
+-- Test copy on append for composite type partition column
+
+CREATE TABLE composite_partition_column_table(
+        id integer,
+        composite_column number_pack
+);
+
+SELECT master_create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
+
+\COPY composite_partition_column_table FROM STDIN WITH (FORMAT 'csv');
+1,"(1,1)"
+2,"(2,2)"
+\.
