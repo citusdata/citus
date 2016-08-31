@@ -100,6 +100,7 @@ SELECT name FROM researchers WHERE lab_id = 4;
 BEGIN;
 DO $$
 BEGIN
+	INSERT INTO researchers VALUES (11, 11, 'Whitfield Diffie');
 	INSERT INTO researchers VALUES (NULL, 10, 'Edsger Dijkstra');
 EXCEPTION
     WHEN not_null_violation THEN
@@ -150,19 +151,41 @@ SELECT count(*) FROM researchers WHERE lab_id = 6;
 ERROR:  no transaction participant matches localhost:57638
 DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
 ABORT;
--- applies to DDL or COPY, too
+-- applies to DDL, too
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
-ALTER TABLE labs ADD COLUMN text motto;
-ERROR:  distributed DDL commands cannot run inside a transaction block
+ALTER TABLE labs ADD COLUMN motto text;
+ERROR:  distributed DDL commands must not appear within transaction blocks containing other modifications
 COMMIT;
+-- whether it occurs first or second
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+INSERT INTO labs VALUES (6, 'Bell Labs');
+ERROR:  distributed data modifications must not appear in transaction blocks which contain distributed DDL commands
+COMMIT;
+-- but the DDL should correctly roll back
+\d labs
+     Table "public.labs"
+ Column |  Type  | Modifiers 
+--------+--------+-----------
+ id     | bigint | not null
+ name   | text   | not null
+
+SELECT * FROM labs WHERE id = 6;
+ id | name 
+----+------
+(0 rows)
+
+-- COPY can't happen second,
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
 ERROR:  cannot open new connections after the first modification command within a transaction
 CONTEXT:  COPY labs, line 1: "10,Weyland-Yutani"
 COMMIT;
--- though the copy will work if before any modifications
+-- though it will work if before any modifications
 BEGIN;
 \copy labs from stdin delimiter ','
 SELECT name FROM labs WHERE id = 10;
@@ -173,6 +196,59 @@ SELECT name FROM labs WHERE id = 10;
 
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
+-- but a double-copy isn't allowed (the first will persist)
+BEGIN;
+\copy labs from stdin delimiter ','
+\copy labs from stdin delimiter ','
+ERROR:  cannot open new connections after the first modification command within a transaction
+CONTEXT:  COPY labs, line 1: "12,fsociety"
+COMMIT;
+SELECT name FROM labs WHERE id = 11;
+      name      
+----------------
+ Planet Express
+(1 row)
+
+-- finally, ALTER and copy aren't compatible
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+\copy labs from stdin delimiter ','
+ERROR:  cannot open new connections after the first modification command within a transaction
+CONTEXT:  COPY labs, line 1: "12,fsociety,lol"
+COMMIT;
+-- but the DDL should correctly roll back
+\d labs
+     Table "public.labs"
+ Column |  Type  | Modifiers 
+--------+--------+-----------
+ id     | bigint | not null
+ name   | text   | not null
+
+SELECT * FROM labs WHERE id = 12;
+ id | name 
+----+------
+(0 rows)
+
+-- and if the copy is before the ALTER...
+BEGIN;
+\copy labs from stdin delimiter ','
+ALTER TABLE labs ADD COLUMN motto text;
+ERROR:  distributed DDL commands must not appear within transaction blocks containing other modifications
+COMMIT;
+-- the DDL fails, but copy persists
+\d labs
+     Table "public.labs"
+ Column |  Type  | Modifiers 
+--------+--------+-----------
+ id     | bigint | not null
+ name   | text   | not null
+
+SELECT * FROM labs WHERE id = 12;
+ id |   name   
+----+----------
+ 12 | fsociety
+(1 row)
+
 -- now, for some special failures...
 CREATE TABLE objects (
 	id bigint PRIMARY KEY,
