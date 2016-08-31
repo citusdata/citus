@@ -260,4 +260,16 @@ SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
 
+-- system columns from shard tables can be queried retrieved
+SELECT count(*) FROM (
+    SELECT tableoid, ctid, cmin, cmax, xmin, xmax
+        FROM articles
+        WHERE tableoid IS NOT NULL OR
+                  ctid IS NOT NULL OR
+                  cmin IS NOT NULL OR
+                  cmax IS NOT NULL OR
+                  xmin IS NOT NULL OR
+                  xmax IS NOT NULL
+) x;
+
 SET client_min_messages to 'NOTICE';

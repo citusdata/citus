@@ -43,6 +43,8 @@ CREATE INDEX lineitem_partkey_desc_index ON lineitem (l_partkey DESC);
 CREATE INDEX lineitem_partial_index ON lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
 
+CREATE INDEX lineitem_colref_index ON lineitem (record_ne(lineitem.*, NULL));
+
 SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
@@ -97,6 +99,7 @@ DROP INDEX CONCURRENTLY lineitem_orderkey_index;
 DROP INDEX lineitem_orderkey_index;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
+DROP INDEX lineitem_colref_index;
 
 -- Verify that we handle if exists statements correctly
 
