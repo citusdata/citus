@@ -155,7 +155,7 @@ ABORT;
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing other modifications
+ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
 COMMIT;
 -- whether it occurs first or second
 BEGIN;
@@ -182,7 +182,7 @@ SELECT * FROM labs WHERE id = 6;
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
-ERROR:  cannot open new connections after the first modification command within a transaction
+ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
 CONTEXT:  COPY labs, line 1: "10,Weyland-Yutani"
 COMMIT;
 -- though it will work if before any modifications
@@ -200,7 +200,7 @@ COMMIT;
 BEGIN;
 \copy labs from stdin delimiter ','
 \copy labs from stdin delimiter ','
-ERROR:  cannot open new connections after the first modification command within a transaction
+ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
 CONTEXT:  COPY labs, line 1: "12,fsociety"
 COMMIT;
 SELECT name FROM labs WHERE id = 11;
@@ -213,7 +213,7 @@ SELECT name FROM labs WHERE id = 11;
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 \copy labs from stdin delimiter ','
-ERROR:  cannot open new connections after the first modification command within a transaction
+ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
 CONTEXT:  COPY labs, line 1: "12,fsociety,lol"
 COMMIT;
 -- but the DDL should correctly roll back
@@ -233,7 +233,7 @@ SELECT * FROM labs WHERE id = 12;
 BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing other modifications
+ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
 COMMIT;
 -- the DDL fails, but copy persists
 \d labs

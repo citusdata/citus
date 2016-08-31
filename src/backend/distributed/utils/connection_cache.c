@@ -377,13 +377,6 @@ ConnectToNode(char *nodeName, int32 nodePort, char *nodeUser)
 
 	sprintf(nodePortString, "%d", nodePort);
 
-	if (XactModificationLevel > XACT_MODIFICATION_NONE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("cannot open new connections after the first modification "
-							   "command within a transaction")));
-	}
-
 	Assert(sizeof(keywordArray) == sizeof(valueArray));
 
 	for (attemptIndex = 0; attemptIndex < MAX_CONNECT_ATTEMPTS; attemptIndex++)

@@ -214,15 +214,9 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 {
 	int affectedTupleCount = 0;
 	char *relationOwner = TableOwner(relationId);
-	HTAB *shardConnectionHash = NULL;
 	ListCell *shardIntervalCell = NULL;
 
-	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
-
-	shardConnectionHash = OpenTransactionsToAllShardPlacements(shardIntervalList,
-															   relationOwner);
-
-	MemoryContextSwitchTo(oldContext);
+	OpenTransactionsToAllShardPlacements(shardIntervalList, relationOwner);
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
@@ -236,9 +230,7 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 		char *shardQueryStringData = NULL;
 		int shardAffectedTupleCount = -1;
 
-		shardConnections = GetShardConnections(shardConnectionHash,
-											   shardId,
-											   &shardConnectionsFound);
+		shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
 		Assert(shardConnectionsFound);
 
 		deparse_shard_query(query, relationId, shardId, shardQueryString);

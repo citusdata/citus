@@ -29,6 +29,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
@@ -152,8 +153,9 @@ _PG_init(void)
 	/* initialize worker node manager */
 	WorkerNodeRegister();
 
-	/* initialize router executor callbacks */
+	/* initialize transaction callbacks */
 	InstallRouterExecutorShmemHook();
+	InstallMultiShardXactShmemHook();
 }
 
 
