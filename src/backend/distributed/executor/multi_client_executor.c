@@ -94,7 +94,7 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
 	char *effectiveDatabaseName = NULL;
 	char *effectiveUserName = NULL;
 
-	if (IsModifyingTransaction)
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("cannot open new connections after the first modification "
@@ -181,7 +181,7 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 		return connectionId;
 	}
 
-	if (IsModifyingTransaction)
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("cannot open new connections after the first modification "
