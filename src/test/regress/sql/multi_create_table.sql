@@ -61,6 +61,19 @@ CREATE TABLE nation (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
+
+\COPY nation FROM STDIN WITH CSV
+1,'name',1,'comment_1'
+2,'name',2,'comment_2'
+3,'name',3,'comment_3'
+4,'name',4,'comment_4'
+5,'name',5,'comment_5'
+\.
+
+SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
+
+TRUNCATE nation;
+
 SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
 
 CREATE TABLE part (
