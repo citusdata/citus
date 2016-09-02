@@ -3400,10 +3400,10 @@ SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
 	bool supportedLateralQuery = false;
 	List *outerCompositeFieldList = NIL;
 	List *localCompositeFieldList = NIL;
-	List *whereClauseList = WhereClauseList(lateralQuery->jointree);
+	ListCell *qualifierCell = NULL;
 
-	ListCell *whereClauseCell = NULL;
-	foreach(whereClauseCell, whereClauseList)
+	List *qualifierList = QualifierList(lateralQuery->jointree);
+	foreach(qualifierCell, qualifierList)
 	{
 		OpExpr *operatorExpression = NULL;
 		List *argumentList = NIL;
@@ -3417,13 +3417,13 @@ SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
 		bool outerColumnIsPartitionColumn = false;
 		bool localColumnIsPartitionColumn = false;
 
-		Node *clause = (Node *) lfirst(whereClauseCell);
-		if (!IsA(clause, OpExpr))
+		Node *qualifier = (Node *) lfirst(qualifierCell);
+		if (!IsA(qualifier, OpExpr))
 		{
 			continue;
 		}
 
-		operatorExpression = (OpExpr *) clause;
+		operatorExpression = (OpExpr *) qualifier;
 		argumentList = operatorExpression->args;
 
 		/*
@@ -3566,8 +3566,8 @@ JoinOnPartitionColumn(Query *query)
 	bool joinOnPartitionColumn = false;
 	List *leftCompositeFieldList = NIL;
 	List *rightCompositeFieldList = NIL;
-	List *whereClauseList = WhereClauseList(query->jointree);
-	List *joinClauseList = JoinClauseList(whereClauseList);
+	List *qualifierList = QualifierList(query->jointree);
+	List *joinClauseList = JoinClauseList(qualifierList);
 
 	ListCell *joinClauseCell = NULL;
 	foreach(joinClauseCell, joinClauseList)
