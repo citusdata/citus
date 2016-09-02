@@ -41,7 +41,7 @@ SELECT count(*) FROM test_truncate_append;
 -- verify no shard exists anymore
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::regclass;
 
--- command can not be run inside transaction
+-- verify command can be run inside transaction
 BEGIN; TRUNCATE TABLE test_truncate_append; COMMIT;
 
 DROP TABLE test_truncate_append;

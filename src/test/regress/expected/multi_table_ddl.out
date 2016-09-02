@@ -22,15 +22,22 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 -- verify that the distribution column can't be dropped
 ALTER TABLE testtableddl DROP COLUMN distributecol;
 ERROR:  cannot execute ALTER TABLE command involving partition column
--- verify that the table cannot be dropped in a transaction block
-\set VERBOSITY terse
+-- verify that the table can be dropped in a transaction block
 BEGIN;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
 DROP TABLE testtableddl;
-ERROR:  DROP distributed table cannot run inside a transaction block
-ROLLBACK;
-\set VERBOSITY default
--- verify that the table can be dropped
-DROP TABLE testtableddl;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+COMMIT;
 -- verify that the table can dropped even if shards exist
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
