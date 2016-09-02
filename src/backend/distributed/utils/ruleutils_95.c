@@ -3623,7 +3623,7 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	}
 	else if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
 	{
-		/* System column on a Citus shared/remote relation */
+		/* System column on a Citus shard */
 		attname = get_relid_attribute_name(rte->relid, attnum);
 	}
 	else
