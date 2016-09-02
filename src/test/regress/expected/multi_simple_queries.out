@@ -502,7 +502,7 @@ DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 14
 ERROR:  cannot use real time executor with repartition jobs
 HINT:  Set citus.task_executor_type to "task-tracker".
--- system columns from shard tables can be queried retrieved
+-- system columns from shard tables can be queried and retrieved
 SELECT count(*) FROM (
     SELECT tableoid, ctid, cmin, cmax, xmin, xmax
         FROM articles

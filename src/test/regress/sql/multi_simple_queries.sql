@@ -260,7 +260,7 @@ SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
 
--- system columns from shard tables can be queried retrieved
+-- system columns from shard tables can be queried and retrieved
 SELECT count(*) FROM (
     SELECT tableoid, ctid, cmin, cmax, xmin, xmax
         FROM articles

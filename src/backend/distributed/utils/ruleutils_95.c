@@ -3621,22 +3621,15 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		attname = colinfo->colnames[attnum - 1];
 		Assert(attname != NULL);
 	}
+	else if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		/* System column on a Citus shared/remote relation */
+		attname = get_relid_attribute_name(rte->relid, attnum);
+	}
 	else
 	{
-		CitusRTEKind rtekind;
-
-		rtekind = GetRangeTblKind(rte);
-
-		if (rtekind == CITUS_RTE_SHARD || rtekind == CITUS_RTE_REMOTE_QUERY)
-		{
-			/* System column on a Citus shared/remote relation */
-			attname = get_relid_attribute_name(rte->relid, attnum);
-		}
-		else
-		{
-			/* System column - name is fixed, get it from the catalog */
-			attname = get_rte_attribute_name(rte, attnum);
-		}
+		/* System column - name is fixed, get it from the catalog */
+		attname = get_rte_attribute_name(rte, attnum);
 	}
 
 	if (refname && (context->varprefix || attname == NULL))
