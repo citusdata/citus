@@ -25,6 +25,7 @@
 #include "access/transam.h"
 #include "access/tupdesc.h"
 #include "access/xact.h"
+#include "catalog/pg_type.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/connection_cache.h"
@@ -832,11 +833,14 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
 		/*
 		 * If the parameter is NULL, or is not referenced / used (ptype == 0
 		 * would otherwise have errored out inside standard_planner()),
-		 * don't pass a value to the remote side.
+		 * don't pass a value to the remote side, and pass text oid to prevent
+		 * undetermined data type errors on workers.
 		 */
 		if (parameterData->isnull || parameterData->ptype == 0)
 		{
 			(*parameterValues)[parameterIndex] = NULL;
+			(*parameterTypes)[parameterIndex] = TEXTOID;
+
 			continue;
 		}
 
