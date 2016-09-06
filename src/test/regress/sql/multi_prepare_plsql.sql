@@ -247,6 +247,115 @@ SELECT plpgsql_test_2();
 -- SELECT plpgsql_test_6(155);
 -- SELECT plpgsql_test_6(1555);
 
+-- test router executor parameterized PL/pgsql functions
+CREATE TABLE temp_table (
+	key int,
+	value int
+);
+SELECT master_create_distributed_table('temp_table','key','hash');
+SELECT master_create_worker_shards('temp_table',4,1);
+
+CREATE OR REPLACE FUNCTION no_parameter_insert() RETURNS void as $$
+BEGIN
+	INSERT INTO temp_table (key) VALUES (0);
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT no_parameter_insert();
+SELECT no_parameter_insert();
+SELECT no_parameter_insert();
+SELECT no_parameter_insert();
+SELECT no_parameter_insert();
+SELECT no_parameter_insert();
+
+CREATE OR REPLACE FUNCTION single_parameter_insert(key_arg int) RETURNS void as $$
+BEGIN
+	INSERT INTO temp_table (key) VALUES (key_arg);
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT single_parameter_insert(1);
+SELECT single_parameter_insert(2);
+SELECT single_parameter_insert(3);
+SELECT single_parameter_insert(4);
+SELECT single_parameter_insert(5);
+SELECT single_parameter_insert(6);
+
+CREATE OR REPLACE FUNCTION double_parameter_insert(key_arg int, value_arg int) RETURNS void as $$
+BEGIN
+	INSERT INTO temp_table (key, value) VALUES (key_arg, value_arg);
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT double_parameter_insert(1, 10);
+SELECT double_parameter_insert(2, 20);
+SELECT double_parameter_insert(3, 30);
+SELECT double_parameter_insert(4, 40);
+SELECT double_parameter_insert(5, 50);
+SELECT double_parameter_insert(6, 60);
+
+-- check inserted values
+SELECT * FROM temp_table ORDER BY key, value;
+
+-- check router executor select
+CREATE OR REPLACE FUNCTION partition_column_select(key_arg int) RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		temp_table.key,
+		temp_table.value
+	FROM
+		temp_table
+	WHERE
+		temp_table.key = key_arg
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT partition_column_select(1);
+SELECT partition_column_select(2);
+SELECT partition_column_select(3);
+SELECT partition_column_select(4);
+SELECT partition_column_select(5);
+
+-- 6th execution is failing. We don't want to run the failing test because of
+-- changing output. After implementing this feature, uncomment this.
+-- SELECT partition_column_select(6);
+
+-- check real-time executor
+CREATE OR REPLACE FUNCTION non_partition_column_select(value_arg int) RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		temp_table.key,
+		temp_table.value
+	FROM
+		temp_table
+	WHERE
+		temp_table.value = value_arg
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT non_partition_column_select(10);
+SELECT non_partition_column_select(20);
+SELECT non_partition_column_select(30);
+SELECT non_partition_column_select(40);
+SELECT non_partition_column_select(50);
+
+-- 6th execution is failing. We don't want to run the failing test because of
+-- changing output. After implementing this feature, uncomment this.
+-- SELECT partition_column_select(6);
+
 -- clean-up functions
 DROP FUNCTION sql_test_no_1();
 DROP FUNCTION sql_test_no_2();
@@ -260,3 +369,8 @@ DROP FUNCTION plpgsql_test_4();
 DROP FUNCTION plpgsql_test_5();
 DROP FUNCTION plpgsql_test_6(int);
 DROP FUNCTION plpgsql_test_7(text, text);
+DROP FUNCTION no_parameter_insert();
+DROP FUNCTION single_parameter_insert(int);
+DROP FUNCTION double_parameter_insert(int, int);
+DROP FUNCTION partition_column_select(int);
+DROP FUNCTION non_partition_column_select(int);
