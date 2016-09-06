@@ -14,6 +14,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
@@ -103,6 +104,56 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 	{
 		return 0;
 	}
+}
+
+
+/*
+ * FindShardIntervalIndex finds index of given shard in sorted shard interval array. For
+ * this purpose, it calculates hash value of a number in its range(e.g. min value) and
+ * finds which shard should contain the hashed value. Therefore this function only works
+ * for hash distributed tables.
+ */
+int
+FindShardIntervalIndex(ShardInterval *shardInterval)
+{
+	Oid distributedTableId = shardInterval->relationId;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	int shardCount = 0;
+	int32 shardMinValue = 0;
+	uint64 hashTokenIncrement = 0;
+	int shardIndex = -1;
+
+	/*
+	 * We can support it for other types of partitioned tables with simple binary scan
+	 * but it is not necessary at the moment. If we need that simply check algorithm in
+	 * FindShardInterval and SearchCachedShardInterval.
+	 */
+	if (partitionMethod != DISTRIBUTE_BY_HASH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("finding index of given shard is not supported for "
+							   "non-hash partitioned tables")));
+	}
+
+	shardCount = cacheEntry->shardIntervalArrayLength;
+	shardMinValue = DatumGetInt32(shardInterval->minValue);
+	hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
+	shardIndex = (uint32) (shardMinValue - INT32_MIN) / hashTokenIncrement;
+
+	Assert(shardIndex <= shardCount);
+
+	/*
+	 * If the shard count is not power of 2, the range of the last
+	 * shard becomes larger than others. For that extra piece of range,
+	 * we still need to use the last shard.
+	 */
+	if (shardIndex == shardCount)
+	{
+		shardIndex = shardCount - 1;
+	}
+
+	return shardIndex;
 }
 
 
