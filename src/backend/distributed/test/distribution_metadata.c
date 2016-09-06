@@ -19,10 +19,12 @@
 
 #include "access/heapam.h"
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/resource_lock.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
@@ -143,6 +145,8 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 	{
 		placementList = ShardPlacementList(shardId);
 	}
+
+	placementList = SortList(placementList, CompareShardPlacements);
 
 	placementCount = list_length(placementList);
 	placementDatumArray = palloc0(placementCount * sizeof(Datum));
