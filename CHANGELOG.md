@@ -1,3 +1,9 @@
+### citus v5.2.1 (September 6, 2016) ###
+
+* Fixes subquery pushdown to properly extract outer join qualifiers
+
+* Addresses possible memory leak during multi-shard transactions
+
 ### citus v5.2.0 (August 15, 2016) ###
 
 * Drops support for PostgreSQL 9.4; PostgreSQL 9.5 is required
