@@ -18,6 +18,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_shard_transaction.h"
 #include "nodes/pg_list.h"
+#include "utils/memutils.h"
 
 
 #define INITIAL_CONNECTION_CACHE_SIZE 1001
@@ -92,6 +93,7 @@ CreateShardConnectionHash(void)
 	info.keysize = sizeof(int64);
 	info.entrysize = sizeof(ShardConnections);
 	info.hash = tag_hash;
+	info.hcxt = TopTransactionContext;
 
 	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT;
 	shardConnectionsHash = hash_create("Shard Connections Hash",
