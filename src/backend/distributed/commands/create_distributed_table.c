@@ -27,6 +27,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
@@ -287,6 +288,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_partkey - 1] =
 		CStringGetTextDatum(distributionKeyString);
+	newValues[Anum_pg_dist_partition_colocationid - 1] = INVALID_COLOCATION_ID;
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
 
