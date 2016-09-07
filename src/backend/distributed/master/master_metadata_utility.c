@@ -334,7 +334,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	values[Anum_pg_dist_shard_shardid - 1] = Int64GetDatum(shardId);
 	values[Anum_pg_dist_shard_shardstorage - 1] = CharGetDatum(storageType);
 
-	/* deprecated shardalias column is always null. */
+	/* deprecated shardalias column is always null */
 	isNulls[Anum_pg_dist_shard_shardalias_DEPRECATED - 1] = true;
 
 	/* check if shard min/max values are null */
