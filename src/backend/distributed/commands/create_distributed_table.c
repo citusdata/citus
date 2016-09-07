@@ -50,6 +50,7 @@ static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
+static void ErrorIfTableHasOids(Relation relation);
 
 
 /* exports for SQL callable functions */
@@ -101,6 +102,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	distributedRelationName = RelationGetRelationName(distributedRelation);
 
 	EnsureTableOwner(distributedRelationId);
+	ErrorIfTableHasOids(distributedRelation);
 
 	/* open system catalog and insert new tuple */
 	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
@@ -445,4 +447,19 @@ LocalTableEmpty(Oid tableId)
 	SPI_finish();
 
 	return localTableEmpty;
+}
+
+
+/*
+ *  ErrorIfTableHasOids raises an ERROR if a to-be-distributed table
+ *  has the WITH (OIDS) option set.
+ */
+static void
+ErrorIfTableHasOids(Relation relation)
+{
+	if (relation->rd_att->tdhasoid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("WITH (OIDS) not supported on distributed tables")));
+	}
 }
