@@ -23,6 +23,7 @@
 /* Shard name and identifier related defines */
 #define SHARD_NAME_SEPARATOR '_'
 #define INVALID_SHARD_ID 0
+#define INVALID_PLACEMENT_ID 0
 
 /*
  * RelayFileState represents last known states of shards on a given node. We

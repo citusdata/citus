@@ -48,8 +48,8 @@
 /* Name of columnar foreign data wrapper */
 #define CSTORE_FDW_NAME "cstore_fdw"
 
-/* ShardId sequence name as defined in initdb.c */
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
+#define PLACEMENTID_SEQUENCE_NAME "pg_dist_shard_placement_placementid_seq"
 
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \
@@ -97,10 +97,11 @@ extern void CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventL
 								  int workerStartIndex, int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
 
-/* Function declarations for generating metadata for shard creation */
+/* Function declarations for generating metadata for shard and placement creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
 extern Datum master_get_table_ddl_events(PG_FUNCTION_ARGS);
 extern Datum master_get_new_shardid(PG_FUNCTION_ARGS);
+extern Datum master_get_new_placementid(PG_FUNCTION_ARGS);
 extern Datum master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS);
 extern Datum master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS);
 extern Datum master_get_active_worker_nodes(PG_FUNCTION_ARGS);

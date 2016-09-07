@@ -58,8 +58,8 @@ SELECT * FROM pg_dist_shard;
 (0 rows)
 
 SELECT * FROM pg_dist_shard_placement;
- shardid | shardstate | shardlength | nodename | nodeport 
----------+------------+-------------+----------+----------
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
 (0 rows)
 
 -- check that the extension now can be dropped (and recreated)

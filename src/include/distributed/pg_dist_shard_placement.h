@@ -29,6 +29,7 @@ typedef struct FormData_pg_dist_shard_placement
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
 	text nodename;              /* remote node's host name */
 	int32 nodeport;             /* remote node's port number */
+	int64 placementid;          /* global placementId on remote node (added later) */
 #endif
 } FormData_pg_dist_shard_placement;
 
@@ -43,12 +44,13 @@ typedef FormData_pg_dist_shard_placement *Form_pg_dist_shard_placement;
  *		compiler constants for pg_dist_shard_placement
  * ----------------
  */
-#define Natts_pg_dist_shard_placement 5
+#define Natts_pg_dist_shard_placement 6
 #define Anum_pg_dist_shard_placement_shardid 1
 #define Anum_pg_dist_shard_placement_shardstate 2
 #define Anum_pg_dist_shard_placement_shardlength 3
 #define Anum_pg_dist_shard_placement_nodename 4
 #define Anum_pg_dist_shard_placement_nodeport 5
+#define Anum_pg_dist_shard_placement_placementid 6
 
 
 #endif   /* PG_DIST_SHARD_PLACEMENT_H */
