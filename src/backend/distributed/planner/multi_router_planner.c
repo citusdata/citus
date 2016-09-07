@@ -42,6 +42,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
 #include "parser/parsetree.h"
 #include "storage/lock.h"
@@ -67,6 +68,8 @@ static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static char MostPermissiveVolatileFlag(char left, char right);
+static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
+									FromExpr *joinTree);
 static Task * RouterModifyTask(Query *originalQuery, Query *query);
 static ShardInterval * TargetShardIntervalForModify(Query *query);
 static List * QueryRestrictList(Query *query);
@@ -286,7 +289,7 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	{
 		bool hasVarArgument = false; /* A STABLE function is passed a Var argument */
 		bool hasBadCoalesce = false; /* CASE/COALESCE passed a mutable function */
-		FromExpr *joinTree = NULL;
+		FromExpr *joinTree = queryTree->jointree;
 		ListCell *targetEntryCell = NULL;
 
 		foreach(targetEntryCell, queryTree->targetList)
@@ -308,12 +311,14 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 
 			if (commandType == CMD_UPDATE &&
-				targetEntry->resno == partitionColumn->varattno)
+				TargetEntryChangesValue(targetEntry, partitionColumn,
+										queryTree->jointree))
 			{
 				specifiesPartitionValue = true;
 			}
 
-			if (targetEntry->resno == partitionColumn->varattno &&
+			if (commandType == CMD_INSERT &&
+				targetEntry->resno == partitionColumn->varattno &&
 				!IsA(targetEntry->expr, Const))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -329,7 +334,6 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 		}
 
-		joinTree = queryTree->jointree;
 		if (joinTree != NULL)
 		{
 			if (contain_volatile_functions(joinTree->quals))
@@ -677,6 +681,55 @@ MostPermissiveVolatileFlag(char left, char right)
 	{
 		return PROVOLATILE_IMMUTABLE;
 	}
+}
+
+
+/*
+ * TargetEntryChangesValue determines whether the given target entry may
+ * change the value in a given column, given a join tree. The result is
+ * true unless the expression refers directly to the column, or the
+ * expression is a value that is implied by the qualifiers of the join
+ * tree, or the target entry sets a different column.
+ */
+static bool
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
+{
+	bool isColumnValueChanged = true;
+	Expr *setExpr = targetEntry->expr;
+
+	if (targetEntry->resno != column->varattno)
+	{
+		/* target entry of the form SET some_other_col = <x> */
+		isColumnValueChanged = false;
+	}
+	else if (IsA(setExpr, Var))
+	{
+		Var *newValue = (Var *) setExpr;
+		if (newValue->varattno == column->varattno)
+		{
+			/* target entry of the form SET col = table.col */
+			isColumnValueChanged = false;
+		}
+	}
+	else if (IsA(setExpr, Const))
+	{
+		Const *newValue = (Const *) setExpr;
+		List *restrictClauseList = WhereClauseList(joinTree);
+		OpExpr *equalityExpr = MakeOpExpression(column, BTEqualStrategyNumber);
+		Const *rightConst = (Const *) get_rightop((Expr *) equalityExpr);
+
+		rightConst->constvalue = newValue->constvalue;
+		rightConst->constisnull = newValue->constisnull;
+		rightConst->constbyval = newValue->constbyval;
+
+		if (predicate_implied_by(list_make1(equalityExpr), restrictClauseList))
+		{
+			/* target entry of the form SET col = <x> WHERE col = <x> AND ... */
+			isColumnValueChanged = false;
+		}
+	}
+
+	return isColumnValueChanged;
 }
 
 

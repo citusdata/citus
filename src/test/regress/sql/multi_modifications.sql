@@ -284,6 +284,12 @@ UPDATE limit_orders SET limit_price = 0.00;
 
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
+UPDATE limit_orders SET id = 0 WHERE id = 0 OR id = 246;
+
+-- setting the partition column value to itself is allowed
+UPDATE limit_orders SET id = 246 WHERE id = 246;
+UPDATE limit_orders SET id = 246 WHERE id = 246 AND symbol = 'GM';
+UPDATE limit_orders SET id = limit_orders.id WHERE id = 246;
 
 -- UPDATEs with a FROM clause are unsupported
 UPDATE limit_orders SET limit_price = 0.00 FROM bidders
