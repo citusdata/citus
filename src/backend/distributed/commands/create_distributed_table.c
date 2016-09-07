@@ -75,6 +75,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 
 	Relation distributedRelation = NULL;
+	TupleDesc relationDesc = NULL;
 	char *distributedRelationName = NULL;
 	char relationKind = '\0';
 
@@ -98,6 +99,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 * multiple backends manipulating this relation.
 	 */
 	distributedRelation = relation_open(distributedRelationId, AccessExclusiveLock);
+	relationDesc = RelationGetDescr(distributedRelation);
 	distributedRelationName = RelationGetRelationName(distributedRelation);
 
 	EnsureTableOwner(distributedRelationId);
@@ -111,6 +113,15 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("table \"%s\" is already distributed",
 							   distributedRelationName)));
+	}
+
+	/* verify target relation does not use WITH (OIDS) PostgreSQL feature */
+	if (relationDesc->tdhasoid)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation: %s", distributedRelationName),
+						errdetail("Distributed relations must not specify the WITH "
+								  "(OIDS) option in their definitions.")));
 	}
 
 	/* verify target relation is either regular or foreign table */
