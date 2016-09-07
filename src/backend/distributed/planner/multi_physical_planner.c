@@ -5101,7 +5101,7 @@ CompareTasksByShardId(const void *leftElement, const void *rightElement)
 
 /*
  * ActiveShardPlacementLists finds the active shard placement list for each task in
- * the given task list, sorts each shard placement list by tuple insertion time,
+ * the given task list, sorts each shard placement list by shard creation time,
  * and adds the sorted placement list into a new list of lists. The function also
  * ensures a one-to-one mapping between each placement list in the new list of
  * lists and each task in the given task list.
@@ -5122,7 +5122,7 @@ ActiveShardPlacementLists(List *taskList)
 		/* filter out shard placements that reside in inactive nodes */
 		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);
 
-		/* sort shard placements by their insertion time */
+		/* sort shard placements by their creation time */
 		activeShardPlacementList = SortList(activeShardPlacementList,
 											CompareShardPlacements);
 		shardPlacementLists = lappend(shardPlacementLists, activeShardPlacementList);
@@ -5142,12 +5142,21 @@ CompareShardPlacements(const void *leftElement, const void *rightElement)
 	const ShardPlacement *leftPlacement = *((const ShardPlacement **) leftElement);
 	const ShardPlacement *rightPlacement = *((const ShardPlacement **) rightElement);
 
-	Oid leftTupleOid = leftPlacement->tupleOid;
-	Oid rightTupleOid = rightPlacement->tupleOid;
+	uint64 leftPlacementId = leftPlacement->placementId;
+	uint64 rightPlacementId = rightPlacement->placementId;
 
-	/* tuples that are inserted earlier appear first */
-	int tupleOidDiff = leftTupleOid - rightTupleOid;
-	return tupleOidDiff;
+	if (leftPlacementId < rightPlacementId)
+	{
+		return -1;
+	}
+	else if (leftPlacementId > rightPlacementId)
+	{
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
 }
 
 

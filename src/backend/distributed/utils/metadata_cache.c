@@ -58,6 +58,7 @@ static Oid distPartitionColocationidIndexId = InvalidOid;
 static Oid distShardLogicalRelidIndexId = InvalidOid;
 static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
+static Oid distShardPlacementPlacementidIndexId = InvalidOid;
 static Oid distShardPlacementNodeidIndexId = InvalidOid;
 static Oid extraDataContainerFuncId = InvalidOid;
 
@@ -702,6 +703,17 @@ DistShardPlacementShardidIndexId(void)
 }
 
 
+/* return oid of pg_dist_shard_placement_shardid_index */
+Oid
+DistShardPlacementPlacementidIndexId(void)
+{
+	CachedRelationLookup("pg_dist_shard_placement_placementid_index",
+						 &distShardPlacementPlacementidIndexId);
+
+	return distShardPlacementPlacementidIndexId;
+}
+
+
 /* return oid of pg_dist_shard_placement_nodeid_index */
 Oid
 DistShardPlacementNodeidIndexId(void)
@@ -1234,6 +1246,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardLogicalRelidIndexId = InvalidOid;
 		distShardShardidIndexId = InvalidOid;
 		distShardPlacementShardidIndexId = InvalidOid;
+		distShardPlacementPlacementidIndexId = InvalidOid;
 		distNodeRelationId = InvalidOid;
 		extraDataContainerFuncId = InvalidOid;
 	}

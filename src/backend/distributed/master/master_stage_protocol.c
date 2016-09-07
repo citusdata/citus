@@ -292,12 +292,14 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	foreach(failedPlacementCell, failedPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(failedPlacementCell);
+		uint64 placementId = placement->placementId;
 		char *workerName = placement->nodeName;
 		uint32 workerPort = placement->nodePort;
 		uint64 oldShardLength = placement->shardLength;
 
 		DeleteShardPlacementRow(shardId, workerName, workerPort);
-		InsertShardPlacementRow(shardId, FILE_INACTIVE, oldShardLength,
+		InsertShardPlacementRow(shardId, placementId,
+								FILE_INACTIVE, oldShardLength,
 								workerName, workerPort);
 
 		ereport(WARNING, (errmsg("could not append table to shard \"%s\" on node "
@@ -398,7 +400,8 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 			const RelayFileState shardState = FILE_FINALIZED;
 			const uint64 shardSize = 0;
 
-			InsertShardPlacementRow(shardId, shardState, shardSize, nodeName, nodePort);
+			InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardState, shardSize,
+									nodeName, nodePort);
 			placementsCreated++;
 		}
 		else
@@ -537,11 +540,12 @@ UpdateShardStatistics(int64 shardId)
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+		uint64 placementId = placement->placementId;
 		char *workerName = placement->nodeName;
 		uint32 workerPort = placement->nodePort;
 
 		DeleteShardPlacementRow(shardId, workerName, workerPort);
-		InsertShardPlacementRow(shardId, FILE_FINALIZED, shardSize,
+		InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, shardSize,
 								workerName, workerPort);
 	}
 
