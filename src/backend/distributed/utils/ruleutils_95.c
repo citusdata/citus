@@ -3621,6 +3621,11 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		attname = colinfo->colnames[attnum - 1];
 		Assert(attname != NULL);
 	}
+	else if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		/* System column on a Citus shard */
+		attname = get_relid_attribute_name(rte->relid, attnum);
+	}
 	else
 	{
 		/* System column - name is fixed, get it from the catalog */
