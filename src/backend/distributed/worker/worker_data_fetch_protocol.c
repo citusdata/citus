@@ -1003,6 +1003,65 @@ ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
 
 
 /*
+ * ExecuteRemoteCommand executes the given SQL command. This command could be an
+ * Insert, Update, or Delete statement, or a utility command that returns
+ * nothing. If query is successfuly executed, the function returns true.
+ * Otherwise, it returns false.
+ */
+bool
+ExecuteRemoteCommand(const char *nodeName, uint32 nodePort, StringInfo queryString)
+{
+	char *nodeDatabase = get_database_name(MyDatabaseId);
+	int32 connectionId = -1;
+	QueryStatus queryStatus = CLIENT_INVALID_QUERY;
+	bool querySent = false;
+	bool queryReady = false;
+	bool queryDone = false;
+
+	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, NULL);
+	if (connectionId == INVALID_CONNECTION_ID)
+	{
+		return false;
+	}
+
+	querySent = MultiClientSendQuery(connectionId, queryString->data);
+	if (!querySent)
+	{
+		MultiClientDisconnect(connectionId);
+		return false;
+	}
+
+	while (!queryReady)
+	{
+		ResultStatus resultStatus = MultiClientResultStatus(connectionId);
+		if (resultStatus == CLIENT_RESULT_READY)
+		{
+			queryReady = true;
+		}
+		else if (resultStatus == CLIENT_RESULT_BUSY)
+		{
+			long sleepIntervalPerCycle = RemoteTaskCheckInterval * 1000L;
+			pg_usleep(sleepIntervalPerCycle);
+		}
+		else
+		{
+			MultiClientDisconnect(connectionId);
+			return false;
+		}
+	}
+
+	queryStatus = MultiClientQueryStatus(connectionId);
+	if (queryStatus == CLIENT_QUERY_DONE)
+	{
+		queryDone = true;
+	}
+
+	MultiClientDisconnect(connectionId);
+	return queryDone;
+}
+
+
+/*
  * Parses the given DDL command, and returns the tree node for parsed command.
  */
 Node *
