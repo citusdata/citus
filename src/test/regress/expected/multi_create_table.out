@@ -24,8 +24,8 @@ CREATE TABLE lineitem (
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
 SELECT master_create_distributed_table('lineitem', 'l_orderkey', 'append');
-WARNING:  table "lineitem" has a unique constraint
-DETAIL:  Unique constraints and primary keys on append-partitioned tables cannot be enforced.
+WARNING:  table "lineitem" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  master_create_distributed_table 
 ---------------------------------
@@ -47,8 +47,8 @@ CREATE TABLE orders (
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
 SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
-WARNING:  table "orders" has a unique constraint
-DETAIL:  Unique constraints and primary keys on append-partitioned tables cannot be enforced.
+WARNING:  table "orders" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  master_create_distributed_table 
 ---------------------------------
@@ -119,86 +119,3 @@ SELECT master_create_distributed_table('supplier', 's_suppkey', 'append');
  
 (1 row)
 
--- now test that Citus cannot distribute unique constraints that do not include
--- the partition column
-CREATE TABLE primary_key_on_non_part_col
-(
-	partition_col integer,
-	other_col integer PRIMARY KEY
-);
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "primary_key_on_non_part_col"
-DETAIL:  Distributed relations cannot have UNIQUE constraints or PRIMARY KEYs that do not include the partition column.
-CREATE TABLE unique_const_on_non_part_col
-(
-	partition_col integer,
-	other_col integer UNIQUE
-);
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "primary_key_on_non_part_col"
-DETAIL:  Distributed relations cannot have UNIQUE constraints or PRIMARY KEYs that do not include the partition column.
--- now show that Citus can distribute unique constrints that include
--- the partition column
-CREATE TABLE primary_key_on_part_col
-(
-	partition_col integer PRIMARY KEY,
-	other_col integer
-);
-SELECT master_create_distributed_table('primary_key_on_part_col', 'partition_col', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-CREATE TABLE unique_const_on_part_col
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_on_part_col', 'partition_col', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-CREATE TABLE unique_const_on_two_columns
-(
-	partition_col integer,
-	other_col integer,
-	UNIQUE (partition_col, other_col)
-);
-SELECT master_create_distributed_table('unique_const_on_two_columns', 'partition_col', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-CREATE TABLE unique_const_append_partitioned_tables
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_append_partitioned_tables', 'partition_col', 'append');
-WARNING:  table "unique_const_append_partitioned_tables" has a unique constraint
-DETAIL:  Unique constraints and primary keys on append-partitioned tables cannot be enforced.
-HINT:  Consider using hash partitioning.
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-CREATE TABLE unique_const_range_partitioned_tables
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_range_partitioned_tables', 'partition_col', 'range');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
--- drop unnecessary tables
-DROP TABLE primary_key_on_non_part_col, unique_const_on_non_part_col CASCADE;
-DROP TABLE primary_key_on_part_col, unique_const_on_part_col, unique_const_on_two_columns CASCADE;
-DROP TABLE unique_const_range_partitioned_tables CASCADE;
