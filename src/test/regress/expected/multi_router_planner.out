@@ -1363,11 +1363,19 @@ FETCH test_cursor;
   1 |         1 | arsenous |       9572
 (1 row)
 
-FETCH test_cursor;
+FETCH ALL test_cursor;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(4 rows)
+
+FETCH test_cursor; -- fetch one row after the last
  id | author_id | title | word_count 
 ----+-----------+-------+------------
- 11 |         1 | alamo |       1347
-(1 row)
+(0 rows)
 
 END;
 -- queries inside copy can be router plannable
@@ -1488,7 +1496,7 @@ PL/pgSQL function author_articles_max_id() line 5 at SQL statement
                      41
 (1 row)
 
--- plpgsql function that return query results are not router plannable
+-- check that function returning setof query are router plannable
 CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
@@ -1512,8 +1520,15 @@ CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
 DEBUG:  Plan is router executable
 CONTEXT:  PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
-ERROR:  scan directions other than forward scans are unsupported
-CONTEXT:  PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+ id | word_count 
+----+------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
 -- materialized views can be created for router plannable queries
 CREATE MATERIALIZED VIEW mv_articles_hash AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
