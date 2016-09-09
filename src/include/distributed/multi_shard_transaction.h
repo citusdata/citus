@@ -25,16 +25,15 @@ typedef struct ShardConnections
 } ShardConnections;
 
 
-extern HTAB * OpenTransactionsToAllShardPlacements(List *shardIdList,
-												   char *relationOwner);
-extern HTAB * CreateShardConnectionHash(void);
-extern void OpenConnectionsToShardPlacements(uint64 shardId, HTAB *shardConnectionHash,
-											 char *nodeUser);
-extern ShardConnections * GetShardConnections(HTAB *shardConnectionHash,
-											  int64 shardId,
-											  bool *shardConnectionsFound);
+extern void OpenTransactionsToAllShardPlacements(List *shardIdList, char *relationOwner);
+extern HTAB * CreateShardConnectionHash(MemoryContext memoryContext);
+extern void BeginTransactionOnShardPlacements(uint64 shardId, char *nodeUser);
+extern ShardConnections * GetShardConnections(int64 shardId, bool *shardConnectionsFound);
+extern ShardConnections * GetShardHashConnections(HTAB *connectionHash, int64 shardId,
+												  bool *connectionsFound);
 extern List * ConnectionList(HTAB *connectionHash);
 extern void CloseConnections(List *connectionList);
+extern void InstallMultiShardXactShmemHook(void);
 
 
 #endif /* MULTI_SHARD_TRANSACTION_H */

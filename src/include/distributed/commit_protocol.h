@@ -54,7 +54,6 @@ extern int MultiShardCommitProtocol;
 
 /* Functions declarations for transaction and connection management */
 extern void InitializeDistributedTransaction(void);
-extern void CompleteShardPlacementTransactions(XactEvent event, void *arg);
 extern void PrepareRemoteTransactions(List *connectionList);
 extern void AbortRemoteTransactions(List *connectionList);
 extern void CommitRemoteTransactions(List *connectionList, bool stopOnFailure);

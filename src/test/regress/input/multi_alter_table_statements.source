@@ -173,14 +173,114 @@ COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 DROP INDEX temp_index_2;
 
--- but that multiple ddl statements in a block results in ROLLBACK
+-- and so are multiple ddl statements
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 COMMIT;
+
+\d lineitem_alter
+
+ALTER TABLE lineitem_alter DROP COLUMN first;
+DROP INDEX temp_index_2;
+
+-- ensure that user-specified rollback causes full rollback
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
+ROLLBACK;
+
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 
--- and distributed SELECTs cannot appear after ALTER
+-- ensure that errors cause full rollback
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+ROLLBACK;
+
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+
+-- verify that SAVEPOINT is allowed...
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+SAVEPOINT my_savepoint;
+CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
+ROLLBACK;
+
+-- but that actually rolling back to it is not
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+SAVEPOINT my_savepoint;
+CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
+ROLLBACK TO my_savepoint;
+COMMIT;
+
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+
+-- Add column on only one worker...
+\c - - - :worker_2_port
+ALTER TABLE lineitem_alter_220000 ADD COLUMN first integer;
+\c - - - :master_port
+
+-- and try to add it in a multi-statement block, which fails
+BEGIN;
+CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
+ALTER TABLE lineitem_alter ADD COLUMN first integer;
+COMMIT;
+
+-- Nothing from the block should have committed
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+
+-- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
+CREATE TABLE single_shard_items (id integer, name text);
+SELECT master_create_distributed_table('single_shard_items', 'id', 'hash');
+SELECT master_create_worker_shards('single_shard_items', 1, 2);
+
+-- Drop the column from the worker...
+\c - - - :worker_2_port
+ALTER TABLE lineitem_alter_220000 DROP COLUMN first;
+
+-- Create table to trigger at-xact-end (deferred) failure
+CREATE TABLE ddl_commands (command text UNIQUE DEFERRABLE INITIALLY DEFERRED);
+
+-- Use an event trigger to log all DDL event tags in it
+CREATE FUNCTION log_ddl_tag() RETURNS event_trigger AS $ldt$
+	BEGIN
+		INSERT INTO ddl_commands VALUES (tg_tag);
+	END;
+$ldt$ LANGUAGE plpgsql;
+
+CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_tag();
+
+\c - - - :master_port
+-- The above trigger will cause failure at transaction end on one placement.
+-- We'll test 2PC first, as it should handle this "best" (no divergence)
+SET citus.multi_shard_commit_protocol TO '2pc';
+BEGIN;
+CREATE INDEX single_index_2 ON single_shard_items(id);
+CREATE INDEX single_index_3 ON single_shard_items(name);
+COMMIT;
+
+-- Nothing from the block should have committed
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+
+-- Now try with 2pc off
+RESET citus.multi_shard_commit_protocol;
+BEGIN;
+CREATE INDEX single_index_2 ON single_shard_items(id);
+CREATE INDEX single_index_3 ON single_shard_items(name);
+COMMIT;
+
+-- The block should have committed with a warning
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+
+\c - - - :worker_2_port
+DROP EVENT TRIGGER log_ddl_tag;
+DROP FUNCTION log_ddl_tag();
+DROP TABLE ddl_commands;
+
+\c - - - :master_port
+-- Distributed SELECTs cannot appear after ALTER
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SELECT l_orderkey FROM lineitem_alter LIMIT 0;
