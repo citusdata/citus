@@ -697,8 +697,6 @@ LIMIT
 
 
 -- Same queries above with explain
-SET client_min_messages TO DEBUG2;
-
 -- Simple join subquery pushdown
 EXPLAIN SELECT
 	avg(array_length(events, 1)) AS event_average
@@ -914,4 +912,3 @@ LIMIT
 	10;
 
 SET citusdb.task_executor_type TO 'real-time';
-SET client_min_messages TO NOTICE;
