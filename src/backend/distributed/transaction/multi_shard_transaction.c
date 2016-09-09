@@ -18,72 +18,57 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_shard_transaction.h"
 #include "nodes/pg_list.h"
+#include "storage/ipc.h"
 #include "utils/memutils.h"
 
 
 #define INITIAL_CONNECTION_CACHE_SIZE 1001
 
 
-/* Local functions forward declarations */
-static void RegisterShardPlacementXactCallback(void);
-
-
 /* Global variables used in commit handler */
-static List *shardPlacementConnectionList = NIL;
-static bool isXactCallbackRegistered = false;
+static HTAB *shardConnectionHash = NULL;
+static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+static bool subXactAbortAttempted = false;
+
+/* functions needed by callbacks and hooks */
+static void RegisterShardPlacementXactCallbacks(void);
+static void CompleteShardPlacementTransactions(XactEvent event, void *arg);
+static void MultiShardSubXactCallback(SubXactEvent event, SubTransactionId subId,
+									  SubTransactionId parentSubid, void *arg);
 
 
 /*
- * OpenTransactionsToAllShardPlacements opens connections to all placements of
- * the given shard Id Pointer List and returns the hash table containing the connections.
- * The resulting hash table maps shardIds to ShardConnection structs.
+ * OpenTransactionsToAllShardPlacements opens connections to all placements
+ * using the provided shard identifier list. Connections accumulate in a global
+ * shardConnectionHash variable for use (and re-use) within this transaction.
  */
-HTAB *
+void
 OpenTransactionsToAllShardPlacements(List *shardIntervalList, char *userName)
 {
-	HTAB *shardConnectionHash = CreateShardConnectionHash();
 	ListCell *shardIntervalCell = NULL;
-	ListCell *connectionCell = NULL;
-	List *connectionList = NIL;
+
+	if (shardConnectionHash == NULL)
+	{
+		shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
+	}
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 
-		OpenConnectionsToShardPlacements(shardId, shardConnectionHash, userName);
+		BeginTransactionOnShardPlacements(shardId, userName);
 	}
-
-	connectionList = ConnectionList(shardConnectionHash);
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-		PGresult *result = NULL;
-
-		result = PQexec(connection, "BEGIN");
-		if (PQresultStatus(result) != PGRES_COMMAND_OK)
-		{
-			ReraiseRemoteError(connection, result);
-		}
-	}
-
-	shardPlacementConnectionList = ConnectionList(shardConnectionHash);
-
-	RegisterShardPlacementXactCallback();
-
-	return shardConnectionHash;
 }
 
 
 /*
- * CreateShardConnectionHash constructs a hash table used for shardId->Connection
- * mapping.
+ * CreateShardConnectionHash constructs a hash table which maps from shard
+ * identifier to connection lists, passing the provided MemoryContext to
+ * hash_create for hash allocations.
  */
 HTAB *
-CreateShardConnectionHash(void)
+CreateShardConnectionHash(MemoryContext memoryContext)
 {
 	HTAB *shardConnectionsHash = NULL;
 	int hashFlags = 0;
@@ -92,10 +77,9 @@ CreateShardConnectionHash(void)
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(int64);
 	info.entrysize = sizeof(ShardConnections);
-	info.hash = tag_hash;
-	info.hcxt = TopTransactionContext;
+	info.hcxt = memoryContext;
+	hashFlags = (HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
 
-	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT;
 	shardConnectionsHash = hash_create("Shard Connections Hash",
 									   INITIAL_CONNECTION_CACHE_SIZE, &info,
 									   hashFlags);
@@ -105,50 +89,58 @@ CreateShardConnectionHash(void)
 
 
 /*
- * OpenConnectionsToShardPlacements opens connections to all placements of the
- * shard with the given shardId and populates the shardConnectionHash table
- * accordingly.
+ * BeginTransactionOnShardPlacements opens new connections (if necessary) to
+ * all placements of a shard (specified by shard identifier). After sending a
+ * BEGIN command on all connections, they are added to shardConnectionHash for
+ * use within this transaction. Exits early if connections already exist for
+ * the specified shard, and errors if no placements can be found, a connection
+ * cannot be made, or if the BEGIN command fails.
  */
 void
-OpenConnectionsToShardPlacements(uint64 shardId, HTAB *shardConnectionHash,
-								 char *userName)
+BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 {
+	List *shardPlacementList = NIL;
+	ListCell *placementCell = NULL;
+
+	ShardConnections *shardConnections = NULL;
 	bool shardConnectionsFound = false;
 
-	/* get existing connections to the shard placements, if any */
-	ShardConnections *shardConnections = GetShardConnections(shardConnectionHash,
-															 shardId,
-															 &shardConnectionsFound);
-
-	List *shardPlacementList = FinalizedShardPlacementList(shardId);
-	ListCell *shardPlacementCell = NULL;
-	List *connectionList = NIL;
-
-	Assert(!shardConnectionsFound);
+	MemoryContext oldContext = NULL;
+	shardPlacementList = FinalizedShardPlacementList(shardId);
 
 	if (shardPlacementList == NIL)
 	{
+		/* going to have to have some placements to do any work */
 		ereport(ERROR, (errmsg("could not find any shard placements for the shard "
 							   UINT64_FORMAT, shardId)));
 	}
 
-	foreach(shardPlacementCell, shardPlacementList)
+	/* get existing connections to the shard placements, if any */
+	shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
+	if (shardConnectionsFound)
 	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(
-			shardPlacementCell);
-		char *workerName = shardPlacement->nodeName;
-		uint32 workerPort = shardPlacement->nodePort;
-		PGconn *connection = ConnectToNode(workerName, workerPort, userName);
+		/* exit early if we've already established shard transactions */
+		return;
+	}
+
+	foreach(placementCell, shardPlacementList)
+	{
+		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(placementCell);
+		PGconn *connection = NULL;
 		TransactionConnection *transactionConnection = NULL;
+		PGresult *result = NULL;
+
+		connection = ConnectToNode(shardPlacement->nodeName, shardPlacement->nodePort,
+								   userName);
 
 		if (connection == NULL)
 		{
-			List *abortConnectionList = ConnectionList(shardConnectionHash);
-			CloseConnections(abortConnectionList);
-
 			ereport(ERROR, (errmsg("could not establish a connection to all "
 								   "placements of shard %lu", shardId)));
 		}
+
+		/* entries must last through the whole top-level transaction */
+		oldContext = MemoryContextSwitchTo(TopTransactionContext);
 
 		transactionConnection = palloc0(sizeof(TransactionConnection));
 
@@ -156,29 +148,47 @@ OpenConnectionsToShardPlacements(uint64 shardId, HTAB *shardConnectionHash,
 		transactionConnection->transactionState = TRANSACTION_STATE_INVALID;
 		transactionConnection->connection = connection;
 
-		connectionList = lappend(connectionList, transactionConnection);
-	}
+		shardConnections->connectionList = lappend(shardConnections->connectionList,
+												   transactionConnection);
 
-	shardConnections->connectionList = connectionList;
+		MemoryContextSwitchTo(oldContext);
+
+		/* now that connection is tracked, issue BEGIN */
+		result = PQexec(connection, "BEGIN");
+		if (PQresultStatus(result) != PGRES_COMMAND_OK)
+		{
+			ReraiseRemoteError(connection, result);
+		}
+	}
 }
 
 
 /*
- * GetShardConnections finds existing connections for a shard in the hash.
- * If not found, then a ShardConnections structure with empty connectionList
- * is returned.
+ * GetShardConnections finds existing connections for a shard in the global
+ * connection hash. If not found, then a ShardConnections structure with empty
+ * connectionList is returned and the shardConnectionsFound output parameter
+ * will be set to false.
  */
 ShardConnections *
-GetShardConnections(HTAB *shardConnectionHash, int64 shardId,
-					bool *shardConnectionsFound)
+GetShardConnections(int64 shardId, bool *shardConnectionsFound)
+{
+	return GetShardHashConnections(shardConnectionHash, shardId, shardConnectionsFound);
+}
+
+
+/*
+ * GetShardHashConnections finds existing connections for a shard in the
+ * provided hash. If not found, then a ShardConnections structure with empty
+ * connectionList is returned.
+ */
+ShardConnections *
+GetShardHashConnections(HTAB *connectionHash, int64 shardId, bool *connectionsFound)
 {
 	ShardConnections *shardConnections = NULL;
 
-	shardConnections = (ShardConnections *) hash_search(shardConnectionHash,
-														&shardId,
-														HASH_ENTER,
-														shardConnectionsFound);
-	if (!*shardConnectionsFound)
+	shardConnections = (ShardConnections *) hash_search(connectionHash, &shardId,
+														HASH_ENTER, connectionsFound);
+	if (!*connectionsFound)
 	{
 		shardConnections->shardId = shardId;
 		shardConnections->connectionList = NIL;
@@ -198,6 +208,11 @@ ConnectionList(HTAB *connectionHash)
 	HASH_SEQ_STATUS status;
 	ShardConnections *shardConnections = NULL;
 
+	if (connectionHash == NULL)
+	{
+		return NIL;
+	}
+
 	hash_seq_init(&status, connectionHash);
 
 	shardConnections = (ShardConnections *) hash_seq_search(&status);
@@ -214,16 +229,31 @@ ConnectionList(HTAB *connectionHash)
 
 
 /*
- * EnableXactCallback ensures the XactCallback for committing/aborting
- * remote worker transactions is registered.
+ * InstallMultiShardXactShmemHook simply installs a hook (intended to be called
+ * once during backend startup), which will itself register all the transaction
+ * callbacks needed by multi-shard transaction logic.
  */
 void
-RegisterShardPlacementXactCallback(void)
+InstallMultiShardXactShmemHook(void)
 {
-	if (!isXactCallbackRegistered)
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = RegisterShardPlacementXactCallbacks;
+}
+
+
+/*
+ * RegisterShardPlacementXactCallbacks registers transaction callbacks needed
+ * for multi-shard transactions before calling previous shmem startup hooks.
+ */
+static void
+RegisterShardPlacementXactCallbacks(void)
+{
+	RegisterXactCallback(CompleteShardPlacementTransactions, NULL);
+	RegisterSubXactCallback(MultiShardSubXactCallback, NULL);
+
+	if (prev_shmem_startup_hook != NULL)
 	{
-		RegisterXactCallback(CompleteShardPlacementTransactions, NULL);
-		isXactCallbackRegistered = true;
+		prev_shmem_startup_hook();
 	}
 }
 
@@ -232,16 +262,28 @@ RegisterShardPlacementXactCallback(void)
  * CompleteShardPlacementTransactions commits or aborts pending shard placement
  * transactions when the local transaction commits or aborts.
  */
-void
+static void
 CompleteShardPlacementTransactions(XactEvent event, void *arg)
 {
-	if (shardPlacementConnectionList == NIL)
+	List *connectionList = ConnectionList(shardConnectionHash);
+
+	if (shardConnectionHash == NULL)
 	{
 		/* nothing to do */
 		return;
 	}
-	else if (event == XACT_EVENT_PRE_COMMIT)
+
+	if (event == XACT_EVENT_PRE_COMMIT)
 	{
+		if (subXactAbortAttempted)
+		{
+			subXactAbortAttempted = false;
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot ROLLBACK TO SAVEPOINT in transactions "
+								   "which modify distributed tables")));
+		}
+
 		/*
 		 * Any failure here will cause local changes to be rolled back,
 		 * and remote changes to either roll back (1PC) or, in case of
@@ -251,7 +293,7 @@ CompleteShardPlacementTransactions(XactEvent event, void *arg)
 
 		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 		{
-			PrepareRemoteTransactions(shardPlacementConnectionList);
+			PrepareRemoteTransactions(connectionList);
 		}
 
 		return;
@@ -265,7 +307,7 @@ CompleteShardPlacementTransactions(XactEvent event, void *arg)
 		 * changes have already been committed.
 		 */
 
-		CommitRemoteTransactions(shardPlacementConnectionList, false);
+		CommitRemoteTransactions(connectionList, false);
 	}
 	else if (event == XACT_EVENT_ABORT)
 	{
@@ -276,16 +318,28 @@ CompleteShardPlacementTransactions(XactEvent event, void *arg)
 		 * already been rolled back.
 		 */
 
-		AbortRemoteTransactions(shardPlacementConnectionList);
+		AbortRemoteTransactions(connectionList);
 	}
 	else
 	{
 		return;
 	}
 
-	CloseConnections(shardPlacementConnectionList);
-	shardPlacementConnectionList = NIL;
+	CloseConnections(connectionList);
+	shardConnectionHash = NULL;
 	XactModificationLevel = XACT_MODIFICATION_NONE;
+	subXactAbortAttempted = false;
+}
+
+
+static void
+MultiShardSubXactCallback(SubXactEvent event, SubTransactionId subId,
+						  SubTransactionId parentSubid, void *arg)
+{
+	if ((shardConnectionHash != NULL) && (event == SUBXACT_EVENT_ABORT_SUB))
+	{
+		subXactAbortAttempted = true;
+	}
 }
 
 
