@@ -174,7 +174,6 @@ SET citus.subquery_pushdown TO false;
 SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
 
 -- LIMIT/OFFSET with a subquery
-SET client_min_messages TO 'debug1';
 SET citus.task_executor_type TO 'task-tracker';
 
 SELECT 
@@ -190,6 +189,7 @@ ORDER BY
 LIMIT 10 OFFSET 20;
 
 SET citus.task_executor_type TO 'real-time';
+SET client_min_messages TO DEBUG1;
 
 -- Ensure that we push down LIMIT and OFFSET properly
 -- No Group-By -> Push Down
