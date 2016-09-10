@@ -731,7 +731,6 @@ LIMIT
 (3 rows)
 
 -- Same queries above with explain
-SET client_min_messages TO DEBUG2;
 -- Simple join subquery pushdown
 EXPLAIN SELECT
 	avg(array_length(events, 1)) AS event_average
@@ -758,10 +757,6 @@ FROM
 	GROUP BY
 		tenant_id,
 		user_id) AS subquery;
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
                                                                                        QUERY PLAN                                                                                       
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Distributed Query into pg_merge_job_270014
@@ -851,17 +846,6 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  building index "pg_toast_17247_index" on table "pg_toast_17247"
                                                                                                                    QUERY PLAN                                                                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Distributed Query into pg_merge_job_270015
@@ -977,16 +961,6 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
 ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
 EXPLAIN SELECT
@@ -1038,12 +1012,6 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-DEBUG:  push down of limit count: 10
-DEBUG:  predicate pruning for shardId 270015
-DEBUG:  predicate pruning for shardId 270016
-DEBUG:  predicate pruning for shardId 270011
-DEBUG:  predicate pruning for shardId 270012
-DEBUG:  building index "pg_toast_17256_index" on table "pg_toast_17256"
                                                                                                 QUERY PLAN                                                                                                
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Distributed Query into pg_merge_job_270017
@@ -1078,4 +1046,3 @@ DEBUG:  building index "pg_toast_17256_index" on table "pg_toast_17256"
 (29 rows)
 
 SET citusdb.task_executor_type TO 'real-time';
-SET client_min_messages TO NOTICE;
