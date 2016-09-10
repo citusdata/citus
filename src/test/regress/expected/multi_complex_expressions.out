@@ -376,7 +376,6 @@ SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
 (10 rows)
 
 -- LIMIT/OFFSET with a subquery
-SET client_min_messages TO 'debug1';
 SET citus.task_executor_type TO 'task-tracker';
 SELECT 
 	customer_keys.o_custkey,
@@ -389,8 +388,6 @@ GROUP BY
 ORDER BY 
 	customer_keys.o_custkey DESC
 LIMIT 10 OFFSET 20;
-DEBUG:  push down of limit count: 30
-DEBUG:  building index "pg_toast_17022_index" on table "pg_toast_17022"
  o_custkey | total_order_count 
 -----------+-------------------
       1466 |                 1
@@ -406,6 +403,7 @@ DEBUG:  building index "pg_toast_17022_index" on table "pg_toast_17022"
 (10 rows)
 
 SET citus.task_executor_type TO 'real-time';
+SET client_min_messages TO DEBUG1;
 -- Ensure that we push down LIMIT and OFFSET properly
 -- No Group-By -> Push Down
 CREATE TEMP TABLE temp_limit_test_1 AS
