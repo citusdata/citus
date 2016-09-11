@@ -43,8 +43,20 @@ typedef struct NodeAddress
 	int32 nodePort;
 } NodeAddress;
 
+/* struct type for a generic source of tuples to copy to shards */
+typedef struct CopyTupleSource
+{
+	void *context;
+	MemoryContext rowContext;
+
+	void (*Open)(void *context, Relation relation, ErrorContextCallback *errorCallback);
+	bool (*NextTuple)(void *context, Datum *columnValues, bool *columnNulls);
+	void (*Close)(void *context);
+} CopyTupleSource;
+
 
 /* function declarations for copying into a distributed table */
+extern uint64 CopyTupleSourceToShards(CopyTupleSource *tupleSource, RangeVar *relation);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  TupleDesc rowDescriptor,
