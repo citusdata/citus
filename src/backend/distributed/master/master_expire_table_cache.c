@@ -144,7 +144,6 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 	char *schemaName = get_namespace_name(schemaId);
 	char *relationName = get_rel_name(relationId);
 	char relationKind = get_rel_relkind(relationId);
-	StringInfo shardName = makeStringInfo();
 	StringInfo workerCommand = makeStringInfo();
 	ListCell *shardIntervalCell = NULL;
 
@@ -170,12 +169,11 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		char *shardName = pnstrdup(relationName, NAMEDATALEN);
 		char *quotedShardName = NULL;
 
-		resetStringInfo(shardName);
-		appendStringInfo(shardName, "%s", relationName);
-		AppendShardIdToStringInfo(shardName, shardInterval->shardId);
-		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);
+		AppendShardIdToName(&shardName, shardInterval->shardId);
+		quotedShardName = quote_qualified_identifier(schemaName, shardName);
 		appendStringInfo(workerCommand, "%s", quotedShardName);
 
 		/* append a comma after the shard name if there are more shards */

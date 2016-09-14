@@ -15,6 +15,7 @@
 #ifndef RELAY_UTILITY_H
 #define RELAY_UTILITY_H
 
+#include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 
@@ -41,7 +42,5 @@ typedef enum
 /* Function declarations to extend names in DDL commands */
 extern void RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId);
 extern void AppendShardIdToName(char **name, uint64 shardId);
-extern void AppendShardIdToStringInfo(StringInfo name, uint64 shardId);
-
 
 #endif   /* RELAY_UTILITY_H */
