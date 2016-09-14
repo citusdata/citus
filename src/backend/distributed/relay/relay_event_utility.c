@@ -21,6 +21,7 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/hash.h"
 #include "access/htup.h"
 #include "access/skey.h"
 #include "access/stratnum.h"
@@ -29,6 +30,7 @@
 #include "catalog/pg_constraint.h"
 #include "distributed/relay_utility.h"
 #include "lib/stringinfo.h"
+#include "mb/pg_wchar.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -36,9 +38,11 @@
 #include "nodes/primnodes.h"
 #include "nodes/value.h"
 #include "storage/lock.h"
+#include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/palloc.h"
 #include "utils/relcache.h"
 
@@ -49,6 +53,9 @@ static bool TypeDropIndexConstraint(const AlterTableCmd *command,
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(shard_name);
 
 /*
  * RelayEventExtendNames extends relation names in the given parse tree for
@@ -624,20 +631,64 @@ AppendShardIdToName(char **name, uint64 shardId)
 {
 	char extendedName[NAMEDATALEN];
 	uint32 extendedNameLength = 0;
+	int nameLength = strlen(*name);
+	char shardIdAndSeparator[NAMEDATALEN];
+	int shardIdAndSeparatorLength;
+	uint32 longNameHash = 0;
+	int multiByteClipLength = 0;
 
-	snprintf(extendedName, NAMEDATALEN, "%s%c" UINT64_FORMAT,
-			 (*name), SHARD_NAME_SEPARATOR, shardId);
+	snprintf(shardIdAndSeparator, NAMEDATALEN, "%c" UINT64_FORMAT,
+			 SHARD_NAME_SEPARATOR, shardId);
+	shardIdAndSeparatorLength = strlen(shardIdAndSeparator);
 
 	/*
-	 * Parser should have already checked that the table name has enough space
-	 * reserved for appending shardIds. Nonetheless, we perform an additional
-	 * check here to verify that the appended name does not overflow.
+	 * If *name strlen is < (NAMEDATALEN - shardIdAndSeparatorLength),
+	 * it is safe merely to append the separator and shardId.
 	 */
-	extendedNameLength = strlen(extendedName) + 1;
-	if (extendedNameLength >= NAMEDATALEN)
+
+	if (nameLength < (NAMEDATALEN - shardIdAndSeparatorLength))
 	{
-		ereport(ERROR, (errmsg("shard name too long to extend: \"%s\"", (*name))));
+		snprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
+
+	/*
+	 * Otherwise, we need to truncate the name further to accommodate
+	 * a sufficient hash value. The resulting name will avoid collision
+	 * with other hashed names such that for any given schema with
+	 * 90 distinct object names that are long enough to require hashing
+	 * (typically 57-63 characters), the chance of a collision existing is:
+	 *
+	 * If randomly generated UTF8 names:
+	 *     (1e-6) * (9.39323783788e-114) ~= (9.39e-120)
+	 * If random case-insensitive ASCII names (letter first, 37 useful characters):
+	 *     (1e-6) * (2.80380202421e-74) ~= (2.8e-80)
+	 * If names sharing only N distinct 45- to 47-character prefixes:
+	 *     (1e-6) * (1/N) = (1e-6/N)
+	 *     1e-7 for 10 distinct prefixes
+	 *     5e-8 for 20 distinct prefixes
+	 *
+	 * In practice, since shard IDs are globally unique, the risk of name collision
+	 * exists only amongst objects that pertain to a single distributed table
+	 * and are created for each shard: the table name and the names of any indexes
+	 * or index-backed constraints. Since there are typically less than five such
+	 * names, and almost never more than ten, the expected collision rate even in
+	 * the worst case (ten names share same 45- to 47-character prefix) is roughly
+	 * 1e-8: one in 100 million schemas will experience a name collision only if ALL
+	 * 100 million schemas present the worst-case scenario.
+	 */
+	else
+	{
+		longNameHash = hash_any((unsigned char *) (*name), nameLength);
+		multiByteClipLength = pg_mbcliplen(*name, nameLength, (NAMEDATALEN -
+															   shardIdAndSeparatorLength -
+															   10));
+		snprintf(extendedName, NAMEDATALEN, "%.*s%c%.8x%s",
+				 multiByteClipLength, (*name),
+				 SHARD_NAME_SEPARATOR, longNameHash,
+				 shardIdAndSeparator);
+	}
+	extendedNameLength = strlen(extendedName) + 1;
+	Assert(extendedNameLength <= NAMEDATALEN);
 
 	(*name) = (char *) repalloc((*name), extendedNameLength);
 	snprintf((*name), extendedNameLength, "%s", extendedName);
@@ -645,11 +696,55 @@ AppendShardIdToName(char **name, uint64 shardId)
 
 
 /*
- * AppendShardIdToStringInfo appends shardId to the given name, represented
- * by a StringInfo.
+ * shard_name() provides a PG function interface to AppendShardNameToId above.
  */
-void
-AppendShardIdToStringInfo(StringInfo name, uint64 shardId)
+Datum
+shard_name(PG_FUNCTION_ARGS)
 {
-	appendStringInfo(name, "%c" UINT64_FORMAT, SHARD_NAME_SEPARATOR, shardId);
+	Oid relationId = InvalidOid;
+	int64 shardId = 0;
+	char *relationName = NULL;
+
+	/*
+	 * Have to check arguments for NULLness as it can't be declared STRICT
+	 * because of min/max arguments, which have to be NULLable for new shards.
+	 */
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("object_name cannot be null")));
+	}
+	if (PG_ARGISNULL(1))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("shard_id cannot be null")));
+	}
+
+
+	relationId = PG_GETARG_OID(0);
+	shardId = PG_GETARG_INT64(1);
+
+	if (shardId <= 0)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("shard_id cannot be zero or negative value")));
+	}
+
+
+	if (!OidIsValid(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("object_name does not reference a valid relation")));
+	}
+
+	relationName = get_rel_name(relationId);
+
+	if (relationName == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("object_name does not reference a valid relation")));
+	}
+
+	AppendShardIdToName(&relationName, shardId);
+	PG_RETURN_TEXT_P(cstring_to_text(relationName));
 }
