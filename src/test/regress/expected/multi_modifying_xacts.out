@@ -160,31 +160,27 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
 ERROR:  cannot open new connections after the first modification command within a transaction
 ABORT;
--- COPY can't happen second,
+-- Check COPY can happen after INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "10,Weyland-Yutani"
 COMMIT;
--- though it will work if before any modifications
+-- Check COPY can happen before INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
 SELECT name FROM labs WHERE id = 10;
       name      
 ----------------
  Weyland-Yutani
-(1 row)
+ Weyland-Yutani
+(2 rows)
 
 INSERT INTO labs VALUES (6, 'Bell Labs');
-ERROR:  cannot open new connections after the first modification command within a transaction
 COMMIT;
--- but a double-copy isn't allowed (the first will persist)
+-- Two COPYs are also ok
 BEGIN;
 \copy labs from stdin delimiter ','
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety"
 COMMIT;
 SELECT name FROM labs WHERE id = 11;
       name      
@@ -192,33 +188,13 @@ SELECT name FROM labs WHERE id = 11;
  Planet Express
 (1 row)
 
--- finally, ALTER and copy aren't compatible
+-- finally, check ALTER and copy are compatible
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto2 text;
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety,lol"
 COMMIT;
+ALTER TABLE labs DROP COLUMN motto2;
 -- but the DDL should correctly roll back
-\d labs
-     Table "public.labs"
- Column |  Type  | Modifiers 
---------+--------+-----------
- id     | bigint | not null
- name   | text   | not null
-
-SELECT * FROM labs WHERE id = 12;
- id | name 
-----+------
-(0 rows)
-
--- and if the copy is before the ALTER...
-BEGIN;
-\copy labs from stdin delimiter ','
-ALTER TABLE labs ADD COLUMN motto3 text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
-COMMIT;
--- the DDL fails, but copy persists
 \d labs
      Table "public.labs"
  Column |  Type  | Modifiers 
@@ -230,7 +206,29 @@ SELECT * FROM labs WHERE id = 12;
  id |   name   
 ----+----------
  12 | fsociety
-(1 row)
+ 12 | fsociety
+(2 rows)
+
+-- and if the copy is before the ALTER...
+BEGIN;
+\copy labs from stdin delimiter ','
+ALTER TABLE labs ADD COLUMN motto3 text;
+ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
+COMMIT;
+-- the DDL fails, and copy does not persist
+\d labs
+     Table "public.labs"
+ Column |  Type  | Modifiers 
+--------+--------+-----------
+ id     | bigint | not null
+ name   | text   | not null
+
+SELECT * FROM labs WHERE id = 12;
+ id |   name   
+----+----------
+ 12 | fsociety
+ 12 | fsociety
+(2 rows)
 
 -- now, for some special failures...
 CREATE TABLE objects (

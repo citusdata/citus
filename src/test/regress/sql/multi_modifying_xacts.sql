@@ -131,7 +131,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
 ABORT;
 
--- COPY can't happen second,
+-- Check COPY can happen after INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
@@ -139,7 +139,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 \.
 COMMIT;
 
--- though it will work if before any modifications
+-- Check COPY can happen before INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
 10,Weyland-Yutani
@@ -148,7 +148,7 @@ SELECT name FROM labs WHERE id = 10;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
 
--- but a double-copy isn't allowed (the first will persist)
+-- Two COPYs are also ok
 BEGIN;
 \copy labs from stdin delimiter ','
 11,Planet Express
@@ -160,13 +160,14 @@ COMMIT;
 
 SELECT name FROM labs WHERE id = 11;
 
--- finally, ALTER and copy aren't compatible
+-- finally, check ALTER and copy are compatible
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto2 text;
 \copy labs from stdin delimiter ','
 12,fsociety,lol
 \.
 COMMIT;
+ALTER TABLE labs DROP COLUMN motto2;
 
 -- but the DDL should correctly roll back
 \d labs
@@ -180,7 +181,7 @@ BEGIN;
 ALTER TABLE labs ADD COLUMN motto3 text;
 COMMIT;
 
--- the DDL fails, but copy persists
+-- the DDL fails, and copy does not persist
 \d labs
 SELECT * FROM labs WHERE id = 12;
 

@@ -702,8 +702,4 @@ SELECT master_create_distributed_table('composite_partition_column_table', 'comp
 WARNING:  function min(number_pack) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 CONTEXT:  while executing command on localhost:57637
-WARNING:  function min(number_pack) does not exist
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
-WARNING:  could not get statistics for shard public.composite_partition_column_table_560164
-DETAIL:  Setting shard statistics to NULL
+ERROR:  failure on connection marked as essential: localhost:57637
