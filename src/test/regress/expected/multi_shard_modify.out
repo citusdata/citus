@@ -103,10 +103,6 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 DEBUG:  predicate pruning for shardId 350001
 DEBUG:  predicate pruning for shardId 350002
 DEBUG:  predicate pruning for shardId 350003
-DEBUG:  sent PREPARE TRANSACTION over connection 350000
-DEBUG:  sent PREPARE TRANSACTION over connection 350000
-DEBUG:  sent COMMIT PREPARED over connection 350000
-DEBUG:  sent COMMIT PREPARED over connection 350000
  master_modify_multiple_shards 
 -------------------------------
                              1
