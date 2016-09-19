@@ -262,8 +262,8 @@ NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 WARNING:  column "non_existent_column" of relation "lineitem_alter_220000" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57637
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
@@ -362,16 +362,16 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subc
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 WARNING:  type "non_existent_type" does not exist
-CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 WARNING:  column "null_column" contains null values
-CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 WARNING:  invalid input syntax for integer: "a"
-CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57637
 -- Verify that we error out on statements involving RENAME
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 ERROR:  renaming distributed tables or their objects is currently unsupported
@@ -520,7 +520,7 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 WARNING:  column "first" of relation "lineitem_alter_220000" already exists
 CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+ERROR:  failure on connection marked as essential: localhost:57638
 COMMIT;
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
@@ -528,6 +528,10 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 -----------+-----------
 (0 rows)
 
+SET client_min_messages = 'ERROR';
+ALTER TABLE lineitem_alter DROP COLUMN first;
+ERROR:  failure on connection marked as essential: localhost:57637
+RESET client_min_messages;
 -- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
 CREATE TABLE single_shard_items (id integer, name text);
 SELECT master_create_distributed_table('single_shard_items', 'id', 'hash');
@@ -565,14 +569,14 @@ COMMIT;
 WARNING:  duplicate key value violates unique constraint "ddl_commands_command_key"
 DETAIL:  Key (command)=(CREATE INDEX) already exists.
 CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to prepare transaction
+ERROR:  failure on connection marked as essential: localhost:57638
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
  indexname | tablename 
 -----------+-----------
 (0 rows)
 
--- Now try with 2pc off
+-- Now try with 2pc off, that'll result in invalid shards
 RESET citus.multi_shard_commit_protocol;
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
@@ -580,8 +584,9 @@ NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
-WARNING:  failed to commit transaction on localhost:57638
--- The block should have committed with a warning
+WARNING:  duplicate key value violates unique constraint "ddl_commands_command_key"
+DETAIL:  Key (command)=(CREATE INDEX) already exists.
+CONTEXT:  while executing command on localhost:57638
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
    indexname    |     tablename      
 ----------------+--------------------
@@ -653,8 +658,8 @@ INSERT INTO test_ab VALUES (2, 11);
 CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
 WARNING:  could not create unique index "temp_unique_index_1_220022"
 DETAIL:  Key (a)=(2) is duplicated.
-CONTEXT:  while executing command on localhost:57638
-ERROR:  could not execute DDL command on worker node shards
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57637
 SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
 WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
  shardid 

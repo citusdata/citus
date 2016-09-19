@@ -30,17 +30,15 @@
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
-#include "distributed/commit_protocol.h"
-#include "distributed/connection_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_join_order.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/remote_commands.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -95,14 +93,13 @@ static void VerifyTransmitStmt(CopyStmt *copyStatement);
 static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  bool *commandMustRunAsOwner);
 static Node * ProcessIndexStmt(IndexStmt *createIndexStatement,
-							   const char *createIndexCommand, bool isTopLevel);
+							   const char *createIndexCommand);
 static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
-								   const char *dropIndexCommand, bool isTopLevel);
+								   const char *dropIndexCommand);
 static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
-									const char *alterTableCommand, bool isTopLevel);
+									const char *alterTableCommand);
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
-										   const char *alterObjectSchemaCommand,
-										   bool isTopLevel);
+										   const char *alterObjectSchemaCommand);
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -117,12 +114,8 @@ static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 /* Local functions forward declarations for helper functions */
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
-static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
-										 bool isTopLevel);
+static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString);
 static void ShowNoticeIfNotUsing2PC(void);
-static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString);
-static void ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
-											ShardConnections *shardConnections);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
@@ -210,12 +203,9 @@ multi_ProcessUtility(Node *parsetree,
 	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
 	if (EnableDDLPropagation)
 	{
-		bool isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
-
 		if (IsA(parsetree, IndexStmt))
 		{
-			parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString,
-										 isTopLevel);
+			parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString);
 		}
 
 		if (IsA(parsetree, DropStmt))
@@ -223,7 +213,7 @@ multi_ProcessUtility(Node *parsetree,
 			DropStmt *dropStatement = (DropStmt *) parsetree;
 			if (dropStatement->removeType == OBJECT_INDEX)
 			{
-				parsetree = ProcessDropIndexStmt(dropStatement, queryString, isTopLevel);
+				parsetree = ProcessDropIndexStmt(dropStatement, queryString);
 			}
 		}
 
@@ -232,8 +222,7 @@ multi_ProcessUtility(Node *parsetree,
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 			if (alterTableStmt->relkind == OBJECT_TABLE)
 			{
-				parsetree = ProcessAlterTableStmt(alterTableStmt, queryString,
-												  isTopLevel);
+				parsetree = ProcessAlterTableStmt(alterTableStmt, queryString);
 			}
 		}
 
@@ -257,8 +246,7 @@ multi_ProcessUtility(Node *parsetree,
 		if (IsA(parsetree, AlterObjectSchemaStmt))
 		{
 			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
-			parsetree = ProcessAlterObjectSchemaStmt(setSchemaStmt, queryString,
-													 isTopLevel);
+			parsetree = ProcessAlterObjectSchemaStmt(setSchemaStmt, queryString);
 		}
 
 		/*
@@ -538,8 +526,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
  * master node table.
  */
 static Node *
-ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand,
-				 bool isTopLevel)
+ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 {
 	/*
 	 * We first check whether a distributed relation is affected. For that, we need to
@@ -586,7 +573,7 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
 			ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
 			/* if it is supported, go ahead and execute the command */
-			ExecuteDistributedDDLCommand(relationId, createIndexCommand, isTopLevel);
+			ExecuteDistributedDDLCommand(relationId, createIndexCommand);
 		}
 	}
 
@@ -603,8 +590,7 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
  * master node table.
  */
 static Node *
-ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
-					 bool isTopLevel)
+ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 {
 	ListCell *dropObjectCell = NULL;
 	Oid distributedIndexId = InvalidOid;
@@ -673,7 +659,7 @@ ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		/* if it is supported, go ahead and execute the command */
-		ExecuteDistributedDDLCommand(distributedRelationId, dropIndexCommand, isTopLevel);
+		ExecuteDistributedDDLCommand(distributedRelationId, dropIndexCommand);
 	}
 
 	return (Node *) dropIndexStatement;
@@ -689,8 +675,7 @@ ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
  * master node table.
  */
 static Node *
-ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand,
-					  bool isTopLevel)
+ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand)
 {
 	/* first check whether a distributed relation is affected */
 	if (alterTableStatement->relation != NULL)
@@ -705,7 +690,7 @@ ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTabl
 				ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 
 				/* if it is supported, go ahead and execute the command */
-				ExecuteDistributedDDLCommand(relationId, alterTableCommand, isTopLevel);
+				ExecuteDistributedDDLCommand(relationId, alterTableCommand);
 			}
 		}
 	}
@@ -722,7 +707,7 @@ ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTabl
  */
 static Node *
 ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
-							 const char *alterObjectSchemaCommand, bool isTopLevel)
+							 const char *alterObjectSchemaCommand)
 {
 	Oid relationId = InvalidOid;
 	bool noWait = false;
@@ -1278,16 +1263,13 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
  * ExecuteDistributedDDLCommand applies a given DDL command to the given
  * distributed table in a distributed transaction. If the multi shard commit protocol is
  * in its default value of '1pc', then a notice message indicating that '2pc' might be
- * used for extra safety. In the commit protocol, a BEGIN is sent after connection to
- * each shard placement and COMMIT/ROLLBACK is handled by
- * CompleteShardPlacementTransactions function.
+ * used for extra safety.
+ *
+ * DDL is executed, via worker_apply_shard_ddl_command(), on the workers.
  */
 static void
-ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
-							 bool isTopLevel)
+ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString)
 {
-	bool executionOK = false;
-
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
@@ -1295,16 +1277,14 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 							   "transaction blocks containing data modifications")));
 	}
 
+	BeginOrContinueCoordinatedTransaction();
+
+	/* FIXME: Move into ExecuteDDLOnRelationPlacements()? */
 	ShowNoticeIfNotUsing2PC();
 
-	executionOK = ExecuteCommandOnWorkerShards(relationId, ddlCommandString);
+	ExecuteDDLOnRelationPlacements(relationId, ddlCommandString);
 
-	/* if command could not be executed on any finalized shard placement, error out */
-	if (!executionOK)
-	{
-		ereport(ERROR, (errmsg("could not execute DDL command on worker node shards")));
-	}
-
+	/* FIXME: Move into ExecuteDDLOnRelationPlacements()? */
 	XactModificationLevel = XACT_MODIFICATION_SCHEMA;
 }
 
@@ -1324,116 +1304,6 @@ ShowNoticeIfNotUsing2PC(void)
 								 "SET citus.multi_shard_commit_protocol TO '2pc'")));
 
 		warnedUserAbout2PC = true;
-	}
-}
-
-
-/*
- * ExecuteCommandOnWorkerShards executes a given command on all the finalized
- * shard placements of the given table within a distributed transaction. The
- * value of citus.multi_shard_commit_protocol is set to '2pc' by the caller
- * ExecuteDistributedDDLCommand function so that two phase commit protocol is used.
- *
- * ExecuteCommandOnWorkerShards opens an individual connection for each of the
- * shard placement. After all connections are opened, a BEGIN command followed by
- * a proper "SELECT worker_apply_shard_ddl_command(<shardId>, <DDL Command>)" is
- * sent to all open connections in a serial manner.
- *
- * The opened transactions are handled by the CompleteShardPlacementTransactions
- * function.
- *
- * Note: There are certain errors which would occur on few nodes and not on the
- * others. For example, adding a column with a type which exists on some nodes
- * and not on the others.
- *
- * Note: The execution will be blocked if a prepared transaction from previous
- * executions exist on the workers. In this case, those prepared transactions should
- * be removed by either COMMIT PREPARED or ROLLBACK PREPARED.
- */
-static bool
-ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
-{
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-	char *tableOwner = TableOwner(relationId);
-	ListCell *shardIntervalCell = NULL;
-	Oid schemaId = get_rel_namespace(relationId);
-	char *schemaName = get_namespace_name(schemaId);
-
-	LockShards(shardIntervalList, ShareLock);
-	OpenTransactionsToAllShardPlacements(shardIntervalList, tableOwner);
-
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
-		ShardConnections *shardConnections = NULL;
-		bool shardConnectionsFound = false;
-		char *escapedSchemaName = quote_literal_cstr(schemaName);
-		char *escapedCommandString = quote_literal_cstr(commandString);
-		StringInfo applyCommand = makeStringInfo();
-
-		shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
-		Assert(shardConnectionsFound);
-
-		/* build the shard ddl command */
-		appendStringInfo(applyCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
-						 escapedSchemaName, escapedCommandString);
-
-		ExecuteCommandOnShardPlacements(applyCommand, shardId, shardConnections);
-
-		FreeStringInfo(applyCommand);
-	}
-
-	/* check for cancellation one last time before returning */
-	CHECK_FOR_INTERRUPTS();
-
-	return true;
-}
-
-
-/*
- * ExecuteCommandOnShardPlacements executes the given ddl command on the
- * placements of the given shard, using the given shard connections.
- */
-static void
-ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
-								ShardConnections *shardConnections)
-{
-	List *connectionList = shardConnections->connectionList;
-	ListCell *connectionCell = NULL;
-
-	Assert(connectionList != NIL);
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-		PGresult *result = NULL;
-
-		/* send the query */
-		result = PQexec(connection, applyCommand->data);
-		if (PQresultStatus(result) != PGRES_TUPLES_OK)
-		{
-			WarnRemoteError(connection, result);
-			ereport(ERROR, (errmsg("could not execute DDL command on worker "
-								   "node shards")));
-		}
-		else
-		{
-			char *workerName = ConnectionGetOptionValue(connection, "host");
-			char *workerPort = ConnectionGetOptionValue(connection, "port");
-
-			ereport(DEBUG2, (errmsg("applied command on shard " UINT64_FORMAT
-									" on node %s:%s", shardId, workerName,
-									workerPort)));
-		}
-
-		PQclear(result);
-
-		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
-
-		CHECK_FOR_INTERRUPTS();
 	}
 }
 
@@ -1761,7 +1631,6 @@ ReplicateGrantStmt(Node *parsetree)
 		RangeVar *relvar = (RangeVar *) lfirst(objectCell);
 		Oid relOid = RangeVarGetRelid(relvar, NoLock, false);
 		const char *grantOption = "";
-		bool isTopLevel = true;
 
 		if (!IsDistributedTable(relOid))
 		{
@@ -1794,7 +1663,7 @@ ReplicateGrantStmt(Node *parsetree)
 							 granteesString.data);
 		}
 
-		ExecuteDistributedDDLCommand(relOid, ddlString.data, isTopLevel);
+		ExecuteDistributedDDLCommand(relOid, ddlString.data);
 		resetStringInfo(&ddlString);
 	}
 }
