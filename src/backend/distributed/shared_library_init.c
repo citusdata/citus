@@ -160,7 +160,6 @@ _PG_init(void)
 	InitPlacementConnectionManagement();
 
 	/* initialize transaction callbacks */
-	RegisterRouterExecutorXactCallbacks();
 	RegisterShardPlacementXactCallbacks();
 }
 
