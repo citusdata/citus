@@ -2,10 +2,8 @@
 -- MULTI_CREATE_TABLE
 --
 
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 360000;
-
 
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
@@ -99,65 +97,3 @@ CREATE TABLE supplier
 	s_comment varchar(101) not null
 );
 SELECT master_create_distributed_table('supplier', 's_suppkey', 'append');
-
-
--- now test that Citus cannot distribute unique constraints that do not include
--- the partition column
-CREATE TABLE primary_key_on_non_part_col
-(
-	partition_col integer,
-	other_col integer PRIMARY KEY
-);
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
-
-CREATE TABLE unique_const_on_non_part_col
-(
-	partition_col integer,
-	other_col integer UNIQUE
-);
-SELECT master_create_distributed_table('primary_key_on_non_part_col', 'partition_col', 'hash');
-
--- now show that Citus can distribute unique constrints that include
--- the partition column
-CREATE TABLE primary_key_on_part_col
-(
-	partition_col integer PRIMARY KEY,
-	other_col integer
-);
-SELECT master_create_distributed_table('primary_key_on_part_col', 'partition_col', 'hash');
-
-CREATE TABLE unique_const_on_part_col
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_on_part_col', 'partition_col', 'hash');
-
-CREATE TABLE unique_const_on_two_columns
-(
-	partition_col integer,
-	other_col integer,
-	UNIQUE (partition_col, other_col)
-);
-SELECT master_create_distributed_table('unique_const_on_two_columns', 'partition_col', 'hash');
-
-CREATE TABLE unique_const_append_partitioned_tables
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_append_partitioned_tables', 'partition_col', 'append');
-
-CREATE TABLE unique_const_range_partitioned_tables
-(
-	partition_col integer UNIQUE,
-	other_col integer
-);
-SELECT master_create_distributed_table('unique_const_range_partitioned_tables', 'partition_col', 'range');
-
--- drop unnecessary tables
-DROP TABLE primary_key_on_non_part_col, unique_const_on_non_part_col CASCADE;
-DROP TABLE primary_key_on_part_col, unique_const_on_part_col, unique_const_on_two_columns CASCADE;
-DROP TABLE unique_const_range_partitioned_tables CASCADE;
-
-

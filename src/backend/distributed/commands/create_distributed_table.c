@@ -29,6 +29,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
 #include "executor/spi.h"
+#include "distributed/multi_logical_planner.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
@@ -186,10 +187,10 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	}
 
 	/*
-	 * Do not allow UNIQUE constraint and/or PRIMARY KEY on append partitioned tables,
+	 * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned tables,
 	 * since currently there is no way of enforcing uniqueness for overlapping shards.
 	 *
-	 * Similarly, do not allow UNIQUE constraint and/or PRIMARY KEY if it does not
+	 * Similarly, do not allow such constraints it they do not
 	 * include partition column. This check is important for two reasons. First,
 	 * currently Citus does not enforce uniqueness constraint on multiple shards.
 	 * Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed with no
@@ -209,23 +210,25 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		/* extract index key information from the index's pg_index info */
 		indexInfo = BuildIndexInfo(indexDesc);
 
-		/* only check unique indexes */
-		if (indexInfo->ii_Unique == false)
+		/* only check unique indexes and exclusion constraints. */
+		if (indexInfo->ii_Unique == false && indexInfo->ii_ExclusionOps == NULL)
 		{
 			index_close(indexDesc, NoLock);
 			continue;
 		}
 
 		/*
-		 * Citus cannot enforce uniqueness constraints with overlapping shards. Thus,
-		 * emit a warning for unique indexes on append partitioned tables.
+		 * Citus cannot enforce uniqueness/exclusion constraints with overlapping shards.
+		 * Thus, emit a warning for unique indexes and exclusion constraints on
+		 * append partitioned tables.
 		 */
 		if (distributionMethod == DISTRIBUTE_BY_APPEND)
 		{
 			ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							  errmsg("table \"%s\" has a unique constraint",
+							  errmsg("table \"%s\" has a UNIQUE or EXCLUDE constraint",
 									 distributedRelationName),
-							  errdetail("Unique constraints and primary keys on "
+							  errdetail("UNIQUE constraints, EXCLUDE constraints, "
+										"and PRIMARY KEYs on "
 										"append-partitioned tables cannot be enforced."),
 							  errhint("Consider using hash partitioning.")));
 		}
@@ -236,7 +239,21 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		for (attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++)
 		{
 			AttrNumber attributeNumber = attributeNumberArray[attributeIndex];
-			if (distributionColumn->varattno == attributeNumber)
+			bool uniqueConstraint = false;
+			bool exclusionConstraintWithEquality = false;
+
+			if (distributionColumn->varattno != attributeNumber)
+			{
+				continue;
+			}
+
+			uniqueConstraint = indexInfo->ii_Unique;
+			exclusionConstraintWithEquality = (indexInfo->ii_ExclusionOps != NULL &&
+											   OperatorImplementsEquality(
+												   indexInfo->ii_ExclusionOps[
+													   attributeIndex]));
+
+			if (uniqueConstraint || exclusionConstraintWithEquality)
 			{
 				hasDistributionColumn = true;
 				break;
@@ -248,9 +265,10 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot distribute relation: \"%s\"",
 								   distributedRelationName),
-							errdetail("Distributed relations cannot have "
-									  "UNIQUE constraints or PRIMARY KEYs that do not "
-									  "include the partition column.")));
+							errdetail("Distributed relations cannot have UNIQUE, "
+									  "EXCLUDE, or PRIMARY KEY constraints that do not "
+									  "include the partition column (with an equality "
+									  "operator if EXCLUDE).")));
 		}
 
 		index_close(indexDesc, NoLock);

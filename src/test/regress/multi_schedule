@@ -23,6 +23,7 @@ test: multi_table_ddl
 # uploading data to it.
 # ----------
 test: multi_create_table
+test: multi_create_table_constraints
 test: multi_master_protocol
 test: multi_load_data
 
