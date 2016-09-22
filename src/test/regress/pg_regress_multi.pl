@@ -168,13 +168,6 @@ for my $port (@workerPorts)
         or die "Could not create worker data directory";
 }
 
-# Initialize master's worker list
-for my $port (@workerPorts)
-{
-    system("echo $host $port >> tmp_check/master/data/pg_worker_list.conf") == 0
-        or die "Could not initialize master's worker list";
-}
-
 # Routine to shutdown servers at failure/exit
 my $serversAreShutdown = "FALSE";
 sub ShutdownServers()

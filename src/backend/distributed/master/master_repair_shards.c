@@ -122,7 +122,6 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	targetNode = palloc0(sizeof(WorkerNode));
-	targetNode->inWorkerFile = true;
 	strlcpy(targetNode->workerName, targetPlacement->nodeName, WORKER_LENGTH);
 	targetNode->workerPort = targetPlacement->nodePort;
 

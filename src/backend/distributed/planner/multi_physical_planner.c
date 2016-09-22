@@ -5166,11 +5166,11 @@ ActivePlacementList(List *placementList)
 	foreach(placementCell, placementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
-		bool workerNodeActive = false;
+		WorkerNode *workerNode = NULL;
 
 		/* check if the worker node for this shard placement is active */
-		workerNodeActive = WorkerNodeActive(placement->nodeName, placement->nodePort);
-		if (workerNodeActive)
+		workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
+		if (workerNode != NULL)
 		{
 			activePlacementList = lappend(activePlacementList, placement);
 		}
