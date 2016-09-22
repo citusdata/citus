@@ -481,6 +481,8 @@ COMMIT;
  first           | integer               | 
 Indexes:
     "temp_index_2" btree (l_orderkey)
+Triggers:
+    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 ALTER TABLE lineitem_alter DROP COLUMN first;
 DROP INDEX temp_index_2;
