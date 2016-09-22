@@ -160,3 +160,8 @@ test: multi_schema_support
 # multi_function_evaluation tests edge-cases in master-side function pre-evaluation
 # ----------
 test: multi_function_evaluation
+
+# ---------
+# multi_insert_query tests the master_insert_query_result UDF
+# ---------
+test: multi_insert_query
