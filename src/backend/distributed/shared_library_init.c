@@ -47,7 +47,6 @@ void _PG_init(void);
 
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
-static void NormalizeWorkerListPath(void);
 
 
 /* *INDENT-OFF* */
@@ -150,9 +149,6 @@ _PG_init(void)
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
 
-	/* initialize worker node manager */
-	WorkerNodeRegister();
-
 	/* initialize transaction callbacks */
 	InstallRouterExecutorShmemHook();
 	InstallMultiShardXactShmemHook();
@@ -193,17 +189,6 @@ CreateRequiredDirectories(void)
 static void
 RegisterCitusConfigVariables(void)
 {
-	DefineCustomStringVariable(
-		"citus.worker_list_file",
-		gettext_noop("Sets the server's \"worker_list\" configuration file."),
-		NULL,
-		&WorkerListFileName,
-		NULL,
-		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY,
-		NULL, NULL, NULL);
-	NormalizeWorkerListPath();
-
 	DefineCustomBoolVariable(
 		"citus.binary_master_copy_format",
 		gettext_noop("Use the binary master copy format."),
@@ -563,49 +548,4 @@ RegisterCitusConfigVariables(void)
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
-}
-
-
-/*
- * NormalizeWorkerListPath converts the path configured via
- * citus.worker_list_file into an absolute path, falling back to the default
- * value if necessary. The previous value of the config variable is
- * overwritten with the normalized value.
- *
- * NB: This has to be called before ChangeToDataDir() is called as otherwise
- * the relative paths won't make much sense to the user anymore.
- */
-static void
-NormalizeWorkerListPath(void)
-{
-	char *absoluteFileName = NULL;
-
-	if (WorkerListFileName != NULL)
-	{
-		absoluteFileName = make_absolute_path(WorkerListFileName);
-	}
-	else if (DataDir != NULL)
-	{
-		absoluteFileName = malloc(strlen(DataDir) + strlen(WORKER_LIST_FILENAME) + 2);
-		if (absoluteFileName == NULL)
-		{
-			ereport(FATAL, (errcode(ERRCODE_OUT_OF_MEMORY),
-							errmsg("out of memory")));
-		}
-
-		sprintf(absoluteFileName, "%s/%s", DataDir, WORKER_LIST_FILENAME);
-	}
-	else
-	{
-		ereport(FATAL, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("%s does not know where to find the \"worker_list_file\" "
-							   "configuration file.\n"
-							   "This can be specified as \"citus.worker_list_file\" in "
-							   "\"%s\", or by the -D invocation option, or by the PGDATA "
-							   "environment variable.\n", progname, ConfigFileName)));
-	}
-
-	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
-					PGC_S_OVERRIDE);
-	free(absoluteFileName);
 }

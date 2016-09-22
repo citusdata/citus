@@ -1,0 +1,68 @@
+-- Tests functions related to cluster membership
+-- add the nodes to the cluster
+SELECT cluster_add_node('localhost', :worker_1_port);
+     cluster_add_node      
+---------------------------
+ (1,p,t,1,localhost,57637)
+(1 row)
+
+SELECT cluster_add_node('localhost', :worker_2_port);
+     cluster_add_node      
+---------------------------
+ (2,p,t,2,localhost,57638)
+(1 row)
+
+-- get the active nodes
+SELECT master_get_active_worker_nodes();
+ master_get_active_worker_nodes 
+--------------------------------
+ (localhost,57638)
+ (localhost,57637)
+(2 rows)
+
+-- de-activate a node
+SELECT cluster_deactivate_node('localhost', :worker_1_port);
+ cluster_deactivate_node 
+-------------------------
+ t
+(1 row)
+
+-- try to add the node again when it is de-activated
+SELECT cluster_add_node('localhost', :worker_1_port);
+     cluster_add_node      
+---------------------------
+ (1,p,f,1,localhost,57637)
+(1 row)
+
+-- get the active nodes again to see deactivation
+SELECT master_get_active_worker_nodes();
+ master_get_active_worker_nodes 
+--------------------------------
+ (localhost,57638)
+(1 row)
+
+-- we cannot de-activate a node that is already de-activated
+SELECT cluster_deactivate_node('localhost', :worker_1_port);
+ERROR:  node is already deactivated
+-- activate it again
+SELECT cluster_activate_node('localhost', :worker_1_port);
+ cluster_activate_node 
+-----------------------
+ t
+(1 row)
+
+-- try to add the node again when it is activated
+SELECT cluster_add_node('localhost', :worker_1_port);
+     cluster_add_node      
+---------------------------
+ (1,p,t,1,localhost,57637)
+(1 row)
+
+-- get the active nodes
+SELECT master_get_active_worker_nodes();
+ master_get_active_worker_nodes 
+--------------------------------
+ (localhost,57638)
+ (localhost,57637)
+(2 rows)
+

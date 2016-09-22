@@ -65,6 +65,19 @@ SELECT * FROM pg_dist_shard_placement;
 -- check that the extension now can be dropped (and recreated)
 DROP EXTENSION citus;
 CREATE EXTENSION citus;
+-- re-add the nodes to the cluster
+SELECT cluster_add_node('localhost', :worker_1_port);
+     cluster_add_node      
+---------------------------
+ (1,p,t,1,localhost,57637)
+(1 row)
+
+SELECT cluster_add_node('localhost', :worker_2_port);
+     cluster_add_node      
+---------------------------
+ (2,p,t,2,localhost,57638)
+(1 row)
+
 -- create a table with a SERIAL column
 CREATE TABLE testserialtable(id serial, group_id integer);
 SELECT master_create_distributed_table('testserialtable', 'group_id', 'hash');

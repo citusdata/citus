@@ -11,6 +11,7 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
+test: multi_cluster_node
 test: multi_table_ddl
 
 # ----------

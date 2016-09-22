@@ -236,14 +236,6 @@ TaskTrackerMain(Datum main_arg)
 
 			/* reload postgres configuration files */
 			ProcessConfigFile(PGC_SIGHUP);
-
-			/*
-			 * Reload worker membership file. For now we do that in the task
-			 * tracker because that's currently the only background worker in
-			 * Citus. And only background workers allow us to safely
-			 * register a SIGHUP handler.
-			 */
-			LoadWorkerNodeList(WorkerListFileName);
 		}
 		if (got_SIGTERM)
 		{
