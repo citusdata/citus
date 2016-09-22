@@ -26,9 +26,11 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "parser/parse_func.h"
 #include "utils/builtins.h"
@@ -49,16 +51,22 @@
 static bool extensionLoaded = false;
 static Oid distShardRelationId = InvalidOid;
 static Oid distShardPlacementRelationId = InvalidOid;
+static Oid distNodeRelationId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
 static Oid distShardLogicalRelidIndexId = InvalidOid;
 static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
+static Oid distShardPlacementNodeidIndexId = InvalidOid;
 static Oid extraDataContainerFuncId = InvalidOid;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
+
+/* Hash table for informations about worker nodes */
+static HTAB *WorkerNodeHash = NULL;
+static bool workerNodeHashValid = false;
 
 /* built first time through in InitializePartitionCache */
 static ScanKeyData DistPartitionScanKey[1];
@@ -78,8 +86,11 @@ static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
 static void InitializeDistTableCache(void);
+static void InitializeWorkerNodeCache(void);
+static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
+static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
@@ -93,6 +104,7 @@ static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
+PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 
 
 /*
@@ -616,6 +628,16 @@ DistShardPlacementRelationId(void)
 }
 
 
+/* return oid of pg_dist_node relation */
+Oid
+DistNodeRelationId(void)
+{
+	CachedRelationLookup("pg_dist_node", &distNodeRelationId);
+
+	return distNodeRelationId;
+}
+
+
 /* return oid of pg_dist_partition relation */
 Oid
 DistPartitionRelationId(void)
@@ -677,6 +699,17 @@ DistShardPlacementShardidIndexId(void)
 						 &distShardPlacementShardidIndexId);
 
 	return distShardPlacementShardidIndexId;
+}
+
+
+/* return oid of pg_dist_shard_placement_nodeid_index */
+Oid
+DistShardPlacementNodeidIndexId(void)
+{
+	CachedRelationLookup("pg_dist_shard_placement_nodeid_index",
+						 &distShardPlacementNodeidIndexId);
+
+	return distShardPlacementNodeidIndexId;
 }
 
 
@@ -896,6 +929,29 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * master_dist_node_cache_invalidate is a trigger function that performs
+ * relcache invalidations when the contents of pg_dist_node are changed
+ * on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
 /* initialize the infrastructure for the metadata cache */
 static void
 InitializeDistTableCache(void)
@@ -941,6 +997,133 @@ InitializeDistTableCache(void)
 	/* Watch for invalidation events. */
 	CacheRegisterRelcacheCallback(InvalidateDistRelationCacheCallback,
 								  (Datum) 0);
+}
+
+
+/*
+ * GetWorkerNodeHash is a wrapper around InitializeWorkerNodeCache(). It
+ * triggers InitializeWorkerNodeCache when the workerHash is invalid. Otherwise,
+ * it returns the hash.
+ */
+HTAB *
+GetWorkerNodeHash(void)
+{
+	if (!workerNodeHashValid)
+	{
+		InitializeWorkerNodeCache();
+
+		workerNodeHashValid = true;
+	}
+
+	return WorkerNodeHash;
+}
+
+
+/*
+ * InitializeWorkerNodeCache initialize the infrastructure for the worker node cache.
+ * The function reads the worker nodes from the metadata table, adds them to the hash and
+ * finally registers an invalidation callback.
+ */
+static void
+InitializeWorkerNodeCache(void)
+{
+	static bool invalidationRegistered = false;
+	HTAB *oldWorkerNodeHash = NULL;
+	List *workerNodeList = NIL;
+	ListCell *workerNodeCell = NULL;
+	HASHCTL info;
+	int hashFlags = 0;
+	long maxTableSize = (long) MaxWorkerNodesTracked;
+
+	/* make sure we've initialized CacheMemoryContext */
+	if (CacheMemoryContext == NULL)
+	{
+		CreateCacheMemoryContext();
+	}
+
+	/*
+	 * Create the hash that holds the worker nodes. The key is the combination of
+	 * nodename and nodeport, instead of the unique nodeid because worker nodes are
+	 * searched by the nodename and nodeport in every physical plan creation.
+	 */
+	memset(&info, 0, sizeof(info));
+	info.keysize = +sizeof(uint32) + WORKER_LENGTH + sizeof(uint32);
+	info.entrysize = sizeof(WorkerNode);
+	info.hcxt = CacheMemoryContext;
+	info.hash = WorkerNodeHashCode;
+	info.match = WorkerNodeCompare;
+	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE;
+
+	oldWorkerNodeHash = WorkerNodeHash;
+	WorkerNodeHash = hash_create("Worker Node Hash",
+								 maxTableSize,
+								 &info, hashFlags);
+
+	/* read the list from pg_dist_node */
+	workerNodeList = ReadWorkerNodes();
+
+	/* iterate over the worker node list */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = NULL;
+		WorkerNode *currentNode = lfirst(workerNodeCell);
+		void *hashKey = NULL;
+		bool handleFound = false;
+
+		/* search for the worker node in the hash, and then insert the values */
+		hashKey = (void *) currentNode;
+		workerNode = (WorkerNode *) hash_search(WorkerNodeHash, hashKey,
+												HASH_ENTER, &handleFound);
+
+		/* fill the newly allocated workerNode in the cache */
+		strlcpy(workerNode->workerName, currentNode->workerName, WORKER_LENGTH);
+		workerNode->workerPort = currentNode->workerPort;
+		workerNode->groupId = currentNode->groupId;
+		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
+
+		if (handleFound)
+		{
+			ereport(WARNING, (errmsg("multiple lines for worker node: \"%s:%u\"",
+									 workerNode->workerName,
+									 workerNode->workerPort)));
+		}
+
+		/* we do not need the currentNode anymore */
+		pfree(currentNode);
+	}
+
+	/* now, safe to destroy the old hash */
+	hash_destroy(oldWorkerNodeHash);
+
+	/* prevent multiple invalidation registrations */
+	if (!invalidationRegistered)
+	{
+		/* Watch for invalidation events. */
+		CacheRegisterRelcacheCallback(InvalidateNodeRelationCacheCallback,
+									  (Datum) 0);
+
+		invalidationRegistered = true;
+	}
+}
+
+
+/*
+ * WorkerNodeHashCode computes the hash code for a worker node from the node's
+ * host name and port number. Nodes that only differ by their rack locations
+ * hash to the same value.
+ */
+static uint32
+WorkerNodeHashCode(const void *key, Size keySize)
+{
+	const WorkerNode *worker = (const WorkerNode *) key;
+	const char *workerName = worker->workerName;
+	const uint32 *workerPort = &(worker->workerPort);
+
+	/* standard hash function outlined in Effective Java, Item 8 */
+	uint32 result = 17;
+	result = 37 * result + string_hash(workerName, WORKER_LENGTH);
+	result = 37 * result + tag_hash(workerPort, sizeof(uint32));
+	return result;
 }
 
 
@@ -1051,7 +1234,24 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardLogicalRelidIndexId = InvalidOid;
 		distShardShardidIndexId = InvalidOid;
 		distShardPlacementShardidIndexId = InvalidOid;
+		distNodeRelationId = InvalidOid;
 		extraDataContainerFuncId = InvalidOid;
+	}
+}
+
+
+/*
+ * InvalidateNodeRelationCacheCallback destroys the WorkerNodeHash when
+ * any change happens on pg_dist_node table. It also set WorkerNodeHash to
+ * NULL, which allows consequent accesses to the hash read from the
+ * pg_dist_node from scratch.
+ */
+static void
+InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
+{
+	if (relationId == InvalidOid || relationId == distNodeRelationId)
+	{
+		workerNodeHashValid = false;
 	}
 }
 

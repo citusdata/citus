@@ -150,9 +150,6 @@ _PG_init(void)
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
 
-	/* initialize worker node manager */
-	WorkerNodeRegister();
-
 	/* initialize transaction callbacks */
 	RegisterRouterExecutorXactCallbacks();
 	RegisterShardPlacementXactCallbacks();
@@ -193,6 +190,7 @@ CreateRequiredDirectories(void)
 static void
 RegisterCitusConfigVariables(void)
 {
+	/* keeping temporarily for updates from pre-6.0 versions */
 	DefineCustomStringVariable(
 		"citus.worker_list_file",
 		gettext_noop("Sets the server's \"worker_list\" configuration file."),
@@ -200,7 +198,7 @@ RegisterCitusConfigVariables(void)
 		&WorkerListFileName,
 		NULL,
 		PGC_POSTMASTER,
-		GUC_SUPERUSER_ONLY,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 	NormalizeWorkerListPath();
 

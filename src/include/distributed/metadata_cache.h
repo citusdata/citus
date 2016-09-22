@@ -14,6 +14,8 @@
 #include "fmgr.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/worker_manager.h"
+#include "utils/hsearch.h"
 
 
 /*
@@ -54,13 +56,18 @@ extern bool IsDistributedTable(Oid relationId);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
+extern void CitusInvalidateNodeCache(void);
 
 extern bool CitusHasBeenLoaded(void);
+
+/* access WorkerNodeHash */
+extern HTAB * GetWorkerNodeHash(void);
 
 /* relation oids */
 extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistShardPlacementRelationId(void);
+extern Oid DistNodeRelationId(void);
 
 /* index oids */
 extern Oid DistPartitionLogicalRelidIndexId(void);
@@ -68,6 +75,7 @@ extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);
+extern Oid DistShardPlacementNodeidIndexId(void);
 
 /* function oids */
 extern Oid CitusExtraDataContainerFuncId(void);

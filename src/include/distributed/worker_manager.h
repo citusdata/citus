@@ -32,22 +32,16 @@
 
 
 /*
- * WorkerNode keeps shared memory state for active and temporarily failed worker
- * nodes. Permanently failed or departed nodes on the other hand are eventually
- * purged from the shared hash. In the current implementation, the distinction
- * between active, temporarily failed, and permanently departed nodes is made
- * based on the node's presence in the membership file; only nodes in this file
- * appear in the shared hash. In the future, worker nodes will report their
- * health status to the master via heartbeats, and these heartbeats along with
- * membership information will be used to determine a worker node's liveliness.
+ * In memory representation of pg_dist_node table elements. The elements are hold in
+ * WorkerNodeHash table.
  */
 typedef struct WorkerNode
 {
-	uint32 workerPort;              /* node's port; part of hash table key */
-	char workerName[WORKER_LENGTH]; /* node's name; part of hash table key */
-	char workerRack[WORKER_LENGTH]; /* node's network location */
-
-	bool inWorkerFile;              /* is node in current membership file? */
+	uint32 nodeId;                      /* node's unique id, key of the hash table */
+	uint32 workerPort;                  /* node's port */
+	char workerName[WORKER_LENGTH];     /* node's name */
+	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
+	char workerRack[WORKER_LENGTH];     /* node's network location */
 } WorkerNode;
 
 
@@ -65,14 +59,12 @@ extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetNodeWithName(const char *hostname);
 extern uint32 WorkerGetLiveNodeCount(void);
 extern List * WorkerNodeList(void);
-extern bool WorkerNodeActive(const char *nodeName, uint32 nodePort);
 extern List * ResponsiveWorkerNodeList(void);
-
-/* Function declarations for loading into shared hash tables */
-extern void WorkerNodeRegister(void);
-extern void LoadWorkerNodeList(const char *workerFilename);
+extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
+extern List * ReadWorkerNodes(void);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
+extern int WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize);
 
 #endif   /* WORKER_MANAGER_H */
