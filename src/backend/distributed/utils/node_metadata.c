@@ -51,7 +51,8 @@ static List * ParseWorkerNodeFile(const char *workerNodeFilename);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(cluster_add_node);
-PG_FUNCTION_INFO_V1(cluster_read_worker_file);
+PG_FUNCTION_INFO_V1(cluster_remove_node);
+PG_FUNCTION_INFO_V1(cluster_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(master_get_new_nodeid);
 PG_FUNCTION_INFO_V1(master_get_next_groupid);
 
@@ -125,11 +126,23 @@ cluster_add_node(PG_FUNCTION_ARGS)
 }
 
 
+Datum
+cluster_remove_node(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	
+	PG_RETURN_VOID();
+}
+
+
 /*
  */
 Datum
-cluster_read_worker_file(PG_FUNCTION_ARGS)
+cluster_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
+	PG_RETURN_BOOL(true);
+	/*
 	text *filePath = PG_GETARG_TEXT_P(0);
 	char *filePathCStr = text_to_cstring(filePath);
 
@@ -147,6 +160,7 @@ cluster_read_worker_file(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(true);
+	*/
 }
 
 

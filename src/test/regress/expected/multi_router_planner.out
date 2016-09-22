@@ -1534,7 +1534,7 @@ DROP MATERIALIZED VIEW mv_articles_hash;
 DEBUG:  drop auto-cascades to type mv_articles_hash
 DEBUG:  drop auto-cascades to type mv_articles_hash[]
 DEBUG:  drop auto-cascades to rule _RETURN on materialized view mv_articles_hash
-DEBUG:  EventTriggerInvoke 16727
+DEBUG:  EventTriggerInvoke 16763
 CREATE MATERIALIZED VIEW mv_articles_hash_error AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
 NOTICE:  cannot use shard pruning with ANY/ALL (array expression)

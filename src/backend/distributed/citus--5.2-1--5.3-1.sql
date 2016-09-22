@@ -10,7 +10,7 @@ CREATE TABLE citus.pg_dist_node(
 	UNIQUE (nodename, nodeport)
 );
 
-CREATE SEQUENCE citus.pg_dist_gropuid_seq
+CREATE SEQUENCE citus.pg_dist_groupid_seq
 	MINVALUE 1
 	MAXVALUE 4294967296;
 
@@ -19,7 +19,7 @@ CREATE SEQUENCE citus.pg_dist_node_nodeid_seq
 	MAXVALUE 4294967296;
 
 ALTER TABLE citus.pg_dist_node SET SCHEMA pg_catalog;
-ALTER SEQUENCE citus.pg_dist_gropuid_seq SET SCHEMA pg_catalog;
+ALTER SEQUENCE citus.pg_dist_groupid_seq SET SCHEMA pg_catalog;
 ALTER SEQUENCE citus.pg_dist_node_nodeid_seq SET SCHEMA pg_catalog;
 
 CREATE FUNCTION master_dist_node_cache_invalidate()
