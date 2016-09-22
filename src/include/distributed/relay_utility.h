@@ -23,7 +23,6 @@
 #define SHARD_NAME_SEPARATOR '_'
 #define INVALID_SHARD_ID 0
 
-
 /*
  * RelayFileState represents last known states of shards on a given node. We
  * currently only have shards in finalized or cached state; and set this state

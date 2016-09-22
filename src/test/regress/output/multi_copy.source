@@ -458,8 +458,8 @@ CREATE TABLE customer_worker_copy_append (
                 primary key (c_custkey));
 CREATE INDEX ON customer_worker_copy_append (c_name);
 SELECT master_create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
-WARNING:  table "customer_worker_copy_append" has a unique constraint
-DETAIL:  Unique constraints and primary keys on append-partitioned tables cannot be enforced.
+WARNING:  table "customer_worker_copy_append" has a UNIQUE or EXCLUDE constraint
+DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
  master_create_distributed_table 
 ---------------------------------

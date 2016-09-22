@@ -423,7 +423,8 @@ TypeAddIndexConstraint(const AlterTableCmd *command)
 		{
 			Constraint *constraint = (Constraint *) command->def;
 			if (constraint->contype == CONSTR_PRIMARY ||
-				constraint->contype == CONSTR_UNIQUE)
+				constraint->contype == CONSTR_UNIQUE ||
+				constraint->contype == CONSTR_EXCLUSION)
 			{
 				return true;
 			}
@@ -466,7 +467,7 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 	 * At this stage, our only option is performing a relationId lookup. We
 	 * first find the relationId, and then scan the pg_constraints system
 	 * catalog using this relationId. Finally, we check if the passed in
-	 * constraint is for a primary key or unique index.
+	 * constraint is for a primary key, unique, or exclusion index.
 	 */
 	relationId = RangeVarGetRelid(relation, NoLock, failOK);
 	if (!OidIsValid(relationId))
@@ -497,7 +498,8 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 		{
 			/* we found the constraint, now check if it is for an index */
 			if (constraintForm->contype == CONSTRAINT_PRIMARY ||
-				constraintForm->contype == CONSTRAINT_UNIQUE)
+				constraintForm->contype == CONSTRAINT_UNIQUE ||
+				constraintForm->contype == CONSTRAINT_EXCLUSION)
 			{
 				indexConstraint = true;
 			}
