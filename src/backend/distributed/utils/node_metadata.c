@@ -47,8 +47,6 @@ static WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 static uint32 NextGroupId(void);
 static uint32 GetMaxGroupId(void);
 static uint64 GetNodeCountInGroup(uint32 groupId);
-static char * InsertNodeCommand(uint32 nodeid, char *nodename, int nodeport,
-								uint32 groupId);
 static List * ParseWorkerNodeFile(const char *workerNodeFilename);
 
 /* declarations for dynamic loading */
@@ -65,9 +63,6 @@ PG_FUNCTION_INFO_V1(master_get_next_groupid);
  * If the groupId is not explicitly given by the user, the function picks the
  * group that the new node should be in with respect to GroupSize. Then, the
  * new node is inserted into the local pg_dist_node.
- *
- * TODO: The following will be added in the near future.
- * Lastly, the new node is inserted to all other nodes' pg_dist_node table.
  */
 Datum
 cluster_add_node(PG_FUNCTION_ARGS)
@@ -80,7 +75,6 @@ cluster_add_node(PG_FUNCTION_ARGS)
 	Relation pgDistNode = NULL;
 	Datum nextNodeId = 0;
 	int nextNodeIdInt = 0;
-	char *insertCommand = NULL;
 	Datum returnData = 0;
 	WorkerNode *workerNode = NULL;
 
@@ -120,11 +114,6 @@ cluster_add_node(PG_FUNCTION_ARGS)
 	nextNodeIdInt = DatumGetUInt32(nextNodeId);
 
 	InsertNodeRow(nextNodeIdInt, nodeNameString, nodePort, groupId);
-
-	insertCommand = InsertNodeCommand(nextNodeIdInt, nodeNameString, nodePort, groupId);
-
-	/* TODO: enable this once we have fully metadata sync */
-	/* SendCommandToWorkersInParallel(insertCommand); */
 
 	heap_close(pgDistNode, AccessExclusiveLock);
 
@@ -309,29 +298,6 @@ GetNodeCountInGroup(uint32 groupId)
 	}
 
 	return elementCountInGroup;
-}
-
-
-/*
- * DistributionCreateCommands generates a commands that can be
- * executed to replicate the metadata for a distributed table.
- */
-static char *
-InsertNodeCommand(uint32 nodeid, char *nodename, int nodeport, uint32 groupId)
-{
-	StringInfo insertNodeCommand = makeStringInfo();
-
-	appendStringInfo(insertNodeCommand,
-					 "INSERT INTO pg_dist_node " /*TODO: add a ON CONFLICT clause */
-					 "(nodeid, nodename, nodeport, groupid) "
-					 "VALUES "
-					 "(%d, '%s', %d, '%c', %s , %d);",
-					 nodeid,
-					 nodename,
-					 nodeport,
-					 groupId);
-
-	return insertNodeCommand->data;
 }
 
 

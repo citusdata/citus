@@ -1029,8 +1029,6 @@ InitializeWorkerNodeCache(void)
 		/* fill the newly allocated workerNode in the cache */
 		strlcpy(workerNode->workerName, currentNode->workerName, WORKER_LENGTH);
 		workerNode->workerPort = currentNode->workerPort;
-		workerNode->workerActive = currentNode->workerActive;
-		workerNode->workerRole = currentNode->workerRole;
 		workerNode->groupId = currentNode->groupId;
 
 		if (handleFound)
@@ -1421,8 +1419,7 @@ ReadWorkerNodes()
  * given values into that system catalog.
  */
 void
-InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, char nodeRole,
-			   bool nodeActive, uint32 groupId)
+InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId)
 {
 	Relation pgDistNode = NULL;
 	TupleDesc tupleDescriptor = NULL;
@@ -1435,8 +1432,6 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, char nodeRole,
 	memset(isNulls, false, sizeof(isNulls));
 
 	values[Anum_pg_dist_node_nodeid - 1] = UInt32GetDatum(nodeid);
-	values[Anum_pg_dist_node_noderole - 1] = CharGetDatum(nodeRole);
-	values[Anum_pg_dist_node_nodeactive - 1] = BoolGetDatum(nodeActive);
 	values[Anum_pg_dist_node_groupid - 1] = UInt32GetDatum(groupId);
 	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(nodeName);
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
@@ -1461,60 +1456,6 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, char nodeRole,
 
 
 /*
- * UpdateNodeActiveColumn updates the nodeactive column of the given worker node
- * on the pg_dist_node. The function also invalidates the pg_dist_node's cache so
- * that subsequent accesses to the table reads the updated values.
- */
-void
-UpdateNodeActiveColumn(WorkerNode *workerNode, bool nodeActive)
-{
-	Relation pgDistNode = NULL;
-	HeapTuple heapTuple = NULL;
-	HeapTuple modifiableHeaptuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	Form_pg_dist_node nodeForm = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	uint32 nodeId = workerNode->nodeId;
-
-	pgDistNode = heap_open(DistNodeRelationId(), AccessExclusiveLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodeid,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(nodeId));
-
-	scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, false, NULL,
-										scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for node %d", nodeId)));
-	}
-
-	/* create a copy of the tuple */
-	modifiableHeaptuple = heap_copytuple(heapTuple);
-
-	nodeForm = (Form_pg_dist_node) GETSTRUCT(modifiableHeaptuple);
-
-	/* now update the active column */
-	nodeForm->nodeactive = nodeActive;
-
-	simple_heap_update(pgDistNode, &heapTuple->t_self, modifiableHeaptuple);
-
-	systable_endscan(scanDescriptor);
-
-	heap_close(pgDistNode, AccessExclusiveLock);
-
-	/* invalidate the cache */
-	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
-
-	/* increment the counter so that next command can see the row */
-	CommandCounterIncrement();
-}
-
-
-
-/*
  * TupleToWorkerNode takes in a heap tuple from pg_dist_node, and
  * converts this tuple to an equivalent struct in memory. The function assumes
  * the caller already has locks on the tuple, and doesn't perform any locking.
@@ -1527,10 +1468,6 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 
 	Datum nodeId = heap_getattr(heapTuple, Anum_pg_dist_node_nodeid,
 								tupleDescriptor, &isNull);
-	Datum nodeRole = heap_getattr(heapTuple, Anum_pg_dist_node_noderole,
-								  tupleDescriptor, &isNull);
-	Datum nodeActive = heap_getattr(heapTuple, Anum_pg_dist_node_nodeactive,
-									  tupleDescriptor, &isNull);
 	Datum groupId = heap_getattr(heapTuple, Anum_pg_dist_node_groupid,
 								 tupleDescriptor, &isNull);
 	Datum nodeName = heap_getattr(heapTuple, Anum_pg_dist_node_nodename,
@@ -1543,9 +1480,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 	workerNode->nodeId = DatumGetUInt32(nodeId);
 	workerNode->workerPort = DatumGetUInt32(nodePort);
-	workerNode->workerRole = DatumGetChar(nodeRole);
 	workerNode->groupId = DatumGetUInt32(groupId);
-	workerNode->workerActive = DatumGetBool(nodeActive);
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 
 	return workerNode;

@@ -237,15 +237,12 @@ WorkerGetNodeWithName(const char *hostname)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->workerActive)
+		int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
+		if (nameCompare == 0)
 		{
-			int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
-			if (nameCompare == 0)
-			{
-				/* we need to terminate the scan since we break */
-				hash_seq_term(&status);
-				break;
-			}
+			/* we need to terminate the scan since we break */
+			hash_seq_term(&status);
+			break;
 		}
 	}
 
@@ -266,10 +263,7 @@ WorkerGetLiveNodeCount(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->workerActive)
-		{
-			liveWorkerCount++;
-		}
+		liveWorkerCount++;
 	}
 
 	return liveWorkerCount;
@@ -292,10 +286,7 @@ WorkerNodeList(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->workerActive)
-		{
-			workerNodeList = lappend(workerNodeList, workerNode);
-		}
+		workerNodeList = lappend(workerNodeList, workerNode);
 	}
 
 	return workerNodeList;
@@ -310,7 +301,6 @@ WorkerNodeList(void)
 bool
 WorkerNodeActive(const char *nodeName, uint32 nodePort)
 {
-	bool workerNodeActive = false;
 	WorkerNode *workerNode = NULL;
 	HASH_SEQ_STATUS status;
 	HTAB *workerNodeHash = GetWorkerNodeHash();
@@ -328,15 +318,7 @@ WorkerNodeActive(const char *nodeName, uint32 nodePort)
 		}
 	}
 
-	if (workerNode != NULL)
-	{
-		if (workerNode->workerActive)
-		{
-			workerNodeActive = true;
-		}
-	}
-
-	return workerNodeActive;
+	return workerNode != NULL;
 }
 
 
@@ -385,7 +367,7 @@ FindRandomNodeNotInList(HTAB *WorkerNodesHash, List *currentNodeList)
 	{
 		bool listMember = ListMember(currentNodeList, workerNode);
 
-		if (workerNode->workerActive && !listMember)
+		if (!listMember)
 		{
 			lookForWorkerNode = false;
 		}

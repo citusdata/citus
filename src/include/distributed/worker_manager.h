@@ -26,7 +26,7 @@
 
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
- * WorkerNodeHash table. workerActive field is used to determine a worker node's liveliness.
+ * WorkerNodeHash table.
  */
 typedef struct WorkerNode
 {
@@ -34,8 +34,6 @@ typedef struct WorkerNode
 	uint32 workerPort;                  /* node's port */
 	char workerName[WORKER_LENGTH];     /* node's name */
 	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
-
-	bool workerActive;                  /* should Citus utilize the node? */
 } WorkerNode;
 
 
