@@ -1,13 +1,13 @@
 -- Tests functions related to cluster membership
 -- add the nodes to the cluster
-SELECT cluster_add_node('localhost', :worker_1_port);
-   cluster_add_node    
+SELECT master_add_node('localhost', :worker_1_port);
+    master_add_node    
 -----------------------
  (1,1,localhost,57637)
 (1 row)
 
-SELECT cluster_add_node('localhost', :worker_2_port);
-   cluster_add_node    
+SELECT master_add_node('localhost', :worker_2_port);
+    master_add_node    
 -----------------------
  (2,2,localhost,57638)
 (1 row)
@@ -21,8 +21,8 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to add the node again when it is activated
-SELECT cluster_add_node('localhost', :worker_1_port);
-   cluster_add_node    
+SELECT master_add_node('localhost', :worker_1_port);
+    master_add_node    
 -----------------------
  (1,1,localhost,57637)
 (1 row)

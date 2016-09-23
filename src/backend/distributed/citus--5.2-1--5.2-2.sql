@@ -33,30 +33,30 @@ CREATE TRIGGER dist_node_cache_invalidate
     ON pg_catalog.pg_dist_node
     FOR EACH ROW EXECUTE PROCEDURE master_dist_node_cache_invalidate();
 
-CREATE FUNCTION cluster_add_node(nodename text,
-								 nodeport integer,
-								 groupid integer DEFAULT 0)
+CREATE FUNCTION master_add_node(nodename text,
+								nodeport integer,
+								groupid integer DEFAULT 0)
 	RETURNS record
 	LANGUAGE C STRICT
-	AS 'MODULE_PATHNAME', $$cluster_add_node$$;
-COMMENT ON FUNCTION cluster_add_node(nodename text,
-									 nodeport integer,
-									 groupid integer)
+	AS 'MODULE_PATHNAME', $$master_add_node$$;
+COMMENT ON FUNCTION master_add_node(nodename text,
+									nodeport integer,
+									groupid integer)
 	IS 'add node to the cluster';
 
-CREATE FUNCTION cluster_remove_node(nodename text, nodeport integer)
+CREATE FUNCTION master_remove_node(nodename text, nodeport integer)
 	RETURNS void
 	LANGUAGE C STRICT
-	AS 'MODULE_PATHNAME', $$cluster_remove_node$$;
-COMMENT ON FUNCTION cluster_remove_node(nodename text, nodeport integer)
+	AS 'MODULE_PATHNAME', $$master_remove_node$$;
+COMMENT ON FUNCTION master_remove_node(nodename text, nodeport integer)
 	IS 'remove node from the cluster';
 
 /* this only needs to run once, now. */
-CREATE FUNCTION cluster_initialize_node_metadata()
+CREATE FUNCTION master_initialize_node_metadata()
     RETURNS BOOL
     LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$cluster_initialize_node_metadata$$;
+    AS 'MODULE_PATHNAME', $$master_initialize_node_metadata$$;
 
-SELECT cluster_initialize_node_metadata();
+SELECT master_initialize_node_metadata();
 
 RESET search_path;

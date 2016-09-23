@@ -49,15 +49,15 @@ static uint64 GetNodeCountInGroup(uint32 groupId);
 static List * ParseWorkerNodeFile(const char *workerNodeFilename);
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(cluster_add_node);
-PG_FUNCTION_INFO_V1(cluster_remove_node);
-PG_FUNCTION_INFO_V1(cluster_initialize_node_metadata);
+PG_FUNCTION_INFO_V1(master_add_node);
+PG_FUNCTION_INFO_V1(master_remove_node);
+PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(master_get_new_nodeid);
 PG_FUNCTION_INFO_V1(master_get_next_groupid);
 
 
 /*
- * cluster_add_node function adds a new node to the cluster. If the node already
+ * master_add_node function adds a new node to the cluster. If the node already
  * exists, the function returns with the information about the node. If not, the
  * following prodecure is followed while adding a node.
  * If the groupId is not explicitly given by the user, the function picks the
@@ -65,7 +65,7 @@ PG_FUNCTION_INFO_V1(master_get_next_groupid);
  * new node is inserted into the local pg_dist_node.
  */
 Datum
-cluster_add_node(PG_FUNCTION_ARGS)
+master_add_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -126,7 +126,7 @@ cluster_add_node(PG_FUNCTION_ARGS)
 
 
 Datum
-cluster_remove_node(PG_FUNCTION_ARGS)
+master_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -145,12 +145,12 @@ cluster_remove_node(PG_FUNCTION_ARGS)
 
 
 /*
- * cluster_initialize_node_metadata is run once, when upgrading citus. It injests the
+ * master_initialize_node_metadata is run once, when upgrading citus. It injests the
  * existing pg_worker_list.conf into pg_dist_node, then adds a header to the file stating
  * that it's no longer used.
  */
 Datum
-cluster_initialize_node_metadata(PG_FUNCTION_ARGS)
+master_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
 	ListCell *workerNodeCell = NULL;
 	List *workerNodes = ParseWorkerNodeFile("pg_worker_list.conf");
@@ -160,7 +160,7 @@ cluster_initialize_node_metadata(PG_FUNCTION_ARGS)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		Datum workerNameDatum = PointerGetDatum(cstring_to_text(workerNode->workerName));
 
-		DirectFunctionCall3(cluster_add_node, workerNameDatum,
+		DirectFunctionCall3(master_add_node, workerNameDatum,
 							UInt32GetDatum(workerNode->workerPort),
 							PointerGetDatum(NULL));
 	}
