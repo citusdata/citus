@@ -27,7 +27,6 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/worker_manager.h"
-#include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "storage/lock.h"
 #include "storage/fd.h"
@@ -131,6 +130,15 @@ cluster_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeNameString = text_to_cstring(nodeName);
+
+	DeleteNodeRow(nodeNameString, nodePort);
+
+	/*
+	 * 1) lookup the node
+	 * 2) ensure there are no existing shard placements for this node
+	 * 3) remove the row
+	 */
 
 	PG_RETURN_VOID();
 }

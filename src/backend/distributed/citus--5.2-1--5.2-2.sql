@@ -45,7 +45,7 @@ COMMENT ON FUNCTION cluster_add_node(nodename text,
 	IS 'add node to the cluster';
 
 CREATE FUNCTION cluster_remove_node(nodename text, nodeport integer)
-	RETURNS record
+	RETURNS void
 	LANGUAGE C STRICT
 	AS 'MODULE_PATHNAME', $$cluster_remove_node$$;
 COMMENT ON FUNCTION cluster_remove_node(nodename text, nodeport integer)

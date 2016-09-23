@@ -1456,6 +1456,49 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId)
 
 
 /*
+ * DeleteNodeRow removes the requested row if it exists
+ */
+void
+DeleteNodeRow(char *nodeName, int32 nodePort)
+{
+	const int scanKeyCount = 2;
+	bool indexOK = false;
+
+	HeapTuple heapTuple = NULL;
+	SysScanDesc heapScan;
+	ScanKeyData scanKey[scanKeyCount];
+
+	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
+				BTEqualStrategyNumber, F_INT8EQ, Int32GetDatum(nodePort));
+
+	heapScan = systable_beginscan(pgDistNode, InvalidOid, indexOK,
+								  NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(heapScan);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+							   nodeName, nodePort)));
+	}
+
+	simple_heap_delete(pgDistNode, &(heapTuple->t_self));
+
+	systable_endscan(heapScan);
+	heap_close(pgDistNode, AccessExclusiveLock);
+
+	/* ensure future commands don't use the node we just removed */
+	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
+
+	/* increment the counter so that next command won't see the row */
+	CommandCounterIncrement();
+}
+
+
+/*
  * TupleToWorkerNode takes in a heap tuple from pg_dist_node, and
  * converts this tuple to an equivalent struct in memory. The function assumes
  * the caller already has locks on the tuple, and doesn't perform any locking.

@@ -54,6 +54,7 @@ extern bool IsDistributedTable(Oid relationId);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, uint32 groupId);
+extern void DeleteNodeRow(char *nodename, int32 nodeport);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateNodeCache(void);
 
