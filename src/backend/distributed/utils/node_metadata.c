@@ -145,31 +145,27 @@ cluster_remove_node(PG_FUNCTION_ARGS)
 
 
 /*
+ * cluster_initialize_node_metadata is run once, when upgrading citus. It injests the
+ * existing pg_worker_list.conf into pg_dist_node, then adds a header to the file stating
+ * that it's no longer used.
  */
 Datum
 cluster_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_BOOL(true);
+	ListCell *workerNodeCell = NULL;
+	List *workerNodes = ParseWorkerNodeFile("pg_worker_list.conf");
 
-	/*
-	 * text *filePath = PG_GETARG_TEXT_P(0);
-	 * char *filePathCStr = text_to_cstring(filePath);
-	 *
-	 * ListCell *workerNodeCell = NULL;
-	 * List *workerNodes = ParseWorkerNodeFile(filePathCStr);
-	 *
-	 * foreach(workerNodeCell, workerNodes)
-	 * {
-	 *  WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-	 *  Datum workerNameDatum = PointerGetDatum(cstring_to_text(workerNode->workerName));
-	 *
-	 *  DirectFunctionCall3(cluster_add_node, workerNameDatum,
-	 *                      UInt32GetDatum(workerNode->workerPort),
-	 *                      PointerGetDatum(NULL));
-	 * }
-	 *
-	 * PG_RETURN_BOOL(true);
-	 */
+	foreach(workerNodeCell, workerNodes)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		Datum workerNameDatum = PointerGetDatum(cstring_to_text(workerNode->workerName));
+
+		DirectFunctionCall3(cluster_add_node, workerNameDatum,
+							UInt32GetDatum(workerNode->workerPort),
+							PointerGetDatum(NULL));
+	}
+
+	PG_RETURN_BOOL(true);
 }
 
 
