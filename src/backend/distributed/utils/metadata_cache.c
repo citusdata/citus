@@ -62,8 +62,8 @@ static Oid extraDataContainerFuncId = InvalidOid;
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
 
-/* Hash table for informations about worker nodes */
-static HTAB *WorkerNodeHash = NULL;
+/* cached list of active workers */
+static List *CachedNodeList = NULL;
 
 /* built first time through in InitializePartitionCache */
 static ScanKeyData DistPartitionScanKey[1];
@@ -967,19 +967,33 @@ InitializeDistTableCache(void)
 
 
 /*
- * GetWorkerNodeHash is a wrapper around InitializeWorkerNodeCache(). It
+ * GetWorkerNodeList is a wrapper around InitializeWorkerNodeCache(). It
  * triggers InitializeWorkerNodeCache when the workerHash is NULL. Otherwise,
  * it returns the hash.
  */
-HTAB *
-GetWorkerNodeHash(void)
+List *
+GetWorkerNodeList(void)
 {
-	if (WorkerNodeHash == NULL)
+	List *resultList = NULL;
+	ListCell *workerNodeCell;
+
+	if (CachedNodeList == NULL)
 	{
 		InitializeWorkerNodeCache();
 	}
 
-	return WorkerNodeHash;
+	/* deep copy the list so invalidations, which free the list, don't cause crashes */
+	foreach(workerNodeCell, CachedNodeList)
+	{
+		WorkerNode *oldNode = (WorkerNode *) lfirst(workerNodeCell);
+		WorkerNode *newNode = palloc(sizeof(WorkerNode));
+
+		memcpy(newNode, oldNode, sizeof(WorkerNode));
+
+		resultList = lappend(resultList, newNode);
+	}
+
+	return resultList;
 }
 
 
@@ -991,12 +1005,10 @@ GetWorkerNodeHash(void)
 static void
 InitializeWorkerNodeCache(void)
 {
+	MemoryContext oldContext;
 	static bool invalidationRegistered = false;
-	List *workerNodeList = NIL;
-	ListCell *workerNodeCell = NULL;
-	HASHCTL info;
-	int hashFlags = 0;
-	long maxTableSize = (long) MaxWorkerNodesTracked;
+	List *workerList = NULL;
+	ListCell *workerListCell;
 
 	/* make sure we've initialized CacheMemoryContext */
 	if (CacheMemoryContext == NULL)
@@ -1004,57 +1016,23 @@ InitializeWorkerNodeCache(void)
 		CreateCacheMemoryContext();
 	}
 
-	/*
-	 * Create the hash that holds the worker nodes. The key is the unique nodeid
-	 * field.
-	 */
-	memset(&info, 0, sizeof(info));
-	info.keysize = sizeof(uint32);
-	info.entrysize = sizeof(WorkerNode);
-	info.hcxt = CacheMemoryContext;
-	info.hash = tag_hash;
-	hashFlags = HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT;
-
-	WorkerNodeHash = hash_create("Worker Node Hash",
-								 maxTableSize,
-								 &info, hashFlags);
+	Assert(CachedNodeList == NULL);
 
 	/* read the list from the pg_dist_node */
-	workerNodeList = ReadWorkerNodes();
+	workerList = ReadWorkerNodes();
 
-	/* iterate over the worker node list */
-	foreach(workerNodeCell, workerNodeList)
+	oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+	foreach(workerListCell, workerList)
 	{
-		WorkerNode *workerNode = NULL;
-		WorkerNode *currentNode = lfirst(workerNodeCell);
-		void *hashKey = NULL;
-		bool handleFound = false;
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerListCell);
+		WorkerNode *newWorkerNode = palloc(sizeof(WorkerNode));
 
-		/*
-		 * Search for the worker node in the hash, and then insert the
-		 * values. When searching, we make the hashKey the unique nodeid.
-		 */
-		hashKey = (void *) &currentNode->nodeId;
-		workerNode = (WorkerNode *) hash_search(WorkerNodeHash, hashKey,
-												HASH_ENTER, &handleFound);
-
-		/* fill the newly allocated workerNode in the cache */
-		strlcpy(workerNode->workerName, currentNode->workerName, WORKER_LENGTH);
-		workerNode->workerPort = currentNode->workerPort;
-		workerNode->groupId = currentNode->groupId;
-
-		if (handleFound)
-		{
-			ereport(WARNING, (errmsg("multiple lines for worker node: \"%s:%u\"",
-									 workerNode->workerName,
-									 workerNode->workerPort)));
-		}
-
-		workerNode->workerPort = currentNode->workerPort;
-
-		/* we do not need the currentNode anymore */
-		pfree(currentNode);
+		memcpy(newWorkerNode, workerNode, sizeof(WorkerNode));
+		CachedNodeList = lappend(CachedNodeList, newWorkerNode);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 
 	/* prevent multiple invalidation registrations */
 	if (!invalidationRegistered)
@@ -1181,18 +1159,18 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 
 
 /*
- * InvalidateNodeRelationCacheCallback destroys the WorkerNodeHash when
- * any change happens on pg_dist_node table. It also set WorkerNodeHash to
+ * InvalidateNodeRelationCacheCallback destroys the CachedNodeList when
+ * any change happens on pg_dist_node table. It also set CachedNodeList to
  * NULL, which allows consequent accesses to the hash read from the
  * pg_dist_node from scratch.
  */
 static void
 InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
 {
-	if (WorkerNodeHash != NULL && relationId == DistNodeRelationId())
+	if (CachedNodeList != NULL && relationId == DistNodeRelationId())
 	{
-		hash_destroy(WorkerNodeHash);
-		WorkerNodeHash = NULL;
+		list_free_deep(CachedNodeList);
+		CachedNodeList = NULL;
 	}
 }
 
