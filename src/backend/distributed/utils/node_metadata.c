@@ -132,13 +132,13 @@ cluster_remove_node(PG_FUNCTION_ARGS)
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
 
-	DeleteNodeRow(nodeNameString, nodePort);
+	bool hasShardPlacements = NodeHasShardPlacements(nodeNameString, nodePort);
+	if (hasShardPlacements)
+	{
+		ereport(ERROR, (errmsg("you cannot remove a node which has shard placements")));
+	}
 
-	/*
-	 * 1) lookup the node
-	 * 2) ensure there are no existing shard placements for this node
-	 * 3) remove the row
-	 */
+	DeleteNodeRow(nodeNameString, nodePort);
 
 	PG_RETURN_VOID();
 }

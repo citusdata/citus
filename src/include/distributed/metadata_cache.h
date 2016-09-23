@@ -74,6 +74,7 @@ extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);
+extern Oid DistShardPlacementNodeidIndexId(void);
 
 /* function oids */
 extern Oid CitusExtraDataContainerFuncId(void);

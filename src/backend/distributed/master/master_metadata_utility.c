@@ -200,6 +200,43 @@ ShardLength(uint64 shardId)
 
 
 /*
+ * NodeHasShardPlacements returns whether any shards are placed on this node
+ */
+bool
+NodeHasShardPlacements(char *nodeName, int32 nodePort)
+{
+	const int scanKeyCount = 2;
+	const bool indexOK = true;
+
+	bool hasPlacements = false;
+
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[scanKeyCount];
+
+	Relation pgShardPlacement = heap_open(DistShardPlacementRelationId(),
+										  AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_placement_nodename,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_shard_placement_nodeport,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
+
+	scanDescriptor = systable_beginscan(pgShardPlacement,
+										DistShardPlacementNodeidIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	hasPlacements = HeapTupleIsValid(heapTuple);
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgShardPlacement, AccessShareLock);
+
+	return hasPlacements;
+}
+
+
+/*
  * FinalizedShardPlacementList finds shard placements for the given shardId from
  * system catalogs, chooses placements that are in finalized state, and returns
  * these shard placements in a new list.
