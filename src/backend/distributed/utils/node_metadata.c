@@ -215,24 +215,26 @@ GenerateNodeTuple(WorkerNode *workerNode)
 static WorkerNode *
 FindWorkerNode(char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	ListCell *workerNodeCell = NULL;
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	List *workerNodeList = GetWorkerNodeList();
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
 		if (strncasecmp(nodeName, workerNode->workerName, WORKER_LENGTH) == 0 &&
 			nodePort == workerNode->workerPort)
 		{
-			/* we need to terminate the scan since we break */
-			hash_seq_term(&status);
-			break;
+			WorkerNode *resultWorkerNode = palloc(sizeof(WorkerNode));
+			memcpy(resultWorkerNode, workerNode, sizeof(WorkerNode));
+
+			list_free_deep(workerNodeList);
+			return resultWorkerNode;
 		}
 	}
 
-	return workerNode;
+	list_free_deep(workerNodeList);
+	return NULL;
 }
 
 
@@ -271,14 +273,12 @@ static uint32
 GetMaxGroupId()
 {
 	uint32 maxGroupId = 0;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	ListCell *workerNodeCell = NULL;
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	List *workerNodeList = GetWorkerNodeList();
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		uint32 workerNodeGroupId = workerNode->groupId;
 
 		if (workerNodeGroupId > maxGroupId)
@@ -287,6 +287,7 @@ GetMaxGroupId()
 		}
 	}
 
+	list_free_deep(workerNodeList);
 	return maxGroupId;
 }
 
@@ -299,14 +300,12 @@ static uint64
 GetNodeCountInGroup(uint32 groupId)
 {
 	uint64 elementCountInGroup = 0;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	ListCell *workerNodeCell;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		uint32 workerNodeGroupId = workerNode->groupId;
 
 		if (workerNodeGroupId == groupId)
@@ -315,6 +314,7 @@ GetNodeCountInGroup(uint32 groupId)
 		}
 	}
 
+	list_free_deep(workerNodeList);
 	return elementCountInGroup;
 }
 

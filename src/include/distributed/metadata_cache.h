@@ -60,8 +60,8 @@ extern void CitusInvalidateNodeCache(void);
 
 extern bool CitusHasBeenLoaded(void);
 
-/* access WorkerNodeHash */
-extern HTAB * GetWorkerNodeHash(void);
+/* access WorkerNodeList */
+extern List * GetWorkerNodeList(void);
 
 /* relation oids */
 extern Oid DistPartitionRelationId(void);

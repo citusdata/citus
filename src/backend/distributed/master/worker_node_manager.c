@@ -36,7 +36,7 @@ int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size *
 
 /* Local functions forward declarations */
 static char * ClientHostAddress(StringInfo remoteHostStringInfo);
-static WorkerNode * FindRandomNodeNotInList(HTAB *WorkerNodesHash,
+static WorkerNode * FindRandomNodeNotInList(List *workerNodesList,
 											List *currentNodeList);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
 static int WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize);
@@ -60,22 +60,26 @@ WorkerNode *
 WorkerGetRandomCandidateNode(List *currentNodeList)
 {
 	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	WorkerNode *resultWorkerNode = NULL;
+	List *workerNodeList = GetWorkerNodeList();
 
 	/*
 	 * We check if the shard has already been placed on all nodes known to us.
-	 * This check is rather defensive, and has the drawback of performing a full
-	 * scan over the worker node hash for determining the number of live nodes.
 	 */
 	uint32 currentNodeCount = list_length(currentNodeList);
-	uint32 liveNodeCount = WorkerGetLiveNodeCount();
+	uint32 liveNodeCount = list_length(workerNodeList);
 	if (currentNodeCount >= liveNodeCount)
 	{
 		return NULL;
 	}
 
-	workerNode = FindRandomNodeNotInList(workerNodeHash, currentNodeList);
-	return workerNode;
+	workerNode = FindRandomNodeNotInList(workerNodeList, currentNodeList);
+
+	resultWorkerNode = palloc(sizeof(WorkerNode));
+	memcpy(resultWorkerNode, workerNode, sizeof(WorkerNode));
+	list_free_deep(workerNodeList);
+
+	return resultWorkerNode;
 }
 
 
@@ -229,24 +233,25 @@ ClientHostAddress(StringInfo clientHostStringInfo)
 WorkerNode *
 WorkerGetNodeWithName(const char *hostname)
 {
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	WorkerNode *resultWorkerNode = NULL;
+	ListCell *workerNodeCell = NULL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
 		int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
 		if (nameCompare == 0)
 		{
-			/* we need to terminate the scan since we break */
-			hash_seq_term(&status);
+			resultWorkerNode = palloc(sizeof(WorkerNode));
+			memcpy(resultWorkerNode, workerNode, sizeof(WorkerNode));
 			break;
 		}
 	}
 
-	return workerNode;
+	list_free_deep(workerNodeList);
+	return resultWorkerNode;
 }
 
 
@@ -254,41 +259,29 @@ WorkerGetNodeWithName(const char *hostname)
 uint32
 WorkerGetLiveNodeCount(void)
 {
-	WorkerNode *workerNode = NULL;
 	uint32 liveWorkerCount = 0;
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
+	/* todo: this is such a waste of resources. we create a whole new list just to count
+	 * it and immediately free it */
 
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		liveWorkerCount++;
-	}
+	liveWorkerCount = list_length(workerNodeList);
 
+	list_free_deep(workerNodeList);
 	return liveWorkerCount;
 }
 
 
 /*
- * WorkerNodeList iterates over the hash table that includes the worker nodes, and adds
- * them to a list which is returned.
+ * WorkerNodeList returns a list of worker nodes, don't forget to free it after you've
+ * used it!
+ *
+ * todo: add free to all call sites?
  */
 List *
 WorkerNodeList(void)
 {
-	List *workerNodeList = NIL;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
-
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		workerNodeList = lappend(workerNodeList, workerNode);
-	}
-
+	List *workerNodeList = GetWorkerNodeList();
 	return workerNodeList;
 }
 
@@ -301,24 +294,24 @@ WorkerNodeList(void)
 bool
 WorkerNodeActive(const char *nodeName, uint32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	bool nodeActive = false;
+	ListCell *workerNodeCell = NULL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	foreach(workerNodeCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+
 		if (strncmp(workerNode->workerName, nodeName, WORKER_LENGTH) == 0 &&
 			workerNode->workerPort == nodePort)
 		{
-			/* we need to terminate the scan since we break */
-			hash_seq_term(&status);
+			nodeActive = true;
 			break;
 		}
 	}
 
-	return workerNode != NULL;
+	list_free_deep(workerNodeList);
+	return nodeActive;
 }
 
 
@@ -327,68 +320,47 @@ WorkerNodeActive(const char *nodeName, uint32 nodePort)
  * a member of the current node list. The caller is responsible for making the
  * necessary node count checks to ensure that such a node exists.
  *
- * Note that this function has a selection bias towards nodes whose positions in
- * the shared hash are sequentially adjacent to the positions of nodes that are
- * in the current node list. This bias follows from our decision to first pick a
- * random node in the hash, and if that node is a member of the current list, to
- * simply iterate to the next node in the hash. Overall, this approach trades in
- * some selection bias for simplicity in design and for bounded execution time.
+ * This function is O(workerNodesList * currentNodeList). This is unfortunate but was
+ * easy to implement.
  */
 static WorkerNode *
-FindRandomNodeNotInList(HTAB *WorkerNodesHash, List *currentNodeList)
+FindRandomNodeNotInList(List *workerNodesList, List *currentNodeList)
 {
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-	uint32 workerNodeCount = 0;
-	uint32 currentNodeCount PG_USED_FOR_ASSERTS_ONLY = 0;
-	bool lookForWorkerNode = true;
+	ListCell *workerNodeCell;
+
 	uint32 workerPosition = 0;
 	uint32 workerIndex = 0;
 
-	workerNodeCount = hash_get_num_entries(WorkerNodesHash);
-	currentNodeCount = list_length(currentNodeList);
+	uint32 workerNodeCount = list_length(workerNodesList);
+	uint32 currentNodeCount = list_length(currentNodeList);
+
 	Assert(workerNodeCount > currentNodeCount);
 
 	/*
-	 * We determine a random position within the worker hash between [1, N],
-	 * assuming that the number of elements in the hash is N. We then get to
-	 * this random position by iterating over the worker hash. Please note that
-	 * the random seed has already been set by the postmaster when starting up.
+	 * Please note that the random seed has already been set by the postmaster when
+	 * starting up.
 	 */
-	workerPosition = (random() % workerNodeCount) + 1;
-	hash_seq_init(&status, WorkerNodesHash);
+	workerPosition = random() % (workerNodeCount - currentNodeCount);
 
-	for (workerIndex = 0; workerIndex < workerPosition; workerIndex++)
+	foreach(workerNodeCell, workerNodesList)
 	{
-		workerNode = (WorkerNode *) hash_seq_search(&status);
-	}
-
-	while (lookForWorkerNode)
-	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		bool listMember = ListMember(currentNodeList, workerNode);
 
-		if (!listMember)
+		if (listMember)
 		{
-			lookForWorkerNode = false;
+			continue;
 		}
-		else
-		{
-			/* iterate to the next worker node in the hash */
-			workerNode = (WorkerNode *) hash_seq_search(&status);
 
-			/* reached end of hash; start from the beginning */
-			if (workerNode == NULL)
-			{
-				hash_seq_init(&status, WorkerNodesHash);
-				workerNode = (WorkerNode *) hash_seq_search(&status);
-			}
+		if (workerIndex == workerPosition)
+		{
+			return workerNode;
 		}
+
+		workerIndex++;
 	}
 
-	/* we stopped scanning before completion; therefore clean up scan */
-	hash_seq_term(&status);
-
-	return workerNode;
+	return NULL;
 }
 
 

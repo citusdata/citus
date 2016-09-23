@@ -25,12 +25,14 @@
 
 
 /*
- * In memory representation of pg_dist_node table elements. The elements are hold in
- * WorkerNodeHash table.
+ * In memory representation of pg_dist_node table elements.
+ *
+ * Caution: In some places we use memcpy to copy WorkerNodes. Those sites will have to be
+ * changed if you add any pointers to this structure.
  */
 typedef struct WorkerNode
 {
-	uint32 nodeId;                      /* node's unique id, key of the hash table */
+	uint32 nodeId;                      /* node's unique id */
 	uint32 workerPort;                  /* node's port */
 	char workerName[WORKER_LENGTH];     /* node's name */
 	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
