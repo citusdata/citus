@@ -92,6 +92,7 @@ static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
+static List * DistTableOidList(void);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
@@ -130,6 +131,34 @@ IsDistributedTable(Oid relationId)
 	cacheEntry = LookupDistTableCacheEntry(relationId);
 
 	return cacheEntry->isDistributedTable;
+}
+
+
+/*
+ * DistributedTableList returns a list that includes all the valid distributed table
+ * cache entries.
+ */
+List *
+DistributedTableList(void)
+{
+	List *distTableOidList = NIL;
+	List *distributedTableList = NIL;
+	ListCell *distTableOidCell = NULL;
+
+	/* first, we need to iterate over pg_dist_partition */
+	distTableOidList = DistTableOidList();
+
+	foreach(distTableOidCell, distTableOidList)
+	{
+		DistTableCacheEntry *cacheEntry = NULL;
+		Oid relationId = lfirst_oid(distTableOidCell);
+
+		cacheEntry = DistributedTableCacheEntry(relationId);
+
+		distributedTableList = lappend(distributedTableList, cacheEntry);
+	}
+
+	return distributedTableList;
 }
 
 
@@ -1091,6 +1120,7 @@ InitializeWorkerNodeCache(void)
 		strlcpy(workerNode->workerName, currentNode->workerName, WORKER_LENGTH);
 		workerNode->workerPort = currentNode->workerPort;
 		workerNode->groupId = currentNode->groupId;
+		workerNode->nodeId = currentNode->nodeId;
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
 
 		if (handleFound)
@@ -1250,6 +1280,51 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distNodeRelationId = InvalidOid;
 		extraDataContainerFuncId = InvalidOid;
 	}
+}
+
+
+/*
+ * DistTableOidList iterates over the pg_dist_partition table and returns
+ * a list that consists of the logicalrelids.
+ */
+static List *
+DistTableOidList(void)
+{
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	HeapTuple heapTuple = NULL;
+	List *distTableOidList = NIL;
+	TupleDesc tupleDescriptor = NULL;
+
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+
+	scanDescriptor = systable_beginscan(pgDistPartition,
+										InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	tupleDescriptor = RelationGetDescr(pgDistPartition);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		Oid relationId = InvalidOid;
+		Datum relationIdDatum = heap_getattr(heapTuple,
+											 Anum_pg_dist_partition_logicalrelid,
+											 tupleDescriptor, &isNull);
+
+		relationId = DatumGetObjectId(relationIdDatum);
+
+		distTableOidList = lappend_oid(distTableOidList, relationId);
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, AccessShareLock);
+
+	return distTableOidList;
 }
 
 

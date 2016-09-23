@@ -625,53 +625,6 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 
 
 /*
- * BuildDistributionKeyFromColumnName builds a simple distribution key consisting
- * only out of a reference to the column of name columnName. Errors out if the
- * specified column does not exist or is not suitable to be used as a
- * distribution column.
- */
-Node *
-BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnName)
-{
-	HeapTuple columnTuple = NULL;
-	Form_pg_attribute columnForm = NULL;
-	Var *column = NULL;
-	char *tableName = RelationGetRelationName(distributedRelation);
-
-	/* it'd probably better to downcase identifiers consistent with SQL case folding */
-	truncate_identifier(columnName, strlen(columnName), true);
-
-	/* lookup column definition */
-	columnTuple = SearchSysCacheAttName(RelationGetRelid(distributedRelation),
-										columnName);
-	if (!HeapTupleIsValid(columnTuple))
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
-						errmsg("column \"%s\" of relation \"%s\" does not exist",
-							   columnName, tableName)));
-	}
-
-	columnForm = (Form_pg_attribute) GETSTRUCT(columnTuple);
-
-	/* check if the column may be referenced in the distribution key */
-	if (columnForm->attnum <= 0)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot reference system column \"%s\" in relation \"%s\"",
-							   columnName, tableName)));
-	}
-
-	/* build Var referencing only the chosen distribution column */
-	column = makeVar(1, columnForm->attnum, columnForm->atttypid,
-					 columnForm->atttypmod, columnForm->attcollation, 0);
-
-	ReleaseSysCache(columnTuple);
-
-	return (Node *) column;
-}
-
-
-/*
  * Check that the current user has `mode` permissions on relationId, error out
  * if not. Superusers always have such permissions.
  */
