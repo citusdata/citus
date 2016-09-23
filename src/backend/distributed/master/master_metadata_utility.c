@@ -26,6 +26,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_shard_placement.h"
+#include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
@@ -200,12 +201,12 @@ ShardLength(uint64 shardId)
 
 
 /*
- * NodeHasShardPlacements returns whether any shards are placed on this node
+ * NodeHasShardPlacements returns whether any active shards are placed on this node
  */
 bool
 NodeHasShardPlacements(char *nodeName, int32 nodePort)
 {
-	const int scanKeyCount = 2;
+	const int scanKeyCount = 3;
 	const bool indexOK = true;
 
 	bool hasPlacements = false;
@@ -221,6 +222,8 @@ NodeHasShardPlacements(char *nodeName, int32 nodePort)
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_shard_placement_nodeport,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
+	ScanKeyInit(&scanKey[2], Anum_pg_dist_shard_placement_shardstate,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(FILE_FINALIZED));
 
 	scanDescriptor = systable_beginscan(pgShardPlacement,
 										DistShardPlacementNodeidIndexId(), indexOK,
