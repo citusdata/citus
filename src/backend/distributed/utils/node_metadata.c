@@ -131,7 +131,7 @@ cluster_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-	
+
 	PG_RETURN_VOID();
 }
 
@@ -142,25 +142,26 @@ Datum
 cluster_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
 	PG_RETURN_BOOL(true);
+
 	/*
-	text *filePath = PG_GETARG_TEXT_P(0);
-	char *filePathCStr = text_to_cstring(filePath);
-
-	ListCell *workerNodeCell = NULL;
-	List *workerNodes = ParseWorkerNodeFile(filePathCStr);
-
-	foreach(workerNodeCell, workerNodes)
-	{
-		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
-		Datum workerNameDatum = PointerGetDatum(cstring_to_text(workerNode->workerName));
-
-		DirectFunctionCall3(cluster_add_node, workerNameDatum,
-							UInt32GetDatum(workerNode->workerPort),
-							PointerGetDatum(NULL));
-	}
-
-	PG_RETURN_BOOL(true);
-	*/
+	 * text *filePath = PG_GETARG_TEXT_P(0);
+	 * char *filePathCStr = text_to_cstring(filePath);
+	 *
+	 * ListCell *workerNodeCell = NULL;
+	 * List *workerNodes = ParseWorkerNodeFile(filePathCStr);
+	 *
+	 * foreach(workerNodeCell, workerNodes)
+	 * {
+	 *  WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+	 *  Datum workerNameDatum = PointerGetDatum(cstring_to_text(workerNode->workerName));
+	 *
+	 *  DirectFunctionCall3(cluster_add_node, workerNameDatum,
+	 *                      UInt32GetDatum(workerNode->workerPort),
+	 *                      PointerGetDatum(NULL));
+	 * }
+	 *
+	 * PG_RETURN_BOOL(true);
+	 */
 }
 
 
@@ -279,7 +280,6 @@ GetMaxGroupId()
 		if (workerNodeGroupId > maxGroupId)
 		{
 			maxGroupId = workerNodeGroupId;
-
 		}
 	}
 
@@ -369,7 +369,6 @@ ParseWorkerNodeFile(const char *workerNodeFilename)
 		char nodePortString[MAX_PORT_LENGTH + 1];
 
 		memset(nodeName, '\0', sizeof(nodeName));
-		//strlcpy(nodeRack, WORKER_DEFAULT_RACK, sizeof(nodeRack));
 		memset(nodePortString, '\0', sizeof(nodePortString));
 
 		if (workerLineLength == MAXPGPATH - 1)
@@ -446,7 +445,6 @@ ParseWorkerNodeFile(const char *workerNodeFilename)
 		workerNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
 
 		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
-		//strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
