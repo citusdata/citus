@@ -36,6 +36,7 @@ ALTER EXTENSION citus UPDATE TO '6.0-2';
 ALTER EXTENSION citus UPDATE TO '6.0-3';
 ALTER EXTENSION citus UPDATE TO '6.0-4';
 ALTER EXTENSION citus UPDATE TO '6.0-5';
+ALTER EXTENSION citus UPDATE TO '6.0-6';
 
 -- drop extension an re-create in newest version
 DROP EXTENSION citus;

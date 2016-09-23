@@ -29,6 +29,7 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"

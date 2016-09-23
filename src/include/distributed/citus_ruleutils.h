@@ -38,6 +38,7 @@ extern void pg_get_query_def(Query *query, StringInfo buffer);
 extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid, StringInfo
 								buffer);
 extern char * generate_relation_name(Oid relid, List *namespaces);
+extern char * generate_qualified_relation_name(Oid relid);
 
 
 #endif /* CITUS_RULEUTILS_H */
