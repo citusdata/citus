@@ -67,6 +67,22 @@ DEBUG:  join prunable for intervals [13921,14947] and [1,5986]
      |    
 (1 row)
 
+-- Make sure that we can handle filters without a column
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND false;
+ sum | avg 
+-----+-----
+     |    
+(1 row)
+
+SELECT sum(l_linenumber), avg(l_linenumber)
+    FROM lineitem INNER JOIN orders ON (l_orderkey = o_orderkey)
+	WHERE false;
+ sum | avg 
+-----+-----
+     |    
+(1 row)
+
 -- These tests check that we can do join pruning for tables partitioned over
 -- different type of columns including varchar, array types, composite types
 -- etc. This is in response to a bug we had where we were not able to resolve
@@ -102,4 +118,3 @@ DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U
  explain statements for distributed queries are not enabled
 (1 row)
 
-SET client_min_messages TO NOTICE;

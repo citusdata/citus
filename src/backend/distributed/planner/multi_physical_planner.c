@@ -2516,6 +2516,12 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 	Var *partitionColumn = PartitionColumn(relationId, tableId);
 	char partitionMethod = PartitionMethod(relationId);
 
+	if (ContainsFalseClause(whereClauseList))
+	{
+		/* always return empty result if WHERE clause is of the form: false (AND ..) */
+		return NIL;
+	}
+
 	/* build the filter clause list for the partition method */
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
@@ -2567,6 +2573,35 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 	}
 
 	return remainingShardList;
+}
+
+
+/*
+ * ContainsFalseClause returns whether the flattened where clause list
+ * contains false as a clause.
+ */
+bool
+ContainsFalseClause(List *whereClauseList)
+{
+	bool containsFalseClause = false;
+	ListCell *clauseCell = NULL;
+
+	foreach(clauseCell, whereClauseList)
+	{
+		Node *clause = (Node *) lfirst(clauseCell);
+
+		if (IsA(clause, Const))
+		{
+			Const *constant = (Const *) clause;
+			if (constant->consttype == BOOLOID && !DatumGetBool(constant->constvalue))
+			{
+				containsFalseClause = true;
+				break;
+			}
+		}
+	}
+
+	return containsFalseClause;
 }
 
 
