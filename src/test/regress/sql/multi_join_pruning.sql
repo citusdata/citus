@@ -36,6 +36,14 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
 
+-- Make sure that we can handle filters without a column
+SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND false;
+
+SELECT sum(l_linenumber), avg(l_linenumber)
+    FROM lineitem INNER JOIN orders ON (l_orderkey = o_orderkey)
+	WHERE false;
+
 -- These tests check that we can do join pruning for tables partitioned over
 -- different type of columns including varchar, array types, composite types
 -- etc. This is in response to a bug we had where we were not able to resolve
@@ -54,5 +62,3 @@ EXPLAIN SELECT count(*)
 EXPLAIN SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
-
-SET client_min_messages TO NOTICE;
