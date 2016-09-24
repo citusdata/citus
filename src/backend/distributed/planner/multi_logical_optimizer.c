@@ -814,7 +814,12 @@ SelectClauseTableIdList(List *selectClauseList)
 		Var *selectColumn = NULL;
 		int selectColumnTableId = 0;
 
-		Assert(list_length(selectColumnList) > 0);
+		if (list_length(selectColumnList) == 0)
+		{
+			/* filter is a constant, e.g. false or 1=0 */
+			continue;
+		}
+
 		selectColumn = (Var *) linitial(selectColumnList);
 		selectColumnTableId = (int) selectColumn->varno;
 
@@ -944,15 +949,23 @@ TableIdListSelectClauses(List *tableIdList, List *selectClauseList)
 	foreach(selectClauseCell, selectClauseList)
 	{
 		Node *selectClause = (Node *) lfirst(selectClauseCell);
+
 		List *selectColumnList = pull_var_clause_default(selectClause);
-
-		Var *selectColumn = (Var *) linitial(selectColumnList);
-		int selectClauseTableId = (int) selectColumn->varno;
-
-		bool tableIdListMember = list_member_int(tableIdList, selectClauseTableId);
-		if (tableIdListMember)
+		if (list_length(selectColumnList) == 0)
 		{
+			/* filter is a constant, e.g. false or 1=0, always include it */
 			tableSelectClauseList = lappend(tableSelectClauseList, selectClause);
+		}
+		else
+		{
+			Var *selectColumn = (Var *) linitial(selectColumnList);
+			int selectClauseTableId = (int) selectColumn->varno;
+
+			bool tableIdListMember = list_member_int(tableIdList, selectClauseTableId);
+			if (tableIdListMember)
+			{
+				tableSelectClauseList = lappend(tableSelectClauseList, selectClause);
+			}
 		}
 	}
 

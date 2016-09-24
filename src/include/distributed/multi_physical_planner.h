@@ -231,6 +231,7 @@ extern StringInfo ShardFetchQueryString(uint64 shardId);
 /* Function declarations for shard pruning */
 extern List * PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 							 List *shardList);
+extern bool ContainsFalseClause(List *whereClauseList);
 extern OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 
 /*
