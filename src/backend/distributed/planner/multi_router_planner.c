@@ -1128,7 +1128,9 @@ RouterSelectTask(Query *originalQuery, Query *query,
  * in the query and returns list of shards per relation. Shard pruning is done based
  * on provided restriction context per relation. The function bails out and returns NULL
  * if any of the relations pruned down to more than one active shard. It also records
- * pruned shard intervals in relation restriction context to be used later on.
+ * pruned shard intervals in relation restriction context to be used later on. Some
+ * queries may have contradiction clauses like 'and false' or 'and 1=0', such queries
+ * are treated as if all of the shards of joining relations are pruned out.
  */
 static List *
 TargetShardIntervalsForSelect(Query *query,
@@ -1149,22 +1151,33 @@ TargetShardIntervalsForSelect(Query *query,
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 		int shardCount = cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
-		List *restrictClauseList = extract_actual_clauses(baseRestrictionList, false);
-		List *shardIntervalList = NIL;
+		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardList = NIL;
 		int shardIndex = 0;
+		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
+		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
+		bool whereFalseQuery = false;
 
 		relationRestriction->prunedShardIntervalList = NIL;
 
-		for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+		/*
+		 * Queries may have contradiction clauses like 'false', or '1=0' in
+		 * their filters. Such queries would have pseudo constant 'false'
+		 * inside relOptInfo->joininfo list. We treat such cases as if all
+		 * shards of the table are pruned out.
+		 */
+		whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
+		if (!whereFalseQuery && shardCount > 0)
 		{
-			ShardInterval *shardInterval =
-				cacheEntry->sortedShardIntervalArray[shardIndex];
-			shardIntervalList = lappend(shardIntervalList, shardInterval);
-		}
+			List *shardIntervalList = NIL;
 
-		if (shardCount > 0)
-		{
+			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+			{
+				ShardInterval *shardInterval =
+					cacheEntry->sortedShardIntervalArray[shardIndex];
+				shardIntervalList = lappend(shardIntervalList, shardInterval);
+			}
+
 			prunedShardList = PruneShardList(relationId, tableId,
 											 restrictClauseList,
 											 shardIntervalList);
