@@ -1278,6 +1278,254 @@ SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	WHERE author_id = 5 or author_id = 2;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Window functions are currently unsupported
+-- where false queries are router plannable
+SELECT * 
+	FROM articles_hash
+	WHERE false;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * 
+	FROM articles_hash
+	WHERE author_id = 1 and false;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * 
+	FROM articles_hash
+	WHERE author_id = 1 and 1=0;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+(0 rows)
+
+SELECT * 
+	FROM articles_hash
+	WHERE null;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- where false with immutable function returning false
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id = 10 and int4eq(1, 2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * 
+	FROM articles_hash a
+	WHERE int4eq(1, 2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 1);
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+           10 |             19519
+           10 |             19519
+           10 |             19519
+           10 |             19519
+           10 |             19519
+(5 rows)
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+(0 rows)
+
+-- stable function returning bool
+SELECT * 
+	FROM articles_hash a
+	WHERE date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and
+		date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+(0 rows)
+
+-- union/difference /intersection with where false
+-- this query was not originally router plannable, addition of 1=0
+-- makes it router plannable
+(SELECT * FROM articles_hash WHERE author_id = 1)
+UNION
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+ 11 |         1 | alamo        |       1347
+ 41 |         1 | aznavour     |      11814
+  1 |         1 | arsenous     |       9572
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+(5 rows)
+
+(SELECT * FROM articles_hash WHERE author_id = 1)
+EXCEPT
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 11 |         1 | alamo        |       1347
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+(SELECT * FROM articles_hash WHERE author_id = 1)
+INTERSECT
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- CTEs with where false
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | id | title 
+----+-----------+----+-------
+(0 rows)
+
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id and 1=0;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | id | title 
+----+-----------+----+-------
+(0 rows)
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2 and 1=0;
+DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840006
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ company_id | employee_id | manager_id | level 
+------------+-------------+------------+-------
+(0 rows)
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1 AND 1=0))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840006
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ company_id | employee_id | manager_id | level 
+------------+-------------+------------+-------
+          1 |           1 |          0 |     1
+(1 row)
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 AND 1=0
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840006
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ company_id | employee_id | manager_id | level 
+------------+-------------+------------+-------
+(0 rows)
+
+-- window functions with where false
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
+	FROM articles_hash 
+	WHERE author_id = 1 and 1=0;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ word_count | rank 
+------------+------
+(0 rows)
+
 -- complex query hitting a single shard 	
 SELECT
 	count(DISTINCT CASE
