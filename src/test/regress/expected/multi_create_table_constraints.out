@@ -156,6 +156,31 @@ INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_partition_col_other_col_excl_365008"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
 CONTEXT:  while executing command on localhost:57637
+CREATE TABLE ex_on_two_columns_prt
+(
+	partition_col integer,
+	other_col integer,
+	EXCLUDE (partition_col WITH =, other_col WITH =) WHERE (other_col > 100)
+);
+SELECT master_create_distributed_table('ex_on_two_columns_prt', 'partition_col', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('ex_on_two_columns_prt', '4', '2');
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,1);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,1);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
+ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_prt_partition_col_other_col_excl_365012"
+DETAIL:  Key (partition_col, other_col)=(1, 101) conflicts with existing key (partition_col, other_col)=(1, 101).
+CONTEXT:  while executing command on localhost:57637
 CREATE TABLE ex_wrong_operator
 (
 	partition_col tsrange,
@@ -185,7 +210,7 @@ SELECT master_create_worker_shards('ex_overlaps', '4', '2');
 
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-01 00:00:00, 2016-02-01 00:00:00]');
 INSERT INTO ex_overlaps (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
-ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_other_col_partition_col_excl_365015"
+ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_other_col_partition_col_excl_365019"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
 CONTEXT:  while executing command on localhost:57638
 -- now show that Citus can distribute unique and EXCLUDE constraints that 
@@ -235,7 +260,7 @@ SELECT master_create_worker_shards('uq_two_columns_named', '4', '2');
 
 INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO uq_two_columns_named (partition_col, other_col) VALUES (1,1);
-ERROR:  duplicate key value violates unique constraint "uq_two_columns_named_uniq_365016"
+ERROR:  duplicate key value violates unique constraint "uq_two_columns_named_uniq_365020"
 DETAIL:  Key (partition_col, other_col)=(1, 1) already exists.
 CONTEXT:  while executing command on localhost:57637
 CREATE TABLE ex_on_part_col_named
@@ -258,7 +283,7 @@ SELECT master_create_worker_shards('ex_on_part_col_named', '4', '2');
 
 INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_part_col_named (partition_col, other_col) VALUES (1,2);
-ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_named_exclude_365020"
+ERROR:  conflicting key value violates exclusion constraint "ex_on_part_col_named_exclude_365024"
 DETAIL:  Key (partition_col)=(1) conflicts with existing key (partition_col)=(1).
 CONTEXT:  while executing command on localhost:57637
 CREATE TABLE ex_on_two_columns_named
@@ -281,7 +306,7 @@ SELECT master_create_worker_shards('ex_on_two_columns_named', '4', '2');
 
 INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns_named (partition_col, other_col) VALUES (1,1);
-ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_named_exclude_365024"
+ERROR:  conflicting key value violates exclusion constraint "ex_on_two_columns_named_exclude_365028"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
 CONTEXT:  while executing command on localhost:57637
 CREATE TABLE ex_multiple_excludes
@@ -306,11 +331,11 @@ SELECT master_create_worker_shards('ex_multiple_excludes', '4', '2');
 
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,1,1);
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,1,2);
-ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl1_365028"
+ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl1_365032"
 DETAIL:  Key (partition_col, other_col)=(1, 1) conflicts with existing key (partition_col, other_col)=(1, 1).
 CONTEXT:  while executing command on localhost:57637
 INSERT INTO ex_multiple_excludes (partition_col, other_col, other_other_col) VALUES (1,2,1);
-ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl2_365028"
+ERROR:  conflicting key value violates exclusion constraint "ex_multiple_excludes_excl2_365032"
 DETAIL:  Key (partition_col, other_other_col)=(1, 1) conflicts with existing key (partition_col, other_other_col)=(1, 1).
 CONTEXT:  while executing command on localhost:57637
 CREATE TABLE ex_wrong_operator_named
@@ -342,7 +367,7 @@ SELECT master_create_worker_shards('ex_overlaps_named', '4', '2');
 
 INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-01 00:00:00, 2016-02-01 00:00:00]');
 INSERT INTO ex_overlaps_named (partition_col, other_col) VALUES ('[2016-01-01 00:00:00, 2016-02-01 00:00:00]', '[2016-01-15 00:00:00, 2016-02-01 00:00:00]');
-ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_operator_named_exclude_365035"
+ERROR:  conflicting key value violates exclusion constraint "ex_overlaps_operator_named_exclude_365039"
 DETAIL:  Key (other_col, partition_col)=(["2016-01-15 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]) conflicts with existing key (other_col, partition_col)=(["2016-01-01 00:00:00","2016-02-01 00:00:00"], ["2016-01-01 00:00:00","2016-02-01 00:00:00"]).
 CONTEXT:  while executing command on localhost:57638
 -- now show that Citus allows unique constraints on range-partitioned tables.
@@ -378,84 +403,84 @@ SELECT master_create_worker_shards('check_example', '2', '2');
 
 \c - - - :worker_1_port
 \d check_example*
-  Table "public.check_example_365036"
+  Table "public.check_example_365040"
      Column      |  Type   | Modifiers 
 -----------------+---------+-----------
  partition_col   | integer | 
  other_col       | integer | 
  other_other_col | integer | 
 Indexes:
-    "check_example_partition_col_key_365036" UNIQUE CONSTRAINT, btree (partition_col)
+    "check_example_partition_col_key_365040" UNIQUE CONSTRAINT, btree (partition_col)
 Check constraints:
     "check_example_other_col_check" CHECK (other_col >= 100)
     "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
 
-  Table "public.check_example_365037"
+  Table "public.check_example_365041"
      Column      |  Type   | Modifiers 
 -----------------+---------+-----------
  partition_col   | integer | 
  other_col       | integer | 
  other_other_col | integer | 
 Indexes:
-    "check_example_partition_col_key_365037" UNIQUE CONSTRAINT, btree (partition_col)
+    "check_example_partition_col_key_365041" UNIQUE CONSTRAINT, btree (partition_col)
 Check constraints:
     "check_example_other_col_check" CHECK (other_col >= 100)
     "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
 
-Index "public.check_example_partition_col_key_365036"
+Index "public.check_example_partition_col_key_365040"
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365036"
+unique, btree, for table "public.check_example_365040"
 
-Index "public.check_example_partition_col_key_365037"
+Index "public.check_example_partition_col_key_365041"
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365037"
+unique, btree, for table "public.check_example_365041"
 
 \c - - - :worker_2_port
 \d check_example*
-  Table "public.check_example_365036"
+  Table "public.check_example_365040"
      Column      |  Type   | Modifiers 
 -----------------+---------+-----------
  partition_col   | integer | 
  other_col       | integer | 
  other_other_col | integer | 
 Indexes:
-    "check_example_partition_col_key_365036" UNIQUE CONSTRAINT, btree (partition_col)
+    "check_example_partition_col_key_365040" UNIQUE CONSTRAINT, btree (partition_col)
 Check constraints:
     "check_example_other_col_check" CHECK (other_col >= 100)
     "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
 
-  Table "public.check_example_365037"
+  Table "public.check_example_365041"
      Column      |  Type   | Modifiers 
 -----------------+---------+-----------
  partition_col   | integer | 
  other_col       | integer | 
  other_other_col | integer | 
 Indexes:
-    "check_example_partition_col_key_365037" UNIQUE CONSTRAINT, btree (partition_col)
+    "check_example_partition_col_key_365041" UNIQUE CONSTRAINT, btree (partition_col)
 Check constraints:
     "check_example_other_col_check" CHECK (other_col >= 100)
     "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
 
-Index "public.check_example_partition_col_key_365036"
+Index "public.check_example_partition_col_key_365040"
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365036"
+unique, btree, for table "public.check_example_365040"
 
-Index "public.check_example_partition_col_key_365037"
+Index "public.check_example_partition_col_key_365041"
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365037"
+unique, btree, for table "public.check_example_365041"
 
 \c - - - :master_port
 -- drop unnecessary tables
 DROP TABLE pk_on_non_part_col, uq_on_non_part_col CASCADE;
 DROP TABLE pk_on_part_col, uq_part_col, uq_two_columns CASCADE;
-DROP TABLE ex_on_part_col, ex_on_two_columns, ex_multiple_excludes, ex_overlaps CASCADE;
+DROP TABLE ex_on_part_col, ex_on_two_columns, ex_on_two_columns_prt, ex_multiple_excludes, ex_overlaps CASCADE;
 DROP TABLE ex_on_part_col_named, ex_on_two_columns_named, ex_overlaps_named CASCADE;
 DROP TABLE uq_range_tables, check_example CASCADE;
