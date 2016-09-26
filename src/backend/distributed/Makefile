@@ -55,7 +55,6 @@ $(EXTENSION)--5.2-1.sql: $(EXTENSION)--5.1-8.sql $(EXTENSION)--5.1-8--5.2-1.sql
 $(EXTENSION)--5.2-2.sql: $(EXTENSION)--5.2-1.sql $(EXTENSION)--5.2-1--5.2-2.sql
 	cat $^ > $@
 
-
 NO_PGXS = 1
 
 SHLIB_LINK = $(libpq)
