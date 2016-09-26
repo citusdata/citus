@@ -67,6 +67,29 @@ WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
 
--- Reset client logging level to its previous value
+-- Test cases with false in the WHERE clause
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey)
+WHERE
+	false;
 
-SET client_min_messages TO NOTICE;
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey)
+WHERE
+	1=0 AND c_custkey < 0;
+
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey AND false);
+
+SELECT
+	o_orderkey
+FROM
+	orders, customer
+WHERE
+	o_custkey = c_custkey AND false;
