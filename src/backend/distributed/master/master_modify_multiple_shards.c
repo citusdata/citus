@@ -59,8 +59,7 @@ static void LockShardsForModify(List *shardIntervalList);
 static bool HasReplication(List *shardIntervalList);
 static int SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId);
 static int SendQueryToPlacements(char *shardQueryString,
-								 ShardConnections *shardConnections,
-								 bool returnTupleCount);
+								 ShardConnections *shardConnections);
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 
@@ -244,16 +243,8 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 	int affectedTupleCount = 0;
 	char *relationOwner = TableOwner(relationId);
 	ListCell *shardIntervalCell = NULL;
-	bool truncateCommand = false;
-	bool requestTupleCount = true;
 
 	OpenTransactionsToAllShardPlacements(shardIntervalList, relationOwner);
-
-	if (query->commandType == CMD_UTILITY && IsA(query->utilityStmt, TruncateStmt))
-	{
-		truncateCommand = true;
-		requestTupleCount = false;
-	}
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
@@ -274,8 +265,7 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 
 		shardQueryStringData = shardQueryString->data;
 		shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
-														shardConnections,
-														requestTupleCount);
+														shardConnections);
 		affectedTupleCount += shardAffectedTupleCount;
 	}
 
@@ -292,8 +282,7 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
  * should be called after all queries have been sent successfully.
  */
 static int
-SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections,
-					  bool returnTupleCount)
+SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections)
 {
 	uint64 shardId = shardConnections->shardId;
 	List *connectionList = shardConnections->connectionList;
@@ -301,11 +290,6 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 	int32 shardAffectedTupleCount = -1;
 
 	Assert(connectionList != NIL);
-
-	if (!returnTupleCount)
-	{
-		shardAffectedTupleCount = 0;
-	}
 
 	foreach(connectionCell, connectionList)
 	{
@@ -328,24 +312,29 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 
 		placementAffectedTupleString = PQcmdTuples(result);
 
-		if (returnTupleCount)
+		/* returned tuple count is empty for utility commands, use 0 as affected count */
+		if (*placementAffectedTupleString == '\0')
+		{
+			placementAffectedTupleCount = 0;
+		}
+		else
 		{
 			placementAffectedTupleCount = pg_atoi(placementAffectedTupleString,
 												  sizeof(int32), 0);
+		}
 
-			if ((shardAffectedTupleCount == -1) ||
-				(shardAffectedTupleCount == placementAffectedTupleCount))
-			{
-				shardAffectedTupleCount = placementAffectedTupleCount;
-			}
-			else
-			{
-				ereport(ERROR,
-						(errmsg("modified %d tuples, but expected to modify %d",
-								placementAffectedTupleCount, shardAffectedTupleCount),
-						 errdetail("Affected tuple counts at placements of shard "
-								   UINT64_FORMAT " are different.", shardId)));
-			}
+		if ((shardAffectedTupleCount == -1) ||
+			(shardAffectedTupleCount == placementAffectedTupleCount))
+		{
+			shardAffectedTupleCount = placementAffectedTupleCount;
+		}
+		else
+		{
+			ereport(ERROR,
+					(errmsg("modified %d tuples, but expected to modify %d",
+							placementAffectedTupleCount, shardAffectedTupleCount),
+					 errdetail("Affected tuple counts at placements of shard "
+							   UINT64_FORMAT " are different.", shardId)));
 		}
 
 		PQclear(result);
