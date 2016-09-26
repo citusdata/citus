@@ -103,8 +103,6 @@ ORDER BY attnum;
  int_column1     | integer               | default 1
  int_column2     | integer               | default 2
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
  float_column | count 
@@ -166,8 +164,6 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET NOT NULL;
  int_column1     | integer               | 
  int_column2     | integer               | not null default 2
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 -- Drop default so that NULLs will be inserted for this column
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
@@ -203,8 +199,6 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
  int_column1     | integer               | 
  int_column2     | integer               | 
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 -- \copy should succeed now 
 \copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
@@ -248,8 +242,6 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE FLOAT;
  int_column1     | integer               | 
  int_column2     | double precision      | 
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 SELECT int_column2, pg_typeof(int_column2), count(*) from lineitem_alter GROUP BY int_column2;
  int_column2 |    pg_typeof     | count 
@@ -296,8 +288,6 @@ ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 -- Verify that we can execute commands with multiple subcommands
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
@@ -325,8 +315,6 @@ ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
  null_column     | integer               | 
  int_column1     | integer               | 
  int_column2     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 	ALTER COLUMN int_column1 SET STATISTICS 10;
@@ -354,8 +342,6 @@ ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 -- Verify that we cannot execute alter commands on the distribution column
 ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey DROP NOT NULL;
@@ -425,8 +411,6 @@ ERROR:  renaming distributed tables or their objects is currently unsupported
  l_shipmode      | character(10)         | not null
  l_comment       | character varying(44) | not null
  null_column     | integer               | 
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 -- verify that non-propagated ddl commands are allowed inside a transaction block
 SET citus.enable_ddl_propagation to false;
@@ -481,8 +465,6 @@ COMMIT;
  first           | integer               | 
 Indexes:
     "temp_index_2" btree (l_orderkey)
-Triggers:
-    "citus_truncate_trigger_on_public.lineitem_alter" BEFORE TRUNCATE ON lineitem_alter FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 ALTER TABLE lineitem_alter DROP COLUMN first;
 DROP INDEX temp_index_2;

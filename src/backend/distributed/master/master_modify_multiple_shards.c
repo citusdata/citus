@@ -61,8 +61,6 @@ static int SendQueryToShards(Query *query, List *shardIntervalList, Oid relation
 static int SendQueryToPlacements(char *shardQueryString,
 								 ShardConnections *shardConnections,
 								 bool returnTupleCount);
-static void deparse_truncate_query(Query *query, Oid distrelid, int64 shardid, StringInfo
-								   buffer);
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 
@@ -91,7 +89,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	List *shardIntervalList = NIL;
 	List *prunedShardIntervalList = NIL;
 	int32 affectedTupleCount = 0;
-	bool validateModifyQuery = true;
 
 	PreventTransactionChain(isTopLevel, "master_modify_multiple_shards");
 
@@ -124,8 +121,14 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 		rangeVar = (RangeVar *) linitial(relationList);
 		relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
+		if (rangeVar->schemaname == NULL)
+		{
+			Oid schemaOid = get_rel_namespace(relationId);
+			char *schemaName = get_namespace_name(schemaOid);
+			rangeVar->schemaname = schemaName;
+		}
+
 		EnsureTablePermissions(relationId, ACL_TRUNCATE);
-		validateModifyQuery = false;
 	}
 	else
 	{
@@ -138,7 +141,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 	modifyQuery = (Query *) linitial(queryTreeList);
 
-	if (validateModifyQuery)
+	if (modifyQuery->commandType != CMD_UTILITY)
 	{
 		ErrorIfModifyQueryNotSupported(modifyQuery);
 	}
@@ -267,14 +270,7 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 		shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
 		Assert(shardConnectionsFound);
 
-		if (truncateCommand)
-		{
-			deparse_truncate_query(query, relationId, shardId, shardQueryString);
-		}
-		else
-		{
-			deparse_shard_query(query, relationId, shardId, shardQueryString);
-		}
+		deparse_shard_query(query, relationId, shardId, shardQueryString);
 
 		shardQueryStringData = shardQueryString->data;
 		shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
@@ -287,33 +283,6 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 	CHECK_FOR_INTERRUPTS();
 
 	return affectedTupleCount;
-}
-
-
-/*
- * deparse_truncate_query creates sql representation of a truncate statement. The
- * function only generated basic truncate statement of the form
- * 'truncate table <table_name>' it ignores all options. It also assumes that
- * there is only one relation in the relation list.
- */
-void
-deparse_truncate_query(Query *query, Oid distrelid, int64 shardid, StringInfo buffer)
-{
-	TruncateStmt *truncateStatement = NULL;
-	RangeVar *relation = NULL;
-	char *qualifiedName = NULL;
-
-	Assert(query->commandType == CMD_UTILITY);
-	Assert(IsA(query->utilityStmt, TruncateStmt));
-
-	truncateStatement = (TruncateStmt *) query->utilityStmt;
-
-	Assert(list_length(truncateStatement->relations) == 1);
-
-	relation = (RangeVar *) linitial(truncateStatement->relations);
-	qualifiedName = quote_qualified_identifier(relation->schemaname,
-											   relation->relname);
-	appendStringInfo(buffer, "TRUNCATE TABLE %s_" UINT64_FORMAT, qualifiedName, shardid);
 }
 
 

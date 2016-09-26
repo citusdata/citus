@@ -68,6 +68,11 @@ SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::r
 ---------
 (0 rows)
 
+-- command can not be run inside transaction
+BEGIN; TRUNCATE TABLE test_truncate_append; COMMIT;
+ERROR:  DROP distributed table cannot run inside a transaction block
+CONTEXT:  SQL statement "SELECT master_drop_all_shards(TG_RELID, TG_TABLE_SCHEMA, TG_TABLE_NAME)"
+PL/pgSQL function citus_truncate_trigger() line 13 at PERFORM
 DROP TABLE test_truncate_append;
 --
 -- truncate for range distribution
@@ -133,6 +138,11 @@ SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::re
  1210005
 (3 rows)
 
+-- command can not be run inside transaction
+BEGIN; TRUNCATE TABLE test_truncate_range; COMMIT;
+ERROR:  master_modify_multiple_shards cannot run inside a transaction block
+CONTEXT:  SQL statement "SELECT master_modify_multiple_shards(commandText)"
+PL/pgSQL function citus_truncate_trigger() line 17 at PERFORM
 DROP TABLE test_truncate_range;
 --
 -- truncate for hash distribution.
@@ -216,4 +226,9 @@ SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::reg
  1210009
 (4 rows)
 
+-- command can not be run inside transaction
+BEGIN; TRUNCATE TABLE test_truncate_hash; COMMIT;
+ERROR:  master_modify_multiple_shards cannot run inside a transaction block
+CONTEXT:  SQL statement "SELECT master_modify_multiple_shards(commandText)"
+PL/pgSQL function citus_truncate_trigger() line 17 at PERFORM
 DROP TABLE test_truncate_hash;

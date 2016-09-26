@@ -572,8 +572,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
  new_col     | integer                | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON test_schema_support.nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -601,8 +599,6 @@ ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON test_schema_support.nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -630,8 +626,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
  new_col     | integer                | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -660,8 +654,6 @@ ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -691,8 +683,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_comment   | character varying(152) | 
 Indexes:
     "index1" btree (n_name)
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON test_schema_support.nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -720,8 +710,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON test_schema_support.nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -751,8 +739,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_comment   | character varying(152) | 
 Indexes:
     "index1" btree (n_name)
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
@@ -781,8 +767,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
  n_name      | character(25)          | not null
  n_regionkey | integer                | not null
  n_comment   | character varying(152) | 
-Triggers:
-    "citus_truncate_trigger_on_test_schema_support.nation_hash" BEFORE TRUNCATE ON nation_hash FOR EACH STATEMENT EXECUTE PROCEDURE citus_truncate_trigger()
 
 \c - - - :worker_1_port
 \d test_schema_support.nation_hash_1190003;
