@@ -232,3 +232,62 @@ ERROR:  master_modify_multiple_shards cannot run inside a transaction block
 CONTEXT:  SQL statement "SELECT master_modify_multiple_shards(commandText)"
 PL/pgSQL function citus_truncate_trigger() line 17 at PERFORM
 DROP TABLE test_truncate_hash;
+-- test with table with spaces in it
+CREATE TABLE "a b hash" (a int, b int);
+SELECT master_create_distributed_table('"a b hash"', 'a', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('"a b hash"', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+INSERT INTO "a b hash" values (1, 0);
+SELECT * from "a b hash";
+ a | b 
+---+---
+ 1 | 0
+(1 row)
+
+TRUNCATE TABLE "a b hash";
+SELECT * from "a b hash";
+ a | b 
+---+---
+(0 rows)
+
+DROP TABLE "a b hash";
+-- now with append
+CREATE TABLE "a b append" (a int, b int);
+SELECT master_create_distributed_table('"a b append"', 'a', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_empty_shard('"a b append"') AS new_shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 500
+WHERE shardid = :new_shard_id;
+SELECT master_create_empty_shard('"a b append"') AS new_shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
+WHERE shardid = :new_shard_id;
+INSERT INTO "a b append" values (1, 1);
+INSERT INTO "a b append" values (600, 600);
+SELECT * FROM "a b append" ORDER BY a;
+  a  |  b  
+-----+-----
+   1 |   1
+ 600 | 600
+(2 rows)
+
+TRUNCATE TABLE "a b append";
+-- verify all shards are dropped
+SELECT shardid FROM pg_dist_shard where logicalrelid = '"a b append"'::regclass;
+ shardid 
+---------
+(0 rows)
+
+DROP TABLE "a b append";
