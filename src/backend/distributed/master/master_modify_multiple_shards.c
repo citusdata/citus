@@ -262,7 +262,6 @@ SendQueryToShards(Query *query, List *shardIntervalList, Oid relationId)
 		Assert(shardConnectionsFound);
 
 		deparse_shard_query(query, relationId, shardId, shardQueryString);
-
 		shardQueryStringData = shardQueryString->data;
 		shardAffectedTupleCount = SendQueryToPlacements(shardQueryStringData,
 														shardConnections);
