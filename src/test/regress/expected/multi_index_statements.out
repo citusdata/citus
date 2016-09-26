@@ -77,23 +77,27 @@ CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
 CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash(a);
 CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash(a,b);
+CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash(a,b) WHERE c IS NOT NULL;
+CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range(a,b) WHERE c IS NOT NULL;
 RESET client_min_messages;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
- schemaname |    tablename     |          indexname           | tablespace |                                                     indexdef                                                     
-------------+------------------+------------------------------+------------+------------------------------------------------------------------------------------------------------------------
- public     | index_test_hash  | index_test_hash_index_a      |            | CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash USING btree (a)
- public     | index_test_hash  | index_test_hash_index_a_b    |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash USING btree (a, b)
- public     | index_test_range | index_test_range_index_a     |            | CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range USING btree (a)
- public     | index_test_range | index_test_range_index_a_b   |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
- public     | lineitem         | lineitem_colref_index        |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
- public     | lineitem         | lineitem_orderkey_hash_index |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
- public     | lineitem         | lineitem_orderkey_index      |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
- public     | lineitem         | lineitem_partial_index       |            | CREATE INDEX lineitem_partial_index ON lineitem USING btree (l_shipdate) WHERE (l_shipdate < '01-01-1995'::date)
- public     | lineitem         | lineitem_partkey_desc_index  |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
- public     | lineitem         | lineitem_pkey                |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
- public     | lineitem         | lineitem_time_index          |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
-(11 rows)
+ schemaname |    tablename     |             indexname              | tablespace |                                                      indexdef                                                       
+------------+------------------+------------------------------------+------------+---------------------------------------------------------------------------------------------------------------------
+ public     | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash USING btree (a)
+ public     | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash USING btree (a, b)
+ public     | index_test_hash  | index_test_hash_index_a_b_partial  |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash USING btree (a, b) WHERE (c IS NOT NULL)
+ public     | index_test_range | index_test_range_index_a           |            | CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range USING btree (a)
+ public     | index_test_range | index_test_range_index_a_b         |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
+ public     | index_test_range | index_test_range_index_a_b_partial |            | CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range USING btree (a, b) WHERE (c IS NOT NULL)
+ public     | lineitem         | lineitem_colref_index              |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
+ public     | lineitem         | lineitem_orderkey_hash_index       |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
+ public     | lineitem         | lineitem_orderkey_index            |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
+ public     | lineitem         | lineitem_partial_index             |            | CREATE INDEX lineitem_partial_index ON lineitem USING btree (l_shipdate) WHERE (l_shipdate < '01-01-1995'::date)
+ public     | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
+ public     | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
+ public     | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
+(13 rows)
 
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
@@ -105,13 +109,13 @@ SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
  count 
 -------
-    16
+    24
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
  count 
 -------
-     4
+     6
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
@@ -130,7 +134,11 @@ CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 ERROR:  specifying tablespaces with CREATE INDEX statements is currently unsupported
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);
 ERROR:  creating unique indexes on non-partition columns is currently unsupported
+CREATE UNIQUE INDEX try_unique_range_index_partial ON index_test_range(b) WHERE c IS NOT NULL;
+ERROR:  creating unique indexes on non-partition columns is currently unsupported
 CREATE UNIQUE INDEX try_unique_hash_index ON index_test_hash(b);
+ERROR:  creating unique indexes on non-partition columns is currently unsupported
+CREATE UNIQUE INDEX try_unique_hash_index_partial ON index_test_hash(b) WHERE c IS NOT NULL;
 ERROR:  creating unique indexes on non-partition columns is currently unsupported
 CREATE UNIQUE INDEX try_unique_append_index ON index_test_append(b);
 ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
@@ -157,20 +165,22 @@ CREATE INDEX ON lineitem (l_orderkey);
 ERROR:  creating index without a name on a distributed table is currently unsupported
 -- Verify that none of failed indexes got created on the master node
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
- schemaname |    tablename     |          indexname           | tablespace |                                                     indexdef                                                     
-------------+------------------+------------------------------+------------+------------------------------------------------------------------------------------------------------------------
- public     | index_test_hash  | index_test_hash_index_a      |            | CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash USING btree (a)
- public     | index_test_hash  | index_test_hash_index_a_b    |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash USING btree (a, b)
- public     | index_test_range | index_test_range_index_a     |            | CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range USING btree (a)
- public     | index_test_range | index_test_range_index_a_b   |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
- public     | lineitem         | lineitem_colref_index        |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
- public     | lineitem         | lineitem_orderkey_hash_index |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
- public     | lineitem         | lineitem_orderkey_index      |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
- public     | lineitem         | lineitem_partial_index       |            | CREATE INDEX lineitem_partial_index ON lineitem USING btree (l_shipdate) WHERE (l_shipdate < '01-01-1995'::date)
- public     | lineitem         | lineitem_partkey_desc_index  |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
- public     | lineitem         | lineitem_pkey                |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
- public     | lineitem         | lineitem_time_index          |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
-(11 rows)
+ schemaname |    tablename     |             indexname              | tablespace |                                                      indexdef                                                       
+------------+------------------+------------------------------------+------------+---------------------------------------------------------------------------------------------------------------------
+ public     | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash USING btree (a)
+ public     | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash USING btree (a, b)
+ public     | index_test_hash  | index_test_hash_index_a_b_partial  |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash USING btree (a, b) WHERE (c IS NOT NULL)
+ public     | index_test_range | index_test_range_index_a           |            | CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range USING btree (a)
+ public     | index_test_range | index_test_range_index_a_b         |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
+ public     | index_test_range | index_test_range_index_a_b_partial |            | CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range USING btree (a, b) WHERE (c IS NOT NULL)
+ public     | lineitem         | lineitem_colref_index              |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
+ public     | lineitem         | lineitem_orderkey_hash_index       |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
+ public     | lineitem         | lineitem_orderkey_index            |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
+ public     | lineitem         | lineitem_partial_index             |            | CREATE INDEX lineitem_partial_index ON lineitem USING btree (l_shipdate) WHERE (l_shipdate < '01-01-1995'::date)
+ public     | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
+ public     | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
+ public     | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
+(13 rows)
 
 --
 -- DROP INDEX
@@ -197,8 +207,10 @@ DROP INDEX lineitem_orderkey_hash_index;
 ERROR:  index "lineitem_orderkey_hash_index" does not exist
 DROP INDEX index_test_range_index_a;
 DROP INDEX index_test_range_index_a_b;
+DROP INDEX index_test_range_index_a_b_partial;
 DROP INDEX index_test_hash_index_a;
 DROP INDEX index_test_hash_index_a_b;
+DROP INDEX index_test_hash_index_a_b_partial;
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
