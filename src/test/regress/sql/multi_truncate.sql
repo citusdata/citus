@@ -140,3 +140,37 @@ SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::reg
 BEGIN; TRUNCATE TABLE test_truncate_hash; COMMIT;
 
 DROP TABLE test_truncate_hash;
+
+-- test with table with spaces in it
+CREATE TABLE "a b hash" (a int, b int);
+SELECT master_create_distributed_table('"a b hash"', 'a', 'hash');
+SELECT master_create_worker_shards('"a b hash"', 4, 1);
+INSERT INTO "a b hash" values (1, 0);
+SELECT * from "a b hash";
+TRUNCATE TABLE "a b hash";
+SELECT * from "a b hash";
+
+DROP TABLE "a b hash";
+
+-- now with append
+CREATE TABLE "a b append" (a int, b int);
+SELECT master_create_distributed_table('"a b append"', 'a', 'append');
+SELECT master_create_empty_shard('"a b append"') AS new_shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 500
+WHERE shardid = :new_shard_id;
+
+SELECT master_create_empty_shard('"a b append"') AS new_shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 501, shardmaxvalue = 1000
+WHERE shardid = :new_shard_id;
+
+INSERT INTO "a b append" values (1, 1);
+INSERT INTO "a b append" values (600, 600);
+
+SELECT * FROM "a b append" ORDER BY a;
+
+TRUNCATE TABLE "a b append";
+
+-- verify all shards are dropped
+SELECT shardid FROM pg_dist_shard where logicalrelid = '"a b append"'::regclass;
+
+DROP TABLE "a b append";
