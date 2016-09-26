@@ -130,5 +130,42 @@ DEBUG:  predicate pruning for shardId 290007
       
 (1 row)
 
--- Reset client logging level to its previous value
-SET client_min_messages TO NOTICE;
+-- Test cases with false in the WHERE clause
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey)
+WHERE
+	false;
+ o_orderkey 
+------------
+(0 rows)
+
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey)
+WHERE
+	1=0 AND c_custkey < 0;
+ o_orderkey 
+------------
+(0 rows)
+
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey AND false);
+ o_orderkey 
+------------
+(0 rows)
+
+SELECT
+	o_orderkey
+FROM
+	orders, customer
+WHERE
+	o_custkey = c_custkey AND false;
+ o_orderkey 
+------------
+(0 rows)
+
