@@ -125,10 +125,34 @@ void
 PurgeConnection(PGconn *connection)
 {
 	NodeConnectionKey nodeConnectionKey;
+	PGconn *purgedConnection = NULL;
+
+	BuildKeyForConnection(connection, &nodeConnectionKey);
+	purgedConnection = PurgeConnectionByKey(&nodeConnectionKey);
+
+	/*
+	 * It's possible the provided connection matches the host and port for
+	 * an entry in the hash without being precisely the same connection. In
+	 * that case, we will want to close the provided connection in addition
+	 * to the one from the hash (which was closed by PurgeConnectionByKey).
+	 */
+	if (purgedConnection != connection)
+	{
+		PQfinish(connection);
+	}
+}
+
+
+/*
+ * Utility method to simplify populating a connection cache key with relevant
+ * fields from a provided connection.
+ */
+void
+BuildKeyForConnection(PGconn *connection, NodeConnectionKey *connectionKey)
+{
 	char *nodeNameString = NULL;
 	char *nodePortString = NULL;
 	char *nodeUserString = NULL;
-	PGconn *purgedConnection = NULL;
 
 	nodeNameString = ConnectionGetOptionValue(connection, "host");
 	if (nodeNameString == NULL)
@@ -151,27 +175,14 @@ PurgeConnection(PGconn *connection)
 						errmsg("connection is missing user option")));
 	}
 
-	memset(&nodeConnectionKey, 0, sizeof(nodeConnectionKey));
-	strlcpy(nodeConnectionKey.nodeName, nodeNameString, MAX_NODE_LENGTH + 1);
-	nodeConnectionKey.nodePort = pg_atoi(nodePortString, sizeof(int32), 0);
-	strlcpy(nodeConnectionKey.nodeUser, nodeUserString, NAMEDATALEN);
+	MemSet(connectionKey, 0, sizeof(NodeConnectionKey));
+	strlcpy(connectionKey->nodeName, nodeNameString, MAX_NODE_LENGTH + 1);
+	connectionKey->nodePort = pg_atoi(nodePortString, sizeof(int32), 0);
+	strlcpy(connectionKey->nodeUser, nodeUserString, NAMEDATALEN);
 
 	pfree(nodeNameString);
 	pfree(nodePortString);
 	pfree(nodeUserString);
-
-	purgedConnection = PurgeConnectionByKey(&nodeConnectionKey);
-
-	/*
-	 * It's possible the provided connection matches the host and port for
-	 * an entry in the hash without being precisely the same connection. In
-	 * that case, we will want to close the provided connection in addition
-	 * to the one from the hash (which was closed by PurgeConnectionByKey).
-	 */
-	if (purgedConnection != connection)
-	{
-		PQfinish(connection);
-	}
 }
 
 
