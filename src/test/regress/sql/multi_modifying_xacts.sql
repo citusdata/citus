@@ -24,6 +24,9 @@ SELECT master_create_worker_shards('researchers', 2, 2);
 SELECT master_create_distributed_table('labs', 'id', 'hash');
 SELECT master_create_worker_shards('labs', 1, 1);
 
+-- might be confusing to have two people in the same lab with the same name
+CREATE UNIQUE INDEX avoid_name_confusion_idx ON researchers (lab_id, name);
+
 -- add some data
 INSERT INTO researchers VALUES (1, 1, 'Donald Knuth');
 INSERT INTO researchers VALUES (2, 1, 'Niklaus Wirth');
@@ -44,6 +47,11 @@ DELETE FROM researchers WHERE lab_id = 1 AND id = 1;
 ABORT;
 
 SELECT name FROM researchers WHERE lab_id = 1 AND id = 1;
+
+-- trigger a unique constraint violation
+BEGIN;
+UPDATE researchers SET name = 'John Backus' WHERE id = 1 AND lab_id = 1;
+ABORT;
 
 -- creating savepoints should work...
 BEGIN;

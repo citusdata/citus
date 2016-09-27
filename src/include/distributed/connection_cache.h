@@ -60,6 +60,7 @@ extern bool IsModifyingTransaction;
 /* function declarations for obtaining and using a connection */
 extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
 extern void PurgeConnection(PGconn *connection);
+extern void BuildKeyForConnection(PGconn *connection, NodeConnectionKey *connectionKey);
 extern PGconn * PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 extern void WarnRemoteError(PGconn *connection, PGresult *result);

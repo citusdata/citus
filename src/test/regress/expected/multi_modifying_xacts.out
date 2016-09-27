@@ -36,6 +36,10 @@ SELECT master_create_worker_shards('labs', 1, 1);
  
 (1 row)
 
+-- might be confusing to have two people in the same lab with the same name
+CREATE UNIQUE INDEX avoid_name_confusion_idx ON researchers (lab_id, name);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- add some data
 INSERT INTO researchers VALUES (1, 1, 'Donald Knuth');
 INSERT INTO researchers VALUES (2, 1, 'Niklaus Wirth');
@@ -62,6 +66,13 @@ SELECT name FROM researchers WHERE lab_id = 1 AND id = 1;
  Donald Knuth
 (1 row)
 
+-- trigger a unique constraint violation
+BEGIN;
+UPDATE researchers SET name = 'John Backus' WHERE id = 1 AND lab_id = 1;
+ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200000"
+DETAIL:  Key (lab_id, name)=(1, John Backus) already exists.
+CONTEXT:  while executing command on localhost:57637
+ABORT;
 -- creating savepoints should work...
 BEGIN;
 INSERT INTO researchers VALUES (5, 3, 'Dennis Ritchie');
