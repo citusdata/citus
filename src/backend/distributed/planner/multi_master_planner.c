@@ -124,8 +124,11 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	AttrNumber *groupColumnIdArray = NULL;
 	List *aggregateTargetList = NIL;
 	List *groupColumnList = NIL;
+	List *aggregateColumnList = NIL;
+	List *havingColumnList = NIL;
 	List *columnList = NIL;
 	ListCell *columnCell = NULL;
+	Node *havingQual = NULL;
 	Oid *groupColumnOpArray = NULL;
 	uint32 groupColumnCount = 0;
 	const long rowEstimate = 10;
@@ -134,14 +137,21 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
 
 	aggregateTargetList = masterQuery->targetList;
-	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
+	havingQual = masterQuery->havingQual;
+
+	/* estimate aggregate execution costs */
+	MemSet(&aggregateCosts, 0, sizeof(AggClauseCosts));
 	count_agg_clauses(NULL, (Node *) aggregateTargetList, &aggregateCosts);
+	count_agg_clauses(NULL, havingQual, &aggregateCosts);
 
 	/*
 	 * For upper level plans above the sequential scan, the planner expects the
 	 * table id (varno) to be set to OUTER_VAR.
 	 */
-	columnList = pull_var_clause_default((Node *) aggregateTargetList);
+	aggregateColumnList = pull_var_clause_default((Node *) aggregateTargetList);
+	havingColumnList = pull_var_clause_default(havingQual);
+
+	columnList = list_concat(aggregateColumnList, havingColumnList);
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
@@ -168,9 +178,10 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	aggregatePlan = make_agg(NULL, aggregateTargetList, NIL, aggregateStrategy,
-							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
-							 groupColumnOpArray, NIL, rowEstimate, subPlan);
+	aggregatePlan = make_agg(NULL, aggregateTargetList, (List *) havingQual,
+							 aggregateStrategy, &aggregateCosts, groupColumnCount,
+							 groupColumnIdArray, groupColumnOpArray, NIL,
+							 rowEstimate, subPlan);
 
 	return aggregatePlan;
 }

@@ -34,6 +34,31 @@ order by
     number_sum desc
 limit 10;
 
+-- same query above, just replace outer where clause with inner having clause
+select
+    number_sum,
+    count(*) as total,
+    avg(total_count) avg_count
+from
+    (select
+        l_suppkey,
+        l_linestatus,
+        sum(l_linenumber) as number_sum,
+        count(*) as total_count
+    from
+        lineitem
+    group by
+        l_suppkey,
+        l_linestatus
+    having
+        sum(l_linenumber) >= 10) as distributed_table
+group by
+    number_sum
+order by
+    total desc,
+    number_sum desc
+limit 10;
+
 select
     (l_suppkey / 100) as suppkey_bin,
     avg(total_count) avg_count
@@ -140,6 +165,18 @@ from
         lineitem
     group by
         l_partkey) as distributed_table;
+
+select
+    avg(different_shipment_days)
+from
+    (select
+        count(distinct l_shipdate) as different_shipment_days
+    from
+        lineitem
+    group by
+        l_partkey
+    having 
+        count(distinct l_shipdate) >= 2) as distributed_table;
 
 -- Check that if subquery is pulled, we don't error and run query properly.
 
