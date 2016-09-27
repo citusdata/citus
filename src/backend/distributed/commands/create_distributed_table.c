@@ -23,8 +23,10 @@
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_opclass.h"
+#include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/trigger.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
@@ -36,6 +38,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
+#include "parser/parser.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -51,7 +54,7 @@ static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
-
+static void CreateTruncateTrigger(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -297,6 +300,15 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	heap_close(pgDistPartition, NoLock);
 	relation_close(distributedRelation, NoLock);
 
+	/*
+	 * PostgreSQL supports truncate trigger for regular relations only.
+	 * Truncate on foreign tables is not supported.
+	 */
+	if (relationKind == RELKIND_RELATION)
+	{
+		CreateTruncateTrigger(distributedRelationId);
+	}
+
 	PG_RETURN_VOID();
 }
 
@@ -474,4 +486,34 @@ LocalTableEmpty(Oid tableId)
 	SPI_finish();
 
 	return localTableEmpty;
+}
+
+
+/*
+ * CreateTruncateTrigger creates a truncate trigger on table identified by relationId
+ * and assigns citus_truncate_trigger() as handler.
+ */
+static void
+CreateTruncateTrigger(Oid relationId)
+{
+	CreateTrigStmt *trigger = NULL;
+	StringInfo triggerName = makeStringInfo();
+	bool internal = true;
+
+	appendStringInfo(triggerName, "truncate_trigger");
+
+	trigger = makeNode(CreateTrigStmt);
+	trigger->trigname = triggerName->data;
+	trigger->relation = NULL;
+	trigger->funcname = SystemFuncName("citus_truncate_trigger");
+	trigger->args = NIL;
+	trigger->row = false;
+	trigger->timing = TRIGGER_TYPE_BEFORE;
+	trigger->events = TRIGGER_TYPE_TRUNCATE;
+	trigger->columns = NIL;
+	trigger->whenClause = NULL;
+	trigger->isconstraint = false;
+
+	CreateTrigger(trigger, NULL, relationId, InvalidOid, InvalidOid, InvalidOid,
+				  internal);
 }

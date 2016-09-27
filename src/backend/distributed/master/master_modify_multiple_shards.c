@@ -104,10 +104,35 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 		relationId = RangeVarGetRelid(updateStatement->relation, NoLock, failOK);
 		EnsureTablePermissions(relationId, ACL_UPDATE);
 	}
+	else if (IsA(queryTreeNode, TruncateStmt))
+	{
+		TruncateStmt *truncateStatement = (TruncateStmt *) queryTreeNode;
+		List *relationList = truncateStatement->relations;
+		RangeVar *rangeVar = NULL;
+
+		if (list_length(relationList) != 1)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("master_modify_multiple_shards() can truncate only "
+							"one table")));
+		}
+
+		rangeVar = (RangeVar *) linitial(relationList);
+		relationId = RangeVarGetRelid(rangeVar, NoLock, failOK);
+		if (rangeVar->schemaname == NULL)
+		{
+			Oid schemaOid = get_rel_namespace(relationId);
+			char *schemaName = get_namespace_name(schemaOid);
+			rangeVar->schemaname = schemaName;
+		}
+
+		EnsureTablePermissions(relationId, ACL_TRUNCATE);
+	}
 	else
 	{
-		ereport(ERROR, (errmsg("query \"%s\" is not a delete nor update statement",
-							   queryString)));
+		ereport(ERROR, (errmsg("query \"%s\" is not a delete, update, or truncate "
+							   "statement", queryString)));
 	}
 
 	CheckDistributedTable(relationId);
@@ -115,7 +140,10 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
 	modifyQuery = (Query *) linitial(queryTreeList);
 
-	ErrorIfModifyQueryNotSupported(modifyQuery);
+	if (modifyQuery->commandType != CMD_UTILITY)
+	{
+		ErrorIfModifyQueryNotSupported(modifyQuery);
+	}
 
 	/* reject queries with a returning list */
 	if (list_length(modifyQuery->returningList) > 0)
@@ -282,8 +310,17 @@ SendQueryToPlacements(char *shardQueryString, ShardConnections *shardConnections
 		}
 
 		placementAffectedTupleString = PQcmdTuples(result);
-		placementAffectedTupleCount = pg_atoi(placementAffectedTupleString,
-											  sizeof(int32), 0);
+
+		/* returned tuple count is empty for utility commands, use 0 as affected count */
+		if (*placementAffectedTupleString == '\0')
+		{
+			placementAffectedTupleCount = 0;
+		}
+		else
+		{
+			placementAffectedTupleCount = pg_atoi(placementAffectedTupleString,
+												  sizeof(int32), 0);
+		}
 
 		if ((shardAffectedTupleCount == -1) ||
 			(shardAffectedTupleCount == placementAffectedTupleCount))
