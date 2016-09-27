@@ -100,6 +100,7 @@ static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescrip
 static PGconn * GetConnectionForPlacement(ShardPlacement *placement,
 										  bool isModificationQuery);
 static void PurgeConnectionForPlacement(ShardPlacement *placement);
+static void RemoveXactConnection(PGconn *connection);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -739,6 +740,12 @@ PurgeConnectionForPlacement(ShardPlacement *placement)
 
 	PurgeConnectionByKey(&nodeKey);
 
+	/*
+	 * The following is logically identical to RemoveXactConnection, but since
+	 * we have a ShardPlacement to help build a NodeConnectionKey, we avoid
+	 * any penalty incurred by calling BuildKeyForConnection, which must ex-
+	 * tract host, port, and user from the connection options list.
+	 */
 	if (xactParticipantHash != NULL)
 	{
 		NodeConnectionEntry *participantEntry = NULL;
@@ -755,6 +762,39 @@ PurgeConnectionForPlacement(ShardPlacement *placement)
 
 		participantEntry->connection = NULL;
 	}
+}
+
+
+/*
+ * Removes a given connection from the transaction participant hash, based on
+ * the host and port of the provided connection. If the hash is not NULL, it
+ * MUST contain the provided connection, or a FATAL error is raised.
+ */
+static void
+RemoveXactConnection(PGconn *connection)
+{
+	NodeConnectionKey nodeKey;
+	NodeConnectionEntry *participantEntry = NULL;
+	bool entryFound = false;
+
+	if (xactParticipantHash == NULL)
+	{
+		return;
+	}
+
+	BuildKeyForConnection(connection, &nodeKey);
+
+	/* the participant hash doesn't use the user field */
+	MemSet(&nodeKey.nodeUser, 0, sizeof(nodeKey.nodeUser));
+	participantEntry = hash_search(xactParticipantHash, &nodeKey, HASH_FIND,
+								   &entryFound);
+
+	if (!entryFound)
+	{
+		ereport(FATAL, (errmsg("could not find specified transaction connection")));
+	}
+
+	participantEntry->connection = NULL;
 }
 
 
@@ -926,6 +966,7 @@ StoreQueryResult(MaterialState *routerState, PGconn *connection,
 
 			if (raiseError)
 			{
+				RemoveXactConnection(connection);
 				ReraiseRemoteError(connection, result);
 			}
 			else
@@ -1037,6 +1078,7 @@ ConsumeQueryResult(PGconn *connection, int64 *rows)
 
 			if (raiseError)
 			{
+				RemoveXactConnection(connection);
 				ReraiseRemoteError(connection, result);
 			}
 			else
