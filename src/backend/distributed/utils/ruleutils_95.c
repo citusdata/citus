@@ -3398,6 +3398,42 @@ get_utility_query_def(Query *query, deparse_context *context)
 			simple_quote_literal(buf, stmt->payload);
 		}
 	}
+	else if (query->utilityStmt && IsA(query->utilityStmt, TruncateStmt))
+	{
+		TruncateStmt *stmt = (TruncateStmt *) query->utilityStmt;
+		List *relationList = stmt->relations;
+		ListCell *relationCell = NULL;
+
+		appendContextKeyword(context, "",
+							 0, PRETTYINDENT_STD, 1);
+
+		appendStringInfo(buf, "TRUNCATE TABLE");
+
+		foreach(relationCell, relationList)
+		{
+			RangeVar *relationVar = (RangeVar *) lfirst(relationCell);
+			Oid relationId = RangeVarGetRelid(relationVar, NoLock, false);
+			char *relationName = generate_relation_or_shard_name(relationId,
+																 context->distrelid,
+																 context->shardid, NIL);
+			appendStringInfo(buf, " %s", relationName);
+
+			if (lnext(relationCell) != NULL)
+			{
+				appendStringInfo(buf, ",");
+			}
+		}
+
+		if (stmt->restart_seqs)
+		{
+			appendStringInfo(buf, " RESTART IDENTITY");
+		}
+
+		if (stmt->behavior == DROP_CASCADE)
+		{
+			appendStringInfo(buf, " CASCADE");
+		}
+	}
 	else
 	{
 		/* Currently only NOTIFY utility commands can appear in rules */
