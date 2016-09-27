@@ -156,17 +156,19 @@ SELECT title, author_id FROM articles
  alkylic     |         8
 (10 rows)
 
--- add in some grouping expressions.
--- it is supported if it is on the same shard, but not supported if it
--- involves multiple shards.
--- having queries unsupported in Citus
+-- add in some grouping expressions
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	WHERE author_id = 1 OR author_id = 2 OR author_id = 8 OR author_id = 10
 	GROUP BY author_id
 	HAVING sum(word_count) > 40000
 	ORDER BY sum(word_count) DESC;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Having qual is currently unsupported
+ author_id | corpus_size 
+-----------+-------------
+         2 |       61782
+        10 |       59955
+         8 |       55410
+(3 rows)
+
 -- UNION/INTERSECT queries are unsupported if on multiple shards
 SELECT * FROM articles WHERE author_id = 10 UNION
 SELECT * FROM articles WHERE author_id = 2; 
@@ -288,21 +290,91 @@ SELECT FROM articles WHERE word_count = 65500;
 --
 (0 rows)
 
--- having queries unsupported in Citus
+-- having queries supported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 25000
 	ORDER BY sum(word_count) DESC
 	LIMIT 5;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Having qual is currently unsupported
--- more proof Citus doesn't support having clauses
+ author_id | corpus_size 
+-----------+-------------
+         4 |       66325
+         2 |       61782
+        10 |       59955
+         8 |       55410
+         6 |       50867
+(5 rows)
+
 SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000
 	ORDER BY author_id;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Having qual is currently unsupported
+ author_id 
+-----------
+         2
+         4
+         6
+         8
+        10
+(5 rows)
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING sum(word_count) > 50000 AND author_id < 5
+	ORDER BY author_id;
+ author_id 
+-----------
+         2
+         4
+(2 rows)
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING sum(word_count) > 50000 OR author_id < 5
+	ORDER BY author_id;
+ author_id 
+-----------
+         1
+         2
+         3
+         4
+         6
+         8
+        10
+(7 rows)
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING author_id <= 2 OR author_id = 8
+	ORDER BY author_id;
+ author_id 
+-----------
+         1
+         2
+         8
+(3 rows)
+
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders 
+	GROUP BY o_orderstatus
+	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
+	ORDER BY o_orderstatus;
+ o_orderstatus | count |         avg         
+---------------+-------+---------------------
+ O             |  1460 | 143355.847013698630
+ P             |    75 | 164847.914533333333
+(2 rows)
+
+SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030
+	GROUP BY o_orderstatus
+	HAVING sum(l_linenumber) > 1000
+	ORDER BY o_orderstatus;
+ o_orderstatus | sum  |        avg         
+---------------+------+--------------------
+ F             | 8559 | 3.0126715945089757
+ O             | 8901 | 3.0050641458474004
+(2 rows)
+
 -- now, test the cases where Citus do or do not need to create
 -- the master queries
 SET citus.large_table_shard_count TO 2;
