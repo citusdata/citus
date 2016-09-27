@@ -361,13 +361,6 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 	Assert(!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY));
 	Assert(task != NULL);
 
-	/* we only support default scan direction and row fetch count */
-	if (!ScanDirectionIsForward(direction))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("scan directions other than forward scans "
-							   "are unsupported")));
-	}
 
 	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
 
@@ -382,6 +375,19 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 	if (sendTuples)
 	{
 		(*destination->rStartup)(destination, operation, queryDesc->tupDesc);
+	}
+
+	/* we only support returning nothing or scanning forward */
+	if (ScanDirectionIsNoMovement(direction))
+	{
+		/* comments in PortalRunSelect() explain the reason for this case */
+		goto out;
+	}
+	else if (!ScanDirectionIsForward(direction))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("scan directions other than forward scans "
+							   "are unsupported")));
 	}
 
 	/*
@@ -437,6 +443,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 			estate->es_processed += returnedRows;
 		}
 	}
+
+out:
 
 	/* shutdown tuple receiver, if we started it */
 	if (sendTuples)

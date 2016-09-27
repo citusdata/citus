@@ -577,7 +577,8 @@ DECLARE test_cursor CURSOR FOR
 		WHERE author_id = 1
 		ORDER BY id;
 FETCH test_cursor;
-FETCH test_cursor;
+FETCH ALL test_cursor;
+FETCH test_cursor; -- fetch one row after the last
 END;
 
 -- queries inside copy can be router plannable
@@ -634,7 +635,7 @@ $$ LANGUAGE plpgsql;
 
 SELECT author_articles_max_id();
 
--- plpgsql function that return query results are not router plannable
+-- check that function returning setof query are router plannable
 CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
