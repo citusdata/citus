@@ -13,7 +13,6 @@ EXTVERSIONS = 5.0 5.0-1 5.0-2  \
 DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*--*.sql))
 # Generated files for each version
 DATA_built = $(foreach v,$(EXTVERSIONS),$(EXTENSION)--$(v).sql)
-SCRIPTS = ../../bin/scripts/copy_to_distributed_table
 
 # directories with source files
 SUBDIRS = . commands executor master planner relay test transaction utils worker
