@@ -153,7 +153,7 @@ _PG_init(void)
 	WorkerNodeRegister();
 
 	/* initialize router executor callbacks */
-	InstallRouterExecutorShmemHook();
+	RegisterRouterExecutorXactCallbacks();
 }
 
 
