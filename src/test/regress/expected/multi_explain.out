@@ -43,7 +43,7 @@ Distributed Query into pg_merge_job_570000
               ->  Seq Scan on lineitem_290000 lineitem
 Master Query
   ->  Sort
-        Sort Key: (sum(((sum(intermediate_column_570000_1))::bigint)))::bigint, intermediate_column_570000_0
+        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570000_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570000_0
         ->  HashAggregate
               Group Key: intermediate_column_570000_0
               ->  Seq Scan on pg_merge_job_570000
@@ -87,7 +87,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       {
         "Plan": {
           "Node Type": "Sort",
-          "Sort Key": ["(sum(((sum(intermediate_column_570001_1))::bigint)))::bigint", "intermediate_column_570001_0"],
+          "Sort Key": ["COALESCE((sum((COALESCE((sum(intermediate_column_570001_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "intermediate_column_570001_0"],
           "Plans": [
             {
               "Node Type": "Aggregate",
@@ -156,7 +156,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
         <Plan>
           <Node-Type>Sort</Node-Type>
           <Sort-Key>
-            <Item>(sum(((sum(intermediate_column_570003_1))::bigint)))::bigint</Item>
+            <Item>COALESCE((sum((COALESCE((sum(intermediate_column_570003_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
             <Item>intermediate_column_570003_0</Item>
           </Sort-Key>
           <Plans>
@@ -213,7 +213,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     - Plan: 
         Node Type: "Sort"
         Sort Key: 
-          - "(sum(((sum(intermediate_column_570005_1))::bigint)))::bigint"
+          - "COALESCE((sum((COALESCE((sum(intermediate_column_570005_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
           - "intermediate_column_570005_0"
         Plans: 
           - Node Type: "Aggregate"
@@ -241,7 +241,7 @@ Distributed Query into pg_merge_job_570006
               ->  Seq Scan on lineitem_290000 lineitem
 Master Query
   ->  Sort
-        Sort Key: (sum(((sum(intermediate_column_570006_1))::bigint)))::bigint, intermediate_column_570006_0
+        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570006_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570006_0
         ->  HashAggregate
               Group Key: intermediate_column_570006_0
               ->  Seq Scan on pg_merge_job_570006

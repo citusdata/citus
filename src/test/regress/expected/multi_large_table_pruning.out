@@ -46,7 +46,7 @@ DEBUG:  predicate pruning for shardId 290006
 DEBUG:  predicate pruning for shardId 290007
  count 
 -------
-      
+     0
 (1 row)
 
 -- Single range-repartition join with a selection clause on the base table to
@@ -63,7 +63,7 @@ DEBUG:  predicate pruning for shardId 280001
 DEBUG:  predicate pruning for shardId 280000
  count 
 -------
-      
+     0
 (1 row)
 
 -- Dual hash-repartition join test case. Note that this query doesn't produce
@@ -125,7 +125,7 @@ DEBUG:  predicate pruning for shardId 290004
 DEBUG:  predicate pruning for shardId 290005
  count 
 -------
-      
+     0
 (1 row)
 
 -- Test cases with false in the WHERE clause

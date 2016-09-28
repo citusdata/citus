@@ -1499,6 +1499,10 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		 */
 		Var *column = NULL;
 		TargetEntry *columnTargetEntry = NULL;
+		CoerceViaIO *coerceExpr = NULL;
+		Const *zeroConst = NULL;
+		List *coalesceArgs = NULL;
+		CoalesceExpr *coalesceExpr = NULL;
 
 		/* worker aggregate and original aggregate have the same return type */
 		Oid workerReturnType = exprType((Node *) originalAggregate);
@@ -1523,7 +1527,25 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		columnTargetEntry = makeTargetEntry((Expr *) column, argumentId, NULL, false);
 		newMasterAggregate->args = list_make1(columnTargetEntry);
 
-		newMasterExpression = (Expr *) newMasterAggregate;
+		/* cast numeric sum result to bigint (count's return type) */
+		coerceExpr = makeNode(CoerceViaIO);
+		coerceExpr->arg = (Expr *) newMasterAggregate;
+		coerceExpr->resulttype = INT8OID;
+		coerceExpr->resultcollid = InvalidOid;
+		coerceExpr->coerceformat = COERCE_IMPLICIT_CAST;
+		coerceExpr->location = -1;
+
+		/* convert NULL to 0 in case of no rows */
+		zeroConst = MakeIntegerConstInt64(0);
+		coalesceArgs = list_make2(coerceExpr, zeroConst);
+
+		coalesceExpr = makeNode(CoalesceExpr);
+		coalesceExpr->coalescetype = INT8OID;
+		coalesceExpr->coalescecollid = InvalidOid;
+		coalesceExpr->args = coalesceArgs;
+		coalesceExpr->location = -1;
+
+		newMasterExpression = (Expr *) coalesceExpr;
 	}
 	else if (aggregateType == AGGREGATE_ARRAY_AGG)
 	{

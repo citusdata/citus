@@ -224,7 +224,7 @@ SELECT count(*) FROM lineitem
 	WHERE 0 != 0;
  count 
 -------
-      
+     0
 (1 row)
 
 -- distinct expressions can be pushed down
