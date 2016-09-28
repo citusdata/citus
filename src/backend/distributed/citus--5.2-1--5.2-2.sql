@@ -1,3 +1,5 @@
+/* citus--5.2-1--5.2-2.sql */
+
 CREATE OR REPLACE FUNCTION pg_catalog.citus_truncate_trigger()
 	RETURNS trigger
 	LANGUAGE plpgsql

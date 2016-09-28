@@ -165,3 +165,7 @@ test: multi_function_evaluation
 # multi_truncate tests truncate functionality for distributed tables
 # ----------
 test: multi_truncate
+# ----------
+# multi_expire_table_cache tests for broadcast tables
+# ----------
+test: multi_expire_table_cache
