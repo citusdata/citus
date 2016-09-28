@@ -155,7 +155,7 @@ _PG_init(void)
 
 	/* initialize transaction callbacks */
 	RegisterRouterExecutorXactCallbacks();
-	InstallMultiShardXactShmemHook();
+	RegisterShardPlacementXactCallbacks();
 }
 
 
