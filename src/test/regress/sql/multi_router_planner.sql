@@ -531,6 +531,119 @@ SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count
 	FROM articles_hash
 	WHERE author_id = 5 or author_id = 2;
 
+-- where false queries are router plannable
+SELECT * 
+	FROM articles_hash
+	WHERE false;
+
+SELECT * 
+	FROM articles_hash
+	WHERE author_id = 1 and false;
+
+SELECT * 
+	FROM articles_hash
+	WHERE author_id = 1 and 1=0;
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and false;
+
+SELECT * 
+	FROM articles_hash
+	WHERE null;
+
+-- where false with immutable function returning false
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id = 10 and int4eq(1, 2);
+
+SELECT * 
+	FROM articles_hash a
+	WHERE int4eq(1, 2);
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 1);
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 2);
+
+-- stable function returning bool
+SELECT * 
+	FROM articles_hash a
+	WHERE date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
+
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash a, articles_single_shard_hash b
+	WHERE a.author_id = 10 and a.author_id = b.author_id and
+		date_ne_timestamp('1954-04-11', '1954-04-11'::timestamp);
+-- union/difference /intersection with where false
+-- this query was not originally router plannable, addition of 1=0
+-- makes it router plannable
+(SELECT * FROM articles_hash WHERE author_id = 1)
+UNION
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+
+(SELECT * FROM articles_hash WHERE author_id = 1)
+EXCEPT
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+
+(SELECT * FROM articles_hash WHERE author_id = 1)
+INTERSECT
+(SELECT * FROM articles_hash WHERE author_id = 2 and 1=0);
+
+-- CTEs with where false
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 1 and 1=0)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+
+WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash WHERE author_id = 1)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id and 1=0;
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2 and 1=0;
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1 AND 1=0))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees
+		WHERE company_id = 1 and manager_id = 0 AND 1=0
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+
+
+-- window functions with where false
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
+	FROM articles_hash 
+	WHERE author_id = 1 and 1=0;
+
 -- complex query hitting a single shard 	
 SELECT
 	count(DISTINCT CASE
