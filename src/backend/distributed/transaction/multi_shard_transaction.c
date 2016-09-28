@@ -27,11 +27,9 @@
 
 /* Global variables used in commit handler */
 static HTAB *shardConnectionHash = NULL;
-static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static bool subXactAbortAttempted = false;
 
 /* functions needed by callbacks and hooks */
-static void RegisterShardPlacementXactCallbacks(void);
 static void CompleteShardPlacementTransactions(XactEvent event, void *arg);
 static void MultiShardSubXactCallback(SubXactEvent event, SubTransactionId subId,
 									  SubTransactionId parentSubid, void *arg);
@@ -229,32 +227,14 @@ ConnectionList(HTAB *connectionHash)
 
 
 /*
- * InstallMultiShardXactShmemHook simply installs a hook (intended to be called
- * once during backend startup), which will itself register all the transaction
- * callbacks needed by multi-shard transaction logic.
+ * RegisterShardPlacementXactCallbacks registers transaction callbacks needed
+ * for multi-shard transactions.
  */
 void
-InstallMultiShardXactShmemHook(void)
-{
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = RegisterShardPlacementXactCallbacks;
-}
-
-
-/*
- * RegisterShardPlacementXactCallbacks registers transaction callbacks needed
- * for multi-shard transactions before calling previous shmem startup hooks.
- */
-static void
 RegisterShardPlacementXactCallbacks(void)
 {
 	RegisterXactCallback(CompleteShardPlacementTransactions, NULL);
 	RegisterSubXactCallback(MultiShardSubXactCallback, NULL);
-
-	if (prev_shmem_startup_hook != NULL)
-	{
-		prev_shmem_startup_hook();
-	}
 }
 
 
