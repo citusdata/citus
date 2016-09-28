@@ -883,7 +883,7 @@ MultiClientWait(WaitInfo *waitInfo)
 		}
 		else if (rc == 0)
 		{
-			ereport(DEBUG2,
+			ereport(DEBUG5,
 					(errmsg("waiting for activity on tasks took longer than %ld ms",
 							(long) RemoteTaskCheckInterval * 10)));
 		}
