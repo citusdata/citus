@@ -134,6 +134,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	Assert(masterQuery->hasAggs || masterQuery->groupClause);
 
 	aggregateTargetList = masterQuery->targetList;
+	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
 	count_agg_clauses(NULL, (Node *) aggregateTargetList, &aggregateCosts);
 
 	/*
