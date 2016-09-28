@@ -80,7 +80,6 @@ bool AllModificationsCommutative = false;
  */
 static HTAB *xactParticipantHash = NULL;
 static List *xactShardConnSetList = NIL;
-static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static bool subXactAbortAttempted = false;
 
 /* functions needed during start phase */
@@ -113,7 +112,6 @@ static void RecordShardIdParticipant(uint64 affectedShardId,
 									 NodeConnectionEntry *participantEntry);
 
 /* functions needed by callbacks and hooks */
-static void RegisterRouterExecutorXactCallbacks(void);
 static void RouterTransactionCallback(XactEvent event, void *arg);
 static void RouterSubtransactionCallback(SubXactEvent event, SubTransactionId subId,
 										 SubTransactionId parentSubid, void *arg);
@@ -1202,32 +1200,13 @@ RouterExecutorEnd(QueryDesc *queryDesc)
 
 
 /*
- * InstallRouterExecutorShmemHook simply installs a hook (intended to be called
- * once during backend startup), which will itself register all the transaction
- * callbacks needed by this executor.
+ * RegisterRouterExecutorXactCallbacks registers this executor's callbacks.
  */
 void
-InstallRouterExecutorShmemHook(void)
-{
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = RegisterRouterExecutorXactCallbacks;
-}
-
-
-/*
- * RegisterRouterExecutorXactCallbacks registers (sub-)transaction callbacks
- * needed by this executor before calling any previous shmem startup hooks.
- */
-static void
 RegisterRouterExecutorXactCallbacks(void)
 {
 	RegisterXactCallback(RouterTransactionCallback, NULL);
 	RegisterSubXactCallback(RouterSubtransactionCallback, NULL);
-
-	if (prev_shmem_startup_hook != NULL)
-	{
-		prev_shmem_startup_hook();
-	}
 }
 
 

@@ -37,6 +37,6 @@ extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task);
 extern void RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count);
 extern void RouterExecutorFinish(QueryDesc *queryDesc);
 extern void RouterExecutorEnd(QueryDesc *queryDesc);
-extern void InstallRouterExecutorShmemHook(void);
+extern void RegisterRouterExecutorXactCallbacks(void);
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */
