@@ -221,6 +221,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	char *partitionKeyString = NULL;
 	char partitionMethod = 0;
 	uint64 colocationId = INVALID_COLOCATION_ID;
+	char replicationModel = 0;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	ShardInterval **shardIntervalArray = NULL;
@@ -258,6 +259,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		Form_pg_dist_partition partitionForm =
 			(Form_pg_dist_partition) GETSTRUCT(distPartitionTuple);
 		Datum partitionKeyDatum = 0;
+		Datum replicationModelDatum = 0;
 		MemoryContext oldContext = NULL;
 		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 		bool isNull = false;
@@ -276,9 +278,16 @@ LookupDistTableCacheEntry(Oid relationId)
 			colocationId = INVALID_COLOCATION_ID;
 		}
 
+		replicationModelDatum = heap_getattr(distPartitionTuple,
+											 Anum_pg_dist_partition_repmodel,
+											 tupleDescriptor,
+											 &isNull);
+		Assert(!isNull);
+
 		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 		partitionKeyString = TextDatumGetCString(partitionKeyDatum);
 		partitionMethod = partitionForm->partmethod;
+		replicationModel = DatumGetChar(replicationModelDatum);
 
 		MemoryContextSwitchTo(oldContext);
 
@@ -391,6 +400,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		cacheEntry->partitionKeyString = partitionKeyString;
 		cacheEntry->partitionMethod = partitionMethod;
 		cacheEntry->colocationId = colocationId;
+		cacheEntry->replicationModel = replicationModel;
 		cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
 		cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 		cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
