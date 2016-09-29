@@ -48,8 +48,8 @@ SELECT 1 FROM master_create_empty_shard('testtableddl');
 DROP TABLE testtableddl;
 -- ensure no metadata of distributed tables are remaining
 SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey 
---------------+------------+---------
+ logicalrelid | partmethod | partkey | colocationid 
+--------------+------------+---------+--------------
 (0 rows)
 
 SELECT * FROM pg_dist_shard;

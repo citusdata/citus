@@ -165,7 +165,13 @@ test: multi_function_evaluation
 # multi_truncate tests truncate functionality for distributed tables
 # ----------
 test: multi_truncate
+
 # ----------
 # multi_expire_table_cache tests for broadcast tables
 # ----------
 test: multi_expire_table_cache
+
+# ----------
+# multi_colocation_utils tests utility functions written for co-location feature & internal API
+# ----------
+test: multi_colocation_utils

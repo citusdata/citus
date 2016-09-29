@@ -23,6 +23,7 @@
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_partition.h"
@@ -50,6 +51,7 @@ static Oid distShardRelationId = InvalidOid;
 static Oid distShardPlacementRelationId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
+static Oid distPartitionColocationidIndexId = InvalidOid;
 static Oid distShardLogicalRelidIndexId = InvalidOid;
 static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
@@ -218,6 +220,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	HeapTuple distPartitionTuple = NULL;
 	char *partitionKeyString = NULL;
 	char partitionMethod = 0;
+	uint64 colocationId = INVALID_COLOCATION_ID;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	ShardInterval **shardIntervalArray = NULL;
@@ -256,13 +259,22 @@ LookupDistTableCacheEntry(Oid relationId)
 			(Form_pg_dist_partition) GETSTRUCT(distPartitionTuple);
 		Datum partitionKeyDatum = 0;
 		MemoryContext oldContext = NULL;
+		TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 		bool isNull = false;
 
 		partitionKeyDatum = heap_getattr(distPartitionTuple,
 										 Anum_pg_dist_partition_partkey,
-										 RelationGetDescr(pgDistPartition),
+										 tupleDescriptor,
 										 &isNull);
 		Assert(!isNull);
+
+		colocationId = heap_getattr(distPartitionTuple,
+									Anum_pg_dist_partition_colocationid, tupleDescriptor,
+									&isNull);
+		if (isNull)
+		{
+			colocationId = INVALID_COLOCATION_ID;
+		}
 
 		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 		partitionKeyString = TextDatumGetCString(partitionKeyDatum);
@@ -378,6 +390,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		cacheEntry->isDistributedTable = true;
 		cacheEntry->partitionKeyString = partitionKeyString;
 		cacheEntry->partitionMethod = partitionMethod;
+		cacheEntry->colocationId = colocationId;
 		cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
 		cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 		cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
@@ -611,6 +624,17 @@ DistPartitionLogicalRelidIndexId(void)
 						 &distPartitionLogicalRelidIndexId);
 
 	return distPartitionLogicalRelidIndexId;
+}
+
+
+/* return oid of pg_dist_partition_colocationid_index index */
+Oid
+DistPartitionColocationidIndexId(void)
+{
+	CachedRelationLookup("pg_dist_partition_colocationid_index",
+						 &distPartitionColocationidIndexId);
+
+	return distPartitionColocationidIndexId;
 }
 
 
@@ -1013,6 +1037,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardPlacementRelationId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
+		distPartitionColocationidIndexId = InvalidOid;
 		distShardLogicalRelidIndexId = InvalidOid;
 		distShardShardidIndexId = InvalidOid;
 		distShardPlacementShardidIndexId = InvalidOid;
