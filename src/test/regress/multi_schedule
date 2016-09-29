@@ -128,6 +128,7 @@ test: multi_simple_queries
 test: multi_utilities
 test: multi_create_insert_proxy
 test: multi_data_types
+test: multi_repartition_udt
 test: multi_repartitioned_subquery_udf
 test: multi_modifying_xacts
 
