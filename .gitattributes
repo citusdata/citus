@@ -32,10 +32,3 @@ src/backend/distributed/utils/citus_readfuncs_95.c -citus-style
 src/backend/distributed/utils/ruleutils_94.c -citus-style
 src/backend/distributed/utils/ruleutils_95.c -citus-style
 src/include/distributed/citus_nodes.h -citus-style
-
-# all csql files use PostgreSQL style...
-src/bin/csql/*.[ch] -citus-style
-
-# except these exceptions
-src/bin/csql/copy_options.c citus-style
-src/bin/csql/stage.[ch] citus-style
