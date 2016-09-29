@@ -38,6 +38,7 @@ typedef struct
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;
 	char partitionMethod;
+	uint64 colocationId;
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
@@ -62,6 +63,7 @@ extern Oid DistShardPlacementRelationId(void);
 
 /* index oids */
 extern Oid DistPartitionLogicalRelidIndexId(void);
+extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);
