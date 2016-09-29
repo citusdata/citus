@@ -154,8 +154,8 @@ _PG_init(void)
 	WorkerNodeRegister();
 
 	/* initialize transaction callbacks */
-	InstallRouterExecutorShmemHook();
-	InstallMultiShardXactShmemHook();
+	RegisterRouterExecutorXactCallbacks();
+	RegisterShardPlacementXactCallbacks();
 }
 
 
