@@ -29,5 +29,6 @@ extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
+extern Query * ReorderInsertSelectTargetListsIfExists(Query *originalQuery);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
