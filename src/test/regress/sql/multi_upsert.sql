@@ -1,6 +1,4 @@
 -- this test file aims to test UPSERT feature on Citus
--- note that output of this file for postgresql 9.4 will
--- be full syntax errors, which is expected.
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 980000;
