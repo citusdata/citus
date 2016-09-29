@@ -11,7 +11,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1130000;
 \set TaskId 101103
 \set Partition_Column l_orderkey
 \set Partition_Column_Text '\'l_orderkey\''
-\set Partition_Column_Type 20
+\set Partition_Column_Type '\'int8\''
 \set Partition_Count 4
 
 \set Select_Query_Text '\'SELECT * FROM lineitem\''
@@ -34,7 +34,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1130000;
 -- Run select query, and apply hash partitioning on query results
 
 SELECT worker_hash_partition_table(:JobId, :TaskId, :Select_Query_Text,
-       				   :Partition_Column_Text, :Partition_Column_Type,
+       				   :Partition_Column_Text, :Partition_Column_Type::regtype,
 				   :Partition_Count);
 
 COPY :Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101103/p_00000';
