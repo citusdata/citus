@@ -51,7 +51,7 @@ check-multi: all tempinstall-main
 
 check-multi-hll: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --load-extension=hll -- \
-	$(MULTI_REGRESS_OPTS) $(EXTRA_TESTS) multi_create_table multi_master_protocol multi_stage_data multi_agg_approximate_distinct
+	$(MULTI_REGRESS_OPTS) $(EXTRA_TESTS) multi_create_table multi_master_protocol multi_load_data multi_agg_approximate_distinct
 
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
