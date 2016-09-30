@@ -55,6 +55,9 @@ SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'lo
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_1_port;
 
+-- we are done with dummyhost, it is safe to remove it
+DELETE FROM pg_dist_shard_placement WHERE nodename = 'dummyhost';
+
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
 

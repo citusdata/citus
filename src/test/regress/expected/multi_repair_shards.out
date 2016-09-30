@@ -55,6 +55,8 @@ SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'lo
 
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_1_port;
+-- we are done with dummyhost, it is safe to remove it
+DELETE FROM pg_dist_shard_placement WHERE nodename = 'dummyhost';
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
  id | created_at |  event_data  
@@ -93,4 +95,4 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :remotenewshar
 -- oops! we don't support repairing shards backed by foreign tables
 SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  cannot repair shard
-DETAIL:  Repairing shards backed by foreign tables is not supported.
+DETAIL:  Table remote_engagements is a foreign table. Repairing shards backed by foreign tables is not supported.

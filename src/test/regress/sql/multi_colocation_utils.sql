@@ -57,11 +57,6 @@ CREATE FUNCTION shards_colocated(bigint, bigint)
     AS 'citus'
     LANGUAGE C STRICT;
 
-CREATE FUNCTION get_colocated_table_array(regclass)
-    RETURNS regclass[]
-    AS 'citus'
-    LANGUAGE C STRICT;
-
 CREATE FUNCTION get_colocated_shard_array(bigint)
     RETURNS BIGINT[]
     AS 'citus'
@@ -79,23 +74,23 @@ CREATE FUNCTION find_shard_interval_index(bigint)
 -- create distributed table observe shard pruning
 CREATE TABLE table1_group1 ( id int );
 SELECT master_create_distributed_table('table1_group1', 'id', 'hash');
-SELECT master_create_worker_shards('table1_group1', 4, 1);
+SELECT master_create_worker_shards('table1_group1', 4, 2);
 
 CREATE TABLE table2_group1 ( id int );
 SELECT master_create_distributed_table('table2_group1', 'id', 'hash');
-SELECT master_create_worker_shards('table2_group1', 4, 1);
+SELECT master_create_worker_shards('table2_group1', 4, 2);
 
 CREATE TABLE table3_group2 ( id int );
 SELECT master_create_distributed_table('table3_group2', 'id', 'hash');
-SELECT master_create_worker_shards('table3_group2', 4, 1);
+SELECT master_create_worker_shards('table3_group2', 4, 2);
 
 CREATE TABLE table4_group2 ( id int );
 SELECT master_create_distributed_table('table4_group2', 'id', 'hash');
-SELECT master_create_worker_shards('table4_group2', 4, 1);
+SELECT master_create_worker_shards('table4_group2', 4, 2);
 
 CREATE TABLE table5_groupX ( id int );
 SELECT master_create_distributed_table('table5_groupX', 'id', 'hash');
-SELECT master_create_worker_shards('table5_groupX', 4, 1);
+SELECT master_create_worker_shards('table5_groupX', 4, 2);
 
 CREATE TABLE table6_append ( id int );
 SELECT master_create_distributed_table('table6_append', 'id', 'append');
