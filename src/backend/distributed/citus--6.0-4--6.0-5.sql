@@ -26,3 +26,4 @@ CREATE FUNCTION master_get_new_placementid()
     AS 'MODULE_PATHNAME', $$master_get_new_placementid$$;
 COMMENT ON FUNCTION master_get_new_placementid()
     IS 'fetch unique placementid';
+
