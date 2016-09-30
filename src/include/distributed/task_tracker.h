@@ -98,7 +98,9 @@ typedef struct WorkerTasksSharedStateData
 	HTAB *taskHash;
 
 	/* Lock protecting workerNodesHash */
-	LWLock *taskHashLock;
+	int taskHashTrancheId;
+	LWLockTranche taskHashLockTranche;
+	LWLock taskHashLock;
 } WorkerTasksSharedStateData;
 
 
