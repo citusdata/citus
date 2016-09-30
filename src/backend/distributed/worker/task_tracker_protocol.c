@@ -100,7 +100,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 		UnlockJobResource(jobId, AccessExclusiveLock);
 	}
 
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	/* check if we already have the task in our shared hash */
 	workerTask = WorkerTasksHashFind(jobId, taskId);
@@ -113,7 +113,7 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 		UpdateTask(workerTask, taskCallString);
 	}
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
 	PG_RETURN_VOID();
 }
@@ -132,7 +132,7 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 	bool taskTrackerRunning = TaskTrackerRunning();
 	if (taskTrackerRunning)
 	{
-		LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_SHARED);
+		LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 
 		workerTask = WorkerTasksHashFind(jobId, taskId);
 		if (workerTask == NULL)
@@ -144,7 +144,7 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 
 		taskStatus = (uint32) workerTask->taskStatus;
 
-		LWLockRelease(WorkerTasksSharedState->taskHashLock);
+		LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 	}
 	else
 	{
@@ -174,7 +174,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * We first clean up any open connections, and remove tasks belonging to
 	 * this job from the shared hash.
 	 */
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
 	hash_seq_init(&status, WorkerTasksSharedState->taskHash);
 
@@ -189,7 +189,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 		currentTask = (WorkerTask *) hash_seq_search(&status);
 	}
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
 	/*
 	 * We then delete the job directory and schema, if they exist. This cleans
@@ -233,7 +233,7 @@ TaskTrackerRunning(void)
 	 * marker task to the shared hash. We need to look up this marker task since
 	 * the postmaster doesn't send a terminate signal to running backends.
 	 */
-	LWLockAcquire(WorkerTasksSharedState->taskHashLock, LW_SHARED);
+	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
 
 	workerTask = WorkerTasksHashFind(RESERVED_JOB_ID, SHUTDOWN_MARKER_TASK_ID);
 	if (workerTask != NULL)
@@ -241,7 +241,7 @@ TaskTrackerRunning(void)
 		taskTrackerRunning = false;
 	}
 
-	LWLockRelease(WorkerTasksSharedState->taskHashLock);
+	LWLockRelease(&WorkerTasksSharedState->taskHashLock);
 
 	return taskTrackerRunning;
 }
