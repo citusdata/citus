@@ -424,11 +424,12 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 
 	simple_heap_insert(pgDistShard, heapTuple);
 	CatalogUpdateIndexes(pgDistShard, heapTuple);
-	CommandCounterIncrement();
 
-	/* close relation and invalidate previous cache entry */
-	heap_close(pgDistShard, RowExclusiveLock);
+	/* invalidate previous cache entry and close relation */
 	CitusInvalidateRelcacheByRelid(relationId);
+
+	CommandCounterIncrement();
+	heap_close(pgDistShard, RowExclusiveLock);
 }
 
 
@@ -464,9 +465,8 @@ InsertShardPlacementRow(uint64 shardId, char shardState, uint64 shardLength,
 
 	simple_heap_insert(pgDistShardPlacement, heapTuple);
 	CatalogUpdateIndexes(pgDistShardPlacement, heapTuple);
-	CommandCounterIncrement();
 
-	/* close relation */
+	CommandCounterIncrement();
 	heap_close(pgDistShardPlacement, RowExclusiveLock);
 }
 
@@ -507,13 +507,14 @@ DeleteShardRow(uint64 shardId)
 	distributedRelationId = pgDistShardForm->logicalrelid;
 
 	simple_heap_delete(pgDistShard, &heapTuple->t_self);
-	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistShard, RowExclusiveLock);
 
 	/* invalidate previous cache entry */
 	CitusInvalidateRelcacheByRelid(distributedRelationId);
+
+	CommandCounterIncrement();
+	heap_close(pgDistShard, RowExclusiveLock);
 }
 
 
@@ -567,9 +568,9 @@ DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32 workerPort)
 	}
 
 	simple_heap_delete(pgDistShardPlacement, &heapTuple->t_self);
-	CommandCounterIncrement();
-
 	systable_endscan(scanDescriptor);
+
+	CommandCounterIncrement();
 	heap_close(pgDistShardPlacement, RowExclusiveLock);
 }
 
