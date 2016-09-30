@@ -89,9 +89,15 @@ FakeGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 	Cost startup_cost = 0;
 	Cost total_cost = startup_cost + baserel->rows;
 
+#if (PG_VERSION_NUM >= 90600)
+	add_path(baserel, (Path *) create_foreignscan_path(root, baserel, NULL, baserel->rows,
+													   startup_cost, total_cost, NIL,
+													   NULL, NULL, NIL));
+#else
 	add_path(baserel, (Path *) create_foreignscan_path(root, baserel, baserel->rows,
 													   startup_cost, total_cost, NIL,
 													   NULL, NULL, NIL));
+#endif
 }
 
 

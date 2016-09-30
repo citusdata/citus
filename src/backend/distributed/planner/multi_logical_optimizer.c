@@ -1526,6 +1526,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfnoid = sumFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
+#if (PG_VERSION_NUM >= 90600)
+		newMasterAggregate->aggtranstype = INTERNALOID;
+		newMasterAggregate->aggargtypes = list_make1_oid(NUMERICOID);
+		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
@@ -1682,6 +1687,11 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	firstSum->aggtype = get_func_rettype(firstSum->aggfnoid);
 	firstSum->args = list_make1(firstTargetEntry);
 	firstSum->aggkind = AGGKIND_NORMAL;
+#if (PG_VERSION_NUM >= 90600)
+	firstSum->aggtranstype = INTERNALOID;
+	firstSum->aggargtypes = list_make1_oid(NUMERICOID);
+	firstSum->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 	/* create the second argument for sum(column2) */
 	secondColumn = makeVar(masterTableId, (*columnId), countAggregateType,
@@ -1694,6 +1704,11 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	secondSum->aggtype = get_func_rettype(secondSum->aggfnoid);
 	secondSum->args = list_make1(secondTargetEntry);
 	secondSum->aggkind = AGGKIND_NORMAL;
+#if (PG_VERSION_NUM >= 90600)
+	secondSum->aggtranstype = INTERNALOID;
+	secondSum->aggargtypes = list_make1_oid(NUMERICOID);
+	secondSum->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 	/*
 	 * Build the division operator between these two aggregates. This function
@@ -2365,8 +2380,17 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 	MultiExtendedOp *extendedOpNode = (MultiExtendedOp *) linitial(opNodeList);
 
 	List *targetList = extendedOpNode->targetList;
+#if (PG_VERSION_NUM >= 90600)
+
+	/*
+	 * PVC_REJECT_PLACEHOLDERS is now implicit if PVC_INCLUDE_PLACEHOLDERS
+	 * isn't specified.
+	 */
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
+#else
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES,
 										   PVC_REJECT_PLACEHOLDERS);
+#endif
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)

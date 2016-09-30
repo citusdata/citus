@@ -200,7 +200,7 @@ CopyQueryResults(List *masterCopyStmtList)
 
 /* Execute query plan. */
 void
-multi_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
+multi_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, tuplecount_t count)
 {
 	int eflags = queryDesc->estate->es_top_eflags;
 

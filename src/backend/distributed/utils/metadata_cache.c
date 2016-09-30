@@ -18,6 +18,7 @@
 #include "access/xact.h"
 #include "access/sysattr.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_am.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"

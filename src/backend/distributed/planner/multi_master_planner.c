@@ -140,9 +140,13 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	havingQual = masterQuery->havingQual;
 
 	/* estimate aggregate execution costs */
-	MemSet(&aggregateCosts, 0, sizeof(AggClauseCosts));
+	memset(&aggregateCosts, 0, sizeof(AggClauseCosts));
+#if (PG_VERSION_NUM >= 90600)
+	get_agg_clause_costs(NULL, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
+						 &aggregateCosts);
+#else
 	count_agg_clauses(NULL, (Node *) aggregateTargetList, &aggregateCosts);
-	count_agg_clauses(NULL, havingQual, &aggregateCosts);
+#endif
 
 	/*
 	 * For upper level plans above the sequential scan, the planner expects the
@@ -178,10 +182,16 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	}
 
 	/* finally create the plan */
-	aggregatePlan = make_agg(NULL, aggregateTargetList, (List *) havingQual,
-							 aggregateStrategy, &aggregateCosts, groupColumnCount,
-							 groupColumnIdArray, groupColumnOpArray, NIL,
+#if (PG_VERSION_NUM >= 90600)
+	aggregatePlan = make_agg(aggregateTargetList, (List *) havingQual, aggregateStrategy,
+							 AGGSPLIT_SIMPLE, groupColumnCount, groupColumnIdArray,
+							 groupColumnOpArray, NIL, NIL,
 							 rowEstimate, subPlan);
+#else
+	aggregatePlan = make_agg(NULL, aggregateTargetList, (List *) havingQual, aggregateStrategy,
+							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
+							 groupColumnOpArray, NIL, rowEstimate, subPlan);
+#endif
 
 	return aggregatePlan;
 }
@@ -247,7 +257,11 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 	if (masterQuery->sortClause)
 	{
 		List *sortClauseList = masterQuery->sortClause;
+#if (PG_VERSION_NUM >= 90600)
+		Sort *sortPlan = make_sort_from_sortclauses(sortClauseList, topLevelPlan);
+#else
 		Sort *sortPlan = make_sort_from_sortclauses(NULL, sortClauseList, topLevelPlan);
+#endif
 		topLevelPlan = (Plan *) sortPlan;
 	}
 
@@ -256,11 +270,15 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 	{
 		Node *limitCount = masterQuery->limitCount;
 		Node *limitOffset = masterQuery->limitOffset;
+#if (PG_VERSION_NUM >= 90600)
+		Limit *limitPlan = make_limit(topLevelPlan, limitOffset, limitCount);
+#else
 		int64 offsetEstimate = 0;
 		int64 countEstimate = 0;
 
 		Limit *limitPlan = make_limit(topLevelPlan, limitOffset, limitCount,
 									  offsetEstimate, countEstimate);
+#endif
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
