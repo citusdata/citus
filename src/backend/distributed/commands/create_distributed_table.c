@@ -16,6 +16,7 @@
 #include "access/htup.h"
 #include "access/htup_details.h"
 #include "access/nbtree.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/indexing.h"
@@ -298,6 +299,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	CitusInvalidateRelcacheByRelid(distributedRelationId);
 
 	RecordDistributedRelationDependencies(distributedRelationId, distributionKey);
+
+	CommandCounterIncrement();
 
 	heap_close(pgDistPartition, NoLock);
 	relation_close(distributedRelation, NoLock);
