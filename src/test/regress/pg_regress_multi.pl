@@ -298,10 +298,6 @@ if ($majorversion eq '9.5')
 {
     push(@arguments, '--bindir', "tmp_check/tmp-bin");
 }
-elsif ($majorversion eq '9.4')
-{
-    push(@arguments, '--psqldir', "tmp_check/tmp-bin");
-}
 else
 {
     die "Citus is not compatible with the detected PostgreSQL version $majorversion";
