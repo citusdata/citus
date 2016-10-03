@@ -768,8 +768,6 @@ CREATE MATERIALIZED VIEW mv_articles_hash AS
 
 SELECT * FROM mv_articles_hash;
 
-DROP MATERIALIZED VIEW mv_articles_hash;
-
 CREATE MATERIALIZED VIEW mv_articles_hash_error AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
 	
@@ -792,6 +790,8 @@ SET client_min_messages to 'NOTICE';
 
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
+
+DROP MATERIALIZED VIEW mv_articles_hash;
 
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
