@@ -26,6 +26,7 @@
 
 /* Directory, file, table name, and UDF related defines for distributed tasks */
 #define PG_JOB_CACHE_DIR "pgsql_job_cache"
+#define MASTER_JOB_DIRECTORY_PREFIX "master_job_"
 #define JOB_DIRECTORY_PREFIX "job_"
 #define JOB_SCHEMA_PREFIX "pg_merge_job_"
 #define TASK_FILE_PREFIX "task_"
@@ -107,6 +108,7 @@ extern StringInfo JobSchemaName(uint64 jobId);
 extern StringInfo TaskTableName(uint32 taskId);
 extern bool JobSchemaExists(StringInfo schemaName);
 extern StringInfo JobDirectoryName(uint64 jobId);
+extern StringInfo MasterJobDirectoryName(uint64 jobId);
 extern StringInfo TaskDirectoryName(uint64 jobId, uint32 taskId);
 extern StringInfo PartitionFilename(StringInfo directoryName, uint32 partitionId);
 extern bool CacheDirectoryElement(const char *filename);

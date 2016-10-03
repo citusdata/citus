@@ -514,7 +514,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			queryStatus = MultiClientQueryStatus(connectionId);
 			if (queryStatus == CLIENT_QUERY_COPY)
 			{
-				StringInfo jobDirectoryName = JobDirectoryName(task->jobId);
+				StringInfo jobDirectoryName = MasterJobDirectoryName(task->jobId);
 				StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
 
 				char *filename = taskFilename->data;

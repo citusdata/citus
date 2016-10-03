@@ -204,7 +204,7 @@ MaxMasterConnectionCount(void)
 void
 RemoveJobDirectory(uint64 jobId)
 {
-	StringInfo jobDirectoryName = JobDirectoryName(jobId);
+	StringInfo jobDirectoryName = MasterJobDirectoryName(jobId);
 	RemoveDirectory(jobDirectoryName);
 
 	ResourceOwnerForgetJobDirectory(CurrentResourceOwner, jobId);
