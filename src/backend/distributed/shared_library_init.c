@@ -392,7 +392,7 @@ RegisterCitusConfigVariables(void)
 					 "before walking over these tasks again. This configuration "
 					 "value determines the length of that sleeping period."),
 		&TaskTrackerDelay,
-		200, 10, 100000,
+		200, 1, 100000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
