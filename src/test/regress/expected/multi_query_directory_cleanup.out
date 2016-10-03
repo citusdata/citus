@@ -96,28 +96,28 @@ DECLARE c_17 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM
 DECLARE c_18 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
 DECLARE c_19 CURSOR FOR SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
-    f     
-----------
- job_1256
- job_1257
- job_1258
- job_1259
- job_1260
- job_1261
- job_1262
- job_1263
- job_1264
- job_1265
- job_1266
- job_1267
- job_1268
- job_1269
- job_1270
- job_1271
- job_1272
- job_1273
- job_1274
- job_1275
+        f        
+-----------------
+ master_job_1256
+ master_job_1257
+ master_job_1258
+ master_job_1259
+ master_job_1260
+ master_job_1261
+ master_job_1262
+ master_job_1263
+ master_job_1264
+ master_job_1265
+ master_job_1266
+ master_job_1267
+ master_job_1268
+ master_job_1269
+ master_job_1270
+ master_job_1271
+ master_job_1272
+ master_job_1273
+ master_job_1274
+ master_job_1275
 (20 rows)
 
 -- close first, 17th (first after re-alloc) and last cursor.
@@ -125,25 +125,25 @@ CLOSE c_00;
 CLOSE c_16;
 CLOSE c_19;
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
-    f     
-----------
- job_1257
- job_1258
- job_1259
- job_1260
- job_1261
- job_1262
- job_1263
- job_1264
- job_1265
- job_1266
- job_1267
- job_1268
- job_1269
- job_1270
- job_1271
- job_1273
- job_1274
+        f        
+-----------------
+ master_job_1257
+ master_job_1258
+ master_job_1259
+ master_job_1260
+ master_job_1261
+ master_job_1262
+ master_job_1263
+ master_job_1264
+ master_job_1265
+ master_job_1266
+ master_job_1267
+ master_job_1268
+ master_job_1269
+ master_job_1270
+ master_job_1271
+ master_job_1273
+ master_job_1274
 (17 rows)
 
 ROLLBACK;
