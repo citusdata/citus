@@ -4151,6 +4151,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 	ListCell *filterTaskCell = NULL;
 	Var *partitionColumn = mapMergeJob->partitionColumn;
 	Oid partitionColumnType = partitionColumn->vartype;
+	char *partitionColumnTypeFullName = format_type_be_qualified(partitionColumnType);
 	int32 partitionColumnTypeMod = partitionColumn->vartypmod;
 	char *partitionColumnName = NULL;
 
@@ -4194,7 +4195,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 
 			appendStringInfo(mapQueryString, RANGE_PARTITION_COMMAND, jobId, taskId,
 							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnType, splitPointString->data);
+							 partitionColumnTypeFullName, splitPointString->data);
 		}
 		else
 		{
@@ -4202,7 +4203,7 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 
 			appendStringInfo(mapQueryString, HASH_PARTITION_COMMAND, jobId, taskId,
 							 filterQueryEscapedText, partitionColumnName,
-							 partitionColumnType, partitionCount);
+							 partitionColumnTypeFullName, partitionCount);
 		}
 
 		/* convert filter query task into map task */
