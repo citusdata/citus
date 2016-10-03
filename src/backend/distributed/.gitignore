@@ -10,6 +10,6 @@
 /tmp_check*
 
 # ignore latest install file
-citus--5.0.sql
-citus--5.?-*.sql
-!citus--5.?-*--5.?-*.sql
+citus--?.?.sql
+citus--?.?-*.sql
+!citus--?.?-*--?.?-*.sql

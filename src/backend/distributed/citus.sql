@@ -29,7 +29,7 @@ CREATE TYPE citus.distribution_type AS ENUM (
  * Citus tables & corresponding indexes
  *****************************************************************************/
 CREATE TABLE citus.pg_dist_partition(
-    logicalrelid Oid NOT NULL,
+    logicalrelid Oid NOT NULL,    /* type changed to regclass as of version 6.0-1 */
     partmethod "char" NOT NULL,
     partkey text NOT NULL
 );
@@ -39,7 +39,7 @@ ON citus.pg_dist_partition using btree(logicalrelid);
 ALTER TABLE citus.pg_dist_partition SET SCHEMA pg_catalog;
 
 CREATE TABLE citus.pg_dist_shard(
-    logicalrelid oid NOT NULL,
+    logicalrelid oid NOT NULL,    /* type changed to regclass as of version 6.0-1 */
     shardid int8 NOT NULL,
     shardstorage "char" NOT NULL,
     shardalias text,
