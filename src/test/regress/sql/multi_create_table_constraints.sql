@@ -100,6 +100,19 @@ SELECT master_create_worker_shards('ex_on_two_columns', '4', '2');
 INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 INSERT INTO ex_on_two_columns (partition_col, other_col) VALUES (1,1);
 
+CREATE TABLE ex_on_two_columns_prt
+(
+	partition_col integer,
+	other_col integer,
+	EXCLUDE (partition_col WITH =, other_col WITH =) WHERE (other_col > 100)
+);
+SELECT master_create_distributed_table('ex_on_two_columns_prt', 'partition_col', 'hash');
+SELECT master_create_worker_shards('ex_on_two_columns_prt', '4', '2');
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,1);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,1);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
+INSERT INTO ex_on_two_columns_prt (partition_col, other_col) VALUES (1,101);
+
 CREATE TABLE ex_wrong_operator
 (
 	partition_col tsrange,
@@ -233,6 +246,6 @@ SELECT master_create_worker_shards('check_example', '2', '2');
 -- drop unnecessary tables
 DROP TABLE pk_on_non_part_col, uq_on_non_part_col CASCADE;
 DROP TABLE pk_on_part_col, uq_part_col, uq_two_columns CASCADE;
-DROP TABLE ex_on_part_col, ex_on_two_columns, ex_multiple_excludes, ex_overlaps CASCADE;
+DROP TABLE ex_on_part_col, ex_on_two_columns, ex_on_two_columns_prt, ex_multiple_excludes, ex_overlaps CASCADE;
 DROP TABLE ex_on_part_col_named, ex_on_two_columns_named, ex_overlaps_named CASCADE;
 DROP TABLE uq_range_tables, check_example CASCADE;
