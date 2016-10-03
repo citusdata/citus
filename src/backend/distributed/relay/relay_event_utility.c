@@ -483,7 +483,7 @@ TypeDropIndexConstraint(const AlterTableCmd *command,
 		return false;
 	}
 
-	searchedConstraintName = pnstrdup(command->name, NAMEDATALEN);
+	searchedConstraintName = pstrdup(command->name);
 	AppendShardIdToName(&searchedConstraintName, shardId);
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
@@ -636,6 +636,13 @@ AppendShardIdToName(char **name, uint64 shardId)
 	int shardIdAndSeparatorLength;
 	uint32 longNameHash = 0;
 	int multiByteClipLength = 0;
+
+	if (nameLength >= NAMEDATALEN)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG),
+						errmsg("identifier must be less than %d characters",
+							   NAMEDATALEN)));
+	}
 
 	snprintf(shardIdAndSeparator, NAMEDATALEN, "%c" UINT64_FORMAT,
 			 SHARD_NAME_SEPARATOR, shardId);
