@@ -519,6 +519,15 @@ TaskHashCreate(uint32 taskHashSize)
 	int hashFlags = 0;
 	HTAB *taskHash = NULL;
 
+	/*
+	 * Can't create a hashtable of size 0. Normally that shouldn't happen, but
+	 * shard pruning currently can lead to this (Job with 0 Tasks). See #833.
+	 */
+	if (taskHashSize == 0)
+	{
+		taskHashSize = 2;
+	}
+
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(TaskMapKey);
 	info.entrysize = sizeof(TaskMapEntry);
