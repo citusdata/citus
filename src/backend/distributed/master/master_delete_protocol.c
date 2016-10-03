@@ -317,7 +317,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *quotedShardName = NULL;
-		char *shardRelationName = pnstrdup(relationName, NAMEDATALEN);
+		char *shardRelationName = pstrdup(relationName);
 
 		Assert(shardInterval->relationId == relationId);
 
