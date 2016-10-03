@@ -17,6 +17,7 @@
 # ---
 test: multi_extension
 test: multi_table_ddl
+test: multi_name_lengths
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
