@@ -317,14 +317,13 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *quotedShardName = NULL;
-		StringInfo shardName = makeStringInfo();
+		char *shardRelationName = pnstrdup(relationName, NAMEDATALEN);
 
 		Assert(shardInterval->relationId == relationId);
 
 		/* Build shard relation name. */
-		appendStringInfoString(shardName, relationName);
-		AppendShardIdToStringInfo(shardName, shardId);
-		quotedShardName = quote_qualified_identifier(schemaName, shardName->data);
+		AppendShardIdToName(&shardRelationName, shardId);
+		quotedShardName = quote_qualified_identifier(schemaName, shardRelationName);
 
 		shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
@@ -386,7 +385,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 									workerName, workerPort);
 
 			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node \"%s:%u\"",
-									 shardName->data, workerName, workerPort),
+									 shardRelationName, workerName, workerPort),
 							  errdetail("Marking this shard placement for deletion")));
 		}
 
