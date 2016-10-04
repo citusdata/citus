@@ -152,7 +152,6 @@ static void ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHa
 static void ErrorIfUnsupportedTableCombination(Query *queryTree);
 static void ErrorIfUnsupportedUnionQuery(Query *unionQuery);
 static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
-static bool IsPartitionColumnRecursive(Expr *columnExpression, Query *query);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static Query * LateralQuery(Query *query);
@@ -3318,7 +3317,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
  * Note that if the given expression is a field of a composite type, then this
  * function checks if this composite column is a partition column.
  */
-static bool
+bool
 IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 {
 	bool isPartitionColumn = false;
@@ -3863,7 +3862,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 /*
  * RelationIdList returns list of unique relation ids in query tree.
  */
-List *
+static List *
 RelationIdList(Query *query)
 {
 	List *rangeTableList = NIL;

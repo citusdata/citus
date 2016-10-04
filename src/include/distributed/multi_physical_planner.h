@@ -169,6 +169,9 @@ typedef struct Task
 	uint64 shardId;                /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
+
+	bool insertSelectQuery;
+	List *selectShardList;         /* only applies INSERT/SELECT tasks */
 } Task;
 
 
@@ -205,6 +208,7 @@ typedef struct MultiPlan
 	Job *workerJob;
 	Query *masterQuery;
 	char *masterTableName;
+	bool routerExecutable;
 } MultiPlan;
 
 
@@ -227,6 +231,8 @@ extern int TaskAssignmentPolicy;
 /* Function declarations for building physical plans and constructing queries */
 extern MultiPlan * MultiPhysicalPlanCreate(MultiTreeRoot *multiTree);
 extern StringInfo ShardFetchQueryString(uint64 shardId);
+extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
+							  char *queryString);
 
 /* Function declarations for shard pruning */
 extern List * PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
@@ -243,9 +249,10 @@ extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 extern bool SimpleOpExpression(Expr *clause);
 extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
 
+/* helper functions */
+extern Var * MakeInt4Column(void);
+extern Const * MakeInt4Constant(Datum constantValue);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
-
-/* Function declarations for sorting shards. */
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 
