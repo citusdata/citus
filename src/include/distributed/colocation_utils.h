@@ -22,6 +22,6 @@ extern bool TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTabl
 extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
 extern List * ColocatedTableList(Oid distributedTableId);
-extern List * ColocatedShardPlacementList(ShardInterval *shardInterval);
+extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
 
 #endif /* COLOCATION_UTILS_H_ */

@@ -119,7 +119,7 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 
 	ArrayType *colocatedShardsArrayType = NULL;
-	List *colocatedShardList = ColocatedShardPlacementList(shardInterval);
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	ListCell *colocatedShardCell = NULL;
 	int colocatedShardCount = list_length(colocatedShardList);
 	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
