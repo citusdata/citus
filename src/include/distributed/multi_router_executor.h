@@ -33,7 +33,7 @@ typedef struct XactShardConnSet
 extern bool AllModificationsCommutative;
 
 
-extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task);
+extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count);
 extern void RouterExecutorFinish(QueryDesc *queryDesc);
 extern void RouterExecutorEnd(QueryDesc *queryDesc);

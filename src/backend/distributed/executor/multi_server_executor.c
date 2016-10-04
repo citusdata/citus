@@ -49,7 +49,7 @@ JobExecutorType(MultiPlan *multiPlan)
 	double tasksPerNode = taskCount / ((double) workerNodeCount);
 	int dependedJobCount = list_length(job->dependedJobList);
 	MultiExecutorType executorType = TaskExecutorType;
-	bool routerExecutablePlan = RouterExecutablePlan(multiPlan, executorType);
+	bool routerExecutablePlan = multiPlan->routerExecutable;
 
 	/* check if can switch to router executor */
 	if (routerExecutablePlan)
@@ -106,78 +106,6 @@ JobExecutorType(MultiPlan *multiPlan)
 	}
 
 	return executorType;
-}
-
-
-/*
- * RouterExecutablePlan returns whether a multi-plan can be executed using the
- * router executor. Modify queries are always router executable, select queries
- * are router executable only if executorType is real time.
- */
-bool
-RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
-{
-	Job *job = multiPlan->workerJob;
-	TaskType taskType = TASK_TYPE_INVALID_FIRST;
-	Query *masterQuery = multiPlan->masterQuery;
-	List *workerTaskList = job->taskList;
-	int taskCount = list_length(workerTaskList);
-	int dependedJobCount = list_length(job->dependedJobList);
-	Task *workerTask = NULL;
-	List *workerDependentTaskList = NIL;
-	bool masterQueryHasAggregates = false;
-
-	/* router executor cannot execute queries that hit more than one shard */
-	if (taskCount != 1)
-	{
-		return false;
-	}
-
-	/* check if the first task is a modify or a router task, short-circuit if so */
-	workerTask = (Task *) linitial(workerTaskList);
-	taskType = workerTask->taskType;
-	if (taskType == MODIFY_TASK || taskType == ROUTER_TASK)
-	{
-		return true;
-	}
-
-	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
-	{
-		return false;
-	}
-
-	/* router executor cannot execute repartition jobs */
-	if (dependedJobCount > 0)
-	{
-		return false;
-	}
-
-	/* router executor cannot execute queries with dependent data fetch tasks */
-	workerDependentTaskList = workerTask->dependedTaskList;
-	if (list_length(workerDependentTaskList) > 0)
-	{
-		return false;
-	}
-
-	/* router executor cannot execute queries with order by */
-	if (masterQuery != NULL && list_length(masterQuery->sortClause) > 0)
-	{
-		return false;
-	}
-
-	/*
-	 * Router executor cannot execute queries with aggregates.
-	 * Note that worker query having an aggregate means that the master query should
-	 * have either an aggregate or a function expression which has to be executed for
-	 * the correct results.
-	 */
-	masterQueryHasAggregates = job->jobQuery->hasAggs;
-	if (masterQueryHasAggregates)
-	{
-		return false;
-	}
-
-	return true;
 }
 
 

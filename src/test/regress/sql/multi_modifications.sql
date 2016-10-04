@@ -150,8 +150,9 @@ DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::times
 -- commands with multiple rows are unsupported
 INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
 
+-- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported
-INSERT INTO limit_orders SELECT * FROM limit_orders;
+-- INSERT INTO limit_orders SELECT * FROM limit_orders;
 
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (DELETE FROM limit_orders RETURNING *)

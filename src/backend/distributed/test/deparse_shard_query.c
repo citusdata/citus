@@ -59,7 +59,16 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 			Query *query = lfirst(queryTreeCell);
 			StringInfo buffer = makeStringInfo();
 
-			ReorderInsertSelectTargetListsIfExists(query);
+			/* reoreder the target list only for INSERT .. SELECT queries */
+			if (InsertSelectQuery(query))
+			{
+				RangeTblEntry *insertRte = linitial(query->rtable);
+				RangeTblEntry *subqueryRte = lsecond(query->rtable);
+
+
+				ReorderInsertSelectTargetLists(query, insertRte, subqueryRte);
+			}
+
 			deparse_shard_query(query, InvalidOid, 0, buffer);
 
 			elog(INFO, "query: %s", buffer->data);

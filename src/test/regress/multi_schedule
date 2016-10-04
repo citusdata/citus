@@ -29,6 +29,8 @@ test: multi_create_table_constraints
 test: multi_master_protocol
 test: multi_load_data
 
+test: multi_insert_select
+
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
