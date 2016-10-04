@@ -162,13 +162,13 @@ ColocatedTableList(Oid distributedTableId)
 
 
 /*
- * ColocatedShardPlacementList function returns list of shard intervals which are
+ * ColocatedShardIntervalList function returns list of shard intervals which are
  * co-located with given shard. If given shard is belong to append or range distributed
  * table, co-location is not valid for that shard. Therefore such shard is only co-located
  * with itself.
  */
 List *
-ColocatedShardPlacementList(ShardInterval *shardInterval)
+ColocatedShardIntervalList(ShardInterval *shardInterval)
 {
 	Oid distributedTableId = shardInterval->relationId;
 	List *colocatedShardList = NIL;
