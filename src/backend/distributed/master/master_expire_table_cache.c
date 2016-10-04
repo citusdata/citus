@@ -169,7 +169,7 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		char *shardName = pnstrdup(relationName, NAMEDATALEN);
+		char *shardName = pstrdup(relationName);
 		char *quotedShardName = NULL;
 
 		AppendShardIdToName(&shardName, shardInterval->shardId);
