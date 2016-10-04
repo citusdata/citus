@@ -152,14 +152,12 @@ static void ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHa
 static void ErrorIfUnsupportedTableCombination(Query *queryTree);
 static void ErrorIfUnsupportedUnionQuery(Query *unionQuery);
 static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
-static bool IsPartitionColumnRecursive(Expr *columnExpression, Query *query);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static Query * LateralQuery(Query *query);
 static bool SupportedLateralQuery(Query *parentQuery, Query *lateralQuery);
 static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
-static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
@@ -3318,7 +3316,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
  * Note that if the given expression is a field of a composite type, then this
  * function checks if this composite column is a partition column.
  */
-static bool
+bool
 IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 {
 	bool isPartitionColumn = false;

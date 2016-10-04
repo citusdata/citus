@@ -59,6 +59,24 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	if (needsDistributedPlanning)
 	{
 		originalQuery = copyObject(parse);
+
+		/*
+		 * We implement INSERT INTO .. SELECT by pushing down the SELECT to
+		 * each shard. That requires that the SELECT is co-located with the
+		 * target table. To compute that we use the router planner, by adding
+		 * a "hidden" constraint that the partition column be equal to a
+		 * certain value. standard_planner() distributes that constraint to
+		 * all affected table's baserestrictinfos. The router planner then
+		 * iterates over the target table's shards, for each we replace the
+		 * "hidden" restriction, with one that PruneShardList() handles, and
+		 * then generate a query for that individual shard. If any of the
+		 * involved tables don't prune down to a single shard, or if the
+		 * pruned shards aren't colocated, we error out.
+		 */
+		if (InsertSelectQuery(parse))
+		{
+			AddHiddenPartitionColumnParameter(parse);
+		}
 	}
 
 	/* create a restriction context and put it at the end if context list */

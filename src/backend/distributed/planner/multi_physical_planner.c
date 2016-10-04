@@ -150,8 +150,6 @@ static List * DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragment
 static StringInfo NodeNameArrayString(List *workerNodeList);
 static StringInfo NodePortArrayString(List *workerNodeList);
 static StringInfo DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId);
-static Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
-							  char *queryString);
 static void UpdateRangeTableAlias(List *rangeTableList, List *fragmentList);
 static Alias * FragmentAlias(RangeTblEntry *rangeTableEntry,
 							 RangeTableFragment *fragment);
@@ -3939,7 +3937,7 @@ DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId)
  * CreateBasicTask creates a task, initializes fields that are common to each task,
  * and returns the created task.
  */
-static Task *
+Task *
 CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType, char *queryString)
 {
 	Task *task = CitusMakeNode(Task);

@@ -21,6 +21,9 @@
 #include "nodes/parsenodes.h"
 
 
+/* reserved parameted id */
+#define HIDDEN_PARAMETER_ID 0xdeadbeef
+
 /* reserved alias name for UPSERTs */
 #define UPSERT_ALIAS "citus_table_alias"
 
@@ -28,7 +31,9 @@
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
+extern void AddHiddenPartitionColumnParameter(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
 extern Query * ReorderInsertSelectTargetListsIfExists(Query *originalQuery);
+extern bool InsertSelectQuery(Query *query);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
