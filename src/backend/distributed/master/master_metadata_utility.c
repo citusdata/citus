@@ -26,6 +26,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_shard_placement.h"
+#include "distributed/relay_utility.h"
 #include "distributed/worker_manager.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
@@ -196,6 +197,45 @@ ShardLength(uint64 shardId)
 	}
 
 	return shardLength;
+}
+
+
+/*
+ * NodeHasActiveShardPlacements returns whether any active shards are placed on this node
+ */
+bool
+NodeHasActiveShardPlacements(char *nodeName, int32 nodePort)
+{
+	const int scanKeyCount = 3;
+	const bool indexOK = false;
+
+	bool hasFinalizedPlacements = false;
+
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[scanKeyCount];
+
+	Relation pgShardPlacement = heap_open(DistShardPlacementRelationId(),
+										  AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_placement_nodename,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_shard_placement_nodeport,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
+	ScanKeyInit(&scanKey[2], Anum_pg_dist_shard_placement_shardstate,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(FILE_FINALIZED));
+
+	scanDescriptor = systable_beginscan(pgShardPlacement,
+										DistShardPlacementNodeidIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	hasFinalizedPlacements = HeapTupleIsValid(heapTuple);
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgShardPlacement, AccessShareLock);
+
+	return hasFinalizedPlacements;
 }
 
 
@@ -585,6 +625,20 @@ EnsureTableOwner(Oid relationId)
 	{
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
 					   get_rel_name(relationId));
+	}
+}
+
+
+/*
+ * EnsureSuperUser check that the current user is a superuser and errors out if not.
+ */
+void
+EnsureSuperUser(void)
+{
+	if (!superuser())
+	{
+		ereport(ERROR, (errmsg("operation is not allowed"),
+						errhint("Run the command with a superuser.")));
 	}
 }
 

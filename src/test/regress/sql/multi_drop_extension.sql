@@ -21,6 +21,10 @@ RESET client_min_messages;
 
 CREATE EXTENSION citus;
 
+-- re-add the nodes to the cluster
+SELECT master_add_node('localhost', :worker_1_port);
+SELECT master_add_node('localhost', :worker_2_port);
+
 -- verify that a table can be created after the extension has been dropped and recreated
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');

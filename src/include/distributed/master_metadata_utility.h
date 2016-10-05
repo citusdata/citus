@@ -62,6 +62,7 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval);
 extern uint64 ShardLength(uint64 shardId);
+extern bool NodeHasActiveShardPlacements(char *nodeName, int32 nodePort);
 extern List * FinalizedShardPlacementList(uint64 shardId);
 extern List * ShardPlacementList(uint64 shardId);
 extern ShardPlacement * TupleToShardPlacement(TupleDesc tupleDesc,
@@ -81,5 +82,6 @@ extern Node * BuildDistributionKeyFromColumnName(Relation distributedRelation,
 extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
+extern void EnsureSuperUser(void);
 
 #endif   /* MASTER_METADATA_UTILITY_H */
