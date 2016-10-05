@@ -41,8 +41,6 @@
 
 
 /* Local functions forward declarations */
-static bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
-							  uint64 shardId, char *newShardOwner, List *ddlCommandList);
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
@@ -426,7 +424,7 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
  * shard on the worker node. Note that this function opens a new connection for
  * each DDL command, and could leave the shard in an half-initialized state.
  */
-static bool
+bool
 WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 				  uint64 shardId, char *newShardOwner, List *ddlCommandList)
 {

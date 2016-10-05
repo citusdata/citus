@@ -66,6 +66,8 @@ extern bool CitusHasBeenLoaded(void);
 extern HTAB * GetWorkerNodeHash(void);
 
 /* relation oids */
+extern Oid DistColocationRelationId(void);
+extern Oid DistColocationConfigurationIndexId(void);
 extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistShardPlacementRelationId(void);
