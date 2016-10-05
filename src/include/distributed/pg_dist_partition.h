@@ -25,8 +25,9 @@ typedef struct FormData_pg_dist_partition
 	char partmethod;     /* partition method; see codes below */
 #ifdef CATALOG_VARLEN    /* variable-length fields start here */
 	text partkey;        /* partition key expression */
+	uint64 colocationid; /* id of the co-location group of particular table belongs to */
+	char repmodel;       /* replication model; see codes below */
 #endif
-	uint64 colocationid;    /* id of the co-location group of particular table belongs to */
 } FormData_pg_dist_partition;
 
 /* ----------------
@@ -40,17 +41,22 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
  *      compiler constants for pg_dist_partitions
  * ----------------
  */
-#define Natts_pg_dist_partition 4
+#define Natts_pg_dist_partition 5
 #define Anum_pg_dist_partition_logicalrelid 1
 #define Anum_pg_dist_partition_partmethod 2
 #define Anum_pg_dist_partition_partkey 3
 #define Anum_pg_dist_partition_colocationid 4
+#define Anum_pg_dist_partition_repmodel 5
 
 /* valid values for partmethod include append, hash, and range */
 #define DISTRIBUTE_BY_APPEND 'a'
 #define DISTRIBUTE_BY_HASH 'h'
 #define DISTRIBUTE_BY_RANGE 'r'
 #define REDISTRIBUTE_BY_HASH 'x'
+
+/* valid values for repmodel are 'c' for coordinator and 's' for streaming */
+#define REPLICATION_MODEL_COORDINATOR 'c'
+#define REPLICATION_MODEL_STREAMING 's'
 
 
 #endif   /* PG_DIST_PARTITION_H */
