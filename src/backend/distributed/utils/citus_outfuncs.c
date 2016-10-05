@@ -389,6 +389,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_NODE_FIELD(taskList);
 	WRITE_NODE_FIELD(dependedJobList);
 	WRITE_BOOL_FIELD(subqueryPushdown);
+	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 }
 
 
@@ -492,7 +493,6 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
-	WRITE_BOOL_FIELD(requiresMasterEvaluation);
 }
 
 #if (PG_VERSION_NUM < 90600)

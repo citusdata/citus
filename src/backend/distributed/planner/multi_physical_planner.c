@@ -1677,6 +1677,7 @@ BuildJob(Query *jobQuery, List *dependedJobList)
 	job->jobId = UniqueJobId();
 	job->jobQuery = jobQuery;
 	job->dependedJobList = dependedJobList;
+	job->requiresMasterEvaluation = false;
 
 	return job;
 }

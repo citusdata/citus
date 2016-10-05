@@ -91,6 +91,7 @@ static HTAB * CreateXactParticipantHash(void);
 static bool ExecuteTaskAndStoreResults(QueryDesc *queryDesc,
 									   Task *task,
 									   bool isModificationQuery,
+									   bool requiresMasterModification,
 									   bool expectResults);
 static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
 									   DestReceiver *destination,
@@ -361,7 +362,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 {
 	PlannedStmt *planStatement = queryDesc->plannedstmt;
 	MultiPlan *multiPlan = GetMultiPlan(planStatement);
-	List *taskList = multiPlan->workerJob->taskList;
+	Job *workerJob = multiPlan->workerJob;
+	List *taskList = workerJob->taskList;
 	Task *task = NULL;
 	EState *estate = queryDesc->estate;
 	CmdType operation = queryDesc->operation;
@@ -415,6 +417,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 	{
 		bool resultsOK = false;
 		bool isModificationQuery = false;
+		bool requiresMasterEvaluation = workerJob->requiresMasterEvaluation;
 
 		if (operation == CMD_INSERT || operation == CMD_UPDATE ||
 			operation == CMD_DELETE)
@@ -429,6 +432,7 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 
 		resultsOK = ExecuteTaskAndStoreResults(queryDesc, task,
 											   isModificationQuery,
+											   requiresMasterEvaluation,
 											   sendTuples);
 		if (!resultsOK)
 		{
@@ -491,6 +495,7 @@ out:
 static bool
 ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 						   bool isModificationQuery,
+						   bool requiresMasterEvaluation,
 						   bool expectResults)
 {
 	CmdType commandType = queryDesc->operation;
@@ -506,7 +511,7 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	bool gotResults = false;
 	char *queryString = task->queryString;
 
-	if (isModificationQuery && task->requiresMasterEvaluation)
+	if (isModificationQuery && requiresMasterEvaluation)
 	{
 		PlannedStmt *planStatement = queryDesc->plannedstmt;
 		MultiPlan *multiPlan = GetMultiPlan(planStatement);
