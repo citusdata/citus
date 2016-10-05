@@ -757,7 +757,6 @@ RouterModifyTask(Query *originalQuery, Query *query)
 	StringInfo queryString = makeStringInfo();
 	Task *modifyTask = NULL;
 	bool upsertQuery = false;
-	bool requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -789,7 +788,6 @@ RouterModifyTask(Query *originalQuery, Query *query)
 	modifyTask->anchorShardId = shardId;
 	modifyTask->dependedTaskList = NIL;
 	modifyTask->upsertQuery = upsertQuery;
-	modifyTask->requiresMasterEvaluation = requiresMasterEvaluation;
 
 	return modifyTask;
 }
@@ -1126,7 +1124,6 @@ RouterSelectTask(Query *originalQuery, Query *query,
 	task->anchorShardId = shardId;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
-	task->requiresMasterEvaluation = false;
 
 	*placementList = workerList;
 
@@ -1477,6 +1474,7 @@ RouterQueryJob(Query *query, Task *task, List *placementList)
 	Job *job = NULL;
 	List *taskList = NIL;
 	TaskType taskType = task->taskType;
+	bool requiresMasterEvaluation = RequiresMasterEvaluation(query);
 
 	/*
 	 * We send modify task to the first replica, otherwise we choose the target shard
@@ -1501,6 +1499,7 @@ RouterQueryJob(Query *query, Task *task, List *placementList)
 	job->subqueryPushdown = false;
 	job->jobQuery = query;
 	job->taskList = taskList;
+	job->requiresMasterEvaluation = requiresMasterEvaluation;
 
 	return job;
 }
