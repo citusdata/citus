@@ -459,7 +459,7 @@ master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
 /*
  * master_get_active_worker_nodes returns a set of active worker host names and
  * port numbers in deterministic order. Currently we assume that all worker
- * nodes in pg_worker_list.conf are active.
+ * nodes in pg_dist_node are active.
  */
 Datum
 master_get_active_worker_nodes(PG_FUNCTION_ARGS)
