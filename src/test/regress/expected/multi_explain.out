@@ -3,6 +3,14 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 570000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 570000;
+-- print major version to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+\.\d+') AS major_version;
+ major_version 
+---------------
+ 9.6
+(1 row)
+
 \a\t
 SET citus.task_executor_type TO 'real-time';
 SET citus.explain_distributed_queries TO on;
@@ -43,7 +51,7 @@ Distributed Query into pg_merge_job_570000
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Sort
-        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570000_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570000_0
+        Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(intermediate_column_570000_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570000_0
         ->  HashAggregate
               Group Key: intermediate_column_570000_0
               ->  Seq Scan on pg_merge_job_570000
@@ -66,11 +74,14 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                 "Plan": {
                   "Node Type": "Aggregate",
                   "Strategy": "Hashed",
+                  "Partial Mode": "Simple",
+                  "Parallel Aware": false,
                   "Group Key": ["l_quantity"],
                   "Plans": [
                     {
                       "Node Type": "Seq Scan",
                       "Parent Relationship": "Outer",
+                      "Parallel Aware": false,
                       "Relation Name": "lineitem_290001",
                       "Alias": "lineitem"
                     }
@@ -87,17 +98,21 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       {
         "Plan": {
           "Node Type": "Sort",
-          "Sort Key": ["COALESCE((sum((COALESCE((sum(intermediate_column_570001_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "intermediate_column_570001_0"],
+          "Parallel Aware": false,
+          "Sort Key": ["COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(intermediate_column_570001_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "intermediate_column_570001_0"],
           "Plans": [
             {
               "Node Type": "Aggregate",
               "Strategy": "Hashed",
+              "Partial Mode": "Simple",
               "Parent Relationship": "Outer",
+              "Parallel Aware": false,
               "Group Key": ["intermediate_column_570001_0"],
               "Plans": [
                 {
                   "Node Type": "Seq Scan",
                   "Parent Relationship": "Outer",
+                  "Parallel Aware": false,
                   "Relation Name": "pg_merge_job_570001",
                   "Alias": "pg_merge_job_570001"
                 }
@@ -133,6 +148,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                 <Plan>
                   <Node-Type>Aggregate</Node-Type>
                   <Strategy>Hashed</Strategy>
+                  <Partial-Mode>Simple</Partial-Mode>
+                  <Parallel-Aware>false</Parallel-Aware>
                   <Group-Key>
                     <Item>l_quantity</Item>
                   </Group-Key>
@@ -140,6 +157,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                     <Plan>
                       <Node-Type>Seq Scan</Node-Type>
                       <Parent-Relationship>Outer</Parent-Relationship>
+                      <Parallel-Aware>false</Parallel-Aware>
                       <Relation-Name>lineitem_290001</Relation-Name>
                       <Alias>lineitem</Alias>
                     </Plan>
@@ -155,15 +173,18 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Query>
         <Plan>
           <Node-Type>Sort</Node-Type>
+          <Parallel-Aware>false</Parallel-Aware>
           <Sort-Key>
-            <Item>COALESCE((sum((COALESCE((sum(intermediate_column_570003_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+            <Item>COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(intermediate_column_570003_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
             <Item>intermediate_column_570003_0</Item>
           </Sort-Key>
           <Plans>
             <Plan>
               <Node-Type>Aggregate</Node-Type>
               <Strategy>Hashed</Strategy>
+              <Partial-Mode>Simple</Partial-Mode>
               <Parent-Relationship>Outer</Parent-Relationship>
+              <Parallel-Aware>false</Parallel-Aware>
               <Group-Key>
                 <Item>intermediate_column_570003_0</Item>
               </Group-Key>
@@ -171,6 +192,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                 <Plan>
                   <Node-Type>Seq Scan</Node-Type>
                   <Parent-Relationship>Outer</Parent-Relationship>
+                  <Parallel-Aware>false</Parallel-Aware>
                   <Relation-Name>pg_merge_job_570003</Relation-Name>
                   <Alias>pg_merge_job_570003</Alias>
                 </Plan>
@@ -201,29 +223,36 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
           - Plan: 
               Node Type: "Aggregate"
               Strategy: "Hashed"
+              Partial Mode: "Simple"
+              Parallel Aware: false
               Group Key: 
                 - "l_quantity"
               Plans: 
                 - Node Type: "Seq Scan"
                   Parent Relationship: "Outer"
+                  Parallel Aware: false
                   Relation Name: "lineitem_290001"
                   Alias: "lineitem"
 
   Master Query: 
     - Plan: 
         Node Type: "Sort"
+        Parallel Aware: false
         Sort Key: 
-          - "COALESCE((sum((COALESCE((sum(intermediate_column_570005_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+          - "COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(intermediate_column_570005_1))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
           - "intermediate_column_570005_0"
         Plans: 
           - Node Type: "Aggregate"
             Strategy: "Hashed"
+            Partial Mode: "Simple"
             Parent Relationship: "Outer"
+            Parallel Aware: false
             Group Key: 
               - "intermediate_column_570005_0"
             Plans: 
               - Node Type: "Seq Scan"
                 Parent Relationship: "Outer"
+                Parallel Aware: false
                 Relation Name: "pg_merge_job_570005"
                 Alias: "pg_merge_job_570005"
 -- Test Text format
@@ -241,7 +270,7 @@ Distributed Query into pg_merge_job_570006
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Sort
-        Sort Key: COALESCE((sum((COALESCE((sum(intermediate_column_570006_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570006_0
+        Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(intermediate_column_570006_1))::bigint, '0'::bigint))))::bigint, '0'::bigint), intermediate_column_570006_0
         ->  HashAggregate
               Group Key: intermediate_column_570006_0
               ->  Seq Scan on pg_merge_job_570006
@@ -260,7 +289,7 @@ Distributed Query into pg_merge_job_570007
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  Aggregate
-        Output: (sum(intermediate_column_570007_0) / (sum(intermediate_column_570007_1) / sum(intermediate_column_570007_2)))
+        Output: (sum(intermediate_column_570007_0) / (sum(intermediate_column_570007_1) / pg_catalog.sum(intermediate_column_570007_2)))
         ->  Seq Scan on pg_temp_2.pg_merge_job_570007
               Output: intermediate_column_570007_0, intermediate_column_570007_1, intermediate_column_570007_2
 -- Test join
@@ -380,7 +409,7 @@ Distributed Query into pg_merge_job_570013
                     Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 Master Query
   ->  Aggregate
-        Output: (sum(intermediate_column_570013_0) / (sum(intermediate_column_570013_1) / sum(intermediate_column_570013_2)))
+        Output: (sum(intermediate_column_570013_0) / (sum(intermediate_column_570013_1) / pg_catalog.sum(intermediate_column_570013_2)))
         Filter: (sum(pg_merge_job_570013.intermediate_column_570013_3) > '100'::numeric)
         ->  Seq Scan on pg_temp_2.pg_merge_job_570013
               Output: intermediate_column_570013_0, intermediate_column_570013_1, intermediate_column_570013_2, intermediate_column_570013_3
@@ -512,10 +541,13 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
         "Plan": {
           "Node Type": "Aggregate",
           "Strategy": "Plain",
+          "Partial Mode": "Simple",
+          "Parallel Aware": false,
           "Plans": [
             {
               "Node Type": "Seq Scan",
               "Parent Relationship": "Outer",
+              "Parallel Aware": false,
               "Relation Name": "pg_merge_job_570024",
               "Alias": "pg_merge_job_570024"
             }
@@ -562,10 +594,13 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
         <Plan>
           <Node-Type>Aggregate</Node-Type>
           <Strategy>Plain</Strategy>
+          <Partial-Mode>Simple</Partial-Mode>
+          <Parallel-Aware>false</Parallel-Aware>
           <Plans>
             <Plan>
               <Node-Type>Seq Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
+              <Parallel-Aware>false</Parallel-Aware>
               <Relation-Name>pg_merge_job_570030</Relation-Name>
               <Alias>pg_merge_job_570030</Alias>
             </Plan>
@@ -602,8 +637,11 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     - Plan: 
         Node Type: "Aggregate"
         Strategy: "Plain"
+        Partial Mode: "Simple"
+        Parallel Aware: false
         Plans: 
           - Node Type: "Seq Scan"
             Parent Relationship: "Outer"
+            Parallel Aware: false
             Relation Name: "pg_merge_job_570036"
             Alias: "pg_merge_job_570036"

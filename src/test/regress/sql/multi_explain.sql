@@ -6,6 +6,9 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 570000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 570000;
 
+-- print major version to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+\.\d+') AS major_version;
 
 \a\t
 
