@@ -82,6 +82,7 @@ typedef enum
 
 
 /* Config variables managed via guc.c */
+extern int ShardCount;
 extern int ShardReplicationFactor;
 extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
