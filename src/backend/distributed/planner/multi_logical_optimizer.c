@@ -39,6 +39,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
 #include "optimizer/var.h"
+#include "parser/parse_agg.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
 #include "utils/builtins.h"
@@ -1271,8 +1272,17 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 		bool hasAggregates = contain_agg_clause((Node *) originalExpression);
 		if (hasAggregates)
 		{
+			AggClauseCosts aggregateCosts;
 			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
 												   walkerContext);
+
+#if PG_VERSION_NUM >= 90600
+			get_agg_clause_costs(NULL, (Node *) newNode, AGGSPLIT_SIMPLE,
+								 &aggregateCosts);
+#else
+			count_agg_clauses(NULL, (Node *) newNode, &aggregateCosts);
+#endif
+
 			newExpression = (Expr *) newNode;
 		}
 		else
@@ -1297,7 +1307,17 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 
 	if (originalHavingQual != NULL)
 	{
+		AggClauseCosts aggregateCosts;
+
 		newHavingQual = MasterAggregateMutator(originalHavingQual, walkerContext);
+
+		memset(&aggregateCosts, 0, sizeof(aggregateCosts));
+#if PG_VERSION_NUM >= 90600
+		get_agg_clause_costs(NULL, (Node *) newHavingQual, AGGSPLIT_SIMPLE,
+							 &aggregateCosts);
+#else
+		count_agg_clauses(NULL, (Node *) newHavingQual, &aggregateCosts);
+#endif
 	}
 
 	masterExtendedOpNode = CitusMakeNode(MultiExtendedOp);
@@ -1468,6 +1488,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->args = list_make1(hllTargetEntry);
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 
+		/* TODO: Fix this for 9.6 */
+
 		cardinalityExpression = makeNode(FuncExpr);
 		cardinalityExpression->funcid = cardinalityFunctionId;
 		cardinalityExpression->funcresulttype = cardinalityReturnType;
@@ -1527,8 +1549,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfnoid = sumFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
 #if (PG_VERSION_NUM >= 90600)
-		newMasterAggregate->aggtranstype = INTERNALOID;
-		newMasterAggregate->aggargtypes = list_make1_oid(NUMERICOID);
+		newMasterAggregate->aggtranstype = InvalidOid;
+		newMasterAggregate->aggargtypes = list_make1_oid(newMasterAggregate->aggtype);
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 #endif
 
@@ -1595,6 +1617,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->args = list_make1(arrayCatAggArgument);
+#if (PG_VERSION_NUM >= 90600)
+		newMasterAggregate->aggtranstype = InvalidOid;
+		newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
+		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
@@ -1688,8 +1715,8 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	firstSum->args = list_make1(firstTargetEntry);
 	firstSum->aggkind = AGGKIND_NORMAL;
 #if (PG_VERSION_NUM >= 90600)
-	firstSum->aggtranstype = INTERNALOID;
-	firstSum->aggargtypes = list_make1_oid(NUMERICOID);
+	firstSum->aggtranstype = InvalidOid;
+	firstSum->aggargtypes = list_make1_oid(firstSum->aggtype);
 	firstSum->aggsplit = AGGSPLIT_SIMPLE;
 #endif
 
@@ -1705,8 +1732,8 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	secondSum->args = list_make1(secondTargetEntry);
 	secondSum->aggkind = AGGKIND_NORMAL;
 #if (PG_VERSION_NUM >= 90600)
-	secondSum->aggtranstype = INTERNALOID;
-	secondSum->aggargtypes = list_make1_oid(NUMERICOID);
+	secondSum->aggtranstype = InvalidOid;
+	secondSum->aggargtypes = list_make1_oid(firstSum->aggtype);
 	secondSum->aggsplit = AGGSPLIT_SIMPLE;
 #endif
 
@@ -1812,7 +1839,16 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 
 		if (hasAggregates)
 		{
+			AggClauseCosts aggregateCosts;
 			WorkerAggregateWalker((Node *) originalExpression, walkerContext);
+
+#if PG_VERSION_NUM >= 90600
+			get_agg_clause_costs(NULL, (Node *) walkerContext->expressionList,
+								 AGGSPLIT_SIMPLE, &aggregateCosts);
+#else
+			count_agg_clauses(NULL, (Node *) walkerContext->expressionList,
+							  &aggregateCosts);
+#endif
 			newExpressionList = walkerContext->expressionList;
 		}
 		else
@@ -1880,6 +1916,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 	{
 		List *newExpressionList = NIL;
 		ListCell *newExpressionCell = NULL;
+		AggClauseCosts aggregateCosts;
 
 		/* reset walker context */
 		walkerContext->expressionList = NIL;
@@ -1887,6 +1924,15 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 
 		WorkerAggregateWalker(havingQual, walkerContext);
 		newExpressionList = walkerContext->expressionList;
+		memset(&aggregateCosts, 0, sizeof(aggregateCosts));
+
+#if PG_VERSION_NUM >= 90600
+		get_agg_clause_costs(NULL, (Node *) walkerContext->expressionList,
+							 AGGSPLIT_SIMPLE, &aggregateCosts);
+#else
+		count_agg_clauses(NULL, (Node *) walkerContext->expressionList,
+						  &aggregateCosts);
+#endif
 
 		/* now create target entries for each new expression */
 		foreach(newExpressionCell, newExpressionList)
@@ -2075,9 +2121,20 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		sumAggregate->aggfnoid = AggregateFunctionOid(sumAggregateName, argumentType);
 		sumAggregate->aggtype = get_func_rettype(sumAggregate->aggfnoid);
 
+#if (PG_VERSION_NUM >= 90600)
+		sumAggregate->aggtranstype = InvalidOid;
+		sumAggregate->aggargtypes = list_make1_oid(argumentType);
+		sumAggregate->aggsplit = AGGSPLIT_SIMPLE;
+#endif
+
 		/* count has any input type */
 		countAggregate->aggfnoid = AggregateFunctionOid(countAggregateName, ANYOID);
 		countAggregate->aggtype = get_func_rettype(countAggregate->aggfnoid);
+#if (PG_VERSION_NUM >= 90600)
+		countAggregate->aggtranstype = InvalidOid;
+		countAggregate->aggargtypes = list_make1_oid(argumentType);
+		countAggregate->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);

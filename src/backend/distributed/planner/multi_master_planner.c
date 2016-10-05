@@ -144,6 +144,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 #if (PG_VERSION_NUM >= 90600)
 	get_agg_clause_costs(NULL, (Node *) aggregateTargetList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
+	get_agg_clause_costs(NULL, (Node *) havingQual, AGGSPLIT_SIMPLE, &aggregateCosts);
 #else
 	count_agg_clauses(NULL, (Node *) aggregateTargetList, &aggregateCosts);
 #endif
@@ -188,7 +189,8 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 							 groupColumnOpArray, NIL, NIL,
 							 rowEstimate, subPlan);
 #else
-	aggregatePlan = make_agg(NULL, aggregateTargetList, (List *) havingQual, aggregateStrategy,
+	aggregatePlan = make_agg(NULL, aggregateTargetList, (List *) havingQual,
+							 aggregateStrategy,
 							 &aggregateCosts, groupColumnCount, groupColumnIdArray,
 							 groupColumnOpArray, NIL, rowEstimate, subPlan);
 #endif
