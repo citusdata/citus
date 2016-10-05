@@ -87,6 +87,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	Relation pgDistPartition = NULL;
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	const char replicationModel = 'c';
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	Node *distributionKey = NULL;
 	Var *distributionColumn = NULL;
@@ -290,6 +291,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	newValues[Anum_pg_dist_partition_partkey - 1] =
 		CStringGetTextDatum(distributionKeyString);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = INVALID_COLOCATION_ID;
+	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
 

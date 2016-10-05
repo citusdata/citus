@@ -39,6 +39,7 @@ typedef struct
 	char *partitionKeyString;
 	char partitionMethod;
 	uint64 colocationId;
+	char replicationModel;
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
