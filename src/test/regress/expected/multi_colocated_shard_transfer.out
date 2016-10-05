@@ -19,22 +19,22 @@ WHERE
 ORDER BY s.shardid;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
 ---------+---------------+----------+--------------+------------
- 1300000 | table1_group1 |    57638 |            1 |          3
- 1300000 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57638 |            1 |          3
- 1300004 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57638 |            1 |          1
+ 1300000 | table1_group1 |    57638 |         1000 |          3
+ 1300000 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          3
+ 1300004 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57638 |         1000 |          1
 (16 rows)
 
 -- repair colocated shards
@@ -55,22 +55,22 @@ WHERE
 ORDER BY s.shardid;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
 ---------+---------------+----------+--------------+------------
- 1300000 | table1_group1 |    57638 |            1 |          1
- 1300000 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57638 |            1 |          1
+ 1300000 | table1_group1 |    57638 |         1000 |          1
+ 1300000 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57638 |         1000 |          1
 (16 rows)
 
 -- test repairing NOT colocated shard
@@ -179,22 +179,22 @@ WHERE
 ORDER BY s.shardid;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
 ---------+---------------+----------+--------------+------------
- 1300000 | table1_group1 |    57638 |            1 |          3
- 1300000 | table1_group1 |    57637 |            1 |          3
- 1300001 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57638 |            1 |          1
+ 1300000 | table1_group1 |    57638 |         1000 |          3
+ 1300000 | table1_group1 |    57637 |         1000 |          3
+ 1300001 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57638 |         1000 |          1
 (16 rows)
 
 -- repair while all placements of one shard in colocation group is unhealthy
@@ -211,21 +211,21 @@ WHERE
 ORDER BY s.shardid;
  shardid | logicalrelid  | nodeport | colocationid | shardstate 
 ---------+---------------+----------+--------------+------------
- 1300000 | table1_group1 |    57638 |            1 |          3
- 1300000 | table1_group1 |    57637 |            1 |          3
- 1300001 | table1_group1 |    57637 |            1 |          1
- 1300001 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57638 |            1 |          1
- 1300002 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57637 |            1 |          1
- 1300003 | table1_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57638 |            1 |          1
- 1300004 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57637 |            1 |          1
- 1300005 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57638 |            1 |          1
- 1300006 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57637 |            1 |          1
- 1300007 | table2_group1 |    57638 |            1 |          1
+ 1300000 | table1_group1 |    57638 |         1000 |          3
+ 1300000 | table1_group1 |    57637 |         1000 |          3
+ 1300001 | table1_group1 |    57637 |         1000 |          1
+ 1300001 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57638 |         1000 |          1
+ 1300002 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57637 |         1000 |          1
+ 1300003 | table1_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57637 |         1000 |          1
+ 1300005 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57638 |         1000 |          1
+ 1300006 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57637 |         1000 |          1
+ 1300007 | table2_group1 |    57638 |         1000 |          1
 (16 rows)
 

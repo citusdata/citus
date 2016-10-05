@@ -55,6 +55,8 @@ static Oid distShardRelationId = InvalidOid;
 static Oid distShardPlacementRelationId = InvalidOid;
 static Oid distNodeRelationId = InvalidOid;
 static Oid distLocalGroupRelationId = InvalidOid;
+static Oid distColocationRelationId = InvalidOid;
+static Oid distColocationConfigurationIndexId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
@@ -687,6 +689,27 @@ DistLocalGroupIdRelationId(void)
 	CachedRelationLookup("pg_dist_local_group", &distLocalGroupRelationId);
 
 	return distLocalGroupRelationId;
+}
+
+
+/* return oid of pg_dist_colocation relation */
+Oid
+DistColocationRelationId(void)
+{
+	CachedRelationLookup("pg_dist_colocation", &distColocationRelationId);
+
+	return distColocationRelationId;
+}
+
+
+/* return oid of pg_dist_colocation_configuration_index index */
+Oid
+DistColocationConfigurationIndexId(void)
+{
+	CachedRelationLookup("pg_dist_colocation_configuration_index",
+						 &distColocationConfigurationIndexId);
+
+	return distColocationConfigurationIndexId;
 }
 
 
@@ -1419,6 +1442,8 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardPlacementRelationId = InvalidOid;
 		distLocalGroupRelationId = InvalidOid;
 		distNodeRelationId = InvalidOid;
+		distColocationRelationId = InvalidOid;
+		distColocationConfigurationIndexId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;

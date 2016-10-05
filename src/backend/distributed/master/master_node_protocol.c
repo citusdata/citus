@@ -94,8 +94,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	HeapTuple metadataTuple = NULL;
 	TupleDesc metadataDescriptor = NULL;
 	uint64 shardMaxSizeInBytes = 0;
-	char relationType = 0;
-	char storageType = 0;
+	char shardStorageType = 0;
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
 
@@ -122,26 +121,10 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 
 	/* get storage type */
-	relationType = get_rel_relkind(relationId);
-	if (relationType == RELKIND_RELATION)
-	{
-		storageType = SHARD_STORAGE_TABLE;
-	}
-	else if (relationType == RELKIND_FOREIGN_TABLE)
-	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			storageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			storageType = SHARD_STORAGE_FOREIGN;
-		}
-	}
+	shardStorageType = ShardStorageType(relationId);
 
 	values[0] = ObjectIdGetDatum(relationId);
-	values[1] = storageType;
+	values[1] = shardStorageType;
 	values[2] = partitionEntry->partitionMethod;
 	values[3] = partitionKey;
 	values[4] = Int32GetDatum(ShardReplicationFactor);
@@ -727,6 +710,41 @@ GetTableDDLEvents(Oid relationId)
 	PopOverrideSearchPath();
 
 	return tableDDLEventList;
+}
+
+
+/*
+ * ShardStorageType returns the shard storage type according to relation type.
+ */
+char
+ShardStorageType(Oid relationId)
+{
+	char shardStorageType = 0;
+
+	char relationType = get_rel_relkind(relationId);
+	if (relationType == RELKIND_RELATION)
+	{
+		shardStorageType = SHARD_STORAGE_TABLE;
+	}
+	else if (relationType == RELKIND_FOREIGN_TABLE)
+	{
+		bool cstoreTable = CStoreTable(relationId);
+		if (cstoreTable)
+		{
+			shardStorageType = SHARD_STORAGE_COLUMNAR;
+		}
+		else
+		{
+			shardStorageType = SHARD_STORAGE_FOREIGN;
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("unexpected relation type: %c", relationType)));
+	}
+
+	return shardStorageType;
 }
 
 

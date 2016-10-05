@@ -4,7 +4,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1300000;
 -- create test utility function
 -- ===================================================================
 CREATE SEQUENCE colocation_test_seq
-    MINVALUE 1
+    MINVALUE 1000
     NO CYCLE;
 /* a very simple UDF that only sets the colocation ids the same 
  * DO NOT USE THIS FUNCTION IN PRODUCTION. It manually sets colocationid column of
@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION colocation_test_colocate_tables(source_table regclass
     RETURNS BOOL
     LANGUAGE plpgsql
     AS $colocate_tables$
-DECLARE nextid BIGINT;
+DECLARE nextid INTEGER;
 BEGIN
     SELECT nextval('colocation_test_seq') INTO nextid;
 
@@ -155,7 +155,7 @@ SELECT colocation_test_colocate_tables('table1_group1', 'table2_group1');
 SELECT get_table_colocation_id('table1_group1');
  get_table_colocation_id 
 -------------------------
-                       1
+                    1000
 (1 row)
 
 SELECT get_table_colocation_id('table5_groupX');
@@ -189,7 +189,7 @@ SELECT tables_colocated('table6_append', 'table6_append');
  t
 (1 row)
 
--- check table  co-location with same co-location group
+-- check table co-location with same co-location group
 SELECT tables_colocated('table1_group1', 'table2_group1');
  tables_colocated 
 ------------------
@@ -338,4 +338,304 @@ SELECT find_shard_interval_index(1300016);
 ---------------------------
                          0
 (1 row)
+
+-- check external colocation API
+SET citus.shard_count = 2;
+CREATE TABLE table1_groupA ( id int );
+SELECT create_distributed_table('table1_groupA', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupA ( id int );
+SELECT create_distributed_table('table2_groupA', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- change shard replication factor
+SET citus.shard_replication_factor = 1;
+CREATE TABLE table1_groupB ( id int );
+SELECT create_distributed_table('table1_groupB', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupB ( id int );
+SELECT create_distributed_table('table2_groupB', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- revert back to default shard replication factor
+SET citus.shard_replication_factor to DEFAULT;
+-- change partition column type
+CREATE TABLE table1_groupC ( id text );
+SELECT create_distributed_table('table1_groupC', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupC ( id text );
+SELECT create_distributed_table('table2_groupC', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- change shard count
+SET citus.shard_count = 4;
+CREATE TABLE table1_groupD ( id int );
+SELECT create_distributed_table('table1_groupD', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupD ( id int );
+SELECT create_distributed_table('table2_groupD', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- try other distribution methods
+CREATE TABLE table_append ( id int );
+SELECT create_distributed_table('table_append', 'id', 'append');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table_range ( id int );
+SELECT create_distributed_table('table_range', 'id', 'range');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- test foreign table creation
+CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
+SELECT create_distributed_table('table3_groupD', 'id');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            1 |          2 |                 2 |                     23
+            2 |          2 |                 1 |                     23
+            3 |          2 |                 2 |                     25
+            4 |          4 |                 2 |                     23
+(4 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ logicalrelid  | colocationid 
+---------------+--------------
+ table1_groupa |            1
+ table2_groupa |            1
+ table1_groupb |            2
+ table2_groupb |            2
+ table1_groupc |            3
+ table2_groupc |            3
+ table1_groupd |            4
+ table2_groupd |            4
+ table3_groupd |            4
+(9 rows)
+
+-- check effects of dropping tables
+DROP TABLE table1_groupA;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            1 |          2 |                 2 |                     23
+(1 row)
+
+-- dropping all tables in a colocation group also deletes the colocation group
+DROP TABLE table2_groupA;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+-- create dropped colocation group again
+SET citus.shard_count = 2;
+CREATE TABLE table1_groupE ( id int );
+SELECT create_distributed_table('table1_groupE', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupE ( id int );
+SELECT create_distributed_table('table2_groupE', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- test different table DDL
+CREATE TABLE table3_groupE ( dummy_column text, id int );
+SELECT create_distributed_table('table3_groupE', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- test different schema
+CREATE SCHEMA schema_collocation;
+CREATE TABLE schema_collocation.table4_groupE ( id int );
+SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- check worker table schemas
+\c - - - :worker_1_port
+\d table3_groupE_1300050
+Table "public.table3_groupe_1300050"
+    Column    |  Type   | Modifiers 
+--------------+---------+-----------
+ dummy_column | text    | 
+ id           | integer | 
+
+\d schema_collocation.table4_groupE_1300052
+Table "schema_collocation.table4_groupe_1300052"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ id     | integer | 
+
+\c - - - :master_port
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            2 |          2 |                 1 |                     23
+            3 |          2 |                 2 |                     25
+            4 |          4 |                 2 |                     23
+            5 |          2 |                 2 |                     23
+(4 rows)
+
+-- cross check with internal colocation API
+SELECT 
+    p1.logicalrelid::regclass AS table1,
+    p2.logicalrelid::regclass AS table2,
+    tables_colocated(p1.logicalrelid , p2.logicalrelid) AS colocated
+FROM
+    pg_dist_partition p1,
+    pg_dist_partition p2
+WHERE
+    p1.logicalrelid < p2.logicalrelid AND
+    p1.colocationid != 0 AND
+    p2.colocationid != 0 AND
+    tables_colocated(p1.logicalrelid , p2.logicalrelid) is TRUE
+ORDER BY
+    table1,
+    table2;
+    table1     |              table2              | colocated 
+---------------+----------------------------------+-----------
+ table1_group1 | table2_group1                    | t
+ table1_groupb | table2_groupb                    | t
+ table1_groupc | table2_groupc                    | t
+ table1_groupd | table2_groupd                    | t
+ table1_groupd | table3_groupd                    | t
+ table2_groupd | table3_groupd                    | t
+ table1_groupe | table2_groupe                    | t
+ table1_groupe | table3_groupe                    | t
+ table1_groupe | schema_collocation.table4_groupe | t
+ table2_groupe | table3_groupe                    | t
+ table2_groupe | schema_collocation.table4_groupe | t
+ table3_groupe | schema_collocation.table4_groupe | t
+(12 rows)
+
+-- check created shards
+SELECT
+    logicalrelid,
+    pg_dist_shard.shardid AS shardid,
+    shardstorage,
+    nodeport,
+    shardminvalue,
+    shardmaxvalue
+FROM
+    pg_dist_shard,
+    pg_dist_shard_placement
+WHERE
+    pg_dist_shard.shardid = pg_dist_shard_placement.shardid AND
+    pg_dist_shard.shardid >= 1300026
+ORDER BY
+    logicalrelid,
+    shardmaxvalue::integer,
+    shardid,
+    placementid;
+           logicalrelid           | shardid | shardstorage | nodeport | shardminvalue | shardmaxvalue 
+----------------------------------+---------+--------------+----------+---------------+---------------
+ table1_groupb                    | 1300026 | t            |    57637 | -2147483648   | -1
+ table1_groupb                    | 1300027 | t            |    57638 | 0             | 2147483647
+ table2_groupb                    | 1300028 | t            |    57637 | -2147483648   | -1
+ table2_groupb                    | 1300029 | t            |    57638 | 0             | 2147483647
+ table1_groupc                    | 1300030 | t            |    57637 | -2147483648   | -1
+ table1_groupc                    | 1300030 | t            |    57638 | -2147483648   | -1
+ table1_groupc                    | 1300031 | t            |    57638 | 0             | 2147483647
+ table1_groupc                    | 1300031 | t            |    57637 | 0             | 2147483647
+ table2_groupc                    | 1300032 | t            |    57638 | -2147483648   | -1
+ table2_groupc                    | 1300032 | t            |    57637 | -2147483648   | -1
+ table2_groupc                    | 1300033 | t            |    57637 | 0             | 2147483647
+ table2_groupc                    | 1300033 | t            |    57638 | 0             | 2147483647
+ table1_groupd                    | 1300034 | t            |    57637 | -2147483648   | -1073741825
+ table1_groupd                    | 1300034 | t            |    57638 | -2147483648   | -1073741825
+ table1_groupd                    | 1300035 | t            |    57638 | -1073741824   | -1
+ table1_groupd                    | 1300035 | t            |    57637 | -1073741824   | -1
+ table1_groupd                    | 1300036 | t            |    57637 | 0             | 1073741823
+ table1_groupd                    | 1300036 | t            |    57638 | 0             | 1073741823
+ table1_groupd                    | 1300037 | t            |    57638 | 1073741824    | 2147483647
+ table1_groupd                    | 1300037 | t            |    57637 | 1073741824    | 2147483647
+ table2_groupd                    | 1300038 | t            |    57638 | -2147483648   | -1073741825
+ table2_groupd                    | 1300038 | t            |    57637 | -2147483648   | -1073741825
+ table2_groupd                    | 1300039 | t            |    57637 | -1073741824   | -1
+ table2_groupd                    | 1300039 | t            |    57638 | -1073741824   | -1
+ table2_groupd                    | 1300040 | t            |    57638 | 0             | 1073741823
+ table2_groupd                    | 1300040 | t            |    57637 | 0             | 1073741823
+ table2_groupd                    | 1300041 | t            |    57637 | 1073741824    | 2147483647
+ table2_groupd                    | 1300041 | t            |    57638 | 1073741824    | 2147483647
+ table3_groupd                    | 1300042 | f            |    57637 | -2147483648   | -1073741825
+ table3_groupd                    | 1300042 | f            |    57638 | -2147483648   | -1073741825
+ table3_groupd                    | 1300043 | f            |    57638 | -1073741824   | -1
+ table3_groupd                    | 1300043 | f            |    57637 | -1073741824   | -1
+ table3_groupd                    | 1300044 | f            |    57637 | 0             | 1073741823
+ table3_groupd                    | 1300044 | f            |    57638 | 0             | 1073741823
+ table3_groupd                    | 1300045 | f            |    57638 | 1073741824    | 2147483647
+ table3_groupd                    | 1300045 | f            |    57637 | 1073741824    | 2147483647
+ table1_groupe                    | 1300046 | t            |    57637 | -2147483648   | -1
+ table1_groupe                    | 1300046 | t            |    57638 | -2147483648   | -1
+ table1_groupe                    | 1300047 | t            |    57638 | 0             | 2147483647
+ table1_groupe                    | 1300047 | t            |    57637 | 0             | 2147483647
+ table2_groupe                    | 1300048 | t            |    57638 | -2147483648   | -1
+ table2_groupe                    | 1300048 | t            |    57637 | -2147483648   | -1
+ table2_groupe                    | 1300049 | t            |    57637 | 0             | 2147483647
+ table2_groupe                    | 1300049 | t            |    57638 | 0             | 2147483647
+ table3_groupe                    | 1300050 | t            |    57637 | -2147483648   | -1
+ table3_groupe                    | 1300050 | t            |    57638 | -2147483648   | -1
+ table3_groupe                    | 1300051 | t            |    57638 | 0             | 2147483647
+ table3_groupe                    | 1300051 | t            |    57637 | 0             | 2147483647
+ schema_collocation.table4_groupe | 1300052 | t            |    57638 | -2147483648   | -1
+ schema_collocation.table4_groupe | 1300052 | t            |    57637 | -2147483648   | -1
+ schema_collocation.table4_groupe | 1300053 | t            |    57637 | 0             | 2147483647
+ schema_collocation.table4_groupe | 1300053 | t            |    57638 | 0             | 2147483647
+(52 rows)
 

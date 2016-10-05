@@ -134,7 +134,7 @@ ColocatedTableList(Oid distributedTableId)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT8EQ, ObjectIdGetDatum(tableColocationId));
+				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(tableColocationId));
 
 	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
 	tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -218,4 +218,45 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	Assert(list_length(colocatedTableList) == list_length(colocatedShardList));
 
 	return colocatedShardList;
+}
+
+
+/*
+ * ColocatedTableId returns an arbitrary table which belongs to given colocation
+ * group. If there is not such a colocation group, it returns invalid oid.
+ */
+Oid
+ColocatedTableId(Oid colocationId)
+{
+	Oid colocatedTableId = InvalidOid;
+	Relation pgDistPartition = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	HeapTuple heapTuple = NULL;
+	bool indexOK = true;
+	bool isNull = false;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
+				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
+
+	/* prevent DELETE statements */
+	pgDistPartition = heap_open(DistPartitionRelationId(), ShareLock);
+	tupleDescriptor = RelationGetDescr(pgDistPartition);
+	scanDescriptor = systable_beginscan(pgDistPartition,
+										DistPartitionColocationidIndexId(),
+										indexOK, NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		colocatedTableId = heap_getattr(heapTuple, Anum_pg_dist_partition_logicalrelid,
+										tupleDescriptor, &isNull);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, ShareLock);
+
+	return colocatedTableId;
 }

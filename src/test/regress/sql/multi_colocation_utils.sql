@@ -7,7 +7,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1300000;
 -- ===================================================================
 
 CREATE SEQUENCE colocation_test_seq
-    MINVALUE 1
+    MINVALUE 1000
     NO CYCLE;
 
 /* a very simple UDF that only sets the colocation ids the same 
@@ -18,7 +18,7 @@ CREATE OR REPLACE FUNCTION colocation_test_colocate_tables(source_table regclass
     RETURNS BOOL
     LANGUAGE plpgsql
     AS $colocate_tables$
-DECLARE nextid BIGINT;
+DECLARE nextid INTEGER;
 BEGIN
     SELECT nextval('colocation_test_seq') INTO nextid;
 
@@ -110,7 +110,7 @@ SELECT tables_colocated('table1_group1', 'table1_group1');
 SELECT tables_colocated('table5_groupX', 'table5_groupX');
 SELECT tables_colocated('table6_append', 'table6_append');
 
--- check table  co-location with same co-location group
+-- check table co-location with same co-location group
 SELECT tables_colocated('table1_group1', 'table2_group1');
 
 -- check table co-location with different co-location group
@@ -154,3 +154,138 @@ SELECT find_shard_interval_index(1300001);
 SELECT find_shard_interval_index(1300002);
 SELECT find_shard_interval_index(1300003);
 SELECT find_shard_interval_index(1300016);
+
+
+-- check external colocation API
+
+SET citus.shard_count = 2;
+
+CREATE TABLE table1_groupA ( id int );
+SELECT create_distributed_table('table1_groupA', 'id');
+
+CREATE TABLE table2_groupA ( id int );
+SELECT create_distributed_table('table2_groupA', 'id');
+
+-- change shard replication factor
+SET citus.shard_replication_factor = 1;
+
+CREATE TABLE table1_groupB ( id int );
+SELECT create_distributed_table('table1_groupB', 'id');
+
+CREATE TABLE table2_groupB ( id int );
+SELECT create_distributed_table('table2_groupB', 'id');
+
+-- revert back to default shard replication factor
+SET citus.shard_replication_factor to DEFAULT;
+
+-- change partition column type
+CREATE TABLE table1_groupC ( id text );
+SELECT create_distributed_table('table1_groupC', 'id');
+
+CREATE TABLE table2_groupC ( id text );
+SELECT create_distributed_table('table2_groupC', 'id');
+
+-- change shard count
+SET citus.shard_count = 4;
+
+CREATE TABLE table1_groupD ( id int );
+SELECT create_distributed_table('table1_groupD', 'id');
+
+CREATE TABLE table2_groupD ( id int );
+SELECT create_distributed_table('table2_groupD', 'id');
+
+-- try other distribution methods
+CREATE TABLE table_append ( id int );
+SELECT create_distributed_table('table_append', 'id', 'append');
+
+CREATE TABLE table_range ( id int );
+SELECT create_distributed_table('table_range', 'id', 'range');
+
+-- test foreign table creation
+CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
+SELECT create_distributed_table('table3_groupD', 'id');
+
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+-- check effects of dropping tables
+DROP TABLE table1_groupA;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+
+-- dropping all tables in a colocation group also deletes the colocation group
+DROP TABLE table2_groupA;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+
+-- create dropped colocation group again
+SET citus.shard_count = 2;
+
+CREATE TABLE table1_groupE ( id int );
+SELECT create_distributed_table('table1_groupE', 'id');
+
+CREATE TABLE table2_groupE ( id int );
+SELECT create_distributed_table('table2_groupE', 'id');
+
+-- test different table DDL
+CREATE TABLE table3_groupE ( dummy_column text, id int );
+SELECT create_distributed_table('table3_groupE', 'id');
+
+-- test different schema
+CREATE SCHEMA schema_collocation;
+
+CREATE TABLE schema_collocation.table4_groupE ( id int );
+SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
+
+-- check worker table schemas
+\c - - - :worker_1_port
+\d table3_groupE_1300050
+\d schema_collocation.table4_groupE_1300052
+
+\c - - - :master_port
+
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+-- cross check with internal colocation API
+SELECT 
+    p1.logicalrelid::regclass AS table1,
+    p2.logicalrelid::regclass AS table2,
+    tables_colocated(p1.logicalrelid , p2.logicalrelid) AS colocated
+FROM
+    pg_dist_partition p1,
+    pg_dist_partition p2
+WHERE
+    p1.logicalrelid < p2.logicalrelid AND
+    p1.colocationid != 0 AND
+    p2.colocationid != 0 AND
+    tables_colocated(p1.logicalrelid , p2.logicalrelid) is TRUE
+ORDER BY
+    table1,
+    table2;
+
+-- check created shards
+SELECT
+    logicalrelid,
+    pg_dist_shard.shardid AS shardid,
+    shardstorage,
+    nodeport,
+    shardminvalue,
+    shardmaxvalue
+FROM
+    pg_dist_shard,
+    pg_dist_shard_placement
+WHERE
+    pg_dist_shard.shardid = pg_dist_shard_placement.shardid AND
+    pg_dist_shard.shardid >= 1300026
+ORDER BY
+    logicalrelid,
+    shardmaxvalue::integer,
+    shardid,
+    placementid;
