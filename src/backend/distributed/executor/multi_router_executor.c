@@ -133,13 +133,10 @@ static void MarkRemainingInactivePlacements(void);
  * execution.
  */
 void
-RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
+RouterExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	EState *executorState = NULL;
 	CmdType commandType = queryDesc->operation;
-
-	/* ensure that the task is not NULL */
-	Assert(task != NULL);
 
 	/* disallow triggers during distributed modify commands */
 	if (commandType != CMD_SELECT)

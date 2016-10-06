@@ -72,8 +72,10 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 * then generate a query for that individual shard. If any of the
 		 * involved tables don't prune down to a single shard, or if the
 		 * pruned shards aren't colocated, we error out.
+		 *
+		 * TODO: we currently not support CTEs.
 		 */
-		if (InsertSelectQuery(parse))
+		if (InsertSelectQuery(parse) && parse->cteList == NULL)
 		{
 			AddHiddenPartitionColumnParameter(parse);
 		}

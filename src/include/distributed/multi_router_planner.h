@@ -25,7 +25,7 @@
 #define HIDDEN_PARAMETER_ID 0xdeadbeef
 
 /* reserved alias name for UPSERTs */
-#define UPSERT_ALIAS "citus_table_alias"
+#define CITUS_TABLE_ALIAS "citus_table_alias"
 
 
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,

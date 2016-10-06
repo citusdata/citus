@@ -106,12 +106,14 @@ static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecut
 static RelationRestrictionContext * copyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
 static Node * ReplaceHiddenParameter(Node *node, void *context);
-static Var * MakeInt4Column();
+static Var * MakeInt4Column(void);
 static Const * MakeInt4Constant(Datum constantValue);
 static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree);
+static void ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query);
 static void ErrorIfNotAllParticipatingTablesAreColocated(Query *query);
 static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query);
-static void AddHiddenParameterToFirstTableRecursively(Query *query);
+static Query * FirstQueryReferencingDistributedTable(Query *query);
+static void AddHiddenParameterToFirstTable(Query *query);
 
 
 /*
@@ -249,6 +251,7 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 		uint64 selectAnchorShardId = INVALID_SHARD_ID;
 		List *insertShardPlacementList = NULL;
 		List *intersectedPlacementList = NULL;
+		RangeTblEntry *rangeTableEntry = NULL;
 
 		/*
 		 * Replace the magic value in all baserestrictinfos. Note that
@@ -276,7 +279,11 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 
 		if (routerQuery == NULL)
 		{
-			elog(ERROR, "couldn't prune down sufficiently for insert pushdown");
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail(
+								"Select query cannot be pushed down to the worker.")));
 		}
 
 		/* Ensure that we have INSERTed table's placement exists on the same worker */
@@ -287,13 +294,26 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 		if (list_length(insertShardPlacementList) != list_length(
 				intersectedPlacementList))
 		{
-			ereport(DEBUG2, (errmsg("insert table does not have the same placements on "
-									"the select placement list. Skipping this task")));
+			ereport(DEBUG2, (errmsg("skipping the task"),
+							 errdetail("Insert query hits %d placements, Select query "
+									   "hits %d placements and only %d of those placements match.",
+									   list_length(insertShardPlacementList), list_length(
+										   selectPlacementList),
+									   list_length(intersectedPlacementList))));
 
 			continue;
 		}
 
+		/* this is required for correct deparsing of the query */
 		ReorderInsertSelectTargetListsIfExists(copiedOriginal);
+
+		/* setting an alias simplifies deparsing of RETURNING */
+		rangeTableEntry = linitial(copiedOriginal->rtable);
+		if (rangeTableEntry->alias == NULL)
+		{
+			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
+			rangeTableEntry->alias = alias;
+		}
 
 		/* and generate the full query string */
 		deparse_shard_query(copiedOriginal, distributedTableId, shardInterval->shardId,
@@ -301,7 +321,7 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 		ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
 
 
-		sqlTask = CreateBasicTask(jobId, taskIdIndex++, SQL_TASK, queryString->data);
+		sqlTask = CreateBasicTask(jobId, taskIdIndex++, MODIFY_TASK, queryString->data);
 		sqlTask->dependedTaskList = NULL;
 		sqlTask->anchorShardId = shardId;
 		sqlTask->taskPlacementList = insertShardPlacementList;
@@ -336,18 +356,14 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 static void
 ErrorIfInsertSelectQueryNotSupported(Query *queryTree)
 {
-	RangeTblEntry *insertRte = NULL;
 	RangeTblEntry *subqueryRte = NULL;
 	Query *subquery = NULL;
-	Oid insertRelationId = InvalidOid;
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
 
-	insertRte = linitial(queryTree->rtable);
 	subqueryRte = lsecond(queryTree->rtable);
 	subquery = subqueryRte->subquery;
-	insertRelationId = insertRte->relid;
 
 	/* we support this feature only for colocated tables */
 	ErrorIfNotAllParticipatingTablesAreColocated(queryTree);
@@ -355,35 +371,92 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree)
 	if (contain_mutable_functions((Node *) queryTree))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("non-IMMUTABLE functions are not allowed in INSERT ... "
-								"SELECT queries")));
+						errmsg("cannot perform distributed planning for the given "
+							   "modification"),
+						errdetail(
+							"Stable and volatile functions are not allowed in INSERT ... "
+							"SELECT queries")));
 	}
 
-	if (subquery->limitCount != NULL)
+	if (queryTree->cteList != NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("LIMIT clause are not allowed in INSERT ... SELECT "
-							   "queries")));
+						errmsg("cannot perform distributed planning for the given "
+							   "modification"),
+						errdetail(
+							"Common table expressions are not allowed in INSERT ... SELECT "
+							"queries")));
 	}
 
-	if (subquery->limitOffset != NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("OFFSET clause are not allowed in INSERT ... SELECT "
-							   "queries")));
-	}
+	/* we don't support LIMIT, OFFSET and WINDOW functions */
+	ErrorIfMultiTaskRouterSelectQueryUnsupported(subquery);
 
-	/*TODO: check with Andres. Should we allow on partition column? I'm cool with not having window functions */
-	if (subquery->windowClause != NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("Window functions are not allowed in INSERT ... SELECT "
-							   "queries")));
-	}
-
+	/* ensure that INSERT's partition column comes from SELECT's partition column */
 	ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree);
 }
 
+
+/*
+ *  ErrorUnsupportedMultiTaskSelectQuery errors out on queries that we support
+ *  for single task router queries, but, cannot allow for multi task router
+ *  queries. We do these checks recursively to prevent any wrong results.
+ */
+static void
+ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
+{
+	List *queryList = NIL;
+	ListCell *queryCell = NULL;
+
+	ExtractQueryWalker((Node *) query, &queryList);
+	foreach(queryCell, queryList)
+	{
+		Query *subquery = (Query *) lfirst(queryCell);
+
+		Assert(subquery->commandType == CMD_SELECT);
+
+		if (subquery->limitCount != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail(
+								"LIMIT clauses are not allowed in INSERT ... SELECT "
+								"queries")));
+		}
+
+		if (subquery->limitOffset != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail(
+								"OFFSET clauses are not allowed in INSERT ... SELECT "
+								"queries")
+
+							));
+		}
+
+		if (subquery->windowClause != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail(
+								"Window functions are not allowed in INSERT ... SELECT "
+								"queries")));
+		}
+
+		if (subquery->setOperations != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail(
+								"Union, Intersect and Except are currently unsupported are not allowed in INSERT ... SELECT "
+								"queries")));
+		}
+	}
+}
 
 
 /*
@@ -428,8 +501,6 @@ ErrorIfNotAllParticipatingTablesAreColocated(Query *query)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("all participating tables should be colocated")));
 	}
-
-	return;
 }
 
 
@@ -497,8 +568,7 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query)
 
 /*
  * AddHiddenPartitionColumnParameter() can only be used with
- * INSERT ... SELECT queries. We add this hidden parameter to
- * recursively for subqueries.
+ * INSERT ... SELECT queries.
  *
  * If the input query is not INSERT .. SELECT the function errors-out.
  */
@@ -506,26 +576,68 @@ void
 AddHiddenPartitionColumnParameter(Query *originalQuery)
 {
 	Query *subquery = NULL;
+	Query *referencedSubquery = NULL;
 	RangeTblEntry *subqueryEntry = NULL;
 
 	if (!InsertSelectQuery(originalQuery))
 	{
 		elog(ERROR, "Only INSERT .. SELECT queries can be modified");
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning for the given"
+							   " modification")));
 	}
 
+	/* TODO: once CTEs are present, this does not work */
 	subqueryEntry = (RangeTblEntry *) list_nth(originalQuery->rtable, 1);
 	subquery = subqueryEntry->subquery;
 
-	AddHiddenParameterToFirstTableRecursively(subquery);
+	referencedSubquery = FirstQueryReferencingDistributedTable(subquery);
+
+	AddHiddenParameterToFirstTable(referencedSubquery);
+}
+
+
+static Query *
+FirstQueryReferencingDistributedTable(Query *query)
+{
+	List *queryList = NIL;
+	ListCell *queryCell = NULL;
+	Query *subquery = NULL;
+
+	ExtractQueryWalker((Node *) query, &queryList);
+
+	/* iterate and find the query which references to distributed table */
+	foreach(queryCell, queryList)
+	{
+		Query *innerSubquery = (Query *) lfirst(queryCell);
+
+		List *rangeTableList = NIL;
+		ListCell *rangeTableCell = NULL;
+
+		/* extract range table entries */
+		ExtractRangeTableEntryWalker((Node *) innerSubquery, &rangeTableList);
+		foreach(rangeTableCell, rangeTableList)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+			if (IsDistributedTable(rangeTableEntry->relid))
+			{
+				subquery = innerSubquery;
+				break;
+			}
+		}
+	}
+
+	return subquery;
 }
 
 
 /*
- * AddHiddenParameterToFirstTableRecursively adds a hidden parameter
+ * AddHiddenParameterToFirstTable adds a hidden parameter
  * ($1 = partitionColumn) for the first table on the query.
  */
 static void
-AddHiddenParameterToFirstTableRecursively(Query *query)
+AddHiddenParameterToFirstTable(Query *query)
 {
 	Param *hiddenParam = makeNode(Param);
 	Node *hiddenBound = NULL;
@@ -536,9 +648,6 @@ AddHiddenParameterToFirstTableRecursively(Query *query)
 	Oid equalsOperator = InvalidOid;
 	Oid greaterOperator = InvalidOid;
 	bool hashable = false;
-
-	List *subqueryEntryList = NIL;
-	ListCell *rangeTableEntryCell = NULL;
 
 	AssertArg(query->commandType == CMD_SELECT);
 
@@ -573,17 +682,6 @@ AddHiddenParameterToFirstTableRecursively(Query *query)
 	{
 		query->jointree->quals = make_and_qual(query->jointree->quals,
 											   hiddenBound);
-	}
-
-	/* recursively do same addition for subqueries of this query */
-	subqueryEntryList = SubqueryEntryList(query);
-	foreach(rangeTableEntryCell, subqueryEntryList)
-	{
-		RangeTblEntry *rangeTableEntry =
-			(RangeTblEntry *) lfirst(rangeTableEntryCell);
-
-		Query *innerSubquery = rangeTableEntry->subquery;
-		AddHiddenParameterToFirstTableRecursively(innerSubquery);
 	}
 }
 
@@ -1205,7 +1303,7 @@ RouterModifyTask(Query *originalQuery, Query *query)
 		rangeTableEntry = linitial(originalQuery->rtable);
 		if (rangeTableEntry->alias == NULL)
 		{
-			Alias *alias = makeAlias(UPSERT_ALIAS, NIL);
+			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
 			rangeTableEntry->alias = alias;
 		}
 	}
@@ -1494,7 +1592,8 @@ RouterSelectTask(Query *originalQuery, Query *query,
 	task->anchorShardId = shardId;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
-	//task->requiresMasterEvaluation = false;
+
+	/* task->requiresMasterEvaluation = false; */
 
 	return task;
 }
@@ -1621,11 +1720,6 @@ TargetShardIntervalsForSelect(Query *query,
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 		bool whereFalseQuery = false;
-
-		/* elog(DEBUG2, "relation id: %d", relationId); */
-		/* elog(DEBUG2, "restrictClauseList-: %s", pretty_format_node_dump(nodeToString(restrictClauseList))); */
-		/* elog(DEBUG2, "join info-: %s", pretty_format_node_dump(nodeToString(relationRestriction->relOptInfo->joininfo))); */
-
 
 		relationRestriction->prunedShardIntervalList = NIL;
 
@@ -2021,6 +2115,8 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 }
 
 
+#include "nodes/print.h"
+
 /*
  * ReorderInsertSelectTargetListsIfExists reorders the target lists of INSERT/SELECT
  * query which is required for deparsing purposes. The reordered query is returned.
@@ -2288,7 +2384,7 @@ ReplaceHiddenParameter(Node *node, void *context)
 			{
 				param = (Param *) leftop;
 			}
-			else if (IsA(rightop, Param)) //IsA(leftop, Var))/* &&) */
+			else if (IsA(rightop, Param)) /* IsA(leftop, Var))/ * &&) * / */
 			{
 				param = (Param *) rightop;
 			}

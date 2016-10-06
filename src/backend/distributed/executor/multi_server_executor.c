@@ -127,8 +127,8 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	List *workerDependentTaskList = NIL;
 	bool masterQueryHasAggregates = false;
 
-	/* router executor cannot execute queries that hit more than one shard */
-	if (taskCount != 1)
+	/* router executor cannot execute queries that hit zero shards */
+	if (taskCount == 0)
 	{
 		return false;
 	}
@@ -139,6 +139,12 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	if (taskType == MODIFY_TASK || taskType == ROUTER_TASK)
 	{
 		return true;
+	}
+
+	/* router executor cannot execute SELECT queries that hit more than one shard */
+	if (taskCount != 1)
+	{
+		return false;
 	}
 
 	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
