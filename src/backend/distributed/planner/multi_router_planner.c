@@ -44,6 +44,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
+#include "optimizer/var.h"
 #include "parser/parsetree.h"
 #include "storage/lock.h"
 #include "utils/elog.h"
@@ -90,7 +91,7 @@ static bool UpdateRelationNames(Node *node,
 static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
 static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 									  RelationRestrictionContext *restrictionContext);
-
+static bool InsertSelectQuery(Query *query);
 
 /*
  * MultiRouterPlanCreate creates a physical plan for given query. The created plan is
@@ -1543,6 +1544,193 @@ MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 				return false;
 			}
 		}
+	}
+
+	return true;
+}
+
+
+/*
+ * ReorderInsertSelectTargetListsIfExists reorders the target lists of INSERT/SELECT
+ * query which is required for deparsing purposes. The reordered query is returned.
+ *
+ * The necessity for this function comes from the fact that ruleutils.c is not supposed to be
+ * used on "rewritten" queries (i.e. ones that have been passed through QueryRewrite()).
+ * Query rewriting is the process in which views and such are expanded,
+ * and, INSERT/UPDATE targetlists are reordered to match the physical order,
+ * defaults etc. For the details of reordeing, see transformInsertRow().
+ */
+Query *
+ReorderInsertSelectTargetListsIfExists(Query *originalQuery)
+{
+	RangeTblEntry *insertRte = NULL;
+	RangeTblEntry *subqueryRte = NULL;
+	Query *subquery = NULL;
+	ListCell *insertTargetEntryCell;
+	List *newSubqueryTargetlist = NIL;
+	List *newInsertTargetlist = NIL;
+	int resno = 1;
+	Index insertTableId = 1;
+	int updatedSubqueryEntryCount = 0;
+	Oid insertRelationId = InvalidOid;
+	int subqueryTargetLength = 0;
+
+	/* we only apply the reording for INSERT ... SELECT queries */
+	if (!InsertSelectQuery(originalQuery))
+	{
+		return originalQuery;
+	}
+
+	insertRte = linitial(originalQuery->rtable);
+	subqueryRte = lsecond(originalQuery->rtable);
+	subquery = subqueryRte->subquery;
+
+	insertRelationId = insertRte->relid;
+
+	/*
+	 * We implement the following algorithm for the reoderding:
+	 *  - Iterate over the INSERT target list entries
+	 *    - If the target entry includes a Var, find the corresponding
+	 *      SELECT target entry on the original query and update resno
+	 *    - If the target entry does not include a Var (i.e., defaults),
+	 *      create new target entry and add that to SELECT target list
+	 *    - Create a new INSERT target entry with respect to the new
+	 *      SELECT target entry created.
+	 */
+	foreach(insertTargetEntryCell, originalQuery->targetList)
+	{
+		TargetEntry *oldInsertTargetEntry = lfirst(insertTargetEntryCell);
+		TargetEntry *newInsertTargetEntry = NULL;
+		Var *newInsertVar = NULL;
+		TargetEntry *newSubqueryTargetEntry = NULL;
+		List *targetVarList = NULL;
+		int targetVarCount = 0;
+		AttrNumber originalAttrNo = get_attnum(insertRelationId,
+											   oldInsertTargetEntry->resname);
+
+
+		/* see transformInsertRow() for the details */
+		if (IsA(oldInsertTargetEntry->expr, ArrayRef) ||
+			IsA(oldInsertTargetEntry->expr, FieldStore))
+		{
+			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+							errmsg("cannot plan distributed INSERT INTO .. SELECT query"),
+							errhint("Do not use array references and field stores "
+									"on the INSERT target list.")));
+		}
+
+		/*
+		 * It is safe to pull Var clause and ignore the coercions since that
+		 * are already going to be added on the workers implicitly.
+		 */
+		targetVarList = pull_var_clause((Node *) oldInsertTargetEntry->expr,
+										PVC_RECURSE_AGGREGATES,
+										PVC_RECURSE_PLACEHOLDERS);
+		targetVarCount = list_length(targetVarList);
+
+		/* a single INSERT target entry cannot have more than one Var */
+		Assert(targetVarCount <= 1);
+
+		if (targetVarCount == 1)
+		{
+			Var *oldInsertVar = (Var *) linitial(targetVarList);
+			TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
+												   oldInsertVar->varattno - 1);
+
+			newSubqueryTargetEntry = copyObject(oldSubqueryTle);
+
+			newSubqueryTargetEntry->resno = resno;
+			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
+											newSubqueryTargetEntry);
+
+			updatedSubqueryEntryCount++;
+		}
+		else
+		{
+			newSubqueryTargetEntry = makeTargetEntry(oldInsertTargetEntry->expr,
+													 resno,
+													 oldInsertTargetEntry->resname,
+													 oldInsertTargetEntry->resjunk);
+			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
+											newSubqueryTargetEntry);
+		}
+
+		newInsertVar = makeVar(insertTableId, originalAttrNo,
+							   exprType(
+								   (Node *) newSubqueryTargetEntry->expr),
+							   exprTypmod(
+								   (Node *) newSubqueryTargetEntry->expr),
+							   exprCollation(
+								   (Node *) newSubqueryTargetEntry->expr),
+							   0);
+		newInsertTargetEntry = makeTargetEntry((Expr *) newInsertVar, originalAttrNo,
+											   oldInsertTargetEntry->resname,
+											   oldInsertTargetEntry->resjunk);
+
+		newInsertTargetlist = lappend(newInsertTargetlist, newInsertTargetEntry);
+		resno++;
+	}
+
+	/*
+	 * if there are any remaining target list entries (i.e., GROUP BY column not on the
+	 * target list of subquery), update the remaining resnos.
+	 */
+	subqueryTargetLength = list_length(subquery->targetList);
+	if (subqueryTargetLength != updatedSubqueryEntryCount)
+	{
+		int targetEntryIndex = updatedSubqueryEntryCount;
+
+		for (; targetEntryIndex < subqueryTargetLength; ++targetEntryIndex)
+		{
+			TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
+												   targetEntryIndex);
+			TargetEntry *newSubqueryTargetEntry = copyObject(oldSubqueryTle);
+
+			Assert(newSubqueryTargetEntry->resjunk == true);
+
+			newSubqueryTargetEntry->resno = resno;
+			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
+											newSubqueryTargetEntry);
+
+			resno++;
+		}
+	}
+
+	originalQuery->targetList = newInsertTargetlist;
+	subquery->targetList = newSubqueryTargetlist;
+
+	return NULL;
+}
+
+
+/*
+ * InsertSelectQuery returns true when the input query
+ * is INSERT INTO ... SELECT kind of query.
+ */
+static bool
+InsertSelectQuery(Query *query)
+{
+	CmdType commandType = query->commandType;
+	List *rangeTableList = query->rtable;
+	RangeTblEntry *subqueryRte = NULL;
+	Query *subquery = NULL;
+
+	if (commandType != CMD_INSERT)
+	{
+		return false;
+	}
+
+	rangeTableList = query->rtable;
+	if (list_length(rangeTableList) < 2)
+	{
+		return false;
+	}
+
+	subqueryRte = lsecond(query->rtable);
+	subquery = subqueryRte->subquery;
+	if (subquery == NULL)
+	{
+		return false;
 	}
 
 	return true;

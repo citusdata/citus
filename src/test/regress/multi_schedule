@@ -32,6 +32,7 @@ test: multi_load_data
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
+test: multi_deparse_shard_query
 test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
 test: multi_explain
 test: multi_subquery
