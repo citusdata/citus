@@ -49,10 +49,6 @@ check-multi: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
-check-multi-hll: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus --load-extension=hll -- \
-	$(MULTI_REGRESS_OPTS) $(EXTRA_TESTS) multi_create_table multi_master_protocol multi_stage_data multi_agg_approximate_distinct
-
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=task-tracker \
