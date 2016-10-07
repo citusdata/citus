@@ -21,6 +21,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/transaction_management.h"
+#include "distributed/placement_connection.h"
 #include "utils/hsearch.h"
 
 
@@ -120,6 +121,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
+				ResetPlacementConnectionManagement();
 				AtEOXact_Connections(true);
 			}
 
@@ -146,6 +148,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
+				ResetPlacementConnectionManagement();
 				AtEOXact_Connections(false);
 			}
 
@@ -163,6 +166,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PRE_COMMIT:
 		{
+			bool using2PC = MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC;
+
 			if (subXactAbortAttempted)
 			{
 				subXactAbortAttempted = false;
@@ -178,6 +183,22 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				break;
 			}
 
+			/*
+			 * TODO: It's probably a good idea to force constraints and
+			 * such to 'immediate' here. Deferred triggers might try to
+			 * send stuff to the remote side, which'd not be good.  Doing
+			 * so remotely would also catch a class of errors where
+			 * committing fails, which can lead to divergence when not
+			 * using 2PC.
+			 */
+
+			/*
+			 * Check whether the coordinated transaction is in a state we want
+			 * to persist, or whether we want to error out.  This handles the
+			 * case that iteratively executed commands marked all placements
+			 * as invalid.
+			 */
+			CheckForFailedPlacements(true, using2PC);
 
 			if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 			{
@@ -194,6 +215,12 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				CoordinatedRemoteTransactionsCommit();
 				CurrentCoordinatedTransactionState = COORD_TRANS_COMMITTED;
 			}
+
+			/*
+			 * Check again whether shards/placement successfully
+			 * committed. This handles failure at COMMIT/PREPARE time.
+			 */
+			CheckForFailedPlacements(false, using2PC);
 		}
 		break;
 
