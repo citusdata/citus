@@ -12,6 +12,7 @@
 #define CONNECTION_MANAGMENT_H
 
 #include "distributed/transaction_management.h"
+#include "distributed/remote_transaction.h"
 #include "nodes/pg_list.h"
 #include "utils/hsearch.h"
 
@@ -71,6 +72,9 @@ typedef struct MultiConnection
 
 	/* has the connection been used in the current coordinated transaction? */
 	bool activeInTransaction;
+
+	/* information about the associated remote transaction */
+	RemoteTransaction remoteTransaction;
 } MultiConnection;
 
 

@@ -29,7 +29,16 @@ typedef enum CoordinatedTransactionState
 	COORD_TRANS_NONE,
 
 	/* no coordinated transaction in progress, but connections established */
-	COORD_TRANS_IDLE
+	COORD_TRANS_IDLE,
+
+	/* coordinated transaction in progress */
+	COORD_TRANS_STARTED,
+
+	/* coordinated transaction prepared on all workers */
+	COORD_TRANS_PREPARED,
+
+	/* coordinated transaction committed */
+	COORD_TRANS_COMMITTED
 } CoordinatedTransactionState;
 
 
@@ -49,6 +58,13 @@ extern XactModificationType XactModificationLevel;
 
 extern CoordinatedTransactionState CurrentCoordinatedTransactionState;
 
+
+/*
+ * Coordinated transaction management.
+ */
+extern void BeginCoordinatedTransaction(void);
+extern void BeginOrContinueCoordinatedTransaction(void);
+extern bool InCoordinatedTransaction(void);
 
 /*
  * Initialization.

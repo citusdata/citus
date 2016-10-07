@@ -138,6 +138,8 @@ AtEOXact_Connections(bool isCommit)
 			{
 				/* reset per-transaction state */
 				connection->activeInTransaction = false;
+				connection->remoteTransaction.transactionState = REMOTE_TRANS_INVALID;
+				connection->remoteTransaction.transactionFailed = false;
 
 				UnclaimConnection(connection);
 
