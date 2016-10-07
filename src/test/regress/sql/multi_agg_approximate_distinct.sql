@@ -6,6 +6,23 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 340000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 340000;
 
+-- Create HLL extension if present, print false result otherwise
+SELECT CASE WHEN COUNT(*) > 0 THEN
+	'CREATE EXTENSION HLL'
+ELSE 'SELECT false AS hll_present' END
+AS create_cmd FROM pg_available_extensions()
+WHERE name = 'hll'
+\gset
+
+:create_cmd;
+
+\c - - - :worker_1_port
+:create_cmd;
+
+\c - - - :worker_2_port
+:create_cmd;
+
+\c - - - :master_port
 
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 

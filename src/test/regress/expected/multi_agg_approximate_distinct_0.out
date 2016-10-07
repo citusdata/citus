@@ -11,10 +11,25 @@ AS create_cmd FROM pg_available_extensions()
 WHERE name = 'hll'
 \gset
 :create_cmd;
+ hll_present 
+-------------
+ f
+(1 row)
+
 \c - - - :worker_1_port
 :create_cmd;
+ hll_present 
+-------------
+ f
+(1 row)
+
 \c - - - :worker_2_port
 :create_cmd;
+ hll_present 
+-------------
+ f
+(1 row)
+
 \c - - - :master_port
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
@@ -24,97 +39,52 @@ HINT:  You can load the hll extension from contrib packages and enable distinct 
 -- Check approximate count(distinct) at different precisions / error rates
 SET citus.count_distinct_error_rate = 0.1;
 SELECT count(distinct l_orderkey) FROM lineitem;
- count 
--------
-  2612
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SET citus.count_distinct_error_rate = 0.01;
 SELECT count(distinct l_orderkey) FROM lineitem;
- count 
--------
-  2967
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- Check approximate count(distinct) for different data types
 SELECT count(distinct l_partkey) FROM lineitem;
- count 
--------
- 11654
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(distinct l_extendedprice) FROM lineitem;
- count 
--------
- 11691
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(distinct l_shipdate) FROM lineitem;
- count 
--------
-  2483
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(distinct l_comment) FROM lineitem;
- count 
--------
- 11788
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- Check that we can execute approximate count(distinct) on complex expressions
 SELECT count(distinct (l_orderkey * 2 + 1)) FROM lineitem;
- count 
--------
-  2980
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(distinct extract(month from l_shipdate)) AS my_month FROM lineitem;
- my_month 
-----------
-       12
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(distinct l_partkey) / count(distinct l_orderkey) FROM lineitem;
- ?column? 
-----------
-        3
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- Check that we can execute approximate count(distinct) on select queries that
 -- contain different filter, join, sort and limit clauses
 SELECT count(distinct l_orderkey) FROM lineitem
 	WHERE octet_length(l_comment) + octet_length('randomtext'::text) > 40;
- count 
--------
-  2355
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(DISTINCT l_orderkey) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
- count 
--------
-   835
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM lineitem
 	WHERE l_quantity < 32.0
 	GROUP BY l_quantity
 	ORDER BY distinct_order_count ASC, l_quantity ASC
 	LIMIT 10;
- distinct_order_count | l_quantity 
-----------------------+------------
-                  210 |      29.00
-                  216 |      13.00
-                  217 |      16.00
-                  219 |       3.00
-                  220 |      18.00
-                  222 |      14.00
-                  223 |       7.00
-                  223 |      17.00
-                  223 |      26.00
-                  223 |      31.00
-(10 rows)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- Check that approximate count(distinct) works at a table in a schema other than public
 -- create necessary objects
 CREATE SCHEMA test_count_distinct_schema;
@@ -140,19 +110,13 @@ SELECT master_create_worker_shards('test_count_distinct_schema.nation_hash', 4, 
 SET search_path TO public;
 SET citus.count_distinct_error_rate TO 0.01;
 SELECT COUNT (DISTINCT n_regionkey) FROM test_count_distinct_schema.nation_hash;
- count 
--------
-     3
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- test with search_path is set
 SET search_path TO test_count_distinct_schema;
 SELECT COUNT (DISTINCT n_regionkey) FROM nation_hash;
- count 
--------
-     3
-(1 row)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SET search_path TO public;
 -- If we have an order by on count(distinct) that we intend to push down to
 -- worker nodes, we need to error out. Otherwise, we are fine.
@@ -162,20 +126,15 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 	GROUP BY l_returnflag
 	ORDER BY count_distinct
 	LIMIT 10;
-ERROR:  cannot approximate count(distinct) and order by it
-HINT:  You might need to disable approximations for either count(distinct) or limit through configuration.
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as total 
 	FROM lineitem
 	GROUP BY l_returnflag
 	ORDER BY total
 	LIMIT 10;
- l_returnflag | count_distinct | total 
---------------+----------------+-------
- R            |           1103 |  2901
- A            |           1108 |  2944
- N            |           1265 |  6155
-(3 rows)
-
+ERROR:  cannot compute count (distinct) approximation
+HINT:  You need to have the hll extension loaded.
 -- Check that we can revert config and disable count(distinct) approximations
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;
