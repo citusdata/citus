@@ -75,7 +75,10 @@ extern void UnlockShardResource(uint64 shardId, LOCKMODE lockmode);
 extern void LockJobResource(uint64 jobId, LOCKMODE lockmode);
 extern void UnlockJobResource(uint64 jobId, LOCKMODE lockmode);
 
-extern void LockShards(List *shardIntervalList, LOCKMODE lockMode);
+/* Lock multiple shards for safe modification */
+extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
+extern void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
+
 extern void LockMetadataSnapshot(LOCKMODE lockMode);
 
 #endif /* RESOURCE_LOCK_H */

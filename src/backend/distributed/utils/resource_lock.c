@@ -20,6 +20,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -28,9 +29,8 @@
 
 /*
  * LockShardDistributionMetadata returns after grabbing a lock for distribution
- * metadata related to the specified shard, blocking if required. ExclusiveLock
- * and ShareLock modes are supported. Any locks acquired using this method are
- * released at transaction end.
+ * metadata related to the specified shard, blocking if required. Any locks
+ * acquired using this method are released at transaction end.
  */
 void
 LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
@@ -126,12 +126,11 @@ UnlockJobResource(uint64 jobId, LOCKMODE lockmode)
 
 
 /*
- * LockShards takes shared locks on the metadata and the data of all shards in
- * shardIntervalList. This prevents concurrent placement changes and concurrent
- * DML statements that require an exclusive lock.
+ * LockShardListMetadata takes shared locks on the metadata of all shards in
+ * shardIntervalList to prevents concurrent placement changes.
  */
 void
-LockShards(List *shardIntervalList, LOCKMODE lockMode)
+LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ListCell *shardIntervalCell = NULL;
 
@@ -143,10 +142,28 @@ LockShards(List *shardIntervalList, LOCKMODE lockMode)
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		int64 shardId = shardInterval->shardId;
 
-		/* prevent concurrent changes to number of placements */
 		LockShardDistributionMetadata(shardId, lockMode);
+	}
+}
 
-		/* prevent concurrent update/delete statements */
+
+/*
+ * LockShardListResources takes locks on all shards in shardIntervalList to
+ * prevent concurrent DML statements on those shards.
+ */
+void
+LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
+{
+	ListCell *shardIntervalCell = NULL;
+
+	/* lock shards in order of shard id to prevent deadlock */
+	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		int64 shardId = shardInterval->shardId;
+
 		LockShardResource(shardId, lockMode);
 	}
 }

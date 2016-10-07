@@ -153,7 +153,7 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 
 		transactionConnection->groupId = workerNode->groupId;
 		transactionConnection->connectionId = shardConnections->shardId;
-		transactionConnection->transactionState = TRANSACTION_STATE_INVALID;
+		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
 		transactionConnection->connection = connection;
 		transactionConnection->nodeName = shardPlacement->nodeName;
 		transactionConnection->nodePort = shardPlacement->nodePort;

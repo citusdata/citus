@@ -168,13 +168,13 @@ ABORT;
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
+ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
 COMMIT;
 -- whether it occurs first or second
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 INSERT INTO labs VALUES (6, 'Bell Labs');
-ERROR:  distributed data modifications must not appear in transaction blocks which contain distributed DDL commands
+ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 COMMIT;
 -- but the DDL should correctly roll back
 \d labs
@@ -244,7 +244,7 @@ SELECT * FROM labs WHERE id = 12;
 BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
+ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
 COMMIT;
 -- the DDL fails, but copy persists
 \d labs
