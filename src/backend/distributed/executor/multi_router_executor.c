@@ -605,12 +605,8 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 		{
 			ShardPlacement *failedPlacement =
 				(ShardPlacement *) lfirst(failedPlacementCell);
-			uint64 shardLength = 0;
 
-			DeleteShardPlacementRow(failedPlacement->shardId, failedPlacement->nodeName,
-									failedPlacement->nodePort);
-			InsertShardPlacementRow(failedPlacement->shardId, FILE_INACTIVE, shardLength,
-									failedPlacement->nodeName, failedPlacement->nodePort);
+			UpdateShardPlacementState(failedPlacement->placementId, FILE_INACTIVE);
 		}
 
 		executorState->es_processed = affectedTupleCount;
@@ -1406,9 +1402,11 @@ MarkRemainingInactivePlacements(void)
 				uint64 shardId = shardConnSet->shardId;
 				NodeConnectionKey *nodeKey = &participant->cacheKey;
 				uint64 shardLength = 0;
+				uint64 placementId = INVALID_PLACEMENT_ID;
 
-				DeleteShardPlacementRow(shardId, nodeKey->nodeName, nodeKey->nodePort);
-				InsertShardPlacementRow(shardId, FILE_INACTIVE, shardLength,
+				placementId = DeleteShardPlacementRow(shardId, nodeKey->nodeName,
+													  nodeKey->nodePort);
+				InsertShardPlacementRow(shardId, placementId, FILE_INACTIVE, shardLength,
 										nodeKey->nodeName, nodeKey->nodePort);
 			}
 		}

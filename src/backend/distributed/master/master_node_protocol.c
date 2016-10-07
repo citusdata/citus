@@ -67,6 +67,7 @@ static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescripto
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
 PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
+PG_FUNCTION_INFO_V1(master_get_new_placementid);
 PG_FUNCTION_INFO_V1(master_get_local_first_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
@@ -251,8 +252,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
  * ahead logs; writing to logs avoids the risk of having shardId collisions.
  *
  * Please note that the caller is still responsible for finalizing shard data
- * and the shardId with the master node. Further note that this function relies
- * on an internal sequence created in initdb to generate unique identifiers.
+ * and the shardId with the master node.
  *
  * NB: This can be called by any user; for now we have decided that that's
  * ok. We might want to restrict this to users part of a specific role or such
@@ -262,6 +262,38 @@ Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
 	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
+	Oid sequenceId = ResolveRelationId(sequenceName);
+	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
+	Datum shardIdDatum = 0;
+
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
+	/* generate new and unique shardId from sequence */
+	shardIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+
+	PG_RETURN_DATUM(shardIdDatum);
+}
+
+
+/*
+ * master_get_new_placementid allocates and returns a unique placementId for
+ * the placement to be created. This allocation occurs both in shared memory
+ * and in write ahead logs; writing to logs avoids the risk of having shardId
+ * collisions.
+ *
+ * NB: This can be called by any user; for now we have decided that that's
+ * ok. We might want to restrict this to users part of a specific role or such
+ * at some later point.
+ */
+Datum
+master_get_new_placementid(PG_FUNCTION_ARGS)
+{
+	text *sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;

@@ -75,6 +75,7 @@ extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);
+extern Oid DistShardPlacementPlacementidIndexId(void);
 extern Oid DistShardPlacementNodeidIndexId(void);
 
 /* function oids */

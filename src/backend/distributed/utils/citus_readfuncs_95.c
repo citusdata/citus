@@ -1478,7 +1478,7 @@ _readShardPlacement(void)
 {
 	READ_LOCALS(ShardPlacement);
 
-	READ_OID_FIELD(tupleOid);
+	READ_UINT64_FIELD(placementId);
 	READ_UINT64_FIELD(shardId);
 	READ_UINT64_FIELD(shardLength);
 	READ_ENUM_FIELD(shardState, RelayFileState);

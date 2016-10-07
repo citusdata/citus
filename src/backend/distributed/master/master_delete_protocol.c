@@ -376,12 +376,13 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		foreach(lingeringPlacementCell, lingeringPlacementList)
 		{
 			ShardPlacement *placement = (ShardPlacement *) lfirst(lingeringPlacementCell);
+			uint64 placementId = placement->placementId;
 			char *workerName = placement->nodeName;
 			uint32 workerPort = placement->nodePort;
 			uint64 oldShardLength = placement->shardLength;
 
 			DeleteShardPlacementRow(shardId, workerName, workerPort);
-			InsertShardPlacementRow(shardId, FILE_TO_DELETE, oldShardLength,
+			InsertShardPlacementRow(shardId, placementId, FILE_TO_DELETE, oldShardLength,
 									workerName, workerPort);
 
 			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node \"%s:%u\"",
