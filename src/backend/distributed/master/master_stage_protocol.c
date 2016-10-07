@@ -295,12 +295,8 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 		uint64 placementId = placement->placementId;
 		char *workerName = placement->nodeName;
 		uint32 workerPort = placement->nodePort;
-		uint64 oldShardLength = placement->shardLength;
 
-		DeleteShardPlacementRow(shardId, workerName, workerPort);
-		InsertShardPlacementRow(shardId, placementId,
-								FILE_INACTIVE, oldShardLength,
-								workerName, workerPort);
+		UpdateShardPlacementState(placementId, FILE_INACTIVE);
 
 		ereport(WARNING, (errmsg("could not append table to shard \"%s\" on node "
 								 "\"%s:%u\"", shardQualifiedName, workerName,

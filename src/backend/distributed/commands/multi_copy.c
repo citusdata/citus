@@ -1026,13 +1026,8 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 	foreach(failedPlacementCell, failedPlacementList)
 	{
 		ShardPlacement *failedPlacement = (ShardPlacement *) lfirst(failedPlacementCell);
-		uint64 shardLength = 0;
 
-		DeleteShardPlacementRow(failedPlacement->shardId, failedPlacement->nodeName,
-								failedPlacement->nodePort);
-		InsertShardPlacementRow(failedPlacement->shardId, failedPlacement->placementId,
-								FILE_INACTIVE, shardLength,
-								failedPlacement->nodeName, failedPlacement->nodePort);
+		UpdateShardPlacementState(failedPlacement->placementId, FILE_INACTIVE);
 	}
 
 	shardConnections->connectionList = connectionList;
