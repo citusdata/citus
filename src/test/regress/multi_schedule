@@ -36,7 +36,7 @@ test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
 test: multi_explain
 test: multi_subquery
 test: multi_single_relation_subquery
-test: multi_agg_distinct multi_limit_clause multi_limit_clause_approximate
+test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause multi_limit_clause_approximate
 test: multi_average_expression multi_working_columns
 test: multi_array_agg
 test: multi_agg_type_conversion multi_count_type_conversion
