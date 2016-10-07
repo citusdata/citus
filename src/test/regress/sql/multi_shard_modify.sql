@@ -46,10 +46,14 @@ COPY multi_shard_modify_test (t_key, t_name, t_value) FROM STDIN WITH (FORMAT 'c
 \.
 
 -- Testing master_modify_multiple_shards
--- Verify that master_modify_multiple_shards cannot be called in a transaction block
+
+-- Verify that master_modify_multiple_shards can be rolled back
 BEGIN;
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key > 10 AND t_key <= 13');
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 202');
 ROLLBACK;
+
+SELECT count(*) FROM multi_shard_modify_test;
 
 -- Check that master_modify_multiple_shards cannot be called with non-distributed tables
 CREATE TEMPORARY TABLE temporary_nondistributed_table (col_1 integer,col_2 text);

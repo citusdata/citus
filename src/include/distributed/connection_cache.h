@@ -58,7 +58,7 @@ typedef enum
 	XACT_MODIFICATION_INVALID = 0, /* placeholder initial value */
 	XACT_MODIFICATION_NONE,        /* no modifications have taken place */
 	XACT_MODIFICATION_DATA,        /* data modifications (DML) have occurred */
-	XACT_MODIFICATION_SCHEMA       /* schema modifications (DDL) have occurred */
+	XACT_MODIFICATION_MULTI_SHARD  /* multi-shard modifications have occurred */
 } XactModificationType;
 
 

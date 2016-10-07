@@ -39,4 +39,8 @@ extern void RouterExecutorFinish(QueryDesc *queryDesc);
 extern void RouterExecutorEnd(QueryDesc *queryDesc);
 extern void RegisterRouterExecutorXactCallbacks(void);
 
+extern int64 ExecuteModifyTasks(List *taskList, bool expectResults,
+								ParamListInfo paramListInfo, MaterialState *routerState,
+								TupleDesc tupleDescriptor);
+
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

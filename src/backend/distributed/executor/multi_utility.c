@@ -1292,7 +1292,8 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("distributed DDL commands must not appear within "
-							   "transaction blocks containing data modifications")));
+							   "transaction blocks containing single-shard data "
+							   "modifications")));
 	}
 
 	ShowNoticeIfNotUsing2PC();
@@ -1305,7 +1306,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 		ereport(ERROR, (errmsg("could not execute DDL command on worker node shards")));
 	}
 
-	XactModificationLevel = XACT_MODIFICATION_SCHEMA;
+	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
 }
 
 
@@ -1359,7 +1360,7 @@ ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
 
-	LockShards(shardIntervalList, ShareLock);
+	LockShardListResources(shardIntervalList, ShareLock);
 	OpenTransactionsToAllShardPlacements(shardIntervalList, tableOwner);
 
 	foreach(shardIntervalCell, shardIntervalList)
