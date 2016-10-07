@@ -21,22 +21,22 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1160000;
 \set Table_Part_02 lineitem_range_part_02
 \set Table_Part_03 lineitem_range_part_03
 
+\set File_Basedir  base/pgsql_job_cache
+\set Table_File_00 :File_Basedir/job_:JobId/task_:TaskId/p_00000
+\set Table_File_01 :File_Basedir/job_:JobId/task_:TaskId/p_00001
+\set Table_File_02 :File_Basedir/job_:JobId/task_:TaskId/p_00002
+\set Table_File_03 :File_Basedir/job_:JobId/task_:TaskId/p_00003
+
 -- Run select query, and apply range partitioning on query results
 
 SELECT worker_range_partition_table(:JobId, :TaskId, :Select_Query_Text,
        				    :Partition_Column_Text, :Partition_Column_Type,
 				    ARRAY[1, 3000, 12000]::_int8);
 
--- Note that the following file names depend on job and task identifiers. We
--- prefer to substitute them here, but the current psql version does not perform
--- variable interpolation for names inside single quotes. This SQL interpolation
--- issue is fixed in PostgreSQL 9.0; and once we upgrade, we will change both
--- the following filenames, and the sequence names in the relay_sequence tests.
-
-COPY :Table_Part_00 FROM 'base/pgsql_job_cache/job_201010/task_101101/p_00000';
-COPY :Table_Part_01 FROM 'base/pgsql_job_cache/job_201010/task_101101/p_00001';
-COPY :Table_Part_02 FROM 'base/pgsql_job_cache/job_201010/task_101101/p_00002';
-COPY :Table_Part_03 FROM 'base/pgsql_job_cache/job_201010/task_101101/p_00003';
+COPY :Table_Part_00 FROM :'Table_File_00';
+COPY :Table_Part_01 FROM :'Table_File_01';
+COPY :Table_Part_02 FROM :'Table_File_02';
+COPY :Table_Part_03 FROM :'Table_File_03';
 
 SELECT COUNT(*) FROM :Table_Part_00;
 SELECT COUNT(*) FROM :Table_Part_03;
