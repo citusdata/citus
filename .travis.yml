@@ -13,10 +13,12 @@ before_install:
   - git clone -b v0.4.1 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
+  - curl https://install.citusdata.com/community/deb.sh | sudo bash
   - nuke_pg
 install:
   - install_uncrustify
   - install_pg
+  - sudo apt-get install -y "postgresql-${PGVERSION}-hll=2.10.1.citus-1"
 before_script: citus_indent --quiet --check
-script: CFLAGS=-Werror pg_travis_multi_test check-multi check-worker
+script: CFLAGS=-Werror pg_travis_multi_test check
 after_success: sync_to_enterprise
