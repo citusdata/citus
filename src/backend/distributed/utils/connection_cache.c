@@ -29,10 +29,6 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 
-
-/* state needed to keep track of operations used during a transaction */
-XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
-
 /*
  * NodeConnectionHash is the connection hash itself. It begins uninitialized.
  * The first call to GetOrEstablishConnection triggers hash creation.
@@ -194,37 +190,6 @@ PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey)
 	}
 
 	return connection;
-}
-
-
-/*
- * SqlStateMatchesCategory returns true if the given sql state (which may be
- * NULL if unknown) is in the given error category. Note that we use
- * ERRCODE_TO_CATEGORY macro to determine error category of the sql state and
- * expect the caller to use the same macro for the error category.
- */
-bool
-SqlStateMatchesCategory(char *sqlStateString, int category)
-{
-	bool sqlStateMatchesCategory = false;
-	int sqlState = 0;
-	int sqlStateCategory = 0;
-
-	if (sqlStateString == NULL)
-	{
-		return false;
-	}
-
-	sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
-							 sqlStateString[3], sqlStateString[4]);
-
-	sqlStateCategory = ERRCODE_TO_CATEGORY(sqlState);
-	if (sqlStateCategory == category)
-	{
-		sqlStateMatchesCategory = true;
-	}
-
-	return sqlStateMatchesCategory;
 }
 
 
