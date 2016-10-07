@@ -30,10 +30,6 @@ static uint32 DistributedTransactionId = 0;
 static StringInfo BuildTransactionName(int connectionId);
 
 
-/* the commit protocol to use for COPY commands */
-int MultiShardCommitProtocol = COMMIT_PROTOCOL_1PC;
-
-
 /*
  * InitializeDistributedTransaction prepares the distributed transaction ID
  * used in transaction names.

@@ -307,7 +307,6 @@ CompleteShardPlacementTransactions(XactEvent event, void *arg)
 
 	CloseConnections(connectionList);
 	shardConnectionHash = NULL;
-	XactModificationLevel = XACT_MODIFICATION_NONE;
 	subXactAbortAttempted = false;
 }
 
