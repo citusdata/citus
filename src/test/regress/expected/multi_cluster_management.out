@@ -72,17 +72,17 @@ SELECT master_create_worker_shards('cluster_management_test', 16, 1);
 (1 row)
 
 -- see that there are some active placements in the candidate node
-SELECT * FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1220001 |          1 |           0 | localhost |    57638
- 1220003 |          1 |           0 | localhost |    57638
- 1220005 |          1 |           0 | localhost |    57638
- 1220007 |          1 |           0 | localhost |    57638
- 1220009 |          1 |           0 | localhost |    57638
- 1220011 |          1 |           0 | localhost |    57638
- 1220013 |          1 |           0 | localhost |    57638
- 1220015 |          1 |           0 | localhost |    57638
+SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+ 1220001 |          1 | localhost |    57638
+ 1220003 |          1 | localhost |    57638
+ 1220005 |          1 | localhost |    57638
+ 1220007 |          1 | localhost |    57638
+ 1220009 |          1 | localhost |    57638
+ 1220011 |          1 | localhost |    57638
+ 1220013 |          1 | localhost |    57638
+ 1220015 |          1 | localhost |    57638
 (8 rows)
 
 -- try to remove a node with active placements and see that node removal is failed
@@ -97,17 +97,17 @@ SELECT master_get_active_worker_nodes();
 
 -- mark all placements in the candidate node as inactive
 UPDATE pg_dist_shard_placement SET shardstate=3 WHERE nodeport=:worker_2_port;
-SELECT * FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
- shardid | shardstate | shardlength | nodename  | nodeport 
----------+------------+-------------+-----------+----------
- 1220001 |          3 |           0 | localhost |    57638
- 1220003 |          3 |           0 | localhost |    57638
- 1220005 |          3 |           0 | localhost |    57638
- 1220007 |          3 |           0 | localhost |    57638
- 1220009 |          3 |           0 | localhost |    57638
- 1220011 |          3 |           0 | localhost |    57638
- 1220013 |          3 |           0 | localhost |    57638
- 1220015 |          3 |           0 | localhost |    57638
+SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+ 1220001 |          3 | localhost |    57638
+ 1220003 |          3 | localhost |    57638
+ 1220005 |          3 | localhost |    57638
+ 1220007 |          3 | localhost |    57638
+ 1220009 |          3 | localhost |    57638
+ 1220011 |          3 | localhost |    57638
+ 1220013 |          3 | localhost |    57638
+ 1220015 |          3 | localhost |    57638
 (8 rows)
 
 -- try to remove a node with only inactive placements and see that node is removed

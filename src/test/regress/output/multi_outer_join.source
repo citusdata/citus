@@ -353,16 +353,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |        23
-        24 |        24 |        24
-        25 |        25 |        25
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |        29
-        30 |        30 |        30
          1 |           |          
          2 |           |          
          3 |           |          
@@ -378,6 +368,16 @@ LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer
         13 |        13 |        13
         14 |        14 |        14
         15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
 (25 rows)
 
 -- Right join with single shard right most table should error out
@@ -399,16 +399,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_left" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |        23
-        24 |        24 |        24
-        25 |        25 |        25
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |        29
-        30 |        30 |        30
         11 |        11 |        11
         12 |        12 |        12
         13 |        13 |        13
@@ -419,6 +409,16 @@ LOG:  join order: [ "multi_outer_join_right" ][ broadcast join "multi_outer_join
         18 |        18 |          
         19 |        19 |          
         20 |        20 |          
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
 (20 rows)
 
 -- Make it anti-join, should display values with l_custkey is null
@@ -458,16 +458,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ]
  l_custkey | r_custkey 
 -----------+-----------
-        21 |        21
-        22 |        22
-        23 |        23
-        24 |        24
-        25 |        25
-        26 |        26
-        27 |        27
-        28 |        28
-        29 |        29
-        30 |        30
          1 |          
          2 |          
          3 |          
@@ -488,6 +478,16 @@ LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer
            |        18
            |        19
            |        16
+        21 |        21
+        22 |        22
+        23 |        23
+        24 |        24
+        25 |        25
+        26 |        26
+        27 |        27
+        28 |        28
+        29 |        29
+        30 |        30
 (30 rows)
 
 -- full outer join + anti (right) should work with 1-1 matched shards
@@ -577,6 +577,11 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer_join_right" ][ broadcast join "multi_outer_join_third" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
+        11 |        11 |        11
+        12 |        12 |        12
+        13 |        13 |        13
+        14 |        14 |        14
+        15 |        15 |        15
         21 |        21 |        21
         22 |        22 |        22
         23 |        23 |        23
@@ -587,11 +592,6 @@ LOG:  join order: [ "multi_outer_join_left" ][ local partition join "multi_outer
         28 |        28 |        28
         29 |        29 |        29
         30 |        30 |        30
-        11 |        11 |        11
-        12 |        12 |        12
-        13 |        13 |        13
-        14 |        14 |        14
-        15 |        15 |        15
 (15 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) join should work
@@ -604,16 +604,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |        23
-        24 |        24 |        24
-        25 |        25 |        25
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |        29
-        30 |        30 |        30
          1 |         1 |          
          2 |         2 |          
          3 |         3 |          
@@ -629,6 +619,16 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
         13 |        13 |        13
         14 |        14 |        14
         15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
 (25 rows)
 
 -- inner (local) join  + 2 shards left (dual partition) join should error out
@@ -650,16 +650,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ][ local partition join "multi_outer_join_right" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
-        21 |        21 |        21
-        22 |        22 |        22
-        23 |        23 |        23
-        24 |        24 |        24
-        25 |        25 |        25
-        26 |        26 |        26
-        27 |        27 |        27
-        28 |        28 |        28
-        29 |        29 |        29
-        30 |        30 |        30
          1 |         1 |          
          2 |         2 |          
          3 |         3 |          
@@ -675,6 +665,16 @@ LOG:  join order: [ "multi_outer_join_left" ][ broadcast join "multi_outer_join_
         13 |        13 |        13
         14 |        14 |        14
         15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
 (25 rows)
 
 -- inner (broadcast) join  + 2 shards left (local) + anti join should work
@@ -712,16 +712,6 @@ FROM
 LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_outer_join_left" ][ broadcast join "multi_outer_join_third" ]
  t_custkey 
 -----------
-        21
-        22
-        23
-        24
-        25
-        26
-        27
-        28
-        29
-        30
         11
         12
         13
@@ -732,6 +722,16 @@ LOG:  join order: [ "multi_outer_join_right" ][ local partition join "multi_oute
         18
         19
         20
+        21
+        22
+        23
+        24
+        25
+        26
+        27
+        28
+        29
+        30
 (20 rows)
 
 -- flattened out subqueries with outer joins are not supported

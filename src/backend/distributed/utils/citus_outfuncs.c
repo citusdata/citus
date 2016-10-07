@@ -431,7 +431,7 @@ _outShardPlacement(StringInfo str, const ShardPlacement *node)
 {
 	WRITE_NODE_TYPE("SHARDPLACEMENT");
 
-	WRITE_OID_FIELD(tupleOid);
+	WRITE_UINT64_FIELD(placementId);
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
 	WRITE_ENUM_FIELD(shardState, RelayFileState);

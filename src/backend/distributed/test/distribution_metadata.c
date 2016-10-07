@@ -309,7 +309,8 @@ create_healthy_local_shard_placement_row(PG_FUNCTION_ARGS)
 	int64 shardId = PG_GETARG_INT64(0);
 	int64 shardLength = 0;
 
-	InsertShardPlacementRow(shardId, FILE_FINALIZED, shardLength, "localhost", 5432);
+	InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, FILE_FINALIZED, shardLength,
+							"localhost", 5432);
 
 	PG_RETURN_VOID();
 }
@@ -347,9 +348,11 @@ update_shard_placement_row_state(PG_FUNCTION_ARGS)
 	bool successful = true;
 	char *hostNameString = text_to_cstring(hostName);
 	uint64 shardLength = 0;
+	uint64 placementId = INVALID_PLACEMENT_ID;
 
-	DeleteShardPlacementRow(shardId, hostNameString, hostPort);
-	InsertShardPlacementRow(shardId, shardState, shardLength, hostNameString, hostPort);
+	placementId = DeleteShardPlacementRow(shardId, hostNameString, hostPort);
+	InsertShardPlacementRow(shardId, placementId, shardState, shardLength,
+							hostNameString, hostPort);
 
 	PG_RETURN_BOOL(successful);
 }

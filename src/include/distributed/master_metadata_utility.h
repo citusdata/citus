@@ -47,7 +47,7 @@ typedef struct ShardInterval
 typedef struct ShardPlacement
 {
 	CitusNodeTag type;
-	Oid tupleOid;       /* unique oid that implies this row's insertion order */
+	uint64 placementId;       /* sequence that implies this placement creation order */
 	uint64 shardId;
 	uint64 shardLength;
 	RelayFileState shardState;
@@ -71,10 +71,14 @@ extern ShardPlacement * TupleToShardPlacement(TupleDesc tupleDesc,
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 						   text *shardMinValue, text *shardMaxValue);
-extern void InsertShardPlacementRow(uint64 shardId, char shardState, uint64 shardLength,
+extern void DeleteShardRow(uint64 shardId);
+extern void InsertShardPlacementRow(uint64 shardId, uint64 placementId,
+									char shardState, uint64 shardLength,
 									char *nodeName, uint32 nodePort);
 extern void DeleteShardRow(uint64 shardId);
-extern void DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32 workerPort);
+extern void UpdateShardPlacementState(uint64 placementId, char shardState);
+extern uint64 DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32
+									  workerPort);
 
 /* Remaining metadata utility functions  */
 extern Node * BuildDistributionKeyFromColumnName(Relation distributedRelation,
