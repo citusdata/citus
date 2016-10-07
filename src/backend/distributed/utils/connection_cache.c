@@ -29,10 +29,6 @@
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 
-
-/* state needed to keep track of operations used during a transaction */
-XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
-
 /*
  * NodeConnectionHash is the connection hash itself. It begins uninitialized.
  * The first call to GetOrEstablishConnection triggers hash creation.
