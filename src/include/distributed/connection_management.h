@@ -12,6 +12,7 @@
 #define CONNECTION_MANAGMENT_H
 
 #include "distributed/transaction_management.h"
+#include "distributed/remote_transaction.h"
 #include "lib/ilist.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
@@ -63,6 +64,12 @@ typedef struct MultiConnection
 
 	/* membership in list of list of connections in ConnectionHashEntry */
 	dlist_node connectionNode;
+
+	/* information about the associated remote transaction */
+	RemoteTransaction remoteTransaction;
+
+	/* membership in list of in-progress transactions */
+	dlist_node transactionNode;
 } MultiConnection;
 
 
