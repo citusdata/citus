@@ -52,20 +52,6 @@ typedef struct NodeConnectionEntry
 } NodeConnectionEntry;
 
 
-/* describes what kind of modifications have occurred in the current transaction */
-typedef enum
-{
-	XACT_MODIFICATION_INVALID = 0, /* placeholder initial value */
-	XACT_MODIFICATION_NONE,        /* no modifications have taken place */
-	XACT_MODIFICATION_DATA,        /* data modifications (DML) have occurred */
-	XACT_MODIFICATION_MULTI_SHARD  /* multi-shard modifications have occurred */
-} XactModificationType;
-
-
-/* state needed to prevent new connections during modifying transactions */
-extern XactModificationType XactModificationLevel;
-
-
 /* function declarations for obtaining and using a connection */
 extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
 extern void PurgeConnection(PGconn *connection);

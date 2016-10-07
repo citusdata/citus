@@ -20,6 +20,7 @@
 #include "executor/executor.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/commit_protocol.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
@@ -32,7 +33,9 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h"
+#include "distributed/remote_commands.h"
 #include "distributed/task_tracker.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "postmaster/postmaster.h"
@@ -153,6 +156,10 @@ _PG_init(void)
 
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
+
+	/* initialize coordinated transaction management */
+	InitializeTransactionManagement();
+	InitializeConnectionManagement();
 
 	/* initialize transaction callbacks */
 	RegisterRouterExecutorXactCallbacks();
