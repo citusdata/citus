@@ -6,6 +6,43 @@
  *   subsystems, this files, and especially CoordinatedTransactionCallback,
  *   coordinates the work between them.
  *
+ *
+ *   The standard pattern to perform work spanning this and remote nodes, is to:
+ *
+ *   1) Call BeginOrContinueCoordinatedTransaction(). This signals that work
+ *      on remote nodes should be done inside explicit transactions. If that's
+ *      not desired, e.g. inside router executor, this step should be skipped.
+ *
+ *   2) Acquire a connection to either the remote node (using
+ *      GetNodeConnection() or similar) or one associated with a placement
+ *      (using GetPlacementConnection() or similar). Always use the latter
+ *      when performing work associated with a placement.  Use the
+ *      FOR_DML/FOR_DDL flags if appropriate.
+ *
+ *   3) Call AdjustRemoteTransactionState() or AdjustRemoteTransactionStates()
+ *      on all connections used. The latter should be used if multiple
+ *      connections are in use, since it is considerably faster.
+ *
+ *   4) Perform work on the connection, either using MultiConnection->conn
+ *      directly via libpq, or using some of the remote_command.h helpers.
+ *
+ *   5) Done.  If the local transaction commits/aborts, the remote
+ *      transaction(s) are going to be committed/aborted as well.  If a
+ *      placement has been modified (DML or DDL flag to
+ *      GetPlacementConnnection()) and the remote transaction failed,
+ *      placements will be marked as invalid, or the entire transaction will
+ *      be aborted, as appropriate.
+ *
+ *
+ *   This subsystem delegates work to several subsystems:
+ *   - connection lifecycle management is handled in connection_management.[ch]
+ *   - transaction on remote nodes are managed via remote_transaction.[ch]
+ *   - per-placement visibility, locking and invalidation resides in
+ *     placement_connection.[ch]
+ *   - simple and complex commands on other nodes can be executed via
+ *     remote_commands.[ch]
+ *
+ *
  * Copyright (c) 2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
