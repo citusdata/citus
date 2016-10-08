@@ -18,7 +18,6 @@
 
 #include "commands/explain.h"
 #include "executor/executor.h"
-#include "distributed/commit_protocol.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
@@ -30,7 +29,6 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
@@ -158,9 +156,6 @@ _PG_init(void)
 	InitializeTransactionManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
-
-	/* initialize transaction callbacks */
-	RegisterShardPlacementXactCallbacks();
 }
 
 
