@@ -27,6 +27,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
@@ -53,9 +54,6 @@ static List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNod
 								   int32 sourceNodePort);
 static char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 static List * RecreateTableDDLCommandList(Oid relationId);
-static void SendCommandListInSingleTransaction(char *nodeName, int32 nodePort,
-											   List *commandList);
-static char * CitusExtensionOwnerName(void);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
@@ -283,6 +281,7 @@ CopyShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	ListCell *colocatedShardCell = NULL;
 	List *ddlCommandList = NIL;
+	char *nodeUser = CitusExtensionOwnerName();
 
 	foreach(colocatedShardCell, colocatedShardList)
 	{
@@ -297,7 +296,8 @@ CopyShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 
 	HOLD_INTERRUPTS();
 
-	SendCommandListInSingleTransaction(targetNodeName, targetNodePort, ddlCommandList);
+	SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort, nodeUser,
+											   ddlCommandList);
 
 	foreach(colocatedShardCell, colocatedShardList)
 	{
@@ -442,88 +442,4 @@ RecreateTableDDLCommandList(Oid relationId)
 	recreateCommandList = list_concat(dropCommandList, createCommandList);
 
 	return recreateCommandList;
-}
-
-
-/*
- * SendCommandListInSingleTransaction opens connection to the node with the given
- * nodeName and nodePort. Then, the connection starts a transaction on the remote
- * node and executes the commands in the transaction. The function raises error if
- * any of the queries fails.
- *
- * FIXME: Copied from Citus-MX, should be removed once those changes checked-in to Citus.
- */
-static void
-SendCommandListInSingleTransaction(char *nodeName, int32 nodePort, List *commandList)
-{
-	char *nodeUser = CitusExtensionOwnerName();
-	PGconn *workerConnection = NULL;
-	PGresult *queryResult = NULL;
-	ListCell *commandCell = NULL;
-
-	workerConnection = ConnectToNode(nodeName, nodePort, nodeUser);
-	if (workerConnection == NULL)
-	{
-		ereport(ERROR, (errmsg("could not open connection to %s:%d as %s",
-							   nodeName, nodePort, nodeUser)));
-	}
-
-	/* start the transaction on the worker node */
-	queryResult = PQexec(workerConnection, "BEGIN");
-	if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-	{
-		ReraiseRemoteError(workerConnection, queryResult);
-	}
-
-	PQclear(queryResult);
-
-	/* iterate over the commands and execute them in the same connection */
-	foreach(commandCell, commandList)
-	{
-		char *commandString = lfirst(commandCell);
-		ExecStatusType resultStatus = PGRES_EMPTY_QUERY;
-
-		queryResult = PQexec(workerConnection, commandString);
-		resultStatus = PQresultStatus(queryResult);
-		if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
-			  resultStatus == PGRES_COMMAND_OK))
-		{
-			ReraiseRemoteError(workerConnection, queryResult);
-		}
-
-		PQclear(queryResult);
-	}
-
-	/* commit the transaction on the worker node */
-	queryResult = PQexec(workerConnection, "COMMIT");
-	if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-	{
-		ReraiseRemoteError(workerConnection, queryResult);
-	}
-
-	PQclear(queryResult);
-
-	/* clear NULL result */
-	PQgetResult(workerConnection);
-
-	/* we no longer need this connection */
-	PQfinish(workerConnection);
-}
-
-
-/*
- * CitusExtensionOwnerName returns the name of the owner of the extension.
- *
- * FIXME: Copied from Citus-MX, should be removed once those changes checked-in to Citus.
- */
-static char *
-CitusExtensionOwnerName(void)
-{
-	Oid superUserId = CitusExtensionOwner();
-
-#if (PG_VERSION_NUM < 90500)
-	return GetUserNameFromId(superUserId);
-#else
-	return GetUserNameFromId(superUserId, false);
-#endif
 }

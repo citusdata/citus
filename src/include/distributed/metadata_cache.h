@@ -79,6 +79,8 @@ extern Oid DistShardLogicalRelidIndexId(void);
 extern Oid DistShardShardidIndexId(void);
 extern Oid DistShardPlacementShardidIndexId(void);
 extern Oid DistShardPlacementPlacementidIndexId(void);
+extern Oid DistTransactionRelationId(void);
+extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistShardPlacementNodeidIndexId(void);
 
 /* function oids */
@@ -86,5 +88,6 @@ extern Oid CitusExtraDataContainerFuncId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);
+extern char * CitusExtensionOwnerName(void);
 extern char * CurrentUserName(void);
 #endif /* METADATA_CACHE_H */

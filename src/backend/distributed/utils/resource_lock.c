@@ -19,6 +19,7 @@
 
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -148,4 +149,19 @@ LockShards(List *shardIntervalList, LOCKMODE lockMode)
 		/* prevent concurrent update/delete statements */
 		LockShardResource(shardId, lockMode);
 	}
+}
+
+
+/*
+ * LockMetadataSnapshot acquires a lock needed to serialize changes to pg_dist_node
+ * and all other metadata changes. Operations that modify pg_dist_node should acquire
+ * AccessExclusiveLock. All other metadata changes should acquire AccessShareLock. Any locks
+ * acquired using this method are released at transaction end.
+ */
+void
+LockMetadataSnapshot(LOCKMODE lockMode)
+{
+	Assert(lockMode == AccessExclusiveLock || lockMode == AccessShareLock);
+
+	(void) LockRelationOid(DistNodeRelationId(), lockMode);
 }
