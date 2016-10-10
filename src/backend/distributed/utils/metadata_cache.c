@@ -62,6 +62,8 @@ static Oid distShardShardidIndexId = InvalidOid;
 static Oid distShardPlacementShardidIndexId = InvalidOid;
 static Oid distShardPlacementPlacementidIndexId = InvalidOid;
 static Oid distShardPlacementNodeidIndexId = InvalidOid;
+static Oid distTransactionRelationId = InvalidOid;
+static Oid distTransactionGroupIndexId = InvalidOid;
 static Oid extraDataContainerFuncId = InvalidOid;
 
 /* Hash table for informations about each partition */
@@ -762,6 +764,27 @@ DistShardPlacementPlacementidIndexId(void)
 }
 
 
+/* return oid of pg_dist_transaction relation */
+Oid
+DistTransactionRelationId(void)
+{
+	CachedRelationLookup("pg_dist_transaction", &distTransactionRelationId);
+
+	return distTransactionRelationId;
+}
+
+
+/* return oid of pg_dist_transaction_group_index */
+Oid
+DistTransactionGroupIndexId(void)
+{
+	CachedRelationLookup("pg_dist_transaction_group_index",
+						 &distTransactionGroupIndexId);
+
+	return distTransactionGroupIndexId;
+}
+
+
 /* return oid of pg_dist_shard_placement_nodeid_index */
 Oid
 DistShardPlacementNodeidIndexId(void)
@@ -854,6 +877,18 @@ CitusExtensionOwner(void)
 	heap_close(relation, AccessShareLock);
 
 	return extensionOwner;
+}
+
+
+/*
+ * CitusExtensionOwnerName returns the name of the owner of the extension.
+ */
+char *
+CitusExtensionOwnerName(void)
+{
+	Oid superUserId = CitusExtensionOwner();
+
+	return GetUserNameFromId(superUserId, false);
 }
 
 
@@ -1382,6 +1417,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardRelationId = InvalidOid;
 		distShardPlacementRelationId = InvalidOid;
 		distLocalGroupRelationId = InvalidOid;
+		distNodeRelationId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;
@@ -1389,7 +1425,8 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distShardShardidIndexId = InvalidOid;
 		distShardPlacementShardidIndexId = InvalidOid;
 		distShardPlacementPlacementidIndexId = InvalidOid;
-		distNodeRelationId = InvalidOid;
+		distTransactionRelationId = InvalidOid;
+		distTransactionGroupIndexId = InvalidOid;
 		extraDataContainerFuncId = InvalidOid;
 	}
 }

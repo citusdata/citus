@@ -42,9 +42,12 @@ typedef enum
  */
 typedef struct TransactionConnection
 {
+	int groupId;
 	int64 connectionId;
 	TransactionState transactionState;
 	PGconn *connection;
+	const char *nodeName;
+	int nodePort;
 } TransactionConnection;
 
 
@@ -57,5 +60,6 @@ extern void InitializeDistributedTransaction(void);
 extern void PrepareRemoteTransactions(List *connectionList);
 extern void AbortRemoteTransactions(List *connectionList);
 extern void CommitRemoteTransactions(List *connectionList, bool stopOnFailure);
+extern StringInfo BuildTransactionName(int connectionId);
 
 #endif /* COMMIT_PROTOCOL_H */

@@ -21,6 +21,7 @@
 /* utility functions declaration shared within this module */
 extern List * SortList(List *pointerList,
 					   int (*ComparisonFunction)(const void *, const void *));
+extern void ** PointerArrayFromList(List *pointerList);
 
 
 #endif /* CITUS_LISTUTILS_H */

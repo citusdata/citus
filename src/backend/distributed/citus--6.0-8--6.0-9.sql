@@ -1,3 +1,5 @@
+/* citus--6.0-8--6.0-9.sql */
+
 CREATE TABLE citus.pg_dist_local_group(
     groupid int NOT NULL PRIMARY KEY)
 ;

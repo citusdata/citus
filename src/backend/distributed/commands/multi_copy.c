@@ -956,12 +956,25 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeName = placement->nodeName;
 		int nodePort = placement->nodePort;
+		WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
+		int workerGroupId = 0;
 		char *nodeUser = CurrentUserName();
 		PGconn *connection = ConnectToNode(nodeName, nodePort, nodeUser);
 
 		TransactionConnection *transactionConnection = NULL;
 		StringInfo copyCommand = NULL;
 		PGresult *result = NULL;
+
+		/*
+		 * When a copy is initiated from a worker, the information about the connected
+		 * worker node may not be found if pg_dist_node entries are not synced to this
+		 * node. In that case we leave the groupId as 0. Fortunately, it is unused since
+		 * COPY from a worker does not initiate a 2PC.
+		 */
+		if (workerNode != NULL)
+		{
+			workerGroupId = workerNode->groupId;
+		}
 
 		if (connection == NULL)
 		{
@@ -1003,9 +1016,12 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 
 		transactionConnection = palloc0(sizeof(TransactionConnection));
 
+		transactionConnection->groupId = workerGroupId;
 		transactionConnection->connectionId = shardConnections->shardId;
 		transactionConnection->transactionState = TRANSACTION_STATE_COPY_STARTED;
 		transactionConnection->connection = connection;
+		transactionConnection->nodeName = nodeName;
+		transactionConnection->nodePort = nodePort;
 
 		connectionList = lappend(connectionList, transactionConnection);
 	}
