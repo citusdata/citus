@@ -94,6 +94,10 @@ static bool ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 							  bool isModificationQuery, bool expectResults);
 static void ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
 								 bool isModificationQuery, bool expectResults);
+static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
+								ParamListInfo paramListInfo,
+								MaterialState *routerState,
+								TupleDesc tupleDescriptor);
 static List * TaskShardIntervalList(List *taskList);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *shardIntervalList);
@@ -762,6 +766,20 @@ ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
 
 
 /*
+ * ExecuteModifyTasksWithoutResults provides a wrapper around ExecuteModifyTasks
+ * for calls that do not require results. In this case, the expectResults flag
+ * is set to false and arguments related to result sets and query parameters are
+ * NULL. This function is primarily intended to allow DDL and
+ * master_modify_multiple_shards to use the router executor infrastructure.
+ */
+int64
+ExecuteModifyTasksWithoutResults(List *taskList)
+{
+	return ExecuteModifyTasks(taskList, false, NULL, NULL, NULL);
+}
+
+
+/*
  * ExecuteModifyTasks executes a list of tasks on remote nodes, and
  * optionally retrieves the results and stores them in a tuple store.
  *
@@ -769,7 +787,7 @@ ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
  * Otherwise, the changes are committed using 2PC when the local transaction
  * commits.
  */
-int64
+static int64
 ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListInfo,
 				   MaterialState *routerState, TupleDesc tupleDescriptor)
 {
