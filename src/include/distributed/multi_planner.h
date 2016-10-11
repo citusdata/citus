@@ -14,6 +14,11 @@
 #include "nodes/relation.h"
 
 
+/* values used by jobs and tasks which do not require identifiers */
+#define INVALID_JOB_ID 0
+#define INVALID_TASK_ID 0
+
+
 typedef struct RelationRestrictionContext
 {
 	bool hasDistributedRelation;

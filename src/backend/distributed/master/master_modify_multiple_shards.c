@@ -162,7 +162,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	taskList = ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList,
 											relationId);
-	affectedTupleCount = ExecuteModifyTasks(taskList, false, NULL, NULL, NULL);
+	affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
 
 	PG_RETURN_INT32(affectedTupleCount);
 }
