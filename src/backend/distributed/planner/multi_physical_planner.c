@@ -130,8 +130,6 @@ static OperatorCacheEntry * LookupOperatorByType(Oid typeId, Oid accessMethodId,
 												 int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static Node * HashableClauseMutator(Node *originalNode, Var *partitionColumn);
-static Var * MakeInt4Column(void);
-static Const * MakeInt4Constant(Datum constantValue);
 static OpExpr * MakeHashedOperatorExpression(OpExpr *operatorExpression);
 static List * BuildRestrictInfoList(List *qualList);
 static List * FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
@@ -3015,7 +3013,7 @@ MakeHashedOperatorExpression(OpExpr *operatorExpression)
  * MakeInt4Column creates a column of int4 type with invalid table id and max
  * attribute number.
  */
-static Var *
+Var *
 MakeInt4Column()
 {
 	Index tableId = 0;
@@ -3035,7 +3033,7 @@ MakeInt4Column()
  * MakeInt4Constant creates a new constant of int4 type and assigns the given
  * value as a constant value.
  */
-static Const *
+Const *
 MakeInt4Constant(Datum constantValue)
 {
 	Oid constantType = INT4OID;

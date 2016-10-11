@@ -245,9 +245,10 @@ extern void UpdateConstraint(Node *baseConstraint, ShardInterval *shardInterval)
 extern bool SimpleOpExpression(Expr *clause);
 extern bool OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn);
 
+/* helper functions */
+extern Var * MakeInt4Column(void);
+extern Const * MakeInt4Constant(Datum constantValue);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
-
-/* Function declarations for sorting shards. */
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
 

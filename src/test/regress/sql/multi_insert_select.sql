@@ -14,7 +14,6 @@ CREATE TABLE raw_events_second (user_id int, time timestamp, value_1 int, value_
 SELECT master_create_distributed_table('raw_events_second', 'user_id', 'hash');
 SELECT master_create_worker_shards('raw_events_second', 4, 2);
 
-
 CREATE TABLE agg_events (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp, UNIQUE(user_id, value_1_agg));
 SELECT master_create_distributed_table('agg_events', 'user_id', 'hash');
 SELECT master_create_worker_shards('agg_events', 4, 2);
@@ -22,6 +21,10 @@ SELECT master_create_worker_shards('agg_events', 4, 2);
 -- make tables as co-located
 UPDATE pg_dist_partition SET colocationid = 100000 WHERE logicalrelid IN ('raw_events_first', 'raw_events_second', 'agg_events');
 
+
+CREATE TABLE reference_table (user_id int);
+SELECT master_create_distributed_table('reference_table', 'user_id', 'hash');
+SELECT master_create_worker_shards('reference_table', 1, 2);
 
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (1, now(), 10, 100, 1000.1, 10000);
@@ -209,8 +212,44 @@ SELECT
 FROM 
    raw_events_first GROUP BY user_id;
 
+-- a very simple UNION query
+INSERT INTO 
+  raw_events_first(user_id) 
+SELECT 
+  user_id 
+FROM 
+  ((SELECT user_id FROM raw_events_first) UNION 
+   (SELECT user_id FROM raw_events_second)) as foo;
+
+-- same query with slightly different syntax, but this time we cannot push it down
+INSERT INTO 
+  raw_events_first(user_id)
+  (SELECT user_id FROM raw_events_first) UNION 
+  (SELECT user_id FROM raw_events_first);
+
+-- similar query with a filter on two of the queries
+INSERT INTO 
+  raw_events_first(user_id) 
+SELECT 
+  user_id 
+FROM 
+  ((SELECT user_id FROM raw_events_first WHERE user_id = 15) UNION 
+   (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
 -- TODO: UUIDs
+
+-- a test with reference table JOINs
+INSERT INTO 
+  agg_events (user_id, value_1_agg) 
+SELECT 
+  raw_events_first.user_id, sum(value_1)
+FROM 
+  reference_table, raw_events_first 
+WHERE 
+  raw_events_first.user_id = reference_table.user_id
+GROUP BY
+  raw_events_first.user_id;
+
 
 -- unsupported JOIN
 INSERT INTO agg_events 
@@ -247,10 +286,59 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 
 -- error cases
 -- no part column at all
-INSERT INTO raw_events_second (value_1) SELECT value_1 FROM raw_events_first;
-INSERT INTO raw_events_second (value_1) SELECT user_id FROM raw_events_first;
-INSERT INTO raw_events_second (user_id) SELECT value_1 FROM raw_events_first;
-INSERT INTO raw_events_second (user_id) SELECT user_id * 2 FROM raw_events_first;
-INSERT INTO raw_events_second (user_id) SELECT user_id::bigint FROM raw_events_first;
-INSERT INTO agg_events (value_3_agg, value_4_agg,  value_1_agg, value_2_agg, user_id) SELECT sum(value_3), count(value_4), user_id, sum(value_1), avg(value_2) FROM raw_events_first GROUP BY user_id;
-INSERT INTO agg_events (value_3_agg, value_4_agg,  value_1_agg, value_2_agg, user_id) SELECT sum(value_3), count(value_4), user_id, sum(value_1), value_2 FROM raw_events_first GROUP BY user_id, value_2;
+INSERT INTO raw_events_second 
+            (value_1) 
+SELECT value_1 
+FROM   raw_events_first; 
+
+INSERT INTO raw_events_second 
+            (value_1) 
+SELECT user_id 
+FROM   raw_events_first; 
+
+INSERT INTO raw_events_second 
+            (user_id) 
+SELECT value_1 
+FROM   raw_events_first; 
+
+INSERT INTO raw_events_second 
+            (user_id) 
+SELECT user_id * 2 
+FROM   raw_events_first; 
+
+INSERT INTO raw_events_second 
+            (user_id) 
+SELECT user_id :: bigint 
+FROM   raw_events_first; 
+
+INSERT INTO agg_events 
+            (value_3_agg, 
+             value_4_agg, 
+             value_1_agg, 
+             value_2_agg, 
+             user_id) 
+SELECT SUM(value_3), 
+       Count(value_4), 
+       user_id, 
+       SUM(value_1), 
+       Avg(value_2) 
+FROM   raw_events_first 
+GROUP  BY user_id; 
+
+INSERT INTO agg_events 
+            (value_3_agg, 
+             value_4_agg, 
+             value_1_agg, 
+             value_2_agg, 
+             user_id) 
+SELECT SUM(value_3), 
+       Count(value_4), 
+       user_id, 
+       SUM(value_1), 
+       value_2 
+FROM   raw_events_first 
+GROUP  BY user_id, 
+          value_2; 
+
+-- tables should be co-located
+INSERT INTO agg_events (user_id) SELECT user_id FROM reference_table;

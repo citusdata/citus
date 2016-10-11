@@ -31,9 +31,11 @@
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
-extern void AddHiddenPartitionColumnParameter(Query *originalQuery);
+extern void AddHiddenPartitionColumnEqualityQual(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
-extern Query * ReorderInsertSelectTargetListsIfExists(Query *originalQuery);
+extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
+											  RangeTblEntry *insertRte,
+											  RangeTblEntry *subqueryRte);
 extern bool InsertSelectQuery(Query *query);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
