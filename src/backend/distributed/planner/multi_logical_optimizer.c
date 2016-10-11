@@ -1487,8 +1487,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->aggtype = hllType;
 		unionAggregate->args = list_make1(hllTargetEntry);
 		unionAggregate->aggkind = AGGKIND_NORMAL;
-
-		/* TODO: Fix this for 9.6 */
+#if (PG_VERSION_NUM >= 90600)
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+#endif
 
 		cardinalityExpression = makeNode(FuncExpr);
 		cardinalityExpression->funcid = cardinalityFunctionId;
