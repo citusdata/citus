@@ -1276,6 +1276,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 			Node *newNode = MasterAggregateMutator((Node *) originalExpression,
 												   walkerContext);
 
+			memset(&aggregateCosts, 0, sizeof(aggregateCosts));
+
 #if PG_VERSION_NUM >= 90600
 			get_agg_clause_costs(NULL, (Node *) newNode, AGGSPLIT_SIMPLE,
 								 &aggregateCosts);
@@ -1844,6 +1846,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 		{
 			AggClauseCosts aggregateCosts;
 			WorkerAggregateWalker((Node *) originalExpression, walkerContext);
+
+			memset(&aggregateCosts, 0, sizeof(aggregateCosts));
 
 #if PG_VERSION_NUM >= 90600
 			get_agg_clause_costs(NULL, (Node *) walkerContext->expressionList,
