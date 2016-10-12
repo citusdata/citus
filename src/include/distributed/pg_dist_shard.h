@@ -26,7 +26,7 @@ typedef struct FormData_pg_dist_shard
 	int64 shardid;            /* global shardId representing remote partition */
 	char shardstorage;        /* shard storage type; see codes below */
 #ifdef CATALOG_VARLEN           /* variable-length fields start here */
-	text shardalias_DEPRECATED;      /* deprecated column, should be unused */
+	text shardalias_DROPPED;      /* dropped column, not in use */
 	text shardminvalue;        /* partition key's minimum value in shard */
 	text shardmaxvalue;        /* partition key's maximum value in shard */
 #endif
@@ -47,7 +47,7 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
 #define Anum_pg_dist_shard_logicalrelid 1
 #define Anum_pg_dist_shard_shardid 2
 #define Anum_pg_dist_shard_shardstorage 3
-#define Anum_pg_dist_shard_shardalias_DEPRECATED 4
+#define Anum_pg_dist_shard_shardalias_DROPPED 4
 #define Anum_pg_dist_shard_shardminvalue 5
 #define Anum_pg_dist_shard_shardmaxvalue 6
 

@@ -53,8 +53,8 @@ SELECT * FROM pg_dist_partition;
 (0 rows)
 
 SELECT * FROM pg_dist_shard;
- logicalrelid | shardid | shardstorage | shardalias | shardminvalue | shardmaxvalue 
---------------+---------+--------------+------------+---------------+---------------
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
 (0 rows)
 
 SELECT * FROM pg_dist_shard_placement;
