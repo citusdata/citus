@@ -67,11 +67,6 @@ CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	AS 'citus'
 	LANGUAGE C STRICT;
 
-CREATE FUNCTION column_name_to_column(regclass, text)
-	RETURNS text
-	AS 'citus'
-	LANGUAGE C STRICT;
-
 -- ===================================================================
 -- test distribution metadata functionality
 -- ===================================================================

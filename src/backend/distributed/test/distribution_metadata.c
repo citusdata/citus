@@ -19,6 +19,7 @@
 
 #include "access/heapam.h"
 #include "catalog/pg_type.h"
+#include "distributed/distribution_column.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -46,8 +47,6 @@ PG_FUNCTION_INFO_V1(load_shard_placement_array);
 PG_FUNCTION_INFO_V1(partition_column_id);
 PG_FUNCTION_INFO_V1(partition_type);
 PG_FUNCTION_INFO_V1(is_distributed_table);
-PG_FUNCTION_INFO_V1(column_name_to_column);
-PG_FUNCTION_INFO_V1(column_name_to_column_id);
 PG_FUNCTION_INFO_V1(create_monolithic_shard_row);
 PG_FUNCTION_INFO_V1(create_healthy_local_shard_placement_row);
 PG_FUNCTION_INFO_V1(delete_shard_placement_row);
@@ -211,61 +210,6 @@ is_distributed_table(PG_FUNCTION_ARGS)
 	bool isDistributedTable = IsDistributedTable(distributedTableId);
 
 	PG_RETURN_BOOL(isDistributedTable);
-}
-
-
-/*
- * column_name_to_column is an internal UDF to obtain a textual representation
- * of a particular column node (Var), given a relation identifier and column
- * name. There is no requirement that the table be distributed; this function
- * simply returns the textual representation of a Var representing a column.
- * This function will raise an ERROR if no such column can be found or if the
- * provided name refers to a system column.
- */
-Datum
-column_name_to_column(PG_FUNCTION_ARGS)
-{
-	Oid relationId = PG_GETARG_OID(0);
-	text *columnText = PG_GETARG_TEXT_P(1);
-	Relation relation = NULL;
-	char *columnName = text_to_cstring(columnText);
-	Var *column = NULL;
-	char *columnNodeString = NULL;
-	text *columnNodeText = NULL;
-
-	relation = relation_open(relationId, AccessExclusiveLock);
-
-	column = (Var *) BuildDistributionKeyFromColumnName(relation, columnName);
-	columnNodeString = nodeToString(column);
-	columnNodeText = cstring_to_text(columnNodeString);
-
-	relation_close(relation, NoLock);
-
-	PG_RETURN_TEXT_P(columnNodeText);
-}
-
-
-/*
- * column_name_to_column_id takes a relation identifier and a name of a column
- * in that relation and returns the index of that column in the relation. If
- * the provided name is a system column or no column at all, this function will
- * throw an error instead.
- */
-Datum
-column_name_to_column_id(PG_FUNCTION_ARGS)
-{
-	Oid distributedTableId = PG_GETARG_OID(0);
-	char *columnName = PG_GETARG_CSTRING(1);
-	Relation relation = NULL;
-	Var *column = NULL;
-
-	relation = relation_open(distributedTableId, AccessExclusiveLock);
-
-	column = (Var *) BuildDistributionKeyFromColumnName(relation, columnName);
-
-	relation_close(relation, NoLock);
-
-	PG_RETURN_INT16((int16) column->varattno);
 }
 
 

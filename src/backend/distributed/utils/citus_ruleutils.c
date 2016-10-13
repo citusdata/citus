@@ -175,41 +175,6 @@ pg_get_serverdef_string(Oid tableRelationId)
 
 
 /*
- * AppendOptionListToString converts the option list to its textual format, and
- * appends this text to the given string buffer.
- */
-static void
-AppendOptionListToString(StringInfo stringBuffer, List *optionList)
-{
-	if (optionList != NIL)
-	{
-		ListCell *optionCell = NULL;
-		bool firstOptionPrinted = false;
-
-		appendStringInfo(stringBuffer, " OPTIONS (");
-
-		foreach(optionCell, optionList)
-		{
-			DefElem *option = (DefElem *) lfirst(optionCell);
-			char *optionName = option->defname;
-			char *optionValue = defGetString(option);
-
-			if (firstOptionPrinted)
-			{
-				appendStringInfo(stringBuffer, ", ");
-			}
-			firstOptionPrinted = true;
-
-			appendStringInfo(stringBuffer, "%s ", quote_identifier(optionName));
-			appendStringInfo(stringBuffer, "%s", quote_literal_cstr(optionValue));
-		}
-
-		appendStringInfo(stringBuffer, ")");
-	}
-}
-
-
-/*
  * pg_get_sequencedef_string returns the definition of a given sequence. This
  * definition includes explicit values for all CREATE SEQUENCE options.
  */
@@ -771,6 +736,77 @@ pg_get_table_grants(Oid relationId)
 	relation_close(relation, NoLock);
 	return defs;
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * generate_qualified_relation_name computes the schema-qualified name to display for a
+ * relation specified by OID.
+ */
+char *
+generate_qualified_relation_name(Oid relid)
+{
+	HeapTuple tp;
+	Form_pg_class reltup;
+	char *relname;
+	char *nspname;
+	char *result;
+
+	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	if (!HeapTupleIsValid(tp))
+	{
+		elog(ERROR, "cache lookup failed for relation %u", relid);
+	}
+	reltup = (Form_pg_class) GETSTRUCT(tp);
+	relname = NameStr(reltup->relname);
+
+	nspname = get_namespace_name(reltup->relnamespace);
+	if (!nspname)
+	{
+		elog(ERROR, "cache lookup failed for namespace %u",
+			 reltup->relnamespace);
+	}
+
+	result = quote_qualified_identifier(nspname, relname);
+
+	ReleaseSysCache(tp);
+
+	return result;
+}
+
+
+/*
+ * AppendOptionListToString converts the option list to its textual format, and
+ * appends this text to the given string buffer.
+ */
+static void
+AppendOptionListToString(StringInfo stringBuffer, List *optionList)
+{
+	if (optionList != NIL)
+	{
+		ListCell *optionCell = NULL;
+		bool firstOptionPrinted = false;
+
+		appendStringInfo(stringBuffer, " OPTIONS (");
+
+		foreach(optionCell, optionList)
+		{
+			DefElem *option = (DefElem *) lfirst(optionCell);
+			char *optionName = option->defname;
+			char *optionValue = defGetString(option);
+
+			if (firstOptionPrinted)
+			{
+				appendStringInfo(stringBuffer, ", ");
+			}
+			firstOptionPrinted = true;
+
+			appendStringInfo(stringBuffer, "%s ", quote_identifier(optionName));
+			appendStringInfo(stringBuffer, "%s", quote_literal_cstr(optionValue));
+		}
+
+		appendStringInfo(stringBuffer, ")");
+	}
 }
 
 
