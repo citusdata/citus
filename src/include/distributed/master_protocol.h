@@ -90,6 +90,7 @@ extern int ShardPlacementPolicy;
 
 /* Function declarations local to the distributed module */
 extern bool CStoreTable(Oid relationId);
+extern uint64 GetNextShardId(void);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
 extern char ShardStorageType(Oid relationId);
