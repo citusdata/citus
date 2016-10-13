@@ -1245,6 +1245,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 	List *targetEntryList = originalOpNode->targetList;
 	List *newTargetEntryList = NIL;
 	ListCell *targetEntryCell = NULL;
+	Node *originalHavingQual = originalOpNode->havingQual;
+	Node *newHavingQual = NULL;
 	MultiNode *parentNode = ParentNode((MultiNode *) originalOpNode);
 	MultiNode *childNode = ChildNode((MultiUnaryNode *) originalOpNode);
 	MasterAggregateWalkerContext *walkerContext = palloc0(
@@ -1293,12 +1295,18 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 		newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
 	}
 
+	if (originalHavingQual != NULL)
+	{
+		newHavingQual = MasterAggregateMutator(originalHavingQual, walkerContext);
+	}
+
 	masterExtendedOpNode = CitusMakeNode(MultiExtendedOp);
 	masterExtendedOpNode->targetList = newTargetEntryList;
 	masterExtendedOpNode->groupClauseList = originalOpNode->groupClauseList;
 	masterExtendedOpNode->sortClauseList = originalOpNode->sortClauseList;
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
+	masterExtendedOpNode->havingQual = newHavingQual;
 
 	return masterExtendedOpNode;
 }
@@ -1748,6 +1756,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 	ListCell *targetEntryCell = NULL;
 	List *newTargetEntryList = NIL;
 	List *groupClauseList = copyObject(originalOpNode->groupClauseList);
+	Node *havingQual = originalOpNode->havingQual;
 	AttrNumber targetProjectionNumber = 1;
 	WorkerAggregateWalkerContext *walkerContext =
 		palloc0(sizeof(WorkerAggregateWalkerContext));
@@ -1848,6 +1857,41 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 			newTargetEntry->resno = targetProjectionNumber;
 			targetProjectionNumber++;
 			newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
+		}
+	}
+
+	/* we also need to add having expressions to worker target list */
+	if (havingQual != NULL)
+	{
+		List *newExpressionList = NIL;
+		ListCell *newExpressionCell = NULL;
+
+		/* reset walker context */
+		walkerContext->expressionList = NIL;
+		walkerContext->createGroupByClause = false;
+
+		WorkerAggregateWalker(havingQual, walkerContext);
+		newExpressionList = walkerContext->expressionList;
+
+		/* now create target entries for each new expression */
+		foreach(newExpressionCell, newExpressionList)
+		{
+			TargetEntry *newTargetEntry = makeNode(TargetEntry);
+			StringInfo columnNameString = makeStringInfo();
+
+			Expr *newExpression = (Expr *) lfirst(newExpressionCell);
+			newTargetEntry->expr = newExpression;
+
+			appendStringInfo(columnNameString, WORKER_COLUMN_FORMAT,
+							 targetProjectionNumber);
+			newTargetEntry->resname = columnNameString->data;
+
+			/* force resjunk to false as we may need this on the master */
+			newTargetEntry->resjunk = false;
+			newTargetEntry->resno = targetProjectionNumber;
+
+			newTargetEntryList = lappend(newTargetEntryList, newTargetEntry);
+			targetProjectionNumber++;
 		}
 	}
 

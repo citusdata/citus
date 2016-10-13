@@ -111,6 +111,17 @@ EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
 
+-- Test having
+EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
+	HAVING sum(l_quantity) > 100;
+
+-- Test having without aggregate
+EXPLAIN (COSTS FALSE, VERBOSE TRUE)
+	SELECT l_quantity FROM lineitem
+	GROUP BY l_quantity
+	HAVING l_quantity > (100 * random());
+
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 

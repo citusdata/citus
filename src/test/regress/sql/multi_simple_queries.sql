@@ -109,10 +109,7 @@ SELECT title, author_id FROM articles
 	WHERE author_id = 7 OR author_id = 8
 	ORDER BY author_id ASC, id;
 
--- add in some grouping expressions.
--- it is supported if it is on the same shard, but not supported if it
--- involves multiple shards.
--- having queries unsupported in Citus
+-- add in some grouping expressions
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	WHERE author_id = 1 OR author_id = 2 OR author_id = 8 OR author_id = 10
 	GROUP BY author_id
@@ -173,18 +170,43 @@ SELECT FROM articles WHERE author_id = 3737;
 
 SELECT FROM articles WHERE word_count = 65500;
 
--- having queries unsupported in Citus
+-- having queries supported in Citus
 SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 25000
 	ORDER BY sum(word_count) DESC
 	LIMIT 5;
 
--- more proof Citus doesn't support having clauses
 SELECT author_id FROM articles
 	GROUP BY author_id
 	HAVING sum(word_count) > 50000
 	ORDER BY author_id;
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING sum(word_count) > 50000 AND author_id < 5
+	ORDER BY author_id;
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING sum(word_count) > 50000 OR author_id < 5
+	ORDER BY author_id;
+
+SELECT author_id FROM articles
+	GROUP BY author_id
+	HAVING author_id <= 2 OR author_id = 8
+	ORDER BY author_id;
+
+SELECT o_orderstatus, count(*), avg(o_totalprice) FROM orders 
+	GROUP BY o_orderstatus
+	HAVING count(*) > 1450 OR avg(o_totalprice) > 150000
+	ORDER BY o_orderstatus;
+
+SELECT o_orderstatus, sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030
+	GROUP BY o_orderstatus
+	HAVING sum(l_linenumber) > 1000
+	ORDER BY o_orderstatus;
 
 -- now, test the cases where Citus do or do not need to create
 -- the master queries

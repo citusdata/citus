@@ -346,6 +346,7 @@ _outMultiExtendedOp(StringInfo str, const MultiExtendedOp *node)
 	WRITE_NODE_FIELD(sortClauseList);
 	WRITE_NODE_FIELD(limitCount);
 	WRITE_NODE_FIELD(limitOffset);
+	WRITE_NODE_FIELD(havingQual);
 
 	_outMultiUnaryNode(str, (const MultiUnaryNode *) node);
 }
