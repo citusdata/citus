@@ -350,7 +350,7 @@ TupleToShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	shardPlacement->shardLength = DatumGetInt64(shardLength);
 	shardPlacement->shardState = DatumGetUInt32(shardState);
 	shardPlacement->nodeName = TextDatumGetCString(nodeName);
-	shardPlacement->nodePort = DatumGetInt64(nodePort);
+	shardPlacement->nodePort = DatumGetInt32(nodePort);
 
 	return shardPlacement;
 }
@@ -439,7 +439,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	values[Anum_pg_dist_shard_placement_shardstate - 1] = CharGetDatum(shardState);
 	values[Anum_pg_dist_shard_placement_shardlength - 1] = Int64GetDatum(shardLength);
 	values[Anum_pg_dist_shard_placement_nodename - 1] = CStringGetTextDatum(nodeName);
-	values[Anum_pg_dist_shard_placement_nodeport - 1] = Int64GetDatum(nodePort);
+	values[Anum_pg_dist_shard_placement_nodeport - 1] = Int32GetDatum(nodePort);
 	values[Anum_pg_dist_shard_placement_placementid - 1] = Int64GetDatum(placementId);
 
 	/* open shard placement relation and insert new tuple */
