@@ -513,6 +513,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	ListCell *columnCell = NULL;
 	FromExpr *joinTree = NULL;
 	Node *joinRoot = NULL;
+	Node *havingQual = NULL;
 
 	/* we start building jobs from below the collect node */
 	Assert(!CitusIsA(multiNode, MultiCollect));
@@ -590,6 +591,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 		limitCount = extendedOp->limitCount;
 		limitOffset = extendedOp->limitOffset;
 		sortClauseList = extendedOp->sortClauseList;
+		havingQual = extendedOp->havingQual;
 	}
 
 	/* build group clauses */
@@ -631,6 +633,7 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	jobQuery->groupClause = groupClauseList;
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
+	jobQuery->havingQual = havingQual;
 	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
 
 	return jobQuery;
@@ -721,6 +724,7 @@ BuildReduceQuery(MultiExtendedOp *extendedOpNode, List *dependedJobList)
 	reduceQuery->groupClause = extendedOpNode->groupClauseList;
 	reduceQuery->limitOffset = extendedOpNode->limitOffset;
 	reduceQuery->limitCount = extendedOpNode->limitCount;
+	reduceQuery->havingQual = extendedOpNode->havingQual;
 	reduceQuery->hasAggs = contain_agg_clause((Node *) targetList);
 
 	return reduceQuery;

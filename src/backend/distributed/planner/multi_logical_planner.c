@@ -375,12 +375,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		errorDetail = "Subqueries other than in from-clause are currently unsupported";
 	}
 
-	if (queryTree->havingQual != NULL)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Having qual is currently unsupported";
-	}
-
 	if (queryTree->hasWindowFuncs)
 	{
 		preconditionsSatisfied = false;
@@ -1264,7 +1258,6 @@ MultiProjectNode(List *targetEntryList)
 
 	/* extract the list of columns and remove any duplicates */
 	columnList = pull_var_clause_default((Node *) targetEntryList);
-
 	foreach(columnCell, columnList)
 	{
 		Var *column = (Var *) lfirst(columnCell);
@@ -1290,6 +1283,7 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->sortClauseList = queryTree->sortClause;
 	extendedOpNode->limitCount = queryTree->limitCount;
 	extendedOpNode->limitOffset = queryTree->limitOffset;
+	extendedOpNode->havingQual = queryTree->havingQual;
 
 	return extendedOpNode;
 }
