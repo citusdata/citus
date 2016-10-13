@@ -64,8 +64,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
 	List *workerNodeList = WorkerNodeList();
-	Datum shardIdDatum = 0;
-	int64 shardId = INVALID_SHARD_ID;
+	uint64 shardId = INVALID_SHARD_ID;
 	List *ddlEventList = NULL;
 	uint32 attemptableNodeCount = 0;
 	uint32 liveNodeCount = 0;
@@ -114,8 +113,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	/* generate new and unique shardId from sequence */
-	shardIdDatum = master_get_new_shardid(NULL);
-	shardId = DatumGetInt64(shardIdDatum);
+	shardId = GetNextShardId();
 
 	/* get table DDL commands to replay on the worker node */
 	ddlEventList = GetTableDDLEvents(relationId);
