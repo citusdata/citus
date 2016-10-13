@@ -81,8 +81,6 @@ extern uint64 DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32
 									  workerPort);
 
 /* Remaining metadata utility functions  */
-extern Node * BuildDistributionKeyFromColumnName(Relation distributedRelation,
-												 char *columnName);
 extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);

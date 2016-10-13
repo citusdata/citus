@@ -8,7 +8,7 @@ EXTENSION = citus
 EXTVERSIONS = 5.0 5.0-1 5.0-2  \
 	5.1-1 5.1-2 5.1-3 5.1-4 5.1-5 5.1-6 5.1-7 5.1-8 \
 	5.2-1 5.2-2 5.2-3 5.2-4 \
-	6.0-1 6.0-2 6.0-3 6.0-4 6.0-5
+	6.0-1 6.0-2 6.0-3 6.0-4 6.0-5 6.0-6
 
 # All citus--*.sql files in the source directory
 DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)/$(EXTENSION)--*--*.sql))
@@ -16,7 +16,7 @@ DATA = $(patsubst $(citus_abs_srcdir)/%.sql,%.sql,$(wildcard $(citus_abs_srcdir)
 DATA_built = $(foreach v,$(EXTVERSIONS),$(EXTENSION)--$(v).sql)
 
 # directories with source files
-SUBDIRS = . commands executor master planner relay test transaction utils worker
+SUBDIRS = . commands executor master metadata planner relay test transaction utils worker
 
 # That patsubst rule searches all directories listed in SUBDIRS for .c
 # files, and adds the corresponding .o files to OBJS
@@ -67,6 +67,8 @@ $(EXTENSION)--6.0-3.sql: $(EXTENSION)--6.0-2.sql $(EXTENSION)--6.0-2--6.0-3.sql
 $(EXTENSION)--6.0-4.sql: $(EXTENSION)--6.0-3.sql $(EXTENSION)--6.0-3--6.0-4.sql
 	cat $^ > $@
 $(EXTENSION)--6.0-5.sql: $(EXTENSION)--6.0-4.sql $(EXTENSION)--6.0-4--6.0-5.sql
+	cat $^ > $@
+$(EXTENSION)--6.0-6.sql: $(EXTENSION)--6.0-5.sql $(EXTENSION)--6.0-5--6.0-6.sql
 	cat $^ > $@
 
 NO_PGXS = 1
