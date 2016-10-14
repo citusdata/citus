@@ -1164,6 +1164,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->groupId = currentNode->groupId;
 		workerNode->nodeId = currentNode->nodeId;
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
+		workerNode->hasMetadata = currentNode->hasMetadata;
 
 		if (handleFound)
 		{
