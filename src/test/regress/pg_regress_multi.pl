@@ -26,16 +26,19 @@ sub Usage()
     print "  pg_regress_multi [MULTI OPTIONS] -- [PG REGRESS OPTS]\n";
     print "\n";
     print "Multi Options:\n";
-    print "  --isolationtester   Run isolationtester tests instead of plain tests\n";
-    print "  --vanillatest       Run postgres tests with citus loaded as shared preload library\n";
-    print "  --bindir            Path to postgres binary directory\n";
-    print "  --libdir            Path to postgres library directory\n";
-    print "  --postgres-builddir Path to postgres build directory\n";
-    print "  --postgres-srcdir Path to postgres build directory\n";
-    print "  --pgxsdir           Path to the PGXS directory\n";
-    print "  --load-extension    Extensions to install in all nodes\n";
-    print "  --server-option     Config option to pass to the server\n";
-    print "  --valgrind          Run server via valgrind\n";
+    print "  --isolationtester   	Run isolationtester tests instead of plain tests\n";
+    print "  --vanillatest       	Run postgres tests with citus loaded as shared preload library\n";
+    print "  --bindir            	Path to postgres binary directory\n";
+    print "  --libdir            	Path to postgres library directory\n";
+    print "  --postgres-builddir 	Path to postgres build directory\n";
+    print "  --postgres-srcdir   	Path to postgres build directory\n";
+    print "  --pgxsdir           	Path to the PGXS directory\n";
+    print "  --load-extension    	Extensions to install in all nodes\n";
+    print "  --server-option     	Config option to pass to the server\n";
+    print "  --valgrind          	Run server via valgrind\n";
+    print "  --valgrind-path     	Path to the valgrind executable\n";
+    print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
+    print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     exit 1;
 }
 
@@ -56,6 +59,9 @@ my %fdwServers = ();
 my %functions = ();
 my %operators = ();
 my $valgrind = 0;
+my $valgrind_path = "valgrind";
+my $pg_ctl_timeout = undef;
+my $connection_timeout = 5000;
 
 my $serversAreShutdown = "TRUE";
 
@@ -71,6 +77,9 @@ GetOptions(
     'load-extension=s' => \@extensions,
     'server-option=s' => \@userPgOptions,
     'valgrind' => \$valgrind,
+    'valgrind-path=s' => \$valgrind_path,
+    'pg_ctl-timeout=s' => \$pg_ctl_timeout,
+    'connection-timeout=s' => \$connection_timeout,
     'help' => sub { Usage() });
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
@@ -136,9 +145,9 @@ MESSAGE
 }
 
 # valgrind starts slow, need to increase timeout
-if ($valgrind)
+if (defined $pg_ctl_timeout)
 {
-    $ENV{PGCTLTIMEOUT} = '360';
+    $ENV{PGCTLTIMEOUT} = "$pg_ctl_timeout";
 }
 
 # We don't want valgrind to run pg_ctl itself, as that'd trigger a lot
@@ -163,7 +172,7 @@ sub replace_postgres
 	or die "Could not create postgres wrapper at $bindir/postgres";
     print $fh <<"END";
 #!/bin/bash
-exec valgrind \\
+exec $valgrind_path \\
     --quiet \\
     --suppressions=${postgresSrcdir}/src/tools/valgrind.supp \\
     --trace-children=yes --track-origins=yes --read-var-info=yes \\
@@ -220,6 +229,7 @@ push(@pgOptions, '-c', "citus.expire_cached_shards=on");
 push(@pgOptions, '-c', "citus.task_tracker_delay=10ms");
 push(@pgOptions, '-c', "citus.remote_task_check_interval=1ms");
 push(@pgOptions, '-c', "citus.shard_replication_factor=2");
+push(@pgOptions, '-c', "citus.node_connection_timeout=${connection_timeout}");
 
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
