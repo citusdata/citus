@@ -8,6 +8,9 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 
+SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_placement_id
+\gset
+ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART 100000;
 
 -- Create the necessary test utility function
 CREATE FUNCTION master_metadata_snapshot()
@@ -55,3 +58,5 @@ SELECT unnest(master_metadata_snapshot());
 -- Show that range distributed tables are not included in the metadata snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(master_metadata_snapshot());
+
+ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
