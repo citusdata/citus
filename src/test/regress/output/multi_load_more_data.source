@@ -8,3 +8,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 280000;
 \copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
 \copy customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
 \copy part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'
+VACUUM ANALYZE;
+WARNING:  not propagating VACUUM command to worker nodes
+HINT:  Provide a specific table in order to VACUUM distributed tables.

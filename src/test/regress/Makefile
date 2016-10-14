@@ -51,6 +51,7 @@ check-multi: all tempinstall-main
 
 check-multi-vg: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-isolation: all tempinstall-main
@@ -69,7 +70,6 @@ check-multi-task-tracker-extra: all tempinstall-main
 	--server-option=citus.task_executor_type=task-tracker \
 	--server-option=citus.large_table_shard_count=1 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
-
 
 check-multi-binary: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \

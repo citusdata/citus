@@ -19,3 +19,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 290000;
 \copy lineitem_hash_part FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 \copy orders_hash_part FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \copy orders_hash_part FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+VACUUM ANALYZE;
+WARNING:  not propagating VACUUM command to worker nodes
+HINT:  Provide a specific table in order to VACUUM distributed tables.
