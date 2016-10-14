@@ -181,3 +181,8 @@ test: multi_expire_table_cache
 # ----------
 test: multi_colocation_utils
 test: multi_colocated_shard_transfer
+
+# ----------
+# multi_citus_tools tests utility functions written for citus tools
+# ----------
+test: multi_citus_tools
