@@ -18,7 +18,7 @@
  */
 typedef struct FormData_pg_dist_colocation
 {
-	int colocationid;
+	uint32 colocationid;
 	int shardcount;
 	int replicationfactor;
 	Oid distributioncolumntype;

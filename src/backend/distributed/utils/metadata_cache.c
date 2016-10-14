@@ -276,7 +276,7 @@ LookupDistTableCacheEntry(Oid relationId)
 	HeapTuple distPartitionTuple = NULL;
 	char *partitionKeyString = NULL;
 	char partitionMethod = 0;
-	uint64 colocationId = INVALID_COLOCATION_ID;
+	uint32 colocationId = INVALID_COLOCATION_ID;
 	char replicationModel = 0;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
