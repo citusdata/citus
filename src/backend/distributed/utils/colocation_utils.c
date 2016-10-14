@@ -23,10 +23,10 @@
 
 
 /*
- * TableColocationId function returns co-location id of given table. This function errors
- * out if given table is not distributed.
+ * TableColocationId function returns co-location id of given table. This function
+ * errors out if given table is not distributed.
  */
-uint64
+uint32
 TableColocationId(Oid distributedTableId)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
@@ -44,8 +44,8 @@ TableColocationId(Oid distributedTableId)
 bool
 TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId)
 {
-	uint64 leftColocationId = INVALID_COLOCATION_ID;
-	uint64 rightColocationId = INVALID_COLOCATION_ID;
+	uint32 leftColocationId = INVALID_COLOCATION_ID;
+	uint32 rightColocationId = INVALID_COLOCATION_ID;
 
 	if (leftDistributedTableId == rightDistributedTableId)
 	{
@@ -112,7 +112,7 @@ ShardsColocated(ShardInterval *leftShardInterval, ShardInterval *rightShardInter
 List *
 ColocatedTableList(Oid distributedTableId)
 {
-	int tableColocationId = TableColocationId(distributedTableId);
+	uint32 tableColocationId = TableColocationId(distributedTableId);
 	List *colocatedTableList = NIL;
 
 	Relation pgDistPartition = NULL;

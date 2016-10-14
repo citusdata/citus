@@ -103,4 +103,6 @@ $cdbdt$;
 COMMENT ON FUNCTION citus_drop_trigger()
     IS 'perform checks and actions at the end of DROP actions';
 
+ALTER TABLE pg_dist_partition ALTER COLUMN colocationid TYPE integer;
+
 RESET search_path;

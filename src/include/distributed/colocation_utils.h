@@ -17,7 +17,7 @@
 
 #define INVALID_COLOCATION_ID 0
 
-extern uint64 TableColocationId(Oid distributedTableId);
+extern uint32 TableColocationId(Oid distributedTableId);
 extern bool TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId);
 extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
