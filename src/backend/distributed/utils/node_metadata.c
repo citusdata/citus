@@ -43,13 +43,13 @@ int GroupSize = 1;
 
 /* local function forward declarations */
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
-							 char *nodeRack);
+							 char *nodeRack, bool hasMetadata);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static uint32 GetMaxGroupId(void);
 static int GetNextNodeId(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, uint32 groupId,
-						  char *nodeRack);
+						  char *nodeRack, bool hasMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static List * ParseWorkerNodeFileAndRename(void);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -71,8 +71,10 @@ master_add_node(PG_FUNCTION_ARGS)
 	char *nodeNameString = text_to_cstring(nodeName);
 	int32 groupId = 0;
 	char *nodeRack = WORKER_DEFAULT_RACK;
+	bool hasMetadata = false;
 
-	Datum returnData = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack);
+	Datum returnData = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+									   hasMetadata);
 
 	PG_RETURN_CSTRING(returnData);
 }
@@ -122,7 +124,7 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 
 		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, 0,
-						workerNode->workerRack);
+						workerNode->workerRack, false);
 	}
 
 	PG_RETURN_BOOL(true);
@@ -202,7 +204,8 @@ ReadWorkerNodes()
  * new node is inserted into the local pg_dist_node.
  */
 static Datum
-AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack)
+AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
+				bool hasMetadata)
 {
 	Relation pgDistNode = NULL;
 	int nextNodeIdInt = 0;
@@ -245,7 +248,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack)
 	/* generate the new node id from the sequence */
 	nextNodeIdInt = GetNextNodeId();
 
-	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, groupId, nodeRack);
+	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, groupId, nodeRack, hasMetadata);
 
 	heap_close(pgDistNode, AccessExclusiveLock);
 
@@ -280,6 +283,7 @@ GenerateNodeTuple(WorkerNode *workerNode)
 	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(workerNode->workerName);
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(workerNode->workerPort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(workerNode->workerRack);
+	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(workerNode->hasMetadata);
 
 	/* open shard relation and insert new tuple */
 	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
@@ -400,7 +404,8 @@ GetNextNodeId()
  * given values into that system catalog.
  */
 static void
-InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *nodeRack)
+InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *nodeRack,
+			  bool hasMetadata)
 {
 	Relation pgDistNode = NULL;
 	TupleDesc tupleDescriptor = NULL;
@@ -417,6 +422,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *
 	values[Anum_pg_dist_node_nodename - 1] = CStringGetTextDatum(nodeName);
 	values[Anum_pg_dist_node_nodeport - 1] = UInt32GetDatum(nodePort);
 	values[Anum_pg_dist_node_noderack - 1] = CStringGetTextDatum(nodeRack);
+	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(hasMetadata);
 
 	/* open shard relation and insert new tuple */
 	pgDistNode = heap_open(DistNodeRelationId(), AccessExclusiveLock);
@@ -614,6 +620,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerName, nodeName, WORKER_LENGTH);
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
+		workerNode->hasMetadata = false;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}
@@ -651,6 +658,8 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 								  tupleDescriptor, &isNull);
 	Datum nodeRack = heap_getattr(heapTuple, Anum_pg_dist_node_noderack,
 								  tupleDescriptor, &isNull);
+	Datum hasMetadata = heap_getattr(heapTuple, Anum_pg_dist_node_hasmetadata,
+									 tupleDescriptor, &isNull);
 
 	Assert(!HeapTupleHasNulls(heapTuple));
 
@@ -660,6 +669,7 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode->groupId = DatumGetUInt32(groupId);
 	strlcpy(workerNode->workerName, TextDatumGetCString(nodeName), WORKER_LENGTH);
 	strlcpy(workerNode->workerRack, TextDatumGetCString(nodeRack), WORKER_LENGTH);
+	workerNode->hasMetadata = DatumGetBool(hasMetadata);
 
 	return workerNode;
 }

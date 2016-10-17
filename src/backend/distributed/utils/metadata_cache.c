@@ -26,6 +26,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/pg_dist_local_group.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -52,6 +53,7 @@ static bool extensionLoaded = false;
 static Oid distShardRelationId = InvalidOid;
 static Oid distShardPlacementRelationId = InvalidOid;
 static Oid distNodeRelationId = InvalidOid;
+static Oid distLocalGroupRelationId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
@@ -68,6 +70,11 @@ static HTAB *DistTableCacheHash = NULL;
 /* Hash table for informations about worker nodes */
 static HTAB *WorkerNodeHash = NULL;
 static bool workerNodeHashValid = false;
+
+static bool invalidationRegistered = false;
+
+/* default value is -1, for schema node it's 0 and for worker nodes > 0 */
+static int LocalGroupId = -1;
 
 /* built first time through in InitializePartitionCache */
 static ScanKeyData DistPartitionScanKey[1];
@@ -93,6 +100,7 @@ static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static List * DistTableOidList(void);
+static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
@@ -107,6 +115,7 @@ static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
+PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
 
 
 /*
@@ -668,6 +677,16 @@ DistNodeRelationId(void)
 }
 
 
+/* return oid of pg_dist_local_group relation */
+Oid
+DistLocalGroupIdRelationId(void)
+{
+	CachedRelationLookup("pg_dist_local_group", &distLocalGroupRelationId);
+
+	return distLocalGroupRelationId;
+}
+
+
 /* return oid of pg_dist_partition relation */
 Oid
 DistPartitionRelationId(void)
@@ -993,6 +1012,29 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * master_dist_local_group_cache_invalidate is a trigger function that performs
+ * relcache invalidations when the contents of pg_dist_local_group are changed
+ * on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	CitusInvalidateRelcacheByRelid(DistLocalGroupIdRelationId());
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
 /* initialize the infrastructure for the metadata cache */
 static void
 InitializeDistTableCache(void)
@@ -1122,6 +1164,7 @@ InitializeWorkerNodeCache(void)
 		workerNode->groupId = currentNode->groupId;
 		workerNode->nodeId = currentNode->nodeId;
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
+		workerNode->hasMetadata = currentNode->hasMetadata;
 
 		if (handleFound)
 		{
@@ -1146,6 +1189,74 @@ InitializeWorkerNodeCache(void)
 
 		invalidationRegistered = true;
 	}
+}
+
+
+/*
+ * GetLocalGroupId returns the group identifier of the local node. The function assumes
+ * that pg_dist_local_node_group has exactly one row and has at least one column.
+ * Otherwise, the function errors out.
+ */
+int
+GetLocalGroupId(void)
+{
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 0;
+	HeapTuple heapTuple = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	Oid groupId = InvalidOid;
+	Relation pgDistLocalGroupId = NULL;
+
+	/*
+	 * Already set the group id, no need to read the heap again.
+	 */
+	if (LocalGroupId != -1)
+	{
+		return LocalGroupId;
+	}
+
+	pgDistLocalGroupId = heap_open(DistLocalGroupIdRelationId(), AccessShareLock);
+
+	scanDescriptor = systable_beginscan(pgDistLocalGroupId,
+										InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	tupleDescriptor = RelationGetDescr(pgDistLocalGroupId);
+
+	heapTuple = systable_getnext(scanDescriptor);
+
+	if (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		Datum groupIdDatum = heap_getattr(heapTuple,
+										  Anum_pg_dist_local_groupid,
+										  tupleDescriptor, &isNull);
+
+		groupId = DatumGetUInt32(groupIdDatum);
+	}
+	else
+	{
+		elog(ERROR, "could not find any entries in pg_dist_local_group");
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistLocalGroupId, AccessShareLock);
+
+	/* prevent multiple invalidation registrations */
+	if (!invalidationRegistered)
+	{
+		/* Watch for invalidation events. */
+		CacheRegisterRelcacheCallback(InvalidateLocalGroupIdRelationCacheCallback,
+									  (Datum) 0);
+
+		invalidationRegistered = true;
+	}
+
+	/* set the local cache variable */
+	LocalGroupId = groupId;
+
+	return groupId;
 }
 
 
@@ -1270,6 +1381,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		extensionLoaded = false;
 		distShardRelationId = InvalidOid;
 		distShardPlacementRelationId = InvalidOid;
+		distLocalGroupRelationId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;
@@ -1340,6 +1452,21 @@ InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
 	if (relationId == InvalidOid || relationId == distNodeRelationId)
 	{
 		workerNodeHashValid = false;
+	}
+}
+
+
+/*
+ * InvalidateLocalGroupIdRelationCacheCallback sets the LocalGroupId to
+ * the default value.
+ */
+static void
+InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId)
+{
+	/* when invalidation happens simply set the LocalGroupId to the default value */
+	if (relationId == InvalidOid || relationId == distLocalGroupRelationId)
+	{
+		LocalGroupId = -1;
 	}
 }
 
