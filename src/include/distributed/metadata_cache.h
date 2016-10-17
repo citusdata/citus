@@ -56,6 +56,7 @@ extern bool IsDistributedTable(Oid relationId);
 extern List * DistributedTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern int GetLocalGroupId(void);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateNodeCache(void);
 
@@ -69,6 +70,7 @@ extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistShardPlacementRelationId(void);
 extern Oid DistNodeRelationId(void);
+extern Oid DistLocalGroupIdRelationId(void);
 
 /* index oids */
 extern Oid DistPartitionLogicalRelidIndexId(void);

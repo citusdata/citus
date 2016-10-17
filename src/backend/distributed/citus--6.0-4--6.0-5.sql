@@ -1,5 +1,3 @@
-/* citus--5.2-1--5.2-2.sql */
-
 /*
  * Replace oid column in pg_dist_shard_placement with an sequence column.
  */

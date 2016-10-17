@@ -3,15 +3,15 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1220000;
 -- Tests functions related to cluster membership
 -- add the nodes to the cluster
 SELECT master_add_node('localhost', :worker_1_port);
-        master_add_node        
--------------------------------
- (1,1,localhost,57637,default)
+         master_add_node         
+---------------------------------
+ (1,1,localhost,57637,default,f)
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-        master_add_node        
--------------------------------
- (2,2,localhost,57638,default)
+         master_add_node         
+---------------------------------
+ (2,2,localhost,57638,default,f)
 (1 row)
 
 -- get the active nodes
@@ -24,9 +24,9 @@ SELECT master_get_active_worker_nodes();
 
 -- try to add the node again when it is activated
 SELECT master_add_node('localhost', :worker_1_port);
-        master_add_node        
--------------------------------
- (1,1,localhost,57637,default)
+         master_add_node         
+---------------------------------
+ (1,1,localhost,57637,default,f)
 (1 row)
 
 -- get the active nodes
@@ -53,9 +53,9 @@ SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
 SELECT master_add_node('localhost', :worker_2_port);
-        master_add_node        
--------------------------------
- (3,3,localhost,57638,default)
+         master_add_node         
+---------------------------------
+ (3,3,localhost,57638,default,f)
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
@@ -125,9 +125,9 @@ SELECT master_get_active_worker_nodes();
 
 -- clean-up
 SELECT master_add_node('localhost', :worker_2_port);
-        master_add_node        
--------------------------------
- (4,4,localhost,57638,default)
+         master_add_node         
+---------------------------------
+ (4,4,localhost,57638,default,f)
 (1 row)
 
 UPDATE pg_dist_shard_placement SET shardstate=1 WHERE nodeport=:worker_2_port;
