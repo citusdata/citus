@@ -24,6 +24,7 @@
 #include "access/xact.h"
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_join_order.h"
@@ -32,6 +33,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/remote_commands.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
@@ -190,11 +192,10 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 
 	char *schemaName = NULL;
 	char *relationName = NULL;
-	bool isTopLevel = true;
 	List *shardIntervalList = NIL;
 	int droppedShardCount = 0;
 
-	PreventTransactionChain(isTopLevel, "DROP distributed table");
+	BeginOrContinueCoordinatedTransaction();
 
 	relationName = get_rel_name(relationId);
 
@@ -253,8 +254,10 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	ArrayIterator sequenceIterator = NULL;
 	Datum sequenceText = 0;
 	bool isNull = false;
-
+	MultiConnection *connection = NULL;
 	StringInfo dropSeqCommand = makeStringInfo();
+
+	BeginOrContinueCoordinatedTransaction();
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
@@ -280,7 +283,9 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceText));
 	}
 
-	dropSuccessful = ExecuteRemoteCommand(nodeName, nodePort, dropSeqCommand);
+	connection = GetNodeConnection(NEW_CONNECTION | CACHED_CONNECTION,
+								   nodeName, nodePort);
+	dropSuccessful = ExecuteCheckStatement(connection, dropSeqCommand->data);
 	if (!dropSuccessful)
 	{
 		ereport(WARNING, (errmsg("could not delete sequences from node \"%s:" INT64_FORMAT
@@ -305,15 +310,15 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 {
 	ListCell *shardIntervalCell = NULL;
 	int droppedShardCount = 0;
+	List *commandList = NIL;
+	ListCell *commandCell = NULL;
+
+	BeginOrContinueCoordinatedTransaction();
 
 	foreach(shardIntervalCell, deletableShardIntervalList)
 	{
 		List *shardPlacementList = NIL;
-		List *droppedPlacementList = NIL;
-		List *lingeringPlacementList = NIL;
 		ListCell *shardPlacementCell = NULL;
-		ListCell *droppedPlacementCell = NULL;
-		ListCell *lingeringPlacementCell = NULL;
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
 		char *quotedShardName = NULL;
@@ -328,14 +333,11 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 		shardPlacementList = ShardPlacementList(shardId);
 		foreach(shardPlacementCell, shardPlacementList)
 		{
-			ShardPlacement *shardPlacement =
-				(ShardPlacement *) lfirst(shardPlacementCell);
-			char *workerName = shardPlacement->nodeName;
-			uint32 workerPort = shardPlacement->nodePort;
-			bool dropSuccessful = false;
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+			BatchCommand *command = (BatchCommand *) palloc0(sizeof(BatchCommand));
 			StringInfo workerDropQuery = makeStringInfo();
-
 			char storageType = shardInterval->storageType;
+
 			if (storageType == SHARD_STORAGE_TABLE)
 			{
 				appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
@@ -348,58 +350,45 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			dropSuccessful = ExecuteRemoteCommand(workerName, workerPort,
-												  workerDropQuery);
-			if (dropSuccessful)
-			{
-				droppedPlacementList = lappend(droppedPlacementList, shardPlacement);
-			}
-			else
-			{
-				lingeringPlacementList = lappend(lingeringPlacementList, shardPlacement);
-			}
+			command->placement = placement;
+			command->connectionFlags = NEW_CONNECTION | CACHED_CONNECTION | FOR_DDL;
+			command->commandString = workerDropQuery->data;
+			command->userData = shardRelationName; /* for failure reporting */
+
+			commandList = lappend(commandList, command);
 		}
 
-		/* make sure we don't process cancel signals */
-		HOLD_INTERRUPTS();
+		DeleteShardRow(shardId);
+	}
 
-		foreach(droppedPlacementCell, droppedPlacementList)
-		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(droppedPlacementCell);
-			char *workerName = placement->nodeName;
-			uint32 workerPort = placement->nodePort;
+	ExecuteBatchCommands(commandList);
 
-			DeleteShardPlacementRow(shardId, workerName, workerPort);
-		}
+	foreach(commandCell, commandList)
+	{
+		BatchCommand *command = (BatchCommand *) lfirst(commandCell);
+		ShardPlacement *placement = command->placement;
+		uint64 shardId = placement->shardId;
+		uint64 placementId = placement->placementId;
+		char *workerName = placement->nodeName;
+		uint32 workerPort = placement->nodePort;
+		uint64 oldShardLength = placement->shardLength;
+		const char *shardName = command->userData;
 
 		/* mark shard placements that we couldn't drop as to be deleted */
-		foreach(lingeringPlacementCell, lingeringPlacementList)
+		if (command->failed)
 		{
-			ShardPlacement *placement = (ShardPlacement *) lfirst(lingeringPlacementCell);
-			uint64 placementId = placement->placementId;
-			char *workerName = placement->nodeName;
-			uint32 workerPort = placement->nodePort;
-			uint64 oldShardLength = placement->shardLength;
-
 			DeleteShardPlacementRow(shardId, workerName, workerPort);
 			InsertShardPlacementRow(shardId, placementId, FILE_TO_DELETE, oldShardLength,
 									workerName, workerPort);
 
 			ereport(WARNING, (errmsg("could not delete shard \"%s\" on node \"%s:%u\"",
-									 shardRelationName, workerName, workerPort),
+									 shardName, workerName, workerPort),
 							  errdetail("Marking this shard placement for deletion")));
 		}
-
-		DeleteShardRow(shardId);
-
-		if (QueryCancelPending)
+		else
 		{
-			ereport(WARNING, (errmsg("cancel requests are ignored during shard "
-									 "deletion")));
-			QueryCancelPending = false;
+			DeleteShardPlacementRow(shardId, workerName, workerPort);
 		}
-
-		RESUME_INTERRUPTS();
 	}
 
 	droppedShardCount = list_length(deletableShardIntervalList);

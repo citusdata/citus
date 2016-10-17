@@ -26,7 +26,6 @@
 
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
-#include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"

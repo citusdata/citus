@@ -135,8 +135,7 @@ SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id;
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
+ERROR:  cannot open new connections after the first modification command within a transaction
 COMMIT;
 -- this logic even applies to router SELECTs occurring after a modification:
 -- selecting from the modified node is fine...
@@ -159,58 +158,29 @@ AND    sp.nodeport = :worker_1_port
 AND    s.logicalrelid = 'researchers'::regclass;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
+ERROR:  cannot open new connections after the first modification command within a transaction
 ABORT;
--- applies to DDL, too
-BEGIN;
-INSERT INTO labs VALUES (6, 'Bell Labs');
-ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
-COMMIT;
--- whether it occurs first or second
-BEGIN;
-ALTER TABLE labs ADD COLUMN motto text;
-INSERT INTO labs VALUES (6, 'Bell Labs');
-ERROR:  distributed data modifications must not appear in transaction blocks which contain distributed DDL commands
-COMMIT;
--- but the DDL should correctly roll back
-\d labs
-     Table "public.labs"
- Column |  Type  | Modifiers 
---------+--------+-----------
- id     | bigint | not null
- name   | text   | not null
-
-SELECT * FROM labs WHERE id = 6;
- id | name 
-----+------
-(0 rows)
-
--- COPY can't happen second,
+-- Check COPY can happen after INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "10,Weyland-Yutani"
 COMMIT;
--- though it will work if before any modifications
+-- Check COPY can happen before INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
 SELECT name FROM labs WHERE id = 10;
       name      
 ----------------
  Weyland-Yutani
-(1 row)
+ Weyland-Yutani
+(2 rows)
 
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
--- but a double-copy isn't allowed (the first will persist)
+-- Two COPYs are also ok
 BEGIN;
 \copy labs from stdin delimiter ','
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety"
 COMMIT;
 SELECT name FROM labs WHERE id = 11;
       name      
@@ -218,33 +188,13 @@ SELECT name FROM labs WHERE id = 11;
  Planet Express
 (1 row)
 
--- finally, ALTER and copy aren't compatible
+-- finally, check ALTER and copy are compatible
 BEGIN;
-ALTER TABLE labs ADD COLUMN motto text;
+ALTER TABLE labs ADD COLUMN motto2 text;
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety,lol"
 COMMIT;
+ALTER TABLE labs DROP COLUMN motto2;
 -- but the DDL should correctly roll back
-\d labs
-     Table "public.labs"
- Column |  Type  | Modifiers 
---------+--------+-----------
- id     | bigint | not null
- name   | text   | not null
-
-SELECT * FROM labs WHERE id = 12;
- id | name 
-----+------
-(0 rows)
-
--- and if the copy is before the ALTER...
-BEGIN;
-\copy labs from stdin delimiter ','
-ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
-COMMIT;
--- the DDL fails, but copy persists
 \d labs
      Table "public.labs"
  Column |  Type  | Modifiers 
@@ -256,7 +206,29 @@ SELECT * FROM labs WHERE id = 12;
  id |   name   
 ----+----------
  12 | fsociety
-(1 row)
+ 12 | fsociety
+(2 rows)
+
+-- and if the copy is before the ALTER...
+BEGIN;
+\copy labs from stdin delimiter ','
+ALTER TABLE labs ADD COLUMN motto3 text;
+ERROR:  distributed DDL commands must not appear within transaction blocks containing data modifications
+COMMIT;
+-- the DDL fails, and copy does not persist
+\d labs
+     Table "public.labs"
+ Column |  Type  | Modifiers 
+--------+--------+-----------
+ id     | bigint | not null
+ name   | text   | not null
+
+SELECT * FROM labs WHERE id = 12;
+ id |   name   
+----+----------
+ 12 | fsociety
+ 12 | fsociety
+(2 rows)
 
 -- now, for some special failures...
 CREATE TABLE objects (
@@ -512,6 +484,7 @@ INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
 CONTEXT:  while executing command on localhost:57637
+ERROR:  could not commit transaction on any active nodes
 -- data to objects should be persisted, but labs should not...
 SELECT * FROM objects WHERE id = 1;
  id | name  
@@ -536,9 +509,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
  logicalrelid | shardstate | count 
 --------------+------------+-------
  labs         |          1 |     1
- objects      |          1 |     1
- objects      |          3 |     1
-(3 rows)
+ objects      |          1 |     2
+(2 rows)
 
 -- some append-partitioned tests for good measure
 CREATE TABLE append_researchers ( LIKE researchers );

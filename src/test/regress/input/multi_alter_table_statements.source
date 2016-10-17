@@ -230,7 +230,9 @@ COMMIT;
 
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
-
+SET client_min_messages = 'ERROR';
+ALTER TABLE lineitem_alter DROP COLUMN first;
+RESET client_min_messages;
 -- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
 CREATE TABLE single_shard_items (id integer, name text);
 SELECT master_create_distributed_table('single_shard_items', 'id', 'hash');
@@ -264,14 +266,13 @@ COMMIT;
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
 
--- Now try with 2pc off
+-- Now try with 2pc off, that'll result in invalid shards
 RESET citus.multi_shard_commit_protocol;
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 
--- The block should have committed with a warning
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
 
 \c - - - :worker_2_port
