@@ -17,6 +17,7 @@
 #include "distributed/connection_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_shard_transaction.h"
+#include "distributed/worker_manager.h"
 #include "nodes/pg_list.h"
 #include "storage/ipc.h"
 #include "utils/memutils.h"
@@ -126,7 +127,15 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(placementCell);
 		PGconn *connection = NULL;
 		TransactionConnection *transactionConnection = NULL;
+		WorkerNode *workerNode = FindWorkerNode(shardPlacement->nodeName,
+												shardPlacement->nodePort);
 		PGresult *result = NULL;
+
+		if (workerNode == NULL)
+		{
+			ereport(ERROR, (errmsg("could not find worker node %s:%d",
+								   shardPlacement->nodeName, shardPlacement->nodePort)));
+		}
 
 		connection = ConnectToNode(shardPlacement->nodeName, shardPlacement->nodePort,
 								   userName);
@@ -142,9 +151,12 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 
 		transactionConnection = palloc0(sizeof(TransactionConnection));
 
+		transactionConnection->groupId = workerNode->groupId;
 		transactionConnection->connectionId = shardConnections->shardId;
 		transactionConnection->transactionState = TRANSACTION_STATE_INVALID;
 		transactionConnection->connection = connection;
+		transactionConnection->nodeName = shardPlacement->nodeName;
+		transactionConnection->nodePort = shardPlacement->nodePort;
 
 		shardConnections->connectionList = lappend(shardConnections->connectionList,
 												   transactionConnection);

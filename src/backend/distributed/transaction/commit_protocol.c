@@ -26,10 +26,6 @@
 static uint32 DistributedTransactionId = 0;
 
 
-/* Local functions forward declarations */
-static StringInfo BuildTransactionName(int connectionId);
-
-
 /* the commit protocol to use for COPY commands */
 int MultiShardCommitProtocol = COMMIT_PROTOCOL_1PC;
 
@@ -252,7 +248,7 @@ CommitRemoteTransactions(List *connectionList, bool stopOnFailure)
  * transaction, which causes it to be rolled back. In general, the user
  * should ensure that prepared transactions do not linger.
  */
-static StringInfo
+StringInfo
 BuildTransactionName(int connectionId)
 {
 	StringInfo commandString = makeStringInfo();

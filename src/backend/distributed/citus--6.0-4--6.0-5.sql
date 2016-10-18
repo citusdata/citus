@@ -1,5 +1,5 @@
 /*
- * Replace oid column in pg_dist_shard_placement with an sequence column.
+ * Replace oid column in pg_dist_shard_placement with a sequence column.
  */
 CREATE SEQUENCE citus.pg_dist_shard_placement_placementid_seq
     NO CYCLE;
