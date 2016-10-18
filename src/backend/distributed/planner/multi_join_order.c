@@ -17,6 +17,7 @@
 #include "access/nbtree.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "catalog/pg_am.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"

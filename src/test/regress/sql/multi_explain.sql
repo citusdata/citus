@@ -6,6 +6,8 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 570000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 570000;
 
+-- print major version to make version-specific tests clear
+SELECT substring(version(), '\d+\.\d+') AS major_version;
 
 \a\t
 
@@ -185,3 +187,16 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
+
+-- test parallel aggregates
+SET parallel_setup_cost=0;
+SET parallel_tuple_cost=0;
+SET min_parallel_relation_size=0;
+SET max_parallel_workers_per_gather=4;
+
+-- ensure local plans display correctly
+CREATE TABLE lineitem_clone (LIKE lineitem);
+EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem_clone;
+
+-- ensure distributed plans don't break
+EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;

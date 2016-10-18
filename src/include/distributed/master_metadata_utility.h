@@ -29,7 +29,7 @@
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {
-	CitusNodeTag type;
+	CitusNode type;
 	Oid relationId;
 	char storageType;
 	Oid valueTypeId;    /* min/max value datum's typeId */
@@ -46,7 +46,7 @@ typedef struct ShardInterval
 /* In-memory representation of a tuple in pg_dist_shard_placement. */
 typedef struct ShardPlacement
 {
-	CitusNodeTag type;
+	CitusNode type;
 	uint64 placementId;       /* sequence that implies this placement creation order */
 	uint64 shardId;
 	uint64 shardLength;

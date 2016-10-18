@@ -1,15 +1,15 @@
 --
 -- MULTI_SUBQUERY
 --
-
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 270000;
-
 -- print major version to make version-specific tests clear
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+\.\d+') AS major_version;
-
+ major_version 
+---------------
+ 9.5
+(1 row)
 
 -- Create tables for subquery tests
 CREATE TABLE lineitem_subquery (
@@ -31,6 +31,10 @@ CREATE TABLE lineitem_subquery (
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
 SELECT master_create_distributed_table('lineitem_subquery', 'l_orderkey', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
 
 CREATE TABLE orders_subquery (
 	o_orderkey bigint not null,
@@ -44,11 +48,13 @@ CREATE TABLE orders_subquery (
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
 SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
 
 SET citus.task_executor_type TO 'task-tracker';
-
 -- Check that we don't allow subquery pushdown in default settings.
-
 SELECT
 	avg(unit_price)
 FROM
@@ -62,11 +68,10 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Join in subqueries is not supported yet
 SET citus.subquery_pushdown to TRUE;
-
 -- Check that we don't crash if there are not any shards.
-
 SELECT
 	avg(unit_price)
 FROM
@@ -80,39 +85,34 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
+ avg 
+-----
+    
+(1 row)
 
 -- Load data into tables.
-
 SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('lineitem_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14947
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 5986
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 8997, shardmaxvalue = 14946
 WHERE shardid = :new_shard_id;
-
 SET citus.shard_max_size TO "1MB";
-
 \copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
-
 \copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
-
 -- Check that we error out if shard min/max values are not exactly same.
-
 SELECT
 	avg(unit_price)
 FROM
@@ -126,13 +126,11 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
 -- Update metadata in order to make all shards equal.
-
 UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 270003;
-
 -- If group by is not on partition column then we error out.
-
 SELECT
 	avg(order_count)
 FROM
@@ -143,9 +141,9 @@ FROM
 		lineitem_subquery
 	GROUP BY
 		l_suppkey) AS order_counts;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported
 -- Check that we error out if join is not on partition columns.
-
 SELECT
 	avg(unit_price)
 FROM
@@ -157,7 +155,8 @@ FROM
 		orders_subquery
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Relations need to be joining on partition columns
 SELECT
 	avg(unit_price)
 FROM
@@ -171,33 +170,36 @@ FROM
 		l_orderkey = o_custkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Relations need to be joining on partition columns
 -- Check that we error out if there is union all.
-
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
-
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Complex table expressions are currently unsupported
 -- Check that we error out if queries in union do not include partition columns.
-
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_partkey FROM lineitem_subquery)
 ) b;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Union clauses need to select partition columns
 -- Check that we run union queries if partition column is selected.
-
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
+ count 
+-------
+  2985
+(1 row)
 
 -- Check that we error out if the outermost query has subquery join.
-
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
@@ -217,9 +219,9 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Join in subqueries is not supported yet
 -- Check that we error out if the outermost query is a distinct clause.
-
 SELECT
 	count(DISTINCT a)
 FROM (
@@ -228,9 +230,9 @@ FROM (
 	FROM
 		lineitem_subquery
 ) z;
-
+ERROR:  cannot push down this subquery
+DETAIL:  distinct in the outermost query is unsupported
 -- Check supported subquery types.
-
 SELECT
 	o_custkey,
 	sum(order_count) as total_order_count
@@ -252,6 +254,19 @@ ORDER BY
 	total_order_count DESC,
 	o_custkey ASC
 LIMIT 10;
+ o_custkey | total_order_count 
+-----------+-------------------
+      1462 |                 9
+       619 |                 8
+       643 |                 8
+      1030 |                 8
+      1486 |                 8
+        79 |                 7
+       304 |                 7
+       319 |                 7
+       343 |                 7
+       448 |                 7
+(10 rows)
 
 SELECT
 	avg(unit_price)
@@ -269,9 +284,12 @@ FROM
 WHERE
 	unit_price > 1000 AND
 	unit_price < 10000;
+          avg          
+-----------------------
+ 4968.2889885208475549
+(1 row)
 
 -- Check that if subquery is pulled, we don't error and run query properly.
-
 SELECT count(*) FROM
 (
 	SELECT l_orderkey FROM (
@@ -280,6 +298,10 @@ SELECT count(*) FROM
 	) a
 	WHERE l_orderkey = 1
 ) b;
+ count 
+-------
+     1
+(1 row)
 
 SELECT count(*) FROM
 (
@@ -289,6 +311,10 @@ SELECT count(*) FROM
 	) a
 	WHERE l_orderkey = 1
 ) b;
+ count 
+-------
+     6
+(1 row)
 
 SELECT max(l_orderkey) FROM
 (
@@ -303,15 +329,17 @@ SELECT max(l_orderkey) FROM
 			l_orderkey
   ) z
 ) y;
+  max  
+-------
+ 14947
+(1 row)
 
 -- Add one more shard to one relation, then test if we error out because of different
 -- shard counts for joining relations.
-
 SELECT master_create_empty_shard('orders_subquery') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = 15000, shardmaxvalue = 20000
 WHERE shardid = :new_shard_id;
-
 SELECT
 	avg(unit_price)
 FROM
@@ -325,31 +353,49 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
+ERROR:  cannot push down this subquery
+DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
 -- Check that we can prune shards in subqueries with VARCHAR partition columns
-
 CREATE TABLE subquery_pruning_varchar_test_table
 (
    a varchar,
    b int
 );
-
 SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
 SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
 
 SET citus.subquery_pushdown TO TRUE;
 SET client_min_messages TO DEBUG2;
-
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
 AS foo;
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270008
+ count 
+-------
+(0 rows)
 
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+ count 
+-------
+(0 rows)
 
 SET client_min_messages TO NOTICE;
-
 -- test subquery join on VARCHAR partition column 
 SELECT * FROM
 	(SELECT 
@@ -364,7 +410,6 @@ SELECT * FROM
 		HAVING 
 		  	count(subquery_pruning_varchar_test_table.a) < 3) 
 		AS f1,
-
 		(SELECT 
 		 	subquery_pruning_varchar_test_table.a
 		FROM 
@@ -379,35 +424,30 @@ SELECT * FROM
 	GROUP BY 
 		a_inner)
 AS foo;
+ a 
+---
+(0 rows)
 
 DROP TABLE subquery_pruning_varchar_test_table;
-
 -- Create composite type to use in subquery pushdown
 CREATE TYPE user_composite_type AS
 (
 	tenant_id BIGINT,
 	user_id BIGINT
 );
-
 \c - - - :worker_1_port
-
 CREATE TYPE user_composite_type AS
 (
 	tenant_id BIGINT,
 	user_id BIGINT
 );
-
 \c - - - :worker_2_port
-
 CREATE TYPE user_composite_type AS
 (
 	tenant_id BIGINT,
 	user_id BIGINT
 );
-
 \c - - - :master_port
-
-
 CREATE TABLE events (
 	composite_id user_composite_type,
 	event_id bigint,
@@ -415,76 +455,56 @@ CREATE TABLE events (
 	event_time bigint
 );
 SELECT master_create_distributed_table('events', 'composite_id', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
 
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
-
 \COPY events FROM STDIN WITH CSV
-"(1,1001)",20001,click,1472807012
-"(1,1001)",20002,submit,1472807015
-"(1,1001)",20003,pay,1472807020
-"(1,1002)",20010,click,1472807022
-"(1,1002)",20011,click,1472807023
-"(1,1002)",20012,submit,1472807025
-"(1,1002)",20013,pay,1472807030
-"(1,1003)",20014,click,1472807032
-"(1,1003)",20015,click,1472807033
-"(1,1003)",20016,click,1472807034
-"(1,1003)",20017,submit,1472807035
-\.
-
 CREATE TABLE users (
 	composite_id user_composite_type,
 	lastseen bigint
 );
 SELECT master_create_distributed_table('users', 'composite_id', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
 
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,2000000001)', shardmaxvalue = '(1,4300000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,1)', shardmaxvalue = '(2,2000000000)'
 WHERE shardid = :new_shard_id;
-
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(2,2000000001)', shardmaxvalue = '(2,4300000000)'
 WHERE shardid = :new_shard_id;
-
 \COPY users FROM STDIN WITH CSV
-"(1,1001)",1472807115
-"(1,1002)",1472807215
-"(1,1003)",1472807315
-\.
-
-
 SET citus.subquery_pushdown TO TRUE;
-
 -- Simple join subquery pushdown
 SELECT
 	avg(array_length(events, 1)) AS event_average
@@ -511,6 +531,10 @@ FROM
 	GROUP BY
 		tenant_id,
 		user_id) AS subquery;
+   event_average    
+--------------------
+ 3.6666666666666667
+(1 row)
 
 -- Union and left join subquery pushdown
 SELECT
@@ -575,6 +599,11 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
+   event_average    |       hasdone       
+--------------------+---------------------
+ 4.0000000000000000 | Has not done paying
+ 2.5000000000000000 | Has done paying
+(2 rows)
 
 -- Union, left join and having subquery pushdown
 SELECT
@@ -647,6 +676,10 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
+   event_average    | count_pay 
+--------------------+-----------
+ 3.0000000000000000 |         0
+(1 row)
 
 -- Lateral join subquery pushdown
 SELECT
@@ -698,7 +731,12 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-
+ tenant_id | user_id | user_lastseen |        event_array         
+-----------+---------+---------------+----------------------------
+         1 |    1003 |    1472807315 | {click,click,click,submit}
+         1 |    1002 |    1472807215 | {click,click,submit,pay}
+         1 |    1001 |    1472807115 | {click,submit,pay}
+(3 rows)
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
@@ -727,6 +765,31 @@ FROM
 	GROUP BY
 		tenant_id,
 		user_id) AS subquery;
+                                                                                       QUERY PLAN                                                                                       
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Distributed Query into pg_merge_job_270014
+   Executor: Real-Time
+   Task Count: 2
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Aggregate  (cost=40.01..40.02 rows=1 width=32)
+               ->  GroupAggregate  (cost=39.89..39.99 rows=1 width=556)
+                     Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                     ->  Merge Join  (cost=39.89..39.97 rows=1 width=556)
+                           Merge Cond: ((((users.composite_id).tenant_id) = ((events.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events.composite_id).user_id)))
+                           ->  Sort  (cost=28.08..28.09 rows=6 width=32)
+                                 Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                 ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=32)
+                                       Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                           ->  Sort  (cost=11.81..11.82 rows=3 width=556)
+                                 Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
+                                 ->  Seq Scan on events_270009 events  (cost=0.00..11.79 rows=3 width=556)
+                                       Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
+ Master Query
+   ->  Aggregate  (cost=0.01..0.02 rows=1 width=0)
+         ->  Seq Scan on pg_merge_job_270014  (cost=0.00..0.00 rows=0 width=0)
+(22 rows)
 
 -- Union and left join subquery pushdown
 EXPLAIN SELECT
@@ -791,6 +854,49 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
+                                                                                                                   QUERY PLAN                                                                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Distributed Query into pg_merge_job_270015
+   Executor: Real-Time
+   Task Count: 2
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  HashAggregate  (cost=91.94..91.96 rows=2 width=64)
+               Group Key: COALESCE(('Has done paying'::text), 'Has not done paying'::text)
+               ->  GroupAggregate  (cost=91.85..91.90 rows=2 width=88)
+                     Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
+                     ->  Sort  (cost=91.85..91.85 rows=2 width=88)
+                           Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
+                           ->  Merge Left Join  (cost=91.75..91.84 rows=2 width=88)
+                                 Merge Cond: ((((users.composite_id).tenant_id) = ((events_2.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events_2.composite_id).user_id)))
+                                 ->  Unique  (cost=79.46..79.48 rows=2 width=40)
+                                       ->  Sort  (cost=79.46..79.47 rows=2 width=40)
+                                             Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('action=>1'::text), events.event_time
+                                             ->  Append  (cost=0.00..79.45 rows=2 width=40)
+                                                   ->  Nested Loop  (cost=0.00..39.72 rows=1 width=40)
+                                                         Join Filter: (((users.composite_id).tenant_id = (events.composite_id).tenant_id) AND ((users.composite_id).user_id = (events.composite_id).user_id))
+                                                         ->  Seq Scan on events_270009 events  (cost=0.00..11.62 rows=1 width=40)
+                                                               Filter: ((event_type)::text = 'click'::text)
+                                                         ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=32)
+                                                               Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                   ->  Nested Loop  (cost=0.00..39.72 rows=1 width=40)
+                                                         Join Filter: (((users_1.composite_id).tenant_id = (events_1.composite_id).tenant_id) AND ((users_1.composite_id).user_id = (events_1.composite_id).user_id))
+                                                         ->  Seq Scan on events_270009 events_1  (cost=0.00..11.62 rows=1 width=40)
+                                                               Filter: ((event_type)::text = 'submit'::text)
+                                                         ->  Seq Scan on users_270013 users_1  (cost=0.00..28.00 rows=6 width=32)
+                                                               Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                 ->  Materialize  (cost=12.29..12.31 rows=1 width=48)
+                                       ->  Unique  (cost=12.29..12.30 rows=1 width=32)
+                                             ->  Sort  (cost=12.29..12.29 rows=1 width=32)
+                                                   Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
+                                                   ->  Seq Scan on events_270009 events_2  (cost=0.00..12.28 rows=1 width=32)
+                                                         Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
+ Master Query
+   ->  HashAggregate  (cost=0.00..0.18 rows=10 width=0)
+         Group Key: intermediate_column_270015_2
+         ->  Seq Scan on pg_merge_job_270015  (cost=0.00..0.00 rows=0 width=0)
+(40 rows)
 
 -- Union, left join and having subquery pushdown
 EXPLAIN SELECT
@@ -863,7 +969,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-
+ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
 EXPLAIN SELECT
 	tenant_id,
@@ -914,5 +1020,37 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
+                                                                                                QUERY PLAN                                                                                                
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Distributed Query into pg_merge_job_270017
+   Executor: Real-Time
+   Task Count: 2
+   Tasks Shown: One of 2
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Limit  (cost=100.43..100.44 rows=6 width=56)
+               ->  Sort  (cost=100.43..100.44 rows=6 width=56)
+                     Sort Key: (max(users.lastseen)) DESC
+                     ->  GroupAggregate  (cost=100.14..100.29 rows=6 width=548)
+                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                           ->  Sort  (cost=100.14..100.16 rows=6 width=548)
+                                 Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                 ->  Nested Loop Left Join  (cost=40.04..100.06 rows=6 width=548)
+                                       ->  Limit  (cost=28.08..28.09 rows=6 width=40)
+                                             ->  Sort  (cost=28.08..28.09 rows=6 width=40)
+                                                   Sort Key: users.lastseen DESC
+                                                   ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=40)
+                                                         Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                       ->  Limit  (cost=11.96..11.96 rows=1 width=524)
+                                             ->  Sort  (cost=11.96..11.96 rows=1 width=524)
+                                                   Sort Key: events.event_time DESC
+                                                   ->  Seq Scan on events_270009 events  (cost=0.00..11.95 rows=1 width=524)
+                                                         Filter: (((composite_id).tenant_id = ((users.composite_id).tenant_id)) AND ((composite_id).user_id = ((users.composite_id).user_id)))
+ Master Query
+   ->  Limit  (cost=0.01..0.02 rows=0 width=0)
+         ->  Sort  (cost=0.01..0.02 rows=0 width=0)
+               Sort Key: intermediate_column_270017_2 DESC
+               ->  Seq Scan on pg_merge_job_270017  (cost=0.00..0.00 rows=0 width=0)
+(29 rows)
 
 SET citusdb.task_executor_type TO 'real-time';

@@ -11,8 +11,30 @@
 #include "postgres.h"
 
 #include "catalog/pg_type.h"
+#include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/metadata_cache.h"
+
+static const char *CitusNodeTagNamesD[] = {
+	"MultiNode",
+	"MultiTreeRoot",
+	"MultiProject",
+	"MultiCollect",
+	"MultiSelect",
+	"MultiTable",
+	"MultiJoin",
+	"MultiPartition",
+	"MultiCartesianProduct",
+	"MultiExtendedOp",
+	"Job",
+	"MapMergeJob",
+	"MultiPlan",
+	"Task",
+	"ShardInterval",
+	"ShardPlacement"
+};
+
+const char **CitusNodeTagNames = CitusNodeTagNamesD;
 
 
 /* exports for SQL callable functions */
@@ -306,4 +328,85 @@ citus_extradata_container(PG_FUNCTION_ARGS)
 	ereport(ERROR, (errmsg("not supposed to get here, did you cheat?")));
 
 	PG_RETURN_NULL();
+}
+
+
+#if (PG_VERSION_NUM >= 90600)
+
+static void
+CopyUnsupportedCitusNode(struct ExtensibleNode *newnode,
+						 const struct ExtensibleNode *oldnode)
+{
+	ereport(ERROR, (errmsg("not implemented")));
+}
+
+
+static bool
+EqualUnsupportedCitusNode(const struct ExtensibleNode *a,
+						  const struct ExtensibleNode *b)
+{
+	ereport(ERROR, (errmsg("not implemented")));
+}
+
+
+/* *INDENT-OFF* */
+#define DEFINE_NODE_METHODS(type) \
+	{ \
+		#type, \
+		sizeof(type), \
+		CopyUnsupportedCitusNode, \
+		EqualUnsupportedCitusNode, \
+		Out##type, \
+		Read##type \
+	}
+
+#define DEFINE_NODE_METHODS_NO_READ(type) \
+	{ \
+		#type, \
+		sizeof(type), \
+		CopyUnsupportedCitusNode, \
+		EqualUnsupportedCitusNode, \
+		Out##type, \
+		ReadUnsupportedCitusNode \
+	}
+
+
+/* *INDENT-ON* */
+const ExtensibleNodeMethods nodeMethods[] =
+{
+	DEFINE_NODE_METHODS(MultiPlan),
+	DEFINE_NODE_METHODS(Job),
+	DEFINE_NODE_METHODS(ShardInterval),
+	DEFINE_NODE_METHODS(MapMergeJob),
+	DEFINE_NODE_METHODS(ShardPlacement),
+	DEFINE_NODE_METHODS(Task),
+
+	/* nodes with only output support */
+	DEFINE_NODE_METHODS_NO_READ(MultiNode),
+	DEFINE_NODE_METHODS_NO_READ(MultiTreeRoot),
+	DEFINE_NODE_METHODS_NO_READ(MultiProject),
+	DEFINE_NODE_METHODS_NO_READ(MultiCollect),
+	DEFINE_NODE_METHODS_NO_READ(MultiSelect),
+	DEFINE_NODE_METHODS_NO_READ(MultiTable),
+	DEFINE_NODE_METHODS_NO_READ(MultiJoin),
+	DEFINE_NODE_METHODS_NO_READ(MultiPartition),
+	DEFINE_NODE_METHODS_NO_READ(MultiCartesianProduct),
+	DEFINE_NODE_METHODS_NO_READ(MultiExtendedOp)
+};
+#endif
+
+void
+RegisterNodes(void)
+{
+#if (PG_VERSION_NUM >= 90600)
+	int off;
+
+	StaticAssertExpr(lengthof(nodeMethods) == lengthof(CitusNodeTagNamesD),
+					 "number of node methods and names do not match");
+
+	for (off = 0; off < lengthof(nodeMethods); off++)
+	{
+		RegisterExtensibleNodeMethods(&nodeMethods[off]);
+	}
+#endif
 }

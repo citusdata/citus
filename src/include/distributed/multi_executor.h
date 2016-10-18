@@ -17,9 +17,15 @@
 #define EXEC_FLAG_CITUS_MASTER_SELECT 0x100
 #define EXEC_FLAG_CITUS_ROUTER_EXECUTOR 0x200
 
+#if (PG_VERSION_NUM >= 90600)
+#define tuplecount_t uint64
+#else
+#define tuplecount_t long
+#endif
+
 extern void multi_ExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void multi_ExecutorRun(QueryDesc *queryDesc,
-							  ScanDirection direction, long count);
+							  ScanDirection direction, tuplecount_t count);
 extern void multi_ExecutorFinish(QueryDesc *queryDesc);
 extern void multi_ExecutorEnd(QueryDesc *queryDesc);
 

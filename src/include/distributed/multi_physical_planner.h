@@ -114,7 +114,7 @@ typedef enum
  */
 typedef struct Job
 {
-	CitusNodeTag type;
+	CitusNode type;
 	uint64 jobId;
 	Query *jobQuery;
 	List *taskList;
@@ -152,7 +152,7 @@ typedef struct TaskExecution TaskExecution;
 
 typedef struct Task
 {
-	CitusNodeTag type;
+	CitusNode type;
 	TaskType taskType;
 	uint64 jobId;
 	uint32 taskId;
@@ -201,7 +201,7 @@ typedef struct JoinSequenceNode
  */
 typedef struct MultiPlan
 {
-	CitusNodeTag type;
+	CitusNode type;
 	Job *workerJob;
 	Query *masterQuery;
 	char *masterTableName;

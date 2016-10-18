@@ -3,6 +3,11 @@
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 520000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 520000;
+CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
+RETURNS ANYARRAY LANGUAGE SQL
+AS $$
+SELECT ARRAY(SELECT unnest($1) ORDER BY 1)
+$$;
 -- Check multi_cat_agg() aggregate which is used to implement array_agg()
 SELECT array_cat_agg(i) FROM (VALUES (ARRAY[1,2]), (NULL), (ARRAY[3,4])) AS t(i);
  array_cat_agg 
@@ -18,68 +23,68 @@ ERROR:  array_agg with order by is unsupported
 SELECT array_agg(distinct l_orderkey ORDER BY l_orderkey) FROM lineitem;
 ERROR:  array_agg with order by is unsupported
 -- Check array_agg() for different data types and LIMIT clauses
-SELECT array_agg(l_partkey) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort(array_agg(l_partkey)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                    array_agg                     
+                    array_sort                    
 --------------------------------------------------
- {155190,67310,63700,2132,24027,15635}
+ {2132,15635,24027,63700,67310,155190}
  {106170}
- {4297,19036,128449,29380,183095,62143}
+ {4297,19036,29380,62143,128449,183095}
  {88035}
- {108570,123927,37531}
+ {37531,108570,123927}
  {139636}
- {182052,145243,94780,163073,151894,79251,157238}
- {82704,197921,44161,2743,85811,11615}
- {61336,60519,137469,33918}
+ {79251,94780,145243,151894,157238,163073,182052}
+ {2743,11615,44161,82704,85811,197921}
+ {33918,60519,61336,137469}
  {88362,89414,169544}
 (10 rows)
 
-SELECT array_agg(l_extendedprice) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort(array_agg(l_extendedprice)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                            array_agg                            
+                           array_sort                            
 -----------------------------------------------------------------
- {21168.23,45983.16,13309.60,28955.64,22824.48,49620.16}
+ {13309.60,21168.23,22824.48,28955.64,45983.16,49620.16}
  {44694.46}
- {54058.05,46796.47,39890.88,2618.76,32986.52,28733.64}
+ {2618.76,28733.64,32986.52,39890.88,46796.47,54058.05}
  {30690.90}
  {23678.55,50723.92,73426.50}
  {61998.31}
- {13608.60,11594.16,81639.88,31809.96,73943.82,43058.75,6476.15}
- {47227.60,64605.44,2210.32,6582.96,79059.64,9159.66}
- {40217.23,47344.32,7532.30,75928.31}
- {17554.68,30875.02,9681.24}
+ {6476.15,11594.16,13608.60,31809.96,43058.75,73943.82,81639.88}
+ {2210.32,6582.96,9159.66,47227.60,64605.44,79059.64}
+ {7532.30,40217.23,47344.32,75928.31}
+ {9681.24,17554.68,30875.02}
 (10 rows)
 
-SELECT array_agg(l_shipdate) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort(array_agg(l_shipdate)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                   array_agg                                    
+                                   array_sort                                   
 --------------------------------------------------------------------------------
- {03-13-1996,04-12-1996,01-29-1996,04-21-1996,03-30-1996,01-30-1996}
+ {01-29-1996,01-30-1996,03-13-1996,03-30-1996,04-12-1996,04-21-1996}
  {01-28-1997}
- {02-02-1994,11-09-1993,01-16-1994,12-04-1993,12-14-1993,10-29-1993}
+ {10-29-1993,11-09-1993,12-04-1993,12-14-1993,01-16-1994,02-02-1994}
  {01-10-1996}
- {10-31-1994,10-16-1994,08-08-1994}
+ {08-08-1994,10-16-1994,10-31-1994}
  {04-27-1992}
- {05-07-1996,02-01-1996,01-15-1996,03-21-1996,02-11-1996,01-16-1996,02-10-1996}
- {10-23-1995,08-14-1995,08-07-1995,08-04-1995,08-28-1995,07-21-1995}
- {10-29-1993,12-09-1993,12-09-1993,11-09-1993}
- {10-23-1998,10-09-1998,10-30-1998}
+ {01-15-1996,01-16-1996,02-01-1996,02-10-1996,02-11-1996,03-21-1996,05-07-1996}
+ {07-21-1995,08-04-1995,08-07-1995,08-14-1995,08-28-1995,10-23-1995}
+ {10-29-1993,11-09-1993,12-09-1993,12-09-1993}
+ {10-09-1998,10-23-1998,10-30-1998}
 (10 rows)
 
-SELECT array_agg(l_shipmode) FROM lineitem GROUP BY l_orderkey
+SELECT array_sort(array_agg(l_shipmode)) FROM lineitem GROUP BY l_orderkey
 	ORDER BY l_orderkey LIMIT 10;
-                                          array_agg                                           
+                                          array_sort                                          
 ----------------------------------------------------------------------------------------------
- {"TRUCK     ","MAIL      ","REG AIR   ","AIR       ","FOB       ","MAIL      "}
+ {"AIR       ","FOB       ","MAIL      ","MAIL      ","REG AIR   ","TRUCK     "}
  {"RAIL      "}
- {"AIR       ","RAIL      ","SHIP      ","TRUCK     ","FOB       ","RAIL      "}
+ {"AIR       ","FOB       ","RAIL      ","RAIL      ","SHIP      ","TRUCK     "}
  {"REG AIR   "}
- {"AIR       ","FOB       ","AIR       "}
+ {"AIR       ","AIR       ","FOB       "}
  {"TRUCK     "}
- {"FOB       ","SHIP      ","MAIL      ","FOB       ","TRUCK     ","FOB       ","FOB       "}
- {"TRUCK     ","AIR       ","AIR       ","REG AIR   ","AIR       ","RAIL      "}
- {"TRUCK     ","MAIL      ","AIR       ","MAIL      "}
- {"REG AIR   ","FOB       ","FOB       "}
+ {"FOB       ","FOB       ","FOB       ","FOB       ","MAIL      ","SHIP      ","TRUCK     "}
+ {"AIR       ","AIR       ","AIR       ","RAIL      ","REG AIR   ","TRUCK     "}
+ {"AIR       ","MAIL      ","MAIL      ","TRUCK     "}
+ {"FOB       ","FOB       ","REG AIR   "}
 (10 rows)
 
 -- Check that we can execute array_agg() within other functions
@@ -93,10 +98,10 @@ SELECT array_length(array_agg(l_orderkey), 1) FROM lineitem;
 -- shards and contain different aggregates, filter clauses and other complex
 -- expressions. Note that the l_orderkey ranges are such that the matching rows
 -- lie in different shards.
-SELECT l_quantity, count(*), avg(l_extendedprice), array_agg(l_orderkey) FROM lineitem
+SELECT l_quantity, count(*), avg(l_extendedprice), array_sort(array_agg(l_orderkey)) FROM lineitem
 	WHERE l_quantity < 5 AND l_orderkey > 5500 AND l_orderkey < 9500
 	GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity | count |          avg          |                                            array_agg                                             
+ l_quantity | count |          avg          |                                            array_sort                                            
 ------------+-------+-----------------------+--------------------------------------------------------------------------------------------------
        1.00 |    17 | 1477.1258823529411765 | {5543,5633,5634,5698,5766,5856,5857,5986,8997,9026,9158,9184,9220,9222,9348,9383,9476}
        2.00 |    19 | 3078.4242105263157895 | {5506,5540,5573,5669,5703,5730,5798,5831,5893,5920,5923,9030,9058,9123,9124,9188,9344,9441,9476}
@@ -104,21 +109,21 @@ SELECT l_quantity, count(*), avg(l_extendedprice), array_agg(l_orderkey) FROM li
        4.00 |    19 | 5929.7136842105263158 | {5504,5507,5508,5511,5538,5764,5766,5826,5829,5862,5959,5985,9091,9120,9281,9347,9382,9440,9473}
 (4 rows)
 
-SELECT l_quantity, array_agg(extract (month FROM o_orderdate)) AS my_month
+SELECT l_quantity, array_sort(array_agg(extract (month FROM o_orderdate))) AS my_month
 	FROM lineitem, orders WHERE l_orderkey = o_orderkey AND l_quantity < 5
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
  l_quantity |                    my_month                    
 ------------+------------------------------------------------
-       1.00 | {9,5,7,5,9,11,11,4,7,7,4,7,4,2,6,3,5}
-       2.00 | {11,10,8,5,5,12,3,11,7,11,5,7,6,6,10,1,12,6,5}
-       3.00 | {4,9,8,11,7,10,6,7,8,5,8,9,11,3}
-       4.00 | {1,5,6,11,12,10,9,6,1,2,5,1,11,6,2,8,2,6,10}
+       1.00 | {2,3,4,4,4,5,5,5,6,7,7,7,7,9,9,11,11}
+       2.00 | {1,3,5,5,5,5,6,6,6,7,7,8,10,10,11,11,11,12,12}
+       3.00 | {3,4,5,6,7,7,8,8,8,9,9,10,11,11}
+       4.00 | {1,1,1,2,2,2,5,5,6,6,6,6,8,9,10,10,11,11,12}
 (4 rows)
 
-SELECT l_quantity, array_agg(l_orderkey * 2 + 1) FROM lineitem WHERE l_quantity < 5
+SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE l_quantity < 5
 	AND octet_length(l_comment) + octet_length('randomtext'::text) > 40
 	AND l_orderkey > 5500 AND l_orderkey < 9500 GROUP BY l_quantity ORDER BY l_quantity;
- l_quantity |                  array_agg                  
+ l_quantity |                 array_sort                  
 ------------+---------------------------------------------
        1.00 | {11269,11397,11713,11715,11973,18317,18445}
        2.00 | {11847,18061,18247,18953}
