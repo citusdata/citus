@@ -323,6 +323,10 @@ CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
 	bool queryRoutable = false;
+	bool upsertQuery = false;
+
+	/* grab shared metadata lock to stop concurrent placement additions */
+	LockShardDistributionMetadata(shardId, ShareLock);
 
 	/*
 	 * Replace the partitioning qual parameter value in all baserestrictinfos.
@@ -375,6 +379,12 @@ CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
 
+	/* set the upsert flag */
+	if (originalQuery->onConflict != NULL)
+	{
+		upsertQuery = true;
+	}
+
 	/* setting an alias simplifies deparsing of RETURNING */
 	if (copiedInsertRte->alias == NULL)
 	{
@@ -391,6 +401,7 @@ CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
 	modifyTask->dependedTaskList = NULL;
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
+	modifyTask->upsertQuery = upsertQuery;
 
 	return modifyTask;
 }
