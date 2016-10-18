@@ -67,7 +67,7 @@ static bool LocalTableEmpty(Oid tableId);
 static void ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 										  Var *distributionColumn);
 static void InsertPgDistPartition(Oid relationId, char distributionMethod,
-								  Node *distributionKey, uint32 colocationId);
+								  Var *distributionColumn, uint32 colocationId);
 static void CreateTruncateTrigger(Oid relationId);
 static uint32 ColocationId(int shardCount, int replicationFactor,
 						   Oid distributionColumnType);
@@ -111,7 +111,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
-	Node *distributionKey = NULL;
 	Var *distributionColumn = NULL;
 	char *distributionColumnName = NULL;
 	int distributionColumnType = 0;
@@ -129,9 +128,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	/* get distribution column type */
 	distributionColumnName = text_to_cstring(distributionColumnText);
 	distributedRelation = relation_open(relationId, AccessShareLock);
-	distributionKey = BuildDistributionKeyFromColumnName(distributedRelation,
-														 distributionColumnName);
-	distributionColumn = (Var *) distributionKey;
+	distributionColumn = BuildDistributionKeyFromColumnName(distributedRelation,
+															distributionColumnName);
 	distributionColumnType = distributionColumn->vartype;
 
 	/*
@@ -203,7 +201,6 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Node *distributionKey = NULL;
 	Var *distributionColumn = NULL;
 
 	/*
@@ -256,12 +253,8 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 						errhint("Empty your table before distributing it.")));
 	}
 
-	distributionKey = BuildDistributionKeyFromColumnName(relation,
-														 distributionColumnName);
-
-	/* the distribution key should always be a Var for now */
-	Assert(IsA(distributionKey, Var));
-	distributionColumn = (Var *) distributionKey;
+	distributionColumn = BuildDistributionKeyFromColumnName(relation,
+															distributionColumnName);
 
 	/* check for support function needed by specified partition method */
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
@@ -296,7 +289,8 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 
 	ErrorIfNotSupportedConstraint(relation, distributionMethod, distributionColumn);
 
-	InsertPgDistPartition(relationId, distributionMethod, distributionKey, colocationId);
+	InsertPgDistPartition(relationId, distributionMethod, distributionColumn,
+						  colocationId);
 
 	relation_close(relation, NoLock);
 
@@ -315,12 +309,12 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
  * InsertPgDistPartition inserts a new tuple into pg_dist_partition.
  */
 static void
-InsertPgDistPartition(Oid relationId, char distributionMethod, Node *distributionKey,
+InsertPgDistPartition(Oid relationId, char distributionMethod, Var *distributionColumn,
 					  uint32 colocationId)
 {
 	Relation pgDistPartition = NULL;
 	const char replicationModel = 'c';
-	char *distributionKeyString = NULL;
+	char *distributionColumnString = NULL;
 
 	HeapTuple newTuple = NULL;
 	Datum newValues[Natts_pg_dist_partition];
@@ -329,7 +323,7 @@ InsertPgDistPartition(Oid relationId, char distributionMethod, Node *distributio
 	/* open system catalog and insert new tuple */
 	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
 
-	distributionKeyString = nodeToString(distributionKey);
+	distributionColumnString = nodeToString((Node *) distributionColumn);
 
 	/* form new tuple for pg_dist_partition */
 	memset(newValues, 0, sizeof(newValues));
@@ -340,7 +334,7 @@ InsertPgDistPartition(Oid relationId, char distributionMethod, Node *distributio
 	newValues[Anum_pg_dist_partition_partmethod - 1] =
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_partkey - 1] =
-		CStringGetTextDatum(distributionKeyString);
+		CStringGetTextDatum(distributionColumnString);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = colocationId;
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
@@ -351,7 +345,7 @@ InsertPgDistPartition(Oid relationId, char distributionMethod, Node *distributio
 	CatalogUpdateIndexes(pgDistPartition, newTuple);
 	CitusInvalidateRelcacheByRelid(relationId);
 
-	RecordDistributedRelationDependencies(relationId, distributionKey);
+	RecordDistributedRelationDependencies(relationId, (Node *) distributionColumn);
 
 	CommandCounterIncrement();
 	heap_close(pgDistPartition, NoLock);
