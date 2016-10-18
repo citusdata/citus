@@ -260,7 +260,8 @@ SELECT *
 SELECT id
 	FROM articles
 	WHERE author_id = 1
-	GROUP BY id;
+	GROUP BY id
+	ORDER BY id;
 
 -- copying from a single shard table does not require the master query
 COPY articles_single_shard TO stdout;

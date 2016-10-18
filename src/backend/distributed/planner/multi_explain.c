@@ -18,6 +18,7 @@
 #include "commands/dbcommands.h"
 #include "commands/explain.h"
 #include "commands/tablecmds.h"
+#include "optimizer/cost.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
@@ -108,9 +109,22 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	instr_time planDuration;
 	Query *originalQuery = NULL;
 	RelationRestrictionContext *restrictionContext = NULL;
-
-	/* if local query, run the standard explain and return */
 	bool localQuery = !NeedsDistributedPlanning(query);
+	int cursorOptions = 0;
+
+#if PG_VERSION_NUM >= 90600
+
+	/*
+	 * Allow parallel plans in 9.6+ unless selecting into a table.
+	 * Without this, we're breaking explain for non-Citus plans.
+	 */
+	if (!into)
+	{
+		cursorOptions |= CURSOR_OPT_PARALLEL_OK;
+	}
+#endif
+
+	/* handle local queries in the same way as ExplainOneQuery */
 	if (localQuery)
 	{
 		PlannedStmt *plan = NULL;
@@ -118,7 +132,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		INSTR_TIME_SET_CURRENT(planStart);
 
 		/* plan the query */
-		plan = pg_plan_query(query, 0, params);
+		plan = pg_plan_query(query, cursorOptions, params);
 
 		INSTR_TIME_SET_CURRENT(planDuration);
 		INSTR_TIME_SUBTRACT(planDuration, planStart);
@@ -143,7 +157,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	PG_TRY();
 	{
 		/* call standard planner to modify the query structure before multi planning */
-		initialPlan = standard_planner(query, 0, params);
+		initialPlan = standard_planner(query, cursorOptions, params);
 
 		commandType = initialPlan->commandType;
 		if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
