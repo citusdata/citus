@@ -43,7 +43,7 @@ $colocate_tables$;
 -- ===================================================================
 
 CREATE FUNCTION get_table_colocation_id(regclass)
-    RETURNS BIGINT
+    RETURNS INTEGER
     AS 'citus'
     LANGUAGE C STRICT;
 

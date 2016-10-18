@@ -249,7 +249,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	/* a share metadata lock is enough on the source relation */
 	LockRelationDistributionMetadata(sourceRelationId, ShareLock);
 
-	/* prevent concurrent placement changes */
+	/* prevent placement changes of the source relation until we colocate with them */
 	sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
 	LockShardListMetadata(sourceShardIntervalList, ShareLock);
 
@@ -271,15 +271,15 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	{
 		ShardInterval *sourceShardInterval = (ShardInterval *) lfirst(sourceShardCell);
 		uint64 sourceShardId = sourceShardInterval->shardId;
-		List *sourceShardPlacementList = ShardPlacementList(sourceShardId);
 		uint64 newShardId = GetNextShardId();
+		ListCell *sourceShardPlacementCell = NULL;
 
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
 		text *shardMinValueText = IntegerToText(shardMinValue);
 		text *shardMaxValueText = IntegerToText(shardMaxValue);
 
-		ListCell *sourceShardPlacementCell = NULL;
+		List *sourceShardPlacementList = ShardPlacementList(sourceShardId);
 		foreach(sourceShardPlacementCell, sourceShardPlacementList)
 		{
 			ShardPlacement *sourcePlacement =

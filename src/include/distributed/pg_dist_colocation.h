@@ -4,7 +4,7 @@
  *	  definition of the relation that holds the colocation information on the
  *	  cluster (pg_dist_colocation).
  *
- * Copyright (c) 2012-2016, Citus Data, Inc.
+ * Copyright (c) 2016, Citus Data, Inc.
  *
  *-------------------------------------------------------------------------
  */
@@ -19,8 +19,8 @@
 typedef struct FormData_pg_dist_colocation
 {
 	uint32 colocationid;
-	int shardcount;
-	int replicationfactor;
+	uint32 shardcount;
+	uint32 replicationfactor;
 	Oid distributioncolumntype;
 } FormData_pg_dist_colocation;
 

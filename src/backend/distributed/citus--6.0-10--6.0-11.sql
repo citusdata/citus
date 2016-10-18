@@ -1,3 +1,5 @@
+/* citus--6.0-10--6.0-11.sql */
+
 SET search_path = 'pg_catalog';
 
 CREATE SEQUENCE citus.pg_dist_colocationid_seq
@@ -77,11 +79,13 @@ BEGIN
         -- ensure all shards are dropped
         PERFORM master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
 
+        -- get colocation group
         SELECT colocationid INTO table_colocation_id FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
 
         -- delete partition entry
         DELETE FROM pg_dist_partition WHERE logicalrelid = v_obj.objid;
 
+        -- drop colocation group if all referencing tables are dropped
         IF NOT EXISTS(SELECT * FROM pg_dist_partition WHERE colocationId = table_colocation_id) THEN
             DELETE FROM pg_dist_colocation WHERE colocationId = table_colocation_id;
         END IF;
