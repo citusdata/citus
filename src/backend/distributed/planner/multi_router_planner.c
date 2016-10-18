@@ -261,9 +261,6 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 		++taskIdIndex;
 	}
 
-	/* there should be a least a single task */
-	Assert(sqlTaskList != NIL);
-
 	/* Create the worker job */
 	workerJob = CitusMakeNode(Job);
 	workerJob->taskList = sqlTaskList;
@@ -360,7 +357,7 @@ CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
 	}
 
 	/* Ensure that we have INSERTed table's placement exists on the same worker */
-	insertShardPlacementList = ShardPlacementList(shardId);
+	insertShardPlacementList = FinalizedShardPlacementList(shardId);
 	intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 													  selectPlacementList);
 

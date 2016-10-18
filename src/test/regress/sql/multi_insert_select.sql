@@ -82,6 +82,24 @@ FROM
 WHERE
    user_id = 8;
 
+-- a zero shard select
+INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
+SELECT 
+   value_2, value_1, value_3, value_4, user_id, time 
+FROM 
+   raw_events_first
+WHERE
+   false;
+
+
+-- another zero shard select
+INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
+SELECT 
+   value_2, value_1, value_3, value_4, user_id, time 
+FROM 
+   raw_events_first
+WHERE
+   0 != 0;
 
 -- add one more row
 SET client_min_messages TO INFO;

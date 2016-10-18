@@ -223,6 +223,54 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- a zero shard select
+INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
+SELECT 
+   value_2, value_1, value_3, value_4, user_id, time 
+FROM 
+   raw_events_first
+WHERE
+   false;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- another zero shard select
+INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
+SELECT 
+   value_2, value_1, value_3, value_4, user_id, time 
+FROM 
+   raw_events_first
+WHERE
+   0 != 0;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  skipping the task
+DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- add one more row
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand

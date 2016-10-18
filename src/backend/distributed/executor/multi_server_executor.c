@@ -127,6 +127,12 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	List *workerDependentTaskList = NIL;
 	bool masterQueryHasAggregates = false;
 
+	/* TODO: this is a hacky solution to allow 0 shard INSERT ... SELECT */
+	if (masterQuery == NULL)
+	{
+		return true;
+	}
+
 	/* router executor cannot execute queries that hit zero shards */
 	if (taskCount == 0)
 	{
