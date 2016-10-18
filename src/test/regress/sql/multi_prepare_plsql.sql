@@ -11,52 +11,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 780000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 780000;
 
 
-CREATE FUNCTION sql_test_no_1() RETURNS bigint AS '
-	SELECT
-		count(*)
-	FROM
-		orders;
-' LANGUAGE SQL;
-
-CREATE FUNCTION sql_test_no_2() RETURNS bigint AS '
-	SELECT
-		count(*)
-	FROM
-		orders, lineitem
-	WHERE
-		o_orderkey = l_orderkey;
-' LANGUAGE SQL;
-
-CREATE FUNCTION sql_test_no_3() RETURNS bigint AS '
-	SELECT
-		count(*)
-	FROM
-		orders, customer
-	WHERE
-		o_custkey = c_custkey;
-' LANGUAGE SQL;
-
-CREATE FUNCTION sql_test_no_4() RETURNS bigint AS '
-	SELECT
-		count(*)
-	FROM
-		orders, customer, lineitem
-	WHERE
-		o_custkey = c_custkey AND
-		o_orderkey = l_orderkey;
-' LANGUAGE SQL;
-
-CREATE OR REPLACE FUNCTION sql_test_no_6(integer) RETURNS bigint AS  $$
-	SELECT
-		count(*)
-	FROM
-		orders, lineitem
-	WHERE
-		o_orderkey = l_orderkey AND
-		l_suppkey > $1;
-$$ LANGUAGE SQL RETURNS NULL ON NULL INPUT;
-
-CREATE OR REPLACE FUNCTION plpgsql_test_1() RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_1() RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -68,7 +23,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_2() RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_2() RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -82,7 +37,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_3() RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_3() RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -96,7 +51,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_4() RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_4() RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -110,7 +65,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_5() RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_5() RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -123,7 +78,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_6(int) RETURNS TABLE(count bigint) AS $$
+CREATE FUNCTION plpgsql_test_6(int) RETURNS TABLE(count bigint) AS $$
 DECLARE
 BEGIN
      RETURN QUERY
@@ -137,7 +92,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION plpgsql_test_7(text, text) RETURNS TABLE(supp_natadsion text, cusasdt_nation text, l_yeasdar int, sasdaum double precision) AS $$
+CREATE FUNCTION plpgsql_test_7(text, text) RETURNS TABLE(supp_natadsion text, cusasdt_nation text, l_yeasdar int, sasdaum double precision) AS $$
 DECLARE
 BEGIN
 	RETURN  QUERY
@@ -195,12 +150,6 @@ $$ LANGUAGE plpgsql;
 SET citus.task_executor_type TO 'task-tracker';
 SET client_min_messages TO INFO;
 
--- now, run plain SQL functions
-SELECT sql_test_no_1();
-SELECT sql_test_no_2();
-SELECT sql_test_no_3();
-SELECT sql_test_no_4();
-
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
 SELECT plpgsql_test_2();
@@ -229,15 +178,6 @@ SELECT plpgsql_test_2();
 -- with real-time executor
 SET citus.task_executor_type TO 'real-time';
 
--- now, run plain SQL functions
-SELECT sql_test_no_1();
-SELECT sql_test_no_2();
-
--- plain SQL functions with parameters cannot be executed
--- FIXME: temporarily disabled, bad error message - waiting for proper parametrized query
--- FIXME: support
--- SELECT sql_test_no_6(155);
-
 -- now, run PL/pgsql functions
 SELECT plpgsql_test_1();
 SELECT plpgsql_test_2();
@@ -248,16 +188,16 @@ SELECT plpgsql_test_2();
 -- SELECT plpgsql_test_6(1555);
 
 -- test router executor parameterized PL/pgsql functions
-CREATE TABLE temp_table (
+CREATE TABLE plpgsql_table (
 	key int,
 	value int
 );
-SELECT master_create_distributed_table('temp_table','key','hash');
-SELECT master_create_worker_shards('temp_table',4,1);
+SELECT master_create_distributed_table('plpgsql_table','key','hash');
+SELECT master_create_worker_shards('plpgsql_table',4,1);
 
-CREATE OR REPLACE FUNCTION no_parameter_insert() RETURNS void as $$
+CREATE FUNCTION no_parameter_insert() RETURNS void as $$
 BEGIN
-	INSERT INTO temp_table (key) VALUES (0);
+	INSERT INTO plpgsql_table (key) VALUES (0);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -269,9 +209,10 @@ SELECT no_parameter_insert();
 SELECT no_parameter_insert();
 SELECT no_parameter_insert();
 
-CREATE OR REPLACE FUNCTION single_parameter_insert(key_arg int) RETURNS void as $$
+CREATE FUNCTION single_parameter_insert(key_arg int)
+	RETURNS void as $$
 BEGIN
-	INSERT INTO temp_table (key) VALUES (key_arg);
+	INSERT INTO plpgsql_table (key) VALUES (key_arg);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -283,9 +224,10 @@ SELECT single_parameter_insert(4);
 SELECT single_parameter_insert(5);
 SELECT single_parameter_insert(6);
 
-CREATE OR REPLACE FUNCTION double_parameter_insert(key_arg int, value_arg int) RETURNS void as $$
+CREATE FUNCTION double_parameter_insert(key_arg int, value_arg int)
+	RETURNS void as $$
 BEGIN
-	INSERT INTO temp_table (key, value) VALUES (key_arg, value_arg);
+	INSERT INTO plpgsql_table (key, value) VALUES (key_arg, value_arg);
 END;
 $$ LANGUAGE plpgsql;
 
@@ -297,71 +239,265 @@ SELECT double_parameter_insert(4, 40);
 SELECT double_parameter_insert(5, 50);
 SELECT double_parameter_insert(6, 60);
 
+CREATE FUNCTION non_partition_parameter_insert(value_arg int)
+	RETURNS void as $$
+BEGIN
+	INSERT INTO plpgsql_table (key, value) VALUES (0, value_arg);
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT non_partition_parameter_insert(10);
+SELECT non_partition_parameter_insert(20);
+SELECT non_partition_parameter_insert(30);
+SELECT non_partition_parameter_insert(40);
+SELECT non_partition_parameter_insert(50);
+SELECT non_partition_parameter_insert(60);
+
 -- check inserted values
-SELECT * FROM temp_table ORDER BY key, value;
+SELECT * FROM plpgsql_table ORDER BY key, value;
 
 -- check router executor select
-CREATE OR REPLACE FUNCTION partition_column_select(key_arg int) RETURNS TABLE(key int, value int) AS $$
+CREATE FUNCTION router_partition_column_select(key_arg int)
+	RETURNS TABLE(key int, value int) AS $$
 DECLARE
 BEGIN
     RETURN QUERY
 	SELECT
-		temp_table.key,
-		temp_table.value
+		plpgsql_table.key,
+		plpgsql_table.value
 	FROM
-		temp_table
+		plpgsql_table
 	WHERE
-		temp_table.key = key_arg
+		plpgsql_table.key = key_arg
 	ORDER BY
 		key,
 		value;
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT partition_column_select(1);
-SELECT partition_column_select(2);
-SELECT partition_column_select(3);
-SELECT partition_column_select(4);
-SELECT partition_column_select(5);
+SELECT router_partition_column_select(1);
+SELECT router_partition_column_select(2);
+SELECT router_partition_column_select(3);
+SELECT router_partition_column_select(4);
+SELECT router_partition_column_select(5);
 
--- 6th execution is failing. We don't want to run the failing test because of
--- changing output. After implementing this feature, uncomment this.
--- SELECT partition_column_select(6);
+-- FIXME: 6th execution is failing. We don't want to run the failing test
+-- because of changing output. After implementing this feature, uncomment this.
+-- SELECT router_partition_column_select(6);
+
+CREATE FUNCTION router_non_partition_column_select(value_arg int)
+	RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		plpgsql_table.key,
+		plpgsql_table.value
+	FROM
+		plpgsql_table
+	WHERE
+		plpgsql_table.key = 0 AND
+		plpgsql_table.value = value_arg
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT router_non_partition_column_select(10);
+SELECT router_non_partition_column_select(20);
+SELECT router_non_partition_column_select(30);
+SELECT router_non_partition_column_select(40);
+SELECT router_non_partition_column_select(50);
+SELECT router_non_partition_column_select(60);
 
 -- check real-time executor
-CREATE OR REPLACE FUNCTION non_partition_column_select(value_arg int) RETURNS TABLE(key int, value int) AS $$
+CREATE FUNCTION real_time_non_partition_column_select(value_arg int)
+	RETURNS TABLE(key int, value int) AS $$
 DECLARE
 BEGIN
     RETURN QUERY
 	SELECT
-		temp_table.key,
-		temp_table.value
+		plpgsql_table.key,
+		plpgsql_table.value
 	FROM
-		temp_table
+		plpgsql_table
 	WHERE
-		temp_table.value = value_arg
+		plpgsql_table.value = value_arg
 	ORDER BY
 		key,
 		value;
 END;
 $$ LANGUAGE plpgsql;
 
-SELECT non_partition_column_select(10);
-SELECT non_partition_column_select(20);
-SELECT non_partition_column_select(30);
-SELECT non_partition_column_select(40);
-SELECT non_partition_column_select(50);
+SELECT real_time_non_partition_column_select(10);
+SELECT real_time_non_partition_column_select(20);
+SELECT real_time_non_partition_column_select(30);
+SELECT real_time_non_partition_column_select(40);
+SELECT real_time_non_partition_column_select(50);
 
--- 6th execution is failing. We don't want to run the failing test because of
--- changing output. After implementing this feature, uncomment this.
--- SELECT partition_column_select(6);
+-- FIXME: 6th execution is failing. We don't want to run the failing test
+-- because of changing output. After implementing this feature, uncomment this.
+-- SELECT real_time_non_partition_column_select(60);
+
+CREATE FUNCTION real_time_partition_column_select(key_arg int)
+	RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		plpgsql_table.key,
+		plpgsql_table.value
+	FROM
+		plpgsql_table
+	WHERE
+		plpgsql_table.key = key_arg OR
+		plpgsql_table.value = 10
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT real_time_partition_column_select(1);
+SELECT real_time_partition_column_select(2);
+SELECT real_time_partition_column_select(3);
+SELECT real_time_partition_column_select(4);
+SELECT real_time_partition_column_select(5);
+
+-- FIXME: 6th execution is failing. We don't want to run the failing test
+-- because of changing output. After implementing this feature, uncomment this.
+-- SELECT real_time_partition_column_select(6);
+
+-- check task-tracker executor
+SET citus.task_executor_type TO 'task-tracker';
+
+CREATE FUNCTION task_tracker_non_partition_column_select(value_arg int)
+	RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		plpgsql_table.key,
+		plpgsql_table.value
+	FROM
+		plpgsql_table
+	WHERE
+		plpgsql_table.value = value_arg
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT task_tracker_non_partition_column_select(10);
+SELECT task_tracker_non_partition_column_select(20);
+SELECT task_tracker_non_partition_column_select(30);
+SELECT task_tracker_non_partition_column_select(40);
+SELECT task_tracker_non_partition_column_select(50);
+
+-- FIXME: 6th execution is failing. We don't want to run the failing test
+-- because of changing output. After implementing this feature, uncomment this.
+-- SELECT real_time_non_partition_column_select(60);
+
+CREATE FUNCTION task_tracker_partition_column_select(key_arg int)
+	RETURNS TABLE(key int, value int) AS $$
+DECLARE
+BEGIN
+    RETURN QUERY
+	SELECT
+		plpgsql_table.key,
+		plpgsql_table.value
+	FROM
+		plpgsql_table
+	WHERE
+		plpgsql_table.key = key_arg OR
+		plpgsql_table.value = 10
+	ORDER BY
+		key,
+		value;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT task_tracker_partition_column_select(1);
+SELECT task_tracker_partition_column_select(2);
+SELECT task_tracker_partition_column_select(3);
+SELECT task_tracker_partition_column_select(4);
+SELECT task_tracker_partition_column_select(5);
+
+-- FIXME: 6th execution is failing. We don't want to run the failing test
+-- because of changing output. After implementing this feature, uncomment this.
+-- SELECT task_tracker_partition_column_select(6);
+
+SET citus.task_executor_type TO 'real-time';
+
+-- check updates
+CREATE FUNCTION partition_parameter_update(int, int) RETURNS void as $$
+BEGIN
+	UPDATE plpgsql_table SET value = $2 WHERE key = $1;
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT partition_parameter_update(1, 11);
+SELECT partition_parameter_update(2, 21);
+SELECT partition_parameter_update(3, 31);
+SELECT partition_parameter_update(4, 41);
+SELECT partition_parameter_update(5, 51);
+-- This fails with an unexpected error message
+SELECT partition_parameter_update(5, 52);
+
+CREATE FUNCTION non_partition_parameter_update(int, int) RETURNS void as $$
+BEGIN
+	UPDATE plpgsql_table SET value = $2 WHERE key = 0 AND value = $1;
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT non_partition_parameter_update(10, 12);
+SELECT non_partition_parameter_update(20, 22);
+SELECT non_partition_parameter_update(30, 32);
+SELECT non_partition_parameter_update(40, 42);
+SELECT non_partition_parameter_update(50, 52);
+SELECT non_partition_parameter_update(60, 62);
+
+-- check table after updates
+SELECT * FROM plpgsql_table ORDER BY key, value;
+
+-- check deletes
+CREATE FUNCTION partition_parameter_delete(int, int) RETURNS void as $$
+BEGIN
+	DELETE FROM plpgsql_table WHERE key = $1 AND value = $2;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT partition_parameter_delete(1, 11);
+SELECT partition_parameter_delete(2, 21);
+SELECT partition_parameter_delete(3, 31);
+SELECT partition_parameter_delete(4, 41);
+SELECT partition_parameter_delete(5, 51);
+-- This fails with an unexpected error message
+SELECT partition_parameter_delete(0, 10);
+
+CREATE FUNCTION  non_partition_parameter_delete(int) RETURNS void as $$
+BEGIN
+	DELETE FROM plpgsql_table WHERE key = 0 AND value = $1;
+END;
+$$ LANGUAGE plpgsql;
+
+-- execute 6 times to trigger prepared statement usage
+SELECT non_partition_parameter_delete(12);
+SELECT non_partition_parameter_delete(22);
+SELECT non_partition_parameter_delete(32);
+SELECT non_partition_parameter_delete(42);
+SELECT non_partition_parameter_delete(52);
+SELECT non_partition_parameter_delete(62);
+
+-- check table after deletes
+SELECT * FROM plpgsql_table ORDER BY key, value;
 
 -- clean-up functions
-DROP FUNCTION sql_test_no_1();
-DROP FUNCTION sql_test_no_2();
-DROP FUNCTION sql_test_no_3();
-DROP FUNCTION sql_test_no_4();
-DROP FUNCTION sql_test_no_6(int);
 DROP FUNCTION plpgsql_test_1();
 DROP FUNCTION plpgsql_test_2();
 DROP FUNCTION plpgsql_test_3();
@@ -372,5 +508,14 @@ DROP FUNCTION plpgsql_test_7(text, text);
 DROP FUNCTION no_parameter_insert();
 DROP FUNCTION single_parameter_insert(int);
 DROP FUNCTION double_parameter_insert(int, int);
-DROP FUNCTION partition_column_select(int);
-DROP FUNCTION non_partition_column_select(int);
+DROP FUNCTION non_partition_parameter_insert(int);
+DROP FUNCTION router_partition_column_select(int);
+DROP FUNCTION router_non_partition_column_select(int);
+DROP FUNCTION real_time_non_partition_column_select(int);
+DROP FUNCTION real_time_partition_column_select(int);
+DROP FUNCTION task_tracker_non_partition_column_select(int);
+DROP FUNCTION task_tracker_partition_column_select(int);
+DROP FUNCTION partition_parameter_update(int, int);
+DROP FUNCTION non_partition_parameter_update(int, int);
+DROP FUNCTION partition_parameter_delete(int, int);
+DROP FUNCTION non_partition_parameter_delete(int);
