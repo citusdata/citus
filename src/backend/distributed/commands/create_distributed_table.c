@@ -66,8 +66,8 @@ static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 static bool LocalTableEmpty(Oid tableId);
 static void ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 										  Var *distributionColumn);
-static void InsertPgDistPartition(Oid relationId, char distributionMethod,
-								  Var *distributionColumn, uint32 colocationId);
+static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
+									  Var *distributionColumn, uint32 colocationId);
 static void CreateTruncateTrigger(Oid relationId);
 static uint32 ColocationId(int shardCount, int replicationFactor,
 						   Oid distributionColumnType);
@@ -84,6 +84,9 @@ PG_FUNCTION_INFO_V1(create_distributed_table);
 /*
  * master_create_distributed_table accepts a table, distribution column and
  * method and performs the corresponding catalog changes.
+ *
+ * Note that this udf is depreciated and cannot create colocated tables, so we
+ * always use INVALID_COLOCATION_ID.
  */
 Datum
 master_create_distributed_table(PG_FUNCTION_ARGS)
@@ -134,8 +137,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
-	 * can be sure that there will no modifications on the table until this
-	 * transaction is committed.
+	 * can be sure that there will no modifications on the colocation table
+	 * until this transaction is committed.
 	 */
 	pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
 
@@ -204,11 +207,11 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 	Var *distributionColumn = NULL;
 
 	/*
-	 * Lock target relation with an access exclusive lock - there's no way to
-	 * make sense of this table until we've committed, and we don't want
-	 * multiple backends manipulating this relation.
+	 * Lock target relation with an exclusive lock - there's no way to make
+	 * sense of this table until we've committed, and we don't want multiple
+	 * backends manipulating this relation.
 	 */
-	relation = relation_open(relationId, AccessExclusiveLock);
+	relation = relation_open(relationId, ExclusiveLock);
 	relationDesc = RelationGetDescr(relation);
 	relationName = RelationGetRelationName(relation);
 
@@ -289,8 +292,8 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 
 	ErrorIfNotSupportedConstraint(relation, distributionMethod, distributionColumn);
 
-	InsertPgDistPartition(relationId, distributionMethod, distributionColumn,
-						  colocationId);
+	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
+							  colocationId);
 
 	relation_close(relation, NoLock);
 
@@ -306,64 +309,19 @@ ConvertToDistributedTable(Oid relationId, text *distributionColumnText,
 
 
 /*
- * InsertPgDistPartition inserts a new tuple into pg_dist_partition.
- */
-static void
-InsertPgDistPartition(Oid relationId, char distributionMethod, Var *distributionColumn,
-					  uint32 colocationId)
-{
-	Relation pgDistPartition = NULL;
-	const char replicationModel = 'c';
-	char *distributionColumnString = NULL;
-
-	HeapTuple newTuple = NULL;
-	Datum newValues[Natts_pg_dist_partition];
-	bool newNulls[Natts_pg_dist_partition];
-
-	/* open system catalog and insert new tuple */
-	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
-
-	distributionColumnString = nodeToString((Node *) distributionColumn);
-
-	/* form new tuple for pg_dist_partition */
-	memset(newValues, 0, sizeof(newValues));
-	memset(newNulls, false, sizeof(newNulls));
-
-	newValues[Anum_pg_dist_partition_logicalrelid - 1] =
-		ObjectIdGetDatum(relationId);
-	newValues[Anum_pg_dist_partition_partmethod - 1] =
-		CharGetDatum(distributionMethod);
-	newValues[Anum_pg_dist_partition_partkey - 1] =
-		CStringGetTextDatum(distributionColumnString);
-	newValues[Anum_pg_dist_partition_colocationid - 1] = colocationId;
-	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
-
-	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
-
-	/* finally insert tuple, build index entries & register cache invalidation */
-	simple_heap_insert(pgDistPartition, newTuple);
-	CatalogUpdateIndexes(pgDistPartition, newTuple);
-	CitusInvalidateRelcacheByRelid(relationId);
-
-	RecordDistributedRelationDependencies(relationId, (Node *) distributionColumn);
-
-	CommandCounterIncrement();
-	heap_close(pgDistPartition, NoLock);
-}
-
-
-/*
  * ErrorIfNotSupportedConstraint run checks related to unique index / exclude
  * constraints.
  *
- * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned tables,
- * since currently there is no way of enforcing uniqueness for overlapping shards.
+ * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned
+ * tables, since currently there is no way of enforcing uniqueness for
+ * overlapping shards.
  *
- * Similarly, do not allow such constraints if they do not include partition column.
- * This check is important for two reasons. First, currently Citus does not enforce
- * uniqueness constraint on multiple shards.
- * Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed with no
- * further check for constraints.
+ * Similarly, do not allow such constraints if they do not include partition
+ * column. This check is important for two reasons:
+ * i. First, currently Citus does not enforce uniqueness constraint on multiple
+ * shards.
+ * ii. Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed
+ * with no further check for constraints.
  */
 static void
 ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
@@ -449,6 +407,53 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 
 		index_close(indexDesc, NoLock);
 	}
+}
+
+
+/*
+ * InsertIntoPgDistPartition inserts a new tuple into pg_dist_partition.
+ */
+static void
+InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
+						  Var *distributionColumn, uint32 colocationId)
+{
+	Relation pgDistPartition = NULL;
+	const char replicationModel = 'c';
+	char *distributionColumnString = NULL;
+
+	HeapTuple newTuple = NULL;
+	Datum newValues[Natts_pg_dist_partition];
+	bool newNulls[Natts_pg_dist_partition];
+
+	/* open system catalog and insert new tuple */
+	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
+
+	distributionColumnString = nodeToString((Node *) distributionColumn);
+
+	/* form new tuple for pg_dist_partition */
+	memset(newValues, 0, sizeof(newValues));
+	memset(newNulls, false, sizeof(newNulls));
+
+	newValues[Anum_pg_dist_partition_logicalrelid - 1] =
+		ObjectIdGetDatum(relationId);
+	newValues[Anum_pg_dist_partition_partmethod - 1] =
+		CharGetDatum(distributionMethod);
+	newValues[Anum_pg_dist_partition_partkey - 1] =
+		CStringGetTextDatum(distributionColumnString);
+	newValues[Anum_pg_dist_partition_colocationid - 1] = colocationId;
+	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+
+	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
+
+	/* finally insert tuple, build index entries & register cache invalidation */
+	simple_heap_insert(pgDistPartition, newTuple);
+	CatalogUpdateIndexes(pgDistPartition, newTuple);
+	CitusInvalidateRelcacheByRelid(relationId);
+
+	RecordDistributedRelationDependencies(relationId, (Node *) distributionColumn);
+
+	CommandCounterIncrement();
+	heap_close(pgDistPartition, NoLock);
 }
 
 
@@ -669,11 +674,10 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	HeapTuple colocationTuple = NULL;
 	SysScanDesc scanDescriptor;
-	ScanKeyData scanKey[3];
-	int scanKeyCount = 3;
+	const int scanKeyCount = 3;
+	ScanKeyData scanKey[scanKeyCount];
 	bool indexOK = true;
 
-	/* acquire a lock, so that no one can do this concurrently */
 	Relation pgDistColocation = heap_open(DistColocationRelationId(), AccessShareLock);
 
 	/* set scan arguments */
@@ -706,12 +710,13 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
 
 /*
  * CreateColocationGroup creates a new colocation id and writes it into
- * pg_dist_colocation with the given configuration.
+ * pg_dist_colocation with the given configuration. It also returns the created
+ * colocation id.
  */
 static uint32
 CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionColumnType)
 {
-	uint32 colocationId = INVALID_COLOCATION_ID;
+	uint32 colocationId = GetNextColocationId();
 	Relation pgDistColocation = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
@@ -721,8 +726,6 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 	/* form new colocation tuple */
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
-
-	colocationId = GetNextColocationId();
 
 	values[Anum_pg_dist_colocation_colocationid - 1] = UInt32GetDatum(colocationId);
 	values[Anum_pg_dist_colocation_shardcount - 1] = UInt32GetDatum(shardCount);
@@ -742,7 +745,7 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
-	heap_close(pgDistColocation, NoLock);
+	heap_close(pgDistColocation, RowExclusiveLock);
 
 	return colocationId;
 }
