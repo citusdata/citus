@@ -150,7 +150,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300004
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
@@ -160,13 +160,13 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300006
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300007
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
@@ -204,19 +204,19 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300005
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300006
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300007
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
@@ -234,13 +234,13 @@ WHERE
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300004
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300005
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300006
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300007
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
@@ -258,13 +258,13 @@ WHERE
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300004
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300005
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300006
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300007
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
@@ -345,7 +345,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300004
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
@@ -355,7 +355,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  skipping the task
+DEBUG:  could not generate task for target shardId: 13300006
 DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001

@@ -110,7 +110,7 @@ static bool UpdateRelationNames(Node *node,
 static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
 static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecutorType,
 									  RelationRestrictionContext *restrictionContext);
-static RelationRestrictionContext * copyRelationRestrictionContext(
+static RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
 static Node * ReplaceHiddenQual(Node *node, void *context);
 static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
@@ -268,7 +268,9 @@ CreateMultiTaskRouterPlan(Query *originalQuery,
 	workerJob->dependedJobList = NIL;
 	workerJob->jobId = jobId;
 	workerJob->jobQuery = originalQuery;
-	workerJob->requiresMasterEvaluation = false; /* for now we do not support any function evaluation */
+
+	/* for now we do not support any function evaluation */
+	workerJob->requiresMasterEvaluation = false;
 
 	/* and finally the multi plan */
 	multiPlan = CitusMakeNode(MultiPlan);
@@ -305,7 +307,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	Oid distributedTableId = shardInterval->relationId;
 
 	RelationRestrictionContext *copiedRestrictionContext =
-		copyRelationRestrictionContext(restrictionContext);
+		CopyRelationRestrictionContext(restrictionContext);
 
 	StringInfo queryString = makeStringInfo();
 	ListCell *restrictionCell = NULL;
@@ -315,7 +317,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
-	bool queryRoutable = false;
+	bool routerPlannable = false;
 	bool upsertQuery = false;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
@@ -340,10 +342,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	queryRoutable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
-									  &selectPlacementList, &selectAnchorShardId);
+	routerPlannable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
+										&selectPlacementList, &selectAnchorShardId);
 
-	if (!queryRoutable)
+	if (!routerPlannable)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "
@@ -358,7 +360,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	if (list_length(insertShardPlacementList) != list_length(intersectedPlacementList))
 	{
-		ereport(DEBUG2, (errmsg("skipping the task"),
+		ereport(DEBUG2, (errmsg("could not generate task for target shardId: %ld",
+								shardId),
 						 errdetail("Insert query hits %d placements, Select query "
 								   "hits %d placements and only %d of those placements match.",
 								   list_length(insertShardPlacementList),
@@ -413,10 +416,8 @@ ExtractSelectRangeTableEntry(Query *query)
 	RangeTblRef *reference = NULL;
 	RangeTblEntry *subqueryRte = NULL;
 
-	/* since we already aseerted InsertSelectQuery() it is safe to access list */
+	/* since we already aseerted InsertSelectQuery() it is safe to access both lists */
 	reference = linitial(fromList);
-	Assert(IsA(reference, RangeTblRef));
-
 	subqueryRte = rt_fetch(reference->rtindex, query->rtable);
 
 	return subqueryRte;
@@ -512,6 +513,7 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 
 		Assert(subquery->commandType == CMD_SELECT);
 
+		/* pushing down limit per shard would yield wrong results */
 		if (subquery->limitCount != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -521,6 +523,7 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 									  "INSERT ... SELECT queries")));
 		}
 
+		/* pushing down limit offest per shard would yield wrong results */
 		if (subquery->limitOffset != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -530,6 +533,11 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 									  "INSERT ... SELECT queries")));
 		}
 
+		/*
+		 * We could potentially support window clauses where the data is partitioned
+		 * over distribution column. For simplicity, we currently do not support window
+		 * clauses at all.
+		 */
 		if (subquery->windowClause != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1686,13 +1694,12 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 	ListCell *prunedRelationShardListCell = NULL;
 	List *workerList = NIL;
 	bool shardsPresent = false;
-	bool queryRoutable = false;
 
 	*placementList = NIL;
 
 	if (prunedRelationShardList == NULL)
 	{
-		return queryRoutable;
+		return false;
 	}
 
 	Assert(commandType == CMD_SELECT);
@@ -1749,7 +1756,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 	{
 		ereport(DEBUG2, (errmsg("Found no worker with all shard placements")));
 
-		return queryRoutable;
+		return false;
 	}
 
 	UpdateRelationNames((Node *) originalQuery, restrictionContext);
@@ -1757,10 +1764,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 	*placementList = workerList;
 	*anchorShardId = shardId;
 
-	/* now that the query is qualified to be routable */
-	queryRoutable = true;
-
-	return queryRoutable;
+	return true;
 }
 
 
@@ -2398,9 +2402,15 @@ InsertSelectQuery(Query *query)
 /*
  * Copy a RelationRestrictionContext. Note that several subfields are copied
  * shallowly, for lack of copyObject support.
+ *
+ * Note that CopyRelationRestrictionContext copies the following fields per relation
+ * context: index, relationId, distributedRelation, rte, relOptInfo->baserestrictinfo,
+ * relOptInfo->joininfo and prunedShardIntervalList. Also, the function shallowly copies
+ * plannerInfo which is read-only. All other parts of the relOptInfo is also shallowly
+ * copied.
  */
 static RelationRestrictionContext *
-copyRelationRestrictionContext(RelationRestrictionContext *oldContext)
+CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 {
 	RelationRestrictionContext *newContext = (RelationRestrictionContext *)
 											 palloc(sizeof(RelationRestrictionContext));
@@ -2426,13 +2436,17 @@ copyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 		newRestriction->relOptInfo = palloc(sizeof(RelOptInfo));
 		memcpy(newRestriction->relOptInfo, oldRestriction->relOptInfo,
 			   sizeof(RelOptInfo));
-		newRestriction->relOptInfo->baserestrictinfo = copyObject(
-			oldRestriction->relOptInfo->baserestrictinfo);
+
+		newRestriction->relOptInfo->baserestrictinfo =
+			copyObject(oldRestriction->relOptInfo->baserestrictinfo);
+
+		newRestriction->relOptInfo->joininfo =
+			copyObject(oldRestriction->relOptInfo->joininfo);
 
 		/* not copyable, but readonly */
 		newRestriction->plannerInfo = oldRestriction->plannerInfo;
-		newRestriction->prunedShardIntervalList = copyObject(
-			oldRestriction->prunedShardIntervalList);
+		newRestriction->prunedShardIntervalList =
+			copyObject(oldRestriction->prunedShardIntervalList);
 
 		newContext->relationRestrictionList =
 			lappend(newContext->relationRestrictionList, newRestriction);
