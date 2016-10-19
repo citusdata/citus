@@ -93,10 +93,10 @@ static ShardInterval * FastShardPruning(Oid distributedTableId,
 										Const *partionColumnValue);
 static Oid ExtractFirstDistributedTableId(Query *query);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
-static Task * RouterSelectTask(Query *originalQuery, Query *query,
+static Task * RouterSelectTask(Query *originalQuery,
 							   RelationRestrictionContext *restrictionContext,
 							   List **placementList);
-static bool RouterSelectQuery(Query *originalQuery, Query *query,
+static bool RouterSelectQuery(Query *originalQuery,
 							  RelationRestrictionContext *restrictionContext,
 							  List **placementList, uint64 *anchorShardId);
 static List * TargetShardIntervalsForSelect(Query *query,
@@ -186,7 +186,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	{
 		Assert(commandType == CMD_SELECT);
 
-		task = RouterSelectTask(originalQuery, query, restrictionContext, &placementList);
+		task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
 	}
 
 	if (task == NULL)
@@ -344,9 +344,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, Query *query,
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	queryRoutable = RouterSelectQuery(copiedSubquery, subquery,
-									  copiedRestrictionContext, &selectPlacementList,
-									  &selectAnchorShardId);
+	queryRoutable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
+									  &selectPlacementList, &selectAnchorShardId);
 
 	if (!queryRoutable)
 	{
@@ -1597,8 +1596,7 @@ ExtractInsertPartitionValue(Query *query, Var *partitionColumn)
 
 /* RouterSelectTask builds a Task to represent a single shard select query */
 static Task *
-RouterSelectTask(Query *originalQuery, Query *query,
-				 RelationRestrictionContext *restrictionContext,
+RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionContext,
 				 List **placementList)
 {
 	Task *task = NULL;
@@ -1607,7 +1605,7 @@ RouterSelectTask(Query *originalQuery, Query *query,
 	bool upsertQuery = false;
 	uint64 shardId = INVALID_SHARD_ID;
 
-	queryRoutable = RouterSelectQuery(originalQuery, query, restrictionContext,
+	queryRoutable = RouterSelectQuery(originalQuery, restrictionContext,
 									  placementList, &shardId);
 
 
@@ -1641,14 +1639,13 @@ RouterSelectTask(Query *originalQuery, Query *query,
  * anchorShardId is set to the first pruned shardId of the given query.
  */
 static bool
-RouterSelectQuery(Query *originalQuery, Query *query,
-				  RelationRestrictionContext *restrictionContext,
+RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
 				  List **placementList, uint64 *anchorShardId)
 {
-	List *prunedRelationShardList = TargetShardIntervalsForSelect(query,
+	List *prunedRelationShardList = TargetShardIntervalsForSelect(originalQuery,
 																  restrictionContext);
 	uint64 shardId = INVALID_SHARD_ID;
-	CmdType commandType PG_USED_FOR_ASSERTS_ONLY = query->commandType;
+	CmdType commandType PG_USED_FOR_ASSERTS_ONLY = originalQuery->commandType;
 	ListCell *prunedRelationShardListCell = NULL;
 	List *workerList = NIL;
 	bool shardsPresent = false;
