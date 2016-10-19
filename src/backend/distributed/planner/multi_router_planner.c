@@ -74,11 +74,11 @@ static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery, Query *query
 static MultiPlan * CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 											 RelationRestrictionContext *
 											 restrictionContext);
-static Task * CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
-												 ShardInterval *shardInterval,
-												 RelationRestrictionContext *
-												 restrictionContext,
-												 uint32 taskIdIndex);
+static Task * RouterModifyTaskForShardInterval(Query *originalQuery, Query *query,
+											   ShardInterval *shardInterval,
+											   RelationRestrictionContext *
+											   restrictionContext,
+											   uint32 taskIdIndex);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -247,10 +247,10 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 			targetCacheEntry->sortedShardIntervalArray[shardOffset];
 		Task *modifyTask = NULL;
 
-		modifyTask = CreateMultipleTaskRouterModifyTask(originalQuery, query,
-														targetShardInterval,
-														restrictionContext,
-														taskIdIndex);
+		modifyTask = RouterModifyTaskForShardInterval(originalQuery, query,
+													  targetShardInterval,
+													  restrictionContext,
+													  taskIdIndex);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -281,7 +281,7 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 
 
 /*
- * CreateMultipleTaskRouterModifyTask creates a modify task by
+ * RouterModifyTaskForShardInterval creates a modify task by
  * replacing the partitioning qual parameter added in multi_planner()
  * with the shardInterval's boundary value. Then perform the normal
  * shard pruning on the subquery. Finally, checks if the target shardInterval
@@ -292,10 +292,10 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
  * subqueries with non euqi-joins.).
  */
 static Task *
-CreateMultipleTaskRouterModifyTask(Query *originalQuery, Query *query,
-								   ShardInterval *shardInterval,
-								   RelationRestrictionContext *restrictionContext,
-								   uint32 taskIdIndex)
+RouterModifyTaskForShardInterval(Query *originalQuery, Query *query,
+								 ShardInterval *shardInterval,
+								 RelationRestrictionContext *restrictionContext,
+								 uint32 taskIdIndex)
 {
 	RangeTblEntry *subqueryRte = lsecond(query->rtable);
 	Query *subquery = subqueryRte->subquery;
