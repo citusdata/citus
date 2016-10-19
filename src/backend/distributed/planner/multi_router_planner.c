@@ -411,13 +411,14 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 static RangeTblEntry *
 ExtractSelectRangeTableEntry(Query *query)
 {
-	Assert(InsertSelectQuery(query));
-
-	List *fromList = query->jointree->fromlist;
+	List *fromList = NULL;
 	RangeTblRef *reference = NULL;
 	RangeTblEntry *subqueryRte = NULL;
 
+	Assert(InsertSelectQuery(query));
+
 	/* since we already aseerted InsertSelectQuery() it is safe to access both lists */
+	fromList = query->jointree->fromlist;
 	reference = linitial(fromList);
 	subqueryRte = rt_fetch(reference->rtindex, query->rtable);
 
@@ -433,11 +434,13 @@ ExtractSelectRangeTableEntry(Query *query)
 static RangeTblEntry *
 ExtractInsertRangeTableEntry(Query *query)
 {
-	AssertArg(InsertSelectQuery(query));
-
 	int resultRelation = query->resultRelation;
 	List *rangeTableList = query->rtable;
-	RangeTblEntry *insertRTE = rt_fetch(resultRelation, rangeTableList);
+	RangeTblEntry *insertRTE = NULL;
+
+	AssertArg(InsertSelectQuery(query));
+
+	insertRTE = rt_fetch(resultRelation, rangeTableList);
 
 	return insertRTE;
 }
