@@ -17,6 +17,7 @@
 
 #include "access/stratnum.h"
 #include "access/xact.h"
+#include "catalog/pg_opfamily.h"
 #include "distributed/citus_clauses.h"
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
@@ -2503,9 +2504,13 @@ InstantiatePartitionQual(Node *node, void *context)
 
 		List *hashedOperatorList = NIL;
 
-		/* TODO: how can I get those ids */
-		Oid integer4GEoperatorId = 525;
-		Oid integer4LEoperatorId = 523;
+		/* get the integer >=, <= operators from the catalog */
+		Oid integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+													   INT4OID,
+													   BTGreaterEqualStrategyNumber);
+		Oid integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+													   INT4OID,
+													   BTLessEqualStrategyNumber);
 
 		/* look for the Params */
 		if (IsA(leftop, Param))
