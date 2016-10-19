@@ -325,6 +325,8 @@ TupleToShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
 	ShardPlacement *shardPlacement = NULL;
 	bool isNull = false;
+	Oid nodePortAttTypeId =
+		tupleDescriptor->attrs[Anum_pg_dist_shard_placement_nodeport - 1]->atttypid;
 
 	Datum placementId = heap_getattr(heapTuple, Anum_pg_dist_shard_placement_placementid,
 									 tupleDescriptor, &isNull);
@@ -350,7 +352,14 @@ TupleToShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	shardPlacement->shardLength = DatumGetInt64(shardLength);
 	shardPlacement->shardState = DatumGetUInt32(shardState);
 	shardPlacement->nodeName = TextDatumGetCString(nodeName);
-	shardPlacement->nodePort = DatumGetInt32(nodePort);
+	if (nodePortAttTypeId == INT4OID)
+	{
+		shardPlacement->nodePort = DatumGetInt32(nodePort);
+	}
+	else
+	{
+		shardPlacement->nodePort = DatumGetInt64(nodePort);
+	}
 
 	return shardPlacement;
 }
