@@ -42,6 +42,11 @@ typedef enum
 
 /* Function declarations to extend names in DDL commands */
 extern void RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId);
+extern void RelayEventExtendNamesForInterShardCommands(Node *parseTree,
+													   uint64 leftShardId,
+													   char *leftShardSchemaName,
+													   uint64 rightShardId,
+													   char *rightShardSchemaName);
 extern void AppendShardIdToName(char **name, uint64 shardId);
 
 #endif   /* RELAY_UTILITY_H */

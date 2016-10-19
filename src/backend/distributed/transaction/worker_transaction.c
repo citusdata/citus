@@ -166,7 +166,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 
 
 /*
- * SendCommandListInSingleTransaction opens connection to the node with the given
+ * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
  * nodeName and nodePort. Then, the connection starts a transaction on the remote
  * node and executes the commands in the transaction. The function raises error if
  * any of the queries fails.
@@ -186,46 +186,59 @@ SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char 
 							   nodeName, nodePort, nodeUser)));
 	}
 
-	/* start the transaction on the worker node */
-	queryResult = PQexec(workerConnection, "BEGIN");
-	if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
+	PG_TRY();
 	{
-		ReraiseRemoteError(workerConnection, queryResult);
-	}
-
-	PQclear(queryResult);
-
-	/* iterate over the commands and execute them in the same connection */
-	foreach(commandCell, commandList)
-	{
-		char *commandString = lfirst(commandCell);
-		ExecStatusType resultStatus = PGRES_EMPTY_QUERY;
-
-		queryResult = PQexec(workerConnection, commandString);
-		resultStatus = PQresultStatus(queryResult);
-		if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
-			  resultStatus == PGRES_COMMAND_OK))
+		/* start the transaction on the worker node */
+		queryResult = PQexec(workerConnection, "BEGIN");
+		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
 		{
 			ReraiseRemoteError(workerConnection, queryResult);
 		}
 
 		PQclear(queryResult);
-	}
 
-	/* commit the transaction on the worker node */
-	queryResult = PQexec(workerConnection, "COMMIT");
-	if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
+		/* iterate over the commands and execute them in the same connection */
+		foreach(commandCell, commandList)
+		{
+			char *commandString = lfirst(commandCell);
+			ExecStatusType resultStatus = PGRES_EMPTY_QUERY;
+
+			CHECK_FOR_INTERRUPTS();
+
+			queryResult = PQexec(workerConnection, commandString);
+			resultStatus = PQresultStatus(queryResult);
+			if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
+				  resultStatus == PGRES_COMMAND_OK))
+			{
+				ReraiseRemoteError(workerConnection, queryResult);
+			}
+
+			PQclear(queryResult);
+		}
+
+		/* commit the transaction on the worker node */
+		queryResult = PQexec(workerConnection, "COMMIT");
+		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
+		{
+			ReraiseRemoteError(workerConnection, queryResult);
+		}
+
+		PQclear(queryResult);
+
+		/* clear NULL result */
+		PQgetResult(workerConnection);
+
+		/* we no longer need this connection */
+		PQfinish(workerConnection);
+	}
+	PG_CATCH();
 	{
-		ReraiseRemoteError(workerConnection, queryResult);
+		/* close the connection */
+		PQfinish(workerConnection);
+
+		PG_RE_THROW();
 	}
-
-	PQclear(queryResult);
-
-	/* clear NULL result */
-	PQgetResult(workerConnection);
-
-	/* we no longer need this connection */
-	PQfinish(workerConnection);
+	PG_END_TRY();
 }
 
 

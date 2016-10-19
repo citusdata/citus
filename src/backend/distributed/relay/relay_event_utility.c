@@ -47,9 +47,6 @@
 #include "utils/relcache.h"
 
 /* Local functions forward declarations */
-static bool TypeAddIndexConstraint(const AlterTableCmd *command);
-static bool TypeDropIndexConstraint(const AlterTableCmd *command,
-									const RangeVar *relation, uint64 shardId);
 static void AppendShardIdToConstraintName(AlterTableCmd *command, uint64 shardId);
 static void SetSchemaNameIfNotExist(char **schemaName, char *newSchemaName);
 static bool UpdateWholeRowColumnReferencesWalker(Node *node, uint64 *shardId);
@@ -81,15 +78,12 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 		{
 			/*
 			 * We append shardId to the very end of table and index names to
-			 * avoid name collisions. We usually do not touch constraint names,
-			 * except for cases where they refer to index names. In such cases,
-			 * we also append to constraint names.
+			 * avoid name collisions. We also append shardId to constraint names.
 			 */
 
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
 			char **relationName = &(alterTableStmt->relation->relname);
 			char **relationSchemaName = &(alterTableStmt->relation->schemaname);
-			RangeVar *relation = alterTableStmt->relation;  /* for constraints */
 
 			List *commandList = alterTableStmt->cmds;
 			ListCell *commandCell = NULL;
@@ -104,8 +98,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 
-				if (TypeAddIndexConstraint(command) ||
-					TypeDropIndexConstraint(command, relation, shardId))
+				if (command->subtype == AT_AddConstraint ||
+					command->subtype == AT_DropConstraint)
 				{
 					AppendShardIdToConstraintName(command, shardId);
 				}
@@ -418,111 +412,63 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 
 /*
- * TypeAddIndexConstraint checks if the alter table command adds a constraint
- * and if that constraint also results in an index creation.
+ * RelayEventExtendNamesForInterShardCommands extends relation names in the given parse
+ * tree for certain utility commands. The function more specifically extends table and
+ * constraint names in the parse tree by appending the given shardId; thereby
+ * avoiding name collisions in the database among sharded tables. This function
+ * has the side effect of extending relation names in the parse tree.
  */
-static bool
-TypeAddIndexConstraint(const AlterTableCmd *command)
+void
+RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
+										   char *leftShardSchemaName, uint64 rightShardId,
+										   char *rightShardSchemaName)
 {
-	if (command->subtype == AT_AddConstraint)
+	NodeTag nodeType = nodeTag(parseTree);
+
+	switch (nodeType)
 	{
-		if (IsA(command->def, Constraint))
+		case T_AlterTableStmt:
 		{
-			Constraint *constraint = (Constraint *) command->def;
-			if (constraint->contype == CONSTR_PRIMARY ||
-				constraint->contype == CONSTR_UNIQUE ||
-				constraint->contype == CONSTR_EXCLUSION)
+			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parseTree;
+			List *commandList = alterTableStmt->cmds;
+			ListCell *commandCell = NULL;
+
+			foreach(commandCell, commandList)
 			{
-				return true;
-			}
-		}
-	}
+				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+				if (command->subtype == AT_AddConstraint)
+				{
+					Constraint *constraint = (Constraint *) command->def;
+					if (constraint->contype == CONSTR_FOREIGN)
+					{
+						char **referencedTableName = &(constraint->pktable->relname);
+						char **relationSchemaName = &(constraint->pktable->schemaname);
 
-	return false;
-}
+						/* prefix with schema name if it is not added already */
+						SetSchemaNameIfNotExist(relationSchemaName, rightShardSchemaName);
 
-
-/*
- * TypeDropIndexConstraint checks if the alter table command drops a constraint
- * and if that constraint also results in an index drop. Note that drop
- * constraints do not have access to constraint type information; this is in
- * contrast with add constraint commands. This function therefore performs
- * additional system catalog lookups to determine if the drop constraint is
- * associated with an index.
- */
-static bool
-TypeDropIndexConstraint(const AlterTableCmd *command,
-						const RangeVar *relation, uint64 shardId)
-{
-	Relation pgConstraint = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	HeapTuple heapTuple = NULL;
-
-	char *searchedConstraintName = NULL;
-	bool indexConstraint = false;
-	Oid relationId = InvalidOid;
-	bool failOK = true;
-
-	if (command->subtype != AT_DropConstraint)
-	{
-		return false;
-	}
-
-	/*
-	 * At this stage, our only option is performing a relationId lookup. We
-	 * first find the relationId, and then scan the pg_constraints system
-	 * catalog using this relationId. Finally, we check if the passed in
-	 * constraint is for a primary key, unique, or exclusion index.
-	 */
-	relationId = RangeVarGetRelid(relation, NoLock, failOK);
-	if (!OidIsValid(relationId))
-	{
-		/* overlook this error, it should be signaled later in the pipeline */
-		return false;
-	}
-
-	searchedConstraintName = pstrdup(command->name);
-	AppendShardIdToName(&searchedConstraintName, shardId);
-
-	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
-
-	scanDescriptor = systable_beginscan(pgConstraint,
-										ConstraintRelidIndexId, true, /* indexOK */
-										NULL, scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-		char *constraintName = NameStr(constraintForm->conname);
-
-		if (strncmp(constraintName, searchedConstraintName, NAMEDATALEN) == 0)
-		{
-			/* we found the constraint, now check if it is for an index */
-			if (constraintForm->contype == CONSTRAINT_PRIMARY ||
-				constraintForm->contype == CONSTRAINT_UNIQUE ||
-				constraintForm->contype == CONSTRAINT_EXCLUSION)
-			{
-				indexConstraint = true;
+						/*
+						 * We will not append shard id to referencing table name or
+						 * constraint name. They will be handled when we drop into
+						 * RelayEventExtendNames.
+						 */
+						AppendShardIdToName(referencedTableName, rightShardId);
+					}
+				}
 			}
 
+			/* drop into RelayEventExtendNames for non-inter table commands */
+			RelayEventExtendNames(parseTree, leftShardSchemaName, leftShardId);
 			break;
 		}
 
-		heapTuple = systable_getnext(scanDescriptor);
+		default:
+		{
+			ereport(WARNING, (errmsg("unsafe statement type in name extension"),
+							  errdetail("Statement type: %u", (uint32) nodeType)));
+			break;
+		}
 	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgConstraint, AccessShareLock);
-
-	pfree(searchedConstraintName);
-
-	return indexConstraint;
 }
 
 

@@ -52,6 +52,7 @@ static void CopyShardPlacement(int64 shardId, char *sourceNodeName, int32 source
 							   bool doRepair);
 static List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
 								   int32 sourceNodePort);
+static List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
 static char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 static List * RecreateTableDDLCommandList(Oid relationId);
 
@@ -280,24 +281,29 @@ CopyShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 	ListCell *colocatedShardCell = NULL;
-	List *ddlCommandList = NIL;
-	char *nodeUser = CitusExtensionOwnerName();
 
 	foreach(colocatedShardCell, colocatedShardList)
 	{
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
-		List *colocatedShardDdlList = NIL;
+		List *ddlCommandList = CopyShardCommandList(colocatedShard, sourceNodeName,
+													sourceNodePort);
+		char *tableOwner = TableOwner(colocatedShard->relationId);
 
-		colocatedShardDdlList = CopyShardCommandList(colocatedShard, sourceNodeName,
-													 sourceNodePort);
-
-		ddlCommandList = list_concat(ddlCommandList, colocatedShardDdlList);
+		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
+												   tableOwner, ddlCommandList);
 	}
 
-	HOLD_INTERRUPTS();
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
+		List *foreignConstraintCommandList = CopyShardForeignConstraintCommandList(
+			colocatedShard);
+		char *tableOwner = TableOwner(colocatedShard->relationId);
 
-	SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort, nodeUser,
-											   ddlCommandList);
+		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
+												   tableOwner,
+												   foreignConstraintCommandList);
+	}
 
 	foreach(colocatedShardCell, colocatedShardList)
 	{
@@ -328,8 +334,6 @@ CopyShardPlacement(int64 shardId, char *sourceNodeName, int32 sourceNodePort,
 									targetNodePort);
 		}
 	}
-
-	RESUME_INTERRUPTS();
 }
 
 
@@ -373,6 +377,70 @@ CopyShardCommandList(ShardInterval *shardInterval,
 										  copyShardDataCommand->data);
 
 	return copyShardToNodeCommandsList;
+}
+
+
+/*
+ * CopyShardForeignConstraintCommandList generates command list to create foreign
+ * constraints existing in source shard after copying it to the other node.
+ */
+static List *
+CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
+{
+	List *copyShardForeignConstraintCommandList = NIL;
+
+	Oid schemaId = get_rel_namespace(shardInterval->relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *escapedSchemaName = quote_literal_cstr(schemaName);
+	int shardIndex = 0;
+
+	List *commandList = GetTableForeignConstraintCommands(shardInterval->relationId);
+	ListCell *commandCell = NULL;
+
+	/* we will only use shardIndex if there is a foreign constraint */
+	if (commandList != NIL)
+	{
+		shardIndex = FindShardIntervalIndex(shardInterval);
+	}
+
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+		char *escapedCommand = quote_literal_cstr(command);
+
+		Oid referencedRelationId = InvalidOid;
+		Oid referencedSchemaId = InvalidOid;
+		char *referencedSchemaName = NULL;
+		char *escapedReferencedSchemaName = NULL;
+		uint64 referencedShardId = INVALID_SHARD_ID;
+
+		StringInfo applyForeignConstraintCommand = makeStringInfo();
+
+		/* we need to parse the foreign constraint command to get referencing table id */
+		referencedRelationId = ForeignConstraintGetReferencedTableId(command);
+		if (referencedRelationId == InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Referenced relation cannot be found.")));
+		}
+
+		referencedSchemaId = get_rel_namespace(referencedRelationId);
+		referencedSchemaName = get_namespace_name(referencedSchemaId);
+		escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
+		referencedShardId = ColocatedShardIdInRelation(referencedRelationId, shardIndex);
+
+		appendStringInfo(applyForeignConstraintCommand,
+						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardInterval->shardId,
+						 escapedSchemaName, referencedShardId,
+						 escapedReferencedSchemaName, escapedCommand);
+
+		copyShardForeignConstraintCommandList = lappend(
+			copyShardForeignConstraintCommandList,
+			applyForeignConstraintCommand->data);
+	}
+
+	return copyShardForeignConstraintCommandList;
 }
 
 

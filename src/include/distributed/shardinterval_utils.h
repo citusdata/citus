@@ -32,5 +32,6 @@ extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 int shardCount, char partitionMethod,
 										 FmgrInfo *compareFunction,
 										 FmgrInfo *hashFunction, bool useBinarySearch);
+extern bool SingleReplicatedTable(Oid relationId);
 
 #endif /* SHARDINTERVAL_UTILS_H_ */
