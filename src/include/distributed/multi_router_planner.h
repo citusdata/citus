@@ -22,7 +22,7 @@
 
 
 /* reserved parameted id */
-#define HIDDEN_PARAMETER_ID 0xdeadbeef
+#define UNINSTANTIATED_PARAMETER_ID 0xdeadbeef
 
 /* reserved alias name for UPSERTs */
 #define CITUS_TABLE_ALIAS "citus_table_alias"
@@ -31,7 +31,7 @@
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
-extern void AddHiddenPartitionColumnEqualityQual(Query *originalQuery);
+extern void AddUninstantiatedPartitionColumnEqualityQual(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,

@@ -112,7 +112,7 @@ static bool MultiRouterPlannableQuery(Query *query, MultiExecutorType taskExecut
 									  RelationRestrictionContext *restrictionContext);
 static RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
-static Node * ReplaceHiddenQual(Node *node, void *context);
+static Node * InstantiatePartitionQual(Node *node, void *context);
 static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
 												 RangeTblEntry *insertRte,
 												 RangeTblEntry *subqueryRte);
@@ -122,7 +122,7 @@ static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
 														   RangeTblEntry *subqueryRte,
 														   Oid *
 														   selectPartitionColumnTableId);
-static void AddHiddenEqualityQual(Query *query, Var *targetPartitionColumnVar);
+static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
 
 
 /*
@@ -333,8 +333,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
 
 		originalBaserestrictInfo =
-			(List *) ReplaceHiddenQual((Node *) originalBaserestrictInfo,
-									   shardInterval);
+			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
+											  shardInterval);
 	}
 
 	/*
@@ -547,7 +547,7 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 									  "INSERT ... SELECT queries")));
 		}
 
-		/* see comment on AddHiddenPartitionColumnEqualityQual() */
+		/* see comment on AddUninstantiatedPartitionColumnEqualityQual() */
 		if (subquery->setOperations != NULL)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -628,12 +628,12 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 
 
 /*
- * AddHiddenPartitionColumnEqualityQual() can only be used with
+ * AddUninstantiatedPartitionColumnEqualityQual() can only be used with
  * INSERT ... SELECT queries.
  *
- * AddHiddenPartitionColumnEqualityQual adds a hidden equality qual
+ * AddUninstantiatedPartitionColumnEqualityQual adds an equality qual
  * to the SELECT query of the given originalQuery. The function currently
- * does NOT add hidden quals if
+ * does NOT add the quals if
  *   (i)   CTEs are present on the top level query
  *   (ii)  Set operations are present on the top level query
  *   (iii) Target list does not include a bare partition column.
@@ -641,7 +641,7 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
  * Note that if the input query is not an INSERT .. SELECT the assertion fails.
  */
 void
-AddHiddenPartitionColumnEqualityQual(Query *originalQuery)
+AddUninstantiatedPartitionColumnEqualityQual(Query *originalQuery)
 {
 	Query *subquery = NULL;
 	RangeTblEntry *subqueryEntry = NULL;
@@ -669,7 +669,7 @@ AddHiddenPartitionColumnEqualityQual(Query *originalQuery)
 	 *   [THE ABOVE COMMENT IS TO EASE THE REVIEW, REMOVE LATER ON]
 	 *
 	 *   (ii)  There are potentially multiple jointree quals that we need to add
-	 *   the hidden qual, and we haven't implemented that logic yet.
+	 *   the qual, and we haven't implemented that logic yet.
 	 *
 	 *   (iii) We cannot get the source tables OID via target entries resorigtbl field.
 	 *   This makes hard to check the colocation requirement of the source and target
@@ -706,20 +706,20 @@ AddHiddenPartitionColumnEqualityQual(Query *originalQuery)
 		return;
 	}
 
-	/* finally add the hidden equality qual of target column to subquery */
-	AddHiddenEqualityQual(subquery, targetPartitionColumnVar);
+	/* finally add the equality qual of target column to subquery */
+	AddUninstantiatedEqualityQual(subquery, targetPartitionColumnVar);
 }
 
 
 /*
- * AddHiddenEqualityQual adds a hidden qual in the following form ($1 = partitionColumn)
- * on the input query and partitionColumn.
+ * AddUninstantiatedEqualityQual adds a qual in the following form
+ * ($1 = partitionColumn) on the input query and partitionColumn.
  */
 static void
-AddHiddenEqualityQual(Query *query, Var *partitionColumn)
+AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 {
 	Param *equalityParameter = makeNode(Param);
-	Node *hiddenEqualityQual = NULL;
+	Node *uninstantiatedEqualityQual = NULL;
 	Oid partitionColumnCollid = InvalidOid;
 	Oid lessThanOperator = InvalidOid;
 	Oid equalsOperator = InvalidOid;
@@ -737,28 +737,29 @@ AddHiddenEqualityQual(Query *query, Var *partitionColumn)
 	partitionColumnCollid = partitionColumn->varcollid;
 
 	equalityParameter->paramkind = PARAM_EXTERN;
-	equalityParameter->paramid = HIDDEN_PARAMETER_ID;
+	equalityParameter->paramid = UNINSTANTIATED_PARAMETER_ID;
 	equalityParameter->paramtype = partitionColumn->vartype;
 	equalityParameter->paramtypmod = partitionColumn->vartypmod;
 	equalityParameter->paramcollid = partitionColumnCollid;
 	equalityParameter->location = -1;
 
-	/* create a hidden equality on the on the target partition column */
-	hiddenEqualityQual = (Node *)
-						 make_opclause(equalsOperator, InvalidOid, false,
-									   (Expr *) partitionColumn,
-									   (Expr *) equalityParameter,
-									   partitionColumnCollid, partitionColumnCollid);
+	/* create an equality on the on the target partition column */
+	uninstantiatedEqualityQual =
+		(Node *) make_opclause(equalsOperator, InvalidOid, false,
+							   (Expr *) partitionColumn,
+							   (Expr *) equalityParameter,
+							   partitionColumnCollid,
+							   partitionColumnCollid);
 
 	/* add restriction on partition column */
 	if (query->jointree->quals == NULL)
 	{
-		query->jointree->quals = hiddenEqualityQual;
+		query->jointree->quals = uninstantiatedEqualityQual;
 	}
 	else
 	{
 		query->jointree->quals = make_and_qual(query->jointree->quals,
-											   hiddenEqualityQual);
+											   uninstantiatedEqualityQual);
 	}
 }
 
@@ -2457,14 +2458,15 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 
 /*
- * ReplaceHiddenQual Replace the "hidden" partition restriction clause with
- * the current shard's (passed in context) boundary value.
+ * InstantiatePartitionQual replaces the "uninstantiated" partition
+ * restriction clause with the current shard's (passed in context)
+ * boundary value.
  *
  * Once we see ($1 = partition column), we replace it with
- * (partCol >= shardMinValue && partCol <= shardMaxValue)
+ * (partCol >= shardMinValue && partCol <= shardMaxValue).
  */
 static Node *
-ReplaceHiddenQual(Node *node, void *context)
+InstantiatePartitionQual(Node *node, void *context)
 {
 	ShardInterval *shardInterval = (ShardInterval *) context;
 	Assert(shardInterval->minValueExists);
@@ -2478,7 +2480,7 @@ ReplaceHiddenQual(Node *node, void *context)
 	/*
 	 * Look for operator expressions with two arguments.
 	 *
-	 * Once Found hidden op, replace with appropriate boundaries for the
+	 * Once Found the  uninstantiate, replace with appropriate boundaries for the
 	 * current shard interval.
 	 *
 	 * The boundaries are replaced in the following manner:
@@ -2516,7 +2518,7 @@ ReplaceHiddenQual(Node *node, void *context)
 		}
 
 		/* not an interesting param for our purpose, so return */
-		if (!(param && param->paramid == HIDDEN_PARAMETER_ID))
+		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
 		{
 			return node;
 		}
@@ -2560,18 +2562,18 @@ ReplaceHiddenQual(Node *node, void *context)
 		/* FIXME: probably can remove support for this */
 		/* to support CTEs, subqueries, etc */
 		return (Node *) query_tree_mutator((Query *) node,
-										   ReplaceHiddenQual,
+										   InstantiatePartitionQual,
 										   context,
 										   QTW_EXAMINE_RTES);
 	}
 	else if (IsA(node, RestrictInfo))
 	{
 		RestrictInfo *restrictInfo = (RestrictInfo *) node;
-		restrictInfo->clause = (Expr *) ReplaceHiddenQual(
+		restrictInfo->clause = (Expr *) InstantiatePartitionQual(
 			(Node *) restrictInfo->clause, context);
 
 		return (Node *) restrictInfo;
 	}
 
-	return expression_tree_mutator(node, ReplaceHiddenQual, context);
+	return expression_tree_mutator(node, InstantiatePartitionQual, context);
 }

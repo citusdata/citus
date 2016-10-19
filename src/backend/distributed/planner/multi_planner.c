@@ -63,13 +63,13 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		/*
 		 * We implement INSERT INTO .. SELECT by pushing down the SELECT to
 		 * each shard. To compute that we use the router planner, by adding
-		 * a "hidden" constraint that the partition column be equal to a
+		 * an "uninstantiated" constraint that the partition column be equal to a
 		 * certain value. standard_planner() distributes that constraint to
 		 * the baserestrictinfos of the tables that they are connected
 		 * via equi joins.
 		 *
 		 * The router planner then iterates over the target table's shards,
-		 * for each we replace the "hidden" restriction, with one that
+		 * for each we replace the "uninstantiated" restriction, with one that
 		 * PruneShardList() handles, and then generate a query for that
 		 * individual shard. If any of the involved tables don't prune down
 		 * to a single shard, or if the pruned shards aren't colocated,
@@ -77,7 +77,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		 */
 		if (InsertSelectQuery(parse))
 		{
-			AddHiddenPartitionColumnEqualityQual(parse);
+			AddUninstantiatedPartitionColumnEqualityQual(parse);
 		}
 	}
 
