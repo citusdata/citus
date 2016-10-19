@@ -248,6 +248,12 @@ SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
 
 \c - - - :master_port
 
+CREATE TABLE table1_groupF ( id int );
+SELECT create_reference_table('table1_groupF');
+
+CREATE TABLE table2_groupF ( id int );
+SELECT create_reference_table('table2_groupF');
+
 -- check metadata
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
