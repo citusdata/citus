@@ -125,21 +125,9 @@ void
 PurgeConnection(PGconn *connection)
 {
 	NodeConnectionKey nodeConnectionKey;
-	PGconn *purgedConnection = NULL;
 
 	BuildKeyForConnection(connection, &nodeConnectionKey);
-	purgedConnection = PurgeConnectionByKey(&nodeConnectionKey);
-
-	/*
-	 * It's possible the provided connection matches the host and port for
-	 * an entry in the hash without being precisely the same connection. In
-	 * that case, we will want to close the provided connection in addition
-	 * to the one from the hash (which was closed by PurgeConnectionByKey).
-	 */
-	if (purgedConnection != connection)
-	{
-		PQfinish(connection);
-	}
+	PurgeConnectionByKey(&nodeConnectionKey);
 }
 
 

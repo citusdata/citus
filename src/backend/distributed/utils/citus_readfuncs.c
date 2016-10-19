@@ -161,6 +161,7 @@ readJobInfo(Job *local_node)
 	READ_NODE_FIELD(taskList);
 	READ_NODE_FIELD(dependedJobList);
 	READ_BOOL_FIELD(subqueryPushdown);
+	READ_BOOL_FIELD(requiresMasterEvaluation);
 }
 
 
@@ -288,7 +289,6 @@ ReadTask(READFUNC_ARGS)
 	READ_BOOL_FIELD(assignmentConstrained);
 	READ_NODE_FIELD(taskExecution);
 	READ_BOOL_FIELD(upsertQuery);
-	READ_BOOL_FIELD(requiresMasterEvaluation);
 
 	READ_DONE();
 }

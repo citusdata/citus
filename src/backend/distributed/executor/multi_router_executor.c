@@ -28,6 +28,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -35,6 +36,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
+#include "distributed/multi_shard_transaction.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "executor/execdesc.h"
@@ -64,6 +66,7 @@
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
 
+
 /*
  * The following static variables are necessary to track the progression of
  * multi-statement transactions managed by the router executor. After the first
@@ -84,15 +87,17 @@ static bool subXactAbortAttempted = false;
 
 /* functions needed during start phase */
 static void InitTransactionStateForTask(Task *task);
-static LOCKMODE CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery);
-static void AcquireExecutorShardLock(Task *task, LOCKMODE lockMode);
 static HTAB * CreateXactParticipantHash(void);
 
 /* functions needed during run phase */
-static bool ExecuteTaskAndStoreResults(QueryDesc *queryDesc,
-									   Task *task,
-									   bool isModificationQuery,
-									   bool expectResults);
+static bool ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
+							  bool isModificationQuery, bool expectResults);
+static void ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
+								 bool isModificationQuery, bool expectResults);
+static List * TaskShardIntervalList(List *taskList);
+static void AcquireExecutorShardLock(Task *task, CmdType commandType);
+static void AcquireExecutorMultiShardLocks(List *shardIntervalList);
+static bool IsReplicated(List *shardIntervalList);
 static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
 									   DestReceiver *destination,
 									   Tuplestorestate *tupleStore);
@@ -106,8 +111,8 @@ static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 static bool SendQueryInSingleRowMode(PGconn *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(MaterialState *routerState, PGconn *connection,
-							 TupleDesc tupleDescriptor, int64 *rows);
-static bool ConsumeQueryResult(PGconn *connection, int64 *rows);
+							 TupleDesc tupleDescriptor, bool failOnError, int64 *rows);
+static bool ConsumeQueryResult(PGconn *connection, bool failOnError, int64 *rows);
 static void RecordShardIdParticipant(uint64 affectedShardId,
 									 NodeConnectionEntry *participantEntry);
 
@@ -126,7 +131,6 @@ static void MarkRemainingInactivePlacements(void);
 void
 RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 {
-	LOCKMODE lockMode = NoLock;
 	EState *executorState = NULL;
 	CmdType commandType = queryDesc->operation;
 
@@ -137,25 +141,6 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	if (commandType != CMD_SELECT)
 	{
 		eflags |= EXEC_FLAG_SKIP_TRIGGERS;
-
-		if (XactModificationLevel == XACT_MODIFICATION_SCHEMA)
-		{
-			ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-							errmsg("distributed data modifications must not appear in "
-								   "transaction blocks which contain distributed DDL "
-								   "commands")));
-		}
-
-		/*
-		 * We could naturally handle function-based transactions (i.e. those
-		 * using PL/pgSQL or similar) by checking the type of queryDesc->dest,
-		 * but some customers already use functions that touch multiple shards
-		 * from within a function, so we'll ignore functions for now.
-		 */
-		if (IsTransactionBlock() && xactParticipantHash == NULL)
-		{
-			InitTransactionStateForTask(task);
-		}
 	}
 
 	/* signal that it is a router execution */
@@ -174,13 +159,6 @@ RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
 	 * work.
 	 */
 	queryDesc->planstate = (PlanState *) makeNode(MaterialState);
-
-	lockMode = CommutativityRuleToLockMode(commandType, task->upsertQuery);
-
-	if (lockMode != NoLock)
-	{
-		AcquireExecutorShardLock(task, lockMode);
-	}
 }
 
 
@@ -241,71 +219,172 @@ InitTransactionStateForTask(Task *task)
 
 
 /*
- * CommutativityRuleToLockMode determines the commutativity rule for the given
- * command and returns the appropriate lock mode to enforce that rule. The
- * function assumes a SELECT doesn't modify state and therefore is commutative
- * with all other commands. The function also assumes that an INSERT commutes
- * with another INSERT, but not with an UPDATE/DELETE/UPSERT; and an
- * UPDATE/DELETE/UPSERT doesn't commute with an INSERT, UPDATE, DELETE or UPSERT.
+ * AcquireExecutorShardLock acquires a lock on the shard for the given task and
+ * command type if necessary to avoid divergence between multiple replicas of
+ * the same shard. No lock is obtained when there is only one replica.
  *
- * Note that the above comment defines INSERT INTO ... ON CONFLICT type of queries
- * as an UPSERT. Since UPSERT is not defined as a separate command type in postgres,
- * we have to pass it as a second parameter to the function.
+ * The function determines the appropriate lock mode based on the commutativity
+ * rule of the command. In each case, it uses a lock mode that enforces the
+ * commutativity rule.
  *
- * The above mapping is overridden entirely when all_modifications_commutative
- * is set to true. In that case, all commands just claim a shared lock. This
- * allows the shard repair logic to lock out modifications while permitting all
- * commands to otherwise commute.
+ * The mapping is overridden when all_modifications_commutative is set to true.
+ * In that case, all modifications are treated as commutative, which can be used
+ * to communicate that the application is only generating commutative
+ * UPDATE/DELETE/UPSERT commands and exclusive locks are unnecessary.
  */
-static LOCKMODE
-CommutativityRuleToLockMode(CmdType commandType, bool upsertQuery)
+static void
+AcquireExecutorShardLock(Task *task, CmdType commandType)
 {
 	LOCKMODE lockMode = NoLock;
+	int64 shardId = task->anchorShardId;
 
-	/* bypass commutativity checks when flag enabled */
-	if (AllModificationsCommutative)
+	if (commandType == CMD_SELECT || list_length(task->taskPlacementList) == 1)
 	{
-		return ShareLock;
-	}
+		/*
+		 * The executor shard lock is used to maintain consistency between
+		 * replicas and therefore no lock is required for read-only queries
+		 * or in general when there is only one replica.
+		 */
 
-	if (commandType == CMD_SELECT)
-	{
 		lockMode = NoLock;
 	}
-	else if (upsertQuery)
+	else if (AllModificationsCommutative)
 	{
+		/*
+		 * Bypass commutativity checks when citus.all_modifications_commutative
+		 * is enabled.
+		 *
+		 * A RowExclusiveLock does not conflict with itself and therefore allows
+		 * multiple commutative commands to proceed concurrently. It does
+		 * conflict with ExclusiveLock, which may still be obtained by another
+		 * session that executes an UPDATE/DELETE/UPSERT command with
+		 * citus.all_modifications_commutative disabled.
+		 */
+
+		lockMode = RowExclusiveLock;
+	}
+	else if (task->upsertQuery || commandType == CMD_UPDATE || commandType == CMD_DELETE)
+	{
+		/*
+		 * UPDATE/DELETE/UPSERT commands do not commute with other modifications
+		 * since the rows modified by one command may be affected by the outcome
+		 * of another command.
+		 *
+		 * We need to handle upsert before INSERT, because PostgreSQL models
+		 * upsert commands as INSERT with an ON CONFLICT section.
+		 *
+		 * ExclusiveLock conflicts with all lock types used by modifications
+		 * and therefore prevents other modifications from running
+		 * concurrently.
+		 */
+
 		lockMode = ExclusiveLock;
 	}
 	else if (commandType == CMD_INSERT)
 	{
-		lockMode = ShareLock;
-	}
-	else if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
-	{
-		lockMode = ExclusiveLock;
+		/*
+		 * An INSERT commutes with other INSERT commands, since performing them
+		 * out-of-order only affects the table order on disk, but not the
+		 * contents.
+		 *
+		 * When a unique constraint exists, INSERTs are not strictly commutative,
+		 * but whichever INSERT comes last will error out and thus has no effect.
+		 * INSERT is not commutative with UPDATE/DELETE/UPSERT, since the
+		 * UPDATE/DELETE/UPSERT may consider the INSERT, depending on execution
+		 * order.
+		 *
+		 * A RowExclusiveLock does not conflict with itself and therefore allows
+		 * multiple INSERT commands to proceed concurrently. It conflicts with
+		 * ExclusiveLock obtained by UPDATE/DELETE/UPSERT, ensuring those do
+		 * not run concurrently with INSERT.
+		 */
+
+		lockMode = RowExclusiveLock;
 	}
 	else
 	{
 		ereport(ERROR, (errmsg("unrecognized operation code: %d", (int) commandType)));
 	}
 
-	return lockMode;
+	if (shardId != INVALID_SHARD_ID && lockMode != NoLock)
+	{
+		LockShardResource(shardId, lockMode);
+	}
 }
 
 
 /*
- * AcquireExecutorShardLock: acquire shard lock needed for execution of
- * a single task within a distributed plan.
+ * AcquireExecutorMultiShardLocks acquires shard locks need for execution
+ * of writes on multiple shards.
+ *
+ * 1. If citus.all_modifications_commutative is set to true, then all locks
+ * are acquired as ShareUpdateExclusiveLock.
+ * 2. If citus.all_modifications_commutative is false, then only the shards
+ * with 2 or more replicas are locked with ExclusiveLock. Otherwise, the
+ * lock is acquired with ShareUpdateExclusiveLock.
+ *
+ * ShareUpdateExclusiveLock conflicts with itself such that only one
+ * multi-shard modification at a time is allowed on a shard. It also conflicts
+ * with ExclusiveLock, which ensures that updates/deletes/upserts are applied
+ * in the same order on all placements. It does not conflict with ShareLock,
+ * which is normally obtained by single-shard commutative writes.
  */
 static void
-AcquireExecutorShardLock(Task *task, LOCKMODE lockMode)
+AcquireExecutorMultiShardLocks(List *shardIntervalList)
 {
-	int64 shardId = task->anchorShardId;
+	LOCKMODE lockMode = NoLock;
 
-	if (shardId != INVALID_SHARD_ID)
+	if (AllModificationsCommutative || !IsReplicated(shardIntervalList))
 	{
-		LockShardResource(shardId, lockMode);
+		/*
+		 * When all writes are commutative then we only need to prevent multi-shard
+		 * commands from running concurrently with each other and with commands
+		 * that are explicitly non-commutative. When there is not replication then
+		 * we only need to prevent concurrent multi-shard commands.
+		 *
+		 * In either case, ShareUpdateExclusive has the desired effect, since
+		 * it conflicts with itself and ExclusiveLock (taken by non-commutative
+		 * writes).
+		 */
+
+		lockMode = ShareUpdateExclusiveLock;
 	}
+	else
+	{
+		/*
+		 * When there is replication, prevent all concurrent writes to the same
+		 * shards to ensure the writes are ordered.
+		 */
+		lockMode = ExclusiveLock;
+	}
+
+	LockShardListResources(shardIntervalList, lockMode);
+}
+
+
+/*
+ * IsReplicated checks whether any of the shards in the given list has more
+ * than one replica.
+ */
+static bool
+IsReplicated(List *shardIntervalList)
+{
+	ListCell *shardIntervalCell;
+	bool hasReplication = false;
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		List *shardPlacementList = FinalizedShardPlacementList(shardId);
+		if (shardPlacementList->length > 1)
+		{
+			hasReplication = true;
+			break;
+		}
+	}
+
+	return hasReplication;
 }
 
 
@@ -344,8 +423,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 {
 	PlannedStmt *planStatement = queryDesc->plannedstmt;
 	MultiPlan *multiPlan = GetMultiPlan(planStatement);
-	List *taskList = multiPlan->workerJob->taskList;
-	Task *task = NULL;
+	Job *workerJob = multiPlan->workerJob;
+	List *taskList = workerJob->taskList;
 	EState *estate = queryDesc->estate;
 	CmdType operation = queryDesc->operation;
 	MemoryContext oldcontext = NULL;
@@ -353,14 +432,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
 	bool sendTuples = operation == CMD_SELECT || queryDesc->plannedstmt->hasReturning;
 
-	/* router executor can only execute distributed plans with a single task */
-	Assert(list_length(taskList) == 1);
-	task = (Task *) linitial(taskList);
-
 	Assert(estate != NULL);
 	Assert(!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY));
-	Assert(task != NULL);
-
 
 	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
 
@@ -396,8 +469,8 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 	 */
 	if (!routerState->eof_underlying)
 	{
-		bool resultsOK = false;
 		bool isModificationQuery = false;
+		bool requiresMasterEvaluation = workerJob->requiresMasterEvaluation;
 
 		if (operation == CMD_INSERT || operation == CMD_UPDATE ||
 			operation == CMD_DELETE)
@@ -410,12 +483,47 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 								   (int) operation)));
 		}
 
-		resultsOK = ExecuteTaskAndStoreResults(queryDesc, task,
-											   isModificationQuery,
-											   sendTuples);
-		if (!resultsOK)
+		if (requiresMasterEvaluation)
 		{
-			ereport(ERROR, (errmsg("could not receive query results")));
+			ListCell *taskCell = NULL;
+			Query *query = workerJob->jobQuery;
+			Oid relationId = ((RangeTblEntry *) linitial(query->rtable))->relid;
+
+			ExecuteMasterEvaluableFunctions(query);
+
+			foreach(taskCell, taskList)
+			{
+				Task *task = (Task *) lfirst(taskCell);
+				StringInfo newQueryString = makeStringInfo();
+
+				deparse_shard_query(query, relationId, task->anchorShardId,
+									newQueryString);
+
+				ereport(DEBUG4, (errmsg("query before master evaluation: %s",
+										task->queryString)));
+				ereport(DEBUG4, (errmsg("query after master evaluation:  %s",
+										newQueryString->data)));
+
+				task->queryString = newQueryString->data;
+			}
+		}
+
+		if (list_length(taskList) == 1)
+		{
+			Task *task = (Task *) linitial(taskList);
+			bool resultsOK = false;
+
+			resultsOK = ExecuteSingleTask(queryDesc, task, isModificationQuery,
+										  sendTuples);
+			if (!resultsOK)
+			{
+				ereport(ERROR, (errmsg("could not receive query results")));
+			}
+		}
+		else
+		{
+			ExecuteMultipleTasks(queryDesc, taskList, isModificationQuery,
+								 sendTuples);
 		}
 
 		/* mark underlying query as having executed */
@@ -462,8 +570,8 @@ out:
 
 
 /*
- * ExecuteTaskAndStoreResults executes the task on the remote node, retrieves
- * the results and stores them, if SELECT or RETURNING is used, in a tuple
+ * ExecuteSingleTask executes the task on the remote node, retrieves the
+ * results and stores them, if SELECT or RETURNING is used, in a tuple
  * store.
  *
  * If the task fails on one of the placements, the function retries it on
@@ -472,10 +580,11 @@ out:
  * failed), or errors out (DML failed on all placements).
  */
 static bool
-ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
-						   bool isModificationQuery,
-						   bool expectResults)
+ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
+				  bool isModificationQuery,
+				  bool expectResults)
 {
+	CmdType operation = queryDesc->operation;
 	TupleDesc tupleDescriptor = queryDesc->tupDesc;
 	EState *executorState = queryDesc->estate;
 	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
@@ -488,21 +597,27 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	bool gotResults = false;
 	char *queryString = task->queryString;
 
-	if (isModificationQuery && task->requiresMasterEvaluation)
+	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
 	{
-		PlannedStmt *planStatement = queryDesc->plannedstmt;
-		MultiPlan *multiPlan = GetMultiPlan(planStatement);
-		Query *query = multiPlan->workerJob->jobQuery;
-		Oid relid = ((RangeTblEntry *) linitial(query->rtable))->relid;
-		StringInfo queryStringInfo = makeStringInfo();
-
-		ExecuteMasterEvaluableFunctions(query);
-		deparse_shard_query(query, relid, task->anchorShardId, queryStringInfo);
-		queryString = queryStringInfo->data;
-
-		elog(DEBUG4, "query before master evaluation: %s", task->queryString);
-		elog(DEBUG4, "query after master evaluation:  %s", queryString);
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("single-shard DML commands must not appear in "
+							   "transaction blocks which contain multi-shard data "
+							   "modifications")));
 	}
+
+	/*
+	 * We could naturally handle function-based transactions (i.e. those
+	 * using PL/pgSQL or similar) by checking the type of queryDesc->dest,
+	 * but some customers already use functions that touch multiple shards
+	 * from within a function, so we'll ignore functions for now.
+	 */
+	if (operation != CMD_SELECT && xactParticipantHash == NULL && IsTransactionBlock())
+	{
+		InitTransactionStateForTask(task);
+	}
+
+	/* prevent replicas of the same shard from diverging */
+	AcquireExecutorShardLock(task, operation);
 
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
@@ -512,6 +627,7 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	{
 		ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(taskPlacementCell);
 		bool queryOK = false;
+		bool failOnError = false;
 		int64 currentAffectedTupleCount = 0;
 		PGconn *connection = GetConnectionForPlacement(taskPlacement,
 													   isModificationQuery);
@@ -538,11 +654,12 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 		if (!gotResults && expectResults)
 		{
 			queryOK = StoreQueryResult(routerState, connection, tupleDescriptor,
-									   &currentAffectedTupleCount);
+									   failOnError, &currentAffectedTupleCount);
 		}
 		else
 		{
-			queryOK = ConsumeQueryResult(connection, &currentAffectedTupleCount);
+			queryOK = ConsumeQueryResult(connection, failOnError,
+										 &currentAffectedTupleCount);
 		}
 
 		if (queryOK)
@@ -613,6 +730,233 @@ ExecuteTaskAndStoreResults(QueryDesc *queryDesc, Task *task,
 	}
 
 	return resultsOK;
+}
+
+
+/*
+ * ExecuteMultipleTasks executes a list of tasks on remote nodes, retrieves
+ * the results and, if RETURNING is used, stores them in a tuple store.
+ *
+ * If a task fails on one of the placements, the transaction rolls back.
+ * Otherwise, the changes are committed using 2PC when the local transaction
+ * commits.
+ */
+static void
+ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
+					 bool isModificationQuery, bool expectResults)
+{
+	TupleDesc tupleDescriptor = queryDesc->tupDesc;
+	EState *executorState = queryDesc->estate;
+	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
+	ParamListInfo paramListInfo = queryDesc->params;
+	int64 affectedTupleCount = -1;
+
+	/* can only support modifications right now */
+	Assert(isModificationQuery);
+
+	affectedTupleCount = ExecuteModifyTasks(taskList, expectResults, paramListInfo,
+											routerState, tupleDescriptor);
+
+	executorState->es_processed = affectedTupleCount;
+}
+
+
+/*
+ * ExecuteModifyTasks executes a list of tasks on remote nodes, and
+ * optionally retrieves the results and stores them in a tuple store.
+ *
+ * If a task fails on one of the placements, the transaction rolls back.
+ * Otherwise, the changes are committed using 2PC when the local transaction
+ * commits.
+ */
+int64
+ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListInfo,
+				   MaterialState *routerState, TupleDesc tupleDescriptor)
+{
+	int64 totalAffectedTupleCount = 0;
+	ListCell *taskCell = NULL;
+	char *userName = CurrentUserName();
+	List *shardIntervalList = NIL;
+	List *affectedTupleCountList = NIL;
+	bool tasksPending = true;
+	int placementIndex = 0;
+
+	if (XactModificationLevel == XACT_MODIFICATION_DATA)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("multi-shard data modifications must not appear in "
+							   "transaction blocks which contain single-shard DML "
+							   "commands")));
+	}
+
+	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
+
+	shardIntervalList = TaskShardIntervalList(taskList);
+
+	/* ensure that there are no concurrent modifications on the same shards */
+	AcquireExecutorMultiShardLocks(shardIntervalList);
+
+	/* open connection to all relevant placements, if not already open */
+	OpenTransactionsToAllShardPlacements(shardIntervalList, userName);
+
+	/* iterate over placements in rounds, to ensure in-order execution */
+	while (tasksPending)
+	{
+		int taskIndex = 0;
+
+		tasksPending = false;
+
+		/* send command to all shard placements with the current index in parallel */
+		foreach(taskCell, taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			int64 shardId = task->anchorShardId;
+			char *queryString = task->queryString;
+			bool shardConnectionsFound = false;
+			ShardConnections *shardConnections = NULL;
+			List *connectionList = NIL;
+			TransactionConnection *transactionConnection = NULL;
+			PGconn *connection = NULL;
+			bool queryOK = false;
+
+			shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
+			connectionList = shardConnections->connectionList;
+
+			if (placementIndex >= list_length(connectionList))
+			{
+				/* no more active placements for this task */
+				continue;
+			}
+
+			transactionConnection =
+				(TransactionConnection *) list_nth(connectionList, placementIndex);
+			connection = transactionConnection->connection;
+
+			queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
+			if (!queryOK)
+			{
+				ReraiseRemoteError(connection, NULL);
+			}
+		}
+
+		/* collects results from all relevant shard placements */
+		foreach(taskCell, taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+			int64 shardId = task->anchorShardId;
+			bool shardConnectionsFound = false;
+			ShardConnections *shardConnections = NULL;
+			List *connectionList = NIL;
+			TransactionConnection *transactionConnection = NULL;
+			PGconn *connection = NULL;
+			int64 currentAffectedTupleCount = 0;
+			bool failOnError = true;
+			bool queryOK PG_USED_FOR_ASSERTS_ONLY = false;
+
+			/* abort in case of cancellation */
+			CHECK_FOR_INTERRUPTS();
+
+			shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
+			connectionList = shardConnections->connectionList;
+
+			if (placementIndex >= list_length(connectionList))
+			{
+				/* no more active placements for this task */
+				continue;
+			}
+
+			transactionConnection =
+				(TransactionConnection *) list_nth(connectionList, placementIndex);
+			connection = transactionConnection->connection;
+
+			/*
+			 * If caller is interested, store query results the first time
+			 * through. The output of the query's execution on other shards is
+			 * discarded if we run there (because it's a modification query).
+			 */
+			if (placementIndex == 0 && expectResults)
+			{
+				Assert(routerState != NULL && tupleDescriptor != NULL);
+
+				queryOK = StoreQueryResult(routerState, connection, tupleDescriptor,
+										   failOnError, &currentAffectedTupleCount);
+			}
+			else
+			{
+				queryOK = ConsumeQueryResult(connection, failOnError,
+											 &currentAffectedTupleCount);
+			}
+
+			/* should have rolled back on error */
+			Assert(queryOK);
+
+			if (placementIndex == 0)
+			{
+				totalAffectedTupleCount += currentAffectedTupleCount;
+
+				/* keep track of the initial affected tuple count */
+				affectedTupleCountList = lappend_int(affectedTupleCountList,
+													 currentAffectedTupleCount);
+			}
+			else
+			{
+				/* warn the user if shard placements have diverged */
+				int64 previousAffectedTupleCount = list_nth_int(affectedTupleCountList,
+																taskIndex);
+
+				if (currentAffectedTupleCount != previousAffectedTupleCount)
+				{
+					char *nodeName = ConnectionGetOptionValue(connection, "host");
+					char *nodePort = ConnectionGetOptionValue(connection, "port");
+
+					ereport(WARNING,
+							(errmsg("modified "INT64_FORMAT " tuples of shard "
+									UINT64_FORMAT ", but expected to modify "INT64_FORMAT,
+									currentAffectedTupleCount, shardId,
+									previousAffectedTupleCount),
+							 errdetail("modified placement on %s:%s", nodeName,
+									   nodePort)));
+				}
+			}
+
+			if (!tasksPending && placementIndex + 1 < list_length(connectionList))
+			{
+				/* more tasks to be done after thise one */
+				tasksPending = true;
+			}
+
+			taskIndex++;
+		}
+
+		placementIndex++;
+	}
+
+	CHECK_FOR_INTERRUPTS();
+
+	return totalAffectedTupleCount;
+}
+
+
+/*
+ * TaskShardIntervalList returns a list of shard intervals for a given list of
+ * tasks.
+ */
+static List *
+TaskShardIntervalList(List *taskList)
+{
+	ListCell *taskCell = NULL;
+	List *shardIntervalList = NIL;
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		int64 shardId = task->anchorShardId;
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+		shardIntervalList = lappend(shardIntervalList, shardInterval);
+	}
+
+	return shardIntervalList;
 }
 
 
@@ -903,7 +1247,7 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
  */
 static bool
 StoreQueryResult(MaterialState *routerState, PGconn *connection,
-				 TupleDesc tupleDescriptor, int64 *rows)
+				 TupleDesc tupleDescriptor, bool failOnError, int64 *rows)
 {
 	AttInMetadata *attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
 	Tuplestorestate *tupleStore = NULL;
@@ -921,7 +1265,7 @@ StoreQueryResult(MaterialState *routerState, PGconn *connection,
 	{
 		routerState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
 	}
-	else
+	else if (!failOnError)
 	{
 		/* might have failed query execution on another placement before */
 		tuplestore_clear(routerState->tuplestorestate);
@@ -948,7 +1292,7 @@ StoreQueryResult(MaterialState *routerState, PGconn *connection,
 		{
 			char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
 			int category = 0;
-			bool raiseError = false;
+			bool isConstraintViolation = false;
 
 			/*
 			 * If the error code is in constraint violation class, we want to
@@ -956,9 +1300,9 @@ StoreQueryResult(MaterialState *routerState, PGconn *connection,
 			 * placements.
 			 */
 			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
-			raiseError = SqlStateMatchesCategory(sqlStateString, category);
+			isConstraintViolation = SqlStateMatchesCategory(sqlStateString, category);
 
-			if (raiseError)
+			if (isConstraintViolation || failOnError)
 			{
 				RemoveXactConnection(connection);
 				ReraiseRemoteError(connection, result);
@@ -1030,7 +1374,7 @@ StoreQueryResult(MaterialState *routerState, PGconn *connection,
  * has been an error.
  */
 static bool
-ConsumeQueryResult(PGconn *connection, int64 *rows)
+ConsumeQueryResult(PGconn *connection, bool failOnError, int64 *rows)
 {
 	bool commandFailed = false;
 	bool gotResponse = false;
@@ -1060,7 +1404,7 @@ ConsumeQueryResult(PGconn *connection, int64 *rows)
 		{
 			char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
 			int category = 0;
-			bool raiseError = false;
+			bool isConstraintViolation = false;
 
 			/*
 			 * If the error code is in constraint violation class, we want to
@@ -1068,9 +1412,9 @@ ConsumeQueryResult(PGconn *connection, int64 *rows)
 			 * placements.
 			 */
 			category = ERRCODE_TO_CATEGORY(ERRCODE_INTEGRITY_CONSTRAINT_VIOLATION);
-			raiseError = SqlStateMatchesCategory(sqlStateString, category);
+			isConstraintViolation = SqlStateMatchesCategory(sqlStateString, category);
 
-			if (raiseError)
+			if (isConstraintViolation || failOnError)
 			{
 				RemoveXactConnection(connection);
 				ReraiseRemoteError(connection, result);
@@ -1092,8 +1436,11 @@ ConsumeQueryResult(PGconn *connection, int64 *rows)
 			char *currentAffectedTupleString = PQcmdTuples(result);
 			int64 currentAffectedTupleCount = 0;
 
-			scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
-			Assert(currentAffectedTupleCount >= 0);
+			if (*currentAffectedTupleString != '\0')
+			{
+				scanint8(currentAffectedTupleString, false, &currentAffectedTupleCount);
+				Assert(currentAffectedTupleCount >= 0);
+			}
 
 #if (PG_VERSION_NUM < 90600)
 
