@@ -27,6 +27,20 @@ if test -z "$PG_CONFIG"; then
    AC_MSG_ERROR([Could not find pg_config. Set PG_CONFIG or PATH.])
 fi
 
+# check that USE_FLOAT8_BYVAL is set (passing by reference is not supported)
+CFLAGS="-I $($PG_CONFIG --includedir)"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+#include "pg_config.h"
+#ifndef USE_FLOAT8_BYVAL
+#error "USE_FLOAT8_BYVAL must be defined for Citus to work"
+#endif
+]])], [USE_FLOAT8_BYVAL="yes"], [USE_FLOAT8_BYVAL="no"])
+
+if test [ "$USE_FLOAT8_BYVAL" = "no"]; then
+AC_MSG_ERROR([Postgres must have been configured with --enable-float8-byval \
+(the default) in order for Citus to run correctly])
+fi
+
 # check we're building against a supported version of PostgreSQL
 citusac_pg_config_version=$($PG_CONFIG --version 2>/dev/null)
 version_num=$(echo "$citusac_pg_config_version"|

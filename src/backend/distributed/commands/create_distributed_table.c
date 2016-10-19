@@ -291,7 +291,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_partkey - 1] =
 		CStringGetTextDatum(distributionKeyString);
-	newValues[Anum_pg_dist_partition_colocationid - 1] = INVALID_COLOCATION_ID;
+	newValues[Anum_pg_dist_partition_colocationid - 1] =
+		Int64GetDatum(INVALID_COLOCATION_ID);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);

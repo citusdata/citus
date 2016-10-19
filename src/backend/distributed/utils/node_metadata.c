@@ -461,7 +461,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT8EQ, Int32GetDatum(nodePort));
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
 
 	heapScan = systable_beginscan(pgDistNode, InvalidOid, indexOK,
 								  NULL, scanKeyCount, scanKey);
