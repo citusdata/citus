@@ -120,6 +120,7 @@ typedef struct Job
 	List *taskList;
 	List *dependedJobList;
 	bool subqueryPushdown;
+	bool requiresMasterEvaluation; /* only applies to modify jobs */
 } Job;
 
 
@@ -168,7 +169,6 @@ typedef struct Task
 	uint64 shardId;                /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
-	bool requiresMasterEvaluation; /* only applies to modify tasks */
 } Task;
 
 

@@ -89,8 +89,10 @@ SELECT count(*) FROM test_truncate_range;
 -- verify 3 shards are still present
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass;
 
--- command can not be run inside transaction
-BEGIN; TRUNCATE TABLE test_truncate_range; COMMIT;
+-- verify that truncate can be aborted
+INSERT INTO test_truncate_range VALUES (1);
+BEGIN; TRUNCATE TABLE test_truncate_range; ROLLBACK;
+SELECT count(*) FROM test_truncate_range;
 
 DROP TABLE test_truncate_range;
 
@@ -136,8 +138,10 @@ SELECT count(*) FROM test_truncate_hash;
 -- verify 4 shards are still presents
 SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass;
 
--- command can not be run inside transaction
-BEGIN; TRUNCATE TABLE test_truncate_hash; COMMIT;
+-- verify that truncate can be aborted
+INSERT INTO test_truncate_hash VALUES (1);
+BEGIN; TRUNCATE TABLE test_truncate_hash; ROLLBACK;
+SELECT count(*) FROM test_truncate_hash;
 
 DROP TABLE test_truncate_hash;
 

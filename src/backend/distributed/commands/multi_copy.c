@@ -433,7 +433,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	}
 
 	/* prevent concurrent placement changes and non-commutative DML statements */
-	LockShards(shardIntervalList, ShareLock);
+	LockShardListMetadata(shardIntervalList, ShareLock);
+	LockShardListResources(shardIntervalList, ShareLock);
 
 	/* initialize the shard interval cache */
 	shardCount = cacheEntry->shardIntervalArrayLength;
