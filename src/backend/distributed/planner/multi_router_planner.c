@@ -71,10 +71,10 @@ typedef struct WalkerState
 static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 											  RelationRestrictionContext *
 											  restrictionContext);
-static MultiPlan * CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
+static MultiPlan * CreateMultiTaskRouterPlan(Query *originalQuery,
 											 RelationRestrictionContext *
 											 restrictionContext);
-static Task * RouterModifyTaskForShardInterval(Query *originalQuery, Query *query,
+static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
 											   restrictionContext,
@@ -142,7 +142,7 @@ MultiRouterPlanCreate(Query *originalQuery, Query *query,
 
 	if (InsertSelectQuery(query))
 	{
-		multiPlan = CreateMultiTaskRouterPlan(originalQuery, query, restrictionContext);
+		multiPlan = CreateMultiTaskRouterPlan(originalQuery, restrictionContext);
 	}
 	else
 	{
@@ -214,7 +214,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
  * The function never returns NULL, it errors out if cannot create the multi plan.
  */
 static MultiPlan *
-CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
+CreateMultiTaskRouterPlan(Query *originalQuery,
 						  RelationRestrictionContext *restrictionContext)
 {
 	int shardOffset = 0;
@@ -223,8 +223,8 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 	Job *workerJob = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	MultiPlan *multiPlan = NULL;
-	RangeTblEntry *insertRte = linitial(query->rtable);
-	RangeTblEntry *subqueryRte = lsecond(query->rtable);
+	RangeTblEntry *insertRte = linitial(originalQuery->rtable);
+	RangeTblEntry *subqueryRte = lsecond(originalQuery->rtable);
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
@@ -247,10 +247,8 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
 			targetCacheEntry->sortedShardIntervalArray[shardOffset];
 		Task *modifyTask = NULL;
 
-		modifyTask = RouterModifyTaskForShardInterval(originalQuery, query,
-													  targetShardInterval,
-													  restrictionContext,
-													  taskIdIndex);
+		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
+													  restrictionContext, taskIdIndex);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -292,14 +290,10 @@ CreateMultiTaskRouterPlan(Query *originalQuery, Query *query,
  * subqueries with non euqi-joins.).
  */
 static Task *
-RouterModifyTaskForShardInterval(Query *originalQuery, Query *query,
-								 ShardInterval *shardInterval,
+RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
 								 RelationRestrictionContext *restrictionContext,
 								 uint32 taskIdIndex)
 {
-	RangeTblEntry *subqueryRte = lsecond(query->rtable);
-	Query *subquery = subqueryRte->subquery;
-
 	Query *copiedQuery = copyObject(originalQuery);
 	RangeTblEntry *copiedInsertRte = linitial(copiedQuery->rtable);
 	RangeTblEntry *copiedSubqueryRte = lsecond(copiedQuery->rtable);
