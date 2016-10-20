@@ -101,6 +101,14 @@ FROM
 WHERE
    0 != 0;
 
+INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time)
+SELECT
+   value_2, value_1, value_3, value_4, user_id, time
+FROM
+   raw_events_first
+WHERE
+   user_id = 15 AND user_id = 16;
+
 -- add one more row
 SET client_min_messages TO INFO;
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
