@@ -113,6 +113,10 @@ JobExecutorType(MultiPlan *multiPlan)
  * RouterExecutablePlan returns whether a multi-plan can be executed using the
  * router executor. Modify queries are always router executable, select queries
  * are router executable only if executorType is real time.
+ *
+ * With the multi task router executor, most of the assumptions in this function do not
+ * hold anymore. In the long term, we could consider adding a new field to workerJob
+ * and only execute router plannable queries with router executor.
  */
 bool
 RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
@@ -127,7 +131,7 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	List *workerDependentTaskList = NIL;
 	bool masterQueryHasAggregates = false;
 
-	/* TODO: this is a hacky solution to allow 0 shard INSERT ... SELECT */
+	/* allow all INSERT ... SELECT queries (i.e., irrespective of taskCount) */
 	if (masterQuery == NULL)
 	{
 		return true;
