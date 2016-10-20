@@ -127,30 +127,16 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	List *workerDependentTaskList = NIL;
 	bool masterQueryHasAggregates = false;
 
-	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
-	{
-		return false;
-	}
-
-	/* router executor cannot execute repartition jobs */
-	if (dependedJobCount > 0)
-	{
-		return false;
-	}
-
-	/* router executor cannot execute plans when master query is present */
-	if (masterQuery != NULL)
-	{
-		return false;
-	}
-
-	/*
-	 * Multi task router executor can execute plans with zero task. This is currently
-	 * here for INSERT ... SELECT queries with zero shards.
-	 */
-	if (taskCount == 0)
+	/* TODO: this is a hacky solution to allow 0 shard INSERT ... SELECT */
+	if (masterQuery == NULL)
 	{
 		return true;
+	}
+
+	/* router executor cannot execute queries that hit zero shards */
+	if (taskCount == 0)
+	{
+		return false;
 	}
 
 	/* check if the first task is a modify or a router task, short-circuit if so */
@@ -162,7 +148,18 @@ RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType)
 	}
 
 	/* router executor cannot execute SELECT queries that hit more than one shard */
-	if (taskCount != 1 && taskType == ROUTER_TASK)
+	if (taskCount != 1)
+	{
+		return false;
+	}
+
+	if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
+	{
+		return false;
+	}
+
+	/* router executor cannot execute repartition jobs */
+	if (dependedJobCount > 0)
 	{
 		return false;
 	}
