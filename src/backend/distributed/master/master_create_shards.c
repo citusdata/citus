@@ -58,13 +58,8 @@ PG_FUNCTION_INFO_V1(master_create_worker_shards);
 
 
 /*
- * master_create_worker_shards creates empty shards for the given table based
- * on the specified number of initial shards. The function first gets a list of
- * candidate nodes and issues DDL commands on the nodes to create empty shard
- * placements on those nodes. The function then updates metadata on the master
- * node to make this shard (and its placements) visible. Note that the function
- * assumes the table is hash partitioned and calculates the min/max hash token
- * ranges for each shard, giving them an equal split of the hash space.
+ * master_create_worker_shards is a user facing function to create worker shards
+ * for the given relation in round robin order.
  */
 Datum
 master_create_worker_shards(PG_FUNCTION_ARGS)
@@ -74,10 +69,27 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	int32 replicationFactor = PG_GETARG_INT32(2);
 
 	Oid distributedTableId = ResolveRelationId(tableNameText);
-	char relationKind = get_rel_relkind(distributedTableId);
-	char *tableName = text_to_cstring(tableNameText);
+	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * CreateShardsWithRoundRobinPolicy creates empty shards for the given table
+ * based on the specified number of initial shards. The function first gets a
+ * list of candidate nodes and issues DDL commands on the nodes to create empty
+ * shard placements on those nodes. The function then updates metadata on the
+ * master node to make this shard (and its placements) visible. Note that the
+ * function assumes the table is hash partitioned and calculates the min/max
+ * hash token ranges for each shard, giving them an equal split of the hash space.
+ */
+void
+CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
+								 int32 replicationFactor)
+{
 	char *relationOwner = NULL;
-	char shardStorageType = '\0';
+	char shardStorageType = 0;
 	List *workerNodeList = NIL;
 	List *ddlCommandList = NIL;
 	int32 workerNodeCount = 0;
@@ -106,6 +118,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	existingShardList = LoadShardList(distributedTableId);
 	if (existingShardList != NIL)
 	{
+		char *tableName = get_rel_name(distributedTableId);
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("table \"%s\" has already had shards created for it",
 							   tableName)));
@@ -156,22 +169,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	}
 
 	/* set shard storage type according to relation type */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		bool cstoreTable = CStoreTable(distributedTableId);
-		if (cstoreTable)
-		{
-			shardStorageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			shardStorageType = SHARD_STORAGE_FOREIGN;
-		}
-	}
-	else
-	{
-		shardStorageType = SHARD_STORAGE_TABLE;
-	}
+	shardStorageType = ShardStorageType(distributedTableId);
 
 	for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
 	{
@@ -182,8 +180,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 		text *maxHashTokenText = NULL;
 		int32 shardMinHashToken = INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
-		Datum shardIdDatum = master_get_new_shardid(NULL);
-		int64 shardId = DatumGetInt64(shardIdDatum);
+		uint64 shardId = GetNextShardId();
 
 		/* if we are at the last shard, make sure the max token value is INT_MAX */
 		if (shardIndex == (shardCount - 1))
@@ -217,8 +214,104 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	}
 
 	RESUME_INTERRUPTS();
+}
 
-	PG_RETURN_VOID();
+
+/*
+ * CreateColocatedShards creates shards for the target relation colocated with
+ * the source relation.
+ */
+void
+CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
+{
+	char *targetTableRelationOwner = NULL;
+	char targetShardStorageType = 0;
+	List *existingShardList = NIL;
+	List *sourceShardIntervalList = NIL;
+	List *targetTableDDLEvents = NIL;
+	ListCell *sourceShardCell = NULL;
+
+	/* make sure that tables are hash partitioned */
+	CheckHashPartitionedTable(targetRelationId);
+	CheckHashPartitionedTable(sourceRelationId);
+
+	/*
+	 * In contrast to append/range partitioned tables it makes more sense to
+	 * require ownership privileges - shards for hash-partitioned tables are
+	 * only created once, not continually during ingest as for the other
+	 * partitioning types.
+	 */
+	EnsureTableOwner(targetRelationId);
+
+	/* we plan to add shards: get an exclusive metadata lock on the target relation */
+	LockRelationDistributionMetadata(targetRelationId, ExclusiveLock);
+
+	/* a share metadata lock is enough on the source relation */
+	LockRelationDistributionMetadata(sourceRelationId, ShareLock);
+
+	/* prevent placement changes of the source relation until we colocate with them */
+	sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
+	LockShardListMetadata(sourceShardIntervalList, ShareLock);
+
+	/* validate that shards haven't already been created for this table */
+	existingShardList = LoadShardList(targetRelationId);
+	if (existingShardList != NIL)
+	{
+		char *targetRelationName = get_rel_name(targetRelationId);
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("table \"%s\" has already had shards created for it",
+							   targetRelationName)));
+	}
+
+	targetTableRelationOwner = TableOwner(targetRelationId);
+	targetTableDDLEvents = GetTableDDLEvents(targetRelationId);
+	targetShardStorageType = ShardStorageType(targetRelationId);
+
+	foreach(sourceShardCell, sourceShardIntervalList)
+	{
+		ShardInterval *sourceShardInterval = (ShardInterval *) lfirst(sourceShardCell);
+		uint64 sourceShardId = sourceShardInterval->shardId;
+		uint64 newShardId = GetNextShardId();
+		ListCell *sourceShardPlacementCell = NULL;
+
+		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
+		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
+		text *shardMinValueText = IntegerToText(shardMinValue);
+		text *shardMaxValueText = IntegerToText(shardMaxValue);
+
+		List *sourceShardPlacementList = ShardPlacementList(sourceShardId);
+		foreach(sourceShardPlacementCell, sourceShardPlacementList)
+		{
+			ShardPlacement *sourcePlacement =
+				(ShardPlacement *) lfirst(sourceShardPlacementCell);
+			char *sourceNodeName = sourcePlacement->nodeName;
+			int32 sourceNodePort = sourcePlacement->nodePort;
+
+			bool created = WorkerCreateShard(targetRelationId, sourceNodeName,
+											 sourceNodePort, newShardId,
+											 targetTableRelationOwner,
+											 targetTableDDLEvents);
+			if (created)
+			{
+				const RelayFileState shardState = FILE_FINALIZED;
+				const uint64 shardSize = 0;
+
+				InsertShardPlacementRow(newShardId, INVALID_PLACEMENT_ID, shardState,
+										shardSize, sourceNodeName, sourceNodePort);
+			}
+			else
+			{
+				char *targetRelationName = get_rel_name(targetRelationId);
+				char *sourceRelationName = get_rel_name(sourceRelationId);
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("table \"%s\" could not be colocated with %s",
+									   targetRelationName, sourceRelationName)));
+			}
+		}
+
+		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
+					   shardMinValueText, shardMaxValueText);
+	}
 }
 
 

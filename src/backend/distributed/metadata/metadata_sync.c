@@ -215,14 +215,14 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
 	char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
-	uint64 colocationId = cacheEntry->colocationId;
+	uint32 colocationId = cacheEntry->colocationId;
 	char replicationModel = cacheEntry->replicationModel;
 
 	appendStringInfo(insertDistributionCommand,
 					 "INSERT INTO pg_dist_partition "
 					 "(logicalrelid, partmethod, partkey, colocationid, repmodel) "
 					 "VALUES "
-					 "(%s::regclass, '%c', column_name_to_column(%s,%s), %lu, '%c')",
+					 "(%s::regclass, '%c', column_name_to_column(%s,%s), %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
 					 quote_literal_cstr(qualifiedRelationName),

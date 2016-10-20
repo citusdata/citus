@@ -55,6 +55,7 @@
 
 
 /* Shard related configuration */
+int ShardCount = 32;
 int ShardReplicationFactor = 2; /* desired replication factor for shards */
 int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
@@ -93,8 +94,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	HeapTuple metadataTuple = NULL;
 	TupleDesc metadataDescriptor = NULL;
 	uint64 shardMaxSizeInBytes = 0;
-	char relationType = 0;
-	char storageType = 0;
+	char shardStorageType = 0;
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
 
@@ -121,26 +121,10 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 
 	/* get storage type */
-	relationType = get_rel_relkind(relationId);
-	if (relationType == RELKIND_RELATION)
-	{
-		storageType = SHARD_STORAGE_TABLE;
-	}
-	else if (relationType == RELKIND_FOREIGN_TABLE)
-	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			storageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			storageType = SHARD_STORAGE_FOREIGN;
-		}
-	}
+	shardStorageType = ShardStorageType(relationId);
 
 	values[0] = ObjectIdGetDatum(relationId);
-	values[1] = storageType;
+	values[1] = shardStorageType;
 	values[2] = partitionEntry->partitionMethod;
 	values[3] = partitionKey;
 	values[4] = Int32GetDatum(ShardReplicationFactor);
@@ -247,12 +231,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 
 
 /*
- * master_get_new_shardid allocates and returns a unique shardId for the shard
- * to be created. This allocation occurs both in shared memory and in write
- * ahead logs; writing to logs avoids the risk of having shardId collisions.
- *
- * Please note that the caller is still responsible for finalizing shard data
- * and the shardId with the master node.
+ * master_get_new_shardid is a user facing wrapper function around GetNextShardId()
+ * which allocates and returns a unique shardId for the shard to be created.
  *
  * NB: This can be called by any user; for now we have decided that that's
  * ok. We might want to restrict this to users part of a specific role or such
@@ -261,12 +241,31 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
+	uint64 shardId = GetNextShardId();
+	Datum shardIdDatum = Int64GetDatum(shardId);
+
+	PG_RETURN_DATUM(shardIdDatum);
+}
+
+
+/*
+ * GetNextShardId allocates and returns a unique shardId for the shard to be
+ * created. This allocation occurs both in shared memory and in write ahead
+ * logs; writing to logs avoids the risk of having shardId collisions.
+ *
+ * Please note that the caller is still responsible for finalizing shard data
+ * and the shardId with the master node.
+ */
+uint64
+GetNextShardId()
+{
 	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Datum shardIdDatum = 0;
+	uint64 shardId = 0;
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -276,7 +275,9 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	PG_RETURN_DATUM(shardIdDatum);
+	shardId = DatumGetInt64(shardIdDatum);
+
+	return shardId;
 }
 
 
@@ -726,6 +727,41 @@ GetTableDDLEvents(Oid relationId)
 	PopOverrideSearchPath();
 
 	return tableDDLEventList;
+}
+
+
+/*
+ * ShardStorageType returns the shard storage type according to relation type.
+ */
+char
+ShardStorageType(Oid relationId)
+{
+	char shardStorageType = 0;
+
+	char relationType = get_rel_relkind(relationId);
+	if (relationType == RELKIND_RELATION)
+	{
+		shardStorageType = SHARD_STORAGE_TABLE;
+	}
+	else if (relationType == RELKIND_FOREIGN_TABLE)
+	{
+		bool cstoreTable = CStoreTable(relationId);
+		if (cstoreTable)
+		{
+			shardStorageType = SHARD_STORAGE_COLUMNAR;
+		}
+		else
+		{
+			shardStorageType = SHARD_STORAGE_FOREIGN;
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("unexpected relation type: %c", relationType)));
+	}
+
+	return shardStorageType;
 }
 
 

@@ -17,11 +17,13 @@
 
 #define INVALID_COLOCATION_ID 0
 
-extern uint64 TableColocationId(Oid distributedTableId);
+extern uint32 TableColocationId(Oid distributedTableId);
 extern bool TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId);
 extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
 extern List * ColocatedTableList(Oid distributedTableId);
 extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
+extern Oid ColocatedTableId(Oid colocationId);
+
 
 #endif /* COLOCATION_UTILS_H_ */

@@ -25,7 +25,7 @@ typedef struct FormData_pg_dist_partition
 	char partmethod;     /* partition method; see codes below */
 #ifdef CATALOG_VARLEN    /* variable-length fields start here */
 	text partkey;        /* partition key expression */
-	uint64 colocationid; /* id of the co-location group of particular table belongs to */
+	uint32 colocationid; /* id of the co-location group of particular table belongs to */
 	char repmodel;       /* replication model; see codes below */
 #endif
 } FormData_pg_dist_partition;

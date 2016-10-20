@@ -333,6 +333,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
+		"citus.shard_count",
+		gettext_noop("Sets the number of shards for a new hash-partitioned table"
+					 "created with create_distributed_table()."),
+		NULL,
+		&ShardCount,
+		32, 1, 64000,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),
 		gettext_noop("Shards are replicated across nodes according to this "

@@ -35,7 +35,7 @@ Datum
 get_table_colocation_id(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
-	int colocationId = TableColocationId(distributedTableId);
+	uint32 colocationId = TableColocationId(distributedTableId);
 
 	PG_RETURN_INT32(colocationId);
 }
