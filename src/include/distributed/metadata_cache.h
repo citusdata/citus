@@ -40,7 +40,7 @@ typedef struct
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;
 	char partitionMethod;
-	uint64 colocationId;
+	uint32 colocationId;
 	char replicationModel;
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
@@ -66,6 +66,8 @@ extern bool CitusHasBeenLoaded(void);
 extern HTAB * GetWorkerNodeHash(void);
 
 /* relation oids */
+extern Oid DistColocationRelationId(void);
+extern Oid DistColocationConfigurationIndexId(void);
 extern Oid DistPartitionRelationId(void);
 extern Oid DistShardRelationId(void);
 extern Oid DistShardPlacementRelationId(void);

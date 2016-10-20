@@ -41,8 +41,6 @@
 
 
 /* Local functions forward declarations */
-static bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
-							  uint64 shardId, char *newShardOwner, List *ddlCommandList);
 static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
@@ -66,8 +64,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
 	List *workerNodeList = WorkerNodeList();
-	Datum shardIdDatum = 0;
-	int64 shardId = INVALID_SHARD_ID;
+	uint64 shardId = INVALID_SHARD_ID;
 	List *ddlEventList = NULL;
 	uint32 attemptableNodeCount = 0;
 	uint32 liveNodeCount = 0;
@@ -116,8 +113,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	}
 
 	/* generate new and unique shardId from sequence */
-	shardIdDatum = master_get_new_shardid(NULL);
-	shardId = DatumGetInt64(shardIdDatum);
+	shardId = GetNextShardId();
 
 	/* get table DDL commands to replay on the worker node */
 	ddlEventList = GetTableDDLEvents(relationId);
@@ -426,7 +422,7 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
  * shard on the worker node. Note that this function opens a new connection for
  * each DDL command, and could leave the shard in an half-initialized state.
  */
-static bool
+bool
 WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 				  uint64 shardId, char *newShardOwner, List *ddlCommandList)
 {

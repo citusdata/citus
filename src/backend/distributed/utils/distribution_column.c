@@ -57,7 +57,7 @@ column_name_to_column(PG_FUNCTION_ARGS)
 
 	relation = relation_open(relationId, AccessShareLock);
 
-	column = (Var *) BuildDistributionKeyFromColumnName(relation, columnName);
+	column = BuildDistributionKeyFromColumnName(relation, columnName);
 	columnNodeString = nodeToString(column);
 	columnNodeText = cstring_to_text(columnNodeString);
 
@@ -83,7 +83,7 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 
 	relation = relation_open(distributedTableId, AccessExclusiveLock);
 
-	column = (Var *) BuildDistributionKeyFromColumnName(relation, columnName);
+	column = BuildDistributionKeyFromColumnName(relation, columnName);
 
 	relation_close(relation, NoLock);
 
@@ -121,12 +121,12 @@ column_to_column_name(PG_FUNCTION_ARGS)
  * specified column does not exist or is not suitable to be used as a
  * distribution column.
  */
-Node *
+Var *
 BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnName)
 {
 	HeapTuple columnTuple = NULL;
 	Form_pg_attribute columnForm = NULL;
-	Var *column = NULL;
+	Var *distributionColumn = NULL;
 	char *tableName = RelationGetRelationName(distributedRelation);
 
 	/* it'd probably better to downcase identifiers consistent with SQL case folding */
@@ -153,12 +153,12 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 	}
 
 	/* build Var referencing only the chosen distribution column */
-	column = makeVar(1, columnForm->attnum, columnForm->atttypid,
-					 columnForm->atttypmod, columnForm->attcollation, 0);
+	distributionColumn = makeVar(1, columnForm->attnum, columnForm->atttypid,
+								 columnForm->atttypmod, columnForm->attcollation, 0);
 
 	ReleaseSysCache(columnTuple);
 
-	return (Node *) column;
+	return distributionColumn;
 }
 
 

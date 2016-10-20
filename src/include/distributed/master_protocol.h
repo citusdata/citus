@@ -82,6 +82,7 @@ typedef enum
 
 
 /* Config variables managed via guc.c */
+extern int ShardCount;
 extern int ShardReplicationFactor;
 extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
@@ -89,13 +90,20 @@ extern int ShardPlacementPolicy;
 
 /* Function declarations local to the distributed module */
 extern bool CStoreTable(Oid relationId);
+extern uint64 GetNextShardId(void);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
+extern char ShardStorageType(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 								  char *newPlacementOwner, List *workerNodeList,
 								  int workerStartIndex, int replicationFactor);
 extern uint64 UpdateShardStatistics(int64 shardId);
+extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
+											 int32 replicationFactor);
+extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId);
+extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
+							  uint64 shardId, char *newShardOwner, List *ddlCommandList);
 
 /* Function declarations for generating metadata for shard and placement creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
