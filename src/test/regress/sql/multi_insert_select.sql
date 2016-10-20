@@ -180,18 +180,72 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         WHERE  raw_events_first.user_id = raw_events_second.user_id 
         GROUP  BY raw_events_second.user_id) AS foo; 
 
+-- join between subqueries
+INSERT INTO agg_events
+            (user_id)
+SELECT f2.id FROM
+
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id);
+
+-- add one more level subqueris on top of subquery JOINs
+INSERT INTO agg_events
+            (user_id, value_4_agg)
+SELECT
+  outer_most.id, max(outer_most.value)
+FROM
+(
+  SELECT f2.id as id, f2.v4 as value FROM
+    (SELECT
+          id
+      FROM   (SELECT reference_table.user_id      AS id
+               FROM   raw_events_first,
+                      reference_table
+            WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+  INNER JOIN
+    (SELECT v4,
+          v1,
+          id
+    FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+            FROM   raw_events_first,
+                    raw_events_second
+            WHERE  raw_events_first.user_id = raw_events_second.user_id
+            GROUP  BY raw_events_second.user_id
+            HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id)) as outer_most
+GROUP BY
+  outer_most.id;
 
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
-            ( 
-                        user_id, 
-                        value_1_agg, 
-                        agg_time 
+            (
+                        user_id,
+                        value_1_agg,
+                        agg_time
             ) 
-SELECT user_id, 
-       value_1, 
-       time 
-FROM   raw_events_first 
+SELECT user_id,
+       value_1,
+       time
+FROM   raw_events_first
 ON conflict (user_id, value_1_agg)
 DO UPDATE
    SET    agg_time = EXCLUDED.agg_time 
@@ -287,93 +341,178 @@ FROM
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
 -- unsupported JOIN
-INSERT INTO agg_events 
-            (value_4_agg, 
-             value_1_agg, 
-             user_id) 
-SELECT v4, 
-       v1, 
-       id 
-FROM   (SELECT SUM(raw_events_second.value_4) AS v4, 
-               SUM(raw_events_first.value_1) AS v1, 
-               raw_events_second.user_id      AS id 
-        FROM   raw_events_first, 
-               raw_events_second 
-        WHERE  raw_events_first.user_id != raw_events_second.user_id 
-        GROUP  BY raw_events_second.user_id) AS foo; 
+INSERT INTO agg_events
+            (value_4_agg,
+             value_1_agg,
+             user_id)
+SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id != raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id) AS foo;
 
 
 -- INSERT partition column does not match with SELECT partition column
-INSERT INTO agg_events 
-            (value_4_agg, 
-             value_1_agg, 
-             user_id) 
-SELECT v4, 
-       v1, 
-       id 
-FROM   (SELECT SUM(raw_events_second.value_4) AS v4, 
-               SUM(raw_events_first.value_1) AS v1, 
-               raw_events_second.value_3      AS id 
-        FROM   raw_events_first, 
-               raw_events_second 
-        WHERE  raw_events_first.user_id = raw_events_second.user_id 
-        GROUP  BY raw_events_second.value_3) AS foo; 
+INSERT INTO agg_events
+            (value_4_agg,
+             value_1_agg,
+             user_id)
+SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.value_3      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.value_3) AS foo;
 
 -- error cases
 -- no part column at all
-INSERT INTO raw_events_second 
-            (value_1) 
-SELECT value_1 
-FROM   raw_events_first; 
+INSERT INTO raw_events_second
+            (value_1)
+SELECT value_1
+FROM   raw_events_first;
 
-INSERT INTO raw_events_second 
-            (value_1) 
-SELECT user_id 
-FROM   raw_events_first; 
+INSERT INTO raw_events_second
+            (value_1)
+SELECT user_id
+FROM   raw_events_first;
 
-INSERT INTO raw_events_second 
-            (user_id) 
-SELECT value_1 
-FROM   raw_events_first; 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT value_1
+FROM   raw_events_first;
 
-INSERT INTO raw_events_second 
-            (user_id) 
-SELECT user_id * 2 
-FROM   raw_events_first; 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id * 2
+FROM   raw_events_first;
 
-INSERT INTO raw_events_second 
-            (user_id) 
-SELECT user_id :: bigint 
-FROM   raw_events_first; 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id :: bigint
+FROM   raw_events_first;
 
-INSERT INTO agg_events 
-            (value_3_agg, 
-             value_4_agg, 
-             value_1_agg, 
-             value_2_agg, 
-             user_id) 
-SELECT SUM(value_3), 
-       Count(value_4), 
-       user_id, 
+INSERT INTO agg_events
+            (value_3_agg,
+             value_4_agg,
+             value_1_agg,
+             value_2_agg,
+             user_id)
+SELECT SUM(value_3),
+       Count(value_4),
+       user_id,
+       SUM(value_1),
+       Avg(value_2)
+FROM   raw_events_first
+GROUP  BY user_id;
+
+INSERT INTO agg_events
+            (value_3_agg,
+             value_4_agg,
+             value_1_agg,
+             value_2_agg,
+             user_id)
+SELECT SUM(value_3),
+       Count(value_4),
+       user_id,
        SUM(value_1), 
-       Avg(value_2) 
-FROM   raw_events_first 
-GROUP  BY user_id; 
-
-INSERT INTO agg_events 
-            (value_3_agg, 
-             value_4_agg, 
-             value_1_agg, 
-             value_2_agg, 
-             user_id) 
-SELECT SUM(value_3), 
-       Count(value_4), 
-       user_id, 
-       SUM(value_1), 
-       value_2 
-FROM   raw_events_first 
-GROUP  BY user_id, 
-          value_2; 
+       value_2
+FROM   raw_events_first
+GROUP  BY user_id,
+          value_2;
 
 -- tables should be co-located
-INSERT INTO agg_events (user_id) SELECT user_id FROM reference_table;
+INSERT INTO agg_events (user_id)
+SELECT
+  user_id
+FROM
+  reference_table;
+
+-- unsupported joins between subqueries
+-- we do not return bare partition column on the inner query
+INSERT INTO agg_events
+            (user_id)
+SELECT f2.id FROM
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               raw_events_second.value_1 AS v1,
+               SUM(raw_events_second.user_id)      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.value_1
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id);
+
+
+-- the second part of the query is not routable since
+-- no GROUP BY on the partition column
+INSERT INTO agg_events
+            (user_id)
+SELECT f.id FROM
+(SELECT
+      id
+FROM   (SELECT raw_events_first.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               raw_events_second.value_1 AS v1,
+               SUM(raw_events_second.user_id)      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.value_1
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id);
+
+-- cannot pushdown the query since the JOIN is not equi JOIN
+INSERT INTO agg_events
+            (user_id, value_4_agg)
+SELECT
+outer_most.id, max(outer_most.value)
+ FROM
+(
+  SELECT f2.id as id, f2.v4 as value FROM
+    (SELECT
+          id
+      FROM   (SELECT reference_table.user_id      AS id
+               FROM   raw_events_first,
+                      reference_table
+            WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+  INNER JOIN
+    (SELECT v4,
+          v1,
+          id
+    FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+            FROM   raw_events_first,
+                    raw_events_second
+            WHERE  raw_events_first.user_id = raw_events_second.user_id
+            GROUP  BY raw_events_second.user_id
+            HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id != f2.id)) as outer_most
+GROUP BY outer_most.id;
+
