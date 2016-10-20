@@ -338,7 +338,15 @@ LookupDistTableCacheEntry(Oid relationId)
 											 Anum_pg_dist_partition_repmodel,
 											 tupleDescriptor,
 											 &isNull);
-		Assert(!isNull);
+
+		if (isNull)
+		{
+			/*
+			 * repmodel is NOT NULL but before ALTER EXTENSION citus UPGRADE the column
+			 * doesn't exist
+			 */
+			replicationModelDatum = CharGetDatum('c');
+		}
 
 		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
 		partitionKeyString = TextDatumGetCString(partitionKeyDatum);
