@@ -105,7 +105,8 @@ static Task * RouterSelectTask(Query *originalQuery,
 							   List **placementList);
 static bool RouterSelectQuery(Query *originalQuery,
 							  RelationRestrictionContext *restrictionContext,
-							  List **placementList, uint64 *anchorShardId);
+							  List **placementList, uint64 *anchorShardId,
+							  List **selectShardList);
 static List * TargetShardIntervalsForSelect(Query *query,
 											RelationRestrictionContext *restrictionContext);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
@@ -264,6 +265,8 @@ CreateMultiTaskRouterPlan(Query *originalQuery,
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
 		{
+			modifyTask->insertSelectQuery = true;
+
 			sqlTaskList = lappend(sqlTaskList, modifyTask);
 		}
 
@@ -323,6 +326,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	Task *modifyTask = NULL;
 	List *selectPlacementList = NIL;
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
+	List *selectShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
@@ -363,7 +367,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
 	 */
 	routerPlannable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
-										&selectPlacementList, &selectAnchorShardId);
+										&selectPlacementList, &selectAnchorShardId,
+										&selectShardList);
 
 	if (!routerPlannable)
 	{
@@ -417,6 +422,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->upsertQuery = upsertQuery;
+	modifyTask->selectShardList = selectShardList;
 
 	return modifyTask;
 }
@@ -1762,9 +1768,10 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	StringInfo queryString = makeStringInfo();
 	bool upsertQuery = false;
 	uint64 shardId = INVALID_SHARD_ID;
+	List *selectShardList = NIL;
 
 	queryRoutable = RouterSelectQuery(originalQuery, restrictionContext,
-									  placementList, &shardId);
+									  placementList, &shardId, &selectShardList);
 
 
 	if (!queryRoutable)
@@ -1798,7 +1805,7 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
  */
 static bool
 RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
-				  List **placementList, uint64 *anchorShardId)
+				  List **placementList, uint64 *anchorShardId, List **selectShardList)
 {
 	List *prunedRelationShardList = TargetShardIntervalsForSelect(originalQuery,
 																  restrictionContext);
@@ -1833,12 +1840,15 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 		/* all relations are now pruned down to 0 or 1 shards */
 		Assert(list_length(prunedShardList) <= 1);
 
+		shardInterval = (ShardInterval *) linitial(prunedShardList);
+
 		/* anchor shard id */
 		if (shardId == INVALID_SHARD_ID)
 		{
-			shardInterval = (ShardInterval *) linitial(prunedShardList);
 			shardId = shardInterval->shardId;
 		}
+
+		*selectShardList = lappend(*selectShardList, shardInterval);
 	}
 
 	/*

@@ -493,6 +493,8 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
+	WRITE_BOOL_FIELD(insertSelectQuery);
+	WRITE_NODE_FIELD(selectShardList);
 }
 
 #if (PG_VERSION_NUM < 90600)
