@@ -29,6 +29,7 @@
 #include "catalog/pg_class.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "commands/prepare.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
@@ -39,6 +40,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
@@ -55,6 +57,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/value.h"
+#include "parser/analyze.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "tcop/dest.h"
@@ -130,7 +133,6 @@ static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 
 static bool warnedUserAbout2PC = false;
-
 
 /*
  * Utility for handling citus specific concerns around utility statements.
@@ -297,6 +299,48 @@ multi_ProcessUtility(Node *parsetree,
 								" nodes"),
 						 errhint("Connect to worker nodes directly to manually create all"
 								 " necessary users and roles.")));
+	}
+
+	/* due to an explain-hook limitation we have to special-case EXPLAIN EXECUTE */
+	if (IsA(parsetree, ExplainStmt) && IsA(((ExplainStmt *) parsetree)->query, Query))
+	{
+		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
+		Query *query = (Query *) explainStmt->query;
+
+		if (query->commandType == CMD_UTILITY &&
+			IsA(query->utilityStmt, ExecuteStmt))
+		{
+			ExecuteStmt *execstmt = (ExecuteStmt *) query->utilityStmt;
+			PreparedStatement *entry = FetchPreparedStatement(execstmt->name, true);
+			CachedPlanSource *plansource = entry->plansource;
+			Query *originalQuery;
+
+			/* copied from ExplainExecuteQuery, will never trigger if you used PREPARE */
+			if (!plansource->fixed_result)
+			{
+				ereport(ERROR, (errmsg("EXPLAIN EXECUTE does not support variable-result"
+									   " cached plans")));
+			}
+
+			originalQuery = parse_analyze(plansource->raw_parse_tree,
+										  plansource->query_string,
+										  plansource->param_types,
+										  plansource->num_params);
+
+			if (ExtractFirstDistributedTableId(originalQuery) != InvalidOid)
+			{
+				/*
+				 * since pg no longer sees EXECUTE it will use the explain hook we've
+				 * installed
+				 */
+				explainStmt->query = (Node *) originalQuery;
+				standard_ProcessUtility(parsetree, plansource->query_string, context,
+										params, dest, completionTag);
+				return;
+			}
+
+			/* if this is a normal query fall through to the usual executor */
+		}
 	}
 
 	if (commandMustRunAsOwner)
