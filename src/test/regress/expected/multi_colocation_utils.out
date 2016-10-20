@@ -520,6 +520,20 @@ Table "schema_collocation.table4_groupe_1300052"
  id     | integer | 
 
 \c - - - :master_port
+CREATE TABLE table1_groupF ( id int );
+SELECT create_reference_table('table1_groupF');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_groupF ( id int );
+SELECT create_reference_table('table2_groupF');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
 -- check metadata
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -530,7 +544,8 @@ SELECT * FROM pg_dist_colocation
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
             5 |          2 |                 2 |                     23
-(4 rows)
+            6 |          1 |                 2 |                     23
+(5 rows)
 
 -- cross check with internal colocation API
 SELECT 
@@ -562,7 +577,8 @@ ORDER BY
  table2_groupe | table3_groupe                    | t
  table2_groupe | schema_collocation.table4_groupe | t
  table3_groupe | schema_collocation.table4_groupe | t
-(12 rows)
+ table1_groupf | table2_groupf                    | t
+(13 rows)
 
 -- check created shards
 SELECT
@@ -637,5 +653,9 @@ ORDER BY
  schema_collocation.table4_groupe | 1300052 | t            |    57637 | -2147483648   | -1
  schema_collocation.table4_groupe | 1300053 | t            |    57637 | 0             | 2147483647
  schema_collocation.table4_groupe | 1300053 | t            |    57638 | 0             | 2147483647
-(52 rows)
+ table1_groupf                    | 1300054 | t            |    57637 | -2147483648   | 2147483647
+ table1_groupf                    | 1300054 | t            |    57638 | -2147483648   | 2147483647
+ table2_groupf                    | 1300055 | t            |    57638 | -2147483648   | 2147483647
+ table2_groupf                    | 1300055 | t            |    57637 | -2147483648   | 2147483647
+(56 rows)
 
