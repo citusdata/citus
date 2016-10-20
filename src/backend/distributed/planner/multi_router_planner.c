@@ -69,7 +69,6 @@ typedef struct WalkerState
 	bool badCoalesce;
 } WalkerState;
 
-
 /* planner functions forward declarations */
 static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 											  RelationRestrictionContext *
@@ -98,7 +97,6 @@ static List * QueryRestrictList(Query *query);
 static bool FastShardPruningPossible(CmdType commandType, char partitionMethod);
 static ShardInterval * FastShardPruning(Oid distributedTableId,
 										Const *partionColumnValue);
-static Oid ExtractFirstDistributedTableId(Query *query);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
 static Task * RouterSelectTask(Query *originalQuery,
 							   RelationRestrictionContext *restrictionContext,
@@ -1754,7 +1752,7 @@ QueryRestrictList(Query *query)
  * for the first distributed table in that query. If the function cannot find a
  * distributed table, it returns InvalidOid.
  */
-static Oid
+Oid
 ExtractFirstDistributedTableId(Query *query)
 {
 	List *rangeTableList = NIL;

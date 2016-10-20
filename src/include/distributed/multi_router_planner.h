@@ -37,5 +37,6 @@ extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,
 											  RangeTblEntry *subqueryRte);
 extern bool InsertSelectQuery(Query *query);
+extern Oid ExtractFirstDistributedTableId(Query *query);
 
 #endif /* MULTI_ROUTER_PLANNER_H */
