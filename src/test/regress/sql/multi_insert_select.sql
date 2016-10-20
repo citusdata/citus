@@ -516,3 +516,6 @@ outer_most.id, max(outer_most.value)
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
 
+-- Views does not work
+CREATE VIEW test_view AS SELECT * FROM raw_events_first;
+INSERT INTO raw_events_second SELECT * FROM test_view;

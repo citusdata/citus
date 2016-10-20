@@ -1207,3 +1207,17 @@ DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
+-- Views does not work
+CREATE VIEW test_view AS SELECT * FROM raw_events_first;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 1150/1/1 (used), nestlvl: 1, children: 
+INSERT INTO raw_events_second SELECT * FROM test_view;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+ERROR:  cannot plan queries that include both regular and partitioned relations
