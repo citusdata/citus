@@ -551,6 +551,19 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 									  "INSERT ... SELECT queries")));
 		}
 
+		/*
+		 * We currently do not support CTEs. In order to handle CTEs, consider expanding
+		 * IsPartitionColumnRecursive() to handle CTEs.
+		 */
+		if (subquery->cteList != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail("Common table expressions are not allowed in "
+									  "INSERT ... SELECT queries")));
+		}
+
 		/* see comment on AddUninstantiatedPartitionColumnEqualityQual() */
 		if (subquery->setOperations != NULL)
 		{
@@ -655,32 +668,15 @@ AddUninstantiatedPartitionColumnEqualityQual(Query *originalQuery)
 
 	Assert(InsertSelectQuery(originalQuery));
 
-	/* we currently do not support CTEs */
-	if (originalQuery->cteList != NULL)
-	{
-		return;
-	}
-
 	subqueryEntry = ExtractSelectRangeTableEntry(originalQuery);
 	subquery = subqueryEntry->subquery;
 
 	/*
-	 * We currently not support the subquery with set operations for three reasons.
-	 *
-	 *   (i) Adding only a single qual where there are more than one join trees
-	 *   leads to an assertion failure on the standard planner (i.e.,
-	 *   Assert(parse->jointree->quals == NULL); on plan_set_operations()).
-	 *   [THE ABOVE COMMENT IS TO EASE THE REVIEW, REMOVE LATER ON]
-	 *
-	 *   (ii)  There are potentially multiple jointree quals that we need to add
-	 *   the qual, and we haven't implemented that logic yet.
-	 *
-	 *   (iii) We cannot get the source tables OID via target entries resorigtbl field.
-	 *   This makes hard to check the colocation requirement of the source and target
-	 *   tables.
-	 *
-	 * Note that we do not allow set operations on the lower level's of the subquery
-	 * as well, which is handled on ErrorIfMultiTaskRouterSelectQueryUnsupported().
+	 * We currently not support the subquery with set operations. The main reason is that
+	 * there is an "Assert(parse->jointree->quals == NULL);" on standard planner's execution
+	 * path (i.e., plan_set_operations).
+	 * If we are to add uninstantiated equality qual to the query, we may end up hitting that
+	 * assertion, so it's better not to support for now.
 	 */
 	if (subquery->setOperations != NULL)
 	{

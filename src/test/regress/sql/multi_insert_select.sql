@@ -217,57 +217,74 @@ RETURNING user_id, value_1_agg;
 
 
 -- TODO:: add hll and date_trunc 
-INSERT INTO agg_events (user_id, value_1_agg) 
-SELECT 
-   user_id, sum(value_1 + value_2) 
-FROM 
+INSERT INTO agg_events (user_id, value_1_agg)
+SELECT
+   user_id, sum(value_1 + value_2)
+FROM
    raw_events_first GROUP BY user_id;
 
 --  FILTER CLAUSE
-INSERT INTO agg_events (user_id, value_1_agg) 
-SELECT 
+INSERT INTO agg_events (user_id, value_1_agg)
+SELECT
    user_id, sum(value_1 + value_2) FILTER (where value_3 = 15)
-FROM 
+FROM
    raw_events_first GROUP BY user_id;
-
--- a very simple UNION query
-INSERT INTO 
-  raw_events_first(user_id) 
-SELECT 
-  user_id 
-FROM 
-  ((SELECT user_id FROM raw_events_first) UNION 
-   (SELECT user_id FROM raw_events_second)) as foo;
-
--- same query with slightly different syntax, but this time we cannot push it down
-INSERT INTO 
-  raw_events_first(user_id)
-  (SELECT user_id FROM raw_events_first) UNION 
-  (SELECT user_id FROM raw_events_first);
-
--- similar query with a filter on two of the queries
-INSERT INTO 
-  raw_events_first(user_id) 
-SELECT 
-  user_id 
-FROM 
-  ((SELECT user_id FROM raw_events_first WHERE user_id = 15) UNION 
-   (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
 -- TODO: UUIDs
 
 -- a test with reference table JOINs
-INSERT INTO 
-  agg_events (user_id, value_1_agg) 
-SELECT 
+INSERT INTO
+  agg_events (user_id, value_1_agg)
+SELECT
   raw_events_first.user_id, sum(value_1)
-FROM 
-  reference_table, raw_events_first 
-WHERE 
+FROM
+  reference_table, raw_events_first
+WHERE
   raw_events_first.user_id = reference_table.user_id
 GROUP BY
   raw_events_first.user_id;
 
+-- We do not support CTEs
+WITH fist_table_agg AS
+  (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
+INSERT INTO agg_events
+            (value_1_agg, user_id)
+            SELECT
+              v1_agg, user_id
+            FROM
+              fist_table_agg;
+
+-- We do not support CTEs in the INSERT as well
+INSERT INTO agg_events
+  WITH sub_cte AS (SELECT 1)
+  SELECT
+    raw_events_first.user_id, (SELECT * FROM sub_cte)
+  FROM
+    raw_events_first;
+
+-- We do not support any set operations
+INSERT INTO
+  raw_events_first(user_id)
+SELECT
+  user_id
+FROM
+  ((SELECT user_id FROM raw_events_first) UNION
+   (SELECT user_id FROM raw_events_second)) as foo;
+
+-- We do not support any set operations
+INSERT INTO
+  raw_events_first(user_id)
+  (SELECT user_id FROM raw_events_first) INTERSECT
+  (SELECT user_id FROM raw_events_first);
+
+-- We do not support any set operations
+INSERT INTO
+  raw_events_first(user_id)
+SELECT
+  user_id
+FROM
+  ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
+   (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
 -- unsupported JOIN
 INSERT INTO agg_events 
