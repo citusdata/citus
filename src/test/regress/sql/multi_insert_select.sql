@@ -5,26 +5,26 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13300000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 13300000;
 
+-- create co-located tables
+SET citus.shard_count = 4;
+SET citus.shard_replication_factor = 2;
 
 CREATE TABLE raw_events_first (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint, UNIQUE(user_id, value_1));
-SELECT master_create_distributed_table('raw_events_first', 'user_id', 'hash');
-SELECT master_create_worker_shards('raw_events_first', 4, 2);
+SELECT create_distributed_table('raw_events_first', 'user_id');
 
 CREATE TABLE raw_events_second (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint, UNIQUE(user_id, value_1));
-SELECT master_create_distributed_table('raw_events_second', 'user_id', 'hash');
-SELECT master_create_worker_shards('raw_events_second', 4, 2);
+SELECT create_distributed_table('raw_events_second', 'user_id');
 
 CREATE TABLE agg_events (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp, UNIQUE(user_id, value_1_agg));
-SELECT master_create_distributed_table('agg_events', 'user_id', 'hash');
-SELECT master_create_worker_shards('agg_events', 4, 2);
+SELECT create_distributed_table('agg_events', 'user_id');;
 
--- make tables as co-located
-UPDATE pg_dist_partition SET colocationid = 100000 WHERE logicalrelid IN ('raw_events_first', 'raw_events_second', 'agg_events');
-
-
+-- create the reference table as well
 CREATE TABLE reference_table (user_id int);
-SELECT master_create_distributed_table('reference_table', 'user_id', 'hash');
-SELECT master_create_worker_shards('reference_table', 1, 2);
+SELECT create_reference_table('reference_table');
+
+-- set back to the defaults
+SET citus.shard_count = DEFAULT;
+SET citus.shard_replication_factor = DEFAULT;
 
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (1, now(), 10, 100, 1000.1, 10000);
