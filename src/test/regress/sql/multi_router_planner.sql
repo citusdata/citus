@@ -250,6 +250,10 @@ SELECT * FROM articles_hash WHERE author_id IN (SELECT author_id FROM articles_h
 
 SELECT * FROM articles_hash WHERE author_id = (SELECT 1);
 
+-- unless the query can be transformed into a join
+SELECT * FROM articles_hash
+WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
+ORDER BY articles_hash.id;
 
 -- subqueries are supported in FROM clause but they are not router plannable
 SELECT articles_hash.id,test.word_count
