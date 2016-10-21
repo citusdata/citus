@@ -81,19 +81,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300000 raw_events_first
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300001 raw_events_first
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300002 raw_events_first
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300003 raw_events_first
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -155,7 +155,7 @@ DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time") SELECT user_id, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE (user_id = 7)
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time") SELECT user_id, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE (((user_id = 7) AND (hashint4(user_id) >= '-1073741824'::integer)) AND (hashint4(user_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -199,7 +199,7 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300000 raw_events_first WHERE (user_id = 8)
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300000 raw_events_first WHERE (((user_id = 8) AND (hashint4(user_id) >= '-2147483648'::integer)) AND (hashint4(user_id) <= '-1073741825'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -298,19 +298,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300000 raw_events_first WHERE (value_3 = (9000)::double precision) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300000 raw_events_first WHERE (((value_3 = (9000)::double precision) AND (hashint4(user_id) >= '-2147483648'::integer)) AND (hashint4(user_id) <= '-1073741825'::integer)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE (value_3 = (9000)::double precision) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE (((value_3 = (9000)::double precision) AND (hashint4(user_id) >= '-1073741824'::integer)) AND (hashint4(user_id) <= '-1'::integer)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300002 raw_events_first WHERE (value_3 = (9000)::double precision) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300002 raw_events_first WHERE (((value_3 = (9000)::double precision) AND (hashint4(user_id) >= 0)) AND (hashint4(user_id) <= 1073741823)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (value_3 = (9000)::double precision) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (((value_3 = (9000)::double precision) AND (hashint4(user_id) >= 1073741824)) AND (hashint4(user_id) <= 2147483647)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -350,7 +350,7 @@ DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id = 9) OR (user_id = 16)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300001 raw_events_first WHERE ((((user_id = 9) OR (user_id = 16)) AND (hashint4(user_id) >= '-1073741824'::integer)) AND (hashint4(user_id) <= '-1'::integer)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -360,7 +360,7 @@ DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id = 9) OR (user_id = 16)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE ((((user_id = 9) OR (user_id = 16)) AND (hashint4(user_id) >= 1073741824)) AND (hashint4(user_id) <= 2147483647)) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300007"
@@ -380,19 +380,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300000 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -422,23 +422,23 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300000 raw_events_first GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(8, 80) already exists.
+DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- some subquery tests
 INSERT INTO agg_events 
@@ -461,32 +461,32 @@ DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo WHERE ((hashint4(id) >= '-2147483648'::integer) AND (hashint4(id) <= '-1073741825'::integer)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo WHERE ((hashint4(id) >= '-1073741824'::integer) AND (hashint4(id) <= '-1'::integer)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo WHERE ((hashint4(id) >= 0) AND (hashint4(id) <= 1073741823)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647)) GROUP BY id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
+DETAIL:  Key (user_id, value_1_agg)=(5, 50) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- subquery one more level depth 
 INSERT INTO agg_events 
@@ -512,32 +512,32 @@ DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((hashint4(id) >= '-2147483648'::integer) AND (hashint4(id) <= '-1073741825'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((hashint4(id) >= '-1073741824'::integer) AND (hashint4(id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((hashint4(id) >= 0) AND (hashint4(id) <= 1073741823))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647))
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
-DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
+DETAIL:  Key (user_id, value_1_agg)=(5, 50) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- join between subqueries
 INSERT INTO agg_events
@@ -574,7 +574,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id))) WHERE ((hashint4(f2.id) >= '-2147483648'::integer) AND (hashint4(f2.id) <= '-1073741825'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -584,7 +584,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id))) WHERE ((hashint4(f2.id) >= '-1073741824'::integer) AND (hashint4(f2.id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
@@ -594,7 +594,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id))) WHERE ((hashint4(f2.id) >= 0) AND (hashint4(f2.id) <= 1073741823))
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -604,7 +604,7 @@ DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id))) WHERE ((hashint4(f2.id) >= 1073741824) AND (hashint4(f2.id) <= 2147483647))
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -659,7 +659,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300004 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most WHERE ((hashint4(id) >= '-2147483648'::integer) AND (hashint4(id) <= '-1073741825'::integer)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -669,7 +669,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300005 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most WHERE ((hashint4(id) >= '-1073741824'::integer) AND (hashint4(id) <= '-1'::integer)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
@@ -679,7 +679,7 @@ DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300006 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most WHERE ((hashint4(id) >= 0) AND (hashint4(id) <= 1073741823)) GROUP BY id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -689,7 +689,7 @@ DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most GROUP BY id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647)) GROUP BY id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -703,6 +703,58 @@ DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300010
 DEBUG:  sent COMMIT over connection 13300010
+-- subqueries in WHERE clause
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE  user_id = 2);
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND (hashint4(user_id) >= '-2147483648'::integer)) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND (hashint4(user_id) >= '-1073741824'::integer)) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND (hashint4(user_id) >= 0)) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND (hashint4(user_id) >= 1073741824)) AND (hashint4(user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300007
+DEBUG:  sent COMMIT over connection 13300007
+DEBUG:  sent COMMIT over connection 13300005
+DEBUG:  sent COMMIT over connection 13300005
+DEBUG:  sent COMMIT over connection 13300006
+DEBUG:  sent COMMIT over connection 13300006
+DEBUG:  sent COMMIT over connection 13300004
+DEBUG:  sent COMMIT over connection 13300004
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -724,19 +776,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300000 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -772,19 +824,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300000 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -815,19 +867,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300000 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300001 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300002 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300003 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -853,19 +905,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300000 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300001 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300002 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) GROUP BY user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300003 raw_events_first GROUP BY user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -897,19 +949,19 @@ DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid:
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300000 raw_events_first WHERE (raw_events_first.user_id = reference_table.user_id) GROUP BY raw_events_first.user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300000 raw_events_first WHERE (((raw_events_first.user_id = reference_table.user_id) AND (hashint4(raw_events_first.user_id) >= '-2147483648'::integer)) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)) GROUP BY raw_events_first.user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300001 raw_events_first WHERE (raw_events_first.user_id = reference_table.user_id) GROUP BY raw_events_first.user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300001 raw_events_first WHERE (((raw_events_first.user_id = reference_table.user_id) AND (hashint4(raw_events_first.user_id) >= '-1073741824'::integer)) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)) GROUP BY raw_events_first.user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300002 raw_events_first WHERE (raw_events_first.user_id = reference_table.user_id) GROUP BY raw_events_first.user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300002 raw_events_first WHERE (((raw_events_first.user_id = reference_table.user_id) AND (hashint4(raw_events_first.user_id) >= 0)) AND (hashint4(raw_events_first.user_id) <= 1073741823)) GROUP BY raw_events_first.user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300003 raw_events_first WHERE (raw_events_first.user_id = reference_table.user_id) GROUP BY raw_events_first.user_id
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300003 raw_events_first WHERE (((raw_events_first.user_id = reference_table.user_id) AND (hashint4(raw_events_first.user_id) >= 1073741824)) AND (hashint4(raw_events_first.user_id) <= 2147483647)) GROUP BY raw_events_first.user_id
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand

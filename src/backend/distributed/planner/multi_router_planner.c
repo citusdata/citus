@@ -51,10 +51,12 @@
 #include "parser/parsetree.h"
 #include "parser/parse_oper.h"
 #include "storage/lock.h"
+#include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/typcache.h"
 
 #include "catalog/pg_proc.h"
 #include "optimizer/planmain.h"
@@ -80,6 +82,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   RelationRestrictionContext *
 											   restrictionContext,
 											   uint32 taskIdIndex);
+static void AddShardIntervalRangeToSelect(Query *subqery,
+										  ShardInterval *shardInterval);
 static RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 static RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
@@ -241,8 +245,12 @@ CreateMultiTaskRouterPlan(Query *originalQuery,
 	/*
 	 * Plan select query for each shard in the target table. Do so by
 	 * replacing the partitioning qual parameter added in multi_planner()
-	 * with actual current shard's boundary values. Then perform the normal
-	 * shard pruning.
+	 * with actual current shard's boundary values. Also, add the current shard's
+	 * boundary values to the top level subquery to ensure that even if the partitioning
+	 * qual is not distributed to all the tables, we never run the queries on the shards
+	 * that don't match with the current shard boundaries.
+	 * Finally, perform the normal shard pruning to decide on whether to push the query to
+	 * the current shard or not.
 	 */
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
 	{
@@ -339,6 +347,17 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	}
 
 	/*
+	 * We also need to add  shard interval range to the subquery in case
+	 * the partition qual not distributed all tables such as some
+	 * subqueries in WHERE clause.
+	 *
+	 * Note that we need to add the ranges before the shard pruning to
+	 * prevent shard pruning logic (i.e, namely UpdateRelationNames())
+	 * modifies range table entries, which makes hard to add the quals.
+	 */
+	AddShardIntervalRangeToSelect(copiedSubquery, shardInterval);
+
+	/*
 	 * Use router select planner to decide on whether we can push down the query
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
@@ -400,6 +419,117 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->upsertQuery = upsertQuery;
 
 	return modifyTask;
+}
+
+
+/*
+ * AddShardIntervalRangeToSelect adds the following range boundaries
+ * with the given subquery and shardInterval:
+ *
+ *    hashfunc(partitionColumn) >= $lower_bound AND
+ *    hashfunc(partitionColumn) >= $upper_bound
+ *
+ * The function expects and asserts that subquery's target list contains a partition
+ * column value.
+ */
+static void
+AddShardIntervalRangeToSelect(Query *subqery, ShardInterval *shardInterval)
+{
+	List *targetList = subqery->targetList;
+	ListCell *targetEntryCell = NULL;
+	Var *targetPartitionColumnVar = NULL;
+	Oid integer4GEoperatorId = InvalidOid;
+	Oid integer4LEoperatorId = InvalidOid;
+	TypeCacheEntry *typeEntry = NULL;
+	FuncExpr *hashFunctionExpr = NULL;
+	OpExpr *greaterThanAndEqualsBoundExpr = NULL;
+	OpExpr *lessThanAndEqualsBoundExpr = NULL;
+
+	/* iterate through the target entries */
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+
+		if (IsPartitionColumnRecursive(targetEntry->expr, subqery) &&
+			IsA(targetEntry->expr, Var))
+		{
+			targetPartitionColumnVar = (Var *) targetEntry->expr;
+			break;
+		}
+	}
+
+	/* we should have found target partition column */
+	Assert(targetPartitionColumnVar != NULL);
+
+	integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+											   INT4OID,
+											   BTGreaterEqualStrategyNumber);
+	integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+											   INT4OID,
+											   BTLessEqualStrategyNumber);
+
+	/* look up the type cache */
+	typeEntry = lookup_type_cache(targetPartitionColumnVar->vartype,
+								  TYPECACHE_HASH_PROC_FINFO);
+
+	/* probable never possible given that the tables are already hash partitioned */
+	if (!OidIsValid(typeEntry->hash_proc_finfo.fn_oid))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
+						errmsg("could not identify a hash function for type %s",
+							   format_type_be(targetPartitionColumnVar->vartype))));
+	}
+
+	/* generate hashfunc(partCol) expression */
+	hashFunctionExpr = makeNode(FuncExpr);
+	hashFunctionExpr->funcid = typeEntry->hash_proc_finfo.fn_oid;
+	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
+
+	/* hash functions always return INT4 */
+	hashFunctionExpr->funcresulttype = INT4OID;
+
+	/* generate hashfunc(partCol) >= shardMinValue OpExpr */
+	greaterThanAndEqualsBoundExpr =
+		(OpExpr *) make_opclause(integer4GEoperatorId,
+								 InvalidOid, false,
+								 (Expr *) hashFunctionExpr,
+								 (Expr *) MakeInt4Constant(shardInterval->minValue),
+								 targetPartitionColumnVar->varcollid,
+								 targetPartitionColumnVar->varcollid);
+
+	/* update the operators with correct operator numbers and function ids */
+	greaterThanAndEqualsBoundExpr->opfuncid =
+		get_opcode(greaterThanAndEqualsBoundExpr->opno);
+	greaterThanAndEqualsBoundExpr->opresulttype =
+		get_func_rettype(greaterThanAndEqualsBoundExpr->opfuncid);
+
+	/* generate hashfunc(partCol) <= shardMinValue OpExpr */
+	lessThanAndEqualsBoundExpr =
+		(OpExpr *) make_opclause(integer4LEoperatorId,
+								 InvalidOid, false,
+								 (Expr *) hashFunctionExpr,
+								 (Expr *) MakeInt4Constant(shardInterval->maxValue),
+								 targetPartitionColumnVar->varcollid,
+								 targetPartitionColumnVar->varcollid);
+
+	/* update the operators with correct operator numbers and function ids */
+	lessThanAndEqualsBoundExpr->opfuncid = get_opcode(lessThanAndEqualsBoundExpr->opno);
+	lessThanAndEqualsBoundExpr->opresulttype =
+		get_func_rettype(lessThanAndEqualsBoundExpr->opfuncid);
+
+	/* finally add the quals */
+	if (subqery->jointree->quals == NULL)
+	{
+		subqery->jointree->quals = (Node *) greaterThanAndEqualsBoundExpr;
+	}
+	else
+	{
+		subqery->jointree->quals = make_and_qual(subqery->jointree->quals,
+												 (Node *) greaterThanAndEqualsBoundExpr);
+	}
+
+	subqery->jointree->quals = make_and_qual(subqery->jointree->quals,
+											 (Node *) lessThanAndEqualsBoundExpr);
 }
 
 
@@ -2503,13 +2633,8 @@ InstantiatePartitionQual(Node *node, void *context)
 
 		List *hashedOperatorList = NIL;
 
-		/* get the integer >=, <= operators from the catalog */
-		Oid integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-													   INT4OID,
-													   BTGreaterEqualStrategyNumber);
-		Oid integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-													   INT4OID,
-													   BTLessEqualStrategyNumber);
+		Oid integer4GEoperatorId = InvalidOid;
+		Oid integer4LEoperatorId = InvalidOid;
 
 		/* look for the Params */
 		if (IsA(leftop, Param))
@@ -2526,6 +2651,14 @@ InstantiatePartitionQual(Node *node, void *context)
 		{
 			return node;
 		}
+
+		/* get the integer >=, <= operators from the catalog */
+		integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+												   INT4OID,
+												   BTGreaterEqualStrategyNumber);
+		integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+												   INT4OID,
+												   BTLessEqualStrategyNumber);
 
 		/* generate hashed columns */
 		hashedGEColumn = MakeInt4Column();

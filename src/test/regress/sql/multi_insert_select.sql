@@ -235,6 +235,15 @@ ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
 
+-- subqueries in WHERE clause
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE  user_id = 2);
+
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
