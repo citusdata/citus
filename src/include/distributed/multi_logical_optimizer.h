@@ -123,7 +123,6 @@ extern bool LeafQuery(Query *queryTree);
 extern List * PartitionColumnOpExpressionList(Query *query);
 extern List * ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn);
 extern bool IsPartitionColumnRecursive(Expr *columnExpression, Query *query);
-extern List * RelationIdList(Query *query);
 
 
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */

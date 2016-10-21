@@ -158,6 +158,7 @@ static Query * LateralQuery(Query *query);
 static bool SupportedLateralQuery(Query *parentQuery, Query *lateralQuery);
 static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
+static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
@@ -3861,7 +3862,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 /*
  * RelationIdList returns list of unique relation ids in query tree.
  */
-List *
+static List *
 RelationIdList(Query *query)
 {
 	List *rangeTableList = NIL;
