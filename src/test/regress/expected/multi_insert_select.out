@@ -975,7 +975,7 @@ DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300010
 DEBUG:  sent COMMIT over connection 13300010
--- We do not support CTEs
+-- We do not support some CTEs
 WITH fist_table_agg AS
   (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
 INSERT INTO agg_events
@@ -987,9 +987,8 @@ INSERT INTO agg_events
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Common table expressions are not allowed in INSERT ... SELECT queries
--- We do not support CTEs in the INSERT as well
+ERROR:  SELECT query should return bare partition column on the same ordinal position with INSERT query's partition column
+-- We do support some CTEs
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
@@ -999,8 +998,35 @@ INSERT INTO agg_events
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Common table expressions are not allowed in INSERT ... SELECT queries
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300010
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)

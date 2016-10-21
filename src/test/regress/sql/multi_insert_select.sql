@@ -307,7 +307,7 @@ WHERE
 GROUP BY
   raw_events_first.user_id;
 
--- We do not support CTEs
+-- We do not support some CTEs
 WITH fist_table_agg AS
   (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
 INSERT INTO agg_events
@@ -317,7 +317,7 @@ INSERT INTO agg_events
             FROM
               fist_table_agg;
 
--- We do not support CTEs in the INSERT as well
+-- We do support some CTEs
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT

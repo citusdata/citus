@@ -300,7 +300,7 @@ CreateMultiTaskRouterPlan(Query *originalQuery,
  * placements.
  *
  * The function errors out if the subquery is not router select query (i.e.,
- * subqueries with non euqi-joins.).
+ * subqueries with non equi-joins.).
  */
 static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
@@ -602,15 +602,6 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 							"SELECT queries")));
 	}
 
-	if (queryTree->cteList != NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given "
-							   "modification"),
-						errdetail("Common table expressions are not allowed in "
-								  "INSERT ... SELECT queries")));
-	}
-
 	/* we don't support LIMIT, OFFSET and WINDOW functions */
 	ErrorIfMultiTaskRouterSelectQueryUnsupported(subquery);
 
@@ -678,19 +669,6 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 							errmsg("cannot perform distributed planning for the given "
 								   "modification"),
 							errdetail("Window functions are not allowed in "
-									  "INSERT ... SELECT queries")));
-		}
-
-		/*
-		 * We currently do not support CTEs. In order to handle CTEs, consider expanding
-		 * IsPartitionColumnRecursive() to handle CTEs.
-		 */
-		if (subquery->cteList != NULL)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("Common table expressions are not allowed in "
 									  "INSERT ... SELECT queries")));
 		}
 
@@ -781,9 +759,8 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
  * AddUninstantiatedPartitionColumnEqualityQual adds an equality qual
  * to the SELECT query of the given originalQuery. The function currently
  * does NOT add the quals if
- *   (i)   CTEs are present on the top level query
- *   (ii)  Set operations are present on the top level query
- *   (iii) Target list does not include a bare partition column.
+ *   (i)  Set operations are present on the top level query
+ *   (ii) Target list does not include a bare partition column.
  *
  * Note that if the input query is not an INSERT .. SELECT the assertion fails.
  */
