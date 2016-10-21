@@ -1474,7 +1474,7 @@ RouterQueryJob(Query *query, Task *task, List *placementList)
 	Job *job = NULL;
 	List *taskList = NIL;
 	TaskType taskType = task->taskType;
-	bool requiresMasterEvaluation = RequiresMasterEvaluation(query);
+	bool requiresMasterEvaluation = false;
 
 	/*
 	 * We send modify task to the first replica, otherwise we choose the target shard
@@ -1484,6 +1484,7 @@ RouterQueryJob(Query *query, Task *task, List *placementList)
 	if (taskType == MODIFY_TASK)
 	{
 		taskList = FirstReplicaAssignTaskList(list_make1(task));
+		requiresMasterEvaluation = RequiresMasterEvaluation(query);
 	}
 	else
 	{
