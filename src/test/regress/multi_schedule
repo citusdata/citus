@@ -188,3 +188,8 @@ test: multi_colocated_shard_transfer
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
 test: multi_citus_tools
+
+# ----------
+# multi_foreign_key tests foreign key push down on distributed tables
+# ----------
+test: multi_foreign_key

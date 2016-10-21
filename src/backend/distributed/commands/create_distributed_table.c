@@ -22,10 +22,15 @@
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
+#include "catalog/pg_constraint.h"
+#if (PG_VERSION_NUM >= 90600)
+#include "catalog/pg_constraint_fn.h"
+#endif
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_opclass.h"
 #include "catalog/pg_trigger.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/sequence.h"
@@ -64,7 +69,11 @@ static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
 static void ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
-										  Var *distributionColumn);
+										  Var *distributionColumn, uint32 colocationId);
+static void ErrorIfNotSupportedForeignConstraint(Relation relation,
+												 char distributionMethod,
+												 Var *distributionColumn,
+												 uint32 colocationId);
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId);
 static void CreateTruncateTrigger(Oid relationId);
@@ -270,7 +279,8 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 		}
 	}
 
-	ErrorIfNotSupportedConstraint(relation, distributionMethod, distributionColumn);
+	ErrorIfNotSupportedConstraint(relation, distributionMethod, distributionColumn,
+								  colocationId);
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId);
@@ -305,7 +315,7 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
  */
 static void
 ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
-							  Var *distributionColumn)
+							  Var *distributionColumn, uint32 colocationId)
 {
 	char *relationName = RelationGetRelationName(relation);
 	List *indexOidList = RelationGetIndexList(relation);
@@ -387,6 +397,186 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 
 		index_close(indexDesc, NoLock);
 	}
+
+	/* we also perform check for foreign constraints */
+	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
+										 colocationId);
+}
+
+
+/*
+ * ErrorIfNotSupportedForeignConstraint runs checks related to foreign constraints and
+ * errors out if it is not possible to create one of the foreign constraint in distributed
+ * environment.
+ *
+ * To support foreign constraints, we require that;
+ * - Referencing and referenced tables are hash distributed.
+ * - Referencing and referenced tables are co-located.
+ * - Foreign constraint is defined over distribution column.
+ * - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *   are not used.
+ * - Replication factors of referencing and referenced table are 1.
+ */
+static void
+ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
+									 Var *distributionColumn, uint32 colocationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+
+	Oid referencedTableId = InvalidOid;
+	uint32 referencedTableColocationId = INVALID_COLOCATION_ID;
+	Var *referencedTablePartitionColumn = NULL;
+
+	Datum referencingColumnsDatum;
+	Datum *referencingColumnArray;
+	int referencingColumnCount = 0;
+	Datum referencedColumnsDatum;
+	Datum *referencedColumnArray;
+	int referencedColumnCount = 0;
+	bool isNull = false;
+	int attrIdx = 0;
+	bool foreignConstraintOnPartitionColumn = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relation->rd_id);
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		/*
+		 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+		 * not want to set partition column to NULL or default value.
+		 */
+		if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+			constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("SET NULL or SET DEFAULT is not supported"
+									  " in ON DELETE operation.")));
+		}
+
+		/*
+		 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+		 * Because we do not want to set partition column to NULL or default value. Also
+		 * cascading update operation would require re-partitioning. Updating partition
+		 * column value is not allowed anyway even outside of foreign key concept.
+		 */
+		if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+			constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+			constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("SET NULL, SET DEFAULT or CASCADE is not"
+									  " supported in ON UPDATE operation.")));
+		}
+
+		/* to enforce foreign constraints, tables must be co-located */
+		referencedTableId = constraintForm->confrelid;
+
+		/* check that the relation is not already distributed */
+		if (!IsDistributedTable(referencedTableId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Referenced table must be a distributed table.")));
+		}
+
+
+		referencedTableColocationId = TableColocationId(referencedTableId);
+		if (relation->rd_id != referencedTableId &&
+			(colocationId == INVALID_COLOCATION_ID ||
+			 colocationId != referencedTableColocationId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Foreign key constraint can only be created"
+									  " on co-located tables.")));
+		}
+
+		/*
+		 * Partition column must exist in both referencing and referenced side of the
+		 * foreign key constraint. They also must be in same ordinal.
+		 */
+		referencedTablePartitionColumn = PartitionKey(referencedTableId);
+
+		/*
+		 * Column attributes are not available in Form_pg_constraint, therefore we need
+		 * to find them in the system catalog. After finding them, we iterate over column
+		 * attributes together because partition column must be at the same place in both
+		 * referencing and referenced side of the foreign key constraint
+		 */
+		referencingColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
+												  Anum_pg_constraint_conkey, &isNull);
+		referencedColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
+												 Anum_pg_constraint_confkey, &isNull);
+
+		deconstruct_array(DatumGetArrayTypeP(referencingColumnsDatum), INT2OID, 2, true,
+						  's', &referencingColumnArray, NULL, &referencingColumnCount);
+		deconstruct_array(DatumGetArrayTypeP(referencedColumnsDatum), INT2OID, 2, true,
+						  's', &referencedColumnArray, NULL, &referencedColumnCount);
+
+		Assert(referencingColumnCount == referencedColumnCount);
+
+		for (attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
+		{
+			AttrNumber referencingAttrNo = DatumGetInt16(referencingColumnArray[attrIdx]);
+			AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
+
+			if (distributionColumn->varattno == referencingAttrNo &&
+				referencedTablePartitionColumn->varattno == referencedAttrNo)
+			{
+				foreignConstraintOnPartitionColumn = true;
+			}
+		}
+
+		if (!foreignConstraintOnPartitionColumn)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Partition column must exist both "
+									  "referencing and referenced side of the "
+									  "foreign constraint statement and it must "
+									  "be in the same ordinal in both sides.")));
+		}
+
+		/*
+		 * We do not allow to create foreign constraints if shard replication factor is
+		 * greater than 1. Because in our current design, multiple replicas may cause
+		 * locking problems and inconsistent shard contents.
+		 */
+		if (ShardReplicationFactor > 1 || !SingleReplicatedTable(referencedTableId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Citus cannot create foreign key constrains"
+									  " if replication factor is greater than 1. "
+									  "Contact Citus Data for alternative "
+									  "deployment options.")));
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
 }
 
 

@@ -260,3 +260,16 @@ ColocatedTableId(Oid colocationId)
 
 	return colocatedTableId;
 }
+
+
+/*
+ * ColocatedShardIdInRelation returns shardId of the shard from given relation, so that
+ * returned shard is co-located with given shard.
+ */
+uint64
+ColocatedShardIdInRelation(Oid relationId, int shardIndex)
+{
+	DistTableCacheEntry *tableCacheEntry = DistributedTableCacheEntry(relationId);
+
+	return tableCacheEntry->sortedShardIntervalArray[shardIndex]->shardId;
+}

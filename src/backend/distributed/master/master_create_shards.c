@@ -34,6 +34,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
@@ -229,6 +230,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	List *existingShardList = NIL;
 	List *sourceShardIntervalList = NIL;
 	List *targetTableDDLEvents = NIL;
+	List *targetTableForeignConstraintCommands = NIL;
 	ListCell *sourceShardCell = NULL;
 
 	/* make sure that tables are hash partitioned */
@@ -265,6 +267,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 
 	targetTableRelationOwner = TableOwner(targetRelationId);
 	targetTableDDLEvents = GetTableDDLEvents(targetRelationId);
+	targetTableForeignConstraintCommands = GetTableForeignConstraintCommands(
+		targetRelationId);
 	targetShardStorageType = ShardStorageType(targetRelationId);
 
 	foreach(sourceShardCell, sourceShardIntervalList)
@@ -273,6 +277,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 newShardId = GetNextShardId();
 		ListCell *sourceShardPlacementCell = NULL;
+		int sourceShardIndex = FindShardIntervalIndex(sourceShardInterval);
 
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
@@ -288,9 +293,10 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 			int32 sourceNodePort = sourcePlacement->nodePort;
 
 			bool created = WorkerCreateShard(targetRelationId, sourceNodeName,
-											 sourceNodePort, newShardId,
+											 sourceNodePort, sourceShardIndex, newShardId,
 											 targetTableRelationOwner,
-											 targetTableDDLEvents);
+											 targetTableDDLEvents,
+											 targetTableForeignConstraintCommands);
 			if (created)
 			{
 				const RelayFileState shardState = FILE_FINALIZED;
