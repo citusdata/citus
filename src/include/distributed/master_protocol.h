@@ -58,6 +58,9 @@
 	"SELECT worker_apply_shard_ddl_command (" UINT64_FORMAT ", %s)"
 #define WORKER_APPEND_TABLE_TO_SHARD \
 	"SELECT worker_append_table_to_shard (%s, %s, %s, %u)"
+#define WORKER_APPLY_INTER_SHARD_DDL_COMMAND \
+	"SELECT worker_apply_inter_shard_ddl_command (" UINT64_FORMAT ", %s, " UINT64_FORMAT \
+	", %s, %s)"
 #define SHARD_RANGE_QUERY "SELECT min(%s), max(%s) FROM %s"
 #define SHARD_TABLE_SIZE_QUERY "SELECT pg_table_size(%s)"
 #define SHARD_CSTORE_TABLE_SIZE_QUERY "SELECT cstore_table_size(%s)"
@@ -93,6 +96,7 @@ extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
+extern List * GetTableForeignConstraintCommands(Oid relationId);
 extern char ShardStorageType(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);
 extern void CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
@@ -103,7 +107,9 @@ extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shard
 											 int32 replicationFactor);
 extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId);
 extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
-							  uint64 shardId, char *newShardOwner, List *ddlCommandList);
+							  int shardIndex, uint64 shardId, char *newShardOwner,
+							  List *ddlCommandList, List *foreignConstraintCommadList);
+extern Oid ForeignConstraintGetReferencedTableId(char *queryString);
 
 /* Function declarations for generating metadata for shard and placement creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);

@@ -74,6 +74,7 @@ static bool check_log_statement(List *stmt_list);
 PG_FUNCTION_INFO_V1(worker_fetch_partition_file);
 PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
+PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
@@ -413,6 +414,36 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
 	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
 				   NULL, None_Receiver, NULL);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_apply_inter_shard_ddl_command extends table, index, or constraint names in
+ * the given DDL command. The function then applies this extended DDL command
+ * against the database.
+ */
+Datum
+worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
+{
+	uint64 leftShardId = PG_GETARG_INT64(0);
+	text *leftShardSchemaNameText = PG_GETARG_TEXT_P(1);
+	uint64 rightShardId = PG_GETARG_INT64(2);
+	text *rightShardSchemaNameText = PG_GETARG_TEXT_P(3);
+	text *ddlCommandText = PG_GETARG_TEXT_P(4);
+
+	char *leftShardSchemaName = text_to_cstring(leftShardSchemaNameText);
+	char *rightShardSchemaName = text_to_cstring(rightShardSchemaNameText);
+	const char *ddlCommand = text_to_cstring(ddlCommandText);
+	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
+
+	/* extend names in ddl command and apply extended command */
+	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
+											   leftShardSchemaName, rightShardId,
+											   rightShardSchemaName);
+	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
+				   None_Receiver, NULL);
 
 	PG_RETURN_VOID();
 }

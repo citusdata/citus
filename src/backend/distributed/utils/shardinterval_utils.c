@@ -256,3 +256,30 @@ SearchCachedShardInterval(Datum partitionColumnValue, ShardInterval **shardInter
 
 	return NULL;
 }
+
+
+/*
+ * SingleReplicatedTable checks whether all shards of a distributed table, do not have
+ * more than one replica. If even one shard has more than one replica, this function
+ * returns false, otherwise it returns true.
+ */
+bool
+SingleReplicatedTable(Oid relationId)
+{
+	List *shardIntervalList = LoadShardList(relationId);
+	ListCell *shardIntervalCell = NULL;
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		uint64 *shardIdPointer = (uint64 *) lfirst(shardIntervalCell);
+		uint64 shardId = (*shardIdPointer);
+		List *shardPlacementList = ShardPlacementList(shardId);
+
+		if (shardPlacementList->length > 1)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}

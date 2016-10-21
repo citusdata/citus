@@ -20,7 +20,10 @@
 
 #include "access/htup_details.h"
 #include "access/xact.h"
+#include "commands/tablecmds.h"
 #include "catalog/indexing.h"
+#include "catalog/namespace.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -384,9 +387,26 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 		WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList, workerNodeIndex);
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
+		List *foreignConstraintCommandList = GetTableForeignConstraintCommands(
+			relationId);
+		int shardIndex = -1; /* not used in this code path */
+		bool created = false;
 
-		bool created = WorkerCreateShard(relationId, nodeName, nodePort, shardId,
-										 newPlacementOwner, ddlEventList);
+		/*
+		 * In this code path, we create not co-located tables. Therefore we should error
+		 * out if there is a foreign key constraint specified.
+		 */
+		if (foreignConstraintCommandList != NIL)
+		{
+			ereport(ERROR, (errmsg("could only create distributed table"),
+							errdetail("Table contains foreign key constraints. Foreign "
+									  "key constraints only supported with co-located "
+									  "tables")));
+		}
+
+		created = WorkerCreateShard(relationId, nodeName, nodePort, shardIndex,
+									shardId, newPlacementOwner, ddlEventList,
+									foreignConstraintCommandList);
 		if (created)
 		{
 			const RelayFileState shardState = FILE_FINALIZED;
@@ -424,12 +444,15 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
  */
 bool
 WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
-				  uint64 shardId, char *newShardOwner, List *ddlCommandList)
+				  int shardIndex, uint64 shardId, char *newShardOwner,
+				  List *ddlCommandList, List *foreignConstraintCommandList)
 {
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
+	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	bool shardCreated = true;
 	ListCell *ddlCommandCell = NULL;
+	ListCell *foreignConstraintCommandCell = NULL;
 
 	foreach(ddlCommandCell, ddlCommandList)
 	{
@@ -440,8 +463,6 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 
 		if (strcmp(schemaName, "public") != 0)
 		{
-			char *escapedSchemaName = quote_literal_cstr(schemaName);
-
 			appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
 							 escapedSchemaName, escapedDDLCommand);
 		}
@@ -454,6 +475,47 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 
 		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
 											 applyDDLCommand);
+		if (queryResultList == NIL)
+		{
+			shardCreated = false;
+			break;
+		}
+	}
+
+	foreach(foreignConstraintCommandCell, foreignConstraintCommandList)
+	{
+		char *command = (char *) lfirst(foreignConstraintCommandCell);
+		char *escapedCommand = quote_literal_cstr(command);
+
+		Oid referencedRelationId = InvalidOid;
+		Oid referencedSchemaId = InvalidOid;
+		char *referencedSchemaName = NULL;
+		char *escapedReferencedSchemaName = NULL;
+		uint64 referencedShardId = INVALID_SHARD_ID;
+
+		List *queryResultList = NIL;
+		StringInfo applyForeignConstraintCommand = makeStringInfo();
+
+		/* we need to parse the foreign constraint command to get referencing table id */
+		referencedRelationId = ForeignConstraintGetReferencedTableId(command);
+		if (referencedRelationId == InvalidOid)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Referenced relation cannot be found.")));
+		}
+
+		referencedSchemaId = get_rel_namespace(referencedRelationId);
+		referencedSchemaName = get_namespace_name(referencedSchemaId);
+		escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
+		referencedShardId = ColocatedShardIdInRelation(referencedRelationId, shardIndex);
+
+		appendStringInfo(applyForeignConstraintCommand,
+						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardId, escapedSchemaName,
+						 referencedShardId, escapedReferencedSchemaName, escapedCommand);
+
+		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
+											 applyForeignConstraintCommand);
 		if (queryResultList == NIL)
 		{
 			shardCreated = false;
@@ -681,4 +743,32 @@ WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardNam
 	MultiClientDisconnect(connectionId);
 
 	return true;
+}
+
+
+/*
+ * ForeignConstraintGetReferencedTableId parses given foreign constraint query and
+ * extracts referenced table id from it.
+ */
+Oid
+ForeignConstraintGetReferencedTableId(char *queryString)
+{
+	Node *queryNode = ParseTreeNode(queryString);
+	AlterTableStmt *foreignConstraintStmt = (AlterTableStmt *) queryNode;
+	AlterTableCmd *command = (AlterTableCmd *) linitial(foreignConstraintStmt->cmds);
+
+	if (command->subtype == AT_AddConstraint)
+	{
+		Constraint *constraint = (Constraint *) command->def;
+		if (constraint->contype == CONSTR_FOREIGN)
+		{
+			RangeVar *referencedTable = constraint->pktable;
+			LOCKMODE lockmode = AlterTableGetLockLevel(foreignConstraintStmt->cmds);
+
+			return RangeVarGetRelid(referencedTable, lockmode,
+									foreignConstraintStmt->missing_ok);
+		}
+	}
+
+	return InvalidOid;
 }
