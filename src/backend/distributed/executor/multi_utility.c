@@ -29,6 +29,7 @@
 #include "catalog/pg_class.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
+#include "commands/prepare.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
@@ -181,23 +182,6 @@ multi_ProcessUtility(Node *parsetree,
 		return;
 	}
 
-	if (IsA(parsetree, ExplainStmt))
-	{
-		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
-
-		if (IsA(explainStmt->query, Query))
-		{
-			Query *query = (Query *) explainStmt->query;
-
-			if (query->commandType == CMD_UTILITY &&
-				IsA(query->utilityStmt, ExecuteStmt))
-			{
-				/* Due to a postgres limitation these cause crashes. Skip them for now */
-				ereport(ERROR, (errmsg("Citus does not support EXPLAIN EXECUTE")));
-			}
-		}
-	}
-
 	if (IsA(parsetree, CopyStmt))
 	{
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
@@ -314,6 +298,39 @@ multi_ProcessUtility(Node *parsetree,
 								" nodes"),
 						 errhint("Connect to worker nodes directly to manually create all"
 								 " necessary users and roles.")));
+	}
+
+	/* due to an explain-hook limitation we have to special-case EXPLAIN EXECUTE */
+	if (IsA(parsetree, ExplainStmt) && IsA(((ExplainStmt*) parsetree)->query, Query))
+	{
+		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
+		Query *query = (Query *) explainStmt->query;
+
+		if (query->commandType == CMD_UTILITY &&
+			IsA(query->utilityStmt, ExecuteStmt))
+		{
+			ListCell *queryCell;
+			ExecuteStmt *execstmt = (ExecuteStmt *) query->utilityStmt;
+			PreparedStatement *entry = FetchPreparedStatement(execstmt->name, true);
+
+			/* copied from ExplainExecuteQuery, will never trigger if you used PREPARE */
+			if (!entry->plansource->fixed_result)
+			{
+				ereport(ERROR, (errmsg("EXPLAIN EXECUTE does not support variable-result"
+									   " cached plans")));
+			}
+
+			foreach(queryCell, entry->plansource->query_list)
+			{
+				Query *query = (Query *) lfirst(queryCell);
+				explainStmt->query = (Node *) query;
+
+				standard_ProcessUtility(parsetree, query_string, context,
+									params, dest, completionTag);
+			}
+
+			return;
+		}
 	}
 
 	if (commandMustRunAsOwner)
