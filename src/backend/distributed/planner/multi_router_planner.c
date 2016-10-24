@@ -826,7 +826,7 @@ static void
 AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 {
 	Param *equalityParameter = makeNode(Param);
-	Node *uninstantiatedEqualityQual = NULL;
+	OpExpr *uninstantiatedEqualityQual = NULL;
 	Oid partitionColumnCollid = InvalidOid;
 	Oid lessThanOperator = InvalidOid;
 	Oid equalsOperator = InvalidOid;
@@ -851,22 +851,27 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 	equalityParameter->location = -1;
 
 	/* create an equality on the on the target partition column */
-	uninstantiatedEqualityQual =
-		(Node *) make_opclause(equalsOperator, InvalidOid, false,
-							   (Expr *) partitionColumn,
-							   (Expr *) equalityParameter,
-							   partitionColumnCollid,
-							   partitionColumnCollid);
+	uninstantiatedEqualityQual = (OpExpr *) make_opclause(equalsOperator, InvalidOid,
+														  false,
+														  (Expr *) partitionColumn,
+														  (Expr *) equalityParameter,
+														  partitionColumnCollid,
+														  partitionColumnCollid);
+
+	/* update the operators with correct operator numbers and function ids */
+	uninstantiatedEqualityQual->opfuncid = get_opcode(uninstantiatedEqualityQual->opno);
+	uninstantiatedEqualityQual->opresulttype =
+		get_func_rettype(uninstantiatedEqualityQual->opfuncid);
 
 	/* add restriction on partition column */
 	if (query->jointree->quals == NULL)
 	{
-		query->jointree->quals = uninstantiatedEqualityQual;
+		query->jointree->quals = (Node *) uninstantiatedEqualityQual;
 	}
 	else
 	{
 		query->jointree->quals = make_and_qual(query->jointree->quals,
-											   uninstantiatedEqualityQual);
+											   (Node *) uninstantiatedEqualityQual);
 	}
 }
 
