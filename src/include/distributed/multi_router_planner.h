@@ -21,10 +21,6 @@
 #include "nodes/parsenodes.h"
 
 
-/* values used by jobs and tasks which do not require identifiers */
-#define INVALID_JOB_ID 0
-#define INVALID_TASK_ID 0
-
 /* reserved alias name for UPSERTs */
 #define UPSERT_ALIAS "citus_table_alias"
 

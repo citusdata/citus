@@ -37,6 +37,8 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_planner.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
@@ -120,9 +122,7 @@ static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 										 bool isTopLevel);
 static void ShowNoticeIfNotUsing2PC(void);
-static bool ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString);
-static void ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
-											ShardConnections *shardConnections);
+static List * DDLTaskList(Oid relationId, const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
@@ -1286,7 +1286,7 @@ static void
 ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 							 bool isTopLevel)
 {
-	bool executionOK = false;
+	List *taskList = NIL;
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
@@ -1298,15 +1298,9 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 
 	ShowNoticeIfNotUsing2PC();
 
-	executionOK = ExecuteCommandOnWorkerShards(relationId, ddlCommandString);
+	taskList = DDLTaskList(relationId, ddlCommandString);
 
-	/* if command could not be executed on any finalized shard placement, error out */
-	if (!executionOK)
-	{
-		ereport(ERROR, (errmsg("could not execute DDL command on worker node shards")));
-	}
-
-	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
+	ExecuteModifyTasksWithoutResults(taskList);
 }
 
 
@@ -1330,112 +1324,48 @@ ShowNoticeIfNotUsing2PC(void)
 
 
 /*
- * ExecuteCommandOnWorkerShards executes a given command on all the finalized
- * shard placements of the given table within a distributed transaction. The
- * value of citus.multi_shard_commit_protocol is set to '2pc' by the caller
- * ExecuteDistributedDDLCommand function so that two phase commit protocol is used.
- *
- * ExecuteCommandOnWorkerShards opens an individual connection for each of the
- * shard placement. After all connections are opened, a BEGIN command followed by
- * a proper "SELECT worker_apply_shard_ddl_command(<shardId>, <DDL Command>)" is
- * sent to all open connections in a serial manner.
- *
- * The opened transactions are handled by the CompleteShardPlacementTransactions
- * function.
- *
- * Note: There are certain errors which would occur on few nodes and not on the
- * others. For example, adding a column with a type which exists on some nodes
- * and not on the others.
- *
- * Note: The execution will be blocked if a prepared transaction from previous
- * executions exist on the workers. In this case, those prepared transactions should
- * be removed by either COMMIT PREPARED or ROLLBACK PREPARED.
+ * DDLCommandList builds a list of tasks to execute a DDL command on a
+ * given list of shards.
  */
-static bool
-ExecuteCommandOnWorkerShards(Oid relationId, const char *commandString)
+static List *
+DDLTaskList(Oid relationId, const char *commandString)
 {
+	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
-	char *tableOwner = TableOwner(relationId);
 	ListCell *shardIntervalCell = NULL;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
+	char *escapedSchemaName = quote_literal_cstr(schemaName);
+	char *escapedCommandString = quote_literal_cstr(commandString);
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
 
-	LockShardListResources(shardIntervalList, ShareLock);
-	OpenTransactionsToAllShardPlacements(shardIntervalList, tableOwner);
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
 		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
 		uint64 shardId = shardInterval->shardId;
-		ShardConnections *shardConnections = NULL;
-		bool shardConnectionsFound = false;
-		char *escapedSchemaName = quote_literal_cstr(schemaName);
-		char *escapedCommandString = quote_literal_cstr(commandString);
 		StringInfo applyCommand = makeStringInfo();
+		Task *task = NULL;
 
-		shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
-		Assert(shardConnectionsFound);
-
-		/* build the shard ddl command */
 		appendStringInfo(applyCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
 						 escapedSchemaName, escapedCommandString);
 
-		ExecuteCommandOnShardPlacements(applyCommand, shardId, shardConnections);
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = SQL_TASK;
+		task->queryString = applyCommand->data;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 
-		FreeStringInfo(applyCommand);
+		taskList = lappend(taskList, task);
 	}
 
-	/* check for cancellation one last time before returning */
-	CHECK_FOR_INTERRUPTS();
-
-	return true;
-}
-
-
-/*
- * ExecuteCommandOnShardPlacements executes the given ddl command on the
- * placements of the given shard, using the given shard connections.
- */
-static void
-ExecuteCommandOnShardPlacements(StringInfo applyCommand, uint64 shardId,
-								ShardConnections *shardConnections)
-{
-	List *connectionList = shardConnections->connectionList;
-	ListCell *connectionCell = NULL;
-
-	Assert(connectionList != NIL);
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-		PGresult *result = NULL;
-
-		/* send the query */
-		result = PQexec(connection, applyCommand->data);
-		if (PQresultStatus(result) != PGRES_TUPLES_OK)
-		{
-			WarnRemoteError(connection, result);
-			ereport(ERROR, (errmsg("could not execute DDL command on worker "
-								   "node shards")));
-		}
-		else
-		{
-			char *workerName = ConnectionGetOptionValue(connection, "host");
-			char *workerPort = ConnectionGetOptionValue(connection, "port");
-
-			ereport(DEBUG2, (errmsg("applied command on shard " UINT64_FORMAT
-									" on node %s:%s", shardId, workerName,
-									workerPort)));
-		}
-
-		PQclear(result);
-
-		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
-
-		CHECK_FOR_INTERRUPTS();
-	}
+	return taskList;
 }
 
 
