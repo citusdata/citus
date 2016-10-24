@@ -388,7 +388,6 @@ DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300010
 DEBUG:  sent COMMIT over connection 13300010
 -- group by column not exists on the SELECT target list
--- TODO: there is a bug on RETURNING 
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id) 
 SELECT
    sum(value_3), count(value_4), sum(value_1), user_id
@@ -836,7 +835,6 @@ DEBUG:  sent COMMIT over connection 13300010
        7 |            
 (1 row)
 
--- TODO:: add hll and date_trunc 
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
    user_id, sum(value_1 + value_2)
@@ -912,7 +910,6 @@ DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300010
 DEBUG:  sent COMMIT over connection 13300010
--- TODO: UUIDs
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -943,6 +940,105 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300003 raw_events_first WHERE (((raw_events_first.user_id = reference_table.user_id) AND (hashint4(raw_events_first.user_id) >= 1073741824)) AND (hashint4(raw_events_first.user_id) <= 2147483647)) GROUP BY raw_events_first.user_id
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300010
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+truncate agg_events;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- DISTINCT clause
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (user_id) value_1, user_id
+  FROM
+    raw_events_first;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300008
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300011
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300009
+DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300010
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+truncate agg_events;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- we could even support DISTINCT ON non_partition_column
+-- but which becomes a non-sense query
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (value_1) value_1, user_id
+  FROM
+    raw_events_first;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (value_1) user_id, value_1 FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (value_1) user_id, value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (value_1) user_id, value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (value_1) user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand

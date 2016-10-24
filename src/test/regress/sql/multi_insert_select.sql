@@ -139,7 +139,6 @@ GROUP BY
    user_id;
 
 -- group by column not exists on the SELECT target list
--- TODO: there is a bug on RETURNING 
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id) 
 SELECT
    sum(value_3), count(value_4), sum(value_1), user_id
@@ -278,8 +277,6 @@ DO UPDATE
 RETURNING user_id, value_1_agg;
 
 
-
--- TODO:: add hll and date_trunc 
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
    user_id, sum(value_1 + value_2)
@@ -293,8 +290,6 @@ SELECT
 FROM
    raw_events_first GROUP BY user_id;
 
--- TODO: UUIDs
-
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -306,6 +301,31 @@ WHERE
   raw_events_first.user_id = reference_table.user_id
 GROUP BY
   raw_events_first.user_id;
+
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+truncate agg_events;
+SET client_min_messages TO DEBUG4;
+
+-- DISTINCT clause
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (user_id) value_1, user_id
+  FROM
+    raw_events_first;
+
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+truncate agg_events;
+SET client_min_messages TO DEBUG4;
+
+-- we could even support DISTINCT ON non_partition_column
+-- but which becomes a non-sense query
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (value_1) value_1, user_id
+  FROM
+    raw_events_first;
 
 -- We do not support some CTEs
 WITH fist_table_agg AS
