@@ -24,6 +24,7 @@
 #include <poll.h>
 
 #include "commands/dbcommands.h"
+#include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -332,11 +333,11 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			{
 				if (TimestampDifferenceExceeds(taskExecution->connectStartTime,
 											   GetCurrentTimestamp(),
-											   REMOTE_NODE_CONNECT_TIMEOUT))
+											   NodeConnectionTimeout))
 				{
 					ereport(WARNING, (errmsg("could not establish asynchronous "
 											 "connection after %u ms",
-											 REMOTE_NODE_CONNECT_TIMEOUT)));
+											 NodeConnectionTimeout)));
 
 					taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
 				}
