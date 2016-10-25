@@ -391,18 +391,6 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 		int shardIndex = -1; /* not used in this code path */
 		bool created = false;
 
-		/*
-		 * In this code path, we create not co-located tables. Therefore we should error
-		 * out if there is a foreign key constraint specified.
-		 */
-		if (foreignConstraintCommandList != NIL)
-		{
-			ereport(ERROR, (errmsg("could only create distributed table"),
-							errdetail("Table contains foreign key constraints. Foreign "
-									  "key constraints only supported with co-located "
-									  "tables")));
-		}
-
 		created = WorkerCreateShard(relationId, nodeName, nodePort, shardIndex,
 									shardId, newPlacementOwner, ddlEventList,
 									foreignConstraintCommandList);
@@ -507,7 +495,22 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 		referencedSchemaId = get_rel_namespace(referencedRelationId);
 		referencedSchemaName = get_namespace_name(referencedSchemaId);
 		escapedReferencedSchemaName = quote_literal_cstr(referencedSchemaName);
-		referencedShardId = ColocatedShardIdInRelation(referencedRelationId, shardIndex);
+
+		/*
+		 * In case of self referencing shards, relation itself might not be distributed
+		 * already. Therefore we cannot use ColocatedShardIdInRelation which assumes
+		 * given relation is distributed. Besides, since we know foreign key references
+		 * itself, referencedShardId is actual shardId anyway.
+		 */
+		if (relationId == referencedRelationId)
+		{
+			referencedShardId = shardId;
+		}
+		else
+		{
+			referencedShardId = ColocatedShardIdInRelation(referencedRelationId,
+														   shardIndex);
+		}
 
 		appendStringInfo(applyForeignConstraintCommand,
 						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, shardId, escapedSchemaName,
