@@ -485,34 +485,48 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 									  " supported in ON UPDATE operation.")));
 		}
 
-		/* to enforce foreign constraints, tables must be co-located */
 		referencedTableId = constraintForm->confrelid;
 
-		/* check that the relation is not already distributed */
-		if (!IsDistributedTable(referencedTableId))
-		{
-			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Referenced table must be a distributed table.")));
-		}
-
-
-		referencedTableColocationId = TableColocationId(referencedTableId);
-		if (relation->rd_id != referencedTableId &&
-			(colocationId == INVALID_COLOCATION_ID ||
-			 colocationId != referencedTableColocationId))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot create foreign key constraint"),
-							errdetail("Foreign key constraint can only be created"
-									  " on co-located tables.")));
-		}
-
 		/*
-		 * Partition column must exist in both referencing and referenced side of the
-		 * foreign key constraint. They also must be in same ordinal.
+		 * Some checks are not meaningful if foreign key references the table itself.
+		 * Therefore we will skip those checks.
 		 */
-		referencedTablePartitionColumn = PartitionKey(referencedTableId);
+		if (referencedTableId != relation->rd_id)
+		{
+			if (!IsDistributedTable(referencedTableId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("Referenced table must be a distributed "
+										  "table.")));
+			}
+
+			/* to enforce foreign constraints, tables must be co-located */
+			referencedTableColocationId = TableColocationId(referencedTableId);
+			if (relation->rd_id != referencedTableId &&
+				(colocationId == INVALID_COLOCATION_ID ||
+				 colocationId != referencedTableColocationId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("Foreign key constraint can only be created"
+										  " on co-located tables.")));
+			}
+
+			/*
+			 * Partition column must exist in both referencing and referenced side of the
+			 * foreign key constraint. They also must be in same ordinal.
+			 */
+			referencedTablePartitionColumn = PartitionKey(referencedTableId);
+		}
+		else
+		{
+			/*
+			 * Partition column must exist in both referencing and referenced side of the
+			 * foreign key constraint. They also must be in same ordinal.
+			 */
+			referencedTablePartitionColumn = distributionColumn;
+		}
 
 		/*
 		 * Column attributes are not available in Form_pg_constraint, therefore we need
@@ -559,7 +573,8 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 		 * greater than 1. Because in our current design, multiple replicas may cause
 		 * locking problems and inconsistent shard contents.
 		 */
-		if (ShardReplicationFactor > 1 || !SingleReplicatedTable(referencedTableId))
+		if (ShardReplicationFactor > 1 || (referencedTableId != relation->rd_id &&
+										   !SingleReplicatedTable(referencedTableId)))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),

@@ -31,6 +31,7 @@
 #include "commands/tablecmds.h"
 #include "commands/prepare.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/master_metadata_utility.h"
@@ -124,8 +125,13 @@ static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 										 bool isTopLevel);
+static void ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
+												const char *ddlCommandString,
+												bool isTopLevel);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
+static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
+								 const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
@@ -755,22 +761,82 @@ static Node *
 ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand,
 					  bool isTopLevel)
 {
-	/* first check whether a distributed relation is affected */
-	if (alterTableStatement->relation != NULL)
-	{
-		LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-		Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
-		if (OidIsValid(relationId))
-		{
-			bool isDistributedRelation = IsDistributedTable(relationId);
-			if (isDistributedRelation)
-			{
-				ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+	LOCKMODE lockmode = 0;
+	Oid leftRelationId = InvalidOid;
+	Oid rightRelationId = InvalidOid;
+	bool isDistributedRelation = false;
+	List *commandList = NIL;
+	ListCell *commandCell = NULL;
 
-				/* if it is supported, go ahead and execute the command */
-				ExecuteDistributedDDLCommand(relationId, alterTableCommand, isTopLevel);
+	/* first check whether a distributed relation is affected */
+	if (alterTableStatement->relation == NULL)
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(leftRelationId))
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	isDistributedRelation = IsDistributedTable(leftRelationId);
+	if (!isDistributedRelation)
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+
+	/*
+	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
+	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
+	 * foreign constraint in master. Validity will be checked in workers anyway.
+	 */
+	commandList = alterTableStatement->cmds;
+
+	foreach(commandCell, commandList)
+	{
+		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+		AlterTableType alterTableType = command->subtype;
+
+		if (alterTableType == AT_AddConstraint)
+		{
+			Constraint *constraint = (Constraint *) command->def;
+			if (constraint->contype == CONSTR_FOREIGN)
+			{
+				/*
+				 * We only support ALTER TABLE ADD CONSTRAINT ... FOREIGN KEY, if it is
+				 * only subcommand of ALTER TABLE. It was already checked in
+				 * ErrorIfUnsupportedAlterTableStmt.
+				 */
+				Assert(commandList->length <= 1);
+
+				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
+												   alterTableStatement->missing_ok);
+
+				/*
+				 * Foreign constraint validations will be done in workers. If we do not
+				 * set this flag, PostgreSQL tries to do additional checking when we drop
+				 * to standard_ProcessUtility. standard_ProcessUtility tries to open new
+				 * connections to workers to verify foreign constraints while original
+				 * transaction is in process, which causes deadlock.
+				 */
+				constraint->skip_validation = true;
 			}
 		}
+	}
+
+	if (rightRelationId)
+	{
+		ExecuteDistributedForeignKeyCommand(leftRelationId, rightRelationId,
+											alterTableCommand, isTopLevel);
+	}
+	else
+	{
+		ExecuteDistributedDDLCommand(leftRelationId, alterTableCommand, isTopLevel);
 	}
 
 	return (Node *) alterTableStatement;
@@ -932,6 +998,7 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
  * ALTER TABLE ALTER COLUMN SET DATA TYPE
  * ALTER TABLE SET|DROP NOT NULL
  * ALTER TABLE SET|DROP DEFAULT
+ * ALTER TABLE ADD|DROP CONSTRAINT FOREIGN
  */
 static void
 ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
@@ -1016,13 +1083,185 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+			case AT_AddConstraint:
+			{
+				Constraint *constraint = (Constraint *) command->def;
+				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+				Oid referencingTableId = InvalidOid;
+				Oid referencedTableId = InvalidOid;
+				Var *referencingTablePartitionColumn = NULL;
+				Var *referencedTablePartitionColumn = NULL;
+				ListCell *referencingTableAttr = NULL;
+				ListCell *referencedTableAttr = NULL;
+				bool foreignConstraintOnPartitionColumn = false;
+
+				/* we only allow adding foreign constraints with ALTER TABLE */
+				if (constraint->contype != CONSTR_FOREIGN)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create constraint"),
+									errdetail("Citus cannot execute ADD CONSTRAINT "
+											  "command other than ADD CONSTRAINT FOREIGN "
+											  "KEY.")));
+				}
+
+				/* we only allow foreign constraints if they are only subcommand */
+				if (commandList->length > 1)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Citus cannot execute ADD CONSTRAINT "
+											  "FOREIGN KEY command together with other "
+											  "subcommands."),
+									errhint("You can issue each subcommand separately")));
+				}
+
+				/*
+				 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because
+				 * we do not want to set partition column to NULL or default value.
+				 */
+				if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL ||
+					constraint->fk_del_action == FKCONSTR_ACTION_SETDEFAULT)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("SET NULL or SET DEFAULT is not supported"
+											  " in ON DELETE operation.")));
+				}
+
+				/*
+				 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not
+				 * supported. Because we do not want to set partition column to NULL or
+				 * default value. Also cascading update operation would require
+				 * re-partitioning. Updating partition column value is not allowed anyway
+				 * even outside of foreign key concept.
+				 */
+				if (constraint->fk_upd_action == FKCONSTR_ACTION_SETNULL ||
+					constraint->fk_upd_action == FKCONSTR_ACTION_SETDEFAULT ||
+					constraint->fk_upd_action == FKCONSTR_ACTION_CASCADE)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("SET NULL, SET DEFAULT or CASCADE is not"
+											  " supported in ON UPDATE operation.")));
+				}
+
+				/*
+				 * We will use constraint name in each placement by extending it at
+				 * workers. Therefore we require it to be exist.
+				 */
+				if (constraint->conname == NULL)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Creating foreign constraint without a "
+											  "name on a distributed table is currently "
+											  "not supported.")));
+				}
+
+				/* to enforce foreign constraints, tables must be co-located */
+				referencingTableId = RangeVarGetRelid(alterTableStatement->relation,
+													  lockmode,
+													  alterTableStatement->missing_ok);
+				referencedTableId = RangeVarGetRelid(constraint->pktable, lockmode,
+													 alterTableStatement->missing_ok);
+
+				if (!TablesColocated(referencingTableId, referencedTableId))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Foreign key constraint can only be created"
+											  " on co-located tables.")));
+				}
+
+				/*
+				 * Referencing column's list length should be equal to referenced columns
+				 * list length.
+				 */
+				if (constraint->fk_attrs->length != constraint->pk_attrs->length)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Referencing column list and referenced "
+											  "column list must be in same size.")));
+				}
+
+				/*
+				 * Partition column must exist in both referencing and referenced side
+				 * of the foreign key constraint. They also must be in same ordinal.
+				 */
+				referencingTablePartitionColumn = PartitionKey(referencingTableId);
+				referencedTablePartitionColumn = PartitionKey(referencedTableId);
+
+				/*
+				 * We iterate over fk_attrs and pk_attrs together because partition
+				 * column must be at the same place in both referencing and referenced
+				 * side of the foreign key constraint
+				 */
+				forboth(referencingTableAttr, constraint->fk_attrs,
+						referencedTableAttr, constraint->pk_attrs)
+				{
+					char *referencingAttrName = strVal(lfirst(referencingTableAttr));
+					char *referencedAttrName = strVal(lfirst(referencedTableAttr));
+					AttrNumber referencingAttrNo = get_attnum(referencingTableId,
+															  referencingAttrName);
+					AttrNumber referencedAttrNo = get_attnum(referencedTableId,
+															 referencedAttrName);
+
+					if (referencingTablePartitionColumn->varattno == referencingAttrNo &&
+						referencedTablePartitionColumn->varattno == referencedAttrNo)
+					{
+						foreignConstraintOnPartitionColumn = true;
+					}
+				}
+
+				if (!foreignConstraintOnPartitionColumn)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Partition column must exist both "
+											  "referencing and referenced side of the "
+											  "foreign constraint statement and it must "
+											  "be in the same ordinal in both sides.")));
+				}
+
+				/*
+				 * We do not allow to create foreign constraints if shard replication
+				 * factor is greater than 1. Because in our current design, multiple
+				 * replicas may cause locking problems and inconsistent shard contents.
+				 */
+				if (!SingleReplicatedTable(referencingTableId) ||
+					!SingleReplicatedTable(referencedTableId))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail("Citus Community Edition currently "
+											  "supports foreign key constraints only for "
+											  "\"citus.shard_replication_factor = 1\"."),
+									errhint("Please change "
+											"\"citus.shard_replication_factor to 1\". To "
+											"learn more about using foreign keys with "
+											"other replication factors, please contact"
+											" us at "
+											"https://citusdata.com/about/contact_us.")));
+				}
+
+				break;
+			}
+
+			case AT_DropConstraint:
+			{
+				/* we will no perform any special check for ALTER TABLE DROP CONSTRAINT */
+				break;
+			}
+
 			default:
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("alter table command is currently unsupported"),
 								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL,"
-										  " SET|DROP DEFAULT and TYPE subcommands are"
-										  " supported.")));
+										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT FOREIGN"
+										  " KEY and TYPE subcommands are supported.")));
 			}
 		}
 	}
@@ -1357,6 +1596,40 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 
 
 /*
+ * ExecuteDistributedForeignKeyCommand applies a given foreign key command to the given
+ * distributed table in a distributed transaction. If the multi shard commit protocol is
+ * in its default value of '1pc', then a notice message indicating that '2pc' might be
+ * used for extra safety. In the commit protocol, a BEGIN is sent after connection to
+ * each shard placement and COMMIT/ROLLBACK is handled by
+ * CompleteShardPlacementTransactions function.
+ *
+ * leftRelationId is the relation id of actual distributed table which given foreign key
+ * command is applied. rightRelationId is the relation id of distributed table which
+ * foreign key refers to.
+ */
+static void
+ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
+									const char *ddlCommandString, bool isTopLevel)
+{
+	List *taskList = NIL;
+
+	if (XactModificationLevel == XACT_MODIFICATION_DATA)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("distributed DDL commands must not appear within "
+							   "transaction blocks containing single-shard data "
+							   "modifications")));
+	}
+
+	ShowNoticeIfNotUsing2PC();
+
+	taskList = ForeignKeyTaskList(leftRelationId, rightRelationId, ddlCommandString);
+
+	ExecuteModifyTasksWithoutResults(taskList);
+}
+
+
+/*
  * ShowNoticeIfNotUsing2PC shows a notice message about using 2PC by setting
  * citus.multi_shard_commit_protocol to 2PC. The notice message is shown only once in a
  * session
@@ -1376,7 +1649,7 @@ ShowNoticeIfNotUsing2PC(void)
 
 
 /*
- * DDLCommandList builds a list of tasks to execute a DDL command on a
+ * DDLTaskList builds a list of tasks to execute a DDL command on a
  * given list of shards.
  */
 static List *
@@ -1402,6 +1675,10 @@ DDLTaskList(Oid relationId, const char *commandString)
 		StringInfo applyCommand = makeStringInfo();
 		Task *task = NULL;
 
+		/*
+		 * If rightRelationId is not InvalidOid, instead of worker_apply_shard_ddl_command
+		 * we use worker_apply_inter_shard_ddl_command.
+		 */
 		appendStringInfo(applyCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
 						 escapedSchemaName, escapedCommandString);
 
@@ -1413,6 +1690,69 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->dependedTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * ForeignKeyTaskList builds a list of tasks to execute a foreign key command on a
+ * shards of given list of distributed table.
+ *
+ * leftRelationId is the relation id of actual distributed table which given foreign key
+ * command is applied. rightRelationId is the relation id of distributed table which
+ * foreign key refers to.
+ */
+static List *
+ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
+				   const char *commandString)
+{
+	List *taskList = NIL;
+
+	List *leftShardList = LoadShardIntervalList(leftRelationId);
+	ListCell *leftShardCell = NULL;
+	Oid leftSchemaId = get_rel_namespace(leftRelationId);
+	char *leftSchemaName = get_namespace_name(leftSchemaId);
+	char *escapedLeftSchemaName = quote_literal_cstr(leftSchemaName);
+
+	List *rightShardList = LoadShardIntervalList(rightRelationId);
+	ListCell *rightShardCell = NULL;
+	Oid rightSchemaId = get_rel_namespace(rightRelationId);
+	char *rightSchemaName = get_namespace_name(rightSchemaId);
+	char *escapedRightSchemaName = quote_literal_cstr(rightSchemaName);
+
+	char *escapedCommandString = quote_literal_cstr(commandString);
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(leftShardList, ShareLock);
+
+	forboth(leftShardCell, leftShardList, rightShardCell, rightShardList)
+	{
+		ShardInterval *leftShardInterval = (ShardInterval *) lfirst(leftShardCell);
+		uint64 leftShardId = leftShardInterval->shardId;
+		StringInfo applyCommand = makeStringInfo();
+		Task *task = NULL;
+
+		ShardInterval *rightShardInterval = (ShardInterval *) lfirst(rightShardCell);
+		uint64 rightShardId = rightShardInterval->shardId;
+
+		appendStringInfo(applyCommand, WORKER_APPLY_INTER_SHARD_DDL_COMMAND,
+						 leftShardId, escapedLeftSchemaName, rightShardId,
+						 escapedRightSchemaName, escapedCommandString);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = SQL_TASK;
+		task->queryString = applyCommand->data;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = leftShardId;
+		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);
 
 		taskList = lappend(taskList, task);
 	}
