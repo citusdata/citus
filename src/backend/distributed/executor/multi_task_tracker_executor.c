@@ -22,9 +22,11 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
+#include <math.h>
 
 #include "commands/dbcommands.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -879,13 +881,14 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 			if (pollStatus == CLIENT_CONNECTION_BUSY_READ ||
 				pollStatus == CLIENT_CONNECTION_BUSY_WRITE)
 			{
-				uint32 maxCount = REMOTE_NODE_CONNECT_TIMEOUT / RemoteTaskCheckInterval;
+				uint32 maxCount =
+					ceil(NodeConnectionTimeout * 1.0f / RemoteTaskCheckInterval);
 				uint32 currentCount = taskTracker->connectPollCount;
 				if (currentCount >= maxCount)
 				{
 					ereport(WARNING, (errmsg("could not establish asynchronous "
 											 "connection after %u ms",
-											 REMOTE_NODE_CONNECT_TIMEOUT)));
+											 NodeConnectionTimeout)));
 
 					taskTracker->trackerStatus = TRACKER_CONNECTION_FAILED;
 
@@ -2779,7 +2782,6 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 	uint64 jobId = jobCleanupTask->jobId;
 	List *taskTrackerList = NIL;
 	List *remainingTaskTrackerList = NIL;
-	const long timeoutDuration = 4000; /* milliseconds */
 	const long statusCheckInterval = 10000; /* microseconds */
 	bool timedOut = false;
 	TimestampTz startTime = 0;
@@ -2855,7 +2857,8 @@ TrackerHashCleanupJob(HTAB *taskTrackerHash, Task *jobCleanupTask)
 
 		pg_usleep(statusCheckInterval);
 		currentTime = GetCurrentTimestamp();
-		timedOut = TimestampDifferenceExceeds(startTime, currentTime, timeoutDuration);
+		timedOut = TimestampDifferenceExceeds(startTime, currentTime,
+											  NodeConnectionTimeout);
 
 		foreach(activeTaskTrackerCell, activeTackTrackerList)
 		{

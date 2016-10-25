@@ -20,8 +20,6 @@
 /* maximum (textual) lengths of hostname and port */
 #define MAX_NODE_LENGTH 255 /* includes 0 byte */
 
-#define CLIENT_CONNECT_TIMEOUT_SECONDS_INT 5
-
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
 struct MemoryContextData;
@@ -97,6 +95,9 @@ typedef struct ConnectionHashEntry
 	ConnectionHashKey key;
 	dlist_head *connections;
 } ConnectionHashEntry;
+
+/* maximum duration to wait for connection */
+extern int NodeConnectionTimeout;
 
 /* the hash table */
 extern HTAB *ConnectionHash;

@@ -19,6 +19,7 @@
 #include "commands/explain.h"
 #include "executor/executor.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/connection_management.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
@@ -203,6 +204,16 @@ CreateRequiredDirectories(void)
 static void
 RegisterCitusConfigVariables(void)
 {
+	DefineCustomIntVariable(
+		"citus.node_connection_timeout",
+		gettext_noop("Sets the maximum duration to connect to worker nodes."),
+		NULL,
+		&NodeConnectionTimeout,
+		5000, 10, 60 * 60 * 1000,
+		PGC_USERSET,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
 	/* keeping temporarily for updates from pre-6.0 versions */
 	DefineCustomStringVariable(
 		"citus.worker_list_file",
@@ -422,7 +433,7 @@ RegisterCitusConfigVariables(void)
 					 "progress. This configuration value sets the time "
 					 "interval between two consequent checks."),
 		&RemoteTaskCheckInterval,
-		10, 1, REMOTE_NODE_CONNECT_TIMEOUT,
+		10, 1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
