@@ -442,7 +442,7 @@ SELECT * FROM pg_dist_colocation
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY colocationid;
+    ORDER BY logicalrelid;
  logicalrelid  | colocationid 
 ---------------+--------------
  table1_groupa |            1
@@ -658,4 +658,125 @@ ORDER BY
  table2_groupf                    | 1300055 | t            |    57638 | -2147483648   | 2147483647
  table2_groupf                    | 1300055 | t            |    57637 | -2147483648   | 2147483647
 (56 rows)
+
+-- reset colocation ids to test mark_tables_colocated
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
+DELETE FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000;
+UPDATE pg_dist_partition SET colocationid = 0
+    WHERE colocationid >= 1 AND colocationid < 1000;
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;
+ logicalrelid | colocationid 
+--------------+--------------
+(0 rows)
+
+-- first check failing cases
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupC']);
+ERROR:  cannot colocate tables table1_groupb and table1_groupc
+DETAIL:  Distribution column types don't match for table1_groupb and table1_groupc.
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupD']);
+ERROR:  cannot colocate tables table1_groupb and table1_groupd
+DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupE']);
+ERROR:  cannot colocate tables table1_groupb and table1_groupe
+DETAIL:  Shard 1300027 of table1_groupb and shard 1300047 of table1_groupe are not colocated.
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
+ERROR:  cannot colocate tables table1_groupb and table1_groupf
+DETAIL:  Shard counts don't match for table1_groupb and table1_groupf.
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
+ERROR:  cannot colocate tables table1_groupb and table1_groupd
+DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
+-- check metadata to see failing calls didn't have any side effects
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;
+ logicalrelid | colocationid 
+--------------+--------------
+(0 rows)
+
+-- check successfully cololated tables
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT mark_tables_colocated('table1_groupC', ARRAY['table2_groupC']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT mark_tables_colocated('table1_groupD', ARRAY['table2_groupD']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT mark_tables_colocated('table1_groupE', ARRAY['table2_groupE', 'table3_groupE']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+-- check to colocate with itself
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+-- check metadata to see colocation groups are created successfully
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            2 |          2 |                 1 |                     23
+            3 |          2 |                 2 |                     25
+            4 |          4 |                 2 |                     23
+            5 |          2 |                 2 |                     23
+            6 |          1 |                 2 |                     23
+(5 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;
+ logicalrelid  | colocationid 
+---------------+--------------
+ table1_groupb |            2
+ table2_groupb |            2
+ table1_groupc |            3
+ table2_groupc |            3
+ table1_groupd |            4
+ table2_groupd |            4
+ table1_groupe |            5
+ table2_groupe |            5
+ table3_groupe |            5
+ table1_groupf |            6
+ table2_groupf |            6
+(11 rows)
 

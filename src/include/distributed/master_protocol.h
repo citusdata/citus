@@ -110,6 +110,7 @@ extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 							  int shardIndex, uint64 shardId, char *newShardOwner,
 							  List *ddlCommandList, List *foreignConstraintCommadList);
 extern Oid ForeignConstraintGetReferencedTableId(char *queryString);
+extern void CheckHashPartitionedTable(Oid distributedTableId);
 
 /* Function declarations for generating metadata for shard and placement creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);

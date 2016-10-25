@@ -79,8 +79,6 @@ static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 static void CreateTruncateTrigger(Oid relationId);
 static uint32 ColocationId(int shardCount, int replicationFactor,
 						   Oid distributionColumnType);
-static uint32 CreateColocationGroup(int shardCount, int replicationFactor,
-									Oid distributionColumnType);
 static uint32 GetNextColocationId(void);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 									   int shardCount, int replicationFactor);
@@ -610,7 +608,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_partkey - 1] =
 		CStringGetTextDatum(distributionColumnString);
-	newValues[Anum_pg_dist_partition_colocationid - 1] = Int32GetDatum(colocationId);
+	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
@@ -883,7 +881,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
  * pg_dist_colocation with the given configuration. It also returns the created
  * colocation id.
  */
-static uint32
+uint32
 CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionColumnType)
 {
 	uint32 colocationId = GetNextColocationId();
@@ -967,7 +965,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
 	Var *distributionColumn = NULL;
-	int distributionColumnType = 0;
+	Oid distributionColumnType = 0;
 	uint32 colocationId = INVALID_COLOCATION_ID;
 
 	/* get distribution column type */

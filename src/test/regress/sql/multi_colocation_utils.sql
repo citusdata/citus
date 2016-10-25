@@ -212,7 +212,7 @@ SELECT * FROM pg_dist_colocation
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY colocationid;
+    ORDER BY logicalrelid;
 
 -- check effects of dropping tables
 DROP TABLE table1_groupA;
@@ -295,3 +295,54 @@ ORDER BY
     shardmaxvalue::integer,
     shardid,
     placementid;
+
+-- reset colocation ids to test mark_tables_colocated
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
+DELETE FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000;
+UPDATE pg_dist_partition SET colocationid = 0
+    WHERE colocationid >= 1 AND colocationid < 1000;
+
+-- check metadata
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;
+
+-- first check failing cases
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupC']);
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupD']);
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupE']);
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
+
+-- check metadata to see failing calls didn't have any side effects
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;
+
+-- check successfully cololated tables
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
+SELECT mark_tables_colocated('table1_groupC', ARRAY['table2_groupC']);
+SELECT mark_tables_colocated('table1_groupD', ARRAY['table2_groupD']);
+SELECT mark_tables_colocated('table1_groupE', ARRAY['table2_groupE', 'table3_groupE']);
+SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
+
+-- check to colocate with itself
+SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
+
+-- check metadata to see colocation groups are created successfully
+SELECT * FROM pg_dist_colocation 
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000 
+    ORDER BY logicalrelid;

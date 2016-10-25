@@ -53,6 +53,61 @@ PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
 
 
 /*
+ * TableShardReplicationFactor returns the current replication factor of the
+ * given relation by looking into shard placements. It errors out if there
+ * are different number of shard placements for different shards. It also
+ * errors out if the table does not have any shards.
+ */
+uint32
+TableShardReplicationFactor(Oid relationId)
+{
+	uint32 replicationCount = 0;
+	ListCell *shardCell = NULL;
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	foreach(shardCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardCell);
+		uint64 shardId = shardInterval->shardId;
+
+		List *shardPlacementList = ShardPlacementList(shardId);
+		uint32 shardPlacementCount = list_length(shardPlacementList);
+
+		/*
+		 * Get the replication count of the first shard in the list, and error
+		 * out if there is a shard with different replication count.
+		 */
+		if (replicationCount == 0)
+		{
+			replicationCount = shardPlacementCount;
+		}
+		else if (replicationCount != shardPlacementCount)
+		{
+			char *relationName = get_rel_name(relationId);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot find the replication factor of the "
+								   "table %s", relationName),
+							errdetail("The shard %ld has different shards replication "
+									  "counts from other shards.", shardId)));
+		}
+	}
+
+	/* error out if the table does not have any shards */
+	if (replicationCount == 0)
+	{
+		char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot find the replication factor of the "
+							   "table %s", relationName),
+						errdetail("The table %s does not have any shards.",
+								  relationName)));
+	}
+
+	return replicationCount;
+}
+
+
+/*
  * LoadShardIntervalList returns a list of shard intervals related for a given
  * distributed table. The function returns an empty list if no shards can be
  * found for the given relation.
