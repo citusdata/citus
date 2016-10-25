@@ -222,7 +222,7 @@ NodeHasActiveShardPlacements(char *nodeName, int32 nodePort)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_placement_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
 	ScanKeyInit(&scanKey[1], Anum_pg_dist_shard_placement_nodeport,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(nodePort));
 	ScanKeyInit(&scanKey[2], Anum_pg_dist_shard_placement_shardstate,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(FILE_FINALIZED));
 
