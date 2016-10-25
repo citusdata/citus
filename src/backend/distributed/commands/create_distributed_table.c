@@ -610,7 +610,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_partkey - 1] =
 		CStringGetTextDatum(distributionColumnString);
-	newValues[Anum_pg_dist_partition_colocationid - 1] = colocationId;
+	newValues[Anum_pg_dist_partition_colocationid - 1] = Int32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
 
 	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
