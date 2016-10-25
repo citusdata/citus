@@ -10,6 +10,15 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 580000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 
+-- ensure no objects were created outside pg_catalog
+SELECT COUNT(*)
+FROM pg_depend AS pgd,
+	 pg_extension AS pge,
+	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
+WHERE pgd.refclassid = 'pg_extension'::regclass AND
+	  pgd.refobjid   = pge.oid AND
+	  pge.extname    = 'citus' AND
+	  pgio.schema    NOT IN ('pg_catalog', 'citus');
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
@@ -44,6 +53,17 @@ ALTER EXTENSION citus UPDATE TO '6.0-10';
 ALTER EXTENSION citus UPDATE TO '6.0-11';
 ALTER EXTENSION citus UPDATE TO '6.0-12';
 ALTER EXTENSION citus UPDATE TO '6.0-13';
+ALTER EXTENSION citus UPDATE TO '6.0-14';
+
+-- ensure no objects were created outside pg_catalog
+SELECT COUNT(*)
+FROM pg_depend AS pgd,
+	 pg_extension AS pge,
+	 LATERAL pg_identify_object(pgd.classid, pgd.objid, pgd.objsubid) AS pgio
+WHERE pgd.refclassid = 'pg_extension'::regclass AND
+	  pgd.refobjid   = pge.oid AND
+	  pge.extname    = 'citus' AND
+	  pgio.schema    NOT IN ('pg_catalog', 'citus');
 
 -- drop extension an re-create in newest version
 DROP EXTENSION citus;
