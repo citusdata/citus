@@ -50,7 +50,6 @@
 
 
 /* local function forward declarations */
-static void CheckHashPartitionedTable(Oid distributedTableId);
 static text * IntegerToText(int32 value);
 
 
@@ -326,7 +325,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
  * tableId and checks if the table is hash partitioned. If not, the function
  * throws an error.
  */
-static void
+void
 CheckHashPartitionedTable(Oid distributedTableId)
 {
 	char partitionType = PartitionMethod(distributedTableId);
