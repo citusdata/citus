@@ -21,13 +21,21 @@
 #include "nodes/parsenodes.h"
 
 
+/* reserved parameted id, we chose a negative number since it is not assigned by postgres */
+#define UNINSTANTIATED_PARAMETER_ID INT_MIN
+
 /* reserved alias name for UPSERTs */
-#define UPSERT_ALIAS "citus_table_alias"
+#define CITUS_TABLE_ALIAS "citus_table_alias"
 
 
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
 										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
+extern void AddUninstantiatedPartitionRestriction(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
+extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
+											  RangeTblEntry *insertRte,
+											  RangeTblEntry *subqueryRte);
+extern bool InsertSelectQuery(Query *query);
 
 #endif /* MULTI_ROUTER_PLANNER_H */

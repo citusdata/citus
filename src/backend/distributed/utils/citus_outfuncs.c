@@ -277,6 +277,7 @@ OutMultiPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(workerJob);
 	WRITE_NODE_FIELD(masterQuery);
 	WRITE_STRING_FIELD(masterTableName);
+	WRITE_BOOL_FIELD(routerExecutable);
 }
 
 
@@ -493,6 +494,8 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
+	WRITE_BOOL_FIELD(insertSelectQuery);
+	WRITE_NODE_FIELD(selectShardList);
 }
 
 #if (PG_VERSION_NUM < 90600)

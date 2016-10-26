@@ -191,7 +191,6 @@ extern void MultiRealTimeExecute(Job *job);
 extern void MultiTaskTrackerExecute(Job *job);
 
 /* Function declarations common to more than one executor */
-extern bool RouterExecutablePlan(MultiPlan *multiPlan, MultiExecutorType executorType);
 extern MultiExecutorType JobExecutorType(MultiPlan *multiPlan);
 extern void RemoveJobDirectory(uint64 jobId);
 extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
