@@ -77,9 +77,18 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	int32 sourceNodePort = PG_GETARG_INT32(2);
 	text *targetNodeNameText = PG_GETARG_TEXT_P(3);
 	int32 targetNodePort = PG_GETARG_INT32(4);
+	bool doRepair = PG_GETARG_BOOL(5);
 
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
+
+	if (!doRepair)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("master_copy_shard_placement() "
+							   "with do not repair functionality "
+							   "is only supported on Citus Enterprise")));
+	}
 
 	/* RepairShardPlacement function repairs only given shard */
 	RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
