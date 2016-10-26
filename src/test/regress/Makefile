@@ -14,7 +14,7 @@ endif
 ## Citus regression support
 ##
 MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
-pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)"
+pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)"  --postgres-srcdir="$(postgres_abs_srcdir)"
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags)
 
 # XXX: Can't actually do useful testruns against install - $libdir
@@ -48,6 +48,10 @@ check-worker: all
 check-multi: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
+
+check-isolation: all tempinstall-main
+	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
