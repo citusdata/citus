@@ -47,6 +47,8 @@ my %fdwServers = ();
 my %functions = ();
 my %operators = ();
 
+my $serversAreShutdown = "TRUE";
+
 GetOptions(
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
@@ -170,7 +172,6 @@ for my $port (@workerPorts)
 }
 
 # Routine to shutdown servers at failure/exit
-my $serversAreShutdown = "FALSE";
 sub ShutdownServers()
 {
     if ($serversAreShutdown eq "FALSE")
@@ -203,6 +204,9 @@ END
         ShutdownServers();
     }
 }
+
+# Signal that servers should be shutdown
+$serversAreShutdown = "FALSE";
 
 # Start servers
 system("$bindir/pg_ctl",
