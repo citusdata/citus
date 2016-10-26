@@ -58,6 +58,7 @@ extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern int GetLocalGroupId(void);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
+extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void CitusInvalidateNodeCache(void);
 
 extern bool CitusHasBeenLoaded(void);
