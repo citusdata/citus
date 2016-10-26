@@ -57,6 +57,7 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		executorType = JobExecutorType(multiPlan);
 		if (executorType == MULTI_EXECUTOR_ROUTER)
 		{
+			List *taskList = workerJob->taskList;
 			TupleDesc tupleDescriptor = ExecCleanTypeFromTL(
 				planStatement->planTree->targetlist, false);
 			List *dependendJobList PG_USED_FOR_ASSERTS_ONLY = workerJob->dependedJobList;
@@ -68,7 +69,7 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 			queryDesc->tupDesc = tupleDescriptor;
 
 			/* drop into the router executor */
-			RouterExecutorStart(queryDesc, eflags);
+			RouterExecutorStart(queryDesc, eflags, taskList);
 		}
 		else
 		{
