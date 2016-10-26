@@ -456,5 +456,56 @@ EXECUTE prepared_non_partition_parameter_delete(62);
 -- check after deletes
 SELECT * FROM prepare_table ORDER BY key, value;
 
+
+-- verify placement state updates invalidate shard state
+--
+-- We use a immutable function to check for that. The planner will
+-- evaluate it once during planning, during execution it should never
+-- be reached (no rows). That way we'll see a NOTICE when
+-- (re-)planning, but not when executing.
+
+-- first create helper function
+CREATE OR REPLACE FUNCTION immutable_bleat(text) RETURNS int LANGUAGE plpgsql IMMUTABLE AS $$BEGIN RAISE NOTICE '%', $1;RETURN 1;END$$;
+\c - - - :worker_1_port
+CREATE OR REPLACE FUNCTION immutable_bleat(text) RETURNS int LANGUAGE plpgsql IMMUTABLE AS $$BEGIN RAISE NOTICE '%', $1;RETURN 1;END$$;
+\c - - - :worker_2_port
+CREATE OR REPLACE FUNCTION immutable_bleat(text) RETURNS int LANGUAGE plpgsql IMMUTABLE AS $$BEGIN RAISE NOTICE '%', $1;RETURN 1;END$$;
+\c - - - :master_port
+
+-- test table
+CREATE TABLE test_table (test_id integer NOT NULL, data text);
+SELECT master_create_distributed_table('test_table', 'test_id', 'hash');
+SELECT master_create_worker_shards('test_table', 2, 2);
+
+-- avoid 9.6+ only context messages
+\set VERBOSITY terse
+
+--plain statement, needs planning
+SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
+--prepared statement
+PREPARE countsome AS SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
+EXECUTE countsome; -- should indicate planning
+EXECUTE countsome; -- no replanning
+
+-- invalidate half of the placements using SQL, should invalidate via trigger
+UPDATE pg_dist_shard_placement SET shardstate = '3'
+WHERE shardid IN (
+        SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
+    AND nodeport = :worker_1_port;
+EXECUTE countsome; -- should indicate replanning
+EXECUTE countsome; -- no replanning
+
+-- repair shards, should invalidate via master_metadata_utility.c
+SELECT master_copy_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
+FROM pg_dist_shard_placement
+WHERE shardid IN (
+        SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass)
+    AND nodeport = :worker_1_port;
+EXECUTE countsome; -- should indicate replanning
+EXECUTE countsome; -- no replanning
+
+-- reset
+\set VERBOSITY default
+
 -- clean-up prepared statements
 DEALLOCATE ALL;
