@@ -31,6 +31,7 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/pg_dist_shard_placement.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -119,6 +120,7 @@ static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_dist_partition_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_shard_cache_invalidate);
+PG_FUNCTION_INFO_V1(master_dist_placement_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_node_cache_invalidate);
 PG_FUNCTION_INFO_V1(master_dist_local_group_cache_invalidate);
 
@@ -1057,6 +1059,68 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
+ * master_dist_placmeent_cache_invalidate is a trigger function that performs
+ * relcache invalidations when the contents of pg_dist_shard_placement are
+ * changed on the SQL level.
+ *
+ * NB: We decided there is little point in checking permissions here, there
+ * are much easier ways to waste CPU than causing cache invalidations.
+ */
+Datum
+master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
+{
+	TriggerData *triggerData = (TriggerData *) fcinfo->context;
+	HeapTuple newTuple = NULL;
+	HeapTuple oldTuple = NULL;
+	Oid oldShardId = InvalidOid;
+	Oid newShardId = InvalidOid;
+
+	if (!CALLED_AS_TRIGGER(fcinfo))
+	{
+		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
+						errmsg("must be called as trigger")));
+	}
+
+	newTuple = triggerData->tg_newtuple;
+	oldTuple = triggerData->tg_trigtuple;
+
+	/* collect shardid for OLD and NEW tuple */
+	if (oldTuple != NULL)
+	{
+		Form_pg_dist_shard_placement distPlacement =
+			(Form_pg_dist_shard_placement) GETSTRUCT(oldTuple);
+
+		oldShardId = distPlacement->shardid;
+	}
+
+	if (newTuple != NULL)
+	{
+		Form_pg_dist_shard_placement distPlacement =
+			(Form_pg_dist_shard_placement) GETSTRUCT(newTuple);
+
+		newShardId = distPlacement->shardid;
+	}
+
+	/*
+	 * Invalidate relcache for the relevant relation(s). In theory shardId
+	 * should never change, but it doesn't hurt to be paranoid.
+	 */
+	if (oldShardId != InvalidOid &&
+		oldShardId != newShardId)
+	{
+		CitusInvalidateRelcacheByShardId(oldShardId);
+	}
+
+	if (newShardId != InvalidOid)
+	{
+		CitusInvalidateRelcacheByShardId(newShardId);
+	}
+
+	PG_RETURN_DATUM(PointerGetDatum(NULL));
+}
+
+
+/*
  * master_dist_node_cache_invalidate is a trigger function that performs
  * relcache invalidations when the contents of pg_dist_node are changed
  * on the SQL level.
@@ -1771,4 +1835,65 @@ CitusInvalidateRelcacheByRelid(Oid relationId)
 		CacheInvalidateRelcacheByTuple(classTuple);
 		ReleaseSysCache(classTuple);
 	}
+}
+
+
+/*
+ * Register a relcache invalidation for the distributed relation associated
+ * with the shard.
+ */
+void
+CitusInvalidateRelcacheByShardId(int64 shardId)
+{
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+	Form_pg_dist_shard shardForm = NULL;
+	Relation pgDistShard = heap_open(DistShardRelationId(), AccessShareLock);
+
+	/*
+	 * Load shard, to find the associated relation id. Can't use
+	 * LoadShardInterval directly because that'd fail if the shard doesn't
+	 * exist anymore, which we can't have. Also lower overhead is desirable
+	 * here.
+	 */
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_shard_shardid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(shardId));
+
+	scanDescriptor = systable_beginscan(pgDistShard,
+										DistShardShardidIndexId(), true,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		shardForm = (Form_pg_dist_shard) GETSTRUCT(heapTuple);
+		CitusInvalidateRelcacheByRelid(shardForm->logicalrelid);
+	}
+	else
+	{
+		/*
+		 * Couldn't find associated relation. That can primarily happen in two cases:
+		 *
+		 * 1) A placement row is inserted before the shard row. That's fine,
+		 *	  since we don't need invalidations via placements in that case.
+		 *
+		 * 2) The shard has been deleted, but some placements were
+		 *    unreachable, and the user is manually deleting the rows. Not
+		 *    much point in WARNING or ERRORing in that case either, there's
+		 *    nothing to invalidate.
+		 *
+		 * Hence we just emit a DEBUG5 message.
+		 */
+		ereport(DEBUG5, (errmsg("could not find distributed relation to invalidate for "
+								"shard "INT64_FORMAT, shardId)));
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistShard, NoLock);
+
+	/* bump command counter, to force invalidation to take effect */
+	CommandCounterIncrement();
 }

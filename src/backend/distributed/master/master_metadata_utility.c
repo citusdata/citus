@@ -451,6 +451,8 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	simple_heap_insert(pgDistShardPlacement, heapTuple);
 	CatalogUpdateIndexes(pgDistShardPlacement, heapTuple);
 
+	CitusInvalidateRelcacheByShardId(shardId);
+
 	CommandCounterIncrement();
 	heap_close(pgDistShardPlacement, RowExclusiveLock);
 }
@@ -565,6 +567,8 @@ DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32 workerPort)
 	simple_heap_delete(pgDistShardPlacement, &heapTuple->t_self);
 	systable_endscan(scanDescriptor);
 
+	CitusInvalidateRelcacheByShardId(shardId);
+
 	CommandCounterIncrement();
 	heap_close(pgDistShardPlacement, RowExclusiveLock);
 
@@ -589,6 +593,8 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 	Datum values[Natts_pg_dist_shard_placement];
 	bool isnull[Natts_pg_dist_shard_placement];
 	bool replace[Natts_pg_dist_shard_placement];
+	uint64 shardId = INVALID_SHARD_ID;
+	bool colIsNull = false;
 
 	pgDistShardPlacement = heap_open(DistShardPlacementRelationId(), RowExclusiveLock);
 	tupleDescriptor = RelationGetDescr(pgDistShardPlacement);
@@ -617,6 +623,13 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 	simple_heap_update(pgDistShardPlacement, &heapTuple->t_self, heapTuple);
 
 	CatalogUpdateIndexes(pgDistShardPlacement, heapTuple);
+
+	shardId = DatumGetInt64(heap_getattr(heapTuple,
+										 Anum_pg_dist_shard_placement_shardid,
+										 tupleDescriptor, &colIsNull));
+	Assert(!colIsNull);
+	CitusInvalidateRelcacheByShardId(shardId);
+
 	CommandCounterIncrement();
 
 	systable_endscan(scanDescriptor);
