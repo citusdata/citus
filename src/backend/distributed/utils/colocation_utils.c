@@ -151,8 +151,9 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
  * following cases:
  * 1.Shard counts are different,
  * 2.Shard intervals don't match
- * 3.Shard placements are not colocated (not on the same node)
- * 4.Shard placements have different health states
+ * 3.Matching shard intervals have different number of shard placements
+ * 4.Shard placements are not colocated (not on the same node)
+ * 5.Shard placements have different health states
  *
  * Note that, this functions assumes that both tables are hash distributed.
  */
@@ -218,6 +219,16 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 
 		leftPlacementList = ShardPlacementList(leftShardId);
 		rightPlacementList = ShardPlacementList(rightShardId);
+
+		if (list_length(leftPlacementList) != list_length(rightPlacementList))
+		{
+			ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+								   leftRelationName, rightRelationName),
+							errdetail("Shard %ld of %s and shard %ld of %s "
+									  "have different number of shard placements.",
+									  leftShardId, leftRelationName,
+									  rightShardId, rightRelationName)));
+		}
 
 		/* sort shard placements according to the node */
 		sortedLeftPlacementList = SortList(leftPlacementList,
