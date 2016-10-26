@@ -689,7 +689,7 @@ ERROR:  cannot colocate tables table1_groupb and table1_groupd
 DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupE']);
 ERROR:  cannot colocate tables table1_groupb and table1_groupe
-DETAIL:  Shard 1300027 of table1_groupb and shard 1300047 of table1_groupe are not colocated.
+DETAIL:  Shard 1300026 of table1_groupb and shard 1300046 of table1_groupe have different number of shard placements.
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
 ERROR:  cannot colocate tables table1_groupb and table1_groupf
 DETAIL:  Shard counts don't match for table1_groupb and table1_groupf.
