@@ -100,8 +100,8 @@ static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
 								TupleDesc tupleDescriptor);
 static List * TaskShardIntervalList(List *taskList);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
-static void AcquireExecutorMultiShardLocks(List *shardIntervalList);
-static bool IsReplicated(List *shardIntervalList);
+static void AcquireExecutorMultiShardLocks(List *taskList);
+static bool RequiresConsistentSnapshot(Task *task);
 static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
 									   DestReceiver *destination,
 									   Tuplestorestate *tupleStore);
@@ -133,13 +133,10 @@ static void MarkRemainingInactivePlacements(void);
  * execution.
  */
 void
-RouterExecutorStart(QueryDesc *queryDesc, int eflags, Task *task)
+RouterExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	EState *executorState = NULL;
 	CmdType commandType = queryDesc->operation;
-
-	/* ensure that the task is not NULL */
-	Assert(task != NULL);
 
 	/* disallow triggers during distributed modify commands */
 	if (commandType != CMD_SELECT)
@@ -314,15 +311,38 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 	{
 		LockShardResource(shardId, lockMode);
 	}
+
+	/*
+	 * If the task has a subselect, then we may need to lock the shards from which
+	 * the query selects as well to prevent the subselects from seeing different
+	 * results on different replicas. In particular this prevents INSERT.. SELECT
+	 * commands from having a different effect on different placements.
+	 */
+	if (RequiresConsistentSnapshot(task))
+	{
+		/*
+		 * ExclusiveLock conflicts with all lock types used by modifications
+		 * and therefore prevents other modifications from running
+		 * concurrently.
+		 */
+
+		LockShardListResources(task->selectShardList, ExclusiveLock);
+	}
 }
 
 
 /*
- * AcquireExecutorMultiShardLocks acquires shard locks need for execution
- * of writes on multiple shards.
+ * AcquireExecutorMultiShardLocks acquires shard locks needed for execution
+ * of writes on multiple shards. In addition to honouring commutativity
+ * rules, we currently only allow a single multi-shard command on a shard at
+ * a time. Otherwise, concurrent multi-shard commands may take row-level
+ * locks on the shard placements in a different order and create a distributed
+ * deadlock. This applies even when writes are commutative and/or there is
+ * no replication.
  *
  * 1. If citus.all_modifications_commutative is set to true, then all locks
  * are acquired as ShareUpdateExclusiveLock.
+ *
  * 2. If citus.all_modifications_commutative is false, then only the shards
  * with 2 or more replicas are locked with ExclusiveLock. Otherwise, the
  * lock is acquired with ShareUpdateExclusiveLock.
@@ -330,65 +350,121 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
  * ShareUpdateExclusiveLock conflicts with itself such that only one
  * multi-shard modification at a time is allowed on a shard. It also conflicts
  * with ExclusiveLock, which ensures that updates/deletes/upserts are applied
- * in the same order on all placements. It does not conflict with ShareLock,
- * which is normally obtained by single-shard commutative writes.
+ * in the same order on all placements. It does not conflict with
+ * RowExclusiveLock, which is normally obtained by single-shard, commutative
+ * writes.
  */
 static void
-AcquireExecutorMultiShardLocks(List *shardIntervalList)
+AcquireExecutorMultiShardLocks(List *taskList)
 {
-	LOCKMODE lockMode = NoLock;
+	ListCell *taskCell = NULL;
 
-	if (AllModificationsCommutative || !IsReplicated(shardIntervalList))
+	foreach(taskCell, taskList)
 	{
+		Task *task = (Task *) lfirst(taskCell);
+		LOCKMODE lockMode = NoLock;
+
+		if (AllModificationsCommutative || list_length(task->taskPlacementList) == 1)
+		{
+			/*
+			 * When all writes are commutative then we only need to prevent multi-shard
+			 * commands from running concurrently with each other and with commands
+			 * that are explicitly non-commutative. When there is no replication then
+			 * we only need to prevent concurrent multi-shard commands.
+			 *
+			 * In either case, ShareUpdateExclusive has the desired effect, since
+			 * it conflicts with itself and ExclusiveLock (taken by non-commutative
+			 * writes).
+			 */
+
+			lockMode = ShareUpdateExclusiveLock;
+		}
+		else
+		{
+			/*
+			 * When there is replication, prevent all concurrent writes to the same
+			 * shards to ensure the writes are ordered.
+			 */
+
+			lockMode = ExclusiveLock;
+		}
+
+		LockShardResource(task->anchorShardId, lockMode);
+
 		/*
-		 * When all writes are commutative then we only need to prevent multi-shard
-		 * commands from running concurrently with each other and with commands
-		 * that are explicitly non-commutative. When there is not replication then
-		 * we only need to prevent concurrent multi-shard commands.
-		 *
-		 * In either case, ShareUpdateExclusive has the desired effect, since
-		 * it conflicts with itself and ExclusiveLock (taken by non-commutative
-		 * writes).
+		 * If the task has a subselect, then we may need to lock the shards from which
+		 * the query selects as well to prevent the subselects from seeing different
+		 * results on different replicas. In particular this prevents INSERT..SELECT
+		 * commands from having different effects on different placements.
 		 */
 
-		lockMode = ShareUpdateExclusiveLock;
-	}
-	else
-	{
-		/*
-		 * When there is replication, prevent all concurrent writes to the same
-		 * shards to ensure the writes are ordered.
-		 */
-		lockMode = ExclusiveLock;
-	}
+		if (RequiresConsistentSnapshot(task))
+		{
+			/*
+			 * ExclusiveLock conflicts with all lock types used by modifications
+			 * and therefore prevents other modifications from running
+			 * concurrently.
+			 */
 
-	LockShardListResources(shardIntervalList, lockMode);
+			LockShardListResources(task->selectShardList, ExclusiveLock);
+		}
+	}
 }
 
 
 /*
- * IsReplicated checks whether any of the shards in the given list has more
- * than one replica.
+ * RequiresConsistentSnapshot returns true if the given task need to take
+ * the necessary locks to ensure that a subquery in the INSERT ... SELECT
+ * query returns the same output for all task placements.
  */
 static bool
-IsReplicated(List *shardIntervalList)
+RequiresConsistentSnapshot(Task *task)
 {
-	ListCell *shardIntervalCell;
-	bool hasReplication = false;
+	bool requiresIsolation = false;
 
-	foreach(shardIntervalCell, shardIntervalList)
+	if (!task->insertSelectQuery)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
-		List *shardPlacementList = FinalizedShardPlacementList(shardId);
-		if (shardPlacementList->length > 1)
-		{
-			hasReplication = true;
-			break;
-		}
+		/*
+		 * Only INSERT/SELECT commands currently require SELECT isolation.
+		 * Other commands do not read from other shards.
+		 */
+
+		requiresIsolation = false;
+	}
+	else if (list_length(task->taskPlacementList) == 1)
+	{
+		/*
+		 * If there is only one replica then we fully rely on PostgreSQL to
+		 * provide SELECT isolation. In this case, we do not provide isolation
+		 * across the shards, but that was never our intention.
+		 */
+
+		requiresIsolation = false;
+	}
+	else if (AllModificationsCommutative)
+	{
+		/*
+		 * An INSERT/SELECT is commutative with other writes if it excludes
+		 * any ongoing writes based on the filter conditions. Without knowing
+		 * whether this is true, we assume the user took this into account
+		 * when enabling citus.all_modifications_commutative. This option
+		 * gives users an escape from aggressive locking during INSERT/SELECT.
+		 */
+
+		requiresIsolation = false;
+	}
+	else
+	{
+		/*
+		 * If this is a non-commutative write, then we need to block ongoing
+		 * writes to make sure that the subselect returns the same result
+		 * on all placements.
+		 */
+
+		requiresIsolation = true;
 	}
 
-	return hasReplication;
+	return requiresIsolation;
 }
 
 
@@ -812,7 +888,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	shardIntervalList = TaskShardIntervalList(taskList);
 
 	/* ensure that there are no concurrent modifications on the same shards */
-	AcquireExecutorMultiShardLocks(shardIntervalList);
+	AcquireExecutorMultiShardLocks(taskList);
 
 	/* open connection to all relevant placements, if not already open */
 	OpenTransactionsToAllShardPlacements(shardIntervalList, userName);

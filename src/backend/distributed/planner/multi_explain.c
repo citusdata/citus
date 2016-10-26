@@ -228,7 +228,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		es->indent += 1;
 	}
 
-	routerExecutablePlan = RouterExecutablePlan(multiPlan, TaskExecutorType);
+	routerExecutablePlan = multiPlan->routerExecutable;
 
 	if (routerExecutablePlan)
 	{

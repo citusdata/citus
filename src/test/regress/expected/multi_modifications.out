@@ -205,10 +205,9 @@ DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::times
 INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Multi-row INSERTs to distributed tables are not supported.
+-- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported
-INSERT INTO limit_orders SELECT * FROM limit_orders;
-ERROR:  cannot perform distributed planning for the given modifications
-DETAIL:  Subqueries are not supported in distributed modifications.
+-- INSERT INTO limit_orders SELECT * FROM limit_orders;
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (DELETE FROM limit_orders RETURNING *)
 INSERT INTO limit_orders DEFAULT VALUES;
