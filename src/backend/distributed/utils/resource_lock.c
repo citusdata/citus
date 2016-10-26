@@ -46,6 +46,28 @@ LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
 
 
 /*
+ * TryLockShardDistributionMetadata tries to grab a lock for distribution
+ * metadata related to the specified shard, returning false if the lock
+ * is currently taken. Any locks acquired using this method are released
+ * at transaction end.
+ */
+bool
+TryLockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = true;
+	bool lockAcquired = false;
+
+	SET_LOCKTAG_SHARD_METADATA_RESOURCE(tag, MyDatabaseId, shardId);
+
+	lockAcquired = LockAcquire(&tag, lockMode, sessionLock, dontWait);
+
+	return lockAcquired;
+}
+
+
+/*
  * LockRelationDistributionMetadata returns after getting a the lock used for a
  * relation's distribution metadata, blocking if required. Only ExclusiveLock
  * and ShareLock modes are supported. Any locks acquired using this method are
