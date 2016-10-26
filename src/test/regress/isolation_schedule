@@ -1,0 +1,2 @@
+test: isolation_cluster_management
+test: isolation_concurrent_dml
