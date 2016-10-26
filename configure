@@ -586,6 +586,8 @@ PACKAGE_URL=''
 
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+POSTGRES_BUILDDIR
+POSTGRES_SRCDIR
 CITUS_CFLAGS
 OBJEXT
 EXEEXT
@@ -2540,6 +2542,14 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 CFLAGS="$SAVE_CFLAGS"
 
+
+# Locate source and build directory of the postgres we're building
+# against. Can't rely on either still being present, but e.g. optional
+# test infrastructure can rely on it.
+POSTGRES_SRCDIR=$(grep ^abs_top_srcdir $(dirname $($PG_CONFIG --pgxs))/../Makefile.global|cut -d ' ' -f3-)
+POSTGRES_BUILDDIR=$(grep ^abs_top_builddir $(dirname $($PG_CONFIG --pgxs))/../Makefile.global|cut -d ' ' -f3-)
+
+
 # check for a number of CFLAGS that make development easier
 
 # CITUSAC_PROG_CC_CFLAGS_OPT
@@ -2937,6 +2947,10 @@ fi
 
 
 CITUS_CFLAGS="$CITUS_CFLAGS"
+
+POSTGRES_SRCDIR="$POSTGRES_SRCDIR"
+
+POSTGRES_BUILDDIR="$POSTGRES_BUILDDIR"
 
 
 ac_config_files="$ac_config_files Makefile.global"
