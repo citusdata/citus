@@ -63,7 +63,7 @@ ORDER BY s.shardid;
  1300002 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          3
  1300004 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57638 |         1000 |          1
@@ -187,7 +187,7 @@ ORDER BY s.shardid;
  1300002 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          3
  1300004 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57638 |         1000 |          1
@@ -219,7 +219,7 @@ ORDER BY s.shardid;
  1300002 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57637 |         1000 |          1
  1300003 | table1_group1 |    57638 |         1000 |          1
- 1300004 | table2_group1 |    57638 |         1000 |          1
+ 1300004 | table2_group1 |    57638 |         1000 |          3
  1300004 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57637 |         1000 |          1
  1300005 | table2_group1 |    57638 |         1000 |          1
