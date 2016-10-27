@@ -11,6 +11,9 @@
 
 citus_abs_srcdir:=@abs_top_srcdir@/${citus_subdir}
 citus_abs_top_srcdir:=@abs_top_srcdir@
+postgres_abs_srcdir:=@POSTGRES_SRCDIR@
+postgres_abs_builddir:=@POSTGRES_BUILDDIR@
+
 PG_CONFIG:=@PG_CONFIG@
 PGXS:=$(shell $(PG_CONFIG) --pgxs)
 
