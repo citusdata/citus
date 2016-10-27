@@ -26,8 +26,11 @@ sub Usage()
     print "  pg_regress_multi [MULTI OPTIONS] -- [PG REGRESS OPTS]\n";
     print "\n";
     print "Multi Options:\n";
+    print "  --isolationtester   Run isolationtester tests instead of plain tests\n";
     print "  --bindir            Path to postgres binary directory\n";
     print "  --libdir            Path to postgres library directory\n";
+    print "  --postgres-builddir Path to postgres build directory\n";
+    print "  --postgres-srcdir Path to postgres build directory\n";
     print "  --pgxsdir           Path to the PGXS directory\n";
     print "  --load-extension    Extensions to install in all nodes\n";
     print "  --server-option     Config option to pass to the server\n";
@@ -35,9 +38,12 @@ sub Usage()
 }
 
 # Option parsing
+my $isolationtester = 0;
 my $bindir = "";
 my $libdir = undef;
 my $pgxsdir = "";
+my $postgresBuilddir = "";
+my $postgresSrcdir = "";
 my $majorversion = "";
 my @extensions = ();
 my @userPgOptions = ();
@@ -47,10 +53,15 @@ my %fdwServers = ();
 my %functions = ();
 my %operators = ();
 
+my $serversAreShutdown = "TRUE";
+
 GetOptions(
+    'isolationtester' => \$isolationtester,
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
     'pgxsdir=s' => \$pgxsdir,
+    'postgres-builddir=s' => \$postgresBuilddir,
+    'postgres-srcdir=s' => \$postgresSrcdir,
     'majorversion=s' => \$majorversion,
     'load-extension=s' => \@extensions,
     'server-option=s' => \@userPgOptions,
@@ -69,6 +80,25 @@ if (defined $libdir)
     $ENV{DYLD_LIBRARY_PATH} = "$libdir:".($ENV{DYLD_LIBRARY_PATH} || '');
     $ENV{LIBPATH} = "$libdir:".($ENV{LIBPATH} || '');
     $ENV{PATH} = "$libdir:".($ENV{PATH} || '');
+}
+
+my $plainRegress = "$pgxsdir/src/test/regress/pg_regress";
+my $isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
+if ($isolationtester && ! -f "$isolationRegress")
+{
+    die <<"MESSAGE";
+
+isolationtester not found at $isolationRegress.
+
+isolationtester tests can only be run when source (detected as ${postgresSrcdir})
+and build (detected as ${postgresBuilddir}) directory corresponding to $bindir
+are present.
+
+Additionally isolationtester in src/test/isolation needs to be built,
+which it is not by default if tests have not been run. If the build
+directory is present locally
+"make -C ${postgresBuilddir} all" should do the trick.
+MESSAGE
 }
 
 # Set some default configuration options
@@ -170,7 +200,6 @@ for my $port (@workerPorts)
 }
 
 # Routine to shutdown servers at failure/exit
-my $serversAreShutdown = "FALSE";
 sub ShutdownServers()
 {
     if ($serversAreShutdown eq "FALSE")
@@ -203,6 +232,9 @@ END
         ShutdownServers();
     }
 }
+
+# Signal that servers should be shutdown
+$serversAreShutdown = "FALSE";
 
 # Start servers
 system("$bindir/pg_ctl",
@@ -309,8 +341,17 @@ push(@arguments, @ARGV);
 my $startTime = time();
 
 # Finally run the tests
-system("$pgxsdir/src/test/regress/pg_regress", @arguments) == 0
-    or die "Could not run regression tests";
+if (!$isolationtester)
+{
+    system("$plainRegress", @arguments) == 0
+	or die "Could not run regression tests";
+}
+else
+{
+    push(@arguments, "--dbname=regression");
+    system("$isolationRegress", @arguments) == 0
+	or die "Could not run isolation tests";
+}
 
 my $endTime = time();
 
