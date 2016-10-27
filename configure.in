@@ -42,6 +42,13 @@ else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])
 fi;
 
+citus_version=$(grep "default_version" src/backend/distributed/citus.control | cut -d\' -f2)
+format_check=$(echo "$citus_version" | grep -E "^@<:@0-9@:>@+\.@<:@0-9@:>@+-@<:@0-9@:>@+$")
+if (( $? )); then
+  AC_MSG_ERROR([Citus version "$citus_version", found in citus.control, is in the wrong format])
+fi
+AC_MSG_NOTICE([Citus version "$citus_version"])
+
 # Check whether we're building inside the source tree, if not, prepare
 # the build directory.
 if test "$srcdir" -ef '.' ; then
@@ -114,4 +121,5 @@ AH_TOP([
  * Do not manually edit!
  */
 ])
+AC_DEFINE_UNQUOTED([CITUS_VERSION], "$citus_version", [so the shared-library knows its own version])
 AC_OUTPUT
