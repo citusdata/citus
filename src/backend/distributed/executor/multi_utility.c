@@ -313,6 +313,7 @@ multi_ProcessUtility(Node *parsetree,
 			ExecuteStmt *execstmt = (ExecuteStmt *) query->utilityStmt;
 			PreparedStatement *entry = FetchPreparedStatement(execstmt->name, true);
 			CachedPlanSource *plansource = entry->plansource;
+			Node *parseTreeCopy;
 			Query *originalQuery;
 
 			/* copied from ExplainExecuteQuery, will never trigger if you used PREPARE */
@@ -322,7 +323,9 @@ multi_ProcessUtility(Node *parsetree,
 									   " cached plans")));
 			}
 
-			originalQuery = parse_analyze(plansource->raw_parse_tree,
+			parseTreeCopy = copyObject(plansource->raw_parse_tree);
+
+			originalQuery = parse_analyze(parseTreeCopy,
 										  plansource->query_string,
 										  plansource->param_types,
 										  plansource->num_params);
