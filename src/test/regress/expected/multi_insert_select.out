@@ -131,8 +131,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300004
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -141,14 +140,12 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300006
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300007
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -185,20 +182,17 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300005
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300006
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300007
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -215,14 +209,10 @@ WHERE
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  could not generate task for target shardId: 13300004
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300005
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300006
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300007
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -239,14 +229,10 @@ WHERE
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  could not generate task for target shardId: 13300004
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300005
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300006
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
-DEBUG:  could not generate task for target shardId: 13300007
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
 DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
@@ -326,8 +312,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300004
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -336,8 +321,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  could not generate task for target shardId: 13300006
-DETAIL:  Insert query hits 2 placements, Select query hits 1 placements and only 1 of those placements match.
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -1475,3 +1459,229 @@ DEBUG:  ProcessUtility
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
 INSERT INTO raw_events_second SELECT * FROM test_view;
 ERROR:  cannot plan queries that include both regular and partitioned relations
+-- we need this in our next test
+truncate raw_events_first;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- first show that the query works now
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300001 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300005 raw_events_second WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+truncate raw_events_first;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- now show that it works for a single shard query as well
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE ((user_id = 5) AND ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+-- if a single shard of the SELECT is unhealty, the query should fail
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
+truncate raw_events_first;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- this should fail
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Insert query cannot be executed on all placements for shard 13300000
+-- this should also fail
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Insert query cannot be executed on all placements for shard 13300000
+-- but this should work given that it hits different shard
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 6;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300000 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((user_id = 6) AND ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+-- mark the unhealthy placement as healthy again for the next tests
+UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
+-- now that we should show that it works if one of the target shard interval is not healthy
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300000 AND nodeport = :worker_1_port;
+truncate raw_events_first;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- this should work
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300001 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300005 raw_events_second WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300002 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300006 raw_events_second WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+truncate raw_events_first;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- this should also work
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300000 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300004 raw_events_second WHERE ((user_id = 5) AND ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300001 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300002 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
