@@ -104,7 +104,7 @@ static Task * RouterSelectTask(Query *originalQuery,
 static bool RouterSelectQuery(Query *originalQuery,
 							  RelationRestrictionContext *restrictionContext,
 							  List **placementList, uint64 *anchorShardId,
-							  List **selectShardList);
+							  List **selectShardList, bool replacePrunedQueryWithDummy);
 static List * TargetShardIntervalsForSelect(Query *query,
 											RelationRestrictionContext *restrictionContext);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
@@ -343,6 +343,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	List *intersectedPlacementList = NULL;
 	bool routerPlannable = false;
 	bool upsertQuery = false;
+	bool replacePrunedQueryWithDummy = false;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -372,6 +373,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 */
 	AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
 
+	/* mark that we don't want the router planner to generate dummy hosts/queries */
+	replacePrunedQueryWithDummy = false;
+
 	/*
 	 * Use router select planner to decide on whether we can push down the query
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
@@ -379,7 +383,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 */
 	routerPlannable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
 										&selectPlacementList, &selectAnchorShardId,
-										&selectShardList);
+										&selectShardList, replacePrunedQueryWithDummy);
 
 	if (!routerPlannable)
 	{
@@ -389,23 +393,34 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 						errdetail("Select query cannot be pushed down to the worker.")));
 	}
 
-	/* Ensure that we have INSERTed table's placement exists on the same worker */
+
+	/* ensure that we do not send queries where select is pruned away completely */
+	if (list_length(selectPlacementList) == 0)
+	{
+		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
+								"SELECT query for it pruned away", shardId)));
+
+		return NULL;
+	}
+
+	/* get the placements for insert target shard and its intersection with select */
 	insertShardPlacementList = FinalizedShardPlacementList(shardId);
 	intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 													  selectPlacementList);
 
+	/*
+	 * If insert target does not have exactly the same placements with the select,
+	 * we sholdn't run the query.
+	 */
 	if (list_length(insertShardPlacementList) != list_length(intersectedPlacementList))
 	{
-		ereport(DEBUG2, (errmsg("could not generate task for target shardId: %ld",
-								shardId),
-						 errdetail("Insert query hits %d placements, Select query "
-								   "hits %d placements and only %d of those placements match.",
-								   list_length(insertShardPlacementList),
-								   list_length(selectPlacementList),
-								   list_length(intersectedPlacementList))));
-
-		return NULL;
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning for the given "
+							   "modification"),
+						errdetail("Insert query cannot be executed on all placements "
+								  "for shard %ld", shardId)));
 	}
+
 
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
@@ -1817,9 +1832,14 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	bool upsertQuery = false;
 	uint64 shardId = INVALID_SHARD_ID;
 	List *selectShardList = NIL;
+	bool replacePrunedQueryWithDummy = false;
+
+	/* router planner should create task even if it deosn't hit a shard at all */
+	replacePrunedQueryWithDummy = true;
 
 	queryRoutable = RouterSelectQuery(originalQuery, restrictionContext,
-									  placementList, &shardId, &selectShardList);
+									  placementList, &shardId, &selectShardList,
+									  replacePrunedQueryWithDummy);
 
 
 	if (!queryRoutable)
@@ -1853,7 +1873,8 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
  */
 static bool
 RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
-				  List **placementList, uint64 *anchorShardId, List **selectShardList)
+				  List **placementList, uint64 *anchorShardId, List **selectShardList,
+				  bool replacePrunedQueryWithDummy)
 {
 	List *prunedRelationShardList = TargetShardIntervalsForSelect(originalQuery,
 																  restrictionContext);
@@ -1901,14 +1922,15 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 
 	/*
 	 * Determine the worker that has all shard placements if a shard placement found.
-	 * If no shard placement exists, we will still run the query but the result will
-	 * be empty. We create a dummy shard placement for the first active worker.
+	 * If no shard placement exists and replacePrunedQueryWithDummy flag is set, we will
+	 * still run the query but the result will be empty. We create a dummy shard
+	 * placement for the first active worker.
 	 */
 	if (shardsPresent)
 	{
 		workerList = WorkersContainingAllShards(prunedRelationShardList);
 	}
-	else
+	else if (replacePrunedQueryWithDummy)
 	{
 		List *workerNodeList = WorkerNodeList();
 		if (workerNodeList != NIL)
@@ -1921,6 +1943,17 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 
 			workerList = lappend(workerList, dummyPlacement);
 		}
+	}
+	else
+	{
+		/*
+		 * For INSERT ... SELECT, this query could be still a valid for some other target
+		 * shard intervals. Thus, we should return empty list if there aren't any matching
+		 * workers, so that the caller can decide what to do with this task.
+		 */
+		workerList = NIL;
+
+		return true;
 	}
 
 	if (workerList == NIL)

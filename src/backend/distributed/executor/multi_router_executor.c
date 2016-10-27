@@ -1027,6 +1027,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			if (placementIndex >= list_length(connectionList))
 			{
 				/* no more active placements for this task */
+				taskIndex++;
 				continue;
 			}
 
