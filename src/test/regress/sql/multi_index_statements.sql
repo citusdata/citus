@@ -51,6 +51,15 @@ CREATE UNIQUE INDEX index_test_hash_index_a ON index_test_hash(a);
 CREATE UNIQUE INDEX index_test_hash_index_a_b ON index_test_hash(a,b);
 RESET client_min_messages;
 
+-- Verify that we handle if not exists statements correctly
+CREATE INDEX lineitem_orderkey_index on lineitem(l_orderkey);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on lineitem(l_orderkey);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on lineitem(l_orderkey);
+
+-- Verify if not exists behavior with an index with same name on a different table
+CREATE INDEX lineitem_orderkey_index on index_test_hash(a);
+CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
+
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
@@ -95,6 +104,7 @@ DROP INDEX CONCURRENTLY lineitem_orderkey_index;
 
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
+DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 

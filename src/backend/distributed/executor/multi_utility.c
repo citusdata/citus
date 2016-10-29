@@ -577,10 +577,26 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
 
 		if (isDistributedRelation)
 		{
+			Oid namespaceId = InvalidOid;
+			Oid indexRelationId = InvalidOid;
+			char *indexName = createIndexStatement->idxname;
+
 			ErrorIfUnsupportedIndexStmt(createIndexStatement);
 
-			/* if it is supported, go ahead and execute the command */
-			ExecuteDistributedDDLCommand(relationId, createIndexCommand, isTopLevel);
+			namespaceId = get_namespace_oid(namespaceName, false);
+			indexRelationId = get_relname_relid(indexName, namespaceId);
+
+			/* if index does not exist, send the command to workers */
+			if (!OidIsValid(indexRelationId))
+			{
+				ExecuteDistributedDDLCommand(relationId, createIndexCommand, isTopLevel);
+			}
+			else if (!createIndexStatement->if_not_exists)
+			{
+				/* if the index exists and there is no IF NOT EXISTS clause, error */
+				ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE),
+								errmsg("relation \"%s\" already exists", indexName)));
+			}
 		}
 	}
 
@@ -754,23 +770,12 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 static void
 ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 {
-	Oid namespaceId;
-	Oid indexRelationId;
 	char *indexRelationName = createIndexStatement->idxname;
-
 	if (indexRelationName == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("creating index without a name on a distributed table is "
 							   "currently unsupported")));
-	}
-
-	namespaceId = get_namespace_oid(createIndexStatement->relation->schemaname, false);
-	indexRelationId = get_relname_relid(indexRelationName, namespaceId);
-	if (indexRelationId != InvalidOid)
-	{
-		ereport(ERROR, (errcode(ERRCODE_DUPLICATE_TABLE),
-						errmsg("relation \"%s\" already exists", indexRelationName)));
 	}
 
 	if (createIndexStatement->tableSpace != NULL)
