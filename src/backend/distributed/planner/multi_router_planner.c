@@ -2532,9 +2532,15 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		{
 			TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
 												   targetEntryIndex);
-			TargetEntry *newSubqueryTargetEntry = copyObject(oldSubqueryTle);
+			TargetEntry *newSubqueryTargetEntry = NULL;
 
-			Assert(newSubqueryTargetEntry->resjunk == true);
+			/* only add if the target entry is junk entry */
+			if (!oldSubqueryTle->resjunk)
+			{
+				continue;
+			}
+
+			newSubqueryTargetEntry = copyObject(oldSubqueryTle);
 
 			newSubqueryTargetEntry->resno = resno;
 			newSubqueryTargetlist = lappend(newSubqueryTargetlist,

@@ -389,6 +389,19 @@ INSERT INTO agg_events
   FROM
     raw_events_first;
 
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+truncate raw_events_second;
+SET client_min_messages TO DEBUG4;
+
+-- insert with constant values
+INSERT INTO raw_events_second (user_id, value_1, time)
+SELECT
+   user_id, value_1, '2016-10-28 21:05:12.048697'::timestamp
+FROM
+   raw_events_first
+RETURNING user_id, time;
+
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
