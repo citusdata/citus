@@ -260,6 +260,24 @@ SELECT * FROM labs WHERE id = 12;
  12 | fsociety
 (1 row)
 
+-- multi-shard operations can co-exist with DDL in a transactional way
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+SELECT master_modify_multiple_shards('DELETE FROM labs');
+ master_modify_multiple_shards 
+-------------------------------
+                             5
+(1 row)
+
+ALTER TABLE labs ADD COLUMN score float;
+ROLLBACK;
+-- should have rolled everything back
+SELECT * FROM labs WHERE id = 12;
+ id |   name   
+----+----------
+ 12 | fsociety
+(1 row)
+
 -- now, for some special failures...
 CREATE TABLE objects (
 	id bigint PRIMARY KEY,

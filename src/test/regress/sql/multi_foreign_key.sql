@@ -81,6 +81,12 @@ DELETE FROM referenced_table WHERE id = 1;
 DELETE FROM referencing_table WHERE ref_id = 1;
 DELETE FROM referenced_table WHERE id = 1;
 
+-- test cascading truncate
+INSERT INTO referenced_table VALUES(2, 2);
+INSERT INTO referencing_table VALUES(2, 2);
+TRUNCATE referenced_table CASCADE;
+SELECT * FROM referencing_table;
+
 -- drop table for next tests
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
@@ -91,11 +97,28 @@ CREATE TABLE referenced_table(id int UNIQUE, test_column int, PRIMARY KEY(id, te
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON DELETE CASCADE);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
+
+-- single shard cascading delete
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
 SELECT * FROM referencing_table;
 SELECT * FROM referenced_table;
+
+-- multi shard cascading delete
+INSERT INTO referenced_table VALUES(2, 2);
+INSERT INTO referencing_table VALUES(2, 2);
+SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+SELECT * FROM referencing_table;
+
+-- multi shard cascading delete with alter table
+INSERT INTO referenced_table VALUES(3, 3);
+INSERT INTO referencing_table VALUES(3, 3);
+BEGIN;
+ALTER TABLE referencing_table ADD COLUMN x int DEFAULT 0;
+SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+COMMIT;
+
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
