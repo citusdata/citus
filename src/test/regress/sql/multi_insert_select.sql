@@ -603,6 +603,64 @@ GROUP  BY grouping sets ( ( user_id ), ( value_1 ), ( user_id, value_1 ), ( ) );
 -- set back to INFO
 SET client_min_messages TO INFO;
 
+-- avoid constraint violations
+TRUNCATE raw_events_first;
+
+-- Altering a table and selecting from it using a multi-shard statement
+-- in the same transaction is allowed because we will use the same
+-- connections for all co-located placements.
+BEGIN;
+ALTER TABLE raw_events_second DROP COLUMN value_4;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second; 
+ROLLBACK;
+
+-- Alterating a table and selecting from it using a single-shard statement
+-- in the same transaction is disallowed because we will use a different
+-- connection.
+BEGIN;
+ALTER TABLE raw_events_second DROP COLUMN value_4;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100; 
+ROLLBACK;
+
+-- Insert after copy is currently disallowed because of the way the 
+-- transaction modification state is currently handled. Copy still
+-- goes through despite rollback.
+BEGIN;
+COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
+100,100
+\.
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+ROLLBACK;
+
+-- Insert after copy is currently allowed for single-shard operation.
+-- Since the COPY commits immediately, the result is visible in the
+-- next operation. Copy goes through despite rollback, while insert
+-- rolls back.
+BEGIN;
+COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
+101,101
+\.
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 101;
+SELECT user_id FROM raw_events_first WHERE user_id = 101;
+ROLLBACK;
+
+-- Copy after insert is disallowed since the insert is not immediately
+-- committed and the copy uses different connections that will not yet
+-- see the result of the insert.
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+102,102
+\.
+ROLLBACK;
+
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+103,103
+\.
+ROLLBACK;
+
 -- Views does not work
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
 INSERT INTO raw_events_second SELECT * FROM test_view;

@@ -202,6 +202,16 @@ COMMIT;
 \d labs
 SELECT * FROM labs WHERE id = 12;
 
+-- multi-shard operations can co-exist with DDL in a transactional way
+BEGIN;
+ALTER TABLE labs ADD COLUMN motto text;
+SELECT master_modify_multiple_shards('DELETE FROM labs');
+ALTER TABLE labs ADD COLUMN score float;
+ROLLBACK;
+
+-- should have rolled everything back
+SELECT * FROM labs WHERE id = 12;
+
 -- now, for some special failures...
 CREATE TABLE objects (
 	id bigint PRIMARY KEY,

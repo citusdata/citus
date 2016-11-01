@@ -13,10 +13,13 @@
 #include "libpq-fe.h"
 #include "postgres.h"
 
+#include "distributed/colocation_utils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_shard_transaction.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "nodes/pg_list.h"
 #include "storage/ipc.h"
@@ -182,7 +185,17 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 ShardConnections *
 GetShardConnections(int64 shardId, bool *shardConnectionsFound)
 {
-	return GetShardHashConnections(shardConnectionHash, shardId, shardConnectionsFound);
+	ShardConnections *shardConnections = NULL;
+
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	List *colocatedShardIds = ColocatedShardIntervalList(shardInterval);
+	ShardInterval *baseShardInterval = LowestShardIntervalById(colocatedShardIds);
+	int64 baseShardId = baseShardInterval->shardId;
+
+	shardConnections = GetShardHashConnections(shardConnectionHash, baseShardId,
+											   shardConnectionsFound);
+
+	return shardConnections;
 }
 
 
