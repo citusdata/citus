@@ -563,8 +563,8 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint"),
-							errdetail("Citus Community Edition currently supports foreign"
-									  "key constraints only for "
+							errdetail("Citus Community Edition currently supports "
+									  "foreign key constraints only for "
 									  "\"citus.shard_replication_factor = 1\"."),
 							errhint("Please change \"citus.shard_replication_factor to "
 									"1\". To learn more about using foreign keys with "
