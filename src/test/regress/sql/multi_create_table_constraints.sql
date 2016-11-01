@@ -249,3 +249,28 @@ DROP TABLE pk_on_part_col, uq_part_col, uq_two_columns CASCADE;
 DROP TABLE ex_on_part_col, ex_on_two_columns, ex_on_two_columns_prt, ex_multiple_excludes, ex_overlaps CASCADE;
 DROP TABLE ex_on_part_col_named, ex_on_two_columns_named, ex_overlaps_named CASCADE;
 DROP TABLE uq_range_tables, check_example CASCADE;
+
+-- test dropping table with foreign keys
+SET citus.shard_count = 4;
+SET citus.shard_replication_factor = 1;
+
+CREATE TABLE raw_table_1 (user_id int, UNIQUE(user_id));
+SELECT create_distributed_table('raw_table_1', 'user_id');
+
+CREATE TABLE raw_table_2 (user_id int REFERENCES raw_table_1(user_id), UNIQUE(user_id));
+SELECT create_distributed_table('raw_table_2', 'user_id');
+
+-- see that the constraint exists
+\d raw_table_2
+
+-- should be prevented by the foreign key
+DROP TABLE raw_table_1;
+
+-- should cleanly drop the remote shards
+DROP TABLE raw_table_1 CASCADE;
+
+-- see that the constraint also dropped
+\d raw_table_2
+
+-- drop the table as well
+DROP TABLE raw_table_2;

@@ -145,25 +145,12 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 	char *relationName = get_rel_name(relationId);
 	char relationKind = get_rel_relkind(relationId);
 	StringInfo workerCommand = makeStringInfo();
+	StringInfo shardNames = makeStringInfo();
 	ListCell *shardIntervalCell = NULL;
 
 	if (shardIntervalList == NIL)
 	{
 		return;
-	}
-
-	if (relationKind == RELKIND_RELATION)
-	{
-		appendStringInfo(workerCommand, DROP_REGULAR_TABLE_COMMAND, "");
-	}
-	else if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		appendStringInfo(workerCommand, DROP_FOREIGN_TABLE_COMMAND, "");
-	}
-	else
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("expire target is not a regular or foreign table")));
 	}
 
 	foreach(shardIntervalCell, shardIntervalList)
@@ -174,16 +161,28 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 
 		AppendShardIdToName(&shardName, shardInterval->shardId);
 		quotedShardName = quote_qualified_identifier(schemaName, shardName);
-		appendStringInfo(workerCommand, "%s", quotedShardName);
+		appendStringInfo(shardNames, "%s", quotedShardName);
 
 		/* append a comma after the shard name if there are more shards */
 		if (lnext(shardIntervalCell) != NULL)
 		{
-			appendStringInfo(workerCommand, ", ");
+			appendStringInfo(shardNames, ", ");
 		}
 	}
 
-	appendStringInfo(workerCommand, " CASCADE");
+	if (relationKind == RELKIND_RELATION)
+	{
+		appendStringInfo(workerCommand, DROP_REGULAR_TABLE_COMMAND, shardNames->data);
+	}
+	else if (relationKind == RELKIND_FOREIGN_TABLE)
+	{
+		appendStringInfo(workerCommand, DROP_FOREIGN_TABLE_COMMAND, shardNames->data);
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("expire target is not a regular or foreign table")));
+	}
 
 	ExecuteRemoteCommand(workerNode->workerName, workerNode->workerPort, workerCommand);
 }
