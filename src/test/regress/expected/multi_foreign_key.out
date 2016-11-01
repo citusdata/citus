@@ -63,7 +63,8 @@ DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 ERROR:  cannot create foreign key constraint
-DETAIL:  Citus cannot create foreign key constrains if replication factor is greater than 1. Contact Citus Data for alternative deployment options.
+DETAIL:  Citus Community Edition currently supports foreignkey constraints only for "citus.shard_replication_factor = 1".
+HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- test foreign constraint with correct conditions
