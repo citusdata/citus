@@ -1176,6 +1176,69 @@ DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300009
 DEBUG:  sent COMMIT over connection 13300010
 DEBUG:  sent COMMIT over connection 13300010
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+truncate raw_events_second;
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- insert with constant values
+INSERT INTO raw_events_second (user_id, value_1, time)
+SELECT
+   user_id, value_1, '2016-10-28 21:05:12.048697'::timestamp
+FROM
+   raw_events_first
+RETURNING user_id, time;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id, "time", value_1) SELECT user_id, 'Fri Oct 28 21:05:12.048697 2016'::timestamp without time zone AS "timestamp", value_1 FROM public.raw_events_first_13300000 raw_events_first WHERE ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)) RETURNING citus_table_alias.user_id, citus_table_alias."time"
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id, "time", value_1) SELECT user_id, 'Fri Oct 28 21:05:12.048697 2016'::timestamp without time zone AS "timestamp", value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)) RETURNING citus_table_alias.user_id, citus_table_alias."time"
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id, "time", value_1) SELECT user_id, 'Fri Oct 28 21:05:12.048697 2016'::timestamp without time zone AS "timestamp", value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)) RETURNING citus_table_alias.user_id, citus_table_alias."time"
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, "time", value_1) SELECT user_id, 'Fri Oct 28 21:05:12.048697 2016'::timestamp without time zone AS "timestamp", value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) RETURNING citus_table_alias.user_id, citus_table_alias."time"
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300007
+DEBUG:  sent COMMIT over connection 13300007
+DEBUG:  sent COMMIT over connection 13300005
+DEBUG:  sent COMMIT over connection 13300005
+DEBUG:  sent COMMIT over connection 13300006
+DEBUG:  sent COMMIT over connection 13300006
+DEBUG:  sent COMMIT over connection 13300004
+DEBUG:  sent COMMIT over connection 13300004
+ user_id |              time               
+---------+---------------------------------
+       1 | Fri Oct 28 21:05:12.048697 2016
+       5 | Fri Oct 28 21:05:12.048697 2016
+       8 | Fri Oct 28 21:05:12.048697 2016
+       3 | Fri Oct 28 21:05:12.048697 2016
+       4 | Fri Oct 28 21:05:12.048697 2016
+       7 | Fri Oct 28 21:05:12.048697 2016
+       6 | Fri Oct 28 21:05:12.048697 2016
+       2 | Fri Oct 28 21:05:12.048697 2016
+       9 | Fri Oct 28 21:05:12.048697 2016
+(9 rows)
+
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
