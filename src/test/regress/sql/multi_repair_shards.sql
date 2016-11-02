@@ -40,6 +40,28 @@ SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_e
 -- now, update the second placement as unhealthy
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_2_port;
 
+-- cannot repair a shard after a modification (transaction still open during repair)
+BEGIN;
+ALTER TABLE customer_engagements ADD COLUMN value float;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ROLLBACK;
+
+BEGIN;
+INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ROLLBACK;
+
+-- modifications after reparing a shard are fine (will use new metadata)
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ALTER TABLE customer_engagements ADD COLUMN value float;
+ROLLBACK;
+
+BEGIN;
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
+ROLLBACK;
+
 -- add a fake healthy placement for the tests
 INSERT INTO pg_dist_shard_placement (nodename, nodeport, shardid, shardstate, shardlength)
 							 VALUES ('dummyhost', :worker_2_port, :newshardid, 1, 0);
