@@ -80,14 +80,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300004
-DEBUG:  sent COMMIT over connection 13300004
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- see that our first multi shard INSERT...SELECT works expected
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
@@ -283,14 +283,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300004
-DEBUG:  sent COMMIT over connection 13300004
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
        9 |      |      90 |         |    9000 |        
@@ -363,14 +363,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- group by column not exists on the SELECT target list
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id) 
 SELECT
@@ -574,14 +574,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- add one more level subqueris on top of subquery JOINs
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -659,14 +659,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- subqueries in WHERE clause
 INSERT INTO raw_events_second
             (user_id)
@@ -711,14 +711,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300007
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300005
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300006
-DEBUG:  sent COMMIT over connection 13300004
-DEBUG:  sent COMMIT over connection 13300004
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -758,14 +758,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- upserts with returning
 INSERT INTO agg_events AS ae 
             ( 
@@ -806,14 +806,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
  user_id | value_1_agg 
 ---------+-------------
        7 |            
@@ -848,14 +848,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 --  FILTER CLAUSE
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
@@ -886,14 +886,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -929,14 +929,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- a note on the outer joins is that
 -- we filter out outer join results
 -- where partition column returns
@@ -1024,14 +1024,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
@@ -1094,14 +1094,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
@@ -1168,14 +1168,14 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300008
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300011
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300009
-DEBUG:  sent COMMIT over connection 13300010
-DEBUG:  sent COMMIT over connection 13300010
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300001
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300000
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300002
+DEBUG:  sent COMMIT over connection 13300003
+DEBUG:  sent COMMIT over connection 13300003
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1455,6 +1455,62 @@ DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  ProcessUtility
+-- avoid constraint violations
+TRUNCATE raw_events_first;
+-- Altering a table and selecting from it using a multi-shard statement
+-- in the same transaction is allowed because we will use the same
+-- connections for all co-located placements.
+BEGIN;
+ALTER TABLE raw_events_second DROP COLUMN value_4;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+INSERT INTO raw_events_first SELECT * FROM raw_events_second; 
+ROLLBACK;
+-- Alterating a table and selecting from it using a single-shard statement
+-- in the same transaction is disallowed because we will use a different
+-- connection.
+BEGIN;
+ALTER TABLE raw_events_second DROP COLUMN value_4;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100; 
+ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
+ROLLBACK;
+-- Insert after copy is currently disallowed because of the way the 
+-- transaction modification state is currently handled. Copy still
+-- goes through despite rollback.
+BEGIN;
+COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+ERROR:  multi-shard data modifications must not appear in transaction blocks which contain single-shard DML commands
+ROLLBACK;
+-- Insert after copy is currently allowed for single-shard operation.
+-- Since the COPY commits immediately, the result is visible in the
+-- next operation. Copy goes through despite rollback, while insert
+-- rolls back.
+BEGIN;
+COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 101;
+SELECT user_id FROM raw_events_first WHERE user_id = 101;
+ user_id 
+---------
+     101
+(1 row)
+
+ROLLBACK;
+-- Copy after insert is disallowed since the insert is not immediately
+-- committed and the copy uses different connections that will not yet
+-- see the result of the insert.
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
+CONTEXT:  COPY raw_events_first, line 1: "102,102"
+ROLLBACK;
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
+CONTEXT:  COPY raw_events_first, line 1: "103,103"
+ROLLBACK;
 -- Views does not work
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
 INSERT INTO raw_events_second SELECT * FROM test_view;

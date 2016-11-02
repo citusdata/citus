@@ -101,6 +101,16 @@ CONTEXT:  while executing command on localhost:57637
 -- test delete from referenced table while there is NO corresponding value in referencing table
 DELETE FROM referencing_table WHERE ref_id = 1;
 DELETE FROM referenced_table WHERE id = 1;
+-- test cascading truncate
+INSERT INTO referenced_table VALUES(2, 2);
+INSERT INTO referencing_table VALUES(2, 2);
+TRUNCATE referenced_table CASCADE;
+NOTICE:  truncate cascades to table "referencing_table"
+SELECT * FROM referencing_table;
+ id | ref_id 
+----+--------
+(0 rows)
+
 -- drop table for next tests
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
@@ -120,6 +130,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
  
 (1 row)
 
+-- single shard cascading delete
 INSERT INTO referenced_table VALUES(1, 1);
 INSERT INTO referencing_table VALUES(1, 1);
 DELETE FROM referenced_table WHERE id = 1;
@@ -133,6 +144,34 @@ SELECT * FROM referenced_table;
 ----+-------------
 (0 rows)
 
+-- multi shard cascading delete
+INSERT INTO referenced_table VALUES(2, 2);
+INSERT INTO referencing_table VALUES(2, 2);
+SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+ master_modify_multiple_shards 
+-------------------------------
+                             1
+(1 row)
+
+SELECT * FROM referencing_table;
+ id | ref_id 
+----+--------
+(0 rows)
+
+-- multi shard cascading delete with alter table
+INSERT INTO referenced_table VALUES(3, 3);
+INSERT INTO referencing_table VALUES(3, 3);
+BEGIN;
+ALTER TABLE referencing_table ADD COLUMN x int DEFAULT 0;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
+ master_modify_multiple_shards 
+-------------------------------
+                             1
+(1 row)
+
+COMMIT;
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 -- test ON DELETE NO ACTION + DEFERABLE + INITIALLY DEFERRED

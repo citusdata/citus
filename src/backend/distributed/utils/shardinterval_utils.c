@@ -29,6 +29,31 @@ static ShardInterval * SearchCachedShardInterval(Datum partitionColumnValue,
 
 
 /*
+ * LowestShardIntervalById returns the shard interval with the lowest shard
+ * ID from a list of shard intervals.
+ */
+ShardInterval *
+LowestShardIntervalById(List *shardIntervalList)
+{
+	ShardInterval *lowestShardInterval = NULL;
+	ListCell *shardIntervalCell = NULL;
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+
+		if (lowestShardInterval == NULL ||
+			lowestShardInterval->shardId > shardInterval->shardId)
+		{
+			lowestShardInterval = shardInterval;
+		}
+	}
+
+	return lowestShardInterval;
+}
+
+
+/*
  * CompareShardIntervals acts as a helper function to compare two shard intervals
  * by their minimum values, using the value's type comparison function.
  *
