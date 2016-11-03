@@ -179,6 +179,13 @@ SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char 
 	PGresult *queryResult = NULL;
 	ListCell *commandCell = NULL;
 
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
+	}
+
 	workerConnection = ConnectToNode(nodeName, nodePort, nodeUser);
 	if (workerConnection == NULL)
 	{
