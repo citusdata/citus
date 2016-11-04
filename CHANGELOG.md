@@ -1,3 +1,29 @@
+### citus v5.2.2 (November 4, 2016) ###
+
+* Adds support for `IF NOT EXISTS` clause of `CREATE INDEX` command
+
+* Adds support for `RETURN QUERY` and `FOR ... IN` PL/pgSQL features
+
+* Extends the router planner to handle more queries
+
+* Changes `COUNT` of zero-row sets to return `0` rather than an empty result
+
+* Reduces the minimum permitted `task_tracker_delay` to a single millisecond
+
+* Fixes a bug that caused crashes during joins with a `WHERE false` clause
+
+* Fixes a bug triggered by unique violation errors raised in long transactions
+
+* Fixes a bug resulting in multiple registration of transaction callbacks
+
+* Fixes a bug which could result in stale reads of distribution metadata
+
+* Fixes a bug preventing distributed modifications in some PL/pgSQL functions
+
+* Fixes some code paths that could hypothetically read uninitialized memory
+
+* Lowers log level of _waiting for activity_ messages
+
 ### citus v5.2.1 (September 6, 2016) ###
 
 * Fixes subquery pushdown to properly extract outer join qualifiers
