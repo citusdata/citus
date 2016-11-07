@@ -10,8 +10,8 @@ SELECT master_add_node('localhost', :worker_2_port);
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
--- try to add the node again when it is activated
-SELECT master_add_node('localhost', :worker_1_port);
+-- try to add a node that is already in the cluster
+SELECT * FROM master_add_node('localhost', :worker_1_port);
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
