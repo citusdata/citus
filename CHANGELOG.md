@@ -1,4 +1,4 @@
-### citus v5.2.2 (November 4, 2016) ###
+### citus v5.2.2 (November 7, 2016) ###
 
 * Adds support for `IF NOT EXISTS` clause of `CREATE INDEX` command
 
