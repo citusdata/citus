@@ -1,4 +1,4 @@
-### citus v6.0.0 (November 4, 2016) ###
+### citus v6.0.0 (November 7, 2016) ###
 
 * Adds compatibility with PostgreSQL 9.6, now the recommended version
 
@@ -78,7 +78,7 @@
 
 * Adds `create_distributed_table` to easily create shards and infer colocation
 
-### citus v5.2.2 (November 4, 2016) ###
+### citus v5.2.2 (November 7, 2016) ###
 
 * Adds support for `IF NOT EXISTS` clause of `CREATE INDEX` command
 
