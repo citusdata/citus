@@ -22,11 +22,11 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (2 rows)
 
--- try to add the node again when it is activated
-SELECT master_add_node('localhost', :worker_1_port);
-         master_add_node         
----------------------------------
- (1,1,localhost,57637,default,f)
+-- try to add a node that is already in the cluster
+SELECT * FROM master_add_node('localhost', :worker_1_port);
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata 
+--------+---------+-----------+----------+----------+-------------
+      1 |       1 | localhost |    57637 | default  | f
 (1 row)
 
 -- get the active nodes
