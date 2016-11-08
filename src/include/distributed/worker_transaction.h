@@ -35,6 +35,7 @@ extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *co
 									   const char *const *parameterValues);
 extern void SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort,
 													   char *nodeUser, List *commandList);
+extern void RemoveWorkerTransaction(char *nodeName, int32 nodePort);
 
 /* helper functions for worker transactions */
 extern bool IsWorkerTransactionActive(void);

@@ -63,9 +63,6 @@ GetWorkerTransactions(void)
 		workerConnectionList = OpenWorkerTransactions();
 	}
 
-	/* ensure that number of workers has not change */
-	Assert(list_length(WorkerNodeList()) == list_length(workerConnectionList));
-
 	return workerConnectionList;
 }
 
@@ -264,6 +261,29 @@ IsWorkerTransactionActive(void)
 	}
 
 	return isWorkerTransactionActive;
+}
+
+
+/*
+ * RemoveWorkerTransaction removes the transaction connection to the specified node from
+ * the transaction connection list.
+ */
+void
+RemoveWorkerTransaction(char *nodeName, int32 nodePort)
+{
+	TransactionConnection *transactionConnection =
+		GetWorkerTransaction(nodeName, nodePort);
+
+	/* transactionConnection = NULL if the worker transactions have not opened before */
+	if (transactionConnection != NULL)
+	{
+		PGconn *connection = transactionConnection->connection;
+
+		/* closing the connection will rollback all uncommited transactions */
+		PQfinish(connection);
+
+		workerConnectionList = list_delete(workerConnectionList, transactionConnection);
+	}
 }
 
 
