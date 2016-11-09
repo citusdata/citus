@@ -157,6 +157,13 @@ _PG_init(void)
 	/* initialize transaction callbacks */
 	RegisterRouterExecutorXactCallbacks();
 	RegisterShardPlacementXactCallbacks();
+
+	/* enable modification of pg_catalog tables during pg_upgrade */
+	if (IsBinaryUpgrade)
+	{
+		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
+						PGC_S_OVERRIDE);
+	}
 }
 
 
