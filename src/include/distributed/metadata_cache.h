@@ -59,7 +59,6 @@ extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationI
 extern int GetLocalGroupId(void);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
-extern void CitusInvalidateNodeCache(void);
 
 extern bool CitusHasBeenLoaded(void);
 
