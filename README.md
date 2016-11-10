@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/citusdata/citus.svg?branch=master)](https://travis-ci.org/citusdata/citus)
 [![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
-[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/en/v5.2/index.html)
+[![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
 
 ### What is Citus?
 
@@ -72,7 +72,7 @@ stay on top of the latest developments.
   <td>Try the <a
   href="https://docs.citusdata.com/en/v5.2/tutorials/tut-hash-distribution.html">Citus
   tutorials</a> for a hands-on introduction or <br/>the <a
-  href="https://docs.citusdata.com/en/v5.2/index.html">documentation</a> for
+  href="https://docs.citusdata.com">documentation</a> for
   a more comprehensive reference.</td>
 </tr>
 <tr>
@@ -145,4 +145,4 @@ Copyright © 2012–2016 Citus Data, Inc.
 [faq]: https://www.citusdata.com/frequently-asked-questions
 [linux_install]: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04
 [mac_install]: https://www.docker.com/products/docker-toolbox
-[tutorial]: https://docs.citusdata.com/en/v5.2/tutorials/tut-hash-distribution.html
+[tutorial]: https://docs.citusdata.com/en/v6.0/tutorials/tut-hash-distribution.html
