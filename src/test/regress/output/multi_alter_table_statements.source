@@ -317,7 +317,7 @@ ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER,
 
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 	ALTER COLUMN int_column1 SET STATISTICS 10;
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
 \d lineitem_alter
@@ -349,13 +349,13 @@ ALTER TABLE lineitem_alter DROP COLUMN l_orderkey;
 ERROR:  cannot execute ALTER TABLE command involving partition column
 -- Verify that we error out on unsupported statement types
 ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter SET WITHOUT OIDS;
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 -- Verify that we error out in case of postgres errors on supported statement
 -- types
