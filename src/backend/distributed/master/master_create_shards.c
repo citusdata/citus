@@ -41,6 +41,7 @@
 #include "nodes/primnodes.h"
 #include "postmaster/postmaster.h"
 #include "storage/fd.h"
+#include "storage/lmgr.h"
 #include "storage/lock.h"
 #include "utils/builtins.h"
 #include "utils/elog.h"
@@ -247,8 +248,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	/* we plan to add shards: get an exclusive metadata lock on the target relation */
 	LockRelationDistributionMetadata(targetRelationId, ExclusiveLock);
 
-	/* a share metadata lock is enough on the source relation */
-	LockRelationDistributionMetadata(sourceRelationId, ShareLock);
+	/* we don't want source table to get dropped before we colocate with it */
+	LockRelationOid(sourceRelationId, AccessShareLock);
 
 	/* prevent placement changes of the source relation until we colocate with them */
 	sourceShardIntervalList = LoadShardIntervalList(sourceRelationId);
