@@ -497,6 +497,17 @@ SELECT non_partition_parameter_delete(62);
 -- check table after deletes
 SELECT * FROM plpgsql_table ORDER BY key, value;
 
+-- check whether we can handle execute parameters
+CREATE TABLE execute_parameter_test (key int, val date);
+SELECT create_distributed_table('execute_parameter_test', 'key');
+DO $$
+BEGIN
+ EXECUTE 'INSERT INTO execute_parameter_test VALUES (3, $1)' USING date '2000-01-01';
+ EXECUTE 'INSERT INTO execute_parameter_test VALUES (3, $1)' USING NULL::date;
+END;
+$$;
+DROP TABLE execute_parameter_test;
+
 -- clean-up functions
 DROP FUNCTION plpgsql_test_1();
 DROP FUNCTION plpgsql_test_2();
