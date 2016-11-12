@@ -1383,12 +1383,12 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
 		}
 
 		/*
-		 * If the parameter is NULL, or is not referenced / used (ptype == 0
+		 * If the parameter is not referenced / used (ptype == 0) and
 		 * would otherwise have errored out inside standard_planner()),
 		 * don't pass a value to the remote side, and pass text oid to prevent
 		 * undetermined data type errors on workers.
 		 */
-		if (parameterData->isnull || parameterData->ptype == 0)
+		if (parameterData->ptype == 0)
 		{
 			(*parameterValues)[parameterIndex] = NULL;
 			(*parameterTypes)[parameterIndex] = TEXTOID;
@@ -1396,8 +1396,20 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
 			continue;
 		}
 
+		/*
+		 * If the parameter is NULL then we preserve its type, but
+		 * don't need to evaluate its value.
+		 */
+		if (parameterData->isnull)
+		{
+			(*parameterValues)[parameterIndex] = NULL;
+
+			continue;
+		}
+
 		getTypeOutputInfo(parameterData->ptype, &typeOutputFunctionId,
 						  &variableLengthType);
+
 		(*parameterValues)[parameterIndex] = OidOutputFunctionCall(typeOutputFunctionId,
 																   parameterData->value);
 	}
