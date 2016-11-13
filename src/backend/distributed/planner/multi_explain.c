@@ -52,8 +52,6 @@
 
 
 /* Config variables that enable printing distributed query plans */
-bool ExplainMultiLogicalPlan = false;
-bool ExplainMultiPhysicalPlan = false;
 bool ExplainDistributedQueries = true;
 bool ExplainAllTasks = false;
 
@@ -185,24 +183,10 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
-	if (ExplainMultiLogicalPlan)
 	{
-		MultiTreeRoot *multiTree = MultiLogicalPlanCreate(query);
-		char *logicalPlanString = CitusNodeToString(multiTree);
-		char *formattedPlanString = pretty_format_node_dump(logicalPlanString);
 
-		appendStringInfo(es->str, "logical plan:\n");
-		appendStringInfo(es->str, "%s\n", formattedPlanString);
 	}
 
-	if (ExplainMultiPhysicalPlan)
-	{
-		char *physicalPlanString = CitusNodeToString(multiPlan);
-		char *formattedPlanString = pretty_format_node_dump(physicalPlanString);
-
-		appendStringInfo(es->str, "physical plan:\n");
-		appendStringInfo(es->str, "%s\n", formattedPlanString);
-	}
 
 	if (!ExplainDistributedQueries)
 	{
