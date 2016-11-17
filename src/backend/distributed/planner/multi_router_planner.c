@@ -2422,9 +2422,9 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	List *newInsertTargetlist = NIL;
 	int resno = 1;
 	Index insertTableId = 1;
-	int updatedSubqueryEntryCount = 0;
 	Oid insertRelationId = InvalidOid;
 	int subqueryTargetLength = 0;
+	int targetEntryIndex = 0;
 
 	AssertArg(InsertSelectQuery(originalQuery));
 
@@ -2437,8 +2437,9 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	 *  - Iterate over the INSERT target list entries
 	 *    - If the target entry includes a Var, find the corresponding
 	 *      SELECT target entry on the original query and update resno
-	 *    - If the target entry does not include a Var (i.e., defaults),
-	 *      create new target entry and add that to SELECT target list
+	 *    - If the target entry does not include a Var (i.e., defaults
+	 *      or constants), create new target entry and add that to
+	 *      SELECT target list
 	 *    - Create a new INSERT target entry with respect to the new
 	 *      SELECT target entry created.
 	 */
@@ -2452,7 +2453,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		int targetVarCount = 0;
 		AttrNumber originalAttrNo = get_attnum(insertRelationId,
 											   oldInsertTargetEntry->resname);
-
 
 		/* see transformInsertRow() for the details */
 		if (IsA(oldInsertTargetEntry->expr, ArrayRef) ||
@@ -2493,8 +2493,6 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 			newSubqueryTargetEntry->resno = resno;
 			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
 											newSubqueryTargetEntry);
-
-			updatedSubqueryEntryCount++;
 		}
 		else
 		{
@@ -2505,6 +2503,13 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
 											newSubqueryTargetEntry);
 		}
+
+		/*
+		 * The newly created select target entry cannot be a junk entry since junk
+		 * entries are not in the final target list and we're processing the
+		 * final target list entries.
+		 */
+		Assert(!newSubqueryTargetEntry->resjunk);
 
 		newInsertVar = makeVar(insertTableId, originalAttrNo,
 							   exprType((Node *) newSubqueryTargetEntry->expr),
@@ -2524,24 +2529,28 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	 * target list of subquery), update the remaining resnos.
 	 */
 	subqueryTargetLength = list_length(subquery->targetList);
-	if (subqueryTargetLength != updatedSubqueryEntryCount)
+	for (; targetEntryIndex < subqueryTargetLength; ++targetEntryIndex)
 	{
-		int targetEntryIndex = updatedSubqueryEntryCount;
+		TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
+											   targetEntryIndex);
+		TargetEntry *newSubqueryTargetEntry = NULL;
 
-		for (; targetEntryIndex < subqueryTargetLength; ++targetEntryIndex)
+		/*
+		 * Skip non-junk entries since we've already processed them above and this
+		 * loop only is intended for junk entries.
+		 */
+		if (!oldSubqueryTle->resjunk)
 		{
-			TargetEntry *oldSubqueryTle = list_nth(subquery->targetList,
-												   targetEntryIndex);
-			TargetEntry *newSubqueryTargetEntry = copyObject(oldSubqueryTle);
-
-			Assert(newSubqueryTargetEntry->resjunk == true);
-
-			newSubqueryTargetEntry->resno = resno;
-			newSubqueryTargetlist = lappend(newSubqueryTargetlist,
-											newSubqueryTargetEntry);
-
-			resno++;
+			continue;
 		}
+
+		newSubqueryTargetEntry = copyObject(oldSubqueryTle);
+
+		newSubqueryTargetEntry->resno = resno;
+		newSubqueryTargetlist = lappend(newSubqueryTargetlist,
+										newSubqueryTargetEntry);
+
+		resno++;
 	}
 
 	originalQuery->targetList = newInsertTargetlist;
