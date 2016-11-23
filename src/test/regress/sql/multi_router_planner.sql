@@ -14,6 +14,13 @@ CREATE TABLE articles_hash (
 	word_count integer
 );
 
+CREATE TABLE articles_range (
+	id bigint NOT NULL,
+	author_id bigint NOT NULL,
+	title varchar(20) NOT NULL,
+	word_count integer
+);
+
 -- Check for the existence of line 'DEBUG:  Creating router plan'
 -- to determine if router planner is used.
 
@@ -25,7 +32,6 @@ CREATE TABLE articles_single_shard_hash (LIKE articles_hash);
 
 SELECT master_create_distributed_table('articles_hash', 'author_id', 'hash');
 SELECT master_create_distributed_table('articles_single_shard_hash', 'author_id', 'hash');
-
 
 -- test when a table is distributed but no shards created yet
 SELECT count(*) from articles_hash;
@@ -650,6 +656,93 @@ SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
 	FROM articles_hash 
 	WHERE author_id = 1 and 1=0;
 
+-- function calls in WHERE clause with non-relational arguments
+SELECT author_id FROM articles_hash
+	WHERE 
+		substring('hello world', 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+-- when expression evaluates to false
+SELECT author_id FROM articles_hash
+	WHERE 
+		substring('hello world', 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+-- following is a bug, function should have been
+-- evaluated at master before going to worker
+
+-- need to use a range distributed table here
+SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
+SET citus.shard_replication_factor TO 1;
+SELECT master_create_empty_shard('articles_range') AS shard_id \gset
+UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
+
+SELECT author_id FROM articles_range
+	WHERE 
+		substring('articles_range'::regclass::text, 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+-- same query with where false but evaluation left to worker
+SELECT author_id FROM articles_range
+	WHERE 
+		substring('articles_range'::regclass::text, 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+-- same query on router planner with where false but evaluation left to worker
+SELECT author_id FROM articles_single_shard_hash
+	WHERE 
+		substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+SELECT author_id FROM articles_hash
+	WHERE 
+		author_id = 1
+		AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+
+-- create a dummy function to be used in filtering
+CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
+    RETURNS text AS
+$$
+BEGIN
+    RETURN md5($1::text);
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE;
+
+-- not router plannable, returns all rows 
+SELECT * FROM articles_hash
+	WHERE
+		someDummyFunction('articles_hash') = md5('articles_hash')
+	ORDER BY
+		author_id, id
+	LIMIT 5;
+
+-- router plannable, errors
+SELECT * FROM articles_hash
+	WHERE
+		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+	ORDER BY
+		author_id, id
+	LIMIT 5;
+
+-- temporarily turn off debug messages before dropping the function
+SET client_min_messages TO 'NOTICE';
+DROP FUNCTION someDummyFunction(regclass);
+
+SET client_min_messages TO 'DEBUG2';
+
 -- complex query hitting a single shard 	
 SELECT
 	count(DISTINCT CASE
@@ -803,3 +896,4 @@ DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
 DROP TABLE company_employees;
+DROP TABLE articles_range;

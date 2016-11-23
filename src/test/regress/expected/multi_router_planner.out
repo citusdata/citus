@@ -9,6 +9,12 @@ CREATE TABLE articles_hash (
 	title varchar(20) NOT NULL,
 	word_count integer
 );
+CREATE TABLE articles_range (
+	id bigint NOT NULL,
+	author_id bigint NOT NULL,
+	title varchar(20) NOT NULL,
+	word_count integer
+);
 -- Check for the existence of line 'DEBUG:  Creating router plan'
 -- to determine if router planner is used.
 -- this table is used in a CTE test
@@ -1545,6 +1551,142 @@ DEBUG:  Plan is router executable
 ------------+------
 (0 rows)
 
+-- function calls in WHERE clause with non-relational arguments
+SELECT author_id FROM articles_hash
+	WHERE 
+		substring('hello world', 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  push down of limit count: 1
+ author_id 
+-----------
+         1
+(1 row)
+
+-- when expression evaluates to false
+SELECT author_id FROM articles_hash
+	WHERE 
+		substring('hello world', 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ author_id 
+-----------
+(0 rows)
+
+-- following is a bug, function should have been
+-- evaluated at master before going to worker
+-- need to use a range distributed table here
+SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SET citus.shard_replication_factor TO 1;
+SELECT master_create_empty_shard('articles_range') AS shard_id \gset
+UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
+SELECT author_id FROM articles_range
+	WHERE 
+		substring('articles_range'::regclass::text, 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  push down of limit count: 1
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failed to execute job 840020
+DETAIL:  Failure due to failed task 2
+-- same query with where false but evaluation left to worker
+SELECT author_id FROM articles_range
+	WHERE 
+		substring('articles_range'::regclass::text, 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  push down of limit count: 1
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "public.articles_range" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failed to execute job 840021
+DETAIL:  Failure due to failed task 2
+-- same query on router planner with where false but evaluation left to worker
+SELECT author_id FROM articles_single_shard_hash
+	WHERE 
+		substring('articles_single_shard_hash'::regclass::text, 1, 4) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+WARNING:  relation "public.articles_single_shard_hash" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  could not receive query results
+SELECT author_id FROM articles_hash
+	WHERE 
+		author_id = 1
+		AND substring('articles_hash'::regclass::text, 1, 5) = 'hello'
+	ORDER BY
+		author_id
+	LIMIT 1;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+WARNING:  relation "public.articles_hash" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  could not receive query results
+-- create a dummy function to be used in filtering
+CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
+    RETURNS text AS
+$$
+BEGIN
+    RETURN md5($1::text);
+END;
+$$ LANGUAGE 'plpgsql' IMMUTABLE;
+-- not router plannable, returns all rows 
+SELECT * FROM articles_hash
+	WHERE
+		someDummyFunction('articles_hash') = md5('articles_hash')
+	ORDER BY
+		author_id, id
+	LIMIT 5;
+DEBUG:  push down of limit count: 5
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable, errors
+SELECT * FROM articles_hash
+	WHERE
+		someDummyFunction('articles_hash') = md5('articles_hash') AND author_id = 1
+	ORDER BY
+		author_id, id
+	LIMIT 5;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+WARNING:  relation "public.articles_hash" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  could not receive query results
+-- temporarily turn off debug messages before dropping the function
+SET client_min_messages TO 'NOTICE';
+DROP FUNCTION someDummyFunction(regclass);
+SET client_min_messages TO 'DEBUG2';
 -- complex query hitting a single shard 	
 SELECT
 	count(DISTINCT CASE
@@ -1863,3 +2005,4 @@ DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
 DROP TABLE company_employees;
+DROP TABLE articles_range;
