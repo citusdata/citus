@@ -642,6 +642,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+enable_coverage
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1257,6 +1258,12 @@ if test -n "$ac_init_help"; then
      short | recursive ) echo "Configuration of Citus 5.0:";;
    esac
   cat <<\_ACEOF
+
+Optional Features:
+  --disable-option-checking  ignore unrecognized --enable/--with options
+  --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
+  --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-coverage       build with coverage testing instrumentation
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -2945,6 +2952,18 @@ if test x"$citusac_cv_prog_cc_cflags__Wmissing_prototypes" = x"yes"; then
   CITUS_CFLAGS="$CITUS_CFLAGS -Wmissing-prototypes"
 fi
 
+
+#
+# --enable-coverage enables generation of code coverage metrics with gcov
+#
+# Check whether --enable-coverage was given.
+if test "${enable_coverage+set}" = set; then :
+  enableval=$enable_coverage;
+fi
+
+if test "$enable_coverage" = yes; then
+    CITUS_CFLAGS="$CITUS_CFLAGS -fprofile-arcs -ftest-coverage"
+fi
 
 CITUS_CFLAGS="$CITUS_CFLAGS"
 

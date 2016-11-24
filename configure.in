@@ -109,6 +109,14 @@ CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-format-attribute])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-declarations])
 CITUSAC_PROG_CC_CFLAGS_OPT([-Wmissing-prototypes])
 
+#
+# --enable-coverage enables generation of code coverage metrics with gcov
+#
+AC_ARG_ENABLE([coverage], AS_HELP_STRING([--enable-coverage], [build with coverage testing instrumentation]))
+if test "$enable_coverage" = yes; then
+    CITUS_CFLAGS="$CITUS_CFLAGS -fprofile-arcs -ftest-coverage"
+fi
+
 AC_SUBST(CITUS_CFLAGS, "$CITUS_CFLAGS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
