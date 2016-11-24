@@ -1,7 +1,7 @@
 --
 -- MULTI_SCHEMA_SUPPORT
 --
-
+SET citus.all_modifications_commutative = true;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1190000;
 
@@ -102,7 +102,7 @@ CREATE TABLE test_schema_support.nation_hash(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
+SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, -1);
 
 
 -- test cursors
@@ -335,7 +335,7 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash_collation', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, 2);
+SELECT master_create_worker_shards('test_schema_support.nation_hash_collation', 4, -1);
 
 \COPY test_schema_support.nation_hash_collation FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
@@ -358,7 +358,7 @@ CREATE TABLE nation_hash_collation_search_path(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('nation_hash_collation_search_path', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, 2);
+SELECT master_create_worker_shards('nation_hash_collation_search_path', 4, -1);
 
 \COPY nation_hash_collation_search_path FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
@@ -393,7 +393,7 @@ CREATE TABLE test_schema_support.nation_hash_composite_types(
     test_col test_schema_support.new_composite_type
 );
 SELECT master_create_distributed_table('test_schema_support.nation_hash_composite_types', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, 2);
+SELECT master_create_worker_shards('test_schema_support.nation_hash_composite_types', 4, -1);
 
 -- insert some data to verify composite type queries
 \COPY test_schema_support.nation_hash_composite_types FROM STDIN with delimiter '|';
