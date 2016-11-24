@@ -41,7 +41,6 @@ static WorkerNode * FindRandomNodeNotInList(HTAB *WorkerNodesHash,
 											List *currentNodeList);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
-static bool WorkerNodeResponsive(const char *workerName, uint32 workerPort);
 
 
 /* ------------------------------------------------------------
@@ -477,53 +476,4 @@ WorkerNodeCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 
 	portCompare = workerLhs->workerPort - workerRhs->workerPort;
 	return portCompare;
-}
-
-
-/* ResponsiveWorkerNodeList returns a list of all responsive worker nodes */
-List *
-ResponsiveWorkerNodeList(void)
-{
-	List *responsiveWorkerNodeList = NULL;
-	ListCell *workerNodeCell = NULL;
-	List *workerNodeList = WorkerNodeList();
-
-	foreach(workerNodeCell, workerNodeList)
-	{
-		bool workerNodeResponsive = false;
-		WorkerNode *workerNode = lfirst(workerNodeCell);
-
-		workerNodeResponsive = WorkerNodeResponsive(workerNode->workerName,
-													workerNode->workerPort);
-		if (workerNodeResponsive)
-		{
-			responsiveWorkerNodeList = lappend(responsiveWorkerNodeList, workerNode);
-		}
-	}
-
-	return responsiveWorkerNodeList;
-}
-
-
-/*
- * WorkerNodeResponsive returns true if the given worker node is reponsive.
- * Otherwise, it returns false.
- *
- * This function is based on worker_node_responsive function present in the
- * shard rebalancer.
- */
-static bool
-WorkerNodeResponsive(const char *workerName, uint32 workerPort)
-{
-	bool workerNodeResponsive = false;
-
-	int connectionId = MultiClientConnect(workerName, workerPort, NULL, NULL);
-	if (connectionId != INVALID_CONNECTION_ID)
-	{
-		MultiClientDisconnect(connectionId);
-
-		workerNodeResponsive = true;
-	}
-
-	return workerNodeResponsive;
 }

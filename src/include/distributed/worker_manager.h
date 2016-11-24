@@ -60,7 +60,6 @@ extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetNodeWithName(const char *hostname);
 extern uint32 WorkerGetLiveNodeCount(void);
 extern List * WorkerNodeList(void);
-extern List * ResponsiveWorkerNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
 
