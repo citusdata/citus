@@ -78,13 +78,13 @@ ALTER TABLE name_lengths ADD COLUMN date_col_12345678901234567890123456789012345
 ALTER TABLE name_lengths ADD COLUMN int_col_12345678901234567890123456789012345678901234567890 INTEGER DEFAULT 1;
 -- Placeholders for unsupported ALTER TABLE to add constraints with implicit names that are likely too long
 ALTER TABLE name_lengths ADD UNIQUE (float_col_12345678901234567890123456789012345678901234567890);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE name_lengths ADD EXCLUDE (int_col_12345678901234567890123456789012345678901234567890 WITH =);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 \c - - - :worker_1_port
 \d name_lengths_*
@@ -113,13 +113,13 @@ Indexes:
 \c - - - :master_port
 -- Placeholders for unsupported add constraints with EXPLICIT names that are too long
 ALTER TABLE name_lengths ADD CONSTRAINT nl_unique_12345678901234567890123456789012345678901234567890 UNIQUE (float_col_12345678901234567890123456789012345678901234567890);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE name_lengths ADD CONSTRAINT nl_exclude_12345678901234567890123456789012345678901234567890 EXCLUDE (int_col_12345678901234567890123456789012345678901234567890 WITH =);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
-ERROR:  alter table command is currently supported
+ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT and TYPE subcommands are supported.
 \c - - - :worker_1_port
 \d nl_*

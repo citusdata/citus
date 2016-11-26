@@ -1019,7 +1019,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			default:
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("alter table command is currently supported"),
+								errmsg("alter table command is currently unsupported"),
 								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL,"
 										  " SET|DROP DEFAULT and TYPE subcommands are"
 										  " supported.")));
