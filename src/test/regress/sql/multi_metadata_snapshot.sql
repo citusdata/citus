@@ -59,4 +59,50 @@ SELECT unnest(master_metadata_snapshot());
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(master_metadata_snapshot());
 
+-- Test start_metadata_sync_to_node UDF
+
+-- Ensure that hasmetadata=false for all nodes
+SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
+
+-- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
+
+-- Check that the metadata has been copied to the worker
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+\d mx_testing_schema.mx_test_table
+
+-- Check that pg_dist_colocation is not synced
+SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+
+-- Check that repeated calls to sync_metadata has no side effects
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+\d mx_testing_schema.mx_test_table
+
+-- Cleanup
+\c - - - :worker_1_port
+DROP TABLE mx_testing_schema.mx_test_table;
+DELETE FROM pg_dist_node;
+DELETE FROM pg_dist_partition;
+DELETE FROM pg_dist_shard;
+DELETE FROM pg_dist_shard_placement;
+\d mx_testing_schema.mx_test_table
+
+\c - - - :master_port
+DROP TABLE mx_testing_schema.mx_test_table;
+UPDATE pg_dist_node SET hasmetadata=false;
+
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
