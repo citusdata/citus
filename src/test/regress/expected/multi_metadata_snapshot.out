@@ -152,4 +152,171 @@ SELECT unnest(master_metadata_snapshot());
  INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage, shardminvalue, shardmaxvalue) VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't', '-2147483648', '-1610612737'),('mx_testing_schema.mx_test_table'::regclass, 1310001, 't', '-1610612736', '-1073741825'),('mx_testing_schema.mx_test_table'::regclass, 1310002, 't', '-1073741824', '-536870913'),('mx_testing_schema.mx_test_table'::regclass, 1310003, 't', '-536870912', '-1'),('mx_testing_schema.mx_test_table'::regclass, 1310004, 't', '0', '536870911'),('mx_testing_schema.mx_test_table'::regclass, 1310005, 't', '536870912', '1073741823'),('mx_testing_schema.mx_test_table'::regclass, 1310006, 't', '1073741824', '1610612735'),('mx_testing_schema.mx_test_table'::regclass, 1310007, 't', '1610612736', '2147483647')
 (12 rows)
 
+-- Test start_metadata_sync_to_node UDF
+-- Ensure that hasmetadata=false for all nodes
+SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
+ count 
+-------
+     0
+(1 row)
+
+-- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------
+ 
+(1 row)
+
+SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
+ nodeid | hasmetadata 
+--------+-------------
+      1 | t
+(1 row)
+
+-- Check that the metadata has been copied to the worker
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+ groupid 
+---------
+       1
+(1 row)
+
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata 
+--------+---------+-----------+----------+----------+-------------
+      1 |       1 | localhost |    57637 | default  | f
+      2 |       2 | localhost |    57638 | default  | f
+(2 rows)
+
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel 
+---------------------------------+------------+------------------------------------------------------------------------------------------------------------------------+--------------+----------
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+(1 row)
+
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+          logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue 
+---------------------------------+---------+--------------+---------------+---------------
+ mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
+ mx_testing_schema.mx_test_table | 1310001 | t            | -1610612736   | -1073741825
+ mx_testing_schema.mx_test_table | 1310002 | t            | -1073741824   | -536870913
+ mx_testing_schema.mx_test_table | 1310003 | t            | -536870912    | -1
+ mx_testing_schema.mx_test_table | 1310004 | t            | 0             | 536870911
+ mx_testing_schema.mx_test_table | 1310005 | t            | 536870912     | 1073741823
+ mx_testing_schema.mx_test_table | 1310006 | t            | 1073741824    | 1610612735
+ mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
+(8 rows)
+
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1310000 |          1 |           0 | localhost |    57637 |      100000
+ 1310001 |          1 |           0 | localhost |    57638 |      100001
+ 1310002 |          1 |           0 | localhost |    57637 |      100002
+ 1310003 |          1 |           0 | localhost |    57638 |      100003
+ 1310004 |          1 |           0 | localhost |    57637 |      100004
+ 1310005 |          1 |           0 | localhost |    57638 |      100005
+ 1310006 |          1 |           0 | localhost |    57637 |      100006
+ 1310007 |          1 |           0 | localhost |    57638 |      100007
+(8 rows)
+
+\d mx_testing_schema.mx_test_table
+                              Table "mx_testing_schema.mx_test_table"
+ Column |  Type   |                                    Modifiers                                    
+--------+---------+---------------------------------------------------------------------------------
+ col_1  | integer | 
+ col_2  | text    | not null
+ col_3  | integer | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
+Indexes:
+    "mx_test_table_col_1_key" UNIQUE CONSTRAINT, btree (col_1)
+    "mx_index" btree (col_2)
+
+-- Check that pg_dist_colocation is not synced
+SELECT * FROM pg_dist_colocation ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+-- Check that repeated calls to sync_metadata has no side effects
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------
+ 
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------
+ 
+(1 row)
+
+\c - - - :worker_1_port
+SELECT * FROM pg_dist_local_group;
+ groupid 
+---------
+       1
+(1 row)
+
+SELECT * FROM pg_dist_node ORDER BY nodeid;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata 
+--------+---------+-----------+----------+----------+-------------
+      1 |       1 | localhost |    57637 | default  | t
+      2 |       2 | localhost |    57638 | default  | f
+(2 rows)
+
+SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel 
+---------------------------------+------------+------------------------------------------------------------------------------------------------------------------------+--------------+----------
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+(1 row)
+
+SELECT * FROM pg_dist_shard ORDER BY shardid;
+          logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue 
+---------------------------------+---------+--------------+---------------+---------------
+ mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
+ mx_testing_schema.mx_test_table | 1310001 | t            | -1610612736   | -1073741825
+ mx_testing_schema.mx_test_table | 1310002 | t            | -1073741824   | -536870913
+ mx_testing_schema.mx_test_table | 1310003 | t            | -536870912    | -1
+ mx_testing_schema.mx_test_table | 1310004 | t            | 0             | 536870911
+ mx_testing_schema.mx_test_table | 1310005 | t            | 536870912     | 1073741823
+ mx_testing_schema.mx_test_table | 1310006 | t            | 1073741824    | 1610612735
+ mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
+(8 rows)
+
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1310000 |          1 |           0 | localhost |    57637 |      100000
+ 1310001 |          1 |           0 | localhost |    57638 |      100001
+ 1310002 |          1 |           0 | localhost |    57637 |      100002
+ 1310003 |          1 |           0 | localhost |    57638 |      100003
+ 1310004 |          1 |           0 | localhost |    57637 |      100004
+ 1310005 |          1 |           0 | localhost |    57638 |      100005
+ 1310006 |          1 |           0 | localhost |    57637 |      100006
+ 1310007 |          1 |           0 | localhost |    57638 |      100007
+(8 rows)
+
+\d mx_testing_schema.mx_test_table
+                              Table "mx_testing_schema.mx_test_table"
+ Column |  Type   |                                    Modifiers                                    
+--------+---------+---------------------------------------------------------------------------------
+ col_1  | integer | 
+ col_2  | text    | not null
+ col_3  | integer | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
+Indexes:
+    "mx_test_table_col_1_key" UNIQUE CONSTRAINT, btree (col_1)
+    "mx_index" btree (col_2)
+
+-- Cleanup
+\c - - - :worker_1_port
+DROP TABLE mx_testing_schema.mx_test_table;
+DELETE FROM pg_dist_node;
+DELETE FROM pg_dist_partition;
+DELETE FROM pg_dist_shard;
+DELETE FROM pg_dist_shard_placement;
+\d mx_testing_schema.mx_test_table
+\c - - - :master_port
+DROP TABLE mx_testing_schema.mx_test_table;
+UPDATE pg_dist_node SET hasmetadata=false;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
