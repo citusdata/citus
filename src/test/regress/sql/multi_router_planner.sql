@@ -719,7 +719,7 @@ SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash
 	WHERE author_id = 1;
 
--- non-router plannable queries do not support filters
+-- non-router plannable queries also support filters
 SELECT count(*), count(*) FILTER (WHERE id < 3)
 	FROM articles_hash
 	WHERE author_id = 1 or author_id = 2;
