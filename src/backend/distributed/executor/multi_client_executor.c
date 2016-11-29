@@ -469,6 +469,8 @@ MultiClientQueryResult(int32 connectionId, void **queryResult, int *rowCount,
 	{
 		WarnRemoteError(connection, result);
 		PQclear(result);
+
+		return false;
 	}
 
 	/* clear extra result objects */

@@ -687,3 +687,23 @@ SELECT * FROM super_packed_numbers_append;
   1 | ("(42,42)","(42,42)")
 (1 row)
 
+-- Test copy on append for composite type partition column
+CREATE TABLE composite_partition_column_table(
+        id integer,
+        composite_column number_pack
+);
+SELECT master_create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+\COPY composite_partition_column_table FROM STDIN WITH (FORMAT 'csv');
+WARNING:  function min(number_pack) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57637
+WARNING:  function min(number_pack) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57638
+WARNING:  could not get statistics for shard public.composite_partition_column_table_560164
+DETAIL:  Setting shard statistics to NULL
