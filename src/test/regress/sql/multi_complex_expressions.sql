@@ -225,3 +225,31 @@ ORDER BY
 LIMIT 10 OFFSET 20;
 
 RESET client_min_messages;
+
+-- FILTERs
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	HAVING count(*) FILTER (WHERE l_shipmode = 'AIR') > 1
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;

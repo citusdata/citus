@@ -457,3 +457,57 @@ DEBUG:  push down of limit count: 30
 (10 rows)
 
 RESET client_min_messages;
+-- FILTERs
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey |    sum    |    sum    | count | count |    max    |   max    
+------------+-----------+-----------+-------+-------+-----------+----------
+      12804 | 440012.71 |  45788.16 |     7 |     1 |  94398.00 | 45788.16
+       9863 | 412560.63 | 175647.63 |     7 |     3 |  85723.77 | 50769.14
+       2567 | 412076.77 |  59722.26 |     7 |     1 |  94894.00 |  9784.02
+      11142 | 410502.38 |  44965.95 |     7 |     1 |  83989.44 | 44965.95
+      12039 | 407048.94 |  76406.30 |     7 |     2 |  94471.02 | 19679.30
+       2306 | 405629.96 |  28032.60 |     7 |     1 |  92838.00 | 44384.50
+       5606 | 403595.91 |  36531.51 |     7 |     2 |  94890.18 | 30582.75
+      11296 | 399079.89 |           |     6 |     0 | 102449.00 | 33122.93
+      11046 | 391163.26 |  31436.34 |     7 |     2 |  94506.24 | 47519.76
+       4421 | 387313.12 |           |     7 |     0 |  67301.52 | 23783.40
+(10 rows)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	HAVING count(*) FILTER (WHERE l_shipmode = 'AIR') > 1
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey |    sum    |    sum    | count | count |   max    |   max    
+------------+-----------+-----------+-------+-------+----------+----------
+       9863 | 412560.63 | 175647.63 |     7 |     3 | 85723.77 | 50769.14
+      12039 | 407048.94 |  76406.30 |     7 |     2 | 94471.02 | 19679.30
+       5606 | 403595.91 |  36531.51 |     7 |     2 | 94890.18 | 30582.75
+      11046 | 391163.26 |  31436.34 |     7 |     2 | 94506.24 | 47519.76
+      14499 | 384140.30 |  67867.08 |     7 |     2 | 84335.36 | 46169.75
+      11623 | 380598.48 | 133709.82 |     7 |     2 | 93701.54 | 21487.65
+      10787 | 375688.09 |  99424.78 |     7 |     2 | 76732.67 | 50946.91
+      12902 | 358191.24 |  76891.00 |     7 |     2 | 82008.08 | 35602.08
+       3747 | 353701.23 |  68592.23 |     7 |     2 | 67181.10 | 46252.77
+       5158 | 349889.05 | 159753.19 |     7 |     3 | 78714.67 | 29729.20
+(10 rows)
+
