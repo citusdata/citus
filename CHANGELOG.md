@@ -1,3 +1,11 @@
+### citus v6.0.1 (November 29, 2016) ###
+
+* Fixes a bug causing failures during pg_upgrade
+
+* Fixes a bug preventing DML queries during colocated table creation
+
+* Fixes a bug that caused NULL parameters to be incorrectly passed as text
+
 ### citus v6.0.0 (November 7, 2016) ###
 
 * Adds compatibility with PostgreSQL 9.6, now the recommended version
