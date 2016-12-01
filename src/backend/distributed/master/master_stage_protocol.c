@@ -114,6 +114,13 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 						errdetail("We currently don't support creating shards "
 								  "on hash-partitioned tables")));
 	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		ereport(ERROR, (errmsg("relation \"%s\" is a reference table",
+							   relationName),
+						errdetail("We currently don't support creating shards "
+								  "on reference tables")));
+	}
 
 	/* generate new and unique shardId from sequence */
 	shardId = GetNextShardId();
@@ -219,11 +226,11 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	}
 
 	partitionMethod = PartitionMethod(relationId);
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
 						errdetail("We currently don't support appending to shards "
-								  "in hash-partitioned tables")));
+								  "in hash-partitioned or reference tables")));
 	}
 
 	/* ensure that the shard placement metadata does not change during the append */

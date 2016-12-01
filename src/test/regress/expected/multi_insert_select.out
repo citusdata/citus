@@ -1225,7 +1225,7 @@ FROM
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  INSERT target table and the source relation of the SELECT partition column value must be colocated
+ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
 -- unsupported joins between subqueries
 -- we do not return bare partition column on the inner query
 INSERT INTO agg_events

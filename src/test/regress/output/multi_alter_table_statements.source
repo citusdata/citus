@@ -561,7 +561,7 @@ DETAIL:  Key (command)=(CREATE INDEX) already exists.
 CONTEXT:  while executing command on localhost:57638
 ERROR:  failure on connection marked as essential: localhost:57638
 -- Nothing from the block should have committed
-SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
  indexname | tablename 
 -----------+-----------
 (0 rows)
@@ -579,7 +579,7 @@ DETAIL:  Key (command)=(CREATE INDEX) already exists.
 CONTEXT:  while executing command on localhost:57638
 WARNING:  failed to commit critical transaction on localhost:57638, metadata is likely out of sync
 -- The block should have committed with a warning
-SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
    indexname    |     tablename      
 ----------------+--------------------
  single_index_2 | single_shard_items

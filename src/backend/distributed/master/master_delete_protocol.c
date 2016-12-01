@@ -146,6 +146,14 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 						errdetail("Delete statements on hash-partitioned tables "
 								  "with where clause is not supported")));
 	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot delete from distributed table"),
+						errdetail("Delete statements on reference tables "
+								  "are not supported.")));
+	}
+
 
 	CheckDeleteCriteria(deleteCriteria);
 	CheckPartitionColumn(relationId, deleteCriteria);

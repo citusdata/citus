@@ -219,7 +219,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		char partitionMethod = PartitionMethod(relationId);
 
 		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-			DISTRIBUTE_BY_RANGE)
+			DISTRIBUTE_BY_RANGE || partitionMethod == DISTRIBUTE_BY_NONE)
 		{
 			CopyToExistingShards(copyStatement, completionTag);
 		}
@@ -422,8 +422,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		}
 	}
 
-	/* error if any shard missing min/max values */
-	if (cacheEntry->hasUninitializedShardInterval)
+	/* error if any shard missing min/max values for non reference tables */
+	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+		cacheEntry->hasUninitializedShardInterval)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("could not start copy"),
@@ -515,22 +516,37 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 			CHECK_FOR_INTERRUPTS();
 
-			/* find the partition column value */
-
-			if (columnNulls[partitionColumn->varattno - 1])
+			/*
+			 * Find the partition column value and corresponding shard interval
+			 * for non-reference tables.
+			 * Get the existing (and only a single) shard interval for the reference
+			 * tables. Note that, reference tables has NULL partition column values so
+			 * skip the check.
+			 */
+			if (partitionColumn != NULL)
 			{
-				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-								errmsg("cannot copy row with NULL value "
-									   "in partition column")));
+				if (columnNulls[partitionColumn->varattno - 1])
+				{
+					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+									errmsg("cannot copy row with NULL value "
+										   "in partition column")));
+				}
+
+				partitionColumnValue = columnValues[partitionColumn->varattno - 1];
 			}
 
-			partitionColumnValue = columnValues[partitionColumn->varattno - 1];
-
-			/* find the shard interval and id for the partition column value */
-			shardInterval = FindShardInterval(partitionColumnValue, shardIntervalCache,
+			/*
+			 * Find the shard interval and id for the partition column value for
+			 * non-reference tables.
+			 * For reference table, this function blindly returns the tables single
+			 * shard.
+			 */
+			shardInterval = FindShardInterval(partitionColumnValue,
+											  shardIntervalCache,
 											  shardCount, partitionMethod,
 											  compareFunction, hashFunction,
 											  useBinarySearch);
+
 			if (shardInterval == NULL)
 			{
 				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

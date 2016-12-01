@@ -131,7 +131,8 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		Oid relationId = rangeTableEntry->relationId;
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
-		if (cacheEntry->hasUninitializedShardInterval)
+		if (cacheEntry->partitionMethod != DISTRIBUTE_BY_NONE &&
+			cacheEntry->hasUninitializedShardInterval)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot perform distributed planning on this query"),
@@ -1150,16 +1151,31 @@ BroadcastJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 
 	/*
 	 * If the table's shard count doesn't exceed the value specified in the
-	 * configuration, then we assume table broadcasting is feasible. This assumption
-	 * is valid only for inner joins.
+	 * configuration or the table is a reference table, then we assume table
+	 * broadcasting is feasible. This assumption is valid only for inner joins.
 	 *
 	 * Left join requires candidate table to have single shard, right join requires
 	 * existing (left) table to have single shard, full outer join requires both tables
 	 * to have single shard.
 	 */
-	if (joinType == JOIN_INNER && candidateShardCount < LargeTableShardCount)
+	if (joinType == JOIN_INNER)
 	{
-		performBroadcastJoin = true;
+		ShardInterval *initialCandidateShardInterval = NULL;
+		char candidatePartitionMethod = '\0';
+
+		if (candidateShardCount > 0)
+		{
+			initialCandidateShardInterval =
+				(ShardInterval *) linitial(candidateShardList);
+			candidatePartitionMethod =
+				PartitionMethod(initialCandidateShardInterval->relationId);
+		}
+
+		if (candidatePartitionMethod == DISTRIBUTE_BY_NONE ||
+			candidateShardCount < LargeTableShardCount)
+		{
+			performBroadcastJoin = true;
+		}
 	}
 	else if ((joinType == JOIN_LEFT || joinType == JOIN_ANTI) && candidateShardCount == 1)
 	{
@@ -1276,7 +1292,8 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	}
 
 	/* evaluate re-partitioning the current table only if the rule didn't apply above */
-	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH)
+	if (nextJoinNode == NULL && candidatePartitionMethod != DISTRIBUTE_BY_HASH &&
+		candidatePartitionMethod != DISTRIBUTE_BY_NONE)
 	{
 		OpExpr *joinClause = SinglePartitionJoinClause(candidatePartitionColumn,
 													   applicableJoinClauses);
@@ -1501,11 +1518,23 @@ RightColumn(OpExpr *joinClause)
 /*
  * PartitionColumn builds the partition column for the given relation, and sets
  * the partition column's range table references to the given table identifier.
+ *
+ * Note that reference tables do not have partition column. Thus, this function
+ * returns NULL when called for reference tables.
  */
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
-	Var *partitionColumn = PartitionKey(relationId);
+	Var *partitionKey = PartitionKey(relationId);
+	Var *partitionColumn = NULL;
+
+	/* short circuit for reference tables */
+	if (partitionKey == NULL)
+	{
+		return partitionColumn;
+	}
+
+	partitionColumn = partitionKey;
 	partitionColumn->varno = rangeTableId;
 	partitionColumn->varnoold = rangeTableId;
 
@@ -1518,16 +1547,27 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
  * that in the context of distributed join and query planning, the callers of
  * this function *must* set the partition key column's range table reference
  * (varno) to match the table's location in the query range table list.
+ *
+ * Note that reference tables do not have partition column. Thus, this function
+ * returns NULL when called for reference tables.
  */
 Var *
 PartitionKey(Oid relationId)
 {
 	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
+	Node *variableNode = NULL;
+	Var *partitionKey = NULL;
+
+	/* reference tables do not have partition column */
+	if (partitionEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return NULL;
+	}
 
 	/* now obtain partition key and build the var node */
-	Node *variableNode = stringToNode(partitionEntry->partitionKeyString);
+	variableNode = stringToNode(partitionEntry->partitionKeyString);
 
-	Var *partitionKey = (Var *) variableNode;
+	partitionKey = (Var *) variableNode;
 	Assert(IsA(variableNode, Var));
 
 	return partitionKey;
