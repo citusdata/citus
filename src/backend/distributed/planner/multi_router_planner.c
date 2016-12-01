@@ -496,7 +496,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
 
-		if (IsPartitionColumnRecursive(targetEntry->expr, subqery) &&
+		if (IsPartitionColumn(targetEntry->expr, subqery) &&
 			IsA(targetEntry->expr, Var))
 		{
 			targetPartitionColumnVar = (Var *) targetEntry->expr;
@@ -641,11 +641,24 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	Oid selectPartitionColumnTableId = InvalidOid;
 	Oid targetRelationId = insertRte->relid;
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
+	ListCell *rangeTableCell = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
 
 	EnsureSchemaNode();
+
+	/* we do not expect to see a view in modify target */
+	foreach(rangeTableCell, queryTree->rtable)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		if (rangeTableEntry->rtekind == RTE_RELATION &&
+			rangeTableEntry->relkind == RELKIND_VIEW)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot insert into view over distributed table")));
+		}
+	}
 
 	subquery = subqueryRte->subquery;
 
@@ -654,9 +667,8 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "
 							   "modification"),
-						errdetail(
-							"Volatile functions are not allowed in INSERT ... "
-							"SELECT queries")));
+						errdetail("Volatile functions are not allowed in "
+								  "INSERT ... SELECT queries")));
 	}
 
 	/* we don't support LIMIT, OFFSET and WINDOW functions */
@@ -821,6 +833,9 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 			AttrNumber originalAttrNo = get_attnum(insertRelationId,
 												   targetEntry->resname);
 			TargetEntry *subqeryTargetEntry = NULL;
+			Oid originalRelationId = InvalidOid;
+			Var *originalColumn = NULL;
+			List *parentQueryList = NIL;
 
 			if (originalAttrNo != insertPartitionColumn->varattno)
 			{
@@ -836,25 +851,36 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 				break;
 			}
 
-			/*
-			 * Reference tables doesn't have a partition column, thus partition columns
-			 * cannot match at all.
-			 */
-			if (PartitionMethod(subqeryTargetEntry->resorigtbl) == DISTRIBUTE_BY_NONE)
+			parentQueryList = list_make2(query, subquery);
+			FindReferencedTableColumn(subqeryTargetEntry->expr,
+									  parentQueryList, subquery,
+									  &originalRelationId,
+									  &originalColumn);
+
+			if (originalRelationId == InvalidOid)
 			{
 				partitionColumnsMatch = false;
 				break;
 			}
 
-			if (!IsPartitionColumnRecursive(subqeryTargetEntry->expr, subquery))
+			/*
+			 * Reference tables doesn't have a partition column, thus partition columns
+			 * cannot match at all.
+			 */
+			if (PartitionMethod(originalRelationId) == DISTRIBUTE_BY_NONE)
+			{
+				partitionColumnsMatch = false;
+				break;
+			}
+
+			if (!IsPartitionColumn(subqeryTargetEntry->expr, subquery))
 			{
 				partitionColumnsMatch = false;
 				break;
 			}
 
 			partitionColumnsMatch = true;
-			*selectPartitionColumnTableId = subqeryTargetEntry->resorigtbl;
-
+			*selectPartitionColumnTableId = originalRelationId;
 			break;
 		}
 	}
@@ -916,7 +942,7 @@ AddUninstantiatedPartitionRestriction(Query *originalQuery)
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
 
-		if (IsPartitionColumnRecursive(targetEntry->expr, subquery) &&
+		if (IsPartitionColumn(targetEntry->expr, subquery) &&
 			IsA(targetEntry->expr, Var))
 		{
 			targetPartitionColumnVar = (Var *) targetEntry->expr;
@@ -1077,6 +1103,13 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 
 			queryTableCount++;
+
+			/* we do not expect to see a view in modify query */
+			if (rangeTableEntry->relkind == RELKIND_VIEW)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot modify views over distributed tables")));
+			}
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
 		{

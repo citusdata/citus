@@ -1,5 +1,5 @@
 --
--- MULTI_STAGE_DATA
+-- MULTI_LOAD_DATA
 --
 -- Tests for loading data in a distributed cluster. Please note that the number
 -- of shards uploaded depends on two config values: citus.shard_replication_factor and
@@ -16,3 +16,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
 \copy part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
 \copy supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
 \copy supplier_single_shard FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+\copy lineitem_hash_part FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\copy lineitem_hash_part FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+\copy orders_hash_part FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\copy orders_hash_part FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
