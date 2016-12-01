@@ -82,6 +82,14 @@ if (defined $libdir)
     $ENV{PATH} = "$libdir:".($ENV{PATH} || '');
 }
 
+# Put $bindir to the end of PATH. We want to prefer system binaries by
+# default (as e.g. new libpq and old psql can cause issues), but still
+# want to find binaries if they're not in PATH.
+if (defined $bindir)
+{
+    $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
+}
+
 my $plainRegress = "$pgxsdir/src/test/regress/pg_regress";
 my $isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
 if ($isolationtester && ! -f "$isolationRegress")
@@ -171,7 +179,7 @@ system("mkdir", ('-p', "tmp_check/tmp-bin")) == 0
 sysopen my $fh, "tmp_check/tmp-bin/psql", O_CREAT|O_TRUNC|O_RDWR, 0700
 	or die "Could not create psql wrapper";
 print $fh "#!/bin/bash\n";
-print $fh "exec $bindir/psql ";
+print $fh "exec psql ";
 print $fh "--variable=master_port=$masterPort ";
 print $fh "--variable=SHOW_CONTEXT=always ";
 for my $workeroff (0 .. $#workerPorts)
@@ -259,14 +267,14 @@ for my $port (@workerPorts)
 ###
 for my $port (@workerPorts)
 {
-    system("$bindir/psql", '-X',
+    system("psql", '-X',
            ('-h', $host, '-p', $port, '-U', $user, "postgres",
             '-c', "CREATE DATABASE regression;")) == 0
         or die "Could not create regression database on worker";
 
     for my $extension (@extensions)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                ('-h', $host, '-p', $port, '-U', $user, "regression",
                 '-c', "CREATE EXTENSION IF NOT EXISTS \"$extension\";")) == 0
             or die "Could not create extension on worker";
@@ -274,7 +282,7 @@ for my $port (@workerPorts)
 
     foreach my $dataType (keys %dataTypes)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE TYPE $dataType AS $dataTypes{$dataType};")) == 0
             or die "Could not create TYPE $dataType on worker";
@@ -282,7 +290,7 @@ for my $port (@workerPorts)
 
     foreach my $function (keys %functions)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FUNCTION $function RETURNS $functions{$function};")) == 0
             or die "Could not create FUNCTION $function on worker";
@@ -290,7 +298,7 @@ for my $port (@workerPorts)
 
     foreach my $operator (keys %operators)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE OPERATOR $operator $operators{$operator};")) == 0
             or die "Could not create OPERATOR $operator on worker";
@@ -298,7 +306,7 @@ for my $port (@workerPorts)
 
     foreach my $fdw (keys %fdws)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};")) == 0
             or die "Could not create foreign data wrapper $fdw on worker";
@@ -306,7 +314,7 @@ for my $port (@workerPorts)
 
     foreach my $fdwServer (keys %fdwServers)
     {
-        system("$bindir/psql", '-X',
+        system("psql", '-X',
                 ('-h', $host, '-p', $port, '-U', $user, "regression",
                  '-c', "CREATE SERVER $fdwServer FOREIGN DATA WRAPPER $fdwServers{$fdwServer};")) == 0
             or die "Could not create server $fdwServer on worker";
