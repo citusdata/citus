@@ -56,6 +56,7 @@ test: multi_dropped_column_aliases
 test: multi_binary_master_copy_format
 test: multi_prepare_sql multi_prepare_plsql
 test: multi_sql_function
+test: multi_view
 
 # ----------
 # Parallel TPC-H tests to check our distributed execution behavior

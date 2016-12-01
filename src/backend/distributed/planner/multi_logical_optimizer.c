@@ -3280,7 +3280,7 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
-		bool isPartitionColumn = IsPartitionColumnRecursive(targetExpression, query);
+		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
 		if (isPartitionColumn)
 		{
 			FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
@@ -3312,30 +3312,61 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 
 /*
- * IsPartitionColumnRecursive recursively checks if the given column is a partition
- * column. If a column is referenced from a regular table, we directly check if
- * it is a partition column. If a column is referenced from a subquery, then we
- * recursively check that subquery until we reach the source of that column, and
- * verify this column is a partition column. If a column is referenced from a
- * join range table entry, then we resolve which join column it refers and
- * recursively check this column with the same query.
+ * IsPartitionColumn returns true if the given column is a partition column.
+ * The function uses FindReferencedTableColumn to find the original relation
+ * id and column that the column expression refers to. It then checks whether
+ * that column is a partition column of the relation.
  *
- * Note that if the given expression is a field of a composite type, then this
- * function checks if this composite column is a partition column.
- *
- * Also, the function returns always false for reference tables given that reference
- * tables do not have partition column.
+ * Also, the function returns always false for reference tables given that
+ * reference tables do not have partition column. The function does not
+ * support queries with CTEs, it would return false if columnExpression
+ * refers to a column returned by a CTE.
  */
 bool
-IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
+IsPartitionColumn(Expr *columnExpression, Query *query)
 {
 	bool isPartitionColumn = false;
+	Oid relationId = InvalidOid;
+	Var *column = NULL;
+
+	FindReferencedTableColumn(columnExpression, NIL, query, &relationId, &column);
+
+	if (relationId != InvalidOid && column != NULL)
+	{
+		Var *partitionColumn = PartitionKey(relationId);
+
+		/* not all distributed tables have partition column */
+		if (partitionColumn != NULL && column->varattno == partitionColumn->varattno)
+		{
+			isPartitionColumn = true;
+		}
+	}
+
+	return isPartitionColumn;
+}
+
+
+/*
+ * FindReferencedTableColumn recursively traverses query tree to find actual relation
+ * id, and column that columnExpression refers to. If columnExpression is a
+ * non-relational or computed/derived expression, the function returns InvolidOid for
+ * relationId and NULL for column. The caller should provide parent query list from
+ * top of the tree to this particular Query's parent. This argument is used to look
+ * into CTEs that may be present in the query.
+ */
+void
+FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *query,
+						  Oid *relationId, Var **column)
+{
 	Var *candidateColumn = NULL;
 	List *rangetableList = query->rtable;
 	Index rangeTableEntryIndex = 0;
 	RangeTblEntry *rangeTableEntry = NULL;
 	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
 		(Node *) columnExpression);
+
+	*relationId = InvalidOid;
+	*column = NULL;
 
 	if (IsA(strippedColumnExpression, Var))
 	{
@@ -3350,17 +3381,11 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 		{
 			candidateColumn = (Var *) fieldExpression;
 		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot push down this subquery"),
-							errdetail("Only references to column fields are supported")));
-		}
 	}
 
 	if (candidateColumn == NULL)
 	{
-		return false;
+		return;
 	}
 
 	rangeTableEntryIndex = candidateColumn->varno - 1;
@@ -3368,18 +3393,8 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
-		Oid relationId = rangeTableEntry->relid;
-		Var *partitionColumn = PartitionKey(relationId);
-
-		/* reference tables do not have partition column */
-		if (partitionColumn == NULL)
-		{
-			isPartitionColumn = false;
-		}
-		else if (candidateColumn->varattno == partitionColumn->varattno)
-		{
-			isPartitionColumn = true;
-		}
+		*relationId = rangeTableEntry->relid;
+		*column = candidateColumn;
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 	{
@@ -3387,9 +3402,12 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 		List *targetEntryList = subquery->targetList;
 		AttrNumber targetEntryIndex = candidateColumn->varattno - 1;
 		TargetEntry *subqueryTargetEntry = list_nth(targetEntryList, targetEntryIndex);
+		Expr *subColumnExpression = subqueryTargetEntry->expr;
 
-		Expr *subqueryExpression = subqueryTargetEntry->expr;
-		isPartitionColumn = IsPartitionColumnRecursive(subqueryExpression, subquery);
+		/* append current query to parent query list */
+		parentQueryList = lappend(parentQueryList, query);
+		FindReferencedTableColumn(subColumnExpression, parentQueryList,
+								  subquery, relationId, column);
 	}
 	else if (rangeTableEntry->rtekind == RTE_JOIN)
 	{
@@ -3397,10 +3415,52 @@ IsPartitionColumnRecursive(Expr *columnExpression, Query *query)
 		AttrNumber joinColumnIndex = candidateColumn->varattno - 1;
 		Expr *joinColumn = list_nth(joinColumnList, joinColumnIndex);
 
-		isPartitionColumn = IsPartitionColumnRecursive(joinColumn, query);
+		/* parent query list stays the same since still in the same query boundary */
+		FindReferencedTableColumn(joinColumn, parentQueryList, query,
+								  relationId, column);
 	}
+	else if (rangeTableEntry->rtekind == RTE_CTE)
+	{
+		int cteParentListIndex = list_length(parentQueryList) -
+								 rangeTableEntry->ctelevelsup - 1;
+		Query *cteParentQuery = NULL;
+		List *cteList = NIL;
+		ListCell *cteListCell = NULL;
+		CommonTableExpr *cte = NULL;
 
-	return isPartitionColumn;
+		/*
+		 * This should have been an error case, not marking it as error at the
+		 * moment due to usage from IsPartitionColumn. Callers of that function
+		 * do not have access to parent query list.
+		 */
+		if (cteParentListIndex >= 0)
+		{
+			cteParentQuery = list_nth(parentQueryList, cteParentListIndex);
+			cteList = cteParentQuery->cteList;
+		}
+
+		foreach(cteListCell, cteList)
+		{
+			CommonTableExpr *candidateCte = (CommonTableExpr *) lfirst(cteListCell);
+			if (strcmp(candidateCte->ctename, rangeTableEntry->ctename) == 0)
+			{
+				cte = candidateCte;
+				break;
+			}
+		}
+
+		if (cte != NULL)
+		{
+			Query *cteQuery = (Query *) cte->ctequery;
+			List *targetEntryList = cteQuery->targetList;
+			AttrNumber targetEntryIndex = candidateColumn->varattno - 1;
+			TargetEntry *targetEntry = list_nth(targetEntryList, targetEntryIndex);
+
+			parentQueryList = lappend(parentQueryList, query);
+			FindReferencedTableColumn(targetEntry->expr, parentQueryList,
+									  cteQuery, relationId, column);
+		}
+	}
 }
 
 
@@ -3669,10 +3729,10 @@ SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
 			continue;
 		}
 
-		outerColumnIsPartitionColumn = IsPartitionColumnRecursive(outerQueryExpression,
-																  parentQuery);
-		localColumnIsPartitionColumn = IsPartitionColumnRecursive(localQueryExpression,
-																  lateralQuery);
+		outerColumnIsPartitionColumn = IsPartitionColumn(outerQueryExpression,
+														 parentQuery);
+		localColumnIsPartitionColumn = IsPartitionColumn(localQueryExpression,
+														 lateralQuery);
 
 		if (outerColumnIsPartitionColumn && localColumnIsPartitionColumn)
 		{
@@ -3747,8 +3807,8 @@ JoinOnPartitionColumn(Query *query)
 		leftArgument = (Expr *) linitial(joinArgumentList);
 		rightArgument = (Expr *) lsecond(joinArgumentList);
 
-		isLeftColumnPartitionColumn = IsPartitionColumnRecursive(leftArgument, query);
-		isRightColumnPartitionColumn = IsPartitionColumnRecursive(rightArgument, query);
+		isLeftColumnPartitionColumn = IsPartitionColumn(leftArgument, query);
+		isRightColumnPartitionColumn = IsPartitionColumn(rightArgument, query);
 
 		if (isLeftColumnPartitionColumn && isRightColumnPartitionColumn)
 		{

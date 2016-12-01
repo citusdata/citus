@@ -6664,6 +6664,11 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 			if (strcmp(refname, rte->ctename) != 0)
 				printalias = true;
 		}
+		else if (rte->rtekind == RTE_SUBQUERY)
+		{
+			/* subquery requires alias too */
+			printalias = true;
+		}
 		if (printalias)
 			appendStringInfo(buf, " %s", quote_identifier(refname));
 
