@@ -106,6 +106,7 @@ extern uint64 UpdateShardStatistics(int64 shardId);
 extern void CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 											 int32 replicationFactor);
 extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId);
+extern void CreateReferenceTableShard(Oid distributedTableId);
 extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 							  int shardIndex, uint64 shardId, char *newShardOwner,
 							  List *ddlCommandList, List *foreignConstraintCommadList);

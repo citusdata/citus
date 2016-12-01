@@ -120,6 +120,9 @@ column_to_column_name(PG_FUNCTION_ARGS)
  * only out of a reference to the column of name columnName. Errors out if the
  * specified column does not exist or is not suitable to be used as a
  * distribution column.
+ *
+ * The function returns NULL if the passed column name is NULL. That case only
+ * corresponds to reference tables.
  */
 Var *
 BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnName)
@@ -128,6 +131,12 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 	Form_pg_attribute columnForm = NULL;
 	Var *distributionColumn = NULL;
 	char *tableName = RelationGetRelationName(distributedRelation);
+
+	/* short circuit for reference tables */
+	if (columnName == NULL)
+	{
+		return NULL;
+	}
 
 	/* it'd probably better to downcase identifiers consistent with SQL case folding */
 	truncate_identifier(columnName, strlen(columnName), true);

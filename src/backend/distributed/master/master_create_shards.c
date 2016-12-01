@@ -322,6 +322,82 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 
 
 /*
+ * CreateReferenceTableShard creates a single shard for the given
+ * distributedTableId. The created shard does not have min/max values.
+ * Also, the shard is replicated to the all active nodes in the cluster.
+ */
+void
+CreateReferenceTableShard(Oid distributedTableId)
+{
+	char *relationOwner = NULL;
+	char shardStorageType = 0;
+	List *workerNodeList = NIL;
+	List *ddlCommandList = NIL;
+	int32 workerNodeCount = 0;
+	List *existingShardList = NIL;
+	uint64 shardId = INVALID_SHARD_ID;
+	int workerStartIndex = 0;
+	int replicationFactor = 0;
+	text *shardMinValue = NULL;
+	text *shardMaxValue = NULL;
+
+	/*
+	 * In contrast to append/range partitioned tables it makes more sense to
+	 * require ownership privileges - shards for reference tables are
+	 * only created once, not continually during ingest as for the other
+	 * partitioning types such as append and range.
+	 */
+	EnsureTableOwner(distributedTableId);
+
+	/* we plan to add shards: get an exclusive metadata lock */
+	LockRelationDistributionMetadata(distributedTableId, ExclusiveLock);
+
+	relationOwner = TableOwner(distributedTableId);
+
+	/* set shard storage type according to relation type */
+	shardStorageType = ShardStorageType(distributedTableId);
+
+	/* validate that shards haven't already been created for this table */
+	existingShardList = LoadShardList(distributedTableId);
+	if (existingShardList != NIL)
+	{
+		char *tableName = get_rel_name(distributedTableId);
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("table \"%s\" has already had shards created for it",
+							   tableName)));
+	}
+
+	/* load and sort the worker node list for deterministic placement */
+	workerNodeList = WorkerNodeList();
+	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
+
+	/* get the next shard id */
+	shardId = GetNextShardId();
+
+	/* retrieve the DDL commands for the table */
+	ddlCommandList = GetTableDDLEvents(distributedTableId);
+
+	/* set the replication factor equal to the number of worker nodes */
+	workerNodeCount = list_length(workerNodeList);
+	replicationFactor = workerNodeCount;
+
+	/*
+	 * Grabbing the shard metadata lock isn't technically necessary since
+	 * we already hold an exclusive lock on the partition table, but we'll
+	 * acquire it for the sake of completeness. As we're adding new active
+	 * placements, the mode must be exclusive.
+	 */
+	LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+	CreateShardPlacements(distributedTableId, shardId, ddlCommandList, relationOwner,
+						  workerNodeList, workerStartIndex, replicationFactor);
+
+	InsertShardRow(distributedTableId, shardId, shardStorageType, shardMinValue,
+				   shardMaxValue);
+}
+
+
+/*
  * CheckHashPartitionedTable looks up the partition information for the given
  * tableId and checks if the table is hash partitioned. If not, the function
  * throws an error.

@@ -133,10 +133,12 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 
 
 /*
- * FindShardIntervalIndex finds index of given shard in sorted shard interval array. For
- * this purpose, it calculates hash value of a number in its range(e.g. min value) and
- * finds which shard should contain the hashed value. Therefore this function only works
- * for hash distributed tables.
+ * FindShardIntervalIndex finds index of given shard in sorted shard interval array.
+ *
+ * For hash partitioned tables, it calculates hash value of a number in its
+ * range (e.g. min value) and finds which shard should contain the hashed
+ * value. For reference tables, it simply returns 0. For distribution methods
+ * other than hash and reference, the function errors out.
  */
 int
 FindShardIntervalIndex(ShardInterval *shardInterval)
@@ -148,6 +150,15 @@ FindShardIntervalIndex(ShardInterval *shardInterval)
 	int32 shardMinValue = 0;
 	uint64 hashTokenIncrement = 0;
 	int shardIndex = -1;
+
+	/* short-circuit for reference tables */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		/* reference tables has only a single shard, so the index is fixed to 0 */
+		shardIndex = 0;
+
+		return shardIndex;
+	}
 
 	/*
 	 * We can support it for other types of partitioned tables with simple binary scan
@@ -184,7 +195,9 @@ FindShardIntervalIndex(ShardInterval *shardInterval)
 
 /*
  * FindShardInterval finds a single shard interval in the cache for the
- * given partition column value.
+ * given partition column value. Note that reference tables do not have
+ * partition columns, thus, pass partitionColumnValue and compareFunction
+ * as NULL for them.
  */
 ShardInterval *
 FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
@@ -224,6 +237,14 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
 
 			shardInterval = shardIntervalCache[shardIndex];
 		}
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		int shardIndex = 0;
+
+		/* reference tables has a single shard, all values mapped to that shard */
+		Assert(shardCount == 1);
+		shardInterval = shardIntervalCache[shardIndex];
 	}
 	else
 	{

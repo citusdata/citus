@@ -95,6 +95,7 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	Oid relationId = ResolveRelationId(relationName);
 
 	DistTableCacheEntry *partitionEntry = NULL;
+	char *partitionKeyString = NULL;
 	TypeFuncClass resultTypeClass = 0;
 	Datum partitionKeyExpr = 0;
 	Datum partitionKey = 0;
@@ -116,15 +117,26 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("return type must be a row type")));
 	}
 
-	/* get decompiled expression tree for partition key */
-	partitionKeyExpr =
-		PointerGetDatum(cstring_to_text(partitionEntry->partitionKeyString));
-	partitionKey = DirectFunctionCall2(pg_get_expr, partitionKeyExpr,
-									   ObjectIdGetDatum(relationId));
-
 	/* form heap tuple for table metadata */
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
+
+	partitionKeyString = partitionEntry->partitionKeyString;
+
+	/* reference tables do not have partition key */
+	if (partitionKeyString == NULL)
+	{
+		partitionKey = PointerGetDatum(NULL);
+		isNulls[3] = true;
+	}
+	else
+	{
+		/* get decompiled expression tree for partition key */
+		partitionKeyExpr =
+			PointerGetDatum(cstring_to_text(partitionEntry->partitionKeyString));
+		partitionKey = DirectFunctionCall2(pg_get_expr, partitionKeyExpr,
+										   ObjectIdGetDatum(relationId));
+	}
 
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 
