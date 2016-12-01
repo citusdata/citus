@@ -111,7 +111,7 @@ static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescrip
 									   Tuplestorestate *tupleStore);
 static PGconn * GetConnectionForPlacement(ShardPlacement *placement,
 										  bool isModificationQuery);
-static void PurgeConnectionForPlacement(ShardPlacement *placement);
+static void PurgeConnectionForPlacement(PGconn *connection, ShardPlacement *placement);
 static void RemoveXactConnection(PGconn *connection);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
@@ -794,7 +794,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
-			PurgeConnectionForPlacement(taskPlacement);
+			PurgeConnectionForPlacement(connection, taskPlacement);
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
 			continue;
 		}
@@ -852,7 +852,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 		}
 		else
 		{
-			PurgeConnectionForPlacement(taskPlacement);
+			PurgeConnectionForPlacement(connection, taskPlacement);
 
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
 
@@ -1234,17 +1234,9 @@ GetConnectionForPlacement(ShardPlacement *placement, bool isModificationQuery)
  * for the transaction in addition to purging the connection cache's entry.
  */
 static void
-PurgeConnectionForPlacement(ShardPlacement *placement)
+PurgeConnectionForPlacement(PGconn *connection, ShardPlacement *placement)
 {
-	NodeConnectionKey nodeKey;
-	char *currentUser = CurrentUserName();
-
-	MemSet(&nodeKey, 0, sizeof(NodeConnectionKey));
-	strlcpy(nodeKey.nodeName, placement->nodeName, MAX_NODE_LENGTH + 1);
-	nodeKey.nodePort = placement->nodePort;
-	strlcpy(nodeKey.nodeUser, currentUser, NAMEDATALEN);
-
-	PurgeConnectionByKey(&nodeKey);
+	PurgeConnection(connection);
 
 	/*
 	 * The following is logically identical to RemoveXactConnection, but since
@@ -1256,6 +1248,13 @@ PurgeConnectionForPlacement(ShardPlacement *placement)
 	{
 		NodeConnectionEntry *participantEntry = NULL;
 		bool entryFound = false;
+		NodeConnectionKey nodeKey;
+		char *currentUser = CurrentUserName();
+
+		MemSet(&nodeKey, 0, sizeof(NodeConnectionKey));
+		strlcpy(nodeKey.nodeName, placement->nodeName, MAX_NODE_LENGTH + 1);
+		nodeKey.nodePort = placement->nodePort;
+		strlcpy(nodeKey.nodeUser, currentUser, NAMEDATALEN);
 
 		Assert(IsTransactionBlock());
 
