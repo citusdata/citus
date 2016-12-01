@@ -1469,6 +1469,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->aggtype = hllType;
 		unionAggregate->args = list_make1(hllTargetEntry);
 		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
 #if (PG_VERSION_NUM >= 90600)
 		unionAggregate->aggtranstype = InvalidOid;
 		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
@@ -1533,6 +1534,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfnoid = sumFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
+		newMasterAggregate->aggfilter = NULL;
 #if (PG_VERSION_NUM >= 90600)
 		newMasterAggregate->aggtranstype = InvalidOid;
 		newMasterAggregate->aggargtypes = list_make1_oid(newMasterAggregate->aggtype);
@@ -1602,6 +1604,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate = copyObject(originalAggregate);
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->args = list_make1(arrayCatAggArgument);
+		newMasterAggregate->aggfilter = NULL;
 #if (PG_VERSION_NUM >= 90600)
 		newMasterAggregate->aggtranstype = InvalidOid;
 		newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
@@ -1632,6 +1635,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggdistinct = NULL;
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
+		newMasterAggregate->aggfilter = NULL;
 
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
@@ -2073,6 +2077,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		addAggregateFunction->aggtype = hllType;
 		addAggregateFunction->args = addAggregateArgumentList;
 		addAggregateFunction->aggkind = AGGKIND_NORMAL;
+		addAggregateFunction->aggfilter = (Expr *) copyObject(
+			originalAggregate->aggfilter);
 
 		workerAggregateList = lappend(workerAggregateList, addAggregateFunction);
 	}

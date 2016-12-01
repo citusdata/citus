@@ -176,6 +176,29 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
  N            |           1265 |  6155
 (3 rows)
 
+SELECT
+	l_orderkey,
+	count(l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey | count | count | count 
+------------+-------+-------+-------
+      12005 |     4 |     4 |     4
+       5409 |     4 |     4 |     4
+       4964 |     4 |     4 |     4
+      14848 |     3 |     3 |     3
+      14496 |     3 |     3 |     3
+      13473 |     3 |     3 |     3
+      13122 |     3 |     3 |     3
+      12929 |     3 |     3 |     3
+      12645 |     3 |     3 |     3
+      12417 |     3 |     3 |     3
+(10 rows)
+
 -- Check that we can revert config and disable count(distinct) approximations
 SET citus.count_distinct_error_rate = 0.0;
 SELECT count(distinct l_orderkey) FROM lineitem;

@@ -116,6 +116,16 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 	ORDER BY total
 	LIMIT 10;
 
+SELECT
+	l_orderkey,
+	count(l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
 -- Check that we can revert config and disable count(distinct) approximations
 
 SET citus.count_distinct_error_rate = 0.0;

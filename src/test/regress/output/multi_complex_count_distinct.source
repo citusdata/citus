@@ -122,14 +122,27 @@ SELECT *
       1927 |     3
 (10 rows)
 
--- there is a known issue with aggregates with filters in non-repartition queries (#395)
+-- count distinct with filters
 SELECT
 	l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-ERROR:  attribute number 15 exceeds number of columns 2
+ l_orderkey | count 
+------------+-------
+      12005 |     4
+       5409 |     4
+       4964 |     4
+      14848 |     3
+      14496 |     3
+      13473 |     3
+      13122 |     3
+      12929 |     3
+      12645 |     3
+      12417 |     3
+(10 rows)
+
 -- filter column already exists in target list
 SELECT *
 	FROM (
