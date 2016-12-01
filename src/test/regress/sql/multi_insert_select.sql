@@ -715,3 +715,114 @@ SET client_min_messages TO DEBUG4;
 
 -- this should also work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
+
+
+SET client_min_messages TO INFO;
+-- some tests with DEFAULT columns and constant values
+-- this test is mostly importantly intended for deparsing the query correctly
+-- but still it is preferable to have this test here instead of multi_deparse_shard_query
+CREATE TABLE table_with_defaults
+( 
+  store_id int,
+  first_name text,
+  default_1 int DEFAULT 1,
+  last_name text,
+  default_2 text DEFAULT '2'
+);
+
+-- we don't need many shards
+SET citus.shard_count = 2;
+SELECT create_distributed_table('table_with_defaults', 'store_id');
+
+-- let's see the queries
+SET client_min_messages TO DEBUG4;
+
+-- a very simple query
+INSERT INTO table_with_defaults SELECT * FROM table_with_defaults;
+
+-- see that defaults are filled
+INSERT INTO table_with_defaults (store_id, first_name)
+SELECT
+  store_id, first_name
+FROM
+  table_with_defaults;
+
+-- shuffle one of the defaults and skip the other
+INSERT INTO table_with_defaults (default_2, store_id, first_name)
+SELECT
+  default_2, store_id, first_name
+FROM
+  table_with_defaults;
+
+-- shuffle both defaults
+INSERT INTO table_with_defaults (default_2, store_id, default_1, first_name)
+SELECT
+  default_2, store_id, default_1, first_name
+FROM
+  table_with_defaults;
+
+-- use constants instead of non-default column
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name)
+SELECT
+  default_2, 'Freund', store_id, 'Andres'
+FROM
+  table_with_defaults;
+
+-- use constants instead of non-default column and skip both defauls
+INSERT INTO table_with_defaults (last_name, store_id, first_name)
+SELECT
+  'Freund', store_id, 'Andres'
+FROM
+  table_with_defaults;
+
+-- use constants instead of default columns
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
+SELECT
+  20, last_name, store_id, first_name, 10
+FROM
+  table_with_defaults;
+
+-- use constants instead of both default columns and non-default columns
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
+SELECT
+  20, 'Freund', store_id, 'Andres', 10
+FROM
+  table_with_defaults;
+
+-- some of the the ultimate queries where we have constants,
+-- defaults and group by entry is not on the target entry
+INSERT INTO table_with_defaults (default_2, store_id, first_name)
+SELECT
+  '2000', store_id, 'Andres'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id;
+
+INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
+SELECT
+  1000, store_id, 'Andres', '2000'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name;
+
+
+INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
+SELECT
+  1000, store_id, 'Andres', '2000'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name, default_2;
+
+INSERT INTO table_with_defaults (default_1, store_id, first_name)
+SELECT
+  1000, store_id, 'Andres'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name, default_2;
+
+-- set back to the default
+SET citus.shard_count TO DEFAULT;
