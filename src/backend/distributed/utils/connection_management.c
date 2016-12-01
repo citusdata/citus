@@ -170,7 +170,15 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	bool found;
 	dlist_iter iter;
 
+	/* do some minimal input checks */
 	strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
+	if (strlen(hostname) > MAX_NODE_LENGTH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("hostname exceeds the maximum length of %d",
+							   MAX_NODE_LENGTH)));
+	}
+
 	key.port = port;
 	if (user)
 	{

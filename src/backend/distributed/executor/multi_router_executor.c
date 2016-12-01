@@ -956,8 +956,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 							   "commands")));
 	}
 
-	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
-
 	shardIntervalList = TaskShardIntervalList(taskList);
 
 	/* ensure that there are no concurrent modifications on the same shards */
@@ -965,6 +963,8 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 	/* open connection to all relevant placements, if not already open */
 	OpenTransactionsToAllShardPlacements(shardIntervalList, userName);
+
+	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
 
 	/* iterate over placements in rounds, to ensure in-order execution */
 	while (tasksPending)
