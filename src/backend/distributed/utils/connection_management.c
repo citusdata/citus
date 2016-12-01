@@ -34,7 +34,8 @@ MemoryContext ConnectionContext = NULL;
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static MultiConnection * StartConnectionEstablishment(ConnectionHashKey *key);
-static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
+static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
+static void AfterXactResetHostConnections(ConnectionHashEntry *entry, bool isCommit);
 
 
 /*
@@ -72,41 +73,15 @@ InitializeConnectionManagement(void)
 
 
 /*
- * Perform connection management activity after the end of a transaction. Both
- * COMMIT and ABORT paths are handled here.
- *
- * This is called by Citus' global transaction callback.
- */
-void
-AfterXactConnectionHandling(bool isCommit)
-{
-	HASH_SEQ_STATUS status;
-	ConnectionHashEntry *entry;
-
-	hash_seq_init(&status, ConnectionHash);
-	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
-	{
-		AfterXactHostConnectionHandling(entry, isCommit);
-
-		/*
-		 * NB: We leave the hash entry in place, even if there's no individual
-		 * connections in it anymore. There seems no benefit in deleting it,
-		 * and it'll save a bit of work in the next transaction.
-		 */
-	}
-}
-
-
-/*
  * GetNodeConnection() establishes a connection to remote node, using default
  * user and database.
  *
  * See StartNodeUserDatabaseConnection for details.
  */
 MultiConnection *
-GetNodeConnection(uint32 flags, const char *hostname, int32 port)
+GetNodeConnection(const char *hostname, int32 port, uint32 flags)
 {
-	return GetNodeUserDatabaseConnection(flags, hostname, port, NULL, NULL);
+	return GetNodeUserDatabaseConnection(hostname, port, NULL, NULL, flags);
 }
 
 
@@ -117,9 +92,9 @@ GetNodeConnection(uint32 flags, const char *hostname, int32 port)
  * See StartNodeUserDatabaseConnection for details.
  */
 MultiConnection *
-StartNodeConnection(uint32 flags, const char *hostname, int32 port)
+StartNodeConnection(const char *hostname, int32 port, uint32 flags)
 {
-	return StartNodeUserDatabaseConnection(flags, hostname, port, NULL, NULL);
+	return StartNodeUserDatabaseConnection(hostname, port, NULL, NULL, flags);
 }
 
 
@@ -129,12 +104,12 @@ StartNodeConnection(uint32 flags, const char *hostname, int32 port)
  * See StartNodeUserDatabaseConnection for details.
  */
 MultiConnection *
-GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, const
-							  char *user, const char *database)
+GetNodeUserDatabaseConnection(const char *hostname, int32 port, const
+							  char *user, const char *database, uint32 flags)
 {
 	MultiConnection *connection;
 
-	connection = StartNodeUserDatabaseConnection(flags, hostname, port, user, database);
+	connection = StartNodeUserDatabaseConnection(hostname, port, user, database, flags);
 
 	FinishConnectionEstablishment(connection);
 
@@ -145,30 +120,18 @@ GetNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, co
 /*
  * StartNodeUserDatabaseConnection() initiates a connection to a remote node.
  *
- * If user or database are NULL, the current session's defaults are used. The
- * following flags influence connection establishment behaviour:
- * - NEW_CONNECTION - it is permitted to establish a new connection
- * - CACHED_CONNECTION - it is permitted to re-use an established connection
- * - SESSION_LIFESPAN - the connection should persist after transaction end
- * - FOR_DML - only meaningful for placement associated connections
- * - FOR_DDL - only meaningful for placement associated connections
- * - CRITICAL_CONNECTION - transaction failures on this connection fail the entire
- *   coordinated transaction
- *
  * The returned connection has only been initiated, not fully
  * established. That's useful to allow parallel connection establishment. If
  * that's not desired use the Get* variant.
  */
 MultiConnection *
-StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, const
-								char *user, const char *database)
+StartNodeUserDatabaseConnection(const char *hostname, int32 port, const
+								char *user, const char *database, uint32 flags)
 {
 	ConnectionHashKey key;
 	ConnectionHashEntry *entry = NULL;
-	MultiConnection *connection;
-	MemoryContext oldContext;
-	bool found;
-	dlist_iter iter;
+	MultiConnection *connection = NULL;
+	bool found = false;
 
 	/* do some minimal input checks */
 	strlcpy(key.hostname, hostname, MAX_NODE_LENGTH);
@@ -197,17 +160,9 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 		strlcpy(key.database, get_database_name(MyDatabaseId), NAMEDATALEN);
 	}
 
-	if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
-	{
-		CurrentCoordinatedTransactionState = COORD_TRANS_IDLE;
-	}
-
 	/*
-	 * Lookup relevant hash entry. We always enter. If only a cached
-	 * connection is desired, and there's none, we'll simply leave the
-	 * connection list empty.
+	 * Lookup relevant hash entry or enter a new one.
 	 */
-
 	entry = hash_search(ConnectionHash, &key, HASH_ENTER, &found);
 	if (!found)
 	{
@@ -216,88 +171,73 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 		dlist_init(entry->connections);
 	}
 
-	/* if desired, check whether there's a usable connection */
-	if (flags & CACHED_CONNECTION)
+	connection = FindAvailableConnection(entry->connections, flags);
+	if (connection == NULL)
 	{
-		/* check connection cache for a connection that's not already in use */
-		dlist_foreach(iter, entry->connections)
-		{
-			connection = dlist_container(MultiConnection, node, iter.cur);
+		MemoryContext oldContext = NULL;
 
-			/* don't return claimed connections */
-			if (connection->claimedExclusively)
-			{
-				continue;
-			}
+		/*
+		 * Either no caching desired, or no pre-established, non-claimed,
+		 * connection present. Initiate connection establishment.
+		 */
+		connection = StartConnectionEstablishment(&key);
 
-			/*
-			 * If we're not allowed to open new connections right now, and the
-			 * current connection hasn't yet been used in this transaction, we
-			 * can't use it.
-			 */
-			if (!connection->activeInTransaction &&
-				XactModificationLevel > XACT_MODIFICATION_DATA)
-			{
-				continue;
-			}
+		oldContext = MemoryContextSwitchTo(ConnectionContext);
+		dlist_push_tail(entry->connections, &connection->node);
 
-			if (flags & SESSION_LIFESPAN)
-			{
-				connection->sessionLifespan = true;
-			}
-			connection->activeInTransaction = true;
-
-			/*
-			 * One could argue for erroring out when the connection is in a
-			 * failed state. But that'd be a bad idea for two reasons:
-			 *
-			 * 1) Generally starting a connection might fail, after calling
-			 *    this function, so calling code needs to handle that anyway.
-			 * 2) This might be used in code that transparently handles
-			 *    connection failure.
-			 */
-			return connection;
-		}
+		MemoryContextSwitchTo(oldContext);
 	}
 
-	/* no connection available, done if a new connection isn't desirable */
-	if (!(flags & NEW_CONNECTION))
+	if (flags & IN_TRANSACTION)
 	{
-		return NULL;
+		connection->activeInTransaction = true;
 	}
 
-	/*
-	 * Check whether we're right now allowed to open new connections.
-	 *
-	 * FIXME: This should be removed soon, once all connections go through
-	 * this API.
-	 */
-	if (XactModificationLevel > XACT_MODIFICATION_DATA)
+	if (flags & CLAIM_EXCLUSIVELY)
 	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("cannot open new connections after the first modification "
-							   "command within a transaction")));
+		ClaimConnectionExclusively(connection);
 	}
-
-	/*
-	 * Either no caching desired, or no pre-established, non-claimed,
-	 * connection present. Initiate connection establishment.
-	 */
-	connection = StartConnectionEstablishment(&key);
-
-	oldContext = MemoryContextSwitchTo(ConnectionContext);
-	dlist_push_tail(entry->connections, &connection->node);
-
-	MemoryContextSwitchTo(oldContext);
-
-	if (flags & SESSION_LIFESPAN)
-	{
-		connection->sessionLifespan = true;
-	}
-
-	connection->activeInTransaction = true;
 
 	return connection;
+}
+
+
+/*
+ * FindAvailableConnection finds an available connection from the given list
+ * of connections. A connection is available if it has not been claimed
+ * exclusively and, if the IN_TRANSACTION flag is not set, is not in a
+ * transaction.
+ */
+static MultiConnection *
+FindAvailableConnection(dlist_head *connections, uint32 flags)
+{
+	dlist_iter iter;
+
+	/* check connection cache for a connection that's not already in use */
+	dlist_foreach(iter, connections)
+	{
+		MultiConnection *connection =
+			dlist_container(MultiConnection, node, iter.cur);
+
+		/* don't return claimed connections */
+		if (connection->claimedExclusively)
+		{
+			continue;
+		}
+
+		/*
+		 * Don't return connections that are active in the coordinated transaction if
+		 * not explicitly requested.
+		 */
+		if (!(flags & IN_TRANSACTION) && connection->activeInTransaction)
+		{
+			continue;
+		}
+
+		return connection;
+	}
+
+	return NULL;
 }
 
 
@@ -305,34 +245,32 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
  * Close a previously established connection.
  */
 void
-CloseConnection(MultiConnection *connection)
+CloseConnectionByPGconn(PGconn *pqConn)
 {
-	ConnectionHashKey key;
-	bool found;
+	HASH_SEQ_STATUS status;
+	ConnectionHashEntry *entry;
 
-	/* close connection */
-	PQfinish(connection->conn);
-	connection->conn = NULL;
-
-	strlcpy(key.hostname, connection->hostname, MAX_NODE_LENGTH);
-	key.port = connection->port;
-	strlcpy(key.user, connection->user, NAMEDATALEN);
-	strlcpy(key.database, connection->database, NAMEDATALEN);
-
-	hash_search(ConnectionHash, &key, HASH_FIND, &found);
-
-	if (found)
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
-		/* unlink from list */
-		dlist_delete(&connection->node);
+		dlist_head *connections = entry->connections;
+		dlist_iter iter;
 
-		/* we leave the per-host entry alive */
-		pfree(connection);
-	}
-	else
-	{
-		/* XXX: we could error out instead */
-		ereport(WARNING, (errmsg("closing untracked connection")));
+		/* check connection cache for a connection that's not already in use */
+		dlist_foreach(iter, connections)
+		{
+			MultiConnection *connection =
+				dlist_container(MultiConnection, node, iter.cur);
+
+			if (connection->conn == pqConn)
+			{
+				/* unlink from list */
+				dlist_delete(&connection->node);
+
+				/* we leave the per-host entry alive */
+				pfree(connection);
+			}
+		}
 	}
 }
 
@@ -560,13 +498,40 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 
 
 /*
- * Close all remote connections if necessary anymore (i.e. not session
- * lifetime), or if in a failed state.
+ * Perform connection management activity after the end of a transaction. Both
+ * COMMIT and ABORT paths are handled here.
+ *
+ * This is called by Citus' global transaction callback.
+ */
+void
+AfterXactResetConnections(bool isCommit)
+{
+	HASH_SEQ_STATUS status;
+	ConnectionHashEntry *entry;
+
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		AfterXactResetHostConnections(entry, isCommit);
+
+		/*
+		 * NB: We leave the hash entry in place, even if there's no individual
+		 * connections in it anymore. There seems no benefit in deleting it,
+		 * and it'll save a bit of work in the next transaction.
+		 */
+	}
+}
+
+
+/*
+ * Close all remote connections if necessary anymore (i.e. not cached),
+ * or if in a failed state.
  */
 static void
-AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
+AfterXactResetHostConnections(ConnectionHashEntry *entry, bool isCommit)
 {
 	dlist_mutable_iter iter;
+	bool cachedConnection = false;
 
 	dlist_foreach_modify(iter, entry->connections)
 	{
@@ -585,11 +550,10 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		}
 
 		/*
-		 * Only let a connection life longer than a single transaction if
-		 * instructed to do so by the caller. We also skip doing so if
-		 * it's in a state that wouldn't allow us to run queries again.
+		 * Close connection if there was an error or we already cached
+		 * a connection for this node.
 		 */
-		if (!connection->sessionLifespan ||
+		if (cachedConnection ||
 			PQstatus(connection->conn) != CONNECTION_OK ||
 			PQtransactionStatus(connection->conn) != PQTRANS_IDLE)
 		{
@@ -603,10 +567,12 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		}
 		else
 		{
-			/* reset per-transaction state */
+			/* reset connection state */
+			UnclaimConnection(connection);
 			connection->activeInTransaction = false;
 
-			UnclaimConnection(connection);
+			/* close remaining connections */
+			cachedConnection = true;
 		}
 	}
 }

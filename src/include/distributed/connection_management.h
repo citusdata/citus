@@ -30,23 +30,11 @@ struct MemoryContextData;
  */
 enum MultiConnectionMode
 {
-	/* allow establishment of new connections */
-	NEW_CONNECTION = 1 << 0,
+	/* connection should be part of the coordinated transaction */
+	IN_TRANSACTION = 1 << 1,
 
-	/* allow use of pre-established connections */
-	CACHED_CONNECTION = 1 << 1,
-
-	/* mark returned connection having session lifespan */
-	SESSION_LIFESPAN = 1 << 2,
-
-	/* the connection will be used for DML */
-	FOR_DML = 1 << 3,
-
-	/* the connection will be used for DDL */
-	FOR_DDL = 1 << 4,
-
-	/* failures on this connection will fail entire coordinated transaction */
-	CRITICAL_CONNECTION = 1 << 5
+	/* connection should be claimed exclusively for the caller */
+	CLAIM_EXCLUSIVELY = 1 << 2,
 };
 
 
@@ -64,13 +52,10 @@ typedef struct MultiConnection
 	/* underlying libpq connection */
 	struct pg_conn *conn;
 
-	/* is the connection intended to be kept after transaction end */
-	bool sessionLifespan;
-
 	/* is the connection currently in use, and shouldn't be used by anything else */
 	bool claimedExclusively;
 
-	/* has the connection been used in the current coordinated transaction? */
+	/* is the connection currently part of the coordinated transaction */
 	bool activeInTransaction;
 
 	/* time connection establishment was started, for timeout */
@@ -112,24 +97,25 @@ extern HTAB *ConnectionHash;
 extern struct MemoryContextData *ConnectionContext;
 
 
-extern void AfterXactConnectionHandling(bool isCommit);
+extern void AfterXactResetConnections(bool isCommit);
 extern void InitializeConnectionManagement(void);
 
 
 /* Low-level connection establishment APIs */
-extern MultiConnection * GetNodeConnection(uint32 flags, const char *hostname,
-										   int32 port);
-extern MultiConnection * StartNodeConnection(uint32 flags, const char *hostname,
-											 int32 port);
-extern MultiConnection * GetNodeUserDatabaseConnection(uint32 flags, const char *hostname,
-													   int32 port, const char *user, const
-													   char *database);
-extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
-														 const char *hostname,
+extern MultiConnection * GetNodeConnection(const char *hostname, int32 port,
+										   uint32 flags);
+extern MultiConnection * StartNodeConnection(const char *hostname, int32 port,
+											 uint32 flags);
+extern MultiConnection * GetNodeUserDatabaseConnection(const char *hostname, int32 port,
+													   const char *user,
+													   const char *database,
+													   uint32 flags);
+extern MultiConnection * StartNodeUserDatabaseConnection(const char *hostname,
 														 int32 port,
 														 const char *user,
-														 const char *database);
-extern void CloseConnection(MultiConnection *connection);
+														 const char *database,
+														 uint32 flags);
+extern void CloseConnectionByPGconn(struct pg_conn *pqConn);
 
 /* dealing with a connection */
 extern void FinishConnectionEstablishment(MultiConnection *connection);

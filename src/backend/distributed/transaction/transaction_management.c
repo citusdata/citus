@@ -69,7 +69,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
-				AfterXactConnectionHandling(true);
+				AfterXactResetConnections(true);
 			}
 
 			Assert(!subXactAbortAttempted);
@@ -83,7 +83,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
-				AfterXactConnectionHandling(false);
+				AfterXactResetConnections(false);
 			}
 
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
