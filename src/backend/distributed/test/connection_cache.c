@@ -21,6 +21,7 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/connection_cache.h"
+#include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "utils/elog.h"
@@ -124,7 +125,7 @@ get_and_purge_connection(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 	}
 
-	PurgeConnection(connection);
+	CloseConnectionByPGconn(connection);
 
 	PG_RETURN_BOOL(true);
 }
@@ -148,7 +149,7 @@ connect_and_purge_connection(PG_FUNCTION_ARGS)
 		PG_RETURN_BOOL(false);
 	}
 
-	PurgeConnection(connection);
+	CloseConnectionByPGconn(connection);
 
 	PG_RETURN_BOOL(true);
 }

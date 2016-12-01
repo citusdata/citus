@@ -233,12 +233,12 @@ SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char 
 		PQgetResult(workerConnection);
 
 		/* we no longer need this connection */
-		PQfinish(workerConnection);
+		CloseConnectionByPGconn(workerConnection);
 	}
 	PG_CATCH();
 	{
 		/* close the connection */
-		PQfinish(workerConnection);
+		CloseConnectionByPGconn(workerConnection);
 
 		PG_RE_THROW();
 	}
@@ -280,7 +280,7 @@ RemoveWorkerTransaction(char *nodeName, int32 nodePort)
 		PGconn *connection = transactionConnection->connection;
 
 		/* closing the connection will rollback all uncommited transactions */
-		PQfinish(connection);
+		CloseConnectionByPGconn(connection);
 
 		workerConnectionList = list_delete(workerConnectionList, transactionConnection);
 	}
