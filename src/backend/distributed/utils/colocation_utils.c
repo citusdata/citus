@@ -91,6 +91,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	Var *targetDistributionColumn = NULL;
 	Oid sourceDistributionColumnType = InvalidOid;
 	Oid targetDistributionColumnType = InvalidOid;
+	bool defaultColocationGroup = false;
 
 	CheckHashPartitionedTable(sourceRelationId);
 	CheckHashPartitionedTable(targetRelationId);
@@ -132,9 +133,19 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	{
 		uint32 shardCount = ShardIntervalCount(sourceRelationId);
 		uint32 shardReplicationFactor = TableShardReplicationFactor(sourceRelationId);
+		uint32 defaultColocationId = INVALID_COLOCATION_ID;
+
+		/* check if there is a default colocation group */
+		defaultColocationId = DefaultColocationGroupId(shardCount, shardReplicationFactor,
+													   sourceDistributionColumnType);
+		if (defaultColocationId == INVALID_COLOCATION_ID)
+		{
+			defaultColocationGroup = true;
+		}
 
 		sourceColocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
-												   sourceDistributionColumnType);
+												   sourceDistributionColumnType,
+												   defaultColocationGroup);
 		UpdateRelationColocationGroup(sourceRelationId, sourceColocationId);
 	}
 

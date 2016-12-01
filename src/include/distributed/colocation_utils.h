@@ -18,6 +18,8 @@
 #define INVALID_COLOCATION_ID 0
 
 extern uint32 TableColocationId(Oid distributedTableId);
+extern uint32 DefaultColocationGroupId(int shardCount, int replicationFactor,
+									   Oid distributionColumnType);
 extern bool TablesColocated(Oid leftDistributedTableId, Oid rightDistributedTableId);
 extern bool ShardsColocated(ShardInterval *leftShardInterval,
 							ShardInterval *rightShardInterval);
@@ -26,7 +28,8 @@ extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
 extern Oid ColocatedTableId(Oid colocationId);
 extern uint64 ColocatedShardIdInRelation(Oid relationId, int shardIndex);
 extern uint32 CreateColocationGroup(int shardCount, int replicationFactor,
-									Oid distributionColumnType);
+									Oid distributionColumnType,
+									bool defaultColocationGroup);
 
 
 #endif /* COLOCATION_UTILS_H_ */
