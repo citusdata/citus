@@ -76,7 +76,7 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
--- there is a known issue with aggregates with filters in non-repartition queries (#395)
+-- count distinct with filters
 SELECT
 	l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
 	FROM lineitem_hash
