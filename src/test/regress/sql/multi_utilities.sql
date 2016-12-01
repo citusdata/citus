@@ -40,3 +40,27 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table');
 
 -- drop table
 DROP TABLE sharded_table;
+
+-- VACUUM tests
+
+-- create a table with a single shard (for convenience)
+CREATE TABLE dustbunnies (id integer, name text);
+SELECT master_create_distributed_table('dustbunnies', 'id', 'hash');
+SELECT master_create_worker_shards('dustbunnies', 1, 2);
+
+-- add some data to the distributed table
+\copy dustbunnies from stdin with csv
+1,bugs
+2,babs
+3,buster
+4,roger
+\.
+
+-- delete all rows from the shard, then run VACUUM against the table on the master
+DELETE FROM dustbunnies;
+VACUUM dustbunnies;
+
+-- update statistics, then verify that the four dead rows are gone
+\c - - - :worker_1_port
+SELECT pg_sleep(.500);
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
