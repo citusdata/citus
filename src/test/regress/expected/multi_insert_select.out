@@ -1741,3 +1741,307 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO INFO;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+-- some tests with DEFAULT columns and constant values
+-- this test is mostly importantly intended for deparsing the query correctly
+-- but still it is preferable to have this test here instead of multi_deparse_shard_query
+CREATE TABLE table_with_defaults
+( 
+  store_id int,
+  first_name text,
+  default_1 int DEFAULT 1,
+  last_name text,
+  default_2 text DEFAULT '2'
+);
+-- we don't need many shards
+SET citus.shard_count = 2;
+SELECT create_distributed_table('table_with_defaults', 'store_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- let's see the queries
+SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- a very simple query
+INSERT INTO table_with_defaults SELECT * FROM table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- see that defaults are filled
+INSERT INTO table_with_defaults (store_id, first_name)
+SELECT
+  store_id, first_name
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- shuffle one of the defaults and skip the other
+INSERT INTO table_with_defaults (default_2, store_id, first_name)
+SELECT
+  default_2, store_id, first_name
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- shuffle both defaults
+INSERT INTO table_with_defaults (default_2, store_id, default_1, first_name)
+SELECT
+  default_2, store_id, default_1, first_name
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- use constants instead of non-default column
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name)
+SELECT
+  default_2, 'Freund', store_id, 'Andres'
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- use constants instead of non-default column and skip both defauls
+INSERT INTO table_with_defaults (last_name, store_id, first_name)
+SELECT
+  'Freund', store_id, 'Andres'
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- use constants instead of default columns
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
+SELECT
+  20, last_name, store_id, first_name, 10
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- use constants instead of both default columns and non-default columns
+INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
+SELECT
+  20, 'Freund', store_id, 'Andres', 10
+FROM
+  table_with_defaults;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- some of the the ultimate queries where we have constants,
+-- defaults and group by entry is not on the target entry
+INSERT INTO table_with_defaults (default_2, store_id, first_name)
+SELECT
+  '2000', store_id, 'Andres'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
+SELECT
+  1000, store_id, 'Andres', '2000'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
+SELECT
+  1000, store_id, 'Andres', '2000'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name, default_2;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name, default_2
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+INSERT INTO table_with_defaults (default_1, store_id, first_name)
+SELECT
+  1000, store_id, 'Andres'
+FROM
+  table_with_defaults
+GROUP BY
+  last_name, store_id, first_name, default_2;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300014
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
+DEBUG:  predicate pruning for shardId 13300013
+DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name, default_2
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300013
+DEBUG:  sent COMMIT over connection 13300014
+DEBUG:  sent COMMIT over connection 13300014
+-- set back to the default
+SET citus.shard_count TO DEFAULT;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
