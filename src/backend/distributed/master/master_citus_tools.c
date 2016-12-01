@@ -19,6 +19,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "distributed/connection_cache.h"
+#include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/worker_protocol.h"
@@ -269,7 +270,7 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 		{
 			StoreErrorMessage(connection, queryResultString);
 			statusArray[commandIndex] = false;
-			PQfinish(connection);
+			CloseConnectionByPGconn(connection);
 			connectionArray[commandIndex] = NULL;
 			finishedCount++;
 		}
@@ -298,7 +299,7 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 				finishedCount++;
 				statusArray[commandIndex] = success;
 				connectionArray[commandIndex] = NULL;
-				PQfinish(connection);
+				CloseConnectionByPGconn(connection);
 			}
 		}
 
@@ -509,7 +510,7 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 		PQclear(queryResult);
 
 		/* close the connection */
-		PQfinish(nodeConnection);
+		CloseConnectionByPGconn(nodeConnection);
 		nodeConnection = NULL;
 	}
 	PG_CATCH();
@@ -517,7 +518,7 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 		StoreErrorMessage(nodeConnection, queryResultString);
 
 		/* close the connection */
-		PQfinish(nodeConnection);
+		CloseConnectionByPGconn(nodeConnection);
 		nodeConnection = NULL;
 	}
 	PG_END_TRY();

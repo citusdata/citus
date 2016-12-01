@@ -111,7 +111,7 @@ static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescrip
 									   Tuplestorestate *tupleStore);
 static PGconn * GetConnectionForPlacement(ShardPlacement *placement,
 										  bool isModificationQuery);
-static void PurgeConnectionForPlacement(ShardPlacement *placement);
+static void PurgeConnectionForPlacement(PGconn *connection, ShardPlacement *placement);
 static void RemoveXactConnection(PGconn *connection);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
@@ -277,7 +277,7 @@ InitTransactionStateForTask(Task *task)
 			if (PQresultStatus(result) != PGRES_COMMAND_OK)
 			{
 				WarnRemoteError(connection, result);
-				PurgeConnection(connection);
+				CloseConnectionByPGconn(connection);
 
 				connection = NULL;
 			}
@@ -794,7 +794,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
-			PurgeConnectionForPlacement(taskPlacement);
+			PurgeConnectionForPlacement(connection, taskPlacement);
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
 			continue;
 		}
@@ -852,7 +852,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 		}
 		else
 		{
-			PurgeConnectionForPlacement(taskPlacement);
+			PurgeConnectionForPlacement(connection, taskPlacement);
 
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
 
@@ -956,8 +956,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 							   "commands")));
 	}
 
-	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
-
 	shardIntervalList = TaskShardIntervalList(taskList);
 
 	/* ensure that there are no concurrent modifications on the same shards */
@@ -965,6 +963,8 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 	/* open connection to all relevant placements, if not already open */
 	OpenTransactionsToAllShardPlacements(shardIntervalList, userName);
+
+	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
 
 	/* iterate over placements in rounds, to ensure in-order execution */
 	while (tasksPending)
@@ -1234,17 +1234,9 @@ GetConnectionForPlacement(ShardPlacement *placement, bool isModificationQuery)
  * for the transaction in addition to purging the connection cache's entry.
  */
 static void
-PurgeConnectionForPlacement(ShardPlacement *placement)
+PurgeConnectionForPlacement(PGconn *connection, ShardPlacement *placement)
 {
-	NodeConnectionKey nodeKey;
-	char *currentUser = CurrentUserName();
-
-	MemSet(&nodeKey, 0, sizeof(NodeConnectionKey));
-	strlcpy(nodeKey.nodeName, placement->nodeName, MAX_NODE_LENGTH + 1);
-	nodeKey.nodePort = placement->nodePort;
-	strlcpy(nodeKey.nodeUser, currentUser, NAMEDATALEN);
-
-	PurgeConnectionByKey(&nodeKey);
+	CloseConnectionByPGconn(connection);
 
 	/*
 	 * The following is logically identical to RemoveXactConnection, but since
@@ -1256,7 +1248,13 @@ PurgeConnectionForPlacement(ShardPlacement *placement)
 	{
 		NodeConnectionEntry *participantEntry = NULL;
 		bool entryFound = false;
+		NodeConnectionKey nodeKey;
+		char *currentUser = CurrentUserName();
 
+		MemSet(&nodeKey, 0, sizeof(NodeConnectionKey));
+		strlcpy(nodeKey.nodeName, placement->nodeName, MAX_NODE_LENGTH + 1);
+		nodeKey.nodePort = placement->nodePort;
+		strlcpy(nodeKey.nodeUser, currentUser, NAMEDATALEN);
 		Assert(IsTransactionBlock());
 
 		/* the participant hash doesn't use the user field */
@@ -1862,7 +1860,7 @@ ExecuteTransactionEnd(bool commit)
 		else
 		{
 			WarnRemoteError(connection, result);
-			PurgeConnection(participant->connection);
+			CloseConnectionByPGconn(participant->connection);
 
 			participant->connection = NULL;
 		}

@@ -329,13 +329,13 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 		PQclear(queryResult);
 
 		/* close the connection */
-		PQfinish(masterConnection);
+		CloseConnectionByPGconn(masterConnection);
 		masterConnection = NULL;
 	}
 	PG_CATCH();
 	{
 		/* close the connection */
-		PQfinish(masterConnection);
+		CloseConnectionByPGconn(masterConnection);
 		masterConnection = NULL;
 
 		PG_RE_THROW();

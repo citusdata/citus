@@ -16,6 +16,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_shard_transaction.h"
@@ -361,6 +362,6 @@ CloseConnections(List *connectionList)
 			(TransactionConnection *) lfirst(connectionCell);
 		PGconn *connection = transactionConnection->connection;
 
-		PQfinish(connection);
+		CloseConnectionByPGconn(connection);
 	}
 }
