@@ -109,6 +109,9 @@ static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
+static Node * ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand,
+								bool isTopLevel);
+static List * VacuumTaskList(Oid relationId, const char *commandString);
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -280,6 +283,17 @@ multi_ProcessUtility(Node *parsetree,
 									 "commands to worker nodes"),
 							  errhint("Connect to worker nodes directly to manually "
 									  "move all tables.")));
+		}
+
+		if (IsA(parsetree, VacuumStmt))
+		{
+			VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+
+			/* must check fields to know whether actually a vacuum */
+			if (vacuumStmt->options | VACOPT_VACUUM)
+			{
+				parsetree = ProcessVacuumStmt(vacuumStmt, queryString, isTopLevel);
+			}
 		}
 	}
 
@@ -879,6 +893,49 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return (Node *) alterObjectSchemaStmt;
+}
+
+
+/* TODO: Write function comments */
+static Node *
+ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand, bool isTopLevel)
+{
+	Oid relationId = InvalidOid;
+	List *taskList = NIL;
+
+	if (vacuumStmt->relation == NULL)
+	{
+		return (Node *) vacuumStmt;
+	}
+
+	relationId = RangeVarGetRelid(vacuumStmt->relation, NoLock, false);
+
+	/* first check whether a distributed relation is affected */
+	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	{
+		return (Node *) vacuumStmt;
+	}
+
+	taskList = VacuumTaskList(relationId, vacuumCommand);
+
+	return (Node *) vacuumStmt;
+}
+
+
+/* TODO: Write function comments */
+static List *
+VacuumTaskList(Oid relationId, const char *commandString)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ExclusiveLock);
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("VACUUM of distributed tables is not supported")));
+
+	return taskList;
 }
 
 
