@@ -80,6 +80,7 @@ extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern uint64 DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32
 									  workerPort);
+extern void CreateTruncateTrigger(Oid relationId);
 
 /* Remaining metadata utility functions  */
 extern char * TableOwner(Oid relationId);

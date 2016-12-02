@@ -80,6 +80,9 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 
+-- Make sure that truncate trigger has been set for the MX table on worker
+SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
+
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -91,6 +94,7 @@ SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
 \d mx_testing_schema.mx_test_table
+SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
 \c - - - :master_port

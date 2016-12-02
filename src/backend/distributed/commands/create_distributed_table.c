@@ -76,7 +76,6 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 uint32 colocationId);
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId);
-static void CreateTruncateTrigger(Oid relationId);
 static uint32 ColocationId(int shardCount, int replicationFactor,
 						   Oid distributionColumnType);
 static uint32 GetNextColocationId(void);
@@ -823,7 +822,7 @@ LocalTableEmpty(Oid tableId)
  * CreateTruncateTrigger creates a truncate trigger on table identified by relationId
  * and assigns citus_truncate_trigger() as handler.
  */
-static void
+void
 CreateTruncateTrigger(Oid relationId)
 {
 	CreateTrigStmt *trigger = NULL;
