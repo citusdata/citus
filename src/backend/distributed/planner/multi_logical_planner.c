@@ -1452,42 +1452,6 @@ FindNodesOfType(MultiNode *node, int type)
 
 
 /*
- * IdentifyRTE assigns an identifier to an RTE, for tracking purposes.
- *
- * To be able to track RTEs through postgres' query planning, which copies and
- * duplicate, and modifies them, we sometimes need to figure out whether two
- * RTEs are copies of the same original RTE. For that we, hackishly, use a
- * field normally unused in RTE_RELATION RTEs.
- *
- * The assigned identifier better be unique within a plantree.
- */
-void
-IdentifyRTE(RangeTblEntry *rte, int identifier)
-{
-	Assert(rte->rtekind == RTE_RELATION);
-	Assert(rte->values_lists == NIL);
-	rte->values_lists = list_make1_int(identifier);
-}
-
-
-/* GetRTEIdentity returns the identity assigned with IdentifyRTE. */
-int
-GetRTEIdentity(RangeTblEntry *rte)
-{
-	Assert(rte->rtekind == RTE_RELATION);
-	Assert(IsA(rte->values_lists, IntList));
-	Assert(list_length(rte->values_lists) == 1);
-
-	if (rte->values_lists == NULL)
-	{
-		return 0;
-	}
-
-	return linitial_int(rte->values_lists);
-}
-
-
-/*
  * NeedsDistributedPlanning checks if the passed in query is a query running
  * on a distributed table. If it is, we start distributed planning.
  *
@@ -1501,7 +1465,6 @@ NeedsDistributedPlanning(Query *queryTree)
 	ListCell *rangeTableCell = NULL;
 	bool hasLocalRelation = false;
 	bool hasDistributedRelation = false;
-	int rteIdentifier = 1;
 
 	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
 		commandType != CMD_UPDATE && commandType != CMD_DELETE)
@@ -1522,17 +1485,6 @@ NeedsDistributedPlanning(Query *queryTree)
 		if (IsDistributedTable(relationId))
 		{
 			hasDistributedRelation = true;
-
-			/*
-			 * To be able to track individual RTEs through postgres' query
-			 * planning, we need to be able to figure out whether an RTE is
-			 * actually a copy of another, rather than a different one. We
-			 * simply number the RTEs starting from 1.
-			 */
-			if (rangeTableEntry->rtekind == RTE_RELATION)
-			{
-				IdentifyRTE(rangeTableEntry, rteIdentifier++);
-			}
 		}
 		else
 		{

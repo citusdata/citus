@@ -289,8 +289,6 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	workerJob->dependedJobList = NIL;
 	workerJob->jobId = jobId;
 	workerJob->jobQuery = originalQuery;
-
-	/* for now we do not support any function evaluation */
 	workerJob->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* and finally the multi plan */

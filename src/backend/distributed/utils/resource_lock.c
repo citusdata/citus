@@ -305,11 +305,11 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 
 
 /*
- * LockRelationShards takes locks on all shards in a list of RelationShards
+ * LockRelationShardResources takes locks on all shards in a list of RelationShards
  * to prevent concurrent DML statements on those shards.
  */
 void
-LockRelationShardListResources(List *relationShardList, LOCKMODE lockMode)
+LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 {
 	ListCell *relationShardCell = NULL;
 
