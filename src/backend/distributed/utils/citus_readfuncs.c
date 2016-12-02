@@ -14,6 +14,7 @@
 #include <math.h>
 
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/multi_planner.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
 
@@ -273,6 +274,18 @@ ReadShardPlacement(READFUNC_ARGS)
 
 
 READFUNC_RET
+ReadRelationShard(READFUNC_ARGS)
+{
+	READ_LOCALS(RelationShard);
+
+	READ_OID_FIELD(relationId);
+	READ_UINT64_FIELD(shardId);
+
+	READ_DONE();
+}
+
+
+READFUNC_RET
 ReadTask(READFUNC_ARGS)
 {
 	READ_LOCALS(Task);
@@ -291,7 +304,7 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(taskExecution);
 	READ_BOOL_FIELD(upsertQuery);
 	READ_BOOL_FIELD(insertSelectQuery);
-	READ_NODE_FIELD(selectShardList);
+	READ_NODE_FIELD(relationShardList);
 
 	READ_DONE();
 }

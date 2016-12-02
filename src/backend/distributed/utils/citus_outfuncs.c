@@ -24,6 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_planner.h"
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
@@ -476,6 +477,17 @@ OutShardPlacement(OUTFUNC_ARGS)
 
 
 void
+OutRelationShard(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(RelationShard);
+	WRITE_NODE_TYPE("RELATIONSHARD");
+
+	WRITE_OID_FIELD(relationId);
+	WRITE_UINT64_FIELD(shardId);
+}
+
+
+void
 OutTask(OUTFUNC_ARGS)
 {
 	WRITE_LOCALS(Task);
@@ -495,7 +507,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
 	WRITE_BOOL_FIELD(insertSelectQuery);
-	WRITE_NODE_FIELD(selectShardList);
+	WRITE_NODE_FIELD(relationShardList);
 }
 
 #if (PG_VERSION_NUM < 90600)
@@ -609,6 +621,12 @@ outNode(StringInfo str, const void *obj)
 		case T_ShardPlacement:
 			appendStringInfoChar(str, '{');
 			OutShardPlacement(str, obj);
+			appendStringInfoChar(str, '}');
+			break;
+
+		case T_RelationShard:
+			appendStringInfoChar(str, '{');
+			OutRelationShard(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 
