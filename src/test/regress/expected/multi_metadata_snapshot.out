@@ -237,7 +237,7 @@ SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 --------------+------------+-------------------+------------------------
 (0 rows)
 
--- Check that repeated calls to sync_metadata has no side effects
+-- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
@@ -307,6 +307,18 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
 Indexes:
     "mx_test_table_col_1_key" UNIQUE CONSTRAINT, btree (col_1)
     "mx_index" btree (col_2)
+
+-- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
+\c - - - :master_port
+BEGIN;
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
+ROLLBACK;
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
+ hasmetadata 
+-------------
+ f
+(1 row)
 
 -- Cleanup
 \c - - - :worker_1_port
