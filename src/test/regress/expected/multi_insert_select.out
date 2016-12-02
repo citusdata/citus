@@ -107,6 +107,86 @@ INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300004"
 DETAIL:  Key (user_id, value_1)=(1, 10) already exists.
 CONTEXT:  while executing command on localhost:57637
+-- stable functions should be allowed
+INSERT INTO raw_events_second (user_id, time)
+SELECT
+  user_id, now()
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+INSERT INTO raw_events_second (user_id)
+SELECT
+  user_id
+FROM
+  raw_events_first
+WHERE
+  time > now() + interval '1 day';
+-- hide version-dependent PL/pgSQL context messages
+\set VERBOSITY terse
+-- make sure we evaluate stable functions on the master, once
+CREATE OR REPLACE FUNCTION evaluate_on_master()
+RETURNS int LANGUAGE plpgsql STABLE
+AS $function$
+BEGIN
+  RAISE NOTICE 'evaluating on master';
+  RETURN 0;
+END;
+$function$;
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, evaluate_on_master()
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+NOTICE:  evaluating on master
+-- make sure stable functions in CTEs are evaluated
+INSERT INTO raw_events_second (user_id, value_1)
+WITH sub_cte AS (SELECT evaluate_on_master())
+SELECT
+  user_id, (SELECT * FROM sub_cte)
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+NOTICE:  evaluating on master
+-- make sure we don't evaluate stable functions with column arguments
+CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
+RETURNS int LANGUAGE plpgsql STABLE
+AS $function$
+BEGIN
+  RAISE NOTICE 'evaluating on master';
+  RETURN x;
+END;
+$function$;
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, evaluate_on_master(value_1)
+FROM
+  raw_events_first
+WHERE
+  user_id = 0;
+WARNING:  function public.evaluate_on_master(integer) does not exist
+WARNING:  function public.evaluate_on_master(integer) does not exist
+ERROR:  could not modify any active placements
+\set VERBOSITY default
+-- volatile functions should be disallowed
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, (random()*10)::int
+FROM
+  raw_events_first;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Volatile functions are not allowed in INSERT ... SELECT queries
+INSERT INTO raw_events_second (user_id, value_1)
+WITH sub_cte AS (SELECT (random()*10)::int)
+SELECT
+  user_id, (SELECT * FROM sub_cte)
+FROM
+  raw_events_first;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Volatile functions are not allowed in INSERT ... SELECT queries
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
@@ -1861,12 +1941,44 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
--- set back to the default
-SET citus.shard_count TO DEFAULT;
+RESET client_min_messages;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- Stable function in default should be allowed
+ALTER TABLE table_with_defaults ADD COLUMN t timestamptz DEFAULT now();
+INSERT INTO table_with_defaults (store_id, first_name, last_name)
+SELECT
+  store_id, 'first '||store_id, 'last '||store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id, first_name, last_name;
+-- Volatile function in default should be disallowed
+CREATE TABLE table_with_serial (
+  store_id int,
+  s bigserial
+);
+SELECT create_distributed_table('table_with_serial', 'store_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO table_with_serial (store_id)
+SELECT
+  store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Volatile functions are not allowed in INSERT ... SELECT queries
+DROP TABLE raw_events_first CASCADE;
+NOTICE:  drop cascades to view test_view
+DROP TABLE raw_events_second;
+DROP TABLE reference_table;
+DROP TABLE agg_events;
+DROP TABLE table_with_defaults;
+DROP TABLE table_with_serial;

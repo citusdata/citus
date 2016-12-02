@@ -31,6 +31,7 @@
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -38,6 +39,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
@@ -382,7 +384,7 @@ AcquireExecutorShardLock(Task *task, CmdType commandType)
 		 * concurrently.
 		 */
 
-		LockRelationShardListResources(task->relationShardList, ExclusiveLock);
+		LockRelationShardResources(task->relationShardList, ExclusiveLock);
 	}
 }
 
@@ -462,7 +464,7 @@ AcquireExecutorMultiShardLocks(List *taskList)
 			 * concurrently.
 			 */
 
-			LockRelationShardListResources(task->relationShardList, ExclusiveLock);
+			LockRelationShardResources(task->relationShardList, ExclusiveLock);
 		}
 	}
 }
@@ -621,27 +623,10 @@ RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
 
 		if (requiresMasterEvaluation)
 		{
-			ListCell *taskCell = NULL;
-			Query *query = workerJob->jobQuery;
-			Oid relationId = ((RangeTblEntry *) linitial(query->rtable))->relid;
+			Query *jobQuery = workerJob->jobQuery;
 
-			ExecuteMasterEvaluableFunctions(query);
-
-			foreach(taskCell, taskList)
-			{
-				Task *task = (Task *) lfirst(taskCell);
-				StringInfo newQueryString = makeStringInfo();
-
-				deparse_shard_query(query, relationId, task->anchorShardId,
-									newQueryString);
-
-				ereport(DEBUG4, (errmsg("query before master evaluation: %s",
-										task->queryString)));
-				ereport(DEBUG4, (errmsg("query after master evaluation:  %s",
-										newQueryString->data)));
-
-				task->queryString = newQueryString->data;
-			}
+			ExecuteMasterEvaluableFunctions(jobQuery);
+			RebuildQueryStrings(jobQuery, taskList);
 		}
 
 		if (list_length(taskList) == 1)

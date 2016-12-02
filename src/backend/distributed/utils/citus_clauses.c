@@ -9,6 +9,7 @@
 #include "postgres.h"
 
 #include "distributed/citus_clauses.h"
+#include "distributed/multi_router_planner.h"
 
 #include "catalog/pg_type.h"
 #include "executor/executor.h"
@@ -35,12 +36,39 @@ bool
 RequiresMasterEvaluation(Query *query)
 {
 	ListCell *targetEntryCell = NULL;
+	ListCell *rteCell = NULL;
+	ListCell *cteCell = NULL;
 
 	foreach(targetEntryCell, query->targetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 
 		if (contain_mutable_functions((Node *) targetEntry->expr))
+		{
+			return true;
+		}
+	}
+
+	foreach(rteCell, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
+
+		if (rte->rtekind != RTE_SUBQUERY)
+		{
+			continue;
+		}
+
+		if (RequiresMasterEvaluation(rte->subquery))
+		{
+			return true;
+		}
+	}
+
+	foreach(cteCell, query->cteList)
+	{
+		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
+
+		if (RequiresMasterEvaluation((Query *) expr->ctequery))
 		{
 			return true;
 		}
@@ -64,7 +92,10 @@ ExecuteMasterEvaluableFunctions(Query *query)
 {
 	CmdType commandType = query->commandType;
 	ListCell *targetEntryCell = NULL;
+	ListCell *rteCell = NULL;
+	ListCell *cteCell = NULL;
 	Node *modifiedNode = NULL;
+	bool insertSelectQuery = InsertSelectQuery(query);
 
 	if (query->jointree && query->jointree->quals)
 	{
@@ -81,7 +112,7 @@ ExecuteMasterEvaluableFunctions(Query *query)
 			continue;
 		}
 
-		if (commandType == CMD_INSERT)
+		if (commandType == CMD_INSERT && !insertSelectQuery)
 		{
 			modifiedNode = EvaluateNodeIfReferencesFunction((Node *) targetEntry->expr);
 		}
@@ -93,11 +124,24 @@ ExecuteMasterEvaluableFunctions(Query *query)
 		targetEntry->expr = (Expr *) modifiedNode;
 	}
 
-	if (query->jointree)
+	foreach(rteCell, query->rtable)
 	{
-		Assert(!contain_mutable_functions((Node *) (query->jointree->quals)));
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
+
+		if (rte->rtekind != RTE_SUBQUERY)
+		{
+			continue;
+		}
+
+		ExecuteMasterEvaluableFunctions(rte->subquery);
 	}
-	Assert(!contain_mutable_functions((Node *) (query->targetList)));
+
+	foreach(cteCell, query->cteList)
+	{
+		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
+
+		ExecuteMasterEvaluableFunctions((Query *) expr->ctequery);
+	}
 }
 
 
