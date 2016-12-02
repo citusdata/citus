@@ -55,7 +55,8 @@ typedef enum CitusNodeTag
 	T_MultiPlan,
 	T_Task,
 	T_ShardInterval,
-	T_ShardPlacement
+	T_ShardPlacement,
+	T_RelationShard
 } CitusNodeTag;
 
 

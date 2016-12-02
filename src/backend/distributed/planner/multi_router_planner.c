@@ -23,6 +23,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/deparse_shard_query.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
@@ -82,10 +83,6 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   RelationRestrictionContext *
 											   restrictionContext,
 											   uint32 taskIdIndex);
-static void AddShardIntervalRestrictionToSelect(Query *subqery,
-												ShardInterval *shardInterval);
-static RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
-static RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -105,13 +102,12 @@ static Task * RouterSelectTask(Query *originalQuery,
 static bool RouterSelectQuery(Query *originalQuery,
 							  RelationRestrictionContext *restrictionContext,
 							  List **placementList, uint64 *anchorShardId,
-							  List **selectShardList, bool replacePrunedQueryWithDummy);
+							  List **relationShardList, bool replacePrunedQueryWithDummy);
+static bool RelationPrunesToMultipleShards(List *relationShardList);
 static List * TargetShardIntervalsForSelect(Query *query,
 											RelationRestrictionContext *restrictionContext);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 static List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
-static bool UpdateRelationNames(Node *node,
-								RelationRestrictionContext *restrictionContext);
 static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
 static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
@@ -295,7 +291,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	workerJob->jobQuery = originalQuery;
 
 	/* for now we do not support any function evaluation */
-	workerJob->requiresMasterEvaluation = false;
+	workerJob->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* and finally the multi plan */
 	multiPlan = CitusMakeNode(MultiPlan);
@@ -339,7 +335,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	Task *modifyTask = NULL;
 	List *selectPlacementList = NIL;
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
-	List *selectShardList = NIL;
+	List *relationShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
@@ -398,7 +394,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 */
 	routerPlannable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
 										&selectPlacementList, &selectAnchorShardId,
-										&selectShardList, replacePrunedQueryWithDummy);
+										&relationShardList, replacePrunedQueryWithDummy);
 
 	if (!routerPlannable)
 	{
@@ -463,7 +459,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->anchorShardId = shardId;
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->upsertQuery = upsertQuery;
-	modifyTask->selectShardList = selectShardList;
+	modifyTask->relationShardList = relationShardList;
 
 	return modifyTask;
 }
@@ -479,7 +475,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
  * The function expects and asserts that subquery's target list contains a partition
  * column value. Thus, this function should never be called with reference tables.
  */
-static void
+void
 AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval)
 {
 	List *targetList = subqery->targetList;
@@ -594,7 +590,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
  * Note that the function expects and asserts that the input query be
  * an INSERT...SELECT query.
  */
-static RangeTblEntry *
+RangeTblEntry *
 ExtractSelectRangeTableEntry(Query *query)
 {
 	List *fromList = NULL;
@@ -617,7 +613,7 @@ ExtractSelectRangeTableEntry(Query *query)
  * Note that the function expects and asserts that the input query be
  * an INSERT...SELECT query.
  */
-static RangeTblEntry *
+RangeTblEntry *
 ExtractInsertRangeTableEntry(Query *query)
 {
 	int resultRelation = query->resultRelation;
@@ -650,13 +646,13 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 
 	subquery = subqueryRte->subquery;
 
-	if (contain_mutable_functions((Node *) queryTree))
+	if (contain_volatile_functions((Node *) queryTree))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "
 							   "modification"),
 						errdetail(
-							"Stable and volatile functions are not allowed in INSERT ... "
+							"Volatile functions are not allowed in INSERT ... "
 							"SELECT queries")));
 	}
 
@@ -1917,14 +1913,14 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	StringInfo queryString = makeStringInfo();
 	bool upsertQuery = false;
 	uint64 shardId = INVALID_SHARD_ID;
-	List *selectShardList = NIL;
+	List *relationShardList = NIL;
 	bool replacePrunedQueryWithDummy = false;
 
 	/* router planner should create task even if it deosn't hit a shard at all */
 	replacePrunedQueryWithDummy = true;
 
 	queryRoutable = RouterSelectQuery(originalQuery, restrictionContext,
-									  placementList, &shardId, &selectShardList,
+									  placementList, &shardId, &relationShardList,
 									  replacePrunedQueryWithDummy);
 
 
@@ -1943,6 +1939,7 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	task->anchorShardId = shardId;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
+	task->relationShardList = relationShardList;
 
 	return task;
 }
@@ -1954,12 +1951,14 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
  *
  * On return true, all RTEs have been updated to point to the relevant shards in
  * the originalQuery. Also, placementList is filled with the list of worker nodes
- * that has all the required shard placements for the query execution. Finally,
- * anchorShardId is set to the first pruned shardId of the given query.
+ * that has all the required shard placements for the query execution.
+ * anchorShardId is set to the first pruned shardId of the given query. Finally,
+ * relationShardList is filled with the list of relation-to-shard mappings for
+ * the query.
  */
 static bool
 RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
-				  List **placementList, uint64 *anchorShardId, List **selectShardList,
+				  List **placementList, uint64 *anchorShardId, List **relationShardList,
 				  bool replacePrunedQueryWithDummy)
 {
 	List *prunedRelationShardList = TargetShardIntervalsForSelect(originalQuery,
@@ -1982,7 +1981,9 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 	foreach(prunedRelationShardListCell, prunedRelationShardList)
 	{
 		List *prunedShardList = (List *) lfirst(prunedRelationShardListCell);
+
 		ShardInterval *shardInterval = NULL;
+		RelationShard *relationShard = NULL;
 
 		/* no shard is present or all shards are pruned out case will be handled later */
 		if (prunedShardList == NIL)
@@ -2003,7 +2004,21 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 			shardId = shardInterval->shardId;
 		}
 
-		*selectShardList = lappend(*selectShardList, shardInterval);
+		/* add relation to shard mapping */
+		relationShard = CitusMakeNode(RelationShard);
+		relationShard->relationId = shardInterval->relationId;
+		relationShard->shardId = shardInterval->shardId;
+
+		*relationShardList = lappend(*relationShardList, relationShard);
+	}
+
+	/*
+	 * We bail out if there are RTEs that prune multiple shards above, but
+	 * there can also be multiple RTEs that reference the same relation.
+	 */
+	if (RelationPrunesToMultipleShards(*relationShardList))
+	{
+		return false;
 	}
 
 	/*
@@ -2049,7 +2064,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 		return false;
 	}
 
-	UpdateRelationNames((Node *) originalQuery, restrictionContext);
+	UpdateRelationToShardNames((Node *) originalQuery, *relationShardList);
 
 	*placementList = workerList;
 	*anchorShardId = shardId;
@@ -2134,6 +2149,37 @@ TargetShardIntervalsForSelect(Query *query,
 	}
 
 	return prunedRelationShardList;
+}
+
+
+/*
+ * RelationPrunesToMultipleShards returns true if the given list of
+ * relation-to-shard mappings contains at least two mappings with
+ * the same relation, but different shards.
+ */
+static bool
+RelationPrunesToMultipleShards(List *relationShardList)
+{
+	ListCell *relationShardCell = NULL;
+	RelationShard *previousRelationShard = NULL;
+
+	relationShardList = SortList(relationShardList, CompareRelationShards);
+
+	foreach(relationShardCell, relationShardList)
+	{
+		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
+
+		if (previousRelationShard != NULL &&
+			relationShard->relationId == previousRelationShard->relationId &&
+			relationShard->shardId != previousRelationShard->shardId)
+		{
+			return true;
+		}
+
+		previousRelationShard = relationShard;
+	}
+
+	return false;
 }
 
 
@@ -2230,164 +2276,6 @@ IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList)
 	}
 
 	return placementList;
-}
-
-
-/*
- * ConvertRteToSubqueryWithEmptyResult converts given relation RTE into
- * subquery RTE that returns no results.
- */
-static void
-ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
-{
-	Relation relation = heap_open(rte->relid, NoLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(relation);
-	int columnCount = tupleDescriptor->natts;
-	int columnIndex = 0;
-	Query *subquery = NULL;
-	List *targetList = NIL;
-	FromExpr *joinTree = NULL;
-
-	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
-	{
-		FormData_pg_attribute *attributeForm = tupleDescriptor->attrs[columnIndex];
-		TargetEntry *targetEntry = NULL;
-		StringInfo resname = NULL;
-		Const *constValue = NULL;
-
-		if (attributeForm->attisdropped)
-		{
-			continue;
-		}
-
-		resname = makeStringInfo();
-		constValue = makeNullConst(attributeForm->atttypid, attributeForm->atttypmod,
-								   attributeForm->attcollation);
-
-		appendStringInfo(resname, "%s", attributeForm->attname.data);
-
-		targetEntry = makeNode(TargetEntry);
-		targetEntry->expr = (Expr *) constValue;
-		targetEntry->resno = columnIndex;
-		targetEntry->resname = resname->data;
-
-		targetList = lappend(targetList, targetEntry);
-	}
-
-	heap_close(relation, NoLock);
-
-	joinTree = makeNode(FromExpr);
-	joinTree->quals = makeBoolConst(false, false);
-
-	subquery = makeNode(Query);
-	subquery->commandType = CMD_SELECT;
-	subquery->querySource = QSRC_ORIGINAL;
-	subquery->canSetTag = true;
-	subquery->targetList = targetList;
-	subquery->jointree = joinTree;
-
-	rte->rtekind = RTE_SUBQUERY;
-	rte->subquery = subquery;
-	rte->alias = copyObject(rte->eref);
-}
-
-
-/*
- * UpdateRelationNames walks over the query tree and appends shard ids to
- * relations. It uses unique identity value to establish connection between a
- * shard and the range table entry. If the range table id is not given a
- * identity, than the relation is not referenced from the query, no connection
- * could be found between a shard and this relation. Therefore relation is replaced
- * by set of NULL values so that the query would work at worker without any problems.
- *
- */
-static bool
-UpdateRelationNames(Node *node, RelationRestrictionContext *restrictionContext)
-{
-	RangeTblEntry *newRte = NULL;
-	uint64 shardId = INVALID_SHARD_ID;
-	Oid relationId = InvalidOid;
-	Oid schemaId = InvalidOid;
-	char *relationName = NULL;
-	char *schemaName = NULL;
-	ListCell *relationRestrictionCell = NULL;
-	RelationRestriction *relationRestriction = NULL;
-	List *shardIntervalList = NIL;
-	ShardInterval *shardInterval = NULL;
-	bool replaceRteWithNullValues = false;
-
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	/* want to look at all RTEs, even in subqueries, CTEs and such */
-	if (IsA(node, Query))
-	{
-		return query_tree_walker((Query *) node, UpdateRelationNames, restrictionContext,
-								 QTW_EXAMINE_RTES);
-	}
-
-	if (!IsA(node, RangeTblEntry))
-	{
-		return expression_tree_walker(node, UpdateRelationNames, restrictionContext);
-	}
-
-
-	newRte = (RangeTblEntry *) node;
-
-	if (newRte->rtekind != RTE_RELATION)
-	{
-		return false;
-	}
-
-	/*
-	 * Search for the restrictions associated with the RTE. There better be
-	 * some, otherwise this query wouldn't be elegible as a router query.
-	 *
-	 * FIXME: We should probably use a hashtable here, to do efficient
-	 * lookup.
-	 */
-	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
-	{
-		relationRestriction =
-			(RelationRestriction *) lfirst(relationRestrictionCell);
-
-		if (GetRTEIdentity(relationRestriction->rte) == GetRTEIdentity(newRte))
-		{
-			break;
-		}
-
-		relationRestriction = NULL;
-	}
-
-	replaceRteWithNullValues = (relationRestriction == NULL) ||
-							   relationRestriction->prunedShardIntervalList == NIL;
-
-	if (replaceRteWithNullValues)
-	{
-		ConvertRteToSubqueryWithEmptyResult(newRte);
-		return false;
-	}
-
-	Assert(relationRestriction != NULL);
-
-	shardIntervalList = relationRestriction->prunedShardIntervalList;
-
-	Assert(list_length(shardIntervalList) == 1);
-	shardInterval = (ShardInterval *) linitial(shardIntervalList);
-
-	shardId = shardInterval->shardId;
-	relationId = shardInterval->relationId;
-	relationName = get_rel_name(relationId);
-	AppendShardIdToName(&relationName, shardId);
-
-	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
-
-	ModifyRangeTblExtraData(newRte, CITUS_RTE_SHARD, schemaName, relationName, NIL);
-
-	return false;
 }
 
 

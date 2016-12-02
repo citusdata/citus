@@ -213,8 +213,7 @@ WITH RECURSIVE hierarchy as (
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
 -- logically wrong query, query involves different shards
--- from the same table, but still router plannable due to
--- shard being placed on the same worker.
+-- from the same table
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees

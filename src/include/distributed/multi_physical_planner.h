@@ -171,7 +171,7 @@ typedef struct Task
 	bool upsertQuery;              /* only applies to modify tasks */
 
 	bool insertSelectQuery;
-	List *selectShardList;         /* only applies INSERT/SELECT tasks */
+	List *relationShardList;       /* only applies INSERT/SELECT tasks */
 } Task;
 
 

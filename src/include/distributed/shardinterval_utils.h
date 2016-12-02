@@ -27,6 +27,8 @@ extern ShardInterval * LowestShardIntervalById(List *shardIntervalList);
 extern int CompareShardIntervals(const void *leftElement, const void *rightElement,
 								 FmgrInfo *typeCompareFunction);
 extern int CompareShardIntervalsById(const void *leftElement, const void *rightElement);
+extern int CompareRelationShards(const void *leftElement,
+								 const void *rightElement);
 extern int FindShardIntervalIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 ShardInterval **shardIntervalCache,
