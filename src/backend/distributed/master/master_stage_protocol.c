@@ -226,12 +226,11 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 								  "in hash-partitioned tables")));
 	}
 
-	/*
-	 * We lock on the shardId, but do not unlock. When the function returns, and
-	 * the transaction for this function commits, this lock will automatically
-	 * be released. This ensures appends to a shard happen in a serial manner.
-	 */
-	LockShardResource(shardId, AccessExclusiveLock);
+	/* ensure that the shard placement metadata does not change during the append */
+	LockShardDistributionMetadata(shardId, ShareLock);
+
+	/* serialize appends to the same shard */
+	LockShardResource(shardId, ExclusiveLock);
 
 	/* get schame name of the target shard */
 	shardSchemaOid = get_rel_namespace(relationId);
