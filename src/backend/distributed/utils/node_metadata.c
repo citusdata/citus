@@ -26,8 +26,10 @@
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "storage/lock.h"
 #include "storage/fd.h"
@@ -81,7 +83,8 @@ master_add_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_remove_node function removes the provided node from the pg_dist_node table.
+ * master_remove_node function removes the provided node from the pg_dist_node table of
+ * the master node and all nodes with metadata.
  * The call to the master_remove_node should be done by the super user and the specified
  * node should not have any active placements.
  */
@@ -91,7 +94,9 @@ master_remove_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
+	char *nodeDeleteCommand = NULL;
 	bool hasShardPlacements = false;
+	WorkerNode *workerNode = NULL;
 
 	EnsureSuperUser();
 
@@ -102,7 +107,15 @@ master_remove_node(PG_FUNCTION_ARGS)
 							   "shard placements")));
 	}
 
+	workerNode = FindWorkerNode(nodeNameString, nodePort);
+
 	DeleteNodeRow(nodeNameString, nodePort);
+
+	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+
+	RemoveWorkerTransaction(nodeNameString, nodePort);
+
+	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
 
 	PG_RETURN_VOID();
 }
@@ -196,12 +209,12 @@ ReadWorkerNodes()
 
 /*
  * AddNodeMetadata checks the given node information and adds the specified node to the
- * pg_dist_node table. If the node already exists, the function returns with the
- * information about the node. If not, the following prodecure is followed while adding a
- * node.
- * If the groupId is not explicitly given by the user, the function picks the
- * group that the new node should be in with respect to GroupSize. Then, the
- * new node is inserted into the local pg_dist_node.
+ * pg_dist_node table of the master and workers with metadata.
+ * If the node already exists, the function returns the information about the node.
+ * If not, the following prodecure is followed while adding a node: If the groupId is not
+ * explicitly given by the user, the function picks the group that the new node should
+ * be in with respect to GroupSize. Then, the new node is inserted into the local
+ * pg_dist_node as well as the nodes with hasmetadata=true.
  */
 static Datum
 AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
@@ -211,6 +224,9 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	int nextNodeIdInt = 0;
 	Datum returnData = 0;
 	WorkerNode *workerNode = NULL;
+	char *nodeDeleteCommand = NULL;
+	char *nodeInsertCommand = NULL;
+	List *workerNodeList = NIL;
 
 	EnsureSuperUser();
 
@@ -249,6 +265,17 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	nextNodeIdInt = GetNextNodeId();
 
 	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, groupId, nodeRack, hasMetadata);
+
+	workerNode = FindWorkerNode(nodeName, nodePort);
+
+	/* send the delete command all nodes with metadata */
+	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+
+	/* finally prepare the insert command and send it to all primary nodes */
+	workerNodeList = list_make1(workerNode);
+	nodeInsertCommand = NodeListInsertCommand(workerNodeList);
+	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeInsertCommand);
 
 	heap_close(pgDistNode, AccessExclusiveLock);
 
