@@ -15,9 +15,11 @@
 #include "miscadmin.h"
 
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_namespace.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
