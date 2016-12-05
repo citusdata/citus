@@ -83,6 +83,33 @@ SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 -- Make sure that truncate trigger has been set for the MX table on worker
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
+-- Make sure that start_metadata_sync_to_node considers foreign key constraints
+SET citus.shard_replication_factor TO 1;
+
+CREATE SCHEMA mx_testing_schema_2;
+
+CREATE TABLE mx_testing_schema.fk_test_1 (col1 int, col2 text, col3 int, UNIQUE(col1, col3));
+CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text, 
+	FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1 (col1, col3));
+
+SELECT create_distributed_table('mx_testing_schema.fk_test_1', 'col1');
+SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
+
+UPDATE 
+	pg_dist_partition SET repmodel='s' 
+WHERE 
+	logicalrelid='mx_testing_schema.fk_test_1'::regclass
+	OR logicalrelid='mx_testing_schema_2.fk_test_2'::regclass;
+		
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+-- Check that foreign key metadata exists on the worker
+\c - - - :worker_1_port
+\d mx_testing_schema_2.fk_test_2
+\c - - - :master_port
+
+RESET citus.shard_replication_factor;
+
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
