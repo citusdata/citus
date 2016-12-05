@@ -158,6 +158,7 @@ MetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
+	List *mxTableList = NIL;
 	List *workerNodeList = WorkerNodeList();
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
@@ -167,26 +168,67 @@ MetadataCreateCommands(void)
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  nodeListInsertCommand);
 
-	/* iterate over the distributed tables */
+	/* create the list of mx tables */
 	foreach(distributedTableCell, distributedTableList)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
-		List *clusteredTableDDLEvents = NIL;
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		{
+			mxTableList = lappend(mxTableList, cacheEntry);
+		}
+	}
+
+	/* create the mx tables, but not the metadata */
+	foreach(distributedTableCell, mxTableList)
+	{
+		DistTableCacheEntry *cacheEntry =
+			(DistTableCacheEntry *) lfirst(distributedTableCell);
+		Oid relationId = cacheEntry->relationId;
+
+		List *commandList = GetTableDDLEvents(relationId);
+		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
+
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  commandList);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  tableOwnerResetCommand);
+	}
+
+	/* construct the foreign key constraints after all tables are created */
+	foreach(distributedTableCell, mxTableList)
+	{
+		DistTableCacheEntry *cacheEntry =
+			(DistTableCacheEntry *) lfirst(distributedTableCell);
+
+		List *foreignConstraintCommands =
+			GetTableForeignConstraintCommands(cacheEntry->relationId);
+
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  foreignConstraintCommands);
+	}
+
+	/* after all tables are created, create the metadata */
+	foreach(distributedTableCell, mxTableList)
+	{
+		DistTableCacheEntry *cacheEntry =
+			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		List *shardIntervalList = NIL;
 		List *shardCreateCommandList = NIL;
+		char *metadataCommand = NULL;
+		char *truncateTriggerCreateCommand = NULL;
 		Oid clusteredTableId = cacheEntry->relationId;
 
-		/* add only clustered tables */
-		if (!ShouldSyncTableMetadata(clusteredTableId))
-		{
-			continue;
-		}
+		/* add the table metadata command first*/
+		metadataCommand = DistributionCreateCommand(cacheEntry);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  metadataCommand);
 
-		/* add the DDL events first */
-		clusteredTableDDLEvents = GetDistributedTableDDLEvents(cacheEntry);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  clusteredTableDDLEvents);
+		/* add the truncate trigger command after the table became distributed */
+		truncateTriggerCreateCommand =
+			TruncateTriggerCreateCommand(cacheEntry->relationId);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  truncateTriggerCreateCommand);
 
 		/* add the pg_dist_shard{,placement} entries */
 		shardIntervalList = LoadShardIntervalList(clusteredTableId);
@@ -473,34 +515,6 @@ NodeDeleteCommand(uint32 nodeId)
 					 "WHERE nodeid = %u", nodeId);
 
 	return nodeDeleteCommand->data;
-}
-
-
-/*
- * GetDistributedTableDDLEvents returns the full set of DDL commands necessary to
- * create this relation on a worker. This includes setting up any sequences,
- * setting the owner of the table, and inserting into metadata tables.
- */
-List *
-GetDistributedTableDDLEvents(DistTableCacheEntry *cacheEntry)
-{
-	char *ownerResetCommand = NULL;
-	char *metadataCommand = NULL;
-	char *truncateTriggerCreateCommand = NULL;
-	Oid relationId = cacheEntry->relationId;
-
-	List *commandList = GetTableDDLEvents(relationId);
-
-	ownerResetCommand = TableOwnerResetCommand(relationId);
-	commandList = lappend(commandList, ownerResetCommand);
-
-	metadataCommand = DistributionCreateCommand(cacheEntry);
-	commandList = lappend(commandList, metadataCommand);
-
-	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-	commandList = lappend(commandList, truncateTriggerCreateCommand);
-
-	return commandList;
 }
 
 
