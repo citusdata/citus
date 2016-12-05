@@ -47,12 +47,16 @@ typedef enum CoordinatedTransactionState
 /* Enumeration that defines the different commit protocols available */
 typedef enum
 {
-	COMMIT_PROTOCOL_1PC = 0,
-	COMMIT_PROTOCOL_2PC = 1
+	COMMIT_PROTOCOL_BARE = 0,
+	COMMIT_PROTOCOL_1PC = 1,
+	COMMIT_PROTOCOL_2PC = 2
 } CommitProtocolType;
 
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
+
+/* state needed to restore multi-shard commit protocol during VACUUM/ANALYZE */
+extern int SavedMultiShardCommitProtocol;
 
 /* state needed to prevent new connections during modifying transactions */
 extern XactModificationType XactModificationLevel;

@@ -175,9 +175,11 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 		 * transaction to fail.
 		 */
 		MarkRemoteTransactionCritical(connection);
-
-		/* issue BEGIN */
-		RemoteTransactionBegin(connection);
+		if (MultiShardCommitProtocol > COMMIT_PROTOCOL_BARE)
+		{
+			/* issue BEGIN */
+			RemoteTransactionBegin(connection);
+		}
 	}
 }
 
@@ -270,6 +272,11 @@ ResetShardPlacementTransactionState(void)
 	 * round.
 	 */
 	shardConnectionHash = NULL;
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
+	}
 }
 
 

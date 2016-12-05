@@ -46,6 +46,7 @@
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -920,6 +921,10 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand, bool isTopL
 
 	taskList = VacuumTaskList(relationId, vacuumStmt);
 
+	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	ExecuteModifyTasksWithoutResults(taskList);
+
 	return (Node *) vacuumStmt;
 }
 
@@ -966,9 +971,6 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 
 		taskList = lappend(taskList, task);
 	}
-
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("VACUUM of distributed tables is not supported")));
 
 	return taskList;
 }
