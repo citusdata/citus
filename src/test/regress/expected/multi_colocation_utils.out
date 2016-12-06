@@ -871,8 +871,8 @@ DELETE FROM pg_dist_colocation
 UPDATE pg_dist_partition SET colocationid = 0
     WHERE colocationid >= 1 AND colocationid < 1000;
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype | defaultgroup 
 --------------+------------+-------------------+------------------------+--------------

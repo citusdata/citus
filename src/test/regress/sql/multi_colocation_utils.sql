@@ -302,8 +302,8 @@ CREATE TABLE table2_groupF ( id int );
 SELECT create_reference_table('table2_groupF');
 
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
 -- test mark_colocation_group_default()
