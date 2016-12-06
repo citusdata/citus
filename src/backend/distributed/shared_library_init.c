@@ -278,6 +278,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.log_remote_commands",
+		gettext_noop("Log queries sent to other nodes in the server log"),
+		NULL,
+		&LogRemoteCommands,
+		false,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.explain_multi_logical_plan",
 		gettext_noop("Enables Explain to print out distributed logical plans."),
 		gettext_noop("We use this private configuration entry as a debugging aid. "
