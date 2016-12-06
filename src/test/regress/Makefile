@@ -53,6 +53,9 @@ check-isolation: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
+check-vanilla: all tempinstall-main
+	$(pg_regress_multi_check) --load-extension=citus --vanillatest
+
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	--server-option=citus.task_executor_type=task-tracker \
