@@ -16,21 +16,8 @@
 #include "c.h"
 #include "libpq-fe.h"
 
-#include "nodes/pg_list.h"
 #include "utils/hsearch.h"
-
-/* maximum duration to wait for connection */
-#define CLIENT_CONNECT_TIMEOUT_SECONDS "5"
-
-/* maximum (textual) lengths of hostname and port */
-#define MAX_NODE_LENGTH 255
-#define MAX_PORT_LENGTH 10
-
-/* times to attempt connection (or reconnection) */
-#define MAX_CONNECT_ATTEMPTS 2
-
-/* SQL statement for testing */
-#define TEST_SQL "DO $$ BEGIN RAISE EXCEPTION 'Raised remotely!'; END $$"
+#include "distributed/connection_management.h"
 
 /*
  * NodeConnectionKey acts as the key to index into the (process-local) hash
@@ -52,26 +39,9 @@ typedef struct NodeConnectionEntry
 } NodeConnectionEntry;
 
 
-/* describes what kind of modifications have occurred in the current transaction */
-typedef enum
-{
-	XACT_MODIFICATION_INVALID = 0, /* placeholder initial value */
-	XACT_MODIFICATION_NONE,        /* no modifications have taken place */
-	XACT_MODIFICATION_DATA,        /* data modifications (DML) have occurred */
-	XACT_MODIFICATION_MULTI_SHARD  /* multi-shard modifications have occurred */
-} XactModificationType;
-
-
-/* state needed to prevent new connections during modifying transactions */
-extern XactModificationType XactModificationLevel;
-
-
 /* function declarations for obtaining and using a connection */
 extern PGconn * GetOrEstablishConnection(char *nodeName, int32 nodePort);
-extern void PurgeConnection(PGconn *connection);
 extern void BuildKeyForConnection(PGconn *connection, NodeConnectionKey *connectionKey);
-extern PGconn * PurgeConnectionByKey(NodeConnectionKey *nodeConnectionKey);
-extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 extern void WarnRemoteError(PGconn *connection, PGresult *result);
 extern void ReraiseRemoteError(PGconn *connection, PGresult *result);
 extern PGconn * ConnectToNode(char *nodeName, int nodePort, char *nodeUser);
