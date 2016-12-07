@@ -14,17 +14,11 @@
 
 
 #include "access/xact.h"
+#include "distributed/connection_management.h"
 #include "libpq-fe.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 
-
-/* Enumeration that defines the different commit protocols available */
-typedef enum
-{
-	COMMIT_PROTOCOL_1PC = 0,
-	COMMIT_PROTOCOL_2PC = 1
-} CommitProtocolType;
 
 /* Enumeration that defines different remote transaction states */
 typedef enum
@@ -49,10 +43,6 @@ typedef struct TransactionConnection
 	const char *nodeName;
 	int nodePort;
 } TransactionConnection;
-
-
-/* config variable managed via guc.c */
-extern int MultiShardCommitProtocol;
 
 
 /* Functions declarations for transaction and connection management */

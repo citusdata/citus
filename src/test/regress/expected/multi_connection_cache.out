@@ -32,7 +32,7 @@ CREATE FUNCTION set_connection_status_bad(cstring, integer)
 \set VERBOSITY terse
 -- connect to non-existent host
 SELECT initialize_remote_temp_table('dummy-host-name', 12345);
-WARNING:  connection failed to dummy-host-name:12345
+WARNING:  connection error: dummy-host-name:12345
  initialize_remote_temp_table 
 ------------------------------
  f
