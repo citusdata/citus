@@ -45,8 +45,6 @@ CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DEBUG:  building index "lineitem_hash_time_index" on table "lineitem_hash"
-DEBUG:  sent COMMIT over connection 650000
-DEBUG:  sent COMMIT over connection 650001
 CREATE TABLE orders_hash (
 	o_orderkey bigint not null,
 	o_custkey integer not null,

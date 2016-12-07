@@ -30,14 +30,8 @@
 #define INITIAL_CONNECTION_CACHE_SIZE 1001
 
 
-/* Global variables used in commit handler */
+/* per-transaction state */
 static HTAB *shardConnectionHash = NULL;
-static bool subXactAbortAttempted = false;
-
-/* functions needed by callbacks and hooks */
-static void CompleteShardPlacementTransactions(XactEvent event, void *arg);
-static void MultiShardSubXactCallback(SubXactEvent event, SubTransactionId subId,
-									  SubTransactionId parentSubid, void *arg);
 
 
 /*
@@ -118,6 +112,12 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 							   UINT64_FORMAT, shardId)));
 	}
 
+	BeginOrContinueCoordinatedTransaction();
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
+
 	/* get existing connections to the shard placements, if any */
 	shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
 	if (shardConnectionsFound)
@@ -129,11 +129,11 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 	foreach(placementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(placementCell);
-		PGconn *connection = NULL;
+		MultiConnection *connection = NULL;
 		TransactionConnection *transactionConnection = NULL;
 		WorkerNode *workerNode = FindWorkerNode(shardPlacement->nodeName,
 												shardPlacement->nodePort);
-		PGresult *result = NULL;
+		int connectionFlags = FORCE_NEW_CONNECTION;
 
 		if (workerNode == NULL)
 		{
@@ -141,10 +141,13 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 								   shardPlacement->nodeName, shardPlacement->nodePort)));
 		}
 
-		connection = ConnectToNode(shardPlacement->nodeName, shardPlacement->nodePort,
-								   userName);
-
-		if (connection == NULL)
+		/* XXX: It'd be nicer to establish connections asynchronously here */
+		connection = GetNodeUserDatabaseConnection(connectionFlags,
+												   shardPlacement->nodeName,
+												   shardPlacement->nodePort,
+												   userName,
+												   NULL);
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			ereport(ERROR, (errmsg("could not establish a connection to all "
 								   "placements of shard %lu", shardId)));
@@ -158,7 +161,7 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 		transactionConnection->groupId = workerNode->groupId;
 		transactionConnection->connectionId = shardConnections->shardId;
 		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
-		transactionConnection->connection = connection;
+		transactionConnection->connection = connection->pgConn;
 		transactionConnection->nodeName = shardPlacement->nodeName;
 		transactionConnection->nodePort = shardPlacement->nodePort;
 
@@ -167,12 +170,14 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 
 		MemoryContextSwitchTo(oldContext);
 
-		/* now that connection is tracked, issue BEGIN */
-		result = PQexec(connection, "BEGIN");
-		if (PQresultStatus(result) != PGRES_COMMAND_OK)
-		{
-			ReraiseRemoteError(connection, result);
-		}
+		/*
+		 * Every individual failure should cause entire distributed
+		 * transaction to fail.
+		 */
+		MarkRemoteTransactionCritical(connection);
+
+		/* issue BEGIN */
+		RemoteTransactionBegin(connection);
 	}
 }
 
@@ -253,98 +258,18 @@ ConnectionList(HTAB *connectionHash)
 
 
 /*
- * RegisterShardPlacementXactCallbacks registers transaction callbacks needed
- * for multi-shard transactions.
+ * ResetShardPlacementTransactionState performs cleanup after the end of a
+ * transaction.
  */
 void
-RegisterShardPlacementXactCallbacks(void)
+ResetShardPlacementTransactionState(void)
 {
-	RegisterXactCallback(CompleteShardPlacementTransactions, NULL);
-	RegisterSubXactCallback(MultiShardSubXactCallback, NULL);
-}
-
-
-/*
- * CompleteShardPlacementTransactions commits or aborts pending shard placement
- * transactions when the local transaction commits or aborts.
- */
-static void
-CompleteShardPlacementTransactions(XactEvent event, void *arg)
-{
-	List *connectionList = ConnectionList(shardConnectionHash);
-
-	if (shardConnectionHash == NULL)
-	{
-		/* nothing to do */
-		return;
-	}
-
-	if (event == XACT_EVENT_PRE_COMMIT)
-	{
-		if (subXactAbortAttempted)
-		{
-			subXactAbortAttempted = false;
-
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot ROLLBACK TO SAVEPOINT in transactions "
-								   "which modify distributed tables")));
-		}
-
-		/*
-		 * Any failure here will cause local changes to be rolled back,
-		 * and remote changes to either roll back (1PC) or, in case of
-		 * connection or node failure, leave a prepared transaction
-		 * (2PC).
-		 */
-
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			PrepareRemoteTransactions(connectionList);
-		}
-
-		return;
-	}
-	else if (event == XACT_EVENT_COMMIT)
-	{
-		/*
-		 * A failure here will cause some remote changes to either
-		 * roll back (1PC) or, in case of connection or node failure,
-		 * leave a prepared transaction (2PC). However, the local
-		 * changes have already been committed.
-		 */
-
-		CommitRemoteTransactions(connectionList, false);
-	}
-	else if (event == XACT_EVENT_ABORT)
-	{
-		/*
-		 * A failure here will cause some remote changes to either
-		 * roll back (1PC) or, in case of connection or node failure,
-		 * leave a prepared transaction (2PC). The local changes have
-		 * already been rolled back.
-		 */
-
-		AbortRemoteTransactions(connectionList);
-	}
-	else
-	{
-		return;
-	}
-
-	CloseConnections(connectionList);
+	/*
+	 * Now that transaction management does most of our work, nothing remains
+	 * but to reset the connection hash, which wouldn't be valid next time
+	 * round.
+	 */
 	shardConnectionHash = NULL;
-	subXactAbortAttempted = false;
-}
-
-
-static void
-MultiShardSubXactCallback(SubXactEvent event, SubTransactionId subId,
-						  SubTransactionId parentSubid, void *arg)
-{
-	if ((shardConnectionHash != NULL) && (event == SUBXACT_EVENT_ABORT_SUB))
-	{
-		subXactAbortAttempted = true;
-	}
 }
 
 

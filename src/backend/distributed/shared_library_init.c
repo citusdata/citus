@@ -31,7 +31,6 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
-#include "distributed/multi_shard_transaction.h"
 #include "distributed/multi_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/task_tracker.h"
@@ -163,7 +162,6 @@ _PG_init(void)
 
 	/* initialize transaction callbacks */
 	RegisterRouterExecutorXactCallbacks();
-	RegisterShardPlacementXactCallbacks();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)

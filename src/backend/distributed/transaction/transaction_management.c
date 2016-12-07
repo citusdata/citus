@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
@@ -140,6 +141,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 	{
 		case XACT_EVENT_COMMIT:
 		{
+			/*
+			 * Call other parts of citus that need to integrate into
+			 * transaction management. Do so before doing other work, so the
+			 * callbacks still can perform work if needed.
+			 */
+			ResetShardPlacementTransactionState();
+
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
 				/* handles both already prepared and open transactions */
@@ -167,6 +175,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * can be reached if this backend fails after the
 			 * XACT_EVENT_PRE_COMMIT state.
 			 */
+
+			/*
+			 * Call other parts of citus that need to integrate into
+			 * transaction management. Do so before doing other work, so the
+			 * callbacks still can perform work if needed.
+			 */
+			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
