@@ -33,10 +33,10 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/shardinterval_utils.h"
@@ -244,6 +244,11 @@ MultiPlanRouterExecutable(MultiPlan *multiPlan)
 	int dependedJobCount = list_length(job->dependedJobList);
 	bool masterQueryHasAggregates = false;
 
+	if (!EnableRouterExecution)
+	{
+		return false;
+	}
+
 	/* router executor cannot execute SELECT queries that hit more than one shard */
 	if (taskCount != 1)
 	{
@@ -273,12 +278,6 @@ MultiPlanRouterExecutable(MultiPlan *multiPlan)
 	 */
 	masterQueryHasAggregates = job->jobQuery->hasAggs;
 	if (masterQueryHasAggregates)
-	{
-		return false;
-	}
-
-	/* FIXME: I tend to think it's time to remove this */
-	if (TaskExecutorType != MULTI_EXECUTOR_REAL_TIME)
 	{
 		return false;
 	}

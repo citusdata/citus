@@ -1962,13 +1962,14 @@ NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
 HINT:  Consider rewriting the expression with OR/AND clauses.
 ERROR:  cannot create temporary table within security-restricted operation
 	
--- router planner/executor is disabled for task-tracker executor
--- following query is router plannable, but router planner is disabled
+-- router planner/executor is now enabled for task-tracker executor
 SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
  id 
 ----
   1
@@ -1987,6 +1988,8 @@ SELECT id
 	FROM articles_hash
 	WHERE author_id = 1;
 DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
  id 
 ----
   1

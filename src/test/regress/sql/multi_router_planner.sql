@@ -870,8 +870,7 @@ SELECT * FROM mv_articles_hash;
 CREATE MATERIALIZED VIEW mv_articles_hash_error AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
 	
--- router planner/executor is disabled for task-tracker executor
--- following query is router plannable, but router planner is disabled
+-- router planner/executor is now enabled for task-tracker executor
 SET citus.task_executor_type to 'task-tracker';
 SELECT id
 	FROM articles_hash
