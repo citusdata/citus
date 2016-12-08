@@ -13,8 +13,11 @@ coverage:
   round: down
   status:
     changes: false
-    patch: true
-    project: true
+    patch: false
+    project: 
+      target: 80
+      threshold: 0.5
+      base: pr
 parsers:
   gcov:
     branch_detection:
