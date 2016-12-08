@@ -8,9 +8,6 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 630000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 630000;
 
--- Print the executor type for clarity in test output
-SHOW citus.task_executor_type;
-
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with
 -- hashed ones. Hash value of 1, 2, 3  and 4 are consecutively -1905060026,
@@ -35,15 +32,6 @@ SET client_min_messages TO DEBUG2;
 -- immutable functions.
 
 
--- Since router plans are not triggered for task-tracker executor type,
--- we need to run the tests that triggers router planning seperately for
--- both executors. Otherwise, check-full fails on the task-tracker.
--- Later, we need to switch back to the actual task executor
--- to contuinue with correct executor type for check-full.
-SELECT quote_literal(current_setting('citus.task_executor_type')) AS actual_task_executor
-\gset
-
-SET citus.task_executor_type TO 'real-time';
 SELECT count(*) FROM orders_hash_partitioned;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
@@ -53,8 +41,8 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
-
-SET citus.task_executor_type TO 'task-tracker';
+-- disable router planning
+SET citus.enable_router_execution TO 'false';
 SELECT count(*) FROM orders_hash_partitioned;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
@@ -64,8 +52,7 @@ SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
 
-SET citus.task_executor_type TO :actual_task_executor;
-
+SET citus.enable_router_execution TO DEFAULT;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is NULL;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey is not NULL;
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;

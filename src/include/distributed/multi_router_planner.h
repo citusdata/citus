@@ -17,7 +17,6 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
-#include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 
 
@@ -27,9 +26,9 @@
 /* reserved alias name for UPSERTs */
 #define CITUS_TABLE_ALIAS "citus_table_alias"
 
+extern bool EnableRouterExecution;
 
 extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
-										 MultiExecutorType taskExecutorType,
 										 RelationRestrictionContext *restrictionContext);
 extern void AddUninstantiatedPartitionRestriction(Query *originalQuery);
 extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
