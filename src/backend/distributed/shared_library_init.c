@@ -160,9 +160,6 @@ _PG_init(void)
 	InitializeTransactionManagement();
 	InitializeConnectionManagement();
 
-	/* initialize transaction callbacks */
-	RegisterRouterExecutorXactCallbacks();
-
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
 	{
