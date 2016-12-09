@@ -17,11 +17,13 @@
 
 #include "miscadmin.h"
 
+#include "access/twophase.h"
 #include "access/xact.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/transaction_management.h"
 #include "utils/hsearch.h"
+#include "utils/guc.h"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -41,6 +43,9 @@ static void CoordinatedTransactionCallback(XactEvent event, void *arg);
 static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 											  SubTransactionId parentSubid, void *arg);
 
+/* remaining functions */
+static void AdjustMaxPreparedTransactions(void);
+
 
 void
 InitializeTransactionManagement(void)
@@ -48,6 +53,8 @@ InitializeTransactionManagement(void)
 	/* hook into transaction machinery */
 	RegisterXactCallback(CoordinatedTransactionCallback, NULL);
 	RegisterSubXactCallback(CoordinatedSubTransactionCallback, NULL);
+
+	AdjustMaxPreparedTransactions();
 }
 
 
@@ -140,5 +147,36 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 	if (event == SUBXACT_EVENT_ABORT_SUB)
 	{
 		subXactAbortAttempted = true;
+	}
+}
+
+
+/*
+ * AdjustMaxPreparedTransactions configures the number of available prepared
+ * transaction slots at startup.
+ */
+static void
+AdjustMaxPreparedTransactions(void)
+{
+	/*
+	 * As Citus uses 2PC internally, there always should be some available. As
+	 * the default is 0, we increase it to something appropriate
+	 * (connections * 2 currently).  If the user explicitly configured 2PC, we
+	 * leave the configuration alone - there might have been intent behind the
+	 * decision.
+	 */
+	if (max_prepared_xacts == 0)
+	{
+		char newvalue[12];
+
+		snprintf(newvalue, sizeof(newvalue), "%d", MaxConnections * 2);
+
+		SetConfigOption("max_prepared_transactions", newvalue, PGC_POSTMASTER,
+						PGC_S_OVERRIDE);
+
+		ereport(LOG, (errmsg("number of prepared transactions has not been "
+							 "configured, overriding"),
+					  errdetail("max_prepared_transactions is now set to %s",
+								newvalue)));
 	}
 }
