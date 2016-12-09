@@ -33,7 +33,6 @@
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(column_name_to_column);
 PG_FUNCTION_INFO_V1(column_name_to_column_id);
-PG_FUNCTION_INFO_V1(column_to_column_name);
 
 
 /*
@@ -88,30 +87,6 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 	relation_close(relation, NoLock);
 
 	PG_RETURN_INT16((int16) column->varattno);
-}
-
-
-/*
- * column_to_column_name is an internal UDF to obtain the human-readable name
- * of a column given a relation identifier and the column's internal textual
- * (Var) representation. This function will raise an ERROR if no such column
- * can be found or if the provided Var refers to a system column.
- */
-Datum
-column_to_column_name(PG_FUNCTION_ARGS)
-{
-	Oid relationId = PG_GETARG_OID(0);
-	text *columnNodeText = PG_GETARG_TEXT_P(1);
-
-	char *columnNodeString = text_to_cstring(columnNodeText);
-	char *columnName = NULL;
-	text *columnText = NULL;
-
-	columnName = ColumnNameToColumn(relationId, columnNodeString);
-
-	columnText = cstring_to_text(columnName);
-
-	PG_RETURN_TEXT_P(columnText);
 }
 
 
