@@ -24,6 +24,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
@@ -1665,8 +1666,10 @@ TargetShardIntervalForModify(Query *query)
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 	bool fastShardPruningPossible = false;
+	CmdType commandType = query->commandType;
+	bool updateOrDelete = (commandType == CMD_UPDATE || commandType == CMD_DELETE);
 
-	Assert(query->commandType != CMD_SELECT);
+	Assert(commandType != CMD_SELECT);
 
 	/* error out if no shards exist for the table */
 	shardCount = cacheEntry->shardIntervalArrayLength;
@@ -1710,9 +1713,60 @@ TargetShardIntervalForModify(Query *query)
 	prunedShardCount = list_length(prunedShardList);
 	if (prunedShardCount != 1)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("distributed modifications must target exactly one "
-							   "shard")));
+		Oid relationId = cacheEntry->relationId;
+		char *partitionKeyString = cacheEntry->partitionKeyString;
+		char *partitionColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		StringInfo errorHint = makeStringInfo();
+		char *errorDetail = NULL;
+
+		if (prunedShardCount == 0)
+		{
+			errorDetail = "This command modifies no shards.";
+		}
+		else if (prunedShardCount == shardCount)
+		{
+			errorDetail = "This command modifies all shards.";
+		}
+
+		if (updateOrDelete)
+		{
+			appendStringInfo(errorHint,
+							 "Consider using an equality filter on partition column "
+							 "\"%s\". You can use master_modify_multiple_shards() to "
+							 "perform multi-shard delete or update operations.",
+							 partitionColumnName);
+		}
+		else
+		{
+			appendStringInfo(errorHint,
+							 "Make sure the value for partition column \"%s\" falls into "
+							 "a single shard.", partitionColumnName);
+		}
+
+
+		if (commandType == CMD_DELETE && partitionMethod == DISTRIBUTE_BY_APPEND)
+		{
+			appendStringInfo(errorHint,
+							 " You can also use master_apply_delete_command() to drop "
+							 "all shards satisfying delete criteria.");
+		}
+
+
+		if (errorDetail == NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("distributed modifications must target exactly one "
+								   "shard"),
+							errhint("%s", errorHint->data)));
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("distributed modifications must target exactly one "
+								   "shard"),
+							errdetail("%s", errorDetail),
+							errhint("%s", errorHint->data)));
+		}
 	}
 
 	return (ShardInterval *) linitial(prunedShardList);
