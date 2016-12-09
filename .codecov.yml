@@ -1,0 +1,40 @@
+codecov:
+  notify:
+    require_ci_to_pass: yes
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  ignore:
+    - "src/backend/distributed/utils/citus_outfuncs.c"
+    - "src/backend/distributed/utils/citus_read.c"
+    - "src/backend/distributed/utils/citus_readfuncs_95.c"
+    - "src/backend/distributed/utils/ruleutils_*.c"
+    - "src/include/distributed/citus_nodes.h"
+
+  status:
+    project:
+      default:
+        target: 87.5
+        threshold: 0.5
+
+    patch:
+      default:
+        target: 75
+
+    changes: no
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: yes
+      loop: yes
+      method: no
+      macro: no
+
+comment:
+  layout: "header, diff"
+  behavior: default
+  require_changes: no
