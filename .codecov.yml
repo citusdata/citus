@@ -12,7 +12,9 @@ coverage:
       default:
         target: 80
         threshold: 0.5
-    patch: yes
+    patch:
+      default:
+        target: 75
     changes: no
 
 parsers:
