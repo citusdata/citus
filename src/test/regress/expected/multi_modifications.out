@@ -108,6 +108,8 @@ INSERT INTO limit_orders VALUES (32744, 'AAPL', 9580, '2004-10-19 10:23:54', 'bu
 INSERT INTO insufficient_shards VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 										20.69);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies no shards.
+HINT:  Make sure the value for partition column "id" falls into a single shard.
 -- try an insert to a range-partitioned table
 INSERT INTO range_partitioned VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									  20.69);
@@ -139,10 +141,14 @@ SET citus.task_executor_type TO DEFAULT;
 INSERT INTO range_partitioned VALUES (999999, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									  20.69);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies no shards.
+HINT:  Make sure the value for partition column "id" falls into a single shard.
 -- and insert into an append-partitioned table with a value that spans shards:
 INSERT INTO append_partitioned VALUES (500000, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									   20.69);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Make sure the value for partition column "id" falls into a single shard.
 -- INSERT with DEFAULT in the target list
 INSERT INTO limit_orders VALUES (12756, 'MSFT', 10959, '2013-05-08 07:29:23', 'sell',
 								 DEFAULT);
@@ -259,6 +265,8 @@ SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 -- commands with no constraints on the partition key are not supported
 DELETE FROM limit_orders WHERE bidder_id = 162;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 -- commands with a USING clause are unsupported
 CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
@@ -273,6 +281,8 @@ DETAIL:  Common table expressions are not supported in distributed modifications
 -- cursors are not supported
 DELETE FROM limit_orders WHERE CURRENT OF cursor_name;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 -- simple UPDATE
 UPDATE limit_orders SET symbol = 'GM' WHERE id = 246;
@@ -392,6 +402,8 @@ ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 -- commands with no constraints on the partition key are not supported
 UPDATE limit_orders SET limit_price = 0.00;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
 ERROR:  modifying the partition value of rows is not allowed
@@ -491,6 +503,8 @@ ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause
 -- cursors are not supported
 UPDATE limit_orders SET symbol = 'GM' WHERE CURRENT OF cursor_name;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 -- check that multi-row UPDATE/DELETEs with RETURNING work
 INSERT INTO multiple_hash VALUES ('0', '1');
 INSERT INTO multiple_hash VALUES ('0', '2');

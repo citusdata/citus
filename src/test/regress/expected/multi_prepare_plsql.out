@@ -874,6 +874,8 @@ SELECT partition_parameter_update(5, 51);
 -- This fails with an unexpected error message
 SELECT partition_parameter_update(5, 52);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 CONTEXT:  SQL statement "UPDATE plpgsql_table SET value = $2 WHERE key = $1"
 PL/pgSQL function partition_parameter_update(integer,integer) line 3 at SQL statement
 CREATE FUNCTION non_partition_parameter_update(int, int) RETURNS void as $$
@@ -985,6 +987,8 @@ SELECT partition_parameter_delete(5, 51);
 -- This fails with an unexpected error message
 SELECT partition_parameter_delete(0, 10);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 CONTEXT:  SQL statement "DELETE FROM plpgsql_table WHERE key = $1 AND value = $2"
 PL/pgSQL function partition_parameter_delete(integer,integer) line 3 at SQL statement
 CREATE FUNCTION  non_partition_parameter_delete(int) RETURNS void as $$

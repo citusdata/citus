@@ -602,6 +602,8 @@ BEGIN;
 INSERT INTO append_researchers VALUES (1, 1, 'John McCarthy');
 INSERT INTO append_researchers VALUES (500000, 500000, 'Tony Hoare');
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Make sure the value for partition column "id" falls into a single shard.
 ROLLBACK;
 SELECT * FROM append_researchers;
  id | lab_id |    name     
