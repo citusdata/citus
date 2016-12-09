@@ -21,6 +21,7 @@
 #include "access/xact.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "utils/hsearch.h"
@@ -147,6 +148,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * callbacks still can perform work if needed.
 			 */
 			ResetShardPlacementTransactionState();
+			RouterExecutorPostCommit();
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
@@ -182,6 +184,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * callbacks still can perform work if needed.
 			 */
 			ResetShardPlacementTransactionState();
+			RouterExecutorPostCommit();
 
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
@@ -245,6 +248,14 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				CoordinatedRemoteTransactionsCommit();
 				CurrentCoordinatedTransactionState = COORD_TRANS_COMMITTED;
 			}
+
+			/*
+			 * Call other parts of citus that need to integrate into
+			 * transaction management. Call them *after* committing/preparing
+			 * the remote transactions, to allow marking shards as invalid
+			 * (e.g. if the remote commit failed).
+			 */
+			RouterExecutorPreCommitCheck();
 		}
 		break;
 

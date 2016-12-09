@@ -35,7 +35,7 @@ typedef struct NodeConnectionKey
 typedef struct NodeConnectionEntry
 {
 	NodeConnectionKey cacheKey; /* hash entry key */
-	PGconn *connection;         /* connection to remote server, if any */
+	MultiConnection *connection; /* connection to remote server, if any */
 } NodeConnectionEntry;
 
 
