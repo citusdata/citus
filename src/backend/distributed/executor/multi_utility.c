@@ -980,6 +980,7 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 {
 	StringInfo vacuumPrefix = makeStringInfo();
 	const int supportedFlags = (
+		VACOPT_ANALYZE |
 #if (PG_VERSION_NUM >= 90600)
 		VACOPT_DISABLE_PAGE_SKIPPING |
 #endif
@@ -997,6 +998,18 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 
 	appendStringInfoChar(vacuumPrefix, '(');
 
+	if (vacuumFlags & VACOPT_ANALYZE)
+	{
+		appendStringInfoString(vacuumPrefix, "ANALYZE,");
+	}
+
+#if (PG_VERSION_NUM >= 90600)
+	if (vacuumFlags & VACOPT_DISABLE_PAGE_SKIPPING)
+	{
+		appendStringInfoString(vacuumPrefix, "DISABLE_PAGE_SKIPPING,");
+	}
+#endif
+
 	if (vacuumFlags & VACOPT_FREEZE)
 	{
 		appendStringInfoString(vacuumPrefix, "FREEZE,");
@@ -1006,13 +1019,6 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 	{
 		appendStringInfoString(vacuumPrefix, "FULL,");
 	}
-
-#if (PG_VERSION_NUM >= 90600)
-	if (vacuumFlags & VACOPT_DISABLE_PAGE_SKIPPING)
-	{
-		appendStringInfoString(vacuumPrefix, "DISABLE_PAGE_SKIPPING,");
-	}
-#endif
 
 	vacuumPrefix->data[vacuumPrefix->len - 1] = ')';
 
