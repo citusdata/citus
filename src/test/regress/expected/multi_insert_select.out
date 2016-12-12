@@ -80,14 +80,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- see that our first multi shard INSERT...SELECT works expected
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
@@ -283,14 +275,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
        9 |      |      90 |         |    9000 |        
@@ -363,14 +347,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- group by column not exists on the SELECT target list
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id) 
 SELECT
@@ -574,14 +550,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- add one more level subqueris on top of subquery JOINs
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -659,14 +627,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- subqueries in WHERE clause
 INSERT INTO raw_events_second
             (user_id)
@@ -711,14 +671,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -758,14 +710,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- upserts with returning
 INSERT INTO agg_events AS ae 
             ( 
@@ -806,14 +750,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
  user_id | value_1_agg 
 ---------+-------------
        7 |            
@@ -848,14 +784,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 --  FILTER CLAUSE
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
@@ -886,14 +814,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -929,14 +849,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- a note on the outer joins is that
 -- we filter out outer join results
 -- where partition column returns
@@ -1024,14 +936,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
@@ -1094,14 +998,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
@@ -1168,14 +1064,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1547,14 +1435,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
@@ -1695,13 +1575,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300001
-DEBUG:  sent COMMIT over connection 13300000
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300002
-DEBUG:  sent COMMIT over connection 13300003
-DEBUG:  sent COMMIT over connection 13300003
 SET client_min_messages TO INFO;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
@@ -1784,10 +1657,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- see that defaults are filled
 INSERT INTO table_with_defaults (store_id, first_name)
 SELECT
@@ -1806,10 +1675,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- shuffle one of the defaults and skip the other
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
 SELECT
@@ -1828,10 +1693,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- shuffle both defaults
 INSERT INTO table_with_defaults (default_2, store_id, default_1, first_name)
 SELECT
@@ -1850,10 +1711,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- use constants instead of non-default column
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name)
 SELECT
@@ -1872,10 +1729,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- use constants instead of non-default column and skip both defauls
 INSERT INTO table_with_defaults (last_name, store_id, first_name)
 SELECT
@@ -1894,10 +1747,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- use constants instead of default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
@@ -1916,10 +1765,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- use constants instead of both default columns and non-default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
@@ -1938,10 +1783,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- some of the the ultimate queries where we have constants,
 -- defaults and group by entry is not on the target entry
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
@@ -1963,10 +1804,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -1986,10 +1823,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -2009,10 +1842,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 INSERT INTO table_with_defaults (default_1, store_id, first_name)
 SELECT
   1000, store_id, 'Andres'
@@ -2032,10 +1861,6 @@ DEBUG:  Plan is router executable
 DEBUG:  CommitTransactionCommand
 DEBUG:  CommitTransaction
 DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300013
-DEBUG:  sent COMMIT over connection 13300014
-DEBUG:  sent COMMIT over connection 13300014
 -- set back to the default
 SET citus.shard_count TO DEFAULT;
 DEBUG:  StartTransactionCommand

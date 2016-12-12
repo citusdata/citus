@@ -33,7 +33,7 @@ extern ShardConnections * GetShardHashConnections(HTAB *connectionHash, int64 sh
 												  bool *connectionsFound);
 extern List * ConnectionList(HTAB *connectionHash);
 extern void CloseConnections(List *connectionList);
-extern void RegisterShardPlacementXactCallbacks(void);
+extern void ResetShardPlacementTransactionState(void);
 
 
 #endif /* MULTI_SHARD_TRANSACTION_H */

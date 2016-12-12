@@ -14,6 +14,8 @@
 #include "distributed/connection_management.h"
 
 
+struct pg_result; /* target of the PGresult typedef */
+
 /* GUC, determining whether statements sent to remote nodes are logged */
 extern bool LogRemoteCommands;
 
@@ -31,6 +33,8 @@ extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 
 /* wrappers around libpq functions, with command logging support */
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
+extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
+												 bool raiseInterrupts);
 
 
 #endif /* REMOTE_COMMAND_H */
