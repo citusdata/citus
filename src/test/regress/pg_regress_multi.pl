@@ -27,6 +27,7 @@ sub Usage()
     print "\n";
     print "Multi Options:\n";
     print "  --isolationtester   Run isolationtester tests instead of plain tests\n";
+    print "  --vanillatest       Run postgres tests with citus loaded as shared preload library\n";
     print "  --bindir            Path to postgres binary directory\n";
     print "  --libdir            Path to postgres library directory\n";
     print "  --postgres-builddir Path to postgres build directory\n";
@@ -39,6 +40,7 @@ sub Usage()
 
 # Option parsing
 my $isolationtester = 0;
+my $vanillatest = 0;
 my $bindir = "";
 my $libdir = undef;
 my $pgxsdir = "";
@@ -57,6 +59,7 @@ my $serversAreShutdown = "TRUE";
 
 GetOptions(
     'isolationtester' => \$isolationtester,
+    'vanillatest' => \$vanillatest,
     'bindir=s' => \$bindir,
     'libdir=s' => \$libdir,
     'pgxsdir=s' => \$pgxsdir,
@@ -109,6 +112,19 @@ directory is present locally
 MESSAGE
 }
 
+my $vanillaRegress = "${postgresBuilddir}/src/test/regress/pg_regress";
+if ($vanillatest && ! -f "$vanillaRegress")
+{
+    die <<"MESSAGE";
+
+pg_regress (for vanilla tests) not found at $vanillaRegress.
+
+Vanilla tests can only be run when source (detected as ${postgresSrcdir})
+and build (detected as ${postgresBuilddir}) directory corresponding to $bindir
+are present.
+MESSAGE
+}
+
 # Set some default configuration options
 my $masterPort = 57636;
 my $workerCount = 2;
@@ -144,7 +160,7 @@ for my $option (@userPgOptions)
 }
 
 #define data types as a name->definition
-%dataTypes = ('dummy_type', '(i integer)', 
+%dataTypes = ('dummy_type', '(i integer)',
                'order_side', ' ENUM (\'buy\', \'sell\')',
                'test_composite_type', '(i integer, i2 integer)',
                'bug_status', ' ENUM (\'new\', \'open\', \'closed\')');
@@ -348,16 +364,25 @@ push(@arguments, @ARGV);
 my $startTime = time();
 
 # Finally run the tests
-if (!$isolationtester)
+if ($vanillatest)
 {
-    system("$plainRegress", @arguments) == 0
-	or die "Could not run regression tests";
+    push(@arguments, "--schedule=${postgresSrcdir}/parallel_schedule");
+    $ENV{PGHOST} = $host;
+    $ENV{PGPORT} = $masterPort;
+    $ENV{PGUSER} = $user;
+
+    system("make -C $postgresBuilddir/src/test/regress installcheck-parallel")
 }
-else
+elsif ($isolationtester)
 {
     push(@arguments, "--dbname=regression");
     system("$isolationRegress", @arguments) == 0
 	or die "Could not run isolation tests";
+}
+else
+{
+    system("$plainRegress", @arguments) == 0
+	or die "Could not run regression tests";
 }
 
 my $endTime = time();
