@@ -131,6 +131,13 @@ ROLLBACK;
 
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
+-- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false 
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
+
 -- Cleanup
 \c - - - :worker_1_port
 DROP TABLE mx_testing_schema.mx_test_table;
@@ -141,7 +148,8 @@ DELETE FROM pg_dist_shard_placement;
 \d mx_testing_schema.mx_test_table
 
 \c - - - :master_port
-DROP TABLE mx_testing_schema.mx_test_table;
-UPDATE pg_dist_node SET hasmetadata=false;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+DROP TABLE mx_testing_schema.mx_test_table CASCADE;
 
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
