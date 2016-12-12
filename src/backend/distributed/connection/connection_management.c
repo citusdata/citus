@@ -329,8 +329,11 @@ CloseConnection(MultiConnection *connection)
 
 	if (found)
 	{
-		/* unlink from list */
+		/* unlink from list of open connections */
 		dlist_delete(&connection->connectionNode);
+
+		/* same for transaction state */
+		CloseRemoteTransaction(connection);
 
 		/* we leave the per-host entry alive */
 		pfree(connection);
@@ -632,6 +635,9 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		}
 		else
 		{
+			/* reset per-transaction state */
+			ResetRemoteTransaction(connection);
+
 			UnclaimConnection(connection);
 		}
 	}

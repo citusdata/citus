@@ -9,6 +9,8 @@
 #ifndef TRANSACTION_MANAGMENT_H
 #define TRANSACTION_MANAGMENT_H
 
+#include "lib/ilist.h"
+
 /* describes what kind of modifications have occurred in the current transaction */
 typedef enum
 {
@@ -29,7 +31,16 @@ typedef enum CoordinatedTransactionState
 	COORD_TRANS_NONE,
 
 	/* no coordinated transaction in progress, but connections established */
-	COORD_TRANS_IDLE
+	COORD_TRANS_IDLE,
+
+	/* coordinated transaction in progress */
+	COORD_TRANS_STARTED,
+
+	/* coordinated transaction prepared on all workers */
+	COORD_TRANS_PREPARED,
+
+	/* coordinated transaction committed */
+	COORD_TRANS_COMMITTED
 } CoordinatedTransactionState;
 
 
@@ -46,9 +57,18 @@ extern int MultiShardCommitProtocol;
 /* state needed to prevent new connections during modifying transactions */
 extern XactModificationType XactModificationLevel;
 
-
 extern CoordinatedTransactionState CurrentCoordinatedTransactionState;
 
+/* list of connections that are part of the current coordinated transaction */
+extern dlist_head InProgressTransactions;
+
+/*
+ * Coordinated transaction management.
+ */
+extern void BeginCoordinatedTransaction(void);
+extern void BeginOrContinueCoordinatedTransaction(void);
+extern bool InCoordinatedTransaction(void);
+extern void CoordinatedTransactionUse2PC(void);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
