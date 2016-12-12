@@ -43,11 +43,12 @@
 
 
 static char * LocalGroupIdUpdateCommand(uint32 groupId);
-static void MarkNodeHasMetadata(char *nodeName, int32 nodePort);
+static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
+PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 
 
 /*
@@ -111,7 +112,35 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	SendCommandListToWorkerInSingleTransaction(nodeNameString, nodePort, extensionOwner,
 											   recreateMetadataSnapshotCommandList);
 
-	MarkNodeHasMetadata(nodeNameString, nodePort);
+	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * stop_metadata_sync_to_node function sets the hasmetadata column of the specified node
+ * to false in pg_dist_node table, thus indicating that the specified worker node does not
+ * receive DDL changes anymore and cannot be used for issuing mx queries.
+ */
+Datum
+stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeNameString = text_to_cstring(nodeName);
+	WorkerNode *workerNode = NULL;
+
+	EnsureSuperUser();
+
+	workerNode = FindWorkerNode(nodeNameString, nodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
+	}
+
+	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 
 	PG_RETURN_VOID();
 }
@@ -539,7 +568,7 @@ LocalGroupIdUpdateCommand(uint32 groupId)
  * pg_dist_node to true.
  */
 static void
-MarkNodeHasMetadata(char *nodeName, int32 nodePort)
+MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 {
 	const bool indexOK = false;
 	const int scanKeyCount = 2;
@@ -573,7 +602,7 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort)
 
 	memset(replace, 0, sizeof(replace));
 
-	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(true);
+	values[Anum_pg_dist_node_hasmetadata - 1] = BoolGetDatum(hasMetadata);
 	isnull[Anum_pg_dist_node_hasmetadata - 1] = false;
 	replace[Anum_pg_dist_node_hasmetadata - 1] = true;
 
