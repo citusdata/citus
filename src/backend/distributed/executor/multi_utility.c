@@ -110,8 +110,7 @@ static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
-static Node * ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand,
-								bool isTopLevel);
+static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
 static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
 static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
 
@@ -287,17 +286,6 @@ multi_ProcessUtility(Node *parsetree,
 							  errhint("Connect to worker nodes directly to manually "
 									  "move all tables.")));
 		}
-
-		if (IsA(parsetree, VacuumStmt))
-		{
-			VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
-
-			/* must check fields to know whether actually a vacuum */
-			if (vacuumStmt->options | VACOPT_VACUUM)
-			{
-				parsetree = ProcessVacuumStmt(vacuumStmt, queryString, isTopLevel);
-			}
-		}
 	}
 
 	/*
@@ -382,6 +370,18 @@ multi_ProcessUtility(Node *parsetree,
 	if (commandMustRunAsOwner)
 	{
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	}
+
+	/* we run VacuumStmt after standard processing to benefit from its checks */
+	if (IsA(parsetree, VacuumStmt))
+	{
+		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+
+		/* must check fields to know whether actually a vacuum */
+		if (vacuumStmt->options | VACOPT_VACUUM)
+		{
+			ProcessVacuumStmt(vacuumStmt, queryString);
+		}
 	}
 }
 
@@ -900,15 +900,15 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 
 
 /* TODO: Write function comments */
-static Node *
-ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand, bool isTopLevel)
+static void
+ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	Oid relationId = InvalidOid;
 	List *taskList = NIL;
 
 	if (vacuumStmt->relation == NULL)
 	{
-		return (Node *) vacuumStmt;
+		return;
 	}
 
 	relationId = RangeVarGetRelid(vacuumStmt->relation, NoLock, false);
@@ -916,7 +916,7 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand, bool isTopL
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
 	{
-		return (Node *) vacuumStmt;
+		return;
 	}
 
 	taskList = VacuumTaskList(relationId, vacuumStmt);
@@ -924,8 +924,6 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand, bool isTopL
 	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 	ExecuteModifyTasksWithoutResults(taskList);
-
-	return (Node *) vacuumStmt;
 }
 
 
