@@ -111,6 +111,7 @@ static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSch
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
 static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+static bool IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt);
 static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
 static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
 
@@ -901,16 +902,15 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
 	Oid relationId = InvalidOid;
 	List *taskList = NIL;
+	bool supportedVacuumStmt = false;
 
-	if (vacuumStmt->relation == NULL)
+	if (vacuumStmt->relation != NULL)
 	{
-		return;
+		relationId = RangeVarGetRelid(vacuumStmt->relation, NoLock, false);
 	}
 
-	relationId = RangeVarGetRelid(vacuumStmt->relation, NoLock, false);
-
-	/* first check whether a distributed relation is affected */
-	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(relationId, vacuumStmt);
+	if (!supportedVacuumStmt)
 	{
 		return;
 	}
@@ -920,6 +920,53 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 	ExecuteModifyTasksWithoutResults(taskList);
+}
+
+
+static bool
+IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
+{
+	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+
+	if (vacuumStmt->relation == NULL && EnableDDLPropagation)
+	{
+		/* WARN and exit early for local unqualified VACUUM commands */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Provide a specific table in order to %s "
+								  "distributed tables.", stmtName)));
+
+		return false;
+	}
+
+	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	if (!EnableDDLPropagation)
+	{
+		/* WARN and exit early if DDL propagation is not enabled */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Set citus.enable_ddl_propagation to true in order to "
+								  "send targeted %s commands to worker nodes.",
+								  stmtName)));
+	}
+
+	if (vacuumStmt->options & VACOPT_VERBOSE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("the VERBOSE option is currently unsupported in "
+							   "distributed %s commands", stmtName)));
+	}
+
+	if (vacuumStmt->va_cols != NIL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("specifying a column list is currently unsupported in "
+							   "distributed %s commands", stmtName)));
+	}
+
+	return true;
 }
 
 
@@ -975,7 +1022,8 @@ static StringInfo
 DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 {
 	StringInfo vacuumPrefix = makeStringInfo();
-	const int supportedFlags = (
+	int vacuumFlags = vacuumStmt->options;
+	const int unsupportedFlags = ~(
 		VACOPT_ANALYZE |
 #if (PG_VERSION_NUM >= 90600)
 		VACOPT_DISABLE_PAGE_SKIPPING |
@@ -983,22 +1031,30 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 		VACOPT_FREEZE |
 		VACOPT_FULL
 		);
-	const int vacuumFlags = vacuumStmt->options;
 
-	if (!(vacuumStmt->options & VACOPT_VACUUM))
+	/* determine actual command and block out its bit */
+	if (vacuumFlags & VACOPT_VACUUM)
+	{
+		appendStringInfoString(vacuumPrefix, "VACUUM ");
+		vacuumFlags &= ~VACOPT_VACUUM;
+	}
+	else
 	{
 		appendStringInfoString(vacuumPrefix, "ANALYZE ");
-
-		return vacuumPrefix;
+		vacuumFlags &= ~VACOPT_ANALYZE;
 	}
 
-	appendStringInfoString(vacuumPrefix, "VACUUM ");
+	/* unsupported flags and options should have already been rejected */
+	Assert((vacuumFlags & unsupportedFlags) == 0);
+	Assert(vacuumStmt->va_cols == NIL);
 
-	if (!(vacuumFlags & supportedFlags))
+	/* if no flags remain, exit early */
+	if (vacuumFlags == 0)
 	{
 		return vacuumPrefix;
 	}
 
+	/* otherwise, handle options */
 	appendStringInfoChar(vacuumPrefix, '(');
 
 	if (vacuumFlags & VACOPT_ANALYZE)
