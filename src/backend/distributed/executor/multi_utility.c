@@ -896,7 +896,16 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 }
 
 
-/* TODO: Write function comments */
+/*
+ * ProcessVacuumStmt processes vacuum statements that may need propagation to
+ * distributed tables. If a VACUUM or ANALYZE command references a distributed
+ * table, it is propagated to all involved nodes; otherwise, this function will
+ * immediately exit after some error checking.
+ *
+ * Unlike other Process functions within this file, this function does not
+ * return a modified parse node, as it is expected that the local VACUUM or
+ * ANALYZE has already been processed.
+ */
 static void
 ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 {
@@ -923,6 +932,15 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 }
 
 
+/*
+ * IsSupportedDistributedVacuumStmt returns whether distributed execution of a
+ * given VacuumStmt is supported. The provided relationId (if valid) represents
+ * the table targeted by the provided statement.
+ *
+ * Returns true if the statement requires distributed execution and returns
+ * false otherwise; however, this function will raise errors if the provided
+ * statement needs distributed execution but contains unsupported options.
+ */
 static bool
 IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 {
@@ -970,7 +988,10 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 }
 
 
-/* TODO: Write function comments */
+/*
+ * VacuumTaskList returns a list of tasks to be executed as part of processing
+ * a VacuumStmt which targets a distributed relation.
+ */
 static List *
 VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 {
@@ -1017,7 +1038,12 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 }
 
 
-/* TODO: Write function comments */
+/*
+ * DeparseVacuumStmtPrefix returns a StringInfo appropriate for use as a prefix
+ * during distributed execution of a VACUUM or ANALYZE statement. Callers may
+ * reuse this prefix within a loop to generate shard-specific VACUUM or ANALYZE
+ * statements.
+ */
 static StringInfo
 DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 {
