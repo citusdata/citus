@@ -66,6 +66,25 @@ SELECT pg_sleep(.500);
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
 SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
 
+-- get file node to verify VACUUM FULL
+SELECT relfilenode AS oldnode FROM pg_class WHERE oid='dustbunnies_990002'::regclass
+\gset
+
+-- send a VACUUM FULL and a VACUUM ANALYZE
+\c - - - :master_port
+VACUUM (FULL) dustbunnies;
+VACUUM ANALYZE dustbunnies;
+
+-- verify that relfilenode changed
+\c - - - :worker_1_port
+SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
+WHERE oid='dustbunnies_990002'::regclass;
+
+-- verify the VACUUM ANALYZE incremented both vacuum and analyze counts
+SELECT pg_sleep(.500);
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+
 -- disable auto-VACUUM for next test
 ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
 SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
@@ -79,19 +98,6 @@ VACUUM (FREEZE) dustbunnies;
 -- verify that relfrozenxid increased
 \c - - - :worker_1_port
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
-WHERE oid='dustbunnies_990002'::regclass;
-
--- get file node to verify VACUUM FULL
-SELECT relfilenode AS oldnode FROM pg_class WHERE oid='dustbunnies_990002'::regclass
-\gset
-
--- send a VACUUM FULL
-\c - - - :master_port
-VACUUM (FULL) dustbunnies;
-
--- verify that relfrozenxid increased
-\c - - - :worker_1_port
-SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
 \c - - - :master_port
