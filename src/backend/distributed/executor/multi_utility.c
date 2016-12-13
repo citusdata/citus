@@ -1049,7 +1049,7 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 {
 	StringInfo vacuumPrefix = makeStringInfo();
 	int vacuumFlags = vacuumStmt->options;
-	const int unsupportedFlags = ~(
+	const int unsupportedFlags PG_USED_FOR_ASSERTS_ONLY = ~(
 		VACOPT_ANALYZE |
 #if (PG_VERSION_NUM >= 90600)
 		VACOPT_DISABLE_PAGE_SKIPPING |
