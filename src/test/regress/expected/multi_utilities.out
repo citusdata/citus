@@ -138,3 +138,23 @@ WHERE oid='dustbunnies_990002'::regclass;
  t
 (1 row)
 
+\c - - - :master_port
+-- verify warning for unqualified VACUUM
+VACUUM;
+WARNING:  not propagating VACUUM command to worker nodes
+HINT:  Provide a specific table in order to VACUUM distributed tables.
+-- and warning when using targeted VACUUM without DDL propagation
+SET citus.enable_ddl_propagation to false;
+VACUUM dustbunnies;
+WARNING:  not propagating VACUUM command to worker nodes
+HINT:  Set citus.enable_ddl_propagation to true in order to send targeted VACUUM commands to worker nodes.
+SET citus.enable_ddl_propagation to DEFAULT;
+-- verify error messages for unsupported options
+VACUUM (ANALYZE) dustbunnies (id);
+ERROR:  specifying a column list is currently unsupported in distributed VACUUM commands
+ANALYZE dustbunnies (id);
+ERROR:  specifying a column list is currently unsupported in distributed ANALYZE commands
+-- TODO: support VERBOSE
+-- VACUUM VERBOSE dustbunnies;
+-- VACUUM (FULL, VERBOSE) dustbunnies;
+-- ANALYZE VERBOSE dustbunnies;

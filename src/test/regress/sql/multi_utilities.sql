@@ -93,3 +93,21 @@ VACUUM (FULL) dustbunnies;
 \c - - - :worker_1_port
 SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
+
+\c - - - :master_port
+-- verify warning for unqualified VACUUM
+VACUUM;
+
+-- and warning when using targeted VACUUM without DDL propagation
+SET citus.enable_ddl_propagation to false;
+VACUUM dustbunnies;
+SET citus.enable_ddl_propagation to DEFAULT;
+
+-- verify error messages for unsupported options
+VACUUM (ANALYZE) dustbunnies (id);
+ANALYZE dustbunnies (id);
+
+-- TODO: support VERBOSE
+-- VACUUM VERBOSE dustbunnies;
+-- VACUUM (FULL, VERBOSE) dustbunnies;
+-- ANALYZE VERBOSE dustbunnies;
