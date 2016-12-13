@@ -83,9 +83,9 @@ SELECT master_create_worker_shards('dustbunnies', 1, 2);
 
 -- add some data to the distributed table
 \copy dustbunnies from stdin with csv
--- delete all rows from the shard, then run VACUUM against the table on the master
-DELETE FROM dustbunnies;
+-- run VACUUM and ANALYZE against the table on the master
 VACUUM dustbunnies;
+ANALYZE dustbunnies;
 -- update statistics, then verify that the four dead rows are gone
 \c - - - :worker_1_port
 SELECT pg_sleep(.500);
@@ -98,5 +98,11 @@ SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
  pg_stat_get_vacuum_count 
 --------------------------
                         1
+(1 row)
+
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+ pg_stat_get_analyze_count 
+---------------------------
+                         1
 (1 row)
 

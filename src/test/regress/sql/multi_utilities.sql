@@ -56,11 +56,22 @@ SELECT master_create_worker_shards('dustbunnies', 1, 2);
 4,roger
 \.
 
--- delete all rows from the shard, then run VACUUM against the table on the master
-DELETE FROM dustbunnies;
+-- run VACUUM and ANALYZE against the table on the master
 VACUUM dustbunnies;
+ANALYZE dustbunnies;
 
 -- update statistics, then verify that the four dead rows are gone
 \c - - - :worker_1_port
 SELECT pg_sleep(.500);
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+
+
+-- try a mixed VACUUM ANALYZE 
+\c - - - :master_port
+VACUUM (FULL, ANALYZE) dustbunnies;
+
+-- update statistics, then verify that the four dead rows are gone
+\c - - - :worker_1_port
+SELECT pg_sleep(.500);
+SELECT * FROM pg_stat_all_tables WHERE relid = 'dustbunnies_990002'::regclass;

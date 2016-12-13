@@ -377,11 +377,7 @@ multi_ProcessUtility(Node *parsetree,
 	{
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
 
-		/* must check fields to know whether actually a vacuum */
-		if (vacuumStmt->options | VACOPT_VACUUM)
-		{
-			ProcessVacuumStmt(vacuumStmt, queryString);
-		}
+		ProcessVacuumStmt(vacuumStmt, queryString);
 	}
 }
 
@@ -988,6 +984,13 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 		VACOPT_FULL
 		);
 	const int vacuumFlags = vacuumStmt->options;
+
+	if (!(vacuumStmt->options & VACOPT_VACUUM))
+	{
+		appendStringInfoString(vacuumPrefix, "ANALYZE ");
+
+		return vacuumPrefix;
+	}
 
 	appendStringInfoString(vacuumPrefix, "VACUUM ");
 
