@@ -398,6 +398,11 @@ SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
 -- check to colocate with itself
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
 
+SET citus.shard_count = 2;
+
+CREATE TABLE table5_groupE ( id int );
+SELECT create_distributed_table('table5_groupE', 'id', colocate_with => 'NONE');
+
 -- check metadata to see colocation groups are created successfully
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -406,3 +411,15 @@ SELECT * FROM pg_dist_colocation
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY logicalrelid;
+
+-- move the only table in colocation group 7 to colocation group 5
+SELECT mark_tables_colocated('table1_groupE', ARRAY['table5_groupE']);
+
+-- check metadata to see that unused colocation group is deleted
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;

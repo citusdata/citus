@@ -954,6 +954,14 @@ SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
  
 (1 row)
 
+SET citus.shard_count = 2;
+CREATE TABLE table5_groupE ( id int );
+SELECT create_distributed_table('table5_groupE', 'id', colocate_with => 'NONE');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- check metadata to see colocation groups are created successfully
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -965,7 +973,8 @@ SELECT * FROM pg_dist_colocation
             4 |          4 |                 2 |                     23 | t
             5 |          2 |                 2 |                     23 | t
             6 |          1 |                 2 |                     23 | t
-(5 rows)
+            7 |          2 |                 2 |                     23 | f
+(6 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -983,5 +992,45 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table3_groupe |            5
  table1_groupf |            6
  table2_groupf |            6
-(11 rows)
+ table5_groupe |            7
+(12 rows)
+
+-- move the only table in colocation group 7 to colocation group 5
+SELECT mark_tables_colocated('table1_groupE', ARRAY['table5_groupE']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+-- check metadata to see that unused colocation group is deleted
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype | defaultgroup 
+--------------+------------+-------------------+------------------------+--------------
+            2 |          2 |                 1 |                     23 | t
+            3 |          2 |                 2 |                     25 | t
+            4 |          4 |                 2 |                     23 | t
+            5 |          2 |                 2 |                     23 | t
+            6 |          1 |                 2 |                     23 | t
+(5 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
+ logicalrelid  | colocationid 
+---------------+--------------
+ table1_groupb |            2
+ table2_groupb |            2
+ table1_groupc |            3
+ table2_groupc |            3
+ table1_groupd |            4
+ table2_groupd |            4
+ table1_groupe |            5
+ table2_groupe |            5
+ table3_groupe |            5
+ table5_groupe |            5
+ table1_groupf |            6
+ table2_groupf |            6
+(12 rows)
 

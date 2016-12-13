@@ -42,6 +42,8 @@ static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
 static uint32 GetNextColocationId(void);
 static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
+static List * ColocationGroupTableList(Oid colocationId);
+static void DeleteColocationGroup(uint32 colocationId);
 
 
 /* exports for SQL callable functions */
@@ -91,6 +93,7 @@ static void
 MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 {
 	uint32 sourceColocationId = INVALID_COLOCATION_ID;
+	uint32 targetColocationId = INVALID_COLOCATION_ID;
 	Relation pgDistColocation = NULL;
 	Var *sourceDistributionColumn = NULL;
 	Var *targetDistributionColumn = NULL;
@@ -154,8 +157,22 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 		UpdateRelationColocationGroup(sourceRelationId, sourceColocationId);
 	}
 
+	targetColocationId = TableColocationId(targetRelationId);
+
 	/* finally set colocation group for the target relation */
 	UpdateRelationColocationGroup(targetRelationId, sourceColocationId);
+
+	/* if there is not any remaining table in the colocation group, delete it */
+	if (targetColocationId != INVALID_COLOCATION_ID)
+	{
+		List *colocatedTableList = ColocationGroupTableList(targetColocationId);
+		int colocatedTableCount = list_length(colocatedTableList);
+
+		if (colocatedTableCount == 0)
+		{
+			DeleteColocationGroup(targetColocationId);
+		}
+	}
 
 	heap_close(pgDistColocation, NoLock);
 }
@@ -622,6 +639,30 @@ ColocatedTableList(Oid distributedTableId)
 	uint32 tableColocationId = TableColocationId(distributedTableId);
 	List *colocatedTableList = NIL;
 
+	/*
+	 * If distribution type of the table is not hash, the table is only co-located
+	 * with itself.
+	 */
+	if (tableColocationId == INVALID_COLOCATION_ID)
+	{
+		colocatedTableList = lappend_oid(colocatedTableList, distributedTableId);
+		return colocatedTableList;
+	}
+
+	colocatedTableList = ColocationGroupTableList(tableColocationId);
+
+	return colocatedTableList;
+}
+
+
+/*
+ * ColocationGroupTableList returns the list of tables in the given colocation
+ * group. If the colocation group is INVALID_COLOCATION_ID, it returns NIL.
+ */
+static List *
+ColocationGroupTableList(Oid colocationId)
+{
+	List *colocatedTableList = NIL;
 	Relation pgDistPartition = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -634,14 +675,13 @@ ColocatedTableList(Oid distributedTableId)
 	 * If distribution type of the table is not hash, the table is only co-located
 	 * with itself.
 	 */
-	if (tableColocationId == INVALID_COLOCATION_ID)
+	if (colocationId == INVALID_COLOCATION_ID)
 	{
-		colocatedTableList = lappend_oid(colocatedTableList, distributedTableId);
-		return colocatedTableList;
+		return NIL;
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(tableColocationId));
+				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 
 	pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
 	tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -779,4 +819,45 @@ ColocatedShardIdInRelation(Oid relationId, int shardIndex)
 	DistTableCacheEntry *tableCacheEntry = DistributedTableCacheEntry(relationId);
 
 	return tableCacheEntry->sortedShardIntervalArray[shardIndex]->shardId;
+}
+
+
+/*
+ * DeleteColocationGroup deletes the colocation group from pg_dist_colocation.
+ */
+static void
+DeleteColocationGroup(uint32 colocationId)
+{
+	Relation pgDistColocation = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	int scanKeyCount = 1;
+	ScanKeyData scanKey[scanKeyCount];
+	bool indexOK = false;
+	HeapTuple heapTuple = NULL;
+
+	pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid,
+				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
+
+	scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for colocation group %d",
+							   colocationId)));
+	}
+
+	simple_heap_delete(pgDistColocation, &(heapTuple->t_self));
+
+	CatalogUpdateIndexes(pgDistColocation, heapTuple);
+	CitusInvalidateRelcacheByRelid(DistColocationRelationId());
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistColocation, RowExclusiveLock);
+
+	/* increment the counter so that next command can see the row */
+	CommandCounterIncrement();
 }
