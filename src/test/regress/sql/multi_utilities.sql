@@ -56,13 +56,59 @@ SELECT master_create_worker_shards('dustbunnies', 1, 2);
 4,roger
 \.
 
+-- following approach adapted from PostgreSQL's stats.sql file
+
+-- save relevant stat counter values in refreshable view
+\c - - - :worker_1_port
+CREATE MATERIALIZED VIEW prevcounts AS
+SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
+WHERE relname='dustbunnies_990002';
+
+-- create function that sleeps until those counters increment
+create function wait_for_stats() returns void as $$
+declare
+  start_time timestamptz := clock_timestamp();
+  analyze_updated bool;
+  vacuum_updated bool;
+begin
+  -- we don't want to wait forever; loop will exit after 10 seconds
+  for i in 1 .. 100 loop
+
+    -- check to see if analyze has been updated
+    SELECT (st.analyze_count >= pc.analyze_count + 1) INTO analyze_updated
+      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
+
+     -- check to see if vacuum has been updated
+    SELECT (st.vacuum_count >= pc.vacuum_count + 1) INTO vacuum_updated
+      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
+
+    exit when analyze_updated or vacuum_updated;
+
+    -- wait a little
+    perform pg_sleep(0.1);
+
+    -- reset stats snapshot so we can test again
+    perform pg_stat_clear_snapshot();
+
+  end loop;
+
+  -- report time waited in postmaster log (where it won't change test output)
+  raise log 'wait_for_stats delayed % seconds',
+    extract(epoch from clock_timestamp() - start_time);
+end
+$$ language plpgsql;
+
 -- run VACUUM and ANALYZE against the table on the master
+\c - - - :master_port
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
 
 -- verify that the VACUUM and ANALYZE ran
 \c - - - :worker_1_port
-SELECT pg_sleep(.500);
+SELECT wait_for_stats();
+REFRESH MATERIALIZED VIEW prevcounts;
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
 SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
 
@@ -81,7 +127,7 @@ SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
 -- verify the VACUUM ANALYZE incremented both vacuum and analyze counts
-SELECT pg_sleep(.500);
+SELECT wait_for_stats();
 SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
 SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
 

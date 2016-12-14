@@ -373,7 +373,7 @@ multi_ProcessUtility(Node *parsetree,
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
-	/* we run VacuumStmt after standard processing to benefit from its checks */
+	/* we run VacuumStmt after standard hook to benefit from its checks and locking */
 	if (IsA(parsetree, VacuumStmt))
 	{
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
@@ -902,7 +902,7 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
  * table, it is propagated to all involved nodes; otherwise, this function will
  * immediately exit after some error checking.
  *
- * Unlike other Process functions within this file, this function does not
+ * Unlike most other Process functions within this file, this function does not
  * return a modified parse node, as it is expected that the local VACUUM or
  * ANALYZE has already been processed.
  */
@@ -915,7 +915,15 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 
 	if (vacuumStmt->relation != NULL)
 	{
-		relationId = RangeVarGetRelid(vacuumStmt->relation, NoLock, false);
+		LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ?
+							AccessExclusiveLock : ShareUpdateExclusiveLock;
+
+		relationId = RangeVarGetRelid(vacuumStmt->relation, lockMode, false);
+
+		if (relationId == InvalidOid)
+		{
+			return;
+		}
 	}
 
 	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(relationId, vacuumStmt);
@@ -926,8 +934,11 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 
 	taskList = VacuumTaskList(relationId, vacuumStmt);
 
+	/* save old commit protocol to restore at xact end */
+	Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
 	ExecuteModifyTasksWithoutResults(taskList);
 }
 
@@ -946,9 +957,9 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 {
 	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
 
-	if (vacuumStmt->relation == NULL && EnableDDLPropagation)
+	if (vacuumStmt->relation == NULL)
 	{
-		/* WARN and exit early for local unqualified VACUUM commands */
+		/* WARN and exit early for unqualified VACUUM commands */
 		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
 						  errhint("Provide a specific table in order to %s "
 								  "distributed tables.", stmtName)));
@@ -996,7 +1007,7 @@ static List *
 VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 {
 	List *taskList = NIL;
-	List *shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = NIL;
 	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
@@ -1006,8 +1017,13 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(relationId);
 
-	/* lock metadata before getting placement lists */
-	LockShardListMetadata(shardIntervalList, ExclusiveLock);
+	/* lock relation metadata before getting shard list */
+	LockRelationDistributionMetadata(relationId, ShareLock);
+
+	shardIntervalList = LoadShardIntervalList(relationId);
+
+	/* grab shard lock before getting placement list */
+	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	foreach(shardIntervalCell, shardIntervalList)
 	{
