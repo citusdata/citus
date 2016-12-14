@@ -1,8 +1,9 @@
 --
--- MULTI_METADATA_SNAPSHOT
+-- MULTI_METADATA_SYNC
 --
 
--- Tests for metadata snapshot functions.
+-- Tests for metadata snapshot functions, metadata syncing functions and propagation of
+-- metadata changes to MX tables.
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;

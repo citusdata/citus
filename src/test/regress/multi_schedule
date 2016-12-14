@@ -139,7 +139,7 @@ test: multi_data_types
 test: multi_repartition_udt
 test: multi_repartitioned_subquery_udf
 test: multi_modifying_xacts
-test: multi_metadata_snapshot
+test: multi_metadata_sync
 test: multi_transaction_recovery
 
 # ---------
