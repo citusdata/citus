@@ -371,6 +371,8 @@ SELECT create_distributed_table('table2_groupB', 'id');
  
 (1 row)
 
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='table1_groupB'::regclass;
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='table2_groupB'::regclass;
 -- revert back to default shard replication factor
 SET citus.shard_replication_factor to DEFAULT;
 -- change partition column type

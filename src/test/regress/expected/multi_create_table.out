@@ -137,3 +137,53 @@ SELECT master_create_distributed_table('supplier_single_shard', 's_suppkey', 'ap
  
 (1 row)
 
+-- Show that when a hash distributed table with replication factor=1 is created, it 
+-- automatically marked as streaming replicated
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT create_distributed_table('mx_table_test', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+ repmodel 
+----------
+ s
+(1 row)
+
+DROP TABLE mx_table_test; 
+-- Show that it is not possible to create an mx table with the old 
+-- master_create_distributed_table function
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT master_create_distributed_table('mx_table_test', 'col1', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+ repmodel 
+----------
+ c
+(1 row)
+
+DROP TABLE mx_table_test;
+-- Show that when replication factor > 1 the table is created as coordinator-replicated
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT create_distributed_table('mx_table_test', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+ repmodel 
+----------
+ c
+(1 row)
+
+DROP TABLE mx_table_test; 
+SET citus.shard_replication_factor TO default;
