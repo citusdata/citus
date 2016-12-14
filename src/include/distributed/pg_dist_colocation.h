@@ -22,6 +22,7 @@ typedef struct FormData_pg_dist_colocation
 	uint32 shardcount;
 	uint32 replicationfactor;
 	Oid distributioncolumntype;
+	bool defaultgroup;
 } FormData_pg_dist_colocation;
 
 /* ----------------
@@ -35,11 +36,12 @@ typedef FormData_pg_dist_colocation *Form_pg_dist_colocation;
  *      compiler constants for pg_dist_colocation
  * ----------------
  */
-#define Natts_pg_dist_colocation 4
+#define Natts_pg_dist_colocation 5
 #define Anum_pg_dist_colocation_colocationid 1
 #define Anum_pg_dist_colocation_shardcount 2
 #define Anum_pg_dist_colocation_replicationfactor 3
 #define Anum_pg_dist_colocation_distributioncolumntype 4
+#define Anum_pg_dist_colocation_defaultgroup 5
 
 #define COLOCATIONID_SEQUENCE_NAME "pg_dist_colocationid_seq"
 

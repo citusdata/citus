@@ -241,6 +241,53 @@ CREATE SCHEMA schema_collocation;
 CREATE TABLE schema_collocation.table4_groupE ( id int );
 SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
 
+-- test colocate_with option
+CREATE TABLE table1_group_none_1 ( id int );
+SELECT create_distributed_table('table1_group_none_1', 'id', colocate_with => 'none');
+
+CREATE TABLE table2_group_none_1 ( id int );
+SELECT create_distributed_table('table2_group_none_1', 'id', colocate_with => 'table1_group_none_1');
+
+CREATE TABLE table1_group_none_2 ( id int );
+SELECT create_distributed_table('table1_group_none_2', 'id', colocate_with => 'none');
+
+CREATE TABLE table4_groupE ( id int );
+SELECT create_distributed_table('table4_groupE', 'id', colocate_with => 'default');
+
+SET citus.shard_count = 3;
+
+-- check that this new configuration does not have a default group
+CREATE TABLE table1_group_none_3 ( id int );
+SELECT create_distributed_table('table1_group_none_3', 'id', colocate_with => 'NONE');
+
+-- a new table does not use a non-default group
+CREATE TABLE table1_group_default ( id int );
+SELECT create_distributed_table('table1_group_default', 'id', colocate_with => 'DEFAULT');
+
+-- check metadata
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
+
+-- check failing colocate_with options
+CREATE TABLE table_postgresql( id int );
+CREATE TABLE table_failing ( id int );
+
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_append');
+SELECT create_distributed_table('table_failing', 'id', 'append', 'table1_groupE');
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_postgresql');
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'no_table');
+SELECT create_distributed_table('table_failing', 'id', colocate_with => '');
+SELECT create_distributed_table('table_failing', 'id', colocate_with => NULL);
+
+-- check with different distribution column types
+CREATE TABLE table_bigint ( id bigint );
+SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_groupE');
+
 -- check worker table schemas
 \c - - - :worker_1_port
 \d table3_groupE_1300050
@@ -255,9 +302,22 @@ CREATE TABLE table2_groupF ( id int );
 SELECT create_reference_table('table2_groupF');
 
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
+
+-- test mark_colocation_group_default()
+SELECT mark_colocation_group_default(7);
+SELECT mark_colocation_group_default(8);
+
+-- check metadata after mark_colocation_group_default() is run
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
 
 -- cross check with internal colocation API
 SELECT 
@@ -304,13 +364,13 @@ UPDATE pg_dist_partition SET colocationid = 0
     WHERE colocationid >= 1 AND colocationid < 1000;
 
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
 
 -- first check failing cases
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupC']);
@@ -320,13 +380,13 @@ SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupF']);
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_groupD']);
 
 -- check metadata to see failing calls didn't have any side effects
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
 
 -- check successfully cololated tables
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB']);
@@ -338,6 +398,11 @@ SELECT mark_tables_colocated('table1_groupF', ARRAY['table2_groupF']);
 -- check to colocate with itself
 SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
 
+SET citus.shard_count = 2;
+
+CREATE TABLE table5_groupE ( id int );
+SELECT create_distributed_table('table5_groupE', 'id', colocate_with => 'NONE');
+
 -- check metadata to see colocation groups are created successfully
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -346,3 +411,15 @@ SELECT * FROM pg_dist_colocation
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY logicalrelid;
+
+-- move the only table in colocation group 7 to colocation group 5
+SELECT mark_tables_colocated('table1_groupE', ARRAY['table5_groupE']);
+
+-- check metadata to see that unused colocation group is deleted
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
