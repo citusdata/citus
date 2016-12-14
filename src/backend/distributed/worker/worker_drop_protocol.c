@@ -42,6 +42,8 @@ static void DeletePartitionRow(Oid distributedRelationId);
  * not dropped as in the case of "DROP TABLE distributed_table;" command.
  *
  * The function errors out if the input relation Oid is not a regular or foreign table.
+ * The function is meant to be called only by the coordinator, therefore requires
+ * superuser privileges.
  */
 Datum
 worker_drop_distributed_table(PG_FUNCTION_ARGS)
@@ -54,6 +56,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	List *shardList = LoadShardList(relationId);
 	ListCell *shardCell = NULL;
 	char relationKind = '\0';
+
+	EnsureSuperUser();
 
 	/* first check the relation type */
 	distributedRelation = relation_open(relationId, AccessShareLock);
@@ -96,8 +100,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		/* drop the table only */
-		performDeletion(&distributedTableObject, DROP_RESTRICT,
+		/* drop the table with cascade since other tables may be referring to it */
+		performDeletion(&distributedTableObject, DROP_CASCADE,
 						PERFORM_DELETION_INTERNAL);
 	}
 
