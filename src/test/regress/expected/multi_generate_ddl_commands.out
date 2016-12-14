@@ -36,9 +36,9 @@ SELECT table_ddl_command_array('not_null_table');
 -- ensure tables not in search path are schema-prefixed
 CREATE SCHEMA not_in_path CREATE TABLE simple_table (id bigint);
 SELECT table_ddl_command_array('not_in_path.simple_table');
-                                     table_ddl_command_array                                     
--------------------------------------------------------------------------------------------------
- {"CREATE SCHEMA IF NOT EXISTS not_in_path","CREATE TABLE not_in_path.simple_table (id bigint)"}
+                                                table_ddl_command_array                                                 
+------------------------------------------------------------------------------------------------------------------------
+ {"CREATE SCHEMA IF NOT EXISTS not_in_path AUTHORIZATION postgres","CREATE TABLE not_in_path.simple_table (id bigint)"}
 (1 row)
 
 -- even more complex constraints should be preserved...
