@@ -409,8 +409,184 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
  f
 (1 row)
 
+-- Test DDL propagation in MX tables
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+SET citus.shard_count = 5;
+CREATE SCHEMA mx_test_schema_1;
+CREATE SCHEMA mx_test_schema_2;
+-- Create MX tables
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE mx_test_schema_1.mx_table_1 (col1 int UNIQUE, col2 text);
+CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 (col1);
+CREATE TABLE mx_test_schema_2.mx_table_2 (col1 int, col2 text);
+CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 (col2);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col1) REFERENCES mx_test_schema_1.mx_table_1(col1);
+\d mx_test_schema_1.mx_table_1
+Table "mx_test_schema_1.mx_table_1"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
+    "mx_index_1" btree (col1)
+Referenced by:
+    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+\d mx_test_schema_2.mx_table_2
+Table "mx_test_schema_2.mx_table_2"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_index_2" btree (col2)
+Foreign-key constraints:
+    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('mx_test_schema_2.mx_table_2', 'col1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Check that created tables are marked as streaming replicated tables
+SELECT 
+	logicalrelid, repmodel 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+        logicalrelid         | repmodel 
+-----------------------------+----------
+ mx_test_schema_1.mx_table_1 | s
+ mx_test_schema_2.mx_table_2 | s
+(2 rows)
+
+-- See the shards and placements of the mx tables 
+SELECT 
+	logicalrelid, shardid, nodename, nodeport
+FROM 
+	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid, shardid;
+        logicalrelid         | shardid | nodename  | nodeport 
+-----------------------------+---------+-----------+----------
+ mx_test_schema_1.mx_table_1 | 1310008 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310009 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310010 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310011 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310012 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310013 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310014 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310015 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310016 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310017 | localhost |    57637
+(10 rows)
+
+	
+-- Check that metadata of MX tables exist on the metadata worker
+\c - - - :worker_1_port
+-- Check that tables are created
+\d mx_test_schema_1.mx_table_1
+Table "mx_test_schema_1.mx_table_1"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
+    "mx_index_1" btree (col1)
+Referenced by:
+    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+\d mx_test_schema_2.mx_table_2
+Table "mx_test_schema_2.mx_table_2"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_index_2" btree (col2)
+Foreign-key constraints:
+    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+-- Check that table metadata are created
+SELECT 
+	logicalrelid, repmodel 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+        logicalrelid         | repmodel 
+-----------------------------+----------
+ mx_test_schema_1.mx_table_1 | s
+ mx_test_schema_2.mx_table_2 | s
+(2 rows)
+
+-- Check that shard and placement data are created
+SELECT 
+	logicalrelid, shardid, nodename, nodeport
+FROM 
+	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE 
+	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid, shardid;
+        logicalrelid         | shardid | nodename  | nodeport 
+-----------------------------+---------+-----------+----------
+ mx_test_schema_1.mx_table_1 | 1310008 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310009 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310010 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310011 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310012 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310013 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310014 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310015 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310016 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310017 | localhost |    57637
+(10 rows)
+
+-- Check that metadata of MX tables don't exist on the non-metadata worker
+\c - - - :worker_2_port
+\d mx_test_schema_1.mx_table_1
+\d mx_test_schema_2.mx_table_2
+SELECT * FROM pg_dist_partition;
+ logicalrelid | partmethod | partkey | colocationid | repmodel 
+--------------+------------+---------+--------------+----------
+(0 rows)
+
+SELECT * FROM pg_dist_shard;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
 -- Cleanup
 \c - - - :worker_1_port
+DROP TABLE mx_test_schema_2.mx_table_2;
+DROP TABLE mx_test_schema_1.mx_table_1;
 DROP TABLE mx_testing_schema.mx_test_table;
 DELETE FROM pg_dist_node;
 DELETE FROM pg_dist_partition;
@@ -430,5 +606,9 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
-DROP TABLE mx_testing_schema.mx_test_table CASCADE;
+DROP TABLE mx_test_schema_2.mx_table_2;
+DROP TABLE mx_test_schema_1.mx_table_1;
+DROP TABLE mx_testing_schema.mx_test_table;
+RESET citus.shard_count;
+RESET citus.shard_replication_factor;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
