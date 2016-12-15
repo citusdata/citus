@@ -156,7 +156,7 @@ SELECT partition_type('events_hash');
 (1 row)
 
 SELECT partition_type('pg_type');
-ERROR:  relation 1247 is not distributed
+ERROR:  relation pg_type is not distributed
 -- should see true for events_hash, false for others
 SELECT is_distributed_table('events_hash');
  is_distributed_table 

@@ -504,6 +504,115 @@ SELECT create_distributed_table('schema_collocation.table4_groupE', 'id');
  
 (1 row)
 
+-- test colocate_with option
+CREATE TABLE table1_group_none_1 ( id int );
+SELECT create_distributed_table('table1_group_none_1', 'id', colocate_with => 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_group_none_1 ( id int );
+SELECT create_distributed_table('table2_group_none_1', 'id', colocate_with => 'table1_group_none_1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table1_group_none_2 ( id int );
+SELECT create_distributed_table('table1_group_none_2', 'id', colocate_with => 'none');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table4_groupE ( id int );
+SELECT create_distributed_table('table4_groupE', 'id', colocate_with => 'default');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SET citus.shard_count = 3;
+-- check that this new configuration does not have a default group
+CREATE TABLE table1_group_none_3 ( id int );
+SELECT create_distributed_table('table1_group_none_3', 'id', colocate_with => 'NONE');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- a new table does not use a non-default group
+CREATE TABLE table1_group_default ( id int );
+SELECT create_distributed_table('table1_group_default', 'id', colocate_with => 'DEFAULT');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- check metadata
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            2 |          2 |                 1 |                     23
+            3 |          2 |                 2 |                     25
+            4 |          4 |                 2 |                     23
+            5 |          2 |                 2 |                     23
+            9 |          3 |                 2 |                     23
+(5 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
+           logicalrelid           | colocationid 
+----------------------------------+--------------
+ table1_groupb                    |            2
+ table2_groupb                    |            2
+ table1_groupc                    |            3
+ table2_groupc                    |            3
+ table1_groupd                    |            4
+ table2_groupd                    |            4
+ table3_groupd                    |            4
+ table1_groupe                    |            5
+ table2_groupe                    |            5
+ table3_groupe                    |            5
+ schema_collocation.table4_groupe |            5
+ table4_groupe                    |            5
+ table1_group_none_1              |            6
+ table2_group_none_1              |            6
+ table1_group_none_2              |            7
+ table1_group_none_3              |            8
+ table1_group_default             |            9
+(17 rows)
+
+-- check failing colocate_with options
+CREATE TABLE table_postgresql( id int );
+CREATE TABLE table_failing ( id int );
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_append');
+ERROR:  cannot distribute relation
+DETAIL:  Currently, colocate_with option is only supported for hash distributed tables.
+SELECT create_distributed_table('table_failing', 'id', 'append', 'table1_groupE');
+ERROR:  cannot distribute relation
+DETAIL:  Currently, colocate_with option is only supported for hash distributed tables.
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'table_postgresql');
+ERROR:  relation table_postgresql is not distributed
+SELECT create_distributed_table('table_failing', 'id', colocate_with => 'no_table');
+ERROR:  relation "no_table" does not exist
+SELECT create_distributed_table('table_failing', 'id', colocate_with => '');
+ERROR:  invalid name syntax
+SELECT create_distributed_table('table_failing', 'id', colocate_with => NULL);
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- check with different distribution column types
+CREATE TABLE table_bigint ( id bigint );
+SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_groupE');
+ERROR:  cannot colocate with table1_groupE
+DETAIL:  Distribution column types are different.
 -- check worker table schemas
 \c - - - :worker_1_port
 \d table3_groupE_1300050
@@ -535,8 +644,8 @@ SELECT create_reference_table('table2_groupF');
 (1 row)
 
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
@@ -544,8 +653,9 @@ SELECT * FROM pg_dist_colocation
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
             5 |          2 |                 2 |                     23
-            6 |          1 |                 2 |                     23
-(5 rows)
+            9 |          3 |                 2 |                     23
+           10 |          1 |                 2 |                     23
+(6 rows)
 
 -- cross check with internal colocation API
 SELECT 
@@ -563,22 +673,27 @@ WHERE
 ORDER BY
     table1,
     table2;
-    table1     |              table2              | colocated 
----------------+----------------------------------+-----------
- table1_group1 | table2_group1                    | t
- table1_groupb | table2_groupb                    | t
- table1_groupc | table2_groupc                    | t
- table1_groupd | table2_groupd                    | t
- table1_groupd | table3_groupd                    | t
- table2_groupd | table3_groupd                    | t
- table1_groupe | table2_groupe                    | t
- table1_groupe | table3_groupe                    | t
- table1_groupe | schema_collocation.table4_groupe | t
- table2_groupe | table3_groupe                    | t
- table2_groupe | schema_collocation.table4_groupe | t
- table3_groupe | schema_collocation.table4_groupe | t
- table1_groupf | table2_groupf                    | t
-(13 rows)
+              table1              |              table2              | colocated 
+----------------------------------+----------------------------------+-----------
+ table1_group1                    | table2_group1                    | t
+ table1_groupb                    | table2_groupb                    | t
+ table1_groupc                    | table2_groupc                    | t
+ table1_groupd                    | table2_groupd                    | t
+ table1_groupd                    | table3_groupd                    | t
+ table2_groupd                    | table3_groupd                    | t
+ table1_groupe                    | table2_groupe                    | t
+ table1_groupe                    | table3_groupe                    | t
+ table1_groupe                    | schema_collocation.table4_groupe | t
+ table1_groupe                    | table4_groupe                    | t
+ table2_groupe                    | table3_groupe                    | t
+ table2_groupe                    | schema_collocation.table4_groupe | t
+ table2_groupe                    | table4_groupe                    | t
+ table3_groupe                    | schema_collocation.table4_groupe | t
+ table3_groupe                    | table4_groupe                    | t
+ schema_collocation.table4_groupe | table4_groupe                    | t
+ table1_group_none_1              | table2_group_none_1              | t
+ table1_groupf                    | table2_groupf                    | t
+(18 rows)
 
 -- check created shards
 SELECT
@@ -653,11 +768,39 @@ ORDER BY
  schema_collocation.table4_groupe | 1300052 | t            |    57637 | -2147483648   | -1
  schema_collocation.table4_groupe | 1300053 | t            |    57637 | 0             | 2147483647
  schema_collocation.table4_groupe | 1300053 | t            |    57638 | 0             | 2147483647
- table1_groupf                    | 1300054 | t            |    57637 | -2147483648   | 2147483647
- table1_groupf                    | 1300054 | t            |    57638 | -2147483648   | 2147483647
- table2_groupf                    | 1300055 | t            |    57638 | -2147483648   | 2147483647
- table2_groupf                    | 1300055 | t            |    57637 | -2147483648   | 2147483647
-(56 rows)
+ table1_group_none_1              | 1300054 | t            |    57637 | -2147483648   | -1
+ table1_group_none_1              | 1300054 | t            |    57638 | -2147483648   | -1
+ table1_group_none_1              | 1300055 | t            |    57638 | 0             | 2147483647
+ table1_group_none_1              | 1300055 | t            |    57637 | 0             | 2147483647
+ table2_group_none_1              | 1300056 | t            |    57638 | -2147483648   | -1
+ table2_group_none_1              | 1300056 | t            |    57637 | -2147483648   | -1
+ table2_group_none_1              | 1300057 | t            |    57637 | 0             | 2147483647
+ table2_group_none_1              | 1300057 | t            |    57638 | 0             | 2147483647
+ table1_group_none_2              | 1300058 | t            |    57637 | -2147483648   | -1
+ table1_group_none_2              | 1300058 | t            |    57638 | -2147483648   | -1
+ table1_group_none_2              | 1300059 | t            |    57638 | 0             | 2147483647
+ table1_group_none_2              | 1300059 | t            |    57637 | 0             | 2147483647
+ table4_groupe                    | 1300060 | t            |    57637 | -2147483648   | -1
+ table4_groupe                    | 1300060 | t            |    57638 | -2147483648   | -1
+ table4_groupe                    | 1300061 | t            |    57638 | 0             | 2147483647
+ table4_groupe                    | 1300061 | t            |    57637 | 0             | 2147483647
+ table1_group_none_3              | 1300062 | t            |    57637 | -2147483648   | -715827884
+ table1_group_none_3              | 1300062 | t            |    57638 | -2147483648   | -715827884
+ table1_group_none_3              | 1300063 | t            |    57638 | -715827883    | 715827881
+ table1_group_none_3              | 1300063 | t            |    57637 | -715827883    | 715827881
+ table1_group_none_3              | 1300064 | t            |    57637 | 715827882     | 2147483647
+ table1_group_none_3              | 1300064 | t            |    57638 | 715827882     | 2147483647
+ table1_group_default             | 1300065 | t            |    57637 | -2147483648   | -715827884
+ table1_group_default             | 1300065 | t            |    57638 | -2147483648   | -715827884
+ table1_group_default             | 1300066 | t            |    57638 | -715827883    | 715827881
+ table1_group_default             | 1300066 | t            |    57637 | -715827883    | 715827881
+ table1_group_default             | 1300067 | t            |    57637 | 715827882     | 2147483647
+ table1_group_default             | 1300067 | t            |    57638 | 715827882     | 2147483647
+ table1_groupf                    | 1300068 | t            |    57637 | -2147483648   | 2147483647
+ table1_groupf                    | 1300068 | t            |    57638 | -2147483648   | 2147483647
+ table2_groupf                    | 1300069 | t            |    57638 | -2147483648   | 2147483647
+ table2_groupf                    | 1300069 | t            |    57637 | -2147483648   | 2147483647
+(84 rows)
 
 -- reset colocation ids to test mark_tables_colocated
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
@@ -666,16 +809,16 @@ DELETE FROM pg_dist_colocation
 UPDATE pg_dist_partition SET colocationid = 0
     WHERE colocationid >= 1 AND colocationid < 1000;
 -- check metadata
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
  logicalrelid | colocationid 
 --------------+--------------
 (0 rows)
@@ -697,16 +840,16 @@ SELECT mark_tables_colocated('table1_groupB', ARRAY['table2_groupB', 'table1_gro
 ERROR:  cannot colocate tables table1_groupb and table1_groupd
 DETAIL:  Shard counts don't match for table1_groupb and table1_groupd.
 -- check metadata to see failing calls didn't have any side effects
-SELECT * FROM pg_dist_colocation 
-    WHERE colocationid >= 1 AND colocationid < 1000 
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
 (0 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
  logicalrelid | colocationid 
 --------------+--------------
 (0 rows)
@@ -749,6 +892,21 @@ SELECT mark_tables_colocated('table1_groupB', ARRAY['table1_groupB']);
  
 (1 row)
 
+SET citus.shard_count = 2;
+CREATE TABLE table1_group_none ( id int );
+SELECT create_distributed_table('table1_group_none', 'id', colocate_with => 'NONE');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE table2_group_none ( id int );
+SELECT create_distributed_table('table2_group_none', 'id', colocate_with => 'NONE');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 -- check metadata to see colocation groups are created successfully
 SELECT * FROM pg_dist_colocation 
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -765,18 +923,66 @@ SELECT * FROM pg_dist_colocation
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
     ORDER BY logicalrelid;
- logicalrelid  | colocationid 
----------------+--------------
- table1_groupb |            2
- table2_groupb |            2
- table1_groupc |            3
- table2_groupc |            3
- table1_groupd |            4
- table2_groupd |            4
- table1_groupe |            5
- table2_groupe |            5
- table3_groupe |            5
- table1_groupf |            6
- table2_groupf |            6
-(11 rows)
+   logicalrelid    | colocationid 
+-------------------+--------------
+ table1_groupb     |            2
+ table2_groupb     |            2
+ table1_groupc     |            3
+ table2_groupc     |            3
+ table1_groupd     |            4
+ table2_groupd     |            4
+ table1_groupe     |            5
+ table2_groupe     |            5
+ table3_groupe     |            5
+ table1_groupf     |            6
+ table2_groupf     |            6
+ table1_group_none |            7
+ table2_group_none |            8
+(13 rows)
+
+-- move the all tables in colocation group 5 to colocation group 7
+SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+-- move a table with a colocation id which is already not in pg_dist_colocation
+SELECT mark_tables_colocated('table1_group_none', ARRAY['table2_group_none']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+-- check metadata to see that unused colocation group is deleted
+SELECT * FROM pg_dist_colocation
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+            2 |          2 |                 1 |                     23
+            3 |          2 |                 2 |                     25
+            4 |          4 |                 2 |                     23
+            6 |          1 |                 2 |                     23
+(4 rows)
+
+SELECT logicalrelid, colocationid FROM pg_dist_partition
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
+   logicalrelid    | colocationid 
+-------------------+--------------
+ table1_groupb     |            2
+ table2_groupb     |            2
+ table1_groupc     |            3
+ table2_groupc     |            3
+ table1_groupd     |            4
+ table2_groupd     |            4
+ table1_groupf     |            6
+ table2_groupf     |            6
+ table1_groupe     |            7
+ table2_groupe     |            7
+ table3_groupe     |            7
+ table1_group_none |            7
+ table2_group_none |            7
+(13 rows)
 

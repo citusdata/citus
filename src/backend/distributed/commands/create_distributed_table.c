@@ -75,7 +75,9 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
+static Oid ColumnType(Oid relationId, char *columnName);
 
 
 /* exports for SQL callable functions */
@@ -109,8 +111,9 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 
 /*
- * create_distributed_table accepts a table, distribution column and
- * distribution method, then it creates a distributed table.
+ * create_distributed_table gets a table name, distribution column,
+ * distribution method and colocate_with option, then it creates a
+ * distributed table.
  */
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
@@ -121,6 +124,36 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	text *colocateWithTableNameText = NULL;
+	char *colocateWithTableName = NULL;
+
+	/* guard against a binary update without a function update */
+	if (PG_NARGS() >= 4)
+	{
+		colocateWithTableNameText = PG_GETARG_TEXT_P(3);
+		colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	}
+	else
+	{
+		colocateWithTableName = "default";
+	}
+
+	/* check if we try to colocate with hash distributed tables */
+	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+		pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) != 0)
+	{
+		Oid colocateWithTableOid = ResolveRelationId(colocateWithTableNameText);
+		char colocateWithTableDistributionMethod = PartitionMethod(colocateWithTableOid);
+
+		if (colocateWithTableDistributionMethod != DISTRIBUTE_BY_HASH ||
+			distributionMethod != DISTRIBUTE_BY_HASH)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation"),
+							errdetail("Currently, colocate_with option is only supported "
+									  "for hash distributed tables.")));
+		}
+	}
 
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
@@ -130,8 +163,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	/* use configuration values for shard count and shard replication factor*/
-	CreateHashDistributedTable(relationId, distributionColumnName, ShardCount,
+	/* use configuration values for shard count and shard replication factor */
+	CreateHashDistributedTable(relationId, distributionColumnName,
+							   colocateWithTableName, ShardCount,
 							   ShardReplicationFactor);
 
 	PG_RETURN_VOID();
@@ -149,6 +183,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	int shardCount = 1;
 	AttrNumber firstColumnAttrNumber = 1;
+	char *colocateWithTableName = "default";
 
 	char *firstColumnName = get_attname(relationId, firstColumnAttrNumber);
 	if (firstColumnName == NULL)
@@ -159,8 +194,8 @@ create_reference_table(PG_FUNCTION_ARGS)
 							   "least one column", relationName)));
 	}
 
-	CreateHashDistributedTable(relationId, firstColumnName, shardCount,
-							   ShardReplicationFactor);
+	CreateHashDistributedTable(relationId, firstColumnName, colocateWithTableName,
+							   shardCount, ShardReplicationFactor);
 
 	PG_RETURN_VOID();
 }
@@ -844,24 +879,21 @@ CreateTruncateTrigger(Oid relationId)
 
 
 /*
- * CreateHashDistributedTable creates a hash distributed table with given
- * shard count and shard replication factor.
+ * CreateHashDistributedTable creates a hash distributed table.
  */
 static void
 CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+						   char *colocateWithTableName,
 						   int shardCount, int replicationFactor)
 {
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
-	Var *distributionColumn = NULL;
-	Oid distributionColumnType = 0;
 	uint32 colocationId = INVALID_COLOCATION_ID;
+	Oid colocationTableId = InvalidOid;
+	Oid distributionColumnType = InvalidOid;
 
-	/* get distribution column type */
+	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
 	distributedRelation = relation_open(relationId, AccessShareLock);
-	distributionColumn = BuildDistributionKeyFromColumnName(distributedRelation,
-															distributionColumnName);
-	distributionColumnType = distributionColumn->vartype;
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
@@ -870,38 +902,77 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	 */
 	pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
 
-	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	/* get distribution column data type */
+	distributionColumnType = ColumnType(relationId, distributionColumnName);
 
-	/*
-	 * If there is a colocation group for the current configuration, get a
-	 * colocated table from the group and use its shards as a reference to
-	 * create new shards. Otherwise, create a new colocation group and create
-	 * shards with the default round robin algorithm.
-	 */
-	if (colocationId != INVALID_COLOCATION_ID)
+	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 	{
-		char *relationName = get_rel_name(relationId);
-
-		Oid colocatedTableId = ColocatedTableId(colocationId);
-		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
-
-		CreateColocatedShards(relationId, colocatedTableId);
-		ereport(DEBUG2, (errmsg("table %s is added to colocation group: %d",
-								relationName, colocationId)));
+		/* check for default colocation group */
+		colocationId = ColocationId(shardCount, replicationFactor,
+									distributionColumnType);
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			colocationId = CreateColocationGroup(shardCount, replicationFactor,
+												 distributionColumnType);
+		}
+		else
+		{
+			colocationTableId = ColocatedTableId(colocationId);
+		}
+	}
+	else if (pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0)
+	{
+		colocationId = GetNextColocationId();
 	}
 	else
 	{
-		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
-		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
+		Var *colocationTablePartitionColumn = NULL;
+		Oid colocationTablePartitionColumnType = InvalidOid;
 
-		/* use the default way to create shards */
+		/* get colocation group of the target table */
+		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+		colocationTableId = ResolveRelationId(colocateWithTableNameText);
+
+		colocationId = TableColocationId(colocationTableId);
+
+		colocationTablePartitionColumn = PartitionKey(colocationTableId);
+		colocationTablePartitionColumnType = colocationTablePartitionColumn->vartype;
+
+		if (colocationTablePartitionColumnType != distributionColumnType)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot colocate with %s", colocateWithTableName),
+							errdetail("Distribution column types are different.")));
+		}
+	}
+
+	/* create distributed table metadata */
+	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
+							  colocationId);
+
+	/* create shards */
+	if (colocationTableId != InvalidOid)
+	{
+		CreateColocatedShards(relationId, colocationTableId);
+	}
+	else
+	{
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
 	}
 
 	heap_close(pgDistColocation, NoLock);
 	relation_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * ColumnType returns the column type of the given column.
+ */
+static Oid
+ColumnType(Oid relationId, char *columnName)
+{
+	AttrNumber columnIndex = get_attnum(relationId, columnName);
+	Oid columnType = get_atttype(relationId, columnIndex);
+
+	return columnType;
 }
