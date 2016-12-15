@@ -75,6 +75,9 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	for (relationIndex = 0; relationIndex < relationCount; relationIndex++)
 	{
 		Oid nextRelationOid = DatumGetObjectId(relationIdDatumArray[relationIndex]);
+
+		CheckReplicationModel(sourceRelationId, nextRelationOid);
+
 		MarkTablesColocated(sourceRelationId, nextRelationOid);
 	}
 
@@ -480,6 +483,34 @@ GetNextColocationId()
 	colocationId = DatumGetUInt32(colocationIdDatum);
 
 	return colocationId;
+}
+
+
+/*
+ * CheckReplicationModel checks if given relation and colocation group are from
+ * the same replication model. Otherwise, it errors out.
+ */
+void
+CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
+{
+	DistTableCacheEntry *sourceTableEntry = NULL;
+	DistTableCacheEntry *targetTableEntry = NULL;
+	char sourceReplicationModel = 0;
+	char targetReplicationModel = 0;
+
+	sourceTableEntry = DistributedTableCacheEntry(sourceRelationId);
+	sourceReplicationModel = sourceTableEntry->replicationModel;
+
+	targetTableEntry = DistributedTableCacheEntry(targetRelationId);
+	targetReplicationModel = targetTableEntry->replicationModel;
+
+	if (sourceReplicationModel != targetReplicationModel)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create colocation"),
+						errdetail("Colocating tables with different replication "
+								  "models is not supported.")));
+	}
 }
 
 

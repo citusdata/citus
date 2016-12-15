@@ -399,8 +399,8 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
 
 -- move the all tables in colocation group 5 to colocation group 7
 SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
@@ -416,3 +416,40 @@ SELECT * FROM pg_dist_colocation
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
+
+-- try to colocate different replication models
+CREATE TABLE table1_groupG ( id int );
+SELECT create_distributed_table('table1_groupG', 'id');
+
+-- update replication model
+UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid = 'table1_groupG'::regclass;
+
+CREATE TABLE table2_groupG ( id int );
+SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'table1_groupG');
+
+CREATE TABLE table2_groupG ( id int );
+SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
+
+SELECT mark_tables_colocated('table1_groupG', ARRAY['table2_groupG']);
+
+-- drop tables to clean test space
+DROP TABLE table1_groupb;
+DROP TABLE table2_groupb;
+DROP TABLE table1_groupc;
+DROP TABLE table2_groupc;
+DROP TABLE table1_groupd;
+DROP TABLE table2_groupd;
+DROP TABLE table1_groupf;
+DROP TABLE table2_groupf;
+DROP TABLE table1_groupe;
+DROP TABLE table2_groupe;
+DROP TABLE table3_groupe;
+DROP TABLE table4_groupe;
+DROP TABLE schema_collocation.table4_groupe;
+DROP TABLE table1_group_none_1;
+DROP TABLE table2_group_none_1;
+DROP TABLE table1_group_none_2;
+DROP TABLE table1_group_none_3;
+DROP TABLE table1_group_none;
+DROP TABLE table2_group_none;
+DROP TABLE table1_group_default;
