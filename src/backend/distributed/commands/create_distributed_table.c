@@ -38,9 +38,11 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodeFuncs.h"
@@ -172,6 +174,24 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	CreateHashDistributedTable(relationId, distributionColumnName,
 							   colocateWithTableName, ShardCount,
 							   ShardReplicationFactor);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		List *commandList = GetDistributedTableDDLEvents(relationId);
+		ListCell *commandCell = NULL;
+
+		/* disable DDL propagation on workers */
+		SendCommandToWorkers(WORKERS_WITH_METADATA,
+							 "SET citus.enable_ddl_propagation TO off");
+
+		/* send the commands one by one */
+		foreach(commandCell, commandList)
+		{
+			char *command = (char *) lfirst(commandCell);
+
+			SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+		}
+	}
 
 	PG_RETURN_VOID();
 }

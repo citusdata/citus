@@ -20,6 +20,7 @@
 /* Functions declarations for metadata syncing */
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern List * MetadataCreateCommands(void);
+extern List * GetDistributedTableDDLEvents(Oid relationId);
 extern List * MetadataDropCommands(void);
 extern char * DistributionCreateCommand(DistTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(char *schemaName,

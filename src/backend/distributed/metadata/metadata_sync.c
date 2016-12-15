@@ -272,6 +272,53 @@ MetadataCreateCommands(void)
 
 
 /*
+ * GetDistributedTableDDLEvents returns the full set of DDL commands necessary to
+ * create the given distributed table on a worker. The list includes setting up any
+ * sequences, setting the owner of the table, inserting table and shard metadata,
+ * setting the truncate trigger and foreign key constraints.
+ */
+List *
+GetDistributedTableDDLEvents(Oid relationId)
+{
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+
+	List *shardIntervalList = NIL;
+	List *commandList = NIL;
+	List *foreignConstraintCommands = NIL;
+	List *shardMetadataInsertCommandList = NIL;
+	char *tableOwnerResetCommand = NULL;
+	char *metadataCommand = NULL;
+	char *truncateTriggerCreateCommand = NULL;
+
+	/* commands to create the table */
+	commandList = GetTableDDLEvents(relationId);
+
+	/* command to reset the table owner */
+	tableOwnerResetCommand = TableOwnerResetCommand(relationId);
+	commandList = lappend(commandList, tableOwnerResetCommand);
+
+	/* command to insert pg_dist_partition entry */
+	metadataCommand = DistributionCreateCommand(cacheEntry);
+	commandList = lappend(commandList, metadataCommand);
+
+	/* commands to create the truncate trigger of the mx table */
+	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+	commandList = lappend(commandList, truncateTriggerCreateCommand);
+
+	/* commands to insert pg_dist_shard & pg_dist_shard_placement entries */
+	shardIntervalList = LoadShardIntervalList(relationId);
+	shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
+	commandList = list_concat(commandList, shardMetadataInsertCommandList);
+
+	/* commands to create foreign key constraints */
+	foreignConstraintCommands = GetTableForeignConstraintCommands(relationId);
+	commandList = list_concat(commandList, foreignConstraintCommands);
+
+	return commandList;
+}
+
+
+/*
  * MetadataDropCommands returns list of queries that are required to
  * drop all the metadata of the node that are related to clustered tables.
  * The drop metadata snapshot commands includes the following queries:
