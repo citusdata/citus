@@ -611,8 +611,8 @@ SELECT create_distributed_table('table_failing', 'id', colocate_with => NULL);
 -- check with different distribution column types
 CREATE TABLE table_bigint ( id bigint );
 SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_groupE');
-ERROR:  cannot colocate with table1_groupE
-DETAIL:  Distribution column types are different.
+ERROR:  cannot colocate tables table1_groupe and table_bigint
+DETAIL:  Distribution column types don't match for table1_groupe and table_bigint.
 -- check worker table schemas
 \c - - - :worker_1_port
 \d table3_groupE_1300050
@@ -921,8 +921,8 @@ SELECT * FROM pg_dist_colocation
 (5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
-    WHERE colocationid >= 1 AND colocationid < 1000 
-    ORDER BY logicalrelid;
+    WHERE colocationid >= 1 AND colocationid < 1000
+    ORDER BY colocationid, logicalrelid;
    logicalrelid    | colocationid 
 -------------------+--------------
  table1_groupb     |            2
@@ -986,3 +986,49 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table2_group_none |            7
 (13 rows)
 
+-- try to colocate different replication models
+CREATE TABLE table1_groupG ( id int );
+SELECT create_distributed_table('table1_groupG', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- update replication model
+UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid = 'table1_groupG'::regclass;
+CREATE TABLE table2_groupG ( id int );
+SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'table1_groupG');
+ERROR:  cannot colocate tables table1_groupg and table2_groupg
+DETAIL:  Replication models don't match for table1_groupg and table2_groupg.
+CREATE TABLE table2_groupG ( id int );
+ERROR:  relation "table2_groupg" already exists
+SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT mark_tables_colocated('table1_groupG', ARRAY['table2_groupG']);
+ERROR:  cannot colocate tables table1_groupg and table2_groupg
+DETAIL:  Replication models don't match for table1_groupg and table2_groupg.
+-- drop tables to clean test space
+DROP TABLE table1_groupb;
+DROP TABLE table2_groupb;
+DROP TABLE table1_groupc;
+DROP TABLE table2_groupc;
+DROP TABLE table1_groupd;
+DROP TABLE table2_groupd;
+DROP TABLE table1_groupf;
+DROP TABLE table2_groupf;
+DROP TABLE table1_groupe;
+DROP TABLE table2_groupe;
+DROP TABLE table3_groupe;
+DROP TABLE table4_groupe;
+DROP TABLE schema_collocation.table4_groupe;
+DROP TABLE table1_group_none_1;
+DROP TABLE table2_group_none_1;
+DROP TABLE table1_group_none_2;
+DROP TABLE table1_group_none_3;
+DROP TABLE table1_group_none;
+DROP TABLE table2_group_none;
+DROP TABLE table1_group_default;

@@ -889,7 +889,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	Oid colocationTableId = InvalidOid;
+	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
@@ -917,7 +917,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		}
 		else
 		{
-			colocationTableId = ColocatedTableId(colocationId);
+			sourceRelationId = ColocatedTableId(colocationId);
 		}
 	}
 	else if (pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0)
@@ -931,11 +931,11 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 		/* get colocation group of the target table */
 		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
-		colocationTableId = ResolveRelationId(colocateWithTableNameText);
+		sourceRelationId = ResolveRelationId(colocateWithTableNameText);
 
-		colocationId = TableColocationId(colocationTableId);
+		colocationId = TableColocationId(sourceRelationId);
 
-		colocationTablePartitionColumn = PartitionKey(colocationTableId);
+		colocationTablePartitionColumn = PartitionKey(sourceRelationId);
 		colocationTablePartitionColumnType = colocationTablePartitionColumn->vartype;
 
 		if (colocationTablePartitionColumnType != distributionColumnType)
@@ -951,9 +951,11 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 							  colocationId);
 
 	/* create shards */
-	if (colocationTableId != InvalidOid)
+	if (sourceRelationId != InvalidOid)
 	{
-		CreateColocatedShards(relationId, colocationTableId);
+		CheckReplicationModel(sourceRelationId, relationId);
+
+		CreateColocatedShards(relationId, sourceRelationId);
 	}
 	else
 	{
