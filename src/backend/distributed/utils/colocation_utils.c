@@ -76,8 +76,6 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	{
 		Oid nextRelationOid = DatumGetObjectId(relationIdDatumArray[relationIndex]);
 
-		CheckReplicationModel(sourceRelationId, nextRelationOid);
-
 		MarkTablesColocated(sourceRelationId, nextRelationOid);
 	}
 
@@ -97,31 +95,12 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	uint32 sourceColocationId = INVALID_COLOCATION_ID;
 	uint32 targetColocationId = INVALID_COLOCATION_ID;
 	Relation pgDistColocation = NULL;
-	Var *sourceDistributionColumn = NULL;
-	Var *targetDistributionColumn = NULL;
-	Oid sourceDistributionColumnType = InvalidOid;
-	Oid targetDistributionColumnType = InvalidOid;
 
 	CheckHashPartitionedTable(sourceRelationId);
 	CheckHashPartitionedTable(targetRelationId);
 
-	sourceDistributionColumn = PartitionKey(sourceRelationId);
-	sourceDistributionColumnType = sourceDistributionColumn->vartype;
-
-	targetDistributionColumn = PartitionKey(targetRelationId);
-	targetDistributionColumnType = targetDistributionColumn->vartype;
-
-	if (sourceDistributionColumnType != targetDistributionColumnType)
-	{
-		char *sourceRelationName = get_rel_name(sourceRelationId);
-		char *targetRelationName = get_rel_name(targetRelationId);
-
-		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
-							   sourceRelationName, targetRelationName),
-						errdetail("Distribution column types don't match for "
-								  "%s and %s.", sourceRelationName,
-								  targetRelationName)));
-	}
+	CheckReplicationModel(sourceRelationId, targetRelationId);
+	CheckDistributionColumnType(sourceRelationId, targetRelationId);
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
@@ -142,6 +121,9 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	{
 		uint32 shardCount = ShardIntervalCount(sourceRelationId);
 		uint32 shardReplicationFactor = TableShardReplicationFactor(sourceRelationId);
+
+		Var *sourceDistributionColumn = PartitionKey(sourceRelationId);
+		Oid sourceDistributionColumnType = sourceDistributionColumn->vartype;
 
 		sourceColocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
 												   sourceDistributionColumnType);
@@ -487,8 +469,8 @@ GetNextColocationId()
 
 
 /*
- * CheckReplicationModel checks if given relation and colocation group are from
- * the same replication model. Otherwise, it errors out.
+ * CheckReplicationModel checks if given relations are from the same
+ * replication model. Otherwise, it errors out.
  */
 void
 CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
@@ -506,10 +488,45 @@ CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
 
 	if (sourceReplicationModel != targetReplicationModel)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create colocation"),
-						errdetail("Colocating tables with different replication "
-								  "models is not supported.")));
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+		char *targetRelationName = get_rel_name(targetRelationId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, targetRelationName),
+						errdetail("Replication models don't match for %s and %s.",
+								  sourceRelationName, targetRelationName)));
+	}
+}
+
+
+/*
+ * CheckDistributionColumnType checks if distribution column types of relations
+ * are same. Otherwise, it errors out.
+ */
+void
+CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
+{
+	Var *sourceDistributionColumn = NULL;
+	Var *targetDistributionColumn = NULL;
+	Oid sourceDistributionColumnType = InvalidOid;
+	Oid targetDistributionColumnType = InvalidOid;
+
+	sourceDistributionColumn = PartitionKey(sourceRelationId);
+	sourceDistributionColumnType = sourceDistributionColumn->vartype;
+
+	targetDistributionColumn = PartitionKey(targetRelationId);
+	targetDistributionColumnType = targetDistributionColumn->vartype;
+
+	if (sourceDistributionColumnType != targetDistributionColumnType)
+	{
+		char *sourceRelationName = get_rel_name(sourceRelationId);
+		char *targetRelationName = get_rel_name(targetRelationId);
+
+		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
+							   sourceRelationName, targetRelationName),
+						errdetail("Distribution column types don't match for "
+								  "%s and %s.", sourceRelationName,
+								  targetRelationName)));
 	}
 }
 
@@ -854,7 +871,7 @@ DeleteColocationGroup(uint32 colocationId)
 	scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
 										NULL, scanKeyCount, scanKey);
 
-	/* if a record id found, delete it */
+	/* if a record is found, delete it */
 	heapTuple = systable_getnext(scanDescriptor);
 	if (HeapTupleIsValid(heapTuple))
 	{

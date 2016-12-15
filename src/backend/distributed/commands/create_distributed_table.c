@@ -926,24 +926,11 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	}
 	else
 	{
-		Var *colocationTablePartitionColumn = NULL;
-		Oid colocationTablePartitionColumnType = InvalidOid;
-
 		/* get colocation group of the target table */
 		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
 		sourceRelationId = ResolveRelationId(colocateWithTableNameText);
 
 		colocationId = TableColocationId(sourceRelationId);
-
-		colocationTablePartitionColumn = PartitionKey(sourceRelationId);
-		colocationTablePartitionColumnType = colocationTablePartitionColumn->vartype;
-
-		if (colocationTablePartitionColumnType != distributionColumnType)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot colocate with %s", colocateWithTableName),
-							errdetail("Distribution column types are different.")));
-		}
 	}
 
 	/* create distributed table metadata */
@@ -953,7 +940,9 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	/* create shards */
 	if (sourceRelationId != InvalidOid)
 	{
+		/* first run checks */
 		CheckReplicationModel(sourceRelationId, relationId);
+		CheckDistributionColumnType(sourceRelationId, relationId);
 
 		CreateColocatedShards(relationId, sourceRelationId);
 	}
