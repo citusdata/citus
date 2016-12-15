@@ -9,7 +9,6 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/hash.h"
@@ -33,7 +32,6 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distribution_column.h"
@@ -76,9 +74,6 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 uint32 colocationId);
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId);
-static uint32 ColocationId(int shardCount, int replicationFactor,
-						   Oid distributionColumnType);
-static uint32 GetNextColocationId(void);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 									   int shardCount, int replicationFactor);
 
@@ -845,129 +840,6 @@ CreateTruncateTrigger(Oid relationId)
 
 	CreateTrigger(trigger, NULL, relationId, InvalidOid, InvalidOid, InvalidOid,
 				  internal);
-}
-
-
-/*
- * ColocationId searches pg_dist_colocation for shard count, replication factor
- * and distribution column type. If a matching entry is found, it returns the
- * colocation id, otherwise it returns INVALID_COLOCATION_ID.
- */
-static uint32
-ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
-{
-	uint32 colocationId = INVALID_COLOCATION_ID;
-	HeapTuple colocationTuple = NULL;
-	SysScanDesc scanDescriptor;
-	const int scanKeyCount = 3;
-	ScanKeyData scanKey[scanKeyCount];
-	bool indexOK = true;
-
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), AccessShareLock);
-
-	/* set scan arguments */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_shardcount,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(shardCount));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_colocation_replicationfactor,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(replicationFactor));
-	ScanKeyInit(&scanKey[2], Anum_pg_dist_colocation_distributioncolumntype,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributionColumnType));
-
-	scanDescriptor = systable_beginscan(pgDistColocation,
-										DistColocationConfigurationIndexId(),
-										indexOK, NULL, scanKeyCount, scanKey);
-
-	colocationTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(colocationTuple))
-	{
-		Form_pg_dist_colocation colocationForm =
-			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
-
-		colocationId = colocationForm->colocationid;
-	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistColocation, AccessShareLock);
-
-	return colocationId;
-}
-
-
-/*
- * CreateColocationGroup creates a new colocation id and writes it into
- * pg_dist_colocation with the given configuration. It also returns the created
- * colocation id.
- */
-uint32
-CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionColumnType)
-{
-	uint32 colocationId = GetNextColocationId();
-	Relation pgDistColocation = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
-	Datum values[Natts_pg_dist_colocation];
-	bool isNulls[Natts_pg_dist_colocation];
-
-	/* form new colocation tuple */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	values[Anum_pg_dist_colocation_colocationid - 1] = UInt32GetDatum(colocationId);
-	values[Anum_pg_dist_colocation_shardcount - 1] = UInt32GetDatum(shardCount);
-	values[Anum_pg_dist_colocation_replicationfactor - 1] =
-		UInt32GetDatum(replicationFactor);
-	values[Anum_pg_dist_colocation_distributioncolumntype - 1] =
-		ObjectIdGetDatum(distributionColumnType);
-
-	/* open colocation relation and insert the new tuple */
-	pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
-
-	tupleDescriptor = RelationGetDescr(pgDistColocation);
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
-
-	simple_heap_insert(pgDistColocation, heapTuple);
-	CatalogUpdateIndexes(pgDistColocation, heapTuple);
-
-	/* increment the counter so that next command can see the row */
-	CommandCounterIncrement();
-	heap_close(pgDistColocation, RowExclusiveLock);
-
-	return colocationId;
-}
-
-
-/*
- * GetNextColocationId allocates and returns a unique colocationId for the
- * colocation group to be created. This allocation occurs both in shared memory
- * and in write ahead logs; writing to logs avoids the risk of having
- * colocationId collisions.
- *
- * Please note that the caller is still responsible for finalizing colocationId
- * with the master node. Further note that this function relies on an internal
- * sequence created in initdb to generate unique identifiers.
- */
-static uint32
-GetNextColocationId()
-{
-	text *sequenceName = cstring_to_text(COLOCATIONID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Datum colocationIdDatum = 0;
-	uint32 colocationId = INVALID_COLOCATION_ID;
-
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/* generate new and unique colocation id from sequence */
-	colocationIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	colocationId = DatumGetUInt32(colocationIdDatum);
-
-	return colocationId;
 }
 
 
