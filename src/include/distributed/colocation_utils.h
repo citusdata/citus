@@ -25,8 +25,12 @@ extern List * ColocatedTableList(Oid distributedTableId);
 extern List * ColocatedShardIntervalList(ShardInterval *shardInterval);
 extern Oid ColocatedTableId(Oid colocationId);
 extern uint64 ColocatedShardIdInRelation(Oid relationId, int shardIndex);
+uint32 ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType);
 extern uint32 CreateColocationGroup(int shardCount, int replicationFactor,
 									Oid distributionColumnType);
+extern uint32 GetNextColocationId(void);
+extern void CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId);
+extern void CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId);
 
 
 #endif /* COLOCATION_UTILS_H_ */
