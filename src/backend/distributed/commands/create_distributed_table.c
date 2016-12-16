@@ -9,7 +9,6 @@
  */
 
 #include "postgres.h"
-#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/hash.h"
@@ -33,7 +32,6 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distribution_column.h"
@@ -76,11 +74,10 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 uint32 colocationId);
 static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId);
-static uint32 ColocationId(int shardCount, int replicationFactor,
-						   Oid distributionColumnType);
-static uint32 GetNextColocationId(void);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
+static Oid ColumnType(Oid relationId, char *columnName);
 
 
 /* exports for SQL callable functions */
@@ -114,8 +111,9 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 
 /*
- * create_distributed_table accepts a table, distribution column and
- * distribution method, then it creates a distributed table.
+ * create_distributed_table gets a table name, distribution column,
+ * distribution method and colocate_with option, then it creates a
+ * distributed table.
  */
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
@@ -126,6 +124,36 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	text *colocateWithTableNameText = NULL;
+	char *colocateWithTableName = NULL;
+
+	/* guard against a binary update without a function update */
+	if (PG_NARGS() >= 4)
+	{
+		colocateWithTableNameText = PG_GETARG_TEXT_P(3);
+		colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	}
+	else
+	{
+		colocateWithTableName = "default";
+	}
+
+	/* check if we try to colocate with hash distributed tables */
+	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+		pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) != 0)
+	{
+		Oid colocateWithTableOid = ResolveRelationId(colocateWithTableNameText);
+		char colocateWithTableDistributionMethod = PartitionMethod(colocateWithTableOid);
+
+		if (colocateWithTableDistributionMethod != DISTRIBUTE_BY_HASH ||
+			distributionMethod != DISTRIBUTE_BY_HASH)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot distribute relation"),
+							errdetail("Currently, colocate_with option is only supported "
+									  "for hash distributed tables.")));
+		}
+	}
 
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
@@ -135,8 +163,9 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	/* use configuration values for shard count and shard replication factor*/
-	CreateHashDistributedTable(relationId, distributionColumnName, ShardCount,
+	/* use configuration values for shard count and shard replication factor */
+	CreateHashDistributedTable(relationId, distributionColumnName,
+							   colocateWithTableName, ShardCount,
 							   ShardReplicationFactor);
 
 	PG_RETURN_VOID();
@@ -154,6 +183,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	int shardCount = 1;
 	AttrNumber firstColumnAttrNumber = 1;
+	char *colocateWithTableName = "default";
 
 	char *firstColumnName = get_attname(relationId, firstColumnAttrNumber);
 	if (firstColumnName == NULL)
@@ -164,8 +194,8 @@ create_reference_table(PG_FUNCTION_ARGS)
 							   "least one column", relationName)));
 	}
 
-	CreateHashDistributedTable(relationId, firstColumnName, shardCount,
-							   ShardReplicationFactor);
+	CreateHashDistributedTable(relationId, firstColumnName, colocateWithTableName,
+							   shardCount, ShardReplicationFactor);
 
 	PG_RETURN_VOID();
 }
@@ -849,147 +879,21 @@ CreateTruncateTrigger(Oid relationId)
 
 
 /*
- * ColocationId searches pg_dist_colocation for shard count, replication factor
- * and distribution column type. If a matching entry is found, it returns the
- * colocation id, otherwise it returns INVALID_COLOCATION_ID.
- */
-static uint32
-ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
-{
-	uint32 colocationId = INVALID_COLOCATION_ID;
-	HeapTuple colocationTuple = NULL;
-	SysScanDesc scanDescriptor;
-	const int scanKeyCount = 3;
-	ScanKeyData scanKey[scanKeyCount];
-	bool indexOK = true;
-
-	Relation pgDistColocation = heap_open(DistColocationRelationId(), AccessShareLock);
-
-	/* set scan arguments */
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_shardcount,
-				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(shardCount));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_colocation_replicationfactor,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(replicationFactor));
-	ScanKeyInit(&scanKey[2], Anum_pg_dist_colocation_distributioncolumntype,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributionColumnType));
-
-	scanDescriptor = systable_beginscan(pgDistColocation,
-										DistColocationConfigurationIndexId(),
-										indexOK, NULL, scanKeyCount, scanKey);
-
-	colocationTuple = systable_getnext(scanDescriptor);
-	if (HeapTupleIsValid(colocationTuple))
-	{
-		Form_pg_dist_colocation colocationForm =
-			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
-
-		colocationId = colocationForm->colocationid;
-	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistColocation, AccessShareLock);
-
-	return colocationId;
-}
-
-
-/*
- * CreateColocationGroup creates a new colocation id and writes it into
- * pg_dist_colocation with the given configuration. It also returns the created
- * colocation id.
- */
-uint32
-CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionColumnType)
-{
-	uint32 colocationId = GetNextColocationId();
-	Relation pgDistColocation = NULL;
-	TupleDesc tupleDescriptor = NULL;
-	HeapTuple heapTuple = NULL;
-	Datum values[Natts_pg_dist_colocation];
-	bool isNulls[Natts_pg_dist_colocation];
-
-	/* form new colocation tuple */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	values[Anum_pg_dist_colocation_colocationid - 1] = UInt32GetDatum(colocationId);
-	values[Anum_pg_dist_colocation_shardcount - 1] = UInt32GetDatum(shardCount);
-	values[Anum_pg_dist_colocation_replicationfactor - 1] =
-		UInt32GetDatum(replicationFactor);
-	values[Anum_pg_dist_colocation_distributioncolumntype - 1] =
-		ObjectIdGetDatum(distributionColumnType);
-
-	/* open colocation relation and insert the new tuple */
-	pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
-
-	tupleDescriptor = RelationGetDescr(pgDistColocation);
-	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
-
-	simple_heap_insert(pgDistColocation, heapTuple);
-	CatalogUpdateIndexes(pgDistColocation, heapTuple);
-
-	/* increment the counter so that next command can see the row */
-	CommandCounterIncrement();
-	heap_close(pgDistColocation, RowExclusiveLock);
-
-	return colocationId;
-}
-
-
-/*
- * GetNextColocationId allocates and returns a unique colocationId for the
- * colocation group to be created. This allocation occurs both in shared memory
- * and in write ahead logs; writing to logs avoids the risk of having
- * colocationId collisions.
- *
- * Please note that the caller is still responsible for finalizing colocationId
- * with the master node. Further note that this function relies on an internal
- * sequence created in initdb to generate unique identifiers.
- */
-static uint32
-GetNextColocationId()
-{
-	text *sequenceName = cstring_to_text(COLOCATIONID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-	Datum colocationIdDatum = 0;
-	uint32 colocationId = INVALID_COLOCATION_ID;
-
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
-	/* generate new and unique colocation id from sequence */
-	colocationIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	colocationId = DatumGetUInt32(colocationIdDatum);
-
-	return colocationId;
-}
-
-
-/*
- * CreateHashDistributedTable creates a hash distributed table with given
- * shard count and shard replication factor.
+ * CreateHashDistributedTable creates a hash distributed table.
  */
 static void
 CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+						   char *colocateWithTableName,
 						   int shardCount, int replicationFactor)
 {
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
-	Var *distributionColumn = NULL;
-	Oid distributionColumnType = 0;
 	uint32 colocationId = INVALID_COLOCATION_ID;
+	Oid sourceRelationId = InvalidOid;
+	Oid distributionColumnType = InvalidOid;
 
-	/* get distribution column type */
+	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
 	distributedRelation = relation_open(relationId, AccessShareLock);
-	distributionColumn = BuildDistributionKeyFromColumnName(distributedRelation,
-															distributionColumnName);
-	distributionColumnType = distributionColumn->vartype;
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
@@ -998,38 +902,68 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	 */
 	pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
 
-	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
+	/* get distribution column data type */
+	distributionColumnType = ColumnType(relationId, distributionColumnName);
 
-	/*
-	 * If there is a colocation group for the current configuration, get a
-	 * colocated table from the group and use its shards as a reference to
-	 * create new shards. Otherwise, create a new colocation group and create
-	 * shards with the default round robin algorithm.
-	 */
-	if (colocationId != INVALID_COLOCATION_ID)
+	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 	{
-		char *relationName = get_rel_name(relationId);
-
-		Oid colocatedTableId = ColocatedTableId(colocationId);
-		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
-
-		CreateColocatedShards(relationId, colocatedTableId);
-		ereport(DEBUG2, (errmsg("table %s is added to colocation group: %d",
-								relationName, colocationId)));
+		/* check for default colocation group */
+		colocationId = ColocationId(shardCount, replicationFactor,
+									distributionColumnType);
+		if (colocationId == INVALID_COLOCATION_ID)
+		{
+			colocationId = CreateColocationGroup(shardCount, replicationFactor,
+												 distributionColumnType);
+		}
+		else
+		{
+			sourceRelationId = ColocatedTableId(colocationId);
+		}
+	}
+	else if (pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0)
+	{
+		colocationId = GetNextColocationId();
 	}
 	else
 	{
-		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
-		ConvertToDistributedTable(relationId, distributionColumnName,
-								  DISTRIBUTE_BY_HASH, colocationId);
+		/* get colocation group of the target table */
+		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+		sourceRelationId = ResolveRelationId(colocateWithTableNameText);
 
-		/* use the default way to create shards */
+		colocationId = TableColocationId(sourceRelationId);
+	}
+
+	/* create distributed table metadata */
+	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
+							  colocationId);
+
+	/* create shards */
+	if (sourceRelationId != InvalidOid)
+	{
+		/* first run checks */
+		CheckReplicationModel(sourceRelationId, relationId);
+		CheckDistributionColumnType(sourceRelationId, relationId);
+
+		CreateColocatedShards(relationId, sourceRelationId);
+	}
+	else
+	{
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
 	}
 
 	heap_close(pgDistColocation, NoLock);
 	relation_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * ColumnType returns the column type of the given column.
+ */
+static Oid
+ColumnType(Oid relationId, char *columnName)
+{
+	AttrNumber columnIndex = get_attnum(relationId, columnName);
+	Oid columnType = get_atttype(relationId, columnIndex);
+
+	return columnType;
 }
