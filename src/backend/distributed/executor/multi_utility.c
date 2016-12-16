@@ -46,6 +46,7 @@
 #include "distributed/multi_utility.h" /* IWYU pragma: keep */
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
@@ -109,6 +110,12 @@ static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
+static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
+static bool IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt);
+static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
+static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
+static char * DeparseVacuumColumnNames(List *columnNameList);
+
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -365,6 +372,14 @@ multi_ProcessUtility(Node *parsetree,
 	if (commandMustRunAsOwner)
 	{
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	}
+
+	/* we run VacuumStmt after standard hook to benefit from its checks and locking */
+	if (IsA(parsetree, VacuumStmt))
+	{
+		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
+
+		ProcessVacuumStmt(vacuumStmt, queryString);
 	}
 }
 
@@ -879,6 +894,267 @@ ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							  "change schemas of affected objects.")));
 
 	return (Node *) alterObjectSchemaStmt;
+}
+
+
+/*
+ * ProcessVacuumStmt processes vacuum statements that may need propagation to
+ * distributed tables. If a VACUUM or ANALYZE command references a distributed
+ * table, it is propagated to all involved nodes; otherwise, this function will
+ * immediately exit after some error checking.
+ *
+ * Unlike most other Process functions within this file, this function does not
+ * return a modified parse node, as it is expected that the local VACUUM or
+ * ANALYZE has already been processed.
+ */
+static void
+ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
+{
+	Oid relationId = InvalidOid;
+	List *taskList = NIL;
+	bool supportedVacuumStmt = false;
+
+	if (vacuumStmt->relation != NULL)
+	{
+		LOCKMODE lockMode = (vacuumStmt->options & VACOPT_FULL) ?
+							AccessExclusiveLock : ShareUpdateExclusiveLock;
+
+		relationId = RangeVarGetRelid(vacuumStmt->relation, lockMode, false);
+
+		if (relationId == InvalidOid)
+		{
+			return;
+		}
+	}
+
+	supportedVacuumStmt = IsSupportedDistributedVacuumStmt(relationId, vacuumStmt);
+	if (!supportedVacuumStmt)
+	{
+		return;
+	}
+
+	taskList = VacuumTaskList(relationId, vacuumStmt);
+
+	/* save old commit protocol to restore at xact end */
+	Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
+	ExecuteModifyTasksWithoutResults(taskList);
+}
+
+
+/*
+ * IsSupportedDistributedVacuumStmt returns whether distributed execution of a
+ * given VacuumStmt is supported. The provided relationId (if valid) represents
+ * the table targeted by the provided statement.
+ *
+ * Returns true if the statement requires distributed execution and returns
+ * false otherwise; however, this function will raise errors if the provided
+ * statement needs distributed execution but contains unsupported options.
+ */
+static bool
+IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
+{
+	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+
+	if (vacuumStmt->relation == NULL)
+	{
+		/* WARN and exit early for unqualified VACUUM commands */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Provide a specific table in order to %s "
+								  "distributed tables.", stmtName)));
+
+		return false;
+	}
+
+	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	if (!EnableDDLPropagation)
+	{
+		/* WARN and exit early if DDL propagation is not enabled */
+		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
+						  errhint("Set citus.enable_ddl_propagation to true in order to "
+								  "send targeted %s commands to worker nodes.",
+								  stmtName)));
+	}
+
+	if (vacuumStmt->options & VACOPT_VERBOSE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("the VERBOSE option is currently unsupported in "
+							   "distributed %s commands", stmtName)));
+	}
+
+	return true;
+}
+
+
+/*
+ * VacuumTaskList returns a list of tasks to be executed as part of processing
+ * a VacuumStmt which targets a distributed relation.
+ */
+static List *
+VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = NIL;
+	ListCell *shardIntervalCell = NULL;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumStmt);
+	const char *columnNames = DeparseVacuumColumnNames(vacuumStmt->va_cols);
+	const int vacuumPrefixLen = vacuumString->len;
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *tableName = get_rel_name(relationId);
+
+	/* lock relation metadata before getting shard list */
+	LockRelationDistributionMetadata(relationId, ShareLock);
+
+	shardIntervalList = LoadShardIntervalList(relationId);
+
+	/* grab shard lock before getting placement list */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		Task *task = NULL;
+
+		char *shardName = pstrdup(tableName);
+		AppendShardIdToName(&shardName, shardInterval->shardId);
+		shardName = quote_qualified_identifier(schemaName, shardName);
+
+		vacuumString->len = vacuumPrefixLen;
+		appendStringInfoString(vacuumString, shardName);
+		appendStringInfoString(vacuumString, columnNames);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = SQL_TASK;
+		task->queryString = pstrdup(vacuumString->data);
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * DeparseVacuumStmtPrefix returns a StringInfo appropriate for use as a prefix
+ * during distributed execution of a VACUUM or ANALYZE statement. Callers may
+ * reuse this prefix within a loop to generate shard-specific VACUUM or ANALYZE
+ * statements.
+ */
+static StringInfo
+DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
+{
+	StringInfo vacuumPrefix = makeStringInfo();
+	int vacuumFlags = vacuumStmt->options;
+	const int unsupportedFlags PG_USED_FOR_ASSERTS_ONLY = ~(
+		VACOPT_ANALYZE |
+#if (PG_VERSION_NUM >= 90600)
+		VACOPT_DISABLE_PAGE_SKIPPING |
+#endif
+		VACOPT_FREEZE |
+		VACOPT_FULL
+		);
+
+	/* determine actual command and block out its bit */
+	if (vacuumFlags & VACOPT_VACUUM)
+	{
+		appendStringInfoString(vacuumPrefix, "VACUUM ");
+		vacuumFlags &= ~VACOPT_VACUUM;
+	}
+	else
+	{
+		appendStringInfoString(vacuumPrefix, "ANALYZE ");
+		vacuumFlags &= ~VACOPT_ANALYZE;
+	}
+
+	/* unsupported flags should have already been rejected */
+	Assert((vacuumFlags & unsupportedFlags) == 0);
+
+	/* if no flags remain, exit early */
+	if (vacuumFlags == 0)
+	{
+		return vacuumPrefix;
+	}
+
+	/* otherwise, handle options */
+	appendStringInfoChar(vacuumPrefix, '(');
+
+	if (vacuumFlags & VACOPT_ANALYZE)
+	{
+		appendStringInfoString(vacuumPrefix, "ANALYZE,");
+	}
+
+#if (PG_VERSION_NUM >= 90600)
+	if (vacuumFlags & VACOPT_DISABLE_PAGE_SKIPPING)
+	{
+		appendStringInfoString(vacuumPrefix, "DISABLE_PAGE_SKIPPING,");
+	}
+#endif
+
+	if (vacuumFlags & VACOPT_FREEZE)
+	{
+		appendStringInfoString(vacuumPrefix, "FREEZE,");
+	}
+
+	if (vacuumFlags & VACOPT_FULL)
+	{
+		appendStringInfoString(vacuumPrefix, "FULL,");
+	}
+
+	vacuumPrefix->data[vacuumPrefix->len - 1] = ')';
+
+	appendStringInfoChar(vacuumPrefix, ' ');
+
+	return vacuumPrefix;
+}
+
+
+/*
+ * DeparseVacuumColumnNames joins the list of strings using commas as a
+ * delimiter. The whole thing is placed in parenthesis and set off with a
+ * single space in order to facilitate appending it to the end of any VACUUM
+ * or ANALYZE command which uses explicit column names. If the provided list
+ * is empty, this function returns an empty string to keep the calling code
+ * simplest.
+ */
+static char *
+DeparseVacuumColumnNames(List *columnNameList)
+{
+	StringInfo columnNames = makeStringInfo();
+	ListCell *columnNameCell = NULL;
+
+	if (columnNameList == NIL)
+	{
+		return columnNames->data;
+	}
+
+	appendStringInfoString(columnNames, " (");
+
+	foreach(columnNameCell, columnNameList)
+	{
+		char *columnName = strVal(lfirst(columnNameCell));
+
+		appendStringInfo(columnNames, "%s,", columnName);
+	}
+
+	columnNames->data[columnNames->len - 1] = ')';
+
+	return columnNames->data;
 }
 
 

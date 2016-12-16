@@ -40,3 +40,136 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table');
 
 -- drop table
 DROP TABLE sharded_table;
+
+-- VACUUM tests
+
+-- create a table with a single shard (for convenience)
+CREATE TABLE dustbunnies (id integer, name text, age integer);
+SELECT master_create_distributed_table('dustbunnies', 'id', 'hash');
+SELECT master_create_worker_shards('dustbunnies', 1, 2);
+
+-- add some data to the distributed table
+\copy dustbunnies (id, name) from stdin with csv
+1,bugs
+2,babs
+3,buster
+4,roger
+\.
+
+-- following approach adapted from PostgreSQL's stats.sql file
+
+-- save relevant stat counter values in refreshable view
+\c - - - :worker_1_port
+CREATE MATERIALIZED VIEW prevcounts AS
+SELECT analyze_count, vacuum_count FROM pg_stat_user_tables
+WHERE relname='dustbunnies_990002';
+
+-- create function that sleeps until those counters increment
+create function wait_for_stats() returns void as $$
+declare
+  start_time timestamptz := clock_timestamp();
+  analyze_updated bool;
+  vacuum_updated bool;
+begin
+  -- we don't want to wait forever; loop will exit after 10 seconds
+  for i in 1 .. 100 loop
+
+    -- check to see if analyze has been updated
+    SELECT (st.analyze_count >= pc.analyze_count + 1) INTO analyze_updated
+      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
+
+     -- check to see if vacuum has been updated
+    SELECT (st.vacuum_count >= pc.vacuum_count + 1) INTO vacuum_updated
+      FROM pg_stat_user_tables AS st, pg_class AS cl, prevcounts AS pc
+     WHERE st.relname='dustbunnies_990002' AND cl.relname='dustbunnies_990002';
+
+    exit when analyze_updated or vacuum_updated;
+
+    -- wait a little
+    perform pg_sleep(0.1);
+
+    -- reset stats snapshot so we can test again
+    perform pg_stat_clear_snapshot();
+
+  end loop;
+
+  -- report time waited in postmaster log (where it won't change test output)
+  raise log 'wait_for_stats delayed % seconds',
+    extract(epoch from clock_timestamp() - start_time);
+end
+$$ language plpgsql;
+
+-- run VACUUM and ANALYZE against the table on the master
+\c - - - :master_port
+VACUUM dustbunnies;
+ANALYZE dustbunnies;
+
+-- verify that the VACUUM and ANALYZE ran
+\c - - - :worker_1_port
+SELECT wait_for_stats();
+REFRESH MATERIALIZED VIEW prevcounts;
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+
+-- get file node to verify VACUUM FULL
+SELECT relfilenode AS oldnode FROM pg_class WHERE oid='dustbunnies_990002'::regclass
+\gset
+
+-- send a VACUUM FULL and a VACUUM ANALYZE
+\c - - - :master_port
+VACUUM (FULL) dustbunnies;
+VACUUM ANALYZE dustbunnies;
+
+-- verify that relfilenode changed
+\c - - - :worker_1_port
+SELECT relfilenode != :oldnode AS table_rewritten FROM pg_class
+WHERE oid='dustbunnies_990002'::regclass;
+
+-- verify the VACUUM ANALYZE incremented both vacuum and analyze counts
+SELECT wait_for_stats();
+SELECT pg_stat_get_vacuum_count('dustbunnies_990002'::regclass);
+SELECT pg_stat_get_analyze_count('dustbunnies_990002'::regclass);
+
+-- disable auto-VACUUM for next test
+ALTER TABLE dustbunnies_990002 SET (autovacuum_enabled = false);
+SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::regclass
+\gset
+
+-- send a VACUUM FREEZE after adding a new row
+\c - - - :master_port
+INSERT INTO dustbunnies VALUES (5, 'peter');
+VACUUM (FREEZE) dustbunnies;
+
+-- verify that relfrozenxid increased
+\c - - - :worker_1_port
+SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
+WHERE oid='dustbunnies_990002'::regclass;
+
+-- check there are no nulls in either column
+SELECT attname, null_frac FROM pg_stats
+WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
+
+-- add NULL values, then perform column-specific ANALYZE
+\c - - - :master_port
+INSERT INTO dustbunnies VALUES (6, NULL, NULL);
+ANALYZE dustbunnies (name);
+
+-- verify that name's NULL ratio is updated but age's is not
+\c - - - :worker_1_port
+SELECT attname, null_frac FROM pg_stats
+WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
+
+\c - - - :master_port
+-- verify warning for unqualified VACUUM
+VACUUM;
+
+-- and warning when using targeted VACUUM without DDL propagation
+SET citus.enable_ddl_propagation to false;
+VACUUM dustbunnies;
+SET citus.enable_ddl_propagation to DEFAULT;
+
+-- TODO: support VERBOSE
+-- VACUUM VERBOSE dustbunnies;
+-- VACUUM (FULL, VERBOSE) dustbunnies;
+-- ANALYZE VERBOSE dustbunnies;

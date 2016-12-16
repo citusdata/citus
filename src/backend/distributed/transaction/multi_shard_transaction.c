@@ -176,8 +176,12 @@ BeginTransactionOnShardPlacements(uint64 shardId, char *userName)
 		 */
 		MarkRemoteTransactionCritical(connection);
 
-		/* issue BEGIN */
-		RemoteTransactionBegin(connection);
+		/* the special BARE mode (for e.g. VACUUM/ANALYZE) skips BEGIN */
+		if (MultiShardCommitProtocol > COMMIT_PROTOCOL_BARE)
+		{
+			/* issue BEGIN */
+			RemoteTransactionBegin(connection);
+		}
 	}
 }
 
@@ -270,6 +274,12 @@ ResetShardPlacementTransactionState(void)
 	 * round.
 	 */
 	shardConnectionHash = NULL;
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	{
+		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
+		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	}
 }
 
 
