@@ -27,7 +27,9 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
@@ -60,6 +62,7 @@ static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapT
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
+PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
 
 /*
@@ -141,6 +144,67 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(true);
+}
+
+
+/*
+ * get_shard_id_for_distribution_column function takes a distributed table name and a
+ * distribution value then returns shard id of the shard which belongs to given table and
+ * contains given value. This function only works for hash distributed tables.
+ */
+Datum
+get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	Datum distributionValue = PG_GETARG_DATUM(1);
+
+	Var *distributionColumn = NULL;
+	char distributionMethod = 0;
+	Oid expectedElementType = InvalidOid;
+	Oid inputElementType = InvalidOid;
+	DistTableCacheEntry *cacheEntry = NULL;
+	int shardCount = 0;
+	ShardInterval **shardIntervalArray = NULL;
+	FmgrInfo *hashFunction = NULL;
+	FmgrInfo *compareFunction = NULL;
+	bool useBinarySearch = true;
+	ShardInterval *shardInterval = NULL;
+
+	if (!IsDistributedTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("relation is not distributed")));
+	}
+
+	distributionMethod = PartitionMethod(relationId);
+	if (distributionMethod != DISTRIBUTE_BY_HASH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("finding shard id of given distribution value is not "
+							   "supported for non-hash partitioned tables")));
+	}
+
+	distributionColumn = PartitionKey(relationId);
+	expectedElementType = distributionColumn->vartype;
+	inputElementType = get_fn_expr_argtype(fcinfo->flinfo, 1);
+	if (expectedElementType != inputElementType)
+	{
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("invalid distribution value type"),
+						errdetail("Type of the value does not match the type of the "
+								  "distribution column.")));
+	}
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	shardCount = cacheEntry->shardIntervalArrayLength;
+	shardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	hashFunction = cacheEntry->hashFunction;
+	compareFunction = cacheEntry->shardIntervalCompareFunction;
+	shardInterval = FindShardInterval(distributionValue, shardIntervalArray, shardCount,
+									  distributionMethod, compareFunction, hashFunction,
+									  useBinarySearch);
+
+	PG_RETURN_INT64(shardInterval->shardId);
 }
 
 

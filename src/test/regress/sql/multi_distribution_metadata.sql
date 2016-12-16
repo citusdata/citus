@@ -202,3 +202,57 @@ COMMIT;
 
 -- lock should be gone now
 SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
+
+-- test get_shard_id_for_distribution_column
+SET citus.shard_count TO 4;
+CREATE TABLE get_shardid_test_table1(column1 int, column2 int);
+SELECT create_distributed_table('get_shardid_test_table1', 'column1');
+\COPY get_shardid_test_table1 FROM STDIN with delimiter '|';
+1|1
+2|2
+3|3
+\.
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 1);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 2);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 3);
+
+-- verify result of the get_shard_id_for_distribution_column
+\c - - - :worker_1_port
+SELECT * FROM get_shardid_test_table1_540006;
+SELECT * FROM get_shardid_test_table1_540009;
+SELECT * FROM get_shardid_test_table1_540007;
+\c - - - :master_port
+
+-- test non-existing value
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
+
+-- test array type
+SET citus.shard_count TO 4;
+CREATE TABLE get_shardid_test_table2(column1 text[], column2 int);
+SELECT create_distributed_table('get_shardid_test_table2', 'column1');
+\COPY get_shardid_test_table2 FROM STDIN with delimiter '|';
+{a, b, c}|1
+{d, e, f}|2
+\.
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}'::text[]);
+
+-- verify result of the get_shard_id_for_distribution_column
+\c - - - :worker_1_port
+SELECT * FROM get_shardid_test_table2_540013;
+SELECT * FROM get_shardid_test_table2_540011;
+\c - - - :master_port
+
+-- test mismatching data type
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a'::text);
+
+-- test non-distributed table
+CREATE TABLE get_shardid_test_table3(column1 int, column2 int);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
+
+-- test non-hash distributed table
+SELECT create_distributed_table('get_shardid_test_table3', 'column1', 'append');
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
+
+-- clear unnecessary tables;
+DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3;
