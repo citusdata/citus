@@ -160,7 +160,7 @@ CREATE TABLE customers (
 INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey)
 VALUES
 	('customers'::regclass, 'h', column_name_to_column('customers'::regclass, 'id'));
-SELECT partmethod, partkey FROM pg_dist_partition
+SELECT partmethod, column_to_column_name(logicalrelid, partkey) FROM pg_dist_partition
 	WHERE logicalrelid = 'customers'::regclass;
 
 -- make one huge shard and manually inspect shard row
