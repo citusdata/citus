@@ -114,6 +114,7 @@ static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 static bool IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt);
 static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
 static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
+static char * DeparseVacuumColumnNames(List *columnNameList);
 
 
 /* Local functions forward declarations for unsupported command checks */
@@ -988,13 +989,6 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 							   "distributed %s commands", stmtName)));
 	}
 
-	if (vacuumStmt->va_cols != NIL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("specifying a column list is currently unsupported in "
-							   "distributed %s commands", stmtName)));
-	}
-
 	return true;
 }
 
@@ -1012,6 +1006,7 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
 	StringInfo vacuumString = DeparseVacuumStmtPrefix(vacuumStmt);
+	const char *columnNames = DeparseVacuumColumnNames(vacuumStmt->va_cols);
 	const int vacuumPrefixLen = vacuumString->len;
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
@@ -1037,6 +1032,7 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 
 		vacuumString->len = vacuumPrefixLen;
 		appendStringInfoString(vacuumString, shardName);
+		appendStringInfoString(vacuumString, columnNames);
 
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
@@ -1086,9 +1082,8 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 		vacuumFlags &= ~VACOPT_ANALYZE;
 	}
 
-	/* unsupported flags and options should have already been rejected */
+	/* unsupported flags should have already been rejected */
 	Assert((vacuumFlags & unsupportedFlags) == 0);
-	Assert(vacuumStmt->va_cols == NIL);
 
 	/* if no flags remain, exit early */
 	if (vacuumFlags == 0)
@@ -1126,6 +1121,40 @@ DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt)
 	appendStringInfoChar(vacuumPrefix, ' ');
 
 	return vacuumPrefix;
+}
+
+
+/*
+ * DeparseVacuumColumnNames joins the list of strings using commas as a
+ * delimiter. The whole thing is placed in parenthesis and set off with a
+ * single space in order to facilitate appending it to the end of any VACUUM
+ * or ANALYZE command which uses explicit column names. If the provided list
+ * is empty, this function returns an empty string to keep the calling code
+ * simplest.
+ */
+static char *
+DeparseVacuumColumnNames(List *columnNameList)
+{
+	StringInfo columnNames = makeStringInfo();
+	ListCell *columnNameCell = NULL;
+
+	if (columnNameList == NIL)
+	{
+		return columnNames->data;
+	}
+
+	appendStringInfoString(columnNames, " (");
+
+	foreach(columnNameCell, columnNameList)
+	{
+		char *columnName = strVal(lfirst(columnNameCell));
+
+		appendStringInfo(columnNames, "%s,", columnName);
+	}
+
+	columnNames->data[columnNames->len - 1] = ')';
+
+	return columnNames->data;
 }
 
 

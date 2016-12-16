@@ -44,12 +44,12 @@ DROP TABLE sharded_table;
 -- VACUUM tests
 
 -- create a table with a single shard (for convenience)
-CREATE TABLE dustbunnies (id integer, name text);
+CREATE TABLE dustbunnies (id integer, name text, age integer);
 SELECT master_create_distributed_table('dustbunnies', 'id', 'hash');
 SELECT master_create_worker_shards('dustbunnies', 1, 2);
 
 -- add some data to the distributed table
-\copy dustbunnies from stdin with csv
+\copy dustbunnies (id, name) from stdin with csv
 1,bugs
 2,babs
 3,buster
@@ -146,6 +146,20 @@ VACUUM (FREEZE) dustbunnies;
 SELECT relfrozenxid::text::integer > :frozenxid AS frozen_performed FROM pg_class
 WHERE oid='dustbunnies_990002'::regclass;
 
+-- check there are no nulls in either column
+SELECT attname, null_frac FROM pg_stats
+WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
+
+-- add NULL values, then perform column-specific ANALYZE
+\c - - - :master_port
+INSERT INTO dustbunnies VALUES (6, NULL, NULL);
+ANALYZE dustbunnies (name);
+
+-- verify that name's NULL ratio is updated but age's is not
+\c - - - :worker_1_port
+SELECT attname, null_frac FROM pg_stats
+WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
+
 \c - - - :master_port
 -- verify warning for unqualified VACUUM
 VACUUM;
@@ -154,10 +168,6 @@ VACUUM;
 SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
 SET citus.enable_ddl_propagation to DEFAULT;
-
--- verify error messages for unsupported options
-VACUUM (ANALYZE) dustbunnies (id);
-ANALYZE dustbunnies (id);
 
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
