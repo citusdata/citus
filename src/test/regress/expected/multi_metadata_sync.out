@@ -251,6 +251,7 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
 (1 row)
 
 -- Make sure that start_metadata_sync_to_node considers foreign key constraints
+\c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA mx_testing_schema_2;
 CREATE TABLE mx_testing_schema.fk_test_1 (col1 int, col2 text, col3 int, UNIQUE(col1, col3));
@@ -268,11 +269,6 @@ SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
  
 (1 row)
 
-UPDATE 
-	pg_dist_partition SET repmodel='s' 
-WHERE 
-	logicalrelid='mx_testing_schema.fk_test_1'::regclass
-	OR logicalrelid='mx_testing_schema_2.fk_test_2'::regclass;
 		
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
@@ -292,7 +288,11 @@ Table "mx_testing_schema_2.fk_test_2"
 Foreign-key constraints:
     "fk_test_2_col1_fkey" FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
 
+DROP TABLE mx_testing_schema_2.fk_test_2;
+DROP TABLE mx_testing_schema.fk_test_1;
 \c - - - :master_port
+DROP TABLE mx_testing_schema_2.fk_test_2;
+DROP TABLE mx_testing_schema.fk_test_1;
 RESET citus.shard_replication_factor;
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
@@ -383,6 +383,62 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  f
 (1 row)
 
+-- Check that the distributed table can be queried from the worker
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node 
+-----------------------------
+ 
+(1 row)
+
+CREATE TABLE mx_query_test (a int, b text, c int);
+SELECT create_distributed_table('mx_query_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_query_test'::regclass;
+ repmodel 
+----------
+ s
+(1 row)
+
+INSERT INTO mx_query_test VALUES (1, 'one', 1);
+INSERT INTO mx_query_test VALUES (2, 'two', 4);
+INSERT INTO mx_query_test VALUES (3, 'three', 9);
+INSERT INTO mx_query_test VALUES (4, 'four', 16);
+INSERT INTO mx_query_test VALUES (5, 'five', 24);
+\c - - - :worker_1_port
+SELECT * FROM mx_query_test ORDER BY a;
+ a |   b   | c  
+---+-------+----
+ 1 | one   |  1
+ 2 | two   |  4
+ 3 | three |  9
+ 4 | four  | 16
+ 5 | five  | 24
+(5 rows)
+
+INSERT INTO mx_query_test VALUES (6, 'six', 36);
+UPDATE mx_query_test SET c = 25 WHERE a = 5;
+\c - - - :master_port
+SELECT * FROM mx_query_test ORDER BY a;
+ a |   b   | c  
+---+-------+----
+ 1 | one   |  1
+ 2 | two   |  4
+ 3 | three |  9
+ 4 | four  | 16
+ 5 | five  | 25
+ 6 | six   | 36
+(6 rows)
+
+\c - - - :worker_1_port
+DROP TABLE mx_query_test;
+\c - - - :master_port
+DROP TABLE mx_query_test;
 -- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false 
 \c - - - :master_port
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -417,6 +473,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 SET citus.shard_count = 5;
+SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE SCHEMA mx_test_schema_1;
 CREATE SCHEMA mx_test_schema_2;
 -- Create MX tables
@@ -468,7 +525,9 @@ FROM
 	pg_dist_partition 
 WHERE 
 	logicalrelid = 'mx_test_schema_1.mx_table_1'::regclass
-	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass;
+	OR logicalrelid = 'mx_test_schema_2.mx_table_2'::regclass
+ORDER BY 
+	logicalrelid;
         logicalrelid         | repmodel 
 -----------------------------+----------
  mx_test_schema_1.mx_table_1 | s
@@ -487,16 +546,16 @@ ORDER BY
 	logicalrelid, shardid;
         logicalrelid         | shardid | nodename  | nodeport 
 -----------------------------+---------+-----------+----------
- mx_test_schema_1.mx_table_1 | 1310008 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310009 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310010 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310011 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310012 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310013 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310014 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310015 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310016 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310017 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310104 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310105 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310106 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310107 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310108 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310109 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310110 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310111 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310112 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310113 | localhost |    57637
 (10 rows)
 
 	
@@ -552,16 +611,16 @@ ORDER BY
 	logicalrelid, shardid;
         logicalrelid         | shardid | nodename  | nodeport 
 -----------------------------+---------+-----------+----------
- mx_test_schema_1.mx_table_1 | 1310008 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310009 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310010 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310011 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310012 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310013 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310014 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310015 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310016 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310017 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310104 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310105 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310106 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310107 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310108 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310109 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310110 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310111 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310112 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310113 | localhost |    57637
 (10 rows)
 
 -- Check that metadata of MX tables don't exist on the non-metadata worker
@@ -583,10 +642,106 @@ SELECT * FROM pg_dist_shard_placement;
 ---------+------------+-------------+----------+----------+-------------
 (0 rows)
 
+-- Check that CREATE INDEX statement is propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
+WARNING:  hash indexes are not WAL-logged and their use is discouraged
+CREATE UNIQUE INDEX mx_index_4 ON mx_test_schema_2.mx_table_2(col1);
+\c - - - :worker_1_port
+\d mx_test_schema_2.mx_table_2
+Table "mx_test_schema_2.mx_table_2"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_index_4" UNIQUE, btree (col1)
+    "mx_index_2" btree (col2)
+    "mx_index_3" hash (col1)
+Foreign-key constraints:
+    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+-- Check that DROP INDEX statement is propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+DROP INDEX mx_test_schema_2.mx_index_3;
+\c - - - :worker_1_port
+\d mx_test_schema_2.mx_table_2
+Table "mx_test_schema_2.mx_table_2"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+Indexes:
+    "mx_index_4" UNIQUE, btree (col1)
+    "mx_index_2" btree (col2)
+Foreign-key constraints:
+    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+-- Check that ALTER TABLE statements are propagated
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
+ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
+ALTER TABLE 
+	mx_test_schema_1.mx_table_1 
+ADD CONSTRAINT 
+	mx_fk_constraint 
+FOREIGN KEY 
+	(col1)
+REFERENCES
+	mx_test_schema_2.mx_table_2(col1);
+\c - - - :worker_1_port
+\d mx_test_schema_1.mx_table_1
+Table "mx_test_schema_1.mx_table_1"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+ col3   | integer | 
+Indexes:
+    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
+    "mx_index_1" btree (col1)
+Foreign-key constraints:
+    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+Referenced by:
+    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
+-- Check that foreign key constraint with NOT VALID works as well
+\c - - - :master_port
+SET citus.multi_shard_commit_protocol TO '2pc';
+ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint; 
+ALTER TABLE 
+	mx_test_schema_1.mx_table_1 
+ADD CONSTRAINT 
+	mx_fk_constraint_2
+FOREIGN KEY 
+	(col1)
+REFERENCES
+	mx_test_schema_2.mx_table_2(col1)
+NOT VALID;
+\c - - - :worker_1_port
+\d mx_test_schema_1.mx_table_1
+Table "mx_test_schema_1.mx_table_1"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col1   | integer | 
+ col2   | text    | 
+ col3   | integer | 
+Indexes:
+    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
+    "mx_index_1" btree (col1)
+Foreign-key constraints:
+    "mx_fk_constraint_2" FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
+Referenced by:
+    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+
 -- Cleanup
 \c - - - :worker_1_port
-DROP TABLE mx_test_schema_2.mx_table_2;
-DROP TABLE mx_test_schema_1.mx_table_1;
+DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
+NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
+DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 DELETE FROM pg_dist_node;
 DELETE FROM pg_dist_partition;
@@ -606,9 +761,11 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
-DROP TABLE mx_test_schema_2.mx_table_2;
-DROP TABLE mx_test_schema_1.mx_table_1;
+DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
+NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
+DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
+RESET citus.multi_shard_commit_protocol;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;

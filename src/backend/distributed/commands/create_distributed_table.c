@@ -180,9 +180,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		List *commandList = GetDistributedTableDDLEvents(relationId);
 		ListCell *commandCell = NULL;
 
-		/* disable DDL propagation on workers */
-		SendCommandToWorkers(WORKERS_WITH_METADATA,
-							 "SET citus.enable_ddl_propagation TO off");
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
 
 		/* send the commands one by one */
 		foreach(commandCell, commandList)

@@ -91,6 +91,8 @@ extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
 
 
+extern bool SchemaNode(void);
+
 /* Function declarations local to the distributed module */
 extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);

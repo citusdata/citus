@@ -37,6 +37,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_planner.h"
@@ -49,6 +50,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -107,6 +109,8 @@ static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
 								   const char *dropIndexCommand, bool isTopLevel);
 static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 									const char *alterTableCommand, bool isTopLevel);
+static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
+										  const char *alterTableCommand);
 static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
@@ -147,6 +151,7 @@ static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 static bool warnedUserAbout2PC = false;
 
+
 /*
  * Utility for handling citus specific concerns around utility statements.
  *
@@ -167,6 +172,8 @@ multi_ProcessUtility(Node *parsetree,
 					 DestReceiver *dest,
 					 char *completionTag)
 {
+	bool schemaNode = SchemaNode();
+	bool propagateChanges = schemaNode && EnableDDLPropagation;
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -222,8 +229,11 @@ multi_ProcessUtility(Node *parsetree,
 		ErrorIfUnsupportedTruncateStmt((TruncateStmt *) parsetree);
 	}
 
-	/* ddl commands are propagated to workers only if EnableDDLPropagation is set */
-	if (EnableDDLPropagation)
+	/*
+	 * DDL commands are propagated to workers only if EnableDDLPropagation is
+	 * set to true and the current node is the schema node
+	 */
+	if (propagateChanges)
 	{
 		bool isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
 
@@ -287,6 +297,24 @@ multi_ProcessUtility(Node *parsetree,
 									 "commands to worker nodes"),
 							  errhint("Connect to worker nodes directly to manually "
 									  "move all tables.")));
+		}
+	}
+	else if (!schemaNode)
+	{
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
+			if (alterTableStmt->relkind == OBJECT_TABLE)
+			{
+				/*
+				 * When the schema node issues an ALTER TABLE ... ADD FOREIGN KEY
+				 * command, the validation step should be skipped on the distributed
+				 * table of the worker. Therefore, we check whether the given ALTER
+				 * TABLE statement is a FOREIGN KEY constraint and if so disable the
+				 * validation step. Note that validation is done on the shard level.
+				 */
+				parsetree = WorkerProcessAlterTableStmt(alterTableStmt, queryString);
+			}
 		}
 	}
 
@@ -852,6 +880,68 @@ ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTabl
 	else
 	{
 		ExecuteDistributedDDLCommand(leftRelationId, alterTableCommand, isTopLevel);
+	}
+
+	return (Node *) alterTableStatement;
+}
+
+
+/*
+ * WorkerProcessAlterTableStmt checks and processes the alter table statement to be
+ * worked on the distributed table of the worker node. Currently, it only processes
+ * ALTER TABLE ... ADD FOREIGN KEY command to skip the validation step.
+ */
+static Node *
+WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
+							const char *alterTableCommand)
+{
+	LOCKMODE lockmode = 0;
+	Oid leftRelationId = InvalidOid;
+	bool isDistributedRelation = false;
+	List *commandList = NIL;
+	ListCell *commandCell = NULL;
+
+	/* first check whether a distributed relation is affected */
+	if (alterTableStatement->relation == NULL)
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(leftRelationId))
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	isDistributedRelation = IsDistributedTable(leftRelationId);
+	if (!isDistributedRelation)
+	{
+		return (Node *) alterTableStatement;
+	}
+
+	/*
+	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
+	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
+	 * foreign constraint in master. Validity will be checked in workers anyway.
+	 */
+	commandList = alterTableStatement->cmds;
+
+	foreach(commandCell, commandList)
+	{
+		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+		AlterTableType alterTableType = command->subtype;
+
+		if (alterTableType == AT_AddConstraint)
+		{
+			Constraint *constraint = (Constraint *) command->def;
+			if (constraint->contype == CONSTR_FOREIGN)
+			{
+				/* foreign constraint validations will be done in shards. */
+				constraint->skip_validation = true;
+			}
+		}
 	}
 
 	return (Node *) alterTableStatement;
@@ -1866,6 +1956,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 							 bool isTopLevel)
 {
 	List *taskList = NIL;
+	bool shouldSyncMetadata = ShouldSyncTableMetadata(relationId);
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
@@ -1876,6 +1967,12 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 	}
 
 	ShowNoticeIfNotUsing2PC();
+
+	if (shouldSyncMetadata)
+	{
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlCommandString);
+	}
 
 	taskList = DDLTaskList(relationId, ddlCommandString);
 
@@ -1900,6 +1997,7 @@ ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
 									const char *ddlCommandString, bool isTopLevel)
 {
 	List *taskList = NIL;
+	bool shouldSyncMetadata = false;
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
@@ -1910,6 +2008,18 @@ ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
 	}
 
 	ShowNoticeIfNotUsing2PC();
+
+	/*
+	 * It is sufficient to check only one of the tables for metadata syncing on workers,
+	 * since the colocation of two tables implies that either both or none of them have
+	 * metadata on workers.
+	 */
+	shouldSyncMetadata = ShouldSyncTableMetadata(leftRelationId);
+	if (shouldSyncMetadata)
+	{
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlCommandString);
+	}
 
 	taskList = ForeignKeyTaskList(leftRelationId, rightRelationId, ddlCommandString);
 
