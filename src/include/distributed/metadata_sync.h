@@ -34,6 +34,7 @@ extern char * NodeDeleteCommand(uint32 nodeId);
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node"
 #define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition"
+#define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 
 
 #endif /* METADATA_SYNC_H */
