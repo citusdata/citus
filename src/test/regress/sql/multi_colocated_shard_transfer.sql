@@ -20,7 +20,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 -- repair colocated shards
 SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -33,7 +33,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 
 -- test repairing NOT colocated shard
@@ -45,7 +45,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table5_groupX'::regclass
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 -- repair NOT colocated shard
 SELECT master_copy_shard_placement(1300016, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -58,7 +58,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table5_groupX'::regclass
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 
 -- test repairing shard in append distributed table
@@ -70,7 +70,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table6_append'::regclass
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 -- repair  shard in append distributed table
 SELECT master_copy_shard_placement(1300020, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -83,7 +83,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table6_append'::regclass
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 
 -- test repair while all placements of one shard in colocation group is unhealthy
@@ -98,7 +98,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
 
 -- repair while all placements of one shard in colocation group is unhealthy
 SELECT master_copy_shard_placement(1300000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -111,4 +111,4 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
-ORDER BY s.shardid;
+ORDER BY s.shardid, sp.nodeport;
