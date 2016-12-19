@@ -737,6 +737,94 @@ Foreign-key constraints:
 Referenced by:
     TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
 
+-- Check that mark_tables_colocated call propagates the changes to the workers 
+\c - - - :master_port
+SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gset
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
+SET citus.shard_count TO 7;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE mx_colocation_test_1 (a int);
+SELECT create_distributed_table('mx_colocation_test_1', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE mx_colocation_test_2 (a int);
+SELECT create_distributed_table('mx_colocation_test_2', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Check the colocation IDs of the created tables
+SELECT 
+	logicalrelid, colocationid
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY logicalrelid;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10000
+ mx_colocation_test_2 |        10000
+(2 rows)
+
+	
+-- Reset the colocation IDs of the test tables
+DELETE FROM 
+	pg_dist_colocation
+WHERE EXISTS (
+	SELECT 1 
+	FROM pg_dist_partition 
+	WHERE 
+		colocationid = pg_dist_partition.colocationid 
+		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
+UPDATE 
+	pg_dist_partition 
+SET 
+	colocationid = 0
+WHERE 
+	logicalrelid = 'mx_colocation_test_1'::regclass 
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+-- Mark tables colocated and see the changes on the master and the worker
+SELECT mark_tables_colocated('mx_colocation_test_1', ARRAY['mx_colocation_test_2']);
+ mark_tables_colocated 
+-----------------------
+ 
+(1 row)
+
+SELECT 
+	logicalrelid, colocationid 
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
+(2 rows)
+
+\c - - - :worker_1_port
+SELECT 
+	logicalrelid, colocationid 
+FROM 
+	pg_dist_partition 
+WHERE
+	logicalrelid = 'mx_colocation_test_1'::regclass
+	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+     logicalrelid     | colocationid 
+----------------------+--------------
+ mx_colocation_test_1 |        10001
+ mx_colocation_test_2 |        10001
+(2 rows)
+
+\c - - - :master_port	
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 -- Cleanup
 \c - - - :worker_1_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;

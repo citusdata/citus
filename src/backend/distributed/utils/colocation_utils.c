@@ -22,11 +22,13 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -617,6 +619,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	SysScanDesc scanDescriptor = NULL;
+	bool shouldSyncMetadata = false;
 	bool indexOK = true;
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[scanKeyCount];
@@ -660,6 +663,15 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistPartition, NoLock);
+
+	shouldSyncMetadata = ShouldSyncTableMetadata(distributedRelationId);
+	if (shouldSyncMetadata)
+	{
+		char *updateColocationIdCommand = ColocationIdUpdateCommand(distributedRelationId,
+																	colocationId);
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, updateColocationIdCommand);
+	}
 }
 
 
