@@ -595,6 +595,25 @@ NodeDeleteCommand(uint32 nodeId)
 
 
 /*
+ * ColocationIdUpdateCommand creates the SQL command to change the colocationId
+ * of the table with the given name to the given colocationId in pg_dist_partition
+ * table.
+ */
+char *
+ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
+{
+	StringInfo command = makeStringInfo();
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	appendStringInfo(command, "UPDATE pg_dist_partition "
+							  "SET colocationid = %d "
+							  "WHERE logicalrelid = %s::regclass",
+					 colocationId, quote_literal_cstr(qualifiedRelationName));
+
+	return command->data;
+}
+
+
+/*
  * LocalGroupIdUpdateCommand creates the SQL command required to set the local group id
  * of a worker and returns the command in a string.
  */
