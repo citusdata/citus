@@ -21,7 +21,6 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
-#include "distributed/multi_server_executor.h"
 
 #include "executor/executor.h"
 
@@ -129,7 +128,7 @@ CreatePhysicalPlan(Query *originalQuery, Query *query,
 				   RelationRestrictionContext *restrictionContext)
 {
 	MultiPlan *physicalPlan = MultiRouterPlanCreate(originalQuery, query,
-													TaskExecutorType, restrictionContext);
+													restrictionContext);
 	if (physicalPlan == NULL)
 	{
 		/* Create and optimize logical plan */

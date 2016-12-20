@@ -351,6 +351,16 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_router_execution",
+		gettext_noop("Enables router execution"),
+		NULL,
+		&EnableRouterExecution,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.shard_count",
 		gettext_noop("Sets the number of shards for a new hash-partitioned table"
