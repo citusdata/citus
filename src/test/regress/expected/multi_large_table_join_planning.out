@@ -80,15 +80,15 @@ DEBUG:  assigned task 21 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
 DEBUG:  generated sql query for job 1251 and task 3
-DETAIL:  query string: "SELECT "pg_merge_job_1250.task_000025".intermediate_column_1250_0, "pg_merge_job_1250.task_000025".intermediate_column_1250_1, "pg_merge_job_1250.task_000025".intermediate_column_1250_2, "pg_merge_job_1250.task_000025".intermediate_column_1250_3, "pg_merge_job_1250.task_000025".intermediate_column_1250_4 FROM (pg_merge_job_1250.task_000025 "pg_merge_job_1250.task_000025" JOIN part_290012 part ON (("pg_merge_job_1250.task_000025".intermediate_column_1250_0 = part.p_partkey))) WHERE (part.p_size > 8)"
+DETAIL:  query string: "SELECT "pg_merge_job_1250.task_000025".intermediate_column_1250_0, "pg_merge_job_1250.task_000025".intermediate_column_1250_1, "pg_merge_job_1250.task_000025".intermediate_column_1250_2, "pg_merge_job_1250.task_000025".intermediate_column_1250_3, "pg_merge_job_1250.task_000025".intermediate_column_1250_4 FROM (pg_merge_job_1250.task_000025 "pg_merge_job_1250.task_000025" JOIN part_290011 part ON (("pg_merge_job_1250.task_000025".intermediate_column_1250_0 = part.p_partkey))) WHERE (part.p_size > 8)"
 DEBUG:  generated sql query for job 1251 and task 6
 DETAIL:  query string: "SELECT "pg_merge_job_1250.task_000034".intermediate_column_1250_0, "pg_merge_job_1250.task_000034".intermediate_column_1250_1, "pg_merge_job_1250.task_000034".intermediate_column_1250_2, "pg_merge_job_1250.task_000034".intermediate_column_1250_3, "pg_merge_job_1250.task_000034".intermediate_column_1250_4 FROM (pg_merge_job_1250.task_000034 "pg_merge_job_1250.task_000034" JOIN part_280002 part ON (("pg_merge_job_1250.task_000034".intermediate_column_1250_0 = part.p_partkey))) WHERE (part.p_size > 8)"
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 25
 DEBUG:  pruning merge fetch taskId 4
 DETAIL:  Creating dependency on merge taskId 34
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57637
+DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
 DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
 DEBUG:  join prunable for intervals [1001,2000] and [1,1000]

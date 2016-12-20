@@ -262,7 +262,7 @@ CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 
 -- Nothing from the block should have committed
-SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
 -- Now try with 2pc off
 RESET citus.multi_shard_commit_protocol;
@@ -272,7 +272,7 @@ CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 
 -- The block should have committed with a warning
-SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items';
+SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
 \c - - - :worker_2_port
 DROP EVENT TRIGGER log_ddl_tag;

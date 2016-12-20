@@ -352,6 +352,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 {
 	RelationRestrictionContext *restrictionContext = NULL;
 	RelationRestriction *relationRestriction = NULL;
+	DistTableCacheEntry *cacheEntry = NULL;
 	bool distributedTable = false;
 	bool localTable = false;
 
@@ -378,6 +379,18 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	restrictionContext->hasDistributedRelation |= distributedTable;
 	restrictionContext->hasLocalRelation |= localTable;
 
+	/*
+	 * We're also keeping track of whether all participant
+	 * tables are reference tables.
+	 */
+	if (distributedTable)
+	{
+		cacheEntry = DistributedTableCacheEntry(rte->relid);
+
+		restrictionContext->allReferenceTables &=
+			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+	}
+
 	restrictionContext->relationRestrictionList =
 		lappend(restrictionContext->relationRestrictionList, relationRestriction);
 }
@@ -392,6 +405,10 @@ CreateAndPushRestrictionContext(void)
 {
 	RelationRestrictionContext *restrictionContext =
 		palloc0(sizeof(RelationRestrictionContext));
+
+	/* we'll apply logical AND as we add tables */
+	restrictionContext->allReferenceTables = true;
+
 	relationRestrictionContextList = lcons(restrictionContext,
 										   relationRestrictionContextList);
 

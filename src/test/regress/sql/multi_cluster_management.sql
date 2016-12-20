@@ -3,6 +3,11 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1220000;
 
 -- Tests functions related to cluster membership
 
+-- before starting the test, lets try to create reference table and see a 
+-- meaningful error
+CREATE TABLE test_reference_table (y int primary key, name text);
+SELECT create_reference_table('test_reference_table');
+
 -- add the nodes to the cluster
 SELECT master_add_node('localhost', :worker_1_port);
 SELECT master_add_node('localhost', :worker_2_port);

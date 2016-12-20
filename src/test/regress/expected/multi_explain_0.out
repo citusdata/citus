@@ -472,7 +472,7 @@ Master Query
 SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -491,7 +491,7 @@ Master Query
         ->  Seq Scan on pg_merge_job_570021
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -534,14 +534,14 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
 ]
 SELECT true AS valid FROM explain_json($$
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -589,9 +589,22 @@ SELECT true AS valid FROM explain_xml($$
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey$$);
 t
+-- make sure that EXPLAIN works without 
+-- problems for queries that inlvolves only 
+-- reference tables
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation
+	WHERE n_name = 'CHINA'$$);
+t
+SELECT true AS valid FROM explain_xml($$
+	SELECT count(*)
+	FROM nation, supplier
+	WHERE nation.n_nationkey = supplier.s_nationkey$$);
+t
 EXPLAIN (COSTS FALSE, FORMAT YAML)
 	SELECT count(*)
-	FROM lineitem, orders, customer, supplier
+	FROM lineitem, orders, customer, supplier_single_shard
 	WHERE l_orderkey = o_orderkey
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
@@ -612,8 +625,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Seq Scan"
             Parent Relationship: "Outer"
-            Relation Name: "pg_merge_job_570036"
-            Alias: "pg_merge_job_570036"
+            Relation Name: "pg_merge_job_570035"
+            Alias: "pg_merge_job_570035"
 -- test parallel aggregates
 SET parallel_setup_cost=0;
 ERROR:  unrecognized configuration parameter "parallel_setup_cost"
@@ -630,7 +643,7 @@ Aggregate
   ->  Seq Scan on lineitem_clone
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
-Distributed Query into pg_merge_job_570037
+Distributed Query into pg_merge_job_570036
   Executor: Task-Tracker
   Task Count: 8
   Tasks Shown: One of 8
@@ -640,12 +653,12 @@ Distributed Query into pg_merge_job_570037
               ->  Seq Scan on lineitem_290001 lineitem
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570037
+        ->  Seq Scan on pg_merge_job_570036
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
-Distributed Query into pg_merge_job_570038
+Distributed Query into pg_merge_job_570037
   Executor: Task-Tracker
   Task Count: 4
   Tasks Shown: One of 4
@@ -656,11 +669,11 @@ Distributed Query into pg_merge_job_570038
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570038
+        ->  Seq Scan on pg_merge_job_570037
 SET citus.task_executor_type TO 'real-time';
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Distributed Query into pg_merge_job_570039
+Distributed Query into pg_merge_job_570038
   Executor: Router
   Task Count: 1
   Tasks Shown: All
@@ -673,7 +686,7 @@ Distributed Query into pg_merge_job_570039
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
-Distributed Query into pg_merge_job_570040
+Distributed Query into pg_merge_job_570039
   Executor: Real-Time
   Task Count: 4
   Tasks Shown: One of 4
@@ -684,4 +697,4 @@ Distributed Query into pg_merge_job_570040
                     Filter: (l_orderkey > 9030)
 Master Query
   ->  Aggregate
-        ->  Seq Scan on pg_merge_job_570040
+        ->  Seq Scan on pg_merge_job_570039
