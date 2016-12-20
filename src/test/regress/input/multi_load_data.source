@@ -19,3 +19,4 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
 \copy nation FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
 \copy part FROM '@abs_srcdir@/data/part.data' with delimiter '|'
 \copy supplier FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'
+\copy supplier_single_shard FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'

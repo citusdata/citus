@@ -23,6 +23,7 @@ typedef struct RelationRestrictionContext
 {
 	bool hasDistributedRelation;
 	bool hasLocalRelation;
+	bool allReferenceTables;
 	List *relationRestrictionList;
 } RelationRestrictionContext;
 

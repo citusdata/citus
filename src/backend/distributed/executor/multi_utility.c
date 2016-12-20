@@ -1201,6 +1201,15 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		ListCell *indexParameterCell = NULL;
 		bool indexContainsPartitionColumn = false;
 
+		/*
+		 * Reference tables do not have partition key, and unique constraints
+		 * are allowed for them. Thus, we added a short-circuit for reference tables.
+		 */
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			return;
+		}
+
 		if (partitionMethod == DISTRIBUTE_BY_APPEND)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1347,7 +1356,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				if (HeapTupleIsValid(tuple))
 				{
 					Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(tuple);
-					if (targetAttr->attnum == partitionColumn->varattno)
+
+					/* reference tables do not have partition column, so allow them */
+					if (partitionColumn != NULL &&
+						targetAttr->attnum == partitionColumn->varattno)
 					{
 						ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
 											   "involving partition column")));

@@ -2566,6 +2566,8 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 /*
  * PruneShardList prunes shard intervals from given list based on the selection criteria,
  * and returns remaining shard intervals in another list.
+ *
+ * For reference tables, the function simply returns the single shard that the table has.
  */
 List *
 PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
@@ -2578,6 +2580,12 @@ PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
 
 	Var *partitionColumn = PartitionColumn(relationId, tableId);
 	char partitionMethod = PartitionMethod(relationId);
+
+	/* short circuit for reference tables */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return shardIntervalList;
+	}
 
 	if (ContainsFalseClause(whereClauseList))
 	{
@@ -3463,7 +3471,9 @@ JoinSequenceArray(List *rangeTableFragmentsList, Query *jobQuery, List *depended
 
 /*
  * PartitionedOnColumn finds the given column's range table entry, and checks if
- * that range table is partitioned on the given column.
+ * that range table is partitioned on the given column. Note that since reference
+ * tables do not have partition columns, the function returns false when the distributed
+ * relation is a reference table.
  */
 static bool
 PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
@@ -3476,7 +3486,16 @@ PartitionedOnColumn(Var *column, List *rangeTableList, List *dependedJobList)
 	if (rangeTableType == CITUS_RTE_RELATION)
 	{
 		Oid relationId = rangeTableEntry->relid;
+		char partitionMethod = PartitionMethod(relationId);
 		Var *partitionColumn = PartitionColumn(relationId, rangeTableId);
+
+		/* reference tables do not have partition columns */
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			partitionedOnColumn = false;
+
+			return partitionedOnColumn;
+		}
 
 		if (partitionColumn->varattno == column->varattno)
 		{

@@ -120,7 +120,8 @@ static RelationRestrictionContext * CopyRelationRestrictionContext(
 static Node * InstantiatePartitionQual(Node *node, void *context);
 static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
 												 RangeTblEntry *insertRte,
-												 RangeTblEntry *subqueryRte);
+												 RangeTblEntry *subqueryRte,
+												 bool allReferenceTables);
 static void ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query);
 static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
 														   RangeTblEntry *insertRte,
@@ -247,12 +248,14 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
 	 * modify queries. Thus, handle separately.
 	 */
-	ErrorIfInsertSelectQueryNotSupported(originalQuery, insertRte, subqueryRte);
+	ErrorIfInsertSelectQueryNotSupported(originalQuery, insertRte, subqueryRte,
+										 allReferenceTables);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -343,6 +346,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	bool routerPlannable = false;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -355,6 +359,15 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+
+		/*
+		 * We haven't added the quals if all participating tables are reference
+		 * tables. Thus, now skip instantiating them.
+		 */
+		if (allReferenceTables)
+		{
+			break;
+		}
 
 		originalBaserestrictInfo =
 			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
@@ -370,7 +383,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 * prevent shard pruning logic (i.e, namely UpdateRelationNames())
 	 * modifies range table entries, which makes hard to add the quals.
 	 */
-	AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
+	if (!allReferenceTables)
+	{
+		AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
+	}
 
 	/* mark that we don't want the router planner to generate dummy hosts/queries */
 	replacePrunedQueryWithDummy = false;
@@ -461,7 +477,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
  *    hashfunc(partitionColumn) <= $upper_bound
  *
  * The function expects and asserts that subquery's target list contains a partition
- * column value.
+ * column value. Thus, this function should never be called with reference tables.
  */
 static void
 AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval)
@@ -622,10 +638,12 @@ ExtractInsertRangeTableEntry(Query *query)
  */
 static void
 ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
-									 RangeTblEntry *subqueryRte)
+									 RangeTblEntry *subqueryRte, bool allReferenceTables)
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
+	Oid targetRelationId = insertRte->relid;
+	char targetPartitionMethod = PartitionMethod(targetRelationId);
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
@@ -645,17 +663,39 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	/* we don't support LIMIT, OFFSET and WINDOW functions */
 	ErrorIfMultiTaskRouterSelectQueryUnsupported(subquery);
 
-	/* ensure that INSERT's partition column comes from SELECT's partition column */
-	ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree, insertRte, subqueryRte,
-												   &selectPartitionColumnTableId);
-
-	/* we expect partition column values come from colocated tables */
-	if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
+	/*
+	 * If we're inserting into a reference table, all participating tables
+	 * should be reference tables as well.
+	 */
+	if (targetPartitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("INSERT target table and the source relation "
-							   "of the SELECT partition column value "
-							   "must be colocated")));
+		if (!allReferenceTables)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("If data inserted into a reference table, "
+								   "all of the participating tables in the "
+								   "INSERT INTO ... SELECT query should be "
+								   "reference tables.")));
+		}
+	}
+	else
+	{
+		/* ensure that INSERT's partition column comes from SELECT's partition column */
+		ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree, insertRte, subqueryRte,
+													   &selectPartitionColumnTableId);
+
+		/*
+		 * We expect partition column values come from colocated tables. Note that we
+		 * skip this check from the reference table case given that all reference tables
+		 * are already (and by default) co-located.
+		 */
+		if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("INSERT target table and the source relation "
+								   "of the SELECT partition column value "
+								   "must be colocated")));
+		}
 	}
 }
 
@@ -797,6 +837,16 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 				break;
 			}
 
+			/*
+			 * Reference tables doesn't have a partition column, thus partition columns
+			 * cannot match at all.
+			 */
+			if (PartitionMethod(subqeryTargetEntry->resorigtbl) == DISTRIBUTE_BY_NONE)
+			{
+				partitionColumnsMatch = false;
+				break;
+			}
+
 			if (!IsPartitionColumnRecursive(subqeryTargetEntry->expr, subquery))
 			{
 				partitionColumnsMatch = false;
@@ -830,7 +880,10 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
  *   (i)  Set operations are present on the top level query
  *   (ii) Target list does not include a bare partition column.
  *
- * Note that if the input query is not an INSERT .. SELECT the assertion fails.
+ * Note that if the input query is not an INSERT .. SELECT the assertion fails. Lastly,
+ * if all the participating tables in the query are reference tables, we implicitly
+ * skip adding the quals to the query since IsPartitionColumnRecursive() always returns
+ * false for reference tables.
  */
 void
 AddUninstantiatedPartitionRestriction(Query *originalQuery)
@@ -1084,6 +1137,17 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			bool targetEntryPartitionColumn = false;
+
+			/* reference tables do not have partition column */
+			if (partitionColumn == NULL)
+			{
+				targetEntryPartitionColumn = false;
+			}
+			else if (targetEntry->resno == partitionColumn->varattno)
+			{
+				targetEntryPartitionColumn = true;
+			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
@@ -1099,15 +1163,14 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 									   "tables must not be VOLATILE")));
 			}
 
-			if (commandType == CMD_UPDATE &&
+			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
 										queryTree->jointree))
 			{
 				specifiesPartitionValue = true;
 			}
 
-			if (commandType == CMD_INSERT &&
-				targetEntry->resno == partitionColumn->varattno &&
+			if (commandType == CMD_INSERT && targetEntryPartitionColumn &&
 				!IsA(targetEntry->expr, Const))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1180,8 +1243,19 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	foreach(setTargetCell, onConflictSet)
 	{
 		TargetEntry *setTargetEntry = (TargetEntry *) lfirst(setTargetCell);
+		bool setTargetEntryPartitionColumn = false;
 
-		if (setTargetEntry->resno == partitionColumn->varattno)
+		/* reference tables do not have partition column */
+		if (partitionColumn == NULL)
+		{
+			setTargetEntryPartitionColumn = false;
+		}
+		else if (setTargetEntry->resno == partitionColumn->varattno)
+		{
+			setTargetEntryPartitionColumn = true;
+		}
+
+		if (setTargetEntryPartitionColumn)
 		{
 			Expr *setExpr = setTargetEntry->expr;
 			if (IsA(setExpr, Var) &&
@@ -1724,17 +1798,30 @@ FastShardPruning(Oid distributedTableId, Const *partitionValue)
  * statement these are the where-clause expressions. For INSERT statements we
  * build an equality clause based on the partition-column and its supplied
  * insert value.
+ *
+ * Since reference tables do not have partition columns, the function returns
+ * NIL for reference tables.
  */
 static List *
 QueryRestrictList(Query *query)
 {
 	List *queryRestrictList = NIL;
 	CmdType commandType = query->commandType;
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	char partitionMethod = PartitionMethod(distributedTableId);
+
+	/*
+	 * Reference tables do not have the notion of partition column. Thus,
+	 * there are no restrictions on the partition column.
+	 */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return queryRestrictList;
+	}
 
 	if (commandType == CMD_INSERT)
 	{
 		/* build equality expression based on partition column value for row */
-		Oid distributedTableId = ExtractFirstDistributedTableId(query);
 		uint32 rangeTableId = 1;
 		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 		Const *partitionValue = ExtractInsertPartitionValue(query, partitionColumn);
@@ -2389,7 +2476,8 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 			Oid distributedTableId = rte->relid;
 			char partitionMethod = PartitionMethod(distributedTableId);
 
-			if (partitionMethod != DISTRIBUTE_BY_HASH)
+			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
+				  DISTRIBUTE_BY_NONE))
 			{
 				return false;
 			}
@@ -2628,6 +2716,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 	newContext->hasDistributedRelation = oldContext->hasDistributedRelation;
 	newContext->hasLocalRelation = oldContext->hasLocalRelation;
+	newContext->allReferenceTables = oldContext->allReferenceTables;
 	newContext->relationRestrictionList = NIL;
 
 	foreach(relationRestrictionCell, oldContext->relationRestrictionList)
