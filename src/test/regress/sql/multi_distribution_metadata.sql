@@ -246,13 +246,55 @@ SELECT * FROM get_shardid_test_table2_540011;
 -- test mismatching data type
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a'::text);
 
+-- test NULL distribution column value for hash distributed table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2');
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', NULL);
+
 -- test non-distributed table
 CREATE TABLE get_shardid_test_table3(column1 int, column2 int);
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
 
--- test non-hash distributed table
+-- test append distributed table
 SELECT create_distributed_table('get_shardid_test_table3', 'column1', 'append');
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
 
+-- test reference table;
+CREATE TABLE get_shardid_test_table4(column1 int, column2 int);
+SELECT create_reference_table('get_shardid_test_table4');
+
+-- test NULL distribution column value for reference table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4');
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', NULL);
+
+-- test different data types for reference table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 1);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a'::text);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}'::text[]);
+
+-- test range distributed table
+CREATE TABLE get_shardid_test_table5(column1 int, column2 int);
+SELECT create_distributed_table('get_shardid_test_table5', 'column1', 'range');
+
+-- create worker shards
+SELECT master_create_empty_shard('get_shardid_test_table5');
+SELECT master_create_empty_shard('get_shardid_test_table5');
+SELECT master_create_empty_shard('get_shardid_test_table5');
+SELECT master_create_empty_shard('get_shardid_test_table5');
+
+-- now the comparison is done via the partition column type, which is text
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 1000 WHERE shardid = 540015;
+UPDATE pg_dist_shard SET shardminvalue = 1001, shardmaxvalue = 2000 WHERE shardid = 540016;
+UPDATE pg_dist_shard SET shardminvalue = 2001, shardmaxvalue = 3000 WHERE shardid = 540017;
+UPDATE pg_dist_shard SET shardminvalue = 3001, shardmaxvalue = 4000 WHERE shardid = 540018;
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 5);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 1111);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 2689);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 3248);
+
+-- test non-existing value for range distributed tables
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 4001);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', -999);
+
 -- clear unnecessary tables;
-DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3;
+DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3, get_shardid_test_table4, get_shardid_test_table5;
