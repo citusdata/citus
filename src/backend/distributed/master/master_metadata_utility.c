@@ -516,6 +516,49 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 
 /*
+ * DeletePartitionRow removes the row from pg_dist_partition where the logicalrelid
+ * field equals to distributedRelationId. Then, the function invalidates the
+ * metadata cache.
+ */
+void
+DeletePartitionRow(Oid distributedRelationId)
+{
+	Relation pgDistPartition = NULL;
+	HeapTuple heapTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+
+	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
+
+	scanDescriptor = systable_beginscan(pgDistPartition, InvalidOid, false, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for partition %d",
+							   distributedRelationId)));
+	}
+
+	simple_heap_delete(pgDistPartition, &heapTuple->t_self);
+
+	systable_endscan(scanDescriptor);
+
+	/* invalidate the cache */
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
+
+	/* increment the counter so that next command can see the row */
+	CommandCounterIncrement();
+
+	heap_close(pgDistPartition, RowExclusiveLock);
+}
+
+
+/*
  * DeleteShardRow opens the shard system catalog, finds the unique row that has
  * the given shardId, and deletes this row.
  */

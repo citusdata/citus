@@ -288,8 +288,6 @@ Table "mx_testing_schema_2.fk_test_2"
 Foreign-key constraints:
     "fk_test_2_col1_fkey" FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
 
-DROP TABLE mx_testing_schema_2.fk_test_2;
-DROP TABLE mx_testing_schema.fk_test_1;
 \c - - - :master_port
 DROP TABLE mx_testing_schema_2.fk_test_2;
 DROP TABLE mx_testing_schema.fk_test_1;
@@ -435,8 +433,6 @@ SELECT * FROM mx_query_test ORDER BY a;
  6 | six   | 36
 (6 rows)
 
-\c - - - :worker_1_port
-DROP TABLE mx_query_test;
 \c - - - :master_port
 DROP TABLE mx_query_test;
 -- Check that stop_metadata_sync_to_node function sets hasmetadata of the node to false 
@@ -824,7 +820,47 @@ WHERE
 (2 rows)
 
 \c - - - :master_port	
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
+-- Check that DROP TABLE on MX tables works
+DROP TABLE mx_colocation_test_1;
+DROP TABLE mx_colocation_test_2;
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+\c - - - :worker_1_port
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+	
+-- Check that dropped MX table can be recreated again
+\c - - - :master_port	
+SET citus.shard_count TO 7;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+   logicalrelid    | repmodel 
+-------------------+----------
+ mx_temp_drop_test | s
+(1 row)
+
+DROP TABLE mx_temp_drop_test;
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+   logicalrelid    | repmodel 
+-------------------+----------
+ mx_temp_drop_test | s
+(1 row)
+
+DROP TABLE mx_temp_drop_test;
 -- Cleanup
 \c - - - :worker_1_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
@@ -856,4 +892,5 @@ DROP TABLE mx_testing_schema.mx_test_table;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.multi_shard_commit_protocol;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;

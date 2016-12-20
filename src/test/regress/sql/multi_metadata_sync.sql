@@ -103,12 +103,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 \d mx_testing_schema_2.fk_test_2
 
-DROP TABLE mx_testing_schema_2.fk_test_2;
-DROP TABLE mx_testing_schema.fk_test_1;
 \c - - - :master_port
 DROP TABLE mx_testing_schema_2.fk_test_2;
 DROP TABLE mx_testing_schema.fk_test_1;
-
 
 RESET citus.shard_replication_factor;
 
@@ -157,8 +154,6 @@ UPDATE mx_query_test SET c = 25 WHERE a = 5;
 \c - - - :master_port
 SELECT * FROM mx_query_test ORDER BY a;
 
-\c - - - :worker_1_port
-DROP TABLE mx_query_test;
 \c - - - :master_port
 DROP TABLE mx_query_test;
 
@@ -357,8 +352,33 @@ WHERE
 	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 
 \c - - - :master_port	
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
+-- Check that DROP TABLE on MX tables works
+DROP TABLE mx_colocation_test_1;
+DROP TABLE mx_colocation_test_2;
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+
+\c - - - :worker_1_port
+\d mx_colocation_test_1
+\d mx_colocation_test_2
+	
+-- Check that dropped MX table can be recreated again
+\c - - - :master_port	
+SET citus.shard_count TO 7;
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+
+DROP TABLE mx_temp_drop_test;
+
+CREATE TABLE mx_temp_drop_test (a int);
+SELECT create_distributed_table('mx_temp_drop_test', 'a');
+SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_temp_drop_test'::regclass;
+
+DROP TABLE mx_temp_drop_test;
 
 -- Cleanup
 \c - - - :worker_1_port
@@ -381,4 +401,5 @@ RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.multi_shard_commit_protocol;
 
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;

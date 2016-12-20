@@ -66,6 +66,7 @@ ALTER EXTENSION citus UPDATE TO '6.1-5';
 ALTER EXTENSION citus UPDATE TO '6.1-6';
 ALTER EXTENSION citus UPDATE TO '6.1-7';
 ALTER EXTENSION citus UPDATE TO '6.1-8';
+ALTER EXTENSION citus UPDATE TO '6.1-9';
 -- ensure no objects were created outside pg_catalog
 SELECT COUNT(*)
 FROM pg_depend AS pgd,
