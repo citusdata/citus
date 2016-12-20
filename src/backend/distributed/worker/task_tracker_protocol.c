@@ -261,12 +261,8 @@ CreateJobSchema(StringInfo schemaName)
 
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-
-	/* build a CREATE SCHEMA statement */
-	CreateSchemaStmt *createSchemaStmt = makeNode(CreateSchemaStmt);
-	createSchemaStmt->schemaname = schemaName->data;
-	createSchemaStmt->authrole = NULL;
-	createSchemaStmt->schemaElts = NIL;
+	CreateSchemaStmt *createSchemaStmt = NULL;
+	RoleSpec currentUserRole = { 0 };
 
 	/* allow schema names that start with pg_ */
 	oldAllowSystemTableMods = allowSystemTableMods;
@@ -276,7 +272,18 @@ CreateJobSchema(StringInfo schemaName)
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	/* actually create schema, and make it visible */
+	/* build a CREATE SCHEMA statement */
+	currentUserRole.type = T_RoleSpec;
+	currentUserRole.roletype = ROLESPEC_CSTRING;
+	currentUserRole.rolename = GetUserNameFromId(savedUserId, false);
+	currentUserRole.location = -1;
+
+	createSchemaStmt = makeNode(CreateSchemaStmt);
+	createSchemaStmt->schemaname = schemaName->data;
+	createSchemaStmt->authrole = (Node *) &currentUserRole;
+	createSchemaStmt->schemaElts = NIL;
+
+	/* actually create schema with the current user as owner */
 	CreateSchemaCommand(createSchemaStmt, queryString);
 	CommandCounterIncrement();
 
