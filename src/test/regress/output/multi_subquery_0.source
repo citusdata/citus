@@ -53,7 +53,7 @@ SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range')
  
 (1 row)
 
-SET citus.task_executor_type TO 'task-tracker';
+SET citus.enable_router_execution TO 'false';
 -- Check that we don't allow subquery pushdown in default settings.
 SELECT
 	avg(unit_price)
@@ -1053,4 +1053,4 @@ LIMIT
                ->  Seq Scan on pg_merge_job_270017  (cost=0.00..0.00 rows=0 width=0)
 (29 rows)
 
-SET citusdb.task_executor_type TO 'real-time';
+SET citus.enable_router_execution TO 'true';
