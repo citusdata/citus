@@ -21,7 +21,6 @@
 
 #define MAX_TASK_EXECUTION_FAILURES 3 /* allowed failure count for one task */
 #define MAX_TRACKER_FAILURE_COUNT 3   /* allowed failure count for one tracker */
-#define REMOTE_NODE_CONNECT_TIMEOUT 4000 /* async connect timeout in ms */
 #define RESERVED_FD_COUNT 64           /* file descriptors unavailable to executor */
 
 /* copy out query results */

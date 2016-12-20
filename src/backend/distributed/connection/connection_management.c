@@ -28,6 +28,7 @@
 #include "utils/memutils.h"
 
 
+int NodeConnectionTimeout = 5000;
 HTAB *ConnectionHash = NULL;
 MemoryContext ConnectionContext = NULL;
 
@@ -455,10 +456,10 @@ FinishConnectionEstablishment(MultiConnection *connection)
 
 				if (TimestampDifferenceExceeds(connection->connectionStart,
 											   GetCurrentTimestamp(),
-											   CLIENT_CONNECT_TIMEOUT_SECONDS_INT * 1000))
+											   NodeConnectionTimeout))
 				{
 					ereport(WARNING, (errmsg("could not establish connection after %u ms",
-											 CLIENT_CONNECT_TIMEOUT_SECONDS_INT * 1000)));
+											 NodeConnectionTimeout)));
 
 					/* close connection, otherwise we take up resource on the other side */
 					PQfinish(connection->pgConn);
