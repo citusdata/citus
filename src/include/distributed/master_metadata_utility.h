@@ -76,6 +76,7 @@ extern void DeleteShardRow(uint64 shardId);
 extern void InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									char shardState, uint64 shardLength,
 									char *nodeName, uint32 nodePort);
+extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern uint64 DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32
