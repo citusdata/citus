@@ -23,6 +23,7 @@
 #include "catalog/pg_namespace.h"
 #include "commands/copy.h"
 #include "commands/tablecmds.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/worker_protocol.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
@@ -74,6 +75,8 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	bool schemaExists = false;
 	List *columnNameList = NIL;
 	List *columnTypeList = NIL;
+	Oid savedUserId = InvalidOid;
+	int savedSecurityContext = 0;
 
 	/* we should have the same number of column names and types */
 	int32 columnNameCount = ArrayObjectCount(columnNameObject);
@@ -101,7 +104,13 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
 
+	/* need superuser to copy from files */
+	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
+	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+
 	CopyTaskFilesFromDirectory(jobSchemaName, taskTableName, taskDirectoryName);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	PG_RETURN_VOID();
 }
