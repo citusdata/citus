@@ -187,6 +187,35 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 
 /* wrappers around libpq functions, with command logging support */
 
+
+/*
+ * ExecuteCriticalRemoteCommand executes a remote command that is critical
+ * to the transaction. If the command fails then the transaction aborts.
+ */
+void
+ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
+{
+	int querySent = 0;
+	PGresult *result = NULL;
+	bool raiseInterrupts = true;
+
+	querySent = SendRemoteCommand(connection, command);
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, WARNING);
+	}
+
+	result = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, ERROR);
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+}
+
+
 /*
  * SendRemoteCommand is a PQsendQuery wrapper that logs remote commands, and
  * accepts a MultiConnection instead of a plain PGconn.  It makes sure it can
