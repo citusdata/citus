@@ -124,6 +124,7 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 const char *user,
 														 const char *database);
 extern MultiConnection * GetConnectionFromPGconn(struct pg_conn *pqConn);
+extern void CloseNodeConnections(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
 extern void CloseConnectionByPGconn(struct pg_conn *pqConn);
 
