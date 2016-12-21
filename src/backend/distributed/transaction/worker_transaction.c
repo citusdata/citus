@@ -20,9 +20,11 @@
 #include "access/xact.h"
 #include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
+#include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/resource_lock.h"
+#include "distributed/remote_commands.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_transaction.h"
 #include "distributed/transaction_recovery.h"
@@ -37,7 +39,6 @@ static void CompleteWorkerTransactions(XactEvent event, void *arg);
 static List * OpenWorkerTransactions(void);
 static TransactionConnection * GetWorkerTransaction(char *nodeName, int32 nodePort);
 static List * GetTargetWorkerTransactions(TargetWorkerSet targetWorkerSet);
-static bool IsResponseOK(ExecStatusType resultStatus);
 
 
 /* Global worker connection list */
@@ -147,9 +148,8 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 
 		PGconn *connection = transactionConnection->connection;
 		PGresult *result = PQgetResult(connection);
-		ExecStatusType resultStatus = PQresultStatus(result);
 
-		if (!IsResponseOK(resultStatus))
+		if (!IsResponseOK(result))
 		{
 			ReraiseRemoteError(connection, result);
 		}
@@ -172,9 +172,9 @@ void
 SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char *nodeUser,
 										   List *commandList)
 {
-	PGconn *workerConnection = NULL;
-	PGresult *queryResult = NULL;
+	MultiConnection *workerConnection = NULL;
 	ListCell *commandCell = NULL;
+	int connectionFlags = FORCE_NEW_CONNECTION;
 
 	if (XactModificationLevel > XACT_MODIFICATION_NONE)
 	{
@@ -183,66 +183,22 @@ SendCommandListToWorkerInSingleTransaction(char *nodeName, int32 nodePort, char 
 							   "command within a transaction")));
 	}
 
-	workerConnection = ConnectToNode(nodeName, nodePort, nodeUser);
-	if (workerConnection == NULL)
+	workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+													 nodeUser, NULL);
+
+	MarkRemoteTransactionCritical(workerConnection);
+	RemoteTransactionBegin(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	foreach(commandCell, commandList)
 	{
-		ereport(ERROR, (errmsg("could not open connection to %s:%d as %s",
-							   nodeName, nodePort, nodeUser)));
+		char *commandString = lfirst(commandCell);
+
+		ExecuteCriticalRemoteCommand(workerConnection, commandString);
 	}
 
-	PG_TRY();
-	{
-		/* start the transaction on the worker node */
-		queryResult = PQexec(workerConnection, "BEGIN");
-		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-		{
-			ReraiseRemoteError(workerConnection, queryResult);
-		}
-
-		PQclear(queryResult);
-
-		/* iterate over the commands and execute them in the same connection */
-		foreach(commandCell, commandList)
-		{
-			char *commandString = lfirst(commandCell);
-			ExecStatusType resultStatus = PGRES_EMPTY_QUERY;
-
-			CHECK_FOR_INTERRUPTS();
-
-			queryResult = PQexec(workerConnection, commandString);
-			resultStatus = PQresultStatus(queryResult);
-			if (!(resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
-				  resultStatus == PGRES_COMMAND_OK))
-			{
-				ReraiseRemoteError(workerConnection, queryResult);
-			}
-
-			PQclear(queryResult);
-		}
-
-		/* commit the transaction on the worker node */
-		queryResult = PQexec(workerConnection, "COMMIT");
-		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-		{
-			ReraiseRemoteError(workerConnection, queryResult);
-		}
-
-		PQclear(queryResult);
-
-		/* clear NULL result */
-		PQgetResult(workerConnection);
-
-		/* we no longer need this connection */
-		CloseConnectionByPGconn(workerConnection);
-	}
-	PG_CATCH();
-	{
-		/* close the connection */
-		CloseConnectionByPGconn(workerConnection);
-
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	RemoteTransactionCommit(workerConnection);
+	CloseConnection(workerConnection);
 }
 
 
@@ -539,20 +495,4 @@ GetTargetWorkerTransactions(TargetWorkerSet targetWorkerSet)
 	}
 
 	return targetConnectionList;
-}
-
-
-/*
- * IsResponseOK checks the resultStatus and returns true if the status is OK.
- */
-static bool
-IsResponseOK(ExecStatusType resultStatus)
-{
-	if (resultStatus == PGRES_SINGLE_TUPLE || resultStatus == PGRES_TUPLES_OK ||
-		resultStatus == PGRES_COMMAND_OK)
-	{
-		return true;
-	}
-
-	return false;
 }
