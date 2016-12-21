@@ -17,6 +17,7 @@
 
 /* Functions declarations for worker transactions */
 extern void LogPreparedTransactions(List *connectionList);
+extern void LogTransactionRecord(int groupId, char *transactionName);
 
 
 #endif /* TRANSACTION_RECOVERY_H */

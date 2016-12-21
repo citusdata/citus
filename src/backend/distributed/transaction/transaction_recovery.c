@@ -45,7 +45,6 @@ PG_FUNCTION_INFO_V1(recover_prepared_transactions);
 
 
 /* Local functions forward declarations */
-static void LogTransactionRecord(int groupId, char *transactionName);
 static int RecoverPreparedTransactions(void);
 static int RecoverWorkerTransactions(WorkerNode *workerNode);
 static List * NameListDifference(List *nameList, List *subtractList);
@@ -106,7 +105,7 @@ LogPreparedTransactions(List *connectionList)
  * prepared on a worker. The presence of this record indicates that the
  * prepared transaction should be committed.
  */
-static void
+void
 LogTransactionRecord(int groupId, char *transactionName)
 {
 	Relation pgDistTransaction = NULL;

@@ -60,3 +60,114 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
      1
 (1 row)
 
+\c - - - :master_port
+SET citus.shard_replication_factor TO 2;
+SET citus.shard_count TO 2;
+SET citus.multi_shard_commit_protocol TO '2pc';
+CREATE TABLE test_recovery (x text);
+SELECT create_distributed_table('test_recovery', 'x');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO test_recovery VALUES ('hello');
+-- Committed DDL commands should write 4 transaction recovery records
+BEGIN;
+ALTER TABLE test_recovery ADD COLUMN y text;
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+ALTER TABLE test_recovery ADD COLUMN y text;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     4
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+-- Committed master_modify_multiple_shards should write 4 transaction recovery records
+BEGIN;
+SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$); 
+ master_modify_multiple_shards 
+-------------------------------
+                             1
+(1 row)
+
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$);
+ master_modify_multiple_shards 
+-------------------------------
+                             1
+(1 row)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     4
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+-- Committed INSERT..SELECT should write 4 transaction recovery records
+BEGIN;
+INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     4
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+\c - - - :master_port
+DROP TABLE test_recovery;

@@ -16,9 +16,12 @@
 
 #include "access/xact.h"
 #include "distributed/connection_management.h"
-#include "distributed/transaction_management.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
+#include "distributed/transaction_management.h"
+#include "distributed/transaction_recovery.h"
+#include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
 
 
@@ -376,6 +379,7 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	StringInfoData command;
 	const bool raiseErrors = true;
+	WorkerNode *workerNode = NULL;
 
 	/* can't prepare a nonexistant transaction */
 	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
@@ -387,6 +391,13 @@ StartRemoteTransactionPrepare(struct MultiConnection *connection)
 	Assert(transaction->transactionState < REMOTE_TRANS_PREPARING);
 
 	Assign2PCIdentifier(connection);
+
+	/* log transactions to workers in pg_dist_transaction */
+	workerNode = FindWorkerNode(connection->hostname, connection->port);
+	if (workerNode != NULL)
+	{
+		LogTransactionRecord(workerNode->groupId, transaction->preparedName);
+	}
 
 	initStringInfo(&command);
 	appendStringInfo(&command, "PREPARE TRANSACTION '%s'",
@@ -826,7 +837,7 @@ Assign2PCIdentifier(MultiConnection *connection)
 {
 	static uint64 sequence = 0;
 	snprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
-			 "citus_%d_"UINT64_FORMAT,
+			 "citus_%d_%d_"UINT64_FORMAT, GetLocalGroupId(),
 			 MyProcPid, sequence++);
 }
 
