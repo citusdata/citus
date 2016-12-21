@@ -202,7 +202,7 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
 	querySent = SendRemoteCommand(connection, command);
 	if (querySent == 0)
 	{
-		ReportConnectionError(connection, WARNING);
+		ReportConnectionError(connection, ERROR);
 	}
 
 	result = GetRemoteCommandResult(connection, raiseInterrupts);
