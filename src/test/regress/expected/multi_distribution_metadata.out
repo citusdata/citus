@@ -300,3 +300,235 @@ SELECT COUNT(*) FROM pg_locks WHERE locktype = 'advisory' AND objid = 5;
      0
 (1 row)
 
+-- test get_shard_id_for_distribution_column
+SET citus.shard_count TO 4;
+CREATE TABLE get_shardid_test_table1(column1 int, column2 int);
+SELECT create_distributed_table('get_shardid_test_table1', 'column1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+\COPY get_shardid_test_table1 FROM STDIN with delimiter '|';
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 1);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540006
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 2);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540009
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 3);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540007
+(1 row)
+
+-- verify result of the get_shard_id_for_distribution_column
+\c - - - :worker_1_port
+SELECT * FROM get_shardid_test_table1_540006;
+ column1 | column2 
+---------+---------
+       1 |       1
+(1 row)
+
+SELECT * FROM get_shardid_test_table1_540009;
+ column1 | column2 
+---------+---------
+       2 |       2
+(1 row)
+
+SELECT * FROM get_shardid_test_table1_540007;
+ column1 | column2 
+---------+---------
+       3 |       3
+(1 row)
+
+\c - - - :master_port
+-- test non-existing value
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540007
+(1 row)
+
+-- test array type
+SET citus.shard_count TO 4;
+CREATE TABLE get_shardid_test_table2(column1 text[], column2 int);
+SELECT create_distributed_table('get_shardid_test_table2', 'column1');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+\COPY get_shardid_test_table2 FROM STDIN with delimiter '|';
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}'::text[]);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540013
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}'::text[]);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540011
+(1 row)
+
+-- verify result of the get_shard_id_for_distribution_column
+\c - - - :worker_1_port
+SELECT * FROM get_shardid_test_table2_540013;
+ column1 | column2 
+---------+---------
+ {a,b,c} |       1
+(1 row)
+
+SELECT * FROM get_shardid_test_table2_540011;
+ column1 | column2 
+---------+---------
+ {d,e,f} |       2
+(1 row)
+
+\c - - - :master_port
+-- test mismatching data type
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a'::text);
+ERROR:  invalid distribution value type
+DETAIL:  Type of the value does not match the type of the distribution column. Expected type id: 1009, given type id: 25
+-- test NULL distribution column value for hash distributed table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2');
+ERROR:  distribution value cannot be NULL for tables other than reference tables.
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', NULL);
+ERROR:  distribution value cannot be NULL for tables other than reference tables.
+-- test non-distributed table
+CREATE TABLE get_shardid_test_table3(column1 int, column2 int);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
+ERROR:  relation is not distributed
+-- test append distributed table
+SELECT create_distributed_table('get_shardid_test_table3', 'column1', 'append');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table3', 1);
+ERROR:  finding shard id of given distribution value is only supported for hash partitioned tables, range partitioned tables and reference tables.
+-- test reference table;
+CREATE TABLE get_shardid_test_table4(column1 int, column2 int);
+SELECT create_reference_table('get_shardid_test_table4');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- test NULL distribution column value for reference table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4');
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540014
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', NULL);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540014
+(1 row)
+
+-- test different data types for reference table
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 1);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540014
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a'::text);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540014
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}'::text[]);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540014
+(1 row)
+
+-- test range distributed table
+CREATE TABLE get_shardid_test_table5(column1 int, column2 int);
+SELECT create_distributed_table('get_shardid_test_table5', 'column1', 'range');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- create worker shards
+SELECT master_create_empty_shard('get_shardid_test_table5');
+ master_create_empty_shard 
+---------------------------
+                    540015
+(1 row)
+
+SELECT master_create_empty_shard('get_shardid_test_table5');
+ master_create_empty_shard 
+---------------------------
+                    540016
+(1 row)
+
+SELECT master_create_empty_shard('get_shardid_test_table5');
+ master_create_empty_shard 
+---------------------------
+                    540017
+(1 row)
+
+SELECT master_create_empty_shard('get_shardid_test_table5');
+ master_create_empty_shard 
+---------------------------
+                    540018
+(1 row)
+
+-- now the comparison is done via the partition column type, which is text
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue = 1000 WHERE shardid = 540015;
+UPDATE pg_dist_shard SET shardminvalue = 1001, shardmaxvalue = 2000 WHERE shardid = 540016;
+UPDATE pg_dist_shard SET shardminvalue = 2001, shardmaxvalue = 3000 WHERE shardid = 540017;
+UPDATE pg_dist_shard SET shardminvalue = 3001, shardmaxvalue = 4000 WHERE shardid = 540018;
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 5);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540015
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 1111);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540016
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 2689);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540017
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 3248);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                               540018
+(1 row)
+
+-- test non-existing value for range distributed tables
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', 4001);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                                    0
+(1 row)
+
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table5', -999);
+ get_shard_id_for_distribution_column 
+--------------------------------------
+                                    0
+(1 row)
+
+-- clear unnecessary tables;
+DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3, get_shardid_test_table4, get_shardid_test_table5;
