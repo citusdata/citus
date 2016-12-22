@@ -24,7 +24,119 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/worker_protocol.h"
 #include "storage/lmgr.h"
+
+
+/* local function forward declarations */
+static LOCKMODE IntToLockMode(int mode);
+
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(lock_shard_metadata);
+PG_FUNCTION_INFO_V1(lock_shard_resources);
+
+
+/*
+ * lock_shard_metadata allows the shard distribution metadata to be locked
+ * remotely to block concurrent writes from workers in MX tables.
+ *
+ * This function does not sort the array to avoid deadlock, callers
+ * must ensure a consistent order.
+ */
+Datum
+lock_shard_metadata(PG_FUNCTION_ARGS)
+{
+	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
+	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
+	Datum *shardIdArrayDatum = NULL;
+	int shardIdCount = 0;
+	int shardIdIndex = 0;
+
+	if (ARR_NDIM(shardIdArrayObject) == 0)
+	{
+		ereport(ERROR, (errmsg("no locks specified")));
+	}
+
+	/* we don't want random users to block writes */
+	EnsureSuperUser();
+
+	shardIdCount = ArrayObjectCount(shardIdArrayObject);
+	shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
+
+	for (shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
+	{
+		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
+
+		LockShardDistributionMetadata(shardId, lockMode);
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * lock_shard_resources allows shard resources  to be locked
+ * remotely to serialise non-commutative writes on shards.
+ *
+ * This function does not sort the array to avoid deadlock, callers
+ * must ensure a consistent order.
+ */
+Datum
+lock_shard_resources(PG_FUNCTION_ARGS)
+{
+	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
+	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
+	Datum *shardIdArrayDatum = NULL;
+	int shardIdCount = 0;
+	int shardIdIndex = 0;
+
+	if (ARR_NDIM(shardIdArrayObject) == 0)
+	{
+		ereport(ERROR, (errmsg("no locks specified")));
+	}
+
+	/* we don't want random users to block writes */
+	EnsureSuperUser();
+
+	shardIdCount = ArrayObjectCount(shardIdArrayObject);
+	shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
+
+	for (shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
+	{
+		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
+
+		LockShardResource(shardId, lockMode);
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * IntToLockMode verifies whether the specified integer is an accepted lock mode
+ * and returns it as a LOCKMODE enum.
+ */
+static LOCKMODE
+IntToLockMode(int mode)
+{
+	if (mode == ExclusiveLock)
+	{
+		return ExclusiveLock;
+	}
+	else if (mode == ShareLock)
+	{
+		return ShareLock;
+	}
+	else if (mode == AccessShareLock)
+	{
+		return AccessShareLock;
+	}
+	else
+	{
+		elog(ERROR, "unsupported lockmode %d", mode);
+	}
+}
 
 
 /*

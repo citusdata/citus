@@ -64,6 +64,88 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table');
                            2
 (1 row)
 
+-- lock shard metadata: take some share locks and exclusive locks
+BEGIN;
+SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);
+ lock_shard_metadata 
+---------------------
+ 
+(1 row)
+
+SELECT lock_shard_metadata(7, ARRAY[999001, 999003, 999004]);
+ lock_shard_metadata 
+---------------------
+ 
+(1 row)
+
+SELECT locktype, objid, mode, granted
+FROM pg_locks
+WHERE objid IN (999001, 999002, 999003, 999004)
+ORDER BY objid, mode;
+ locktype | objid  |     mode      | granted 
+----------+--------+---------------+---------
+ advisory | 999001 | ExclusiveLock | t
+ advisory | 999001 | ShareLock     | t
+ advisory | 999002 | ShareLock     | t
+ advisory | 999003 | ExclusiveLock | t
+ advisory | 999004 | ExclusiveLock | t
+(5 rows)
+
+END;
+-- lock shard metadata: unsupported lock type
+SELECT lock_shard_metadata(0, ARRAY[990001, 999002]);
+ERROR:  unsupported lockmode 0
+-- lock shard metadata: invalid shard ID
+SELECT lock_shard_metadata(5, ARRAY[0]);
+ lock_shard_metadata 
+---------------------
+ 
+(1 row)
+
+-- lock shard metadata: lock nothing
+SELECT lock_shard_metadata(5, ARRAY[]::bigint[]);
+ERROR:  no locks specified
+-- lock shard resources: take some share locks and exclusive locks
+BEGIN;
+SELECT lock_shard_resources(5, ARRAY[999001, 999002, 999002]);
+ lock_shard_resources 
+----------------------
+ 
+(1 row)
+
+SELECT lock_shard_resources(7, ARRAY[999001, 999003, 999004]);
+ lock_shard_resources 
+----------------------
+ 
+(1 row)
+
+SELECT locktype, objid, mode, granted
+FROM pg_locks
+WHERE objid IN (999001, 999002, 999003, 999004)
+ORDER BY objid, mode;
+ locktype | objid  |     mode      | granted 
+----------+--------+---------------+---------
+ advisory | 999001 | ExclusiveLock | t
+ advisory | 999001 | ShareLock     | t
+ advisory | 999002 | ShareLock     | t
+ advisory | 999003 | ExclusiveLock | t
+ advisory | 999004 | ExclusiveLock | t
+(5 rows)
+
+END;
+-- lock shard metadata: unsupported lock type
+SELECT lock_shard_resources(0, ARRAY[990001, 999002]);
+ERROR:  unsupported lockmode 0
+-- lock shard metadata: invalid shard ID
+SELECT lock_shard_resources(5, ARRAY[-1]);
+ lock_shard_resources 
+----------------------
+ 
+(1 row)
+
+-- lock shard metadata: lock nothing
+SELECT lock_shard_resources(5, ARRAY[]::bigint[]);
+ERROR:  no locks specified
 -- drop table
 DROP TABLE sharded_table;
 -- VACUUM tests
