@@ -38,6 +38,46 @@ SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
 -- drop all shards
 SELECT master_apply_delete_command('DELETE FROM sharded_table');
 
+-- lock shard metadata: take some share locks and exclusive locks
+BEGIN;
+SELECT lock_shard_metadata(5, ARRAY[999001, 999002, 999002]);
+SELECT lock_shard_metadata(7, ARRAY[999001, 999003, 999004]);
+
+SELECT locktype, objid, mode, granted
+FROM pg_locks
+WHERE objid IN (999001, 999002, 999003, 999004)
+ORDER BY objid, mode;
+END;
+
+-- lock shard metadata: unsupported lock type
+SELECT lock_shard_metadata(0, ARRAY[990001, 999002]);
+
+-- lock shard metadata: invalid shard ID
+SELECT lock_shard_metadata(5, ARRAY[0]);
+
+-- lock shard metadata: lock nothing
+SELECT lock_shard_metadata(5, ARRAY[]::bigint[]);
+
+-- lock shard resources: take some share locks and exclusive locks
+BEGIN;
+SELECT lock_shard_resources(5, ARRAY[999001, 999002, 999002]);
+SELECT lock_shard_resources(7, ARRAY[999001, 999003, 999004]);
+
+SELECT locktype, objid, mode, granted
+FROM pg_locks
+WHERE objid IN (999001, 999002, 999003, 999004)
+ORDER BY objid, mode;
+END;
+
+-- lock shard metadata: unsupported lock type
+SELECT lock_shard_resources(0, ARRAY[990001, 999002]);
+
+-- lock shard metadata: invalid shard ID
+SELECT lock_shard_resources(5, ARRAY[-1]);
+
+-- lock shard metadata: lock nothing
+SELECT lock_shard_resources(5, ARRAY[]::bigint[]);
+
 -- drop table
 DROP TABLE sharded_table;
 
