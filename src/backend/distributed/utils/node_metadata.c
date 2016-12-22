@@ -192,7 +192,13 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	distributionMethod = PartitionMethod(relationId);
 	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
-		shardInterval = (ShardInterval *) linitial(LoadShardIntervalList(relationId));
+		List *shardIntervalList = LoadShardIntervalList(relationId);
+		if (shardIntervalList == NIL)
+		{
+			PG_RETURN_INT64(NULL);
+		}
+
+		shardInterval = (ShardInterval *) linitial(shardIntervalList);
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
