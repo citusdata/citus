@@ -35,3 +35,51 @@ SELECT count(*) FROM pg_dist_transaction;
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 2;
+SET citus.shard_count TO 2;
+SET citus.multi_shard_commit_protocol TO '2pc';
+
+CREATE TABLE test_recovery (x text);
+SELECT create_distributed_table('test_recovery', 'x');
+INSERT INTO test_recovery VALUES ('hello');
+
+-- Committed DDL commands should write 4 transaction recovery records
+BEGIN;
+ALTER TABLE test_recovery ADD COLUMN y text;
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+
+ALTER TABLE test_recovery ADD COLUMN y text;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+SELECT count(*) FROM pg_dist_transaction;
+
+-- Committed master_modify_multiple_shards should write 4 transaction recovery records
+BEGIN;
+SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$); 
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+
+SELECT master_modify_multiple_shards($$UPDATE test_recovery SET y = 'world'$$);
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+SELECT count(*) FROM pg_dist_transaction;
+
+-- Committed INSERT..SELECT should write 4 transaction recovery records
+BEGIN;
+INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
+ROLLBACK;
+SELECT count(*) FROM pg_dist_transaction;
+
+INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+SELECT count(*) FROM pg_dist_transaction;
+
+\c - - - :master_port
+DROP TABLE test_recovery;

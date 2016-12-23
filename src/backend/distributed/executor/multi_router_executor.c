@@ -244,7 +244,7 @@ InitTransactionStateForTask(Task *task)
 {
 	ListCell *placementCell = NULL;
 
-	BeginCoordinatedTransaction();
+	BeginOrContinueCoordinatedTransaction();
 
 	xactParticipantHash = CreateXactParticipantHash();
 

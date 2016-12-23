@@ -309,6 +309,43 @@ GetConnectionFromPGconn(struct pg_conn *pqConn)
 
 
 /*
+ * CloseNodeConnections closes all the connections to a particular node.
+ * This is mainly used when a worker leaves the cluster
+ */
+void
+CloseNodeConnections(char *nodeName, int nodePort)
+{
+	HASH_SEQ_STATUS status;
+	ConnectionHashEntry *entry;
+
+	hash_seq_init(&status, ConnectionHash);
+	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		dlist_head *connections = entry->connections;
+
+		if (strcmp(entry->key.hostname, nodeName) != 0 || entry->key.port != nodePort)
+		{
+			continue;
+		}
+
+		while (!dlist_is_empty(connections))
+		{
+			dlist_node *currentNode = dlist_pop_head_node(connections);
+
+			MultiConnection *connection =
+				dlist_container(MultiConnection, connectionNode, currentNode);
+
+			/* same for transaction state */
+			CloseRemoteTransaction(connection);
+
+			/* we leave the per-host entry alive */
+			pfree(connection);
+		}
+	}
+}
+
+
+/*
  * Close a previously established connection.
  */
 void

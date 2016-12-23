@@ -23,6 +23,7 @@
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "commands/sequence.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -116,7 +117,8 @@ master_remove_node(PG_FUNCTION_ARGS)
 
 	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
-	RemoveWorkerTransaction(nodeNameString, nodePort);
+	/* make sure we don't have any open connections */
+	CloseNodeConnections(nodeNameString, nodePort);
 
 	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
 
