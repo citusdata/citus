@@ -950,7 +950,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			bool shardConnectionsFound = false;
 			ShardConnections *shardConnections = NULL;
 			List *connectionList = NIL;
-			TransactionConnection *transactionConnection = NULL;
+			MultiConnection *multiConnection = NULL;
 			PGconn *connection = NULL;
 			bool queryOK = false;
 
@@ -963,9 +963,9 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				continue;
 			}
 
-			transactionConnection =
-				(TransactionConnection *) list_nth(connectionList, placementIndex);
-			connection = transactionConnection->connection;
+			multiConnection =
+				(MultiConnection *) list_nth(connectionList, placementIndex);
+			connection = multiConnection->pgConn;
 
 			queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 			if (!queryOK)
@@ -982,7 +982,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			bool shardConnectionsFound = false;
 			ShardConnections *shardConnections = NULL;
 			List *connectionList = NIL;
-			TransactionConnection *transactionConnection = NULL;
+			MultiConnection *multiConnection = NULL;
 			PGconn *connection = NULL;
 			int64 currentAffectedTupleCount = 0;
 			bool failOnError = true;
@@ -1001,9 +1001,9 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				continue;
 			}
 
-			transactionConnection =
-				(TransactionConnection *) list_nth(connectionList, placementIndex);
-			connection = transactionConnection->connection;
+			multiConnection =
+				(MultiConnection *) list_nth(connectionList, placementIndex);
+			connection = multiConnection->pgConn;
 
 			/*
 			 * If caller is interested, store query results the first time
