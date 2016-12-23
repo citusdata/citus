@@ -91,6 +91,8 @@ extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
 
 
+extern bool SchemaNode(void);
+
 /* Function declarations local to the distributed module */
 extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
@@ -112,6 +114,8 @@ extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 							  List *ddlCommandList, List *foreignConstraintCommadList);
 extern Oid ForeignConstraintGetReferencedTableId(char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
+extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,
+										char **tableName);
 
 /* Function declarations for generating metadata for shard and placement creation */
 extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);

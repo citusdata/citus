@@ -38,9 +38,11 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodeFuncs.h"
@@ -79,8 +81,7 @@ static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  char replicationModel);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 									   char *colocateWithTableName,
-									   int shardCount, int replicationFactor,
-									   char replicationModel);
+									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
 
 
@@ -172,8 +173,23 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	/* use configuration values for shard count and shard replication factor */
 	CreateHashDistributedTable(relationId, distributionColumnName,
 							   colocateWithTableName, ShardCount,
-							   ShardReplicationFactor,
-							   REPLICATION_MODEL_COORDINATOR);
+							   ShardReplicationFactor);
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		List *commandList = GetDistributedTableDDLEvents(relationId);
+		ListCell *commandCell = NULL;
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		foreach(commandCell, commandList)
+		{
+			char *command = (char *) lfirst(commandCell);
+
+			SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+		}
+	}
 
 	PG_RETURN_VOID();
 }
@@ -953,16 +969,27 @@ CreateTruncateTrigger(Oid relationId)
 static void
 CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 						   char *colocateWithTableName, int shardCount,
-						   int replicationFactor, char replicationModel)
+						   int replicationFactor)
 {
 	Relation distributedRelation = NULL;
 	Relation pgDistColocation = NULL;
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
+	char replicationModel = 0;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
 	distributedRelation = relation_open(relationId, AccessShareLock);
+
+	/* all hash-distributed tables with repfactor=1 are treated as MX tables */
+	if (replicationFactor == 1)
+	{
+		replicationModel = REPLICATION_MODEL_STREAMING;
+	}
+	else
+	{
+		replicationModel = REPLICATION_MODEL_COORDINATOR;
+	}
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
@@ -1004,7 +1031,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 	/* create distributed table metadata */
 	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
-							  colocationId, REPLICATION_MODEL_COORDINATOR);
+							  colocationId, replicationModel);
 
 	/* create shards */
 	if (sourceRelationId != InvalidOid)

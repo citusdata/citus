@@ -111,3 +111,28 @@ CREATE TABLE supplier_single_shard
   	s_comment varchar(101) not null
 );
 SELECT master_create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
+
+-- Show that when a hash distributed table with replication factor=1 is created, it 
+-- automatically marked as streaming replicated
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT create_distributed_table('mx_table_test', 'col1');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+DROP TABLE mx_table_test; 
+
+-- Show that it is not possible to create an mx table with the old 
+-- master_create_distributed_table function
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT master_create_distributed_table('mx_table_test', 'col1', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+DROP TABLE mx_table_test;
+
+-- Show that when replication factor > 1 the table is created as coordinator-replicated
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE mx_table_test (col1 int, col2 text);
+SELECT create_distributed_table('mx_table_test', 'col1');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
+DROP TABLE mx_table_test; 
+
+SET citus.shard_replication_factor TO default;
