@@ -1129,6 +1129,7 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 		task->taskType = SQL_TASK;
 		task->queryString = pstrdup(vacuumString->data);
 		task->dependedTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 
@@ -2097,6 +2098,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->taskId = taskId++;
 		task->taskType = SQL_TASK;
 		task->queryString = applyCommand->data;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependedTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
@@ -2161,6 +2163,7 @@ ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 		task->taskType = SQL_TASK;
 		task->queryString = applyCommand->data;
 		task->dependedTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = leftShardId;
 		task->taskPlacementList = FinalizedShardPlacementList(leftShardId);
 

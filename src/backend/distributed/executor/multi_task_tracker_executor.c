@@ -30,6 +30,7 @@
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "storage/fd.h"
 #include "utils/builtins.h"
@@ -2764,6 +2765,7 @@ JobCleanupTask(uint64 jobId)
 	jobCleanupTask = CitusMakeNode(Task);
 	jobCleanupTask->jobId = jobId;
 	jobCleanupTask->taskId = JOB_CLEANUP_TASK_ID;
+	jobCleanupTask->replicationModel = REPLICATION_MODEL_INVALID;
 	jobCleanupTask->queryString = jobCleanupQuery->data;
 
 	return jobCleanupTask;
