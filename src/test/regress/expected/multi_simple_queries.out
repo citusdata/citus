@@ -93,8 +93,12 @@ INSERT INTO articles_single_shard VALUES (50, 10, 'anjanette', 19519);
 -- zero-shard modifications should fail
 UPDATE articles SET title = '' WHERE author_id = 1 AND author_id = 2;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies no shards.
+HINT:  Consider using an equality filter on partition column "author_id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 DELETE FROM articles WHERE author_id = 1 AND author_id = 2;
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies no shards.
+HINT:  Consider using an equality filter on partition column "author_id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 -- single-shard tests
 -- test simple select for a single row
 SELECT * FROM articles WHERE author_id = 10 AND id = 50;

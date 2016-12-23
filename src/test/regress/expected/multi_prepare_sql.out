@@ -751,6 +751,8 @@ EXECUTE prepared_partition_parameter_update(5, 51);
 -- This fails with an unexpected error message
 EXECUTE prepared_partition_parameter_update(5, 52);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 PREPARE prepared_non_partition_parameter_update(int, int) AS
 	UPDATE prepare_table SET value = $2 WHERE key = 0 AND value = $1;
 -- execute 6 times to trigger prepared statement usage
@@ -799,6 +801,8 @@ EXECUTE prepared_partition_parameter_delete(5, 51);
 -- This fails with an unexpected error message
 EXECUTE prepared_partition_parameter_delete(0, 10);
 ERROR:  distributed modifications must target exactly one shard
+DETAIL:  This command modifies all shards.
+HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
 PREPARE prepared_non_partition_parameter_delete(int) AS
 	DELETE FROM prepare_table WHERE key = 0 AND value = $1;
 -- execute 6 times to trigger prepared statement usage
