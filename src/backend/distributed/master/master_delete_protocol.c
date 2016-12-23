@@ -196,45 +196,16 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *relationNameText = PG_GETARG_TEXT_P(2);
 
-	char *schemaName = NULL;
-	char *relationName = NULL;
 	bool isTopLevel = true;
 	List *shardIntervalList = NIL;
 	int droppedShardCount = 0;
 
+	char *schemaName = text_to_cstring(schemaNameText);
+	char *relationName = text_to_cstring(relationNameText);
+
 	PreventTransactionChain(isTopLevel, "DROP distributed table");
 
-	relationName = get_rel_name(relationId);
-
-	if (relationName != NULL)
-	{
-		/* ensure proper values are used if the table exists */
-		Oid schemaId = get_rel_namespace(relationId);
-		schemaName = get_namespace_name(schemaId);
-
-		/*
-		 * Only allow the owner to drop all shards, this is more akin to DDL
-		 * than DELETE.
-		 */
-		EnsureTableOwner(relationId);
-	}
-	else
-	{
-		/* table has been dropped, rely on user-supplied values */
-		schemaName = text_to_cstring(schemaNameText);
-		relationName = text_to_cstring(relationNameText);
-
-		/*
-		 * Verify that this only is run as superuser - that's how it's used in
-		 * our drop event trigger, and we can't verify permissions for an
-		 * already dropped relation.
-		 */
-		if (!superuser())
-		{
-			ereport(ERROR, (errmsg("cannot drop all shards of a dropped table as "
-								   "non-superuser")));
-		}
-	}
+	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
 	shardIntervalList = LoadShardIntervalList(relationId);
 	droppedShardCount = DropShards(relationId, schemaName, relationName,
@@ -296,6 +267,35 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_BOOL(dropSuccessful);
+}
+
+
+/*
+ * CheckTableSchemaNameForDrop errors out if the current user does not
+ * have permission to undistribute the given relation, taking into
+ * account that it may be called from the drop trigger. If the table exists,
+ * the function rewrites the given table and schema name.
+ */
+void
+CheckTableSchemaNameForDrop(Oid relationId, char **schemaName, char **tableName)
+{
+	char *tempTableName = get_rel_name(relationId);
+
+	if (tempTableName != NULL)
+	{
+		/* ensure proper values are used if the table exists */
+		Oid schemaId = get_rel_namespace(relationId);
+		(*schemaName) = get_namespace_name(schemaId);
+		(*tableName) = tempTableName;
+
+		EnsureTableOwner(relationId);
+	}
+	else if (!superuser())
+	{
+		/* table does not exist, must be called from drop trigger */
+		ereport(ERROR, (errmsg("cannot drop distributed table metadata as a "
+							   "non-superuser")));
+	}
 }
 
 

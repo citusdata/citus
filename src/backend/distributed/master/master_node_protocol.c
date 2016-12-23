@@ -848,6 +848,17 @@ ShardStorageType(Oid relationId)
 
 
 /*
+ * SchemaNode function returns true if this node is identified as the
+ * schema/coordinator/master node of the cluster.
+ */
+bool
+SchemaNode(void)
+{
+	return (GetLocalGroupId() == 0);
+}
+
+
+/*
  * WorkerNodeGetDatum converts the worker node passed to it into its datum
  * representation. To do this, the function first creates the heap tuple from
  * the worker node name and port. Then, the function converts the heap tuple

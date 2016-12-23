@@ -1377,6 +1377,7 @@ GetLocalGroupId(void)
 	TupleDesc tupleDescriptor = NULL;
 	Oid groupId = InvalidOid;
 	Relation pgDistLocalGroupId = NULL;
+	Oid localGroupTableOid = InvalidOid;
 
 	/*
 	 * Already set the group id, no need to read the heap again.
@@ -1386,7 +1387,13 @@ GetLocalGroupId(void)
 		return LocalGroupId;
 	}
 
-	pgDistLocalGroupId = heap_open(DistLocalGroupIdRelationId(), AccessShareLock);
+	localGroupTableOid = get_relname_relid("pg_dist_local_group", PG_CATALOG_NAMESPACE);
+	if (localGroupTableOid == InvalidOid)
+	{
+		return 0;
+	}
+
+	pgDistLocalGroupId = heap_open(localGroupTableOid, AccessShareLock);
 
 	scanDescriptor = systable_beginscan(pgDistLocalGroupId,
 										InvalidOid, false,

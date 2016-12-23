@@ -29,9 +29,6 @@
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 
 
-static void DeletePartitionRow(Oid distributedRelationId);
-
-
 /*
  * worker_drop_distributed_table drops the distributed table with the given oid,
  * then, removes the associated rows from pg_dist_partition, pg_dist_shard and
@@ -132,47 +129,4 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	DeletePartitionRow(relationId);
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * DeletePartitionRow removes the row from pg_dist_partition where the logicalrelid
- * field equals to distributedRelationId. Then, the function invalidates the
- * metadata cache.
- */
-void
-DeletePartitionRow(Oid distributedRelationId)
-{
-	Relation pgDistPartition = NULL;
-	HeapTuple heapTuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-
-	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
-
-	scanDescriptor = systable_beginscan(pgDistPartition, InvalidOid, false, NULL,
-										scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for partition %d",
-							   distributedRelationId)));
-	}
-
-	simple_heap_delete(pgDistPartition, &heapTuple->t_self);
-
-	systable_endscan(scanDescriptor);
-
-	/* invalidate the cache */
-	CitusInvalidateRelcacheByRelid(distributedRelationId);
-
-	/* increment the counter so that next command can see the row */
-	CommandCounterIncrement();
-
-	heap_close(pgDistPartition, RowExclusiveLock);
 }
