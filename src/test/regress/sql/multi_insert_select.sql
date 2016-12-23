@@ -56,6 +56,89 @@ WHERE
 -- see that we get unique vialitons
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
 
+-- stable functions should be allowed
+INSERT INTO raw_events_second (user_id, time)
+SELECT
+  user_id, now()
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+
+INSERT INTO raw_events_second (user_id)
+SELECT
+  user_id
+FROM
+  raw_events_first
+WHERE
+  time > now() + interval '1 day';
+
+-- hide version-dependent PL/pgSQL context messages
+\set VERBOSITY terse
+
+-- make sure we evaluate stable functions on the master, once
+CREATE OR REPLACE FUNCTION evaluate_on_master()
+RETURNS int LANGUAGE plpgsql STABLE
+AS $function$
+BEGIN
+  RAISE NOTICE 'evaluating on master';
+  RETURN 0;
+END;
+$function$;
+
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, evaluate_on_master()
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+
+-- make sure stable functions in CTEs are evaluated
+INSERT INTO raw_events_second (user_id, value_1)
+WITH sub_cte AS (SELECT evaluate_on_master())
+SELECT
+  user_id, (SELECT * FROM sub_cte)
+FROM
+  raw_events_first
+WHERE
+  user_id < 0;
+
+-- make sure we don't evaluate stable functions with column arguments
+CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
+RETURNS int LANGUAGE plpgsql STABLE
+AS $function$
+BEGIN
+  RAISE NOTICE 'evaluating on master';
+  RETURN x;
+END;
+$function$;
+
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, evaluate_on_master(value_1)
+FROM
+  raw_events_first
+WHERE
+  user_id = 0;
+
+\set VERBOSITY default
+
+-- volatile functions should be disallowed
+INSERT INTO raw_events_second (user_id, value_1)
+SELECT
+  user_id, (random()*10)::int
+FROM
+  raw_events_first;
+
+INSERT INTO raw_events_second (user_id, value_1)
+WITH sub_cte AS (SELECT (random()*10)::int)
+SELECT
+  user_id, (SELECT * FROM sub_cte)
+FROM
+  raw_events_first;
+
+
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
@@ -824,5 +907,37 @@ FROM
 GROUP BY
   last_name, store_id, first_name, default_2;
 
--- set back to the default
-SET citus.shard_count TO DEFAULT;
+RESET client_min_messages;
+
+-- Stable function in default should be allowed
+ALTER TABLE table_with_defaults ADD COLUMN t timestamptz DEFAULT now();
+
+INSERT INTO table_with_defaults (store_id, first_name, last_name)
+SELECT
+  store_id, 'first '||store_id, 'last '||store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id, first_name, last_name;
+
+-- Volatile function in default should be disallowed
+CREATE TABLE table_with_serial (
+  store_id int,
+  s bigserial
+);
+SELECT create_distributed_table('table_with_serial', 'store_id');
+
+INSERT INTO table_with_serial (store_id)
+SELECT
+  store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id;
+
+DROP TABLE raw_events_first CASCADE;
+DROP TABLE raw_events_second;
+DROP TABLE reference_table;
+DROP TABLE agg_events;
+DROP TABLE table_with_defaults;
+DROP TABLE table_with_serial;

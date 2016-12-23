@@ -334,7 +334,6 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  predicate pruning for shardId 840000
-DEBUG:  Found no worker with all shard placements
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Complex table expressions are currently unsupported
 -- recursive CTEs are supported when filtered on partition column
@@ -420,8 +419,7 @@ DEBUG:  predicate pruning for shardId 840006
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Complex table expressions are currently unsupported
 -- logically wrong query, query involves different shards
--- from the same table, but still router plannable due to
--- shard being placed on the same worker.
+-- from the same table
 WITH RECURSIVE hierarchy as (
 	SELECT *, 1 AS level
 		FROM company_employees
@@ -439,13 +437,8 @@ DEBUG:  predicate pruning for shardId 840006
 DEBUG:  predicate pruning for shardId 840003
 DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
-DEBUG:  Creating router plan
-DEBUG:  Plan is router executable
- company_id | employee_id | manager_id | level 
-------------+-------------+------------+-------
-          3 |           1 |          0 |     1
-(1 row)
-
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Complex table expressions are currently unsupported
 -- grouping sets are supported on single shard
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)

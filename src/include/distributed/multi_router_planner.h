@@ -37,5 +37,10 @@ extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *subqueryRte);
 extern bool InsertSelectQuery(Query *query);
 extern Oid ExtractFirstDistributedTableId(Query *query);
+extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
+extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
+extern void AddShardIntervalRestrictionToSelect(Query *subqery,
+												ShardInterval *shardInterval);
+
 
 #endif /* MULTI_ROUTER_PLANNER_H */

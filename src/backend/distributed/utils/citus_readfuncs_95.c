@@ -1515,6 +1515,8 @@ CitusParseNodeString(void)
 		return_value = ReadMapMergeJob();
 	else if (MATCH("SHARDPLACEMENT", 14))
 		return_value = ReadShardPlacement();
+	else if (MATCH("RELATIONSHARD", 13))
+		return_value = ReadRelationShard();
 	else if (MATCH("TASK", 4))
 		return_value = ReadTask();
 /* XXX: END Citus Nodes */
