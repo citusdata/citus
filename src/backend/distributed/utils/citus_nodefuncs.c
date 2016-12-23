@@ -14,6 +14,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_planner.h"
 
 static const char *CitusNodeTagNamesD[] = {
 	"MultiNode",
@@ -31,7 +32,8 @@ static const char *CitusNodeTagNamesD[] = {
 	"MultiPlan",
 	"Task",
 	"ShardInterval",
-	"ShardPlacement"
+	"ShardPlacement",
+	"RelationShard"
 };
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
@@ -379,6 +381,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(ShardInterval),
 	DEFINE_NODE_METHODS(MapMergeJob),
 	DEFINE_NODE_METHODS(ShardPlacement),
+	DEFINE_NODE_METHODS(RelationShard),
 	DEFINE_NODE_METHODS(Task),
 
 	/* nodes with only output support */

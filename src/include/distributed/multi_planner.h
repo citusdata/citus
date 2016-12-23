@@ -13,6 +13,8 @@
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
 
+#include "distributed/citus_nodes.h"
+
 
 /* values used by jobs and tasks which do not require identifiers */
 #define INVALID_JOB_ID 0
@@ -37,6 +39,13 @@ typedef struct RelationRestriction
 	PlannerInfo *plannerInfo;
 	List *prunedShardIntervalList;
 } RelationRestriction;
+
+typedef struct RelationShard
+{
+	CitusNode type;
+	Oid relationId;
+	uint64 shardId;
+} RelationShard;
 
 
 extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,

@@ -15,6 +15,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_planner.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
@@ -118,6 +119,43 @@ CompareShardIntervalsById(const void *leftElement, const void *rightElement)
 
 	/* we compare 64-bit integers, instead of casting their difference to int */
 	if (leftShardId > rightShardId)
+	{
+		return 1;
+	}
+	else if (leftShardId < rightShardId)
+	{
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+
+/*
+ * CompareRelationShards is a comparison function for sorting relation
+ * to shard mappings by their relation ID and then shard ID.
+ */
+int
+CompareRelationShards(const void *leftElement, const void *rightElement)
+{
+	RelationShard *leftRelationShard = *((RelationShard **) leftElement);
+	RelationShard *rightRelationShard = *((RelationShard **) rightElement);
+	Oid leftRelationId = leftRelationShard->relationId;
+	Oid rightRelationId = rightRelationShard->relationId;
+	int64 leftShardId = leftRelationShard->shardId;
+	int64 rightShardId = rightRelationShard->shardId;
+
+	if (leftRelationId > rightRelationId)
+	{
+		return 1;
+	}
+	else if (leftRelationId < rightRelationId)
+	{
+		return -1;
+	}
+	else if (leftShardId > rightShardId)
 	{
 		return 1;
 	}
