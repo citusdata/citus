@@ -223,7 +223,9 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
  * an additional memory allocation).
  */
 int
-SendRemoteCommand(MultiConnection *connection, const char *command)
+SendRemoteCommandParams(MultiConnection *connection, const char *command,
+						int parameterCount, const Oid *parameterTypes,
+						const char *const *parameterValues)
 {
 	PGconn *pgConn = connection->pgConn;
 	bool wasNonblocking = PQisnonblocking(pgConn);
@@ -237,7 +239,8 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 		PQsetnonblocking(pgConn, true);
 	}
 
-	rc = PQsendQuery(pgConn, command);
+	rc = PQsendQueryParams(pgConn, command, parameterCount, parameterTypes,
+						   parameterValues, NULL, NULL, 0);
 
 	/* reset nonblocking connection to its original state */
 	if (!wasNonblocking)
@@ -246,6 +249,19 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 	}
 
 	return rc;
+}
+
+
+/*
+ * SendRemoteCommand is a PQsendQuery wrapper that logs remote commands, and
+ * accepts a MultiConnection instead of a plain PGconn.  It makes sure it can
+ * send commands asynchronously without blocking (at the potential expense of
+ * an additional memory allocation).
+ */
+int
+SendRemoteCommand(MultiConnection *connection, const char *command)
+{
+	return SendRemoteCommandParams(connection, command, 0, NULL, NULL);
 }
 
 
