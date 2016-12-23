@@ -146,6 +146,11 @@ typedef struct MapMergeJob
  * fetch tasks. We also forward declare the task execution struct here to avoid
  * including the executor header files.
  *
+ * We currently do not take replication model into account for tasks other
+ * than modifications. When it is set to REPLICATION_MODEL_2PC, the execution
+ * of the modification task is done with two-phase commit. Set it to
+ * REPLICATION_MODEL_INVALID if it is not relevant for the task.
+ *
  * NB: Changing this requires also changing _outTask in citus_outfuncs and _readTask
  * in citus_readfuncs to correctly (de)serialize this struct.
  */
@@ -169,6 +174,7 @@ typedef struct Task
 	uint64 shardId;                /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
+	char replicationModel;         /* only applies to modify tasks */
 
 	bool insertSelectQuery;
 	List *relationShardList;       /* only applies INSERT/SELECT tasks */

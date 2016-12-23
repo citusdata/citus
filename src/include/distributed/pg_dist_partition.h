@@ -55,10 +55,15 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
 #define DISTRIBUTE_BY_NONE 'n'
 #define REDISTRIBUTE_BY_HASH 'x'
 
-/* valid values for repmodel are 'c' for coordinator and 's' for streaming */
+/*
+ * Valid values for repmodel are 'c' for coordinator, 's' for streaming
+ * and 't' for two-phase-commit. We also use an invalid replication model
+ * ('i') for distinguishing uninitialized variables where necessary.
+ */
 #define REPLICATION_MODEL_COORDINATOR 'c'
 #define REPLICATION_MODEL_STREAMING 's'
 #define REPLICATION_MODEL_2PC 't'
+#define REPLICATION_MODEL_INVALID 'i'
 
 
 #endif   /* PG_DIST_PARTITION_H */

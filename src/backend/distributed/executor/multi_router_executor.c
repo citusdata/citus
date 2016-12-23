@@ -95,6 +95,7 @@ static HTAB * CreateXactParticipantHash(void);
 static void ReacquireMetadataLocks(List *taskList);
 static bool ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 							  bool isModificationQuery, bool expectResults);
+static void GetPlacementConnectionsReadyForTwoPhaseCommit(List *taskPlacementList);
 static void ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
@@ -717,6 +718,7 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 	int64 affectedTupleCount = -1;
 	bool gotResults = false;
 	char *queryString = task->queryString;
+	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
 
 	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
 	{
@@ -724,6 +726,22 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 						errmsg("single-shard DML commands must not appear in "
 							   "transaction blocks which contain multi-shard data "
 							   "modifications")));
+	}
+
+	/*
+	 * Firstly ensure that distributed transaction is started. Then, force
+	 * the transaction manager to use 2PC while running the task on the placements.
+	 */
+	if (taskRequiresTwoPhaseCommit)
+	{
+		BeginOrContinueCoordinatedTransaction();
+		CoordinatedTransactionUse2PC();
+
+		/*
+		 * Mark connections for all placements as critical and establish connections
+		 * to all placements at once.
+		 */
+		GetPlacementConnectionsReadyForTwoPhaseCommit(taskPlacementList);
 	}
 
 	/*
@@ -766,6 +784,9 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 			failedPlacementList = lappend(failedPlacementList, taskPlacement);
 			continue;
 		}
+
+		/* if we're running a 2PC, the query should fail on error */
+		failOnError = taskRequiresTwoPhaseCommit;
 
 		/*
 		 * If caller is interested, store query results the first time
@@ -838,11 +859,17 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 			ereport(ERROR, (errmsg("could not modify any active placements")));
 		}
 
-		/* otherwise, mark failed placements as inactive: they're stale */
+		/*
+		 * Otherwise, mark failed placements as inactive: they're stale. Note that
+		 * connections for tasks that require 2PC has already failed the whole transaction
+		 * and there is no way that they're marked stale here.
+		 */
 		foreach(failedPlacementCell, failedPlacementList)
 		{
 			ShardPlacement *failedPlacement =
 				(ShardPlacement *) lfirst(failedPlacementCell);
+
+			Assert(!taskRequiresTwoPhaseCommit);
 
 			UpdateShardPlacementState(failedPlacement->placementId, FILE_INACTIVE);
 		}
@@ -851,6 +878,38 @@ ExecuteSingleTask(QueryDesc *queryDesc, Task *task,
 	}
 
 	return resultsOK;
+}
+
+
+/*
+ * GetPlacementConnectionsReadyForTwoPhaseCommit iterates over the task placement list,
+ * starts the connections to the nodes and marks them critical. In the second iteration,
+ * the connection establishments are finished. Finally, BEGIN commands are sent,
+ * if necessary.
+ */
+static void
+GetPlacementConnectionsReadyForTwoPhaseCommit(List *taskPlacementList)
+{
+	ListCell *taskPlacementCell = NULL;
+	List *multiConnectionList = NIL;
+
+	/* in the first iteration start the connections */
+	foreach(taskPlacementCell, taskPlacementList)
+	{
+		ShardPlacement *taskPlacement = (ShardPlacement *) lfirst(taskPlacementCell);
+		int connectionFlags = SESSION_LIFESPAN;
+		MultiConnection *multiConnection = StartNodeConnection(connectionFlags,
+															   taskPlacement->nodeName,
+															   taskPlacement->nodePort);
+
+		MarkRemoteTransactionCritical(multiConnection);
+
+		multiConnectionList = lappend(multiConnectionList, multiConnection);
+	}
+
+	FinishConnectionListEstablishment(multiConnectionList);
+
+	RemoteTransactionsBeginIfNecessary(multiConnectionList);
 }
 
 

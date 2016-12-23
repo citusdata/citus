@@ -409,6 +409,27 @@ CloseConnectionByPGconn(PGconn *pqConn)
 
 
 /*
+ * FinishConnectionListEstablishment is a wrapper around FinishConnectionEstablishment.
+ * The function iterates over the multiConnectionList and finishes the connection
+ * establishment for each multi connection.
+ */
+void
+FinishConnectionListEstablishment(List *multiConnectionList)
+{
+	ListCell *multiConnectionCell = NULL;
+
+	foreach(multiConnectionCell, multiConnectionList)
+	{
+		MultiConnection *multiConnection = (MultiConnection *) lfirst(
+			multiConnectionCell);
+
+		/* TODO: consider making connection establishment fully in parallel */
+		FinishConnectionEstablishment(multiConnection);
+	}
+}
+
+
+/*
  * Synchronously finish connection establishment of an individual connection.
  *
  * TODO: Replace with variant waiting for multiple connections.

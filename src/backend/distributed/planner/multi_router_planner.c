@@ -326,6 +326,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
 	RelationRestrictionContext *copiedRestrictionContext =
 		CopyRelationRestrictionContext(restrictionContext);
@@ -460,6 +461,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->upsertQuery = upsertQuery;
 	modifyTask->relationShardList = relationShardList;
+	modifyTask->replicationModel = cacheEntry->replicationModel;
 
 	return modifyTask;
 }
@@ -1640,9 +1642,11 @@ RouterModifyTask(Query *originalQuery, Query *query)
 {
 	ShardInterval *shardInterval = TargetShardIntervalForModify(query);
 	uint64 shardId = shardInterval->shardId;
+	Oid distributedTableId = shardInterval->relationId;
 	StringInfo queryString = makeStringInfo();
 	Task *modifyTask = NULL;
 	bool upsertQuery = false;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -1674,6 +1678,7 @@ RouterModifyTask(Query *originalQuery, Query *query)
 	modifyTask->anchorShardId = shardId;
 	modifyTask->dependedTaskList = NIL;
 	modifyTask->upsertQuery = upsertQuery;
+	modifyTask->replicationModel = cacheEntry->replicationModel;
 
 	return modifyTask;
 }
@@ -2017,6 +2022,7 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	task->taskType = ROUTER_TASK;
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
+	task->replicationModel = REPLICATION_MODEL_INVALID;
 	task->dependedTaskList = NIL;
 	task->upsertQuery = upsertQuery;
 	task->relationShardList = relationShardList;
