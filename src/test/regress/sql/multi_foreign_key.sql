@@ -449,3 +449,42 @@ SELECT * FROM self_referencing_table2;
 
 -- we no longer need those tables
 DROP TABLE self_referencing_table2;
+
+
+-- test reference tables
+-- test foreign key creation on CREATE TABLE from reference table
+CREATE TABLE referenced_by_reference_table(id int PRIMARY KEY, other_column int);
+SELECT create_distributed_table('referenced_by_reference_table', 'id');
+
+CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_by_reference_table(id));
+SELECT create_reference_table('reference_table');
+
+-- test foreign key creation on CREATE TABLE to reference table
+DROP TABLE reference_table;
+CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
+SELECT create_reference_table('reference_table');
+
+CREATE TABLE references_to_reference_table(id int, referencing_column int REFERENCES reference_table(id));
+SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
+
+-- test foreign key creation on CREATE TABLE from + to reference table
+CREATE TABLE reference_table2(id int, referencing_column int REFERENCES reference_table(id));
+SELECT create_reference_table('reference_table2');
+
+-- test foreign key creation on ALTER TABLE from reference table
+ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
+
+-- test foreign key creation on ALTER TABLE to reference table
+DROP TABLE references_to_reference_table;
+CREATE TABLE references_to_reference_table(id int, referencing_column int);
+SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
+ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+
+-- test foreign key creation on ALTER TABLE from + to reference table
+DROP TABLE reference_table2;
+CREATE TABLE reference_table2(id int, referencing_column int);
+SELECT create_reference_table('reference_table2');
+ALTER TABLE reference_table2 ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+
+-- we no longer need those tables
+DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table2;

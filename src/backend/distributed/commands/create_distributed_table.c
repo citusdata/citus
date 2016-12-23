@@ -408,12 +408,14 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 	List *indexOidList = NULL;
 	ListCell *indexOidCell = NULL;
 
+	/* we first perform check for foreign constraints */
+	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
+										 colocationId);
+
 	/*
 	 * Citus supports any kind of uniqueness constraints for reference tables
 	 * given that they only consist of a single shard and we can simply rely on
 	 * Postgres.
-	 * TODO: Here we should be erroring out if there exists any foreign keys
-	 * from/to a reference table.
 	 */
 	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
@@ -499,10 +501,6 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 
 		index_close(indexDesc, NoLock);
 	}
-
-	/* we also perform check for foreign constraints */
-	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
-										 colocationId);
 }
 
 
@@ -560,6 +558,19 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 			continue;
 		}
 
+		referencedTableId = constraintForm->confrelid;
+
+		/* we do not support foreign keys for reference tables */
+		if (distributionMethod == DISTRIBUTE_BY_NONE ||
+			(relation->rd_id != referencedTableId &&
+			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Foreign key constraints are not allowed from or "
+									  "to reference tables.")));
+		}
+
 		/*
 		 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
 		 * not want to set partition column to NULL or default value.
@@ -588,8 +599,6 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 							errdetail("SET NULL, SET DEFAULT or CASCADE is not"
 									  " supported in ON UPDATE operation.")));
 		}
-
-		referencedTableId = constraintForm->confrelid;
 
 		/*
 		 * Some checks are not meaningful if foreign key references the table itself.

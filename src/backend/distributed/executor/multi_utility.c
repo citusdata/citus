@@ -1494,6 +1494,23 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									errhint("You can issue each subcommand separately")));
 				}
 
+				referencingTableId = RangeVarGetRelid(alterTableStatement->relation,
+													  lockmode,
+													  alterTableStatement->missing_ok);
+				referencedTableId = RangeVarGetRelid(constraint->pktable, lockmode,
+													 alterTableStatement->missing_ok);
+
+				/* we do not support foreign keys for reference tables */
+				if (PartitionMethod(referencingTableId) == DISTRIBUTE_BY_NONE ||
+					PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint"),
+									errdetail(
+										"Foreign key constraints are not allowed from or "
+										"to reference tables.")));
+				}
+
 				/*
 				 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because
 				 * we do not want to set partition column to NULL or default value.
@@ -1538,12 +1555,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 
 				/* to enforce foreign constraints, tables must be co-located */
-				referencingTableId = RangeVarGetRelid(alterTableStatement->relation,
-													  lockmode,
-													  alterTableStatement->missing_ok);
-				referencedTableId = RangeVarGetRelid(constraint->pktable, lockmode,
-													 alterTableStatement->missing_ok);
-
 				if (!TablesColocated(referencingTableId, referencedTableId))
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
