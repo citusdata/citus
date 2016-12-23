@@ -32,7 +32,12 @@ extern void ReportResultError(MultiConnection *connection, struct pg_result *res
 extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 
 /* wrappers around libpq functions, with command logging support */
+extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
+										 const char *command);
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
+extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
+								   int parameterCount, const Oid *parameterTypes,
+								   const char *const *parameterValues);
 extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
 												 bool raiseInterrupts);
 
