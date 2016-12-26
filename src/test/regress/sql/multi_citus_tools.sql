@@ -7,18 +7,14 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1240000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1240000;
 
--- the function is not exposed explicitly, create the entry point
-CREATE OR REPLACE FUNCTION master_run_on_worker(worker_name text[], port integer[],
-												command text[],
-												parallel boolean default false,
-												OUT node_name text, OUT node_port integer,
-												OUT success boolean, OUT result text)
-	RETURNS SETOF record
-	LANGUAGE C STABLE STRICT
-	AS 'citus.so', $$master_run_on_worker$$;
-
 -- test with invalid port, prevent OS dependent warning from being displayed
 SET client_min_messages to ERROR;
+-- PG 9.5 does not show context for plpgsql raise
+-- message whereas PG 9.6 shows. disabling it 
+-- for this test only to have consistent behavior
+-- b/w PG 9.6+ and PG 9.5. 
+\set SHOW_CONTEXT never
+
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
 								   false);
@@ -208,9 +204,66 @@ SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]:
 SELECT * FROM master_run_on_worker(ARRAY[:node_name]::text[], ARRAY[:node_port]::int[],
 								   ARRAY['select count(*) from second_table']::text[],
 								   true);
+-- run_command_on_XXX tests
+SELECT * FROM run_command_on_workers('select 1') ORDER BY 2 ASC;
+SELECT * FROM run_command_on_workers('select count(*) from pg_dist_partition') ORDER BY 2 ASC;
 
--- drop the function after use
-DROP FUNCTION master_run_on_worker(worker_name text[], port integer[], command text[],
-						  parallel boolean, OUT node_name text, OUT node_port integer,
-						  OUT success boolean, OUT result text);
+-- make sure run_on_all_placements respects shardstate
+CREATE TABLE check_placements (key int);
+SELECT master_create_distributed_table('check_placements', 'key', 'hash');
+SELECT master_create_worker_shards('check_placements', 5, 2);
+SELECT * FROM run_command_on_placements('check_placements', 'select 1');
+UPDATE pg_dist_shard_placement SET shardstate = 3
+	WHERE shardid % 2 = 0 AND nodeport = :worker_1_port;
+SELECT * FROM run_command_on_placements('check_placements', 'select 1');
+DROP TABLE check_placements CASCADE;
 
+-- make sure run_on_all_colocated_placements correctly detects colocation
+CREATE TABLE check_colocated (key int);
+SELECT master_create_distributed_table('check_colocated', 'key', 'hash');
+SELECT master_create_worker_shards('check_colocated', 5, 2);
+CREATE TABLE second_table (key int);
+SELECT master_create_distributed_table('second_table', 'key', 'hash');
+SELECT master_create_worker_shards('second_table', 4, 2);
+SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
+												  'select 1');
+-- even when the difference is in replication factor, an error is thrown
+SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
+SELECT master_create_worker_shards('second_table', 5, 1);
+SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
+												  'select 1');
+-- when everything matches, the command is run!
+SELECT master_drop_all_shards('second_table'::regclass, current_schema(), 'second_table');
+SELECT master_create_worker_shards('second_table', 5, 2);
+SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
+												  'select 1');
+-- when a placement is invalid considers the tables to not be colocated
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
+		SELECT shardid FROM pg_dist_shard
+		WHERE nodeport = :worker_1_port AND logicalrelid = 'second_table'::regclass
+		ORDER BY 1 ASC LIMIT 1
+);
+SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
+												  'select 1');
+-- when matching placement is also invalid, considers the tables to be colocated
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = (
+		SELECT shardid FROM pg_dist_shard
+		WHERE nodeport = :worker_1_port AND logicalrelid = 'check_colocated'::regclass
+		ORDER BY 1 ASC LIMIT 1
+);
+SELECT * FROM run_command_on_colocated_placements('check_colocated', 'second_table',
+												  'select 1');
+DROP TABLE check_colocated CASCADE;
+DROP TABLE second_table CASCADE;
+
+-- runs on all shards
+CREATE TABLE check_shards (key int);
+SELECT master_create_distributed_table('check_shards', 'key', 'hash');
+SELECT master_create_worker_shards('check_shards', 5, 2);
+SELECT * FROM run_command_on_shards('check_shards', 'select 1');
+UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid % 2 = 0;
+SELECT * FROM run_command_on_shards('check_shards', 'select 1');
+DROP TABLE check_shards CASCADE;
+
+-- set SHOW_CONTEXT back to default
+\set SHOW_CONTEXT errors
