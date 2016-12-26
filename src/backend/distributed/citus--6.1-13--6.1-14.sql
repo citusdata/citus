@@ -1,24 +1,19 @@
-/*
- * citus_tools.sql
- * Contains definitions of citus_tools UDFs
- * - citus_run_on_all_workers
- * - citus_run_on_all_placements
- * - citus_run_on_all_colocated_placements
- * - citus_run_on_all_shards
- *
- * These functions depends on presence of UDF master_run_on_worker
- */
+/* citus--6.1-13--6.1-14.sql */
 
-CREATE OR REPLACE FUNCTION master_run_on_worker(worker_name text[], port integer[],
-												command text[], parallel boolean,
-												OUT node_name text, OUT node_port integer,
-												OUT success boolean, OUT result text )
+CREATE OR REPLACE FUNCTION pg_catalog.master_run_on_worker(worker_name text[],
+														   port integer[],
+														   command text[],
+														   parallel boolean,
+														   OUT node_name text,
+														   OUT node_port integer,
+														   OUT success boolean,
+														   OUT result text )
 	RETURNS SETOF record
 	LANGUAGE C STABLE STRICT
-	AS 'citus.so', $$master_run_on_worker$$;
+	AS 'MODULE_PATHNAME', $$master_run_on_worker$$;
 
 
-CREATE TYPE colocation_placement_type AS (
+CREATE TYPE citus.colocation_placement_type AS (
     shardid1 bigint,
     shardid2 bigint,
     nodename text,
@@ -26,10 +21,11 @@ CREATE TYPE colocation_placement_type AS (
 );
 
 --
--- tables_colocated returns true if given tables are co-located, false otherwise.
+-- distributed_tables_colocated returns true if given tables are co-located, false otherwise.
 -- The function checks shard definitions, matches shard placements for given tables.
 --
-CREATE OR REPLACE FUNCTION citus_tables_colocated(table1 regclass, table2 regclass)
+CREATE OR REPLACE FUNCTION pg_catalog.distributed_tables_colocated(table1 regclass,
+																   table2 regclass)
     RETURNS bool
     LANGUAGE plpgsql
     AS $function$
@@ -39,8 +35,8 @@ DECLARE
 	table2_shard_count int;
 	table1_placement_count int;
 	table2_placement_count int;
-	table1_placements colocation_placement_type[];
-	table2_placements colocation_placement_type[];
+	table1_placements citus.colocation_placement_type[];
+	table2_placements citus.colocation_placement_type[];
 BEGIN
 	SELECT count(*),
 	    (SELECT count(*) FROM pg_dist_shard a WHERE a.logicalrelid = table1),
@@ -61,10 +57,12 @@ BEGIN
 		WHERE tba.logicalrelid = table1 AND tbb.logicalrelid = table2),
 	left_shard_placements AS (
 		SELECT cs.shardid1, cs.shardid2, sp.nodename, sp.nodeport 
-		FROM colocated_shards cs JOIN pg_dist_shard_placement sp ON (cs.shardid1 = sp.shardid)
+		FROM colocated_shards cs JOIN pg_dist_shard_placement sp
+		ON (cs.shardid1 = sp.shardid)
 		WHERE sp.shardstate = 1)
 	SELECT 
-		array_agg((lsp.shardid1, lsp.shardid2, lsp.nodename, lsp.nodeport)::colocation_placement_type
+		array_agg(
+			(lsp.shardid1, lsp.shardid2, lsp.nodename, lsp.nodeport)::citus.colocation_placement_type
 			ORDER BY shardid1, shardid2, nodename, nodeport),
 		count(distinct lsp.shardid1)
 	FROM left_shard_placements lsp
@@ -79,7 +77,8 @@ BEGIN
 		FROM colocated_shards cs LEFT JOIN pg_dist_shard_placement sp ON(cs.shardid2 = sp.shardid)
 		WHERE sp.shardstate = 1)
 	SELECT
-		array_agg((rsp.shardid1, rsp.shardid2, rsp.nodename, rsp.nodeport)::colocation_placement_type
+		array_agg(
+			(rsp.shardid1, rsp.shardid2, rsp.nodename, rsp.nodeport)::citus.colocation_placement_type
 			ORDER BY shardid1, shardid2, nodename, nodeport),
 		count(distinct rsp.shardid2)
 	FROM right_shard_placements rsp
@@ -106,7 +105,7 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION citus_run_on_all_workers(command text,
+CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_workers(command text,
 													parallel bool default true,
 													OUT nodename text,
 													OUT nodeport int,
@@ -131,12 +130,14 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION citus_run_on_all_placements(table_name regclass, command text,
-													   parallel bool default true,
-													   OUT nodename text,
-													   OUT nodeport int,
-													   OUT shardid bigint,
-													   OUT success bool, OUT result text)
+CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_placements(table_name regclass,
+																command text,
+																parallel bool default true,
+																OUT nodename text,
+																OUT nodeport int,
+																OUT shardid bigint,
+																OUT success bool,
+																OUT result text)
 	RETURNS SETOF record
 	LANGUAGE plpgsql
 	AS $function$
@@ -169,7 +170,8 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION citus_run_on_all_colocated_placements(table_name1 regclass,
+CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_colocated_placements(
+																 table_name1 regclass,
 																 table_name2 regclass,
 																 command text,
 																 parallel bool default true,
@@ -189,7 +191,7 @@ DECLARE
 	shards2 bigint[];
 	commands text[];
 BEGIN
-	IF NOT (SELECT citus_tables_colocated(table_name1, table_name2)) THEN
+	IF NOT (SELECT distributed_tables_colocated(table_name1, table_name2)) THEN
 		RAISE EXCEPTION 'tables % and % are not co-located', table_name1, table_name2;
 	END IF;
 
@@ -240,11 +242,12 @@ END;
 $function$;
 
 
-CREATE OR REPLACE FUNCTION citus_run_on_all_shards(table_name regclass, command text,
-												   parallel bool default true,
-												   OUT shardid bigint,
-												   OUT success bool,
-												   OUT result text)
+CREATE OR REPLACE FUNCTION pg_catalog.run_command_on_shards(table_name regclass,
+															command text,
+															parallel bool default true,
+															OUT shardid bigint,
+															OUT success bool,
+															OUT result text)
 	RETURNS SETOF record
 	LANGUAGE plpgsql
 	AS $function$
