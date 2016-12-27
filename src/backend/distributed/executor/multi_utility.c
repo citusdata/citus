@@ -173,7 +173,6 @@ multi_ProcessUtility(Node *parsetree,
 					 char *completionTag)
 {
 	bool schemaNode = SchemaNode();
-	bool propagateChanges = schemaNode && EnableDDLPropagation;
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -233,7 +232,7 @@ multi_ProcessUtility(Node *parsetree,
 	 * DDL commands are propagated to workers only if EnableDDLPropagation is
 	 * set to true and the current node is the schema node
 	 */
-	if (propagateChanges)
+	if (EnableDDLPropagation)
 	{
 		bool isTopLevel = (context == PROCESS_UTILITY_TOPLEVEL);
 
@@ -1977,6 +1976,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 							   "modifications")));
 	}
 
+	EnsureSchemaNode();
 	ShowNoticeIfNotUsing2PC();
 
 	if (shouldSyncMetadata)
@@ -2018,6 +2018,7 @@ ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
 							   "modifications")));
 	}
 
+	EnsureSchemaNode();
 	ShowNoticeIfNotUsing2PC();
 
 	/*

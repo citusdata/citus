@@ -90,6 +90,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 							   "is only supported on Citus Enterprise")));
 	}
 
+	EnsureSchemaNode();
+
 	/* RepairShardPlacement function repairs only given shard */
 	RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
 						 targetNodePort);
