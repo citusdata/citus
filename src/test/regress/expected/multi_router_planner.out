@@ -1385,6 +1385,26 @@ DEBUG:  Plan is router executable
 --------------+-------------------
 (0 rows)
 
+-- partition_column is null clause does not prune out any shards,
+-- all shards remain after shard pruning, not router plannable
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id is null;
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- partition_column equals to null clause prunes out all shards
+-- no shards after shard pruning, router plannable
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id = null;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
 -- stable function returning bool
 SELECT * 
 	FROM articles_hash a
@@ -1595,7 +1615,7 @@ WARNING:  relation "public.articles_range" does not exist
 CONTEXT:  while executing command on localhost:57637
 WARNING:  relation "public.articles_range" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  failed to execute job 840020
+ERROR:  failed to execute job 840021
 DETAIL:  Failure due to failed task 2
 -- same query with where false but evaluation left to worker
 SELECT author_id FROM articles_range
@@ -1611,7 +1631,7 @@ WARNING:  relation "public.articles_range" does not exist
 CONTEXT:  while executing command on localhost:57637
 WARNING:  relation "public.articles_range" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  failed to execute job 840021
+ERROR:  failed to execute job 840022
 DETAIL:  Failure due to failed task 2
 -- same query on router planner with where false but evaluation left to worker
 SELECT author_id FROM articles_single_shard_hash
