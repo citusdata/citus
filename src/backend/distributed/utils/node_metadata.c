@@ -102,6 +102,7 @@ master_remove_node(PG_FUNCTION_ARGS)
 	bool hasShardPlacements = false;
 	WorkerNode *workerNode = NULL;
 
+	EnsureSchemaNode();
 	EnsureSuperUser();
 
 	hasShardPlacements = NodeHasActiveShardPlacements(nodeNameString, nodePort);
@@ -345,6 +346,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	char *nodeInsertCommand = NULL;
 	List *workerNodeList = NIL;
 
+	EnsureSchemaNode();
 	EnsureSuperUser();
 
 	/* acquire a lock so that no one can do this concurrently */
@@ -540,6 +542,23 @@ GetNextNodeId()
 	nextNodeId = DatumGetUInt32(nextNodeId);
 
 	return nextNodeId;
+}
+
+
+/*
+ * EnsureSchemaNode checks if the current node is the schema node. If it does not,
+ * the function errors out.
+ */
+void
+EnsureSchemaNode(void)
+{
+	int localGroupId = GetLocalGroupId();
+
+	if (localGroupId != 0)
+	{
+		ereport(ERROR, (errmsg("operation is not allowed on this node"),
+						errhint("Connect to the schema node and run it again.")));
+	}
 }
 
 

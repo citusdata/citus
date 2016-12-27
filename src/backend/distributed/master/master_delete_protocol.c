@@ -108,6 +108,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	bool failOK = false;
 	bool isTopLevel = true;
 
+	EnsureSchemaNode();
 	PreventTransactionChain(isTopLevel, "master_apply_delete_command");
 
 	queryTreeNode = ParseTreeNode(queryString);
@@ -206,6 +207,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
 
+	EnsureSchemaNode();
 	PreventTransactionChain(isTopLevel, "DROP distributed table");
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
@@ -239,6 +241,8 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	{
 		PG_RETURN_VOID();
 	}
+
+	EnsureSchemaNode();
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
