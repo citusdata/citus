@@ -133,3 +133,12 @@ WHERE
 	AND pg_dist_shard_placement.nodeport = :worker_2_port;
 	
 DROP TABLE temp;
+
+\c - - - :worker_1_port
+DELETE FROM pg_dist_partition;
+DELETE FROM pg_dist_shard;
+DELETE FROM pg_dist_shard_placement;
+DELETE FROM pg_dist_node;
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
