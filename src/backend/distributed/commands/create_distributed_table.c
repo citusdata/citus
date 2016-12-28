@@ -409,11 +409,19 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 	ListCell *indexOidCell = NULL;
 
 	/*
+	 * We first perform check for foreign constraints. It is important to do this check
+	 * before next check, because other types of constraints are allowed on reference
+	 * tables and we return early for those constraints thanks to next check. Therefore,
+	 * for reference tables, we first check for foreing constraints and if they are OK,
+	 * we do not error out for other types of constraints.
+	 */
+	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
+										 colocationId);
+
+	/*
 	 * Citus supports any kind of uniqueness constraints for reference tables
 	 * given that they only consist of a single shard and we can simply rely on
 	 * Postgres.
-	 * TODO: Here we should be erroring out if there exists any foreign keys
-	 * from/to a reference table.
 	 */
 	if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
@@ -499,10 +507,6 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 
 		index_close(indexDesc, NoLock);
 	}
-
-	/* we also perform check for foreign constraints */
-	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
-										 colocationId);
 }
 
 
@@ -542,6 +546,7 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 	bool isNull = false;
 	int attrIdx = 0;
 	bool foreignConstraintOnPartitionColumn = false;
+	bool selfReferencingTable = false;
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
@@ -558,6 +563,27 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 		{
 			heapTuple = systable_getnext(scanDescriptor);
 			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+		selfReferencingTable = relation->rd_id == referencedTableId;
+
+		/*
+		 * We do not support foreign keys for reference tables. Here we skip the second
+		 * part of check if the table is a self referencing table because;
+		 * - PartitionMethod only works for distributed tables and this table is not
+		 * distributed yet.
+		 * - Since referencing and referenced tables are same, it is OK to not checking
+		 * distribution method twice.
+		 */
+		if (distributionMethod == DISTRIBUTE_BY_NONE ||
+			(!selfReferencingTable &&
+			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Foreign key constraints are not allowed from or "
+									  "to reference tables.")));
 		}
 
 		/*
@@ -589,13 +615,11 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 									  " supported in ON UPDATE operation.")));
 		}
 
-		referencedTableId = constraintForm->confrelid;
-
 		/*
 		 * Some checks are not meaningful if foreign key references the table itself.
 		 * Therefore we will skip those checks.
 		 */
-		if (referencedTableId != relation->rd_id)
+		if (!selfReferencingTable)
 		{
 			if (!IsDistributedTable(referencedTableId))
 			{
