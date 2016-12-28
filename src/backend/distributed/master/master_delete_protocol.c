@@ -25,15 +25,18 @@
 #include "catalog/namespace.h"
 #include "commands/dbcommands.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_utility.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/relay_utility.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
@@ -216,24 +219,26 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 
 
 /*
- * master_drop_sequences attempts to drop a list of sequences on a specified
- * node. The "IF EXISTS" clause is used to permit dropping sequences even if
- * they may not exist. Returns true on success, false on failure.
+ * master_drop_sequences attempts to drop a list of sequences on worker nodes.
+ * The "IF EXISTS" clause is used to permit dropping sequences even if they may not
+ * exist. If the commands fail on the workers, the operation is rolled back.
+ * If ddl propagation (citus.enable_ddl_propagation) is set to off, then the function
+ * returns without doing anything.
  */
 Datum
 master_drop_sequences(PG_FUNCTION_ARGS)
 {
 	ArrayType *sequenceNamesArray = PG_GETARG_ARRAYTYPE_P(0);
-	text *nodeText = PG_GETARG_TEXT_P(1);
-	int64 nodePort = PG_GETARG_INT64(2);
-	bool dropSuccessful = false;
-	char *nodeName = TextDatumGetCString(nodeText);
-
 	ArrayIterator sequenceIterator = NULL;
 	Datum sequenceText = 0;
 	bool isNull = false;
-
 	StringInfo dropSeqCommand = makeStringInfo();
+
+	/* do nothing if DDL propagation is switched off */
+	if (!EnableDDLPropagation)
+	{
+		PG_RETURN_VOID();
+	}
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
@@ -259,14 +264,10 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceText));
 	}
 
-	dropSuccessful = ExecuteRemoteCommand(nodeName, nodePort, dropSeqCommand);
-	if (!dropSuccessful)
-	{
-		ereport(WARNING, (errmsg("could not delete sequences from node \"%s:" INT64_FORMAT
-								 "\"", nodeName, nodePort)));
-	}
+	SendCommandToWorkers(ALL_WORKERS, DISABLE_DDL_PROPAGATION);
+	SendCommandToWorkers(ALL_WORKERS, dropSeqCommand->data);
 
-	PG_RETURN_BOOL(dropSuccessful);
+	PG_RETURN_VOID();
 }
 
 
