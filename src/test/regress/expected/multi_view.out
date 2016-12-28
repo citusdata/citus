@@ -236,13 +236,13 @@ CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
 -- following will fail due to non-flattening of subquery due to GROUP BY
 SELECT * FROM  lineitems_by_shipping_method;
-ERROR:  bogus varno: 0
+ERROR:  Unrecognized range table id 1
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
 	SELECT l_orderkey, count(*) FROM lineitem_hash_part GROUP BY 1;
 -- this will also fail due to same reason
 SELECT * FROM  lineitems_by_orderkey;
-ERROR:  bogus varno: 0
+ERROR:  Unrecognized range table id 1
 -- however it would work if it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
  l_orderkey | count 
