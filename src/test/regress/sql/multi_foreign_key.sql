@@ -468,10 +468,29 @@ CREATE TABLE references_to_reference_table(id int, referencing_column int REFERE
 SELECT create_distributed_table('references_to_reference_table', 'referencing_column');
 
 -- test foreign key creation on CREATE TABLE from + to reference table
-CREATE TABLE reference_table2(id int, referencing_column int REFERENCES reference_table(id));
-SELECT create_reference_table('reference_table2');
+CREATE TABLE reference_table_second(id int, referencing_column int REFERENCES reference_table(id));
+SELECT create_reference_table('reference_table_second');
+
+-- test foreign key creation on CREATE TABLE from reference table to local table
+CREATE TABLE referenced_local_table(id int PRIMARY KEY, other_column int);
+DROP TABLE reference_table CASCADE;
+CREATE TABLE reference_table(id int, referencing_column int REFERENCES referenced_local_table(id));
+SELECT create_reference_table('reference_table');
+
+-- test foreign key creation on CREATE TABLE on self referencing reference table
+CREATE TABLE self_referencing_reference_table(
+    id int,
+    other_column int,
+    other_column_ref int,
+    PRIMARY KEY(id, other_column),
+    FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column)
+);
+SELECT create_reference_table('self_referencing_reference_table');
 
 -- test foreign key creation on ALTER TABLE from reference table
+DROP TABLE reference_table;
+CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
+SELECT create_reference_table('reference_table');
 ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_by_reference_table(id);
 
 -- test foreign key creation on ALTER TABLE to reference table
@@ -481,10 +500,27 @@ SELECT create_distributed_table('references_to_reference_table', 'referencing_co
 ALTER TABLE references_to_reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
 
 -- test foreign key creation on ALTER TABLE from + to reference table
-DROP TABLE reference_table2;
-CREATE TABLE reference_table2(id int, referencing_column int);
-SELECT create_reference_table('reference_table2');
-ALTER TABLE reference_table2 ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+DROP TABLE reference_table_second;
+CREATE TABLE reference_table_second(id int, referencing_column int);
+SELECT create_reference_table('reference_table_second');
+ALTER TABLE reference_table_second ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES reference_table(id);
+
+-- test foreign key creation on ALTER TABLE from reference table to local table
+DROP TABLE reference_table;
+CREATE TABLE reference_table(id int PRIMARY KEY, referencing_column int);
+SELECT create_reference_table('reference_table');
+ALTER TABLE reference_table ADD CONSTRAINT fk FOREIGN KEY(referencing_column) REFERENCES referenced_local_table(id);
+
+-- test foreign key creation on ALTER TABLE on self referencing reference table
+DROP TABLE self_referencing_reference_table;
+CREATE TABLE self_referencing_reference_table(
+    id int,
+    other_column int,
+    other_column_ref int,
+    PRIMARY KEY(id, other_column)
+);
+SELECT create_reference_table('self_referencing_reference_table');
+ALTER TABLE self_referencing_reference_table ADD CONSTRAINT fk FOREIGN KEY(id, other_column_ref) REFERENCES self_referencing_reference_table(id, other_column);
 
 -- we no longer need those tables
-DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table2;
+DROP TABLE referenced_by_reference_table, references_to_reference_table, reference_table, reference_table_second, referenced_local_table, self_referencing_reference_table;

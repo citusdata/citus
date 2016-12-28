@@ -408,7 +408,13 @@ ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 	List *indexOidList = NULL;
 	ListCell *indexOidCell = NULL;
 
-	/* we first perform check for foreign constraints */
+	/*
+	 * We first perform check for foreign constraints. It is important to do this check
+	 * before next check, because other types of constraints are allowed on reference
+	 * tables and we return early for those constraints thanks to next check. Therefore,
+	 * for reference tables, we first check for foreing constraints and if they are OK,
+	 * we do not error out for other types of constraints.
+	 */
 	ErrorIfNotSupportedForeignConstraint(relation, distributionMethod, distributionColumn,
 										 colocationId);
 
@@ -540,6 +546,7 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 	bool isNull = false;
 	int attrIdx = 0;
 	bool foreignConstraintOnPartitionColumn = false;
+	bool selfReferencingTable = false;
 
 	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
 	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
@@ -559,10 +566,18 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 		}
 
 		referencedTableId = constraintForm->confrelid;
+		selfReferencingTable = relation->rd_id == referencedTableId;
 
-		/* we do not support foreign keys for reference tables */
+		/*
+		 * We do not support foreign keys for reference tables. Here we skip the second
+		 * part of check if the table is a self referencing table because;
+		 * - PartitionMethod only works for distributed tables and this table is not
+		 * distributed yet.
+		 * - Since referencing and referenced tables are same, it is OK to not checking
+		 * distribution method twice.
+		 */
 		if (distributionMethod == DISTRIBUTE_BY_NONE ||
-			(relation->rd_id != referencedTableId &&
+			(!selfReferencingTable &&
 			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -604,7 +619,7 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 		 * Some checks are not meaningful if foreign key references the table itself.
 		 * Therefore we will skip those checks.
 		 */
-		if (referencedTableId != relation->rd_id)
+		if (!selfReferencingTable)
 		{
 			if (!IsDistributedTable(referencedTableId))
 			{
