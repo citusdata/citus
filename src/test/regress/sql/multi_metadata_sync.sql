@@ -380,22 +380,44 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 
 DROP TABLE mx_temp_drop_test;
 
--- Cleanup
+-- Create an MX table with sequences
+\c - - - :master_port	
+SET citus.shard_count TO 3;
+SET citus.shard_replication_factor TO 1;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
+SELECT create_distributed_table('mx_table_with_sequence', 'a');
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+
+-- Check that the sequences created on the worker as well
 \c - - - :worker_1_port
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+
+-- Check that dropping the mx table with sequences works as expected
+\c - - - :master_port
+DROP TABLE mx_table_with_sequence;
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+
+-- Check that the sequences are dropped from the worker as well
+\c - - - :worker_1_port
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+
+-- Cleanup
+\c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
-DELETE FROM pg_dist_node;
-DELETE FROM pg_dist_partition;
-DELETE FROM pg_dist_shard;
-DELETE FROM pg_dist_shard_placement;
-\d mx_testing_schema.mx_test_table
-\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
-DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
-DROP TABLE mx_testing_schema.mx_test_table;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
