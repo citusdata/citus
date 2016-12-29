@@ -107,9 +107,8 @@ INSERT INTO limit_orders VALUES (32744, 'AAPL', 9580, '2004-10-19 10:23:54', 'bu
 -- try a single-row INSERT with no shard to receive it
 INSERT INTO insufficient_shards VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 										20.69);
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies no shards.
-HINT:  Make sure the value for partition column "id" falls into a single shard.
+ERROR:  cannot find shard interval
+DETAIL:  Hash of the partition column value does not fall into any shards.
 -- try an insert to a range-partitioned table
 INSERT INTO range_partitioned VALUES (32743, 'AAPL', 9580, '2004-10-19 10:23:54', 'buy',
 									  20.69);
