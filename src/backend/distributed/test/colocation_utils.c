@@ -153,7 +153,7 @@ find_shard_interval_index(PG_FUNCTION_ARGS)
 {
 	uint32 shardId = PG_GETARG_UINT32(0);
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	uint32 shardIndex = FindShardIntervalIndex(shardInterval);
+	uint32 shardIndex = ShardIndex(shardInterval);
 
 	PG_RETURN_INT32(shardIndex);
 }

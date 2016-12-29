@@ -277,7 +277,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 		uint64 sourceShardId = sourceShardInterval->shardId;
 		uint64 newShardId = GetNextShardId();
 		ListCell *sourceShardPlacementCell = NULL;
-		int sourceShardIndex = FindShardIntervalIndex(sourceShardInterval);
+		int sourceShardIndex = ShardIndex(sourceShardInterval);
 
 		int32 shardMinValue = DatumGetInt32(sourceShardInterval->minValue);
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
