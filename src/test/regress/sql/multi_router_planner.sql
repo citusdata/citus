@@ -580,6 +580,18 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, articles_single_shard_hash b
 	WHERE a.author_id = 10 and a.author_id = b.author_id and int4eq(1, 2);
 
+-- partition_column is null clause does not prune out any shards,
+-- all shards remain after shard pruning, not router plannable
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id is null;
+
+-- partition_column equals to null clause prunes out all shards
+-- no shards after shard pruning, router plannable
+SELECT * 
+	FROM articles_hash a
+	WHERE a.author_id = null;
+
 -- stable function returning bool
 SELECT * 
 	FROM articles_hash a
