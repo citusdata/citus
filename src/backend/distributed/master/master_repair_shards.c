@@ -307,7 +307,7 @@ CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 	/* we will only use shardIndex if there is a foreign constraint */
 	if (commandList != NIL)
 	{
-		shardIndex = FindShardIntervalIndex(shardInterval);
+		shardIndex = ShardIndex(shardInterval);
 	}
 
 	foreach(commandCell, commandList)
