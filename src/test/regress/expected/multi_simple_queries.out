@@ -176,16 +176,16 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 -- UNION/INTERSECT queries are unsupported if on multiple shards
 SELECT * FROM articles WHERE author_id = 10 UNION
 SELECT * FROM articles WHERE author_id = 2; 
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Union, Intersect, or Except are currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- queries using CTEs are unsupported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
 SELECT title FROM articles;
 ERROR:  cannot plan queries that include both regular and partitioned relations
 -- queries which involve functions in FROM clause are unsupported.
 SELECT * FROM articles, position('om' in 'Thomas');
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- subqueries are not supported in WHERE clause in Citus
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
 ERROR:  cannot plan queries that include both regular and partitioned relations
@@ -250,8 +250,8 @@ ORDER BY articles.id;
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles a;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries other than in from-clause are currently unsupported
+ERROR:  could not run distributed query with subquery outside the FROM clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- joins are not supported between local and distributed tables
 SELECT title, authors.name FROM authors, articles WHERE authors.id = articles.author_id;
 ERROR:  cannot plan queries that include both regular and partitioned relations
