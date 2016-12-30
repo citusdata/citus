@@ -348,7 +348,7 @@ ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShard
  * partitioned table's shards.
  *
  * We do min/max value check here to decide whether two shards are colocated,
- * instead we can simply use FindShardIntervalIndex function on both shards then
+ * instead we can simply use ShardIndex function on both shards then
  * but do index check, but we avoid it because this way it is more cheaper.
  */
 static bool
@@ -852,10 +852,10 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		return colocatedShardList;
 	}
 
-	shardIntervalIndex = FindShardIntervalIndex(shardInterval);
+	shardIntervalIndex = ShardIndex(shardInterval);
 	colocatedTableList = ColocatedTableList(distributedTableId);
 
-	/* FindShardIntervalIndex have to find index of given shard */
+	/* ShardIndex have to find index of given shard */
 	Assert(shardIntervalIndex >= 0);
 
 	foreach(colocatedTableCell, colocatedTableList)

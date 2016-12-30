@@ -15,6 +15,8 @@
 #include "distributed/master_metadata_utility.h"
 #include "nodes/primnodes.h"
 
+#define INVALID_SHARD_INDEX -1
+
 /* OperatorCacheEntry contains information for each element in OperatorCache */
 typedef struct ShardIntervalCompareFunctionCacheEntry
 {
@@ -29,7 +31,7 @@ extern int CompareShardIntervals(const void *leftElement, const void *rightEleme
 extern int CompareShardIntervalsById(const void *leftElement, const void *rightElement);
 extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
-extern int FindShardIntervalIndex(ShardInterval *shardInterval);
+extern int ShardIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 ShardInterval **shardIntervalCache,
 										 int shardCount, char partitionMethod,
