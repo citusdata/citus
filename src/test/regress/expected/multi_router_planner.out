@@ -334,8 +334,8 @@ id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 DEBUG:  predicate pruning for shardId 840001
 DEBUG:  predicate pruning for shardId 840000
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- recursive CTEs are supported when filtered on partition column
 CREATE TABLE company_employees (company_id int, employee_id int, manager_id int); 
 SELECT master_create_distributed_table('company_employees', 'company_id', 'hash');
@@ -416,8 +416,8 @@ SELECT * FROM hierarchy WHERE LEVEL <= 2;
 DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- logically wrong query, query involves different shards
 -- from the same table
 WITH RECURSIVE hierarchy as (
@@ -437,8 +437,8 @@ DEBUG:  predicate pruning for shardId 840006
 DEBUG:  predicate pruning for shardId 840003
 DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- CTE with queries other than SELECT is not supported
 WITH new_article AS (
     INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
@@ -504,8 +504,8 @@ SELECT
 	FROM articles_hash
 	WHERE author_id = 1 or author_id = 2
 	GROUP BY GROUPING SETS ((id),(subtitle));
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Grouping sets, cube, and rollup is currently unsupported
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- queries which involve functions in FROM clause are supported if it goes to a single worker.
 SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1;
 DEBUG:  predicate pruning for shardId 840001
@@ -540,17 +540,17 @@ DEBUG:  Plan is router executable
 
 -- they are not supported if multiple workers are involved
 SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- subqueries are not supported in WHERE clause in Citus
 SELECT * FROM articles_hash WHERE author_id IN (SELECT id FROM authors_hash WHERE name LIKE '%a');
 ERROR:  cannot plan queries that include both regular and partitioned relations
 SELECT * FROM articles_hash WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 1 or author_id = 3);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join types other than inner/outer joins are currently unsupported
+ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
 SELECT * FROM articles_hash WHERE author_id = (SELECT 1);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries other than in from-clause are currently unsupported
+ERROR:  could not run distributed query with subquery outside the FROM clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- unless the query can be transformed into a join
 SELECT * FROM articles_hash
 WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
@@ -641,8 +641,8 @@ HINT:  Set citus.task_executor_type to "task-tracker".
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries other than in from-clause are currently unsupported
+ERROR:  could not run distributed query with subquery outside the FROM clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- simple lookup query
 SELECT *
 	FROM articles_hash
@@ -748,8 +748,8 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 DEBUG:  predicate pruning for shardId 840000
 DEBUG:  Found no worker with all shard placements
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- single shard select with limit is router plannable
 SELECT *
 	FROM articles_hash
@@ -961,8 +961,8 @@ SET client_min_messages to 'NOTICE';
 (SELECT * FROM articles_hash WHERE author_id = 1)
 UNION
 (SELECT * FROM articles_hash WHERE author_id = 2);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Union, Intersect, or Except are currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM (
 	(SELECT * FROM articles_hash WHERE author_id = 1)
 	UNION
@@ -1317,13 +1317,13 @@ DEBUG:  Plan is router executable
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1 or author_id = 2;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Window functions are currently unsupported
+ERROR:  could not run distributed query with window functions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
 	FROM articles_hash
 	WHERE author_id = 5 or author_id = 2;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Window functions are currently unsupported
+ERROR:  could not run distributed query with window functions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- where false queries are router plannable
 SELECT * 
 	FROM articles_hash

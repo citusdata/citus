@@ -358,8 +358,8 @@ FROM
 	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_right_reference r2 ON (l1.l_custkey  = r2.r_custkey)
 	RIGHT JOIN multi_outer_join_left_hash l2 ON (r2.r_custkey = l2.l_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex join orders are currently unsupported
+ERROR:  could not run distributed query with complex join orders
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
 -- add an anti-join, this should also error out
 SELECT
 	*
@@ -370,8 +370,8 @@ FROM
 	RIGHT JOIN multi_outer_join_left_hash l2 ON (r2.r_custkey = l2.l_custkey)
 WHERE
 	r1.r_custkey is NULL;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex join orders are currently unsupported
+ERROR:  could not run distributed query with complex join orders
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
 -- Three way join 2-1-1 (broadcast + broadcast join) should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -417,8 +417,8 @@ FROM
 	multi_outer_join_left_hash l1
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex join orders are currently unsupported
+ERROR:  could not run distributed query with complex join orders
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
 -- Right join with single shard left most table should work
 SELECT
 	t_custkey, r_custkey, l_custkey
@@ -479,8 +479,8 @@ FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
 	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex join orders are currently unsupported
+ERROR:  could not run distributed query with complex join orders
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
 -- full outer join should work with 1-1 matched shards
 SELECT
 	l_custkey, r_custkey

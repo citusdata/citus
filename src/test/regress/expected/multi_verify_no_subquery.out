@@ -6,18 +6,13 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1030000;
 SELECT * FROM lineitem WHERE l_orderkey IN
 	(SELECT l_orderkey FROM lineitem WHERE l_quantity > 0);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join types other than inner/outer joins are currently unsupported
+ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
 SELECT l_quantity FROM lineitem WHERE EXISTS
 	(SELECT 1 FROM orders WHERE o_orderkey = l_orderkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join types other than inner/outer joins are currently unsupported
+ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
 SELECT l_quantity FROM lineitem WHERE l_orderkey IN (SELECT o_orderkey FROM orders);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join types other than inner/outer joins are currently unsupported
+ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
 SELECT l_orderkey FROM lineitem WHERE l_quantity > ALL(SELECT o_orderkey FROM orders);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries other than in from-clause are currently unsupported
+ERROR:  could not run distributed query with subquery outside the FROM clause
 SELECT l_quantity FROM lineitem WHERE l_orderkey = (SELECT min(o_orderkey) FROM orders);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries other than in from-clause are currently unsupported
+ERROR:  could not run distributed query with subquery outside the FROM clause
