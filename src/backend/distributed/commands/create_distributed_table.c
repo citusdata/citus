@@ -42,6 +42,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
@@ -65,8 +66,6 @@ static void ConvertToDistributedTable(Oid relationId, char *distributionColumnNa
 									  char distributionMethod, uint32 colocationId,
 									  char replicationModel);
 static char LookupDistributionMethod(Oid distributionMethodOid);
-static void RecordDistributedRelationDependencies(Oid distributedRelationId,
-												  Node *distributionKey);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
@@ -76,9 +75,6 @@ static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 char distributionMethod,
 												 Var *distributionColumn,
 												 uint32 colocationId);
-static void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-									  Var *distributionColumn, uint32 colocationId,
-									  char replicationModel);
 static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
@@ -225,9 +221,7 @@ CreateReferenceTable(Oid relationId)
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	List *workerNodeList = WorkerNodeList();
-	int shardCount = 1;
 	int replicationFactor = list_length(workerNodeList);
-	Oid distributionColumnType = InvalidOid;
 	char *distributionColumnName = NULL;
 
 	EnsureSchemaNode();
@@ -242,13 +236,7 @@ CreateReferenceTable(Oid relationId)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	/* check for existing colocations */
-	colocationId = ColocationId(shardCount, replicationFactor, distributionColumnType);
-	if (colocationId == INVALID_COLOCATION_ID)
-	{
-		colocationId = CreateColocationGroup(shardCount, replicationFactor,
-											 distributionColumnType);
-	}
+	colocationId = CreateReferenceTableColocationId();
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
@@ -727,99 +715,6 @@ ErrorIfNotSupportedForeignConstraint(Relation relation, char distributionMethod,
 	/* clean up scan and close system catalog */
 	systable_endscan(scanDescriptor);
 	heap_close(pgConstraint, AccessShareLock);
-}
-
-
-/*
- * InsertIntoPgDistPartition inserts a new tuple into pg_dist_partition.
- */
-static void
-InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-						  Var *distributionColumn, uint32 colocationId,
-						  char replicationModel)
-{
-	Relation pgDistPartition = NULL;
-	char *distributionColumnString = NULL;
-
-	HeapTuple newTuple = NULL;
-	Datum newValues[Natts_pg_dist_partition];
-	bool newNulls[Natts_pg_dist_partition];
-
-	/* open system catalog and insert new tuple */
-	pgDistPartition = heap_open(DistPartitionRelationId(), RowExclusiveLock);
-
-	/* form new tuple for pg_dist_partition */
-	memset(newValues, 0, sizeof(newValues));
-	memset(newNulls, false, sizeof(newNulls));
-
-	newValues[Anum_pg_dist_partition_logicalrelid - 1] =
-		ObjectIdGetDatum(relationId);
-	newValues[Anum_pg_dist_partition_partmethod - 1] =
-		CharGetDatum(distributionMethod);
-	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
-	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
-
-	/* set partkey column to NULL for reference tables */
-	if (distributionMethod != DISTRIBUTE_BY_NONE)
-	{
-		distributionColumnString = nodeToString((Node *) distributionColumn);
-
-		newValues[Anum_pg_dist_partition_partkey - 1] =
-			CStringGetTextDatum(distributionColumnString);
-	}
-	else
-	{
-		newValues[Anum_pg_dist_partition_partkey - 1] = PointerGetDatum(NULL);
-		newNulls[Anum_pg_dist_partition_partkey - 1] = true;
-	}
-
-	newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues, newNulls);
-
-	/* finally insert tuple, build index entries & register cache invalidation */
-	simple_heap_insert(pgDistPartition, newTuple);
-	CatalogUpdateIndexes(pgDistPartition, newTuple);
-	CitusInvalidateRelcacheByRelid(relationId);
-
-	RecordDistributedRelationDependencies(relationId, (Node *) distributionColumn);
-
-	CommandCounterIncrement();
-	heap_close(pgDistPartition, NoLock);
-}
-
-
-/*
- * RecordDistributedRelationDependencies creates the dependency entries
- * necessary for a distributed relation in addition to the preexisting ones
- * for a normal relation.
- *
- * We create one dependency from the (now distributed) relation to the citus
- * extension to prevent the extension from being dropped while distributed
- * tables exist. Furthermore a dependency from pg_dist_partition's
- * distribution clause to the underlying columns is created, but it's marked
- * as being owned by the relation itself. That means the entire table can be
- * dropped, but the column itself can't. Neither can the type of the
- * distribution column be changed (c.f. ATExecAlterColumnType).
- */
-static void
-RecordDistributedRelationDependencies(Oid distributedRelationId, Node *distributionKey)
-{
-	ObjectAddress relationAddr = { 0, 0, 0 };
-	ObjectAddress citusExtensionAddr = { 0, 0, 0 };
-
-	relationAddr.classId = RelationRelationId;
-	relationAddr.objectId = distributedRelationId;
-	relationAddr.objectSubId = 0;
-
-	citusExtensionAddr.classId = ExtensionRelationId;
-	citusExtensionAddr.objectId = get_extension_oid("citus", false);
-	citusExtensionAddr.objectSubId = 0;
-
-	/* dependency from table entry to extension */
-	recordDependencyOn(&relationAddr, &citusExtensionAddr, DEPENDENCY_NORMAL);
-
-	/* make sure the distribution key column/expression does not just go away */
-	recordDependencyOnSingleRelExpr(&relationAddr, distributionKey, distributedRelationId,
-									DEPENDENCY_NORMAL, DEPENDENCY_NORMAL);
 }
 
 

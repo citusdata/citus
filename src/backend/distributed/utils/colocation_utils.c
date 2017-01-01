@@ -145,16 +145,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	UpdateRelationColocationGroup(targetRelationId, sourceColocationId);
 
 	/* if there is not any remaining table in the colocation group, delete it */
-	if (targetColocationId != INVALID_COLOCATION_ID)
-	{
-		List *colocatedTableList = ColocationGroupTableList(targetColocationId);
-		int colocatedTableCount = list_length(colocatedTableList);
-
-		if (colocatedTableCount == 0)
-		{
-			DeleteColocationGroup(targetColocationId);
-		}
-	}
+	DeleteColocationGroupIfNoTablesBelong(targetColocationId);
 
 	heap_close(pgDistColocation, NoLock);
 }
@@ -937,6 +928,28 @@ ColocatedShardIdInRelation(Oid relationId, int shardIndex)
 	DistTableCacheEntry *tableCacheEntry = DistributedTableCacheEntry(relationId);
 
 	return tableCacheEntry->sortedShardIntervalArray[shardIndex]->shardId;
+}
+
+
+/*
+ * DeleteColocationGroupIfNoTablesBelong function deletes given co-location group if there
+ * is no relation in that co-location group. A co-location group may become empty after
+ * mark_tables_colocated or upgrade_reference_table UDF calls. In that case we need to
+ * remove empty co-location group to prevent orphaned co-location groups.
+ */
+void
+DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
+{
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		List *colocatedTableList = ColocationGroupTableList(colocationId);
+		int colocatedTableCount = list_length(colocatedTableList);
+
+		if (colocatedTableCount == 0)
+		{
+			DeleteColocationGroup(colocationId);
+		}
+	}
 }
 
 
