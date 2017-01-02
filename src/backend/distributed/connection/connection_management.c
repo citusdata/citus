@@ -163,7 +163,6 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	ConnectionHashKey key;
 	ConnectionHashEntry *entry = NULL;
 	MultiConnection *connection;
-	MemoryContext oldContext;
 	bool found;
 
 	/* do some minimal input checks */
@@ -234,10 +233,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	 */
 	connection = StartConnectionEstablishment(&key);
 
-	oldContext = MemoryContextSwitchTo(ConnectionContext);
 	dlist_push_tail(entry->connections, &connection->connectionNode);
-
-	MemoryContextSwitchTo(oldContext);
 
 	if (flags & SESSION_LIFESPAN)
 	{
