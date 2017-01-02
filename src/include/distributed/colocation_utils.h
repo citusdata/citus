@@ -32,5 +32,6 @@ extern uint32 GetNextColocationId(void);
 extern void CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId);
 extern void CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId);
 
+extern void DeleteColocationGroupIfNoTablesBelong(uint32 colocationId);
 
 #endif /* COLOCATION_UTILS_H_ */

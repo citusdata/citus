@@ -45,12 +45,6 @@ static void RepairShardPlacement(int64 shardId, char *sourceNodeName,
 static void EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
 									 int32 targetNodePort);
-static ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
-												   char *nodeName, uint32 nodePort,
-												   bool missingOk);
-static List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
-								   int32 sourceNodePort);
-static List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
 static char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 static List * RecreateTableDDLCommandList(Oid relationId);
 
@@ -210,7 +204,7 @@ EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName, int32 sourceNodePo
  * specified node name and port. If missingOk is set to true, this function returns NULL
  * if no such placement exists in the provided list, otherwise it throws an error.
  */
-static ShardPlacement *
+ShardPlacement *
 SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 nodePort, bool
 						   missingOk)
 {
@@ -250,7 +244,7 @@ SearchShardPlacementInList(List *shardPlacementList, char *nodeName, uint32 node
  * CopyShardCommandList generates command list to copy the given shard placement
  * from the source node to the target node.
  */
-static List *
+List *
 CopyShardCommandList(ShardInterval *shardInterval,
 					 char *sourceNodeName, int32 sourceNodePort)
 {
@@ -293,7 +287,7 @@ CopyShardCommandList(ShardInterval *shardInterval,
  * CopyShardForeignConstraintCommandList generates command list to create foreign
  * constraints existing in source shard after copying it to the other node.
  */
-static List *
+List *
 CopyShardForeignConstraintCommandList(ShardInterval *shardInterval)
 {
 	List *copyShardForeignConstraintCommandList = NIL;

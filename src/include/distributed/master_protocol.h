@@ -18,6 +18,7 @@
 #include "c.h"
 #include "fmgr.h"
 
+#include "distributed/shardinterval_utils.h"
 #include "nodes/pg_list.h"
 
 
@@ -141,5 +142,12 @@ extern Datum master_create_worker_shards(PG_FUNCTION_ARGS);
 /* function declarations for shard repair functionality */
 extern Datum master_copy_shard_placement(PG_FUNCTION_ARGS);
 
+/* function declarations for shard copy functinality */
+extern List * CopyShardCommandList(ShardInterval *shardInterval, char *sourceNodeName,
+								   int32 sourceNodePort);
+extern List * CopyShardForeignConstraintCommandList(ShardInterval *shardInterval);
+extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
+												   char *nodeName, uint32 nodePort,
+												   bool missingOk);
 
 #endif   /* MASTER_PROTOCOL_H */
