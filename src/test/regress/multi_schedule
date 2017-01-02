@@ -140,7 +140,6 @@ test: multi_data_types
 test: multi_repartition_udt
 test: multi_repartitioned_subquery_udf
 test: multi_modifying_xacts
-test: multi_metadata_sync
 test: multi_transaction_recovery
 
 # ---------
@@ -157,6 +156,13 @@ test: multi_router_planner
 # multi_large_shardid loads more lineitem data using high shard identifiers
 # ----------
 test: multi_large_shardid
+
+# ----------
+# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers 
+# multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
+# ----------
+test: multi_metadata_sync
+test: multi_unsupported_worker_operations
 
 # ----------
 # multi_drop_extension makes sure we can safely drop and recreate the extension

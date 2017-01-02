@@ -70,6 +70,9 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	int32 replicationFactor = PG_GETARG_INT32(2);
 
 	Oid distributedTableId = ResolveRelationId(tableNameText);
+
+	EnsureSchemaNode();
+
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
 
 	PG_RETURN_VOID();

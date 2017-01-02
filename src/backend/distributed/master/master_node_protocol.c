@@ -261,8 +261,13 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
-	uint64 shardId = GetNextShardId();
-	Datum shardIdDatum = Int64GetDatum(shardId);
+	uint64 shardId = 0;
+	Datum shardIdDatum = 0;
+
+	EnsureSchemaNode();
+
+	shardId = GetNextShardId();
+	shardIdDatum = Int64GetDatum(shardId);
 
 	PG_RETURN_DATUM(shardIdDatum);
 }
@@ -320,6 +325,8 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Datum shardIdDatum = 0;
+
+	EnsureSchemaNode();
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);

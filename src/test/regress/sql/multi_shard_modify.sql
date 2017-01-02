@@ -70,8 +70,13 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 -- DELETE with expression in WHERE clause
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = (3*18-40)');
 
+-- commands with a USING a non distributed table error out
+CREATE TABLE temp_nations(name text, key integer);
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
+
 -- commands with a USING clause are unsupported
-CREATE TEMP TABLE temp_nations(name text, key integer);
+SELECT master_create_distributed_table('temp_nations', 'name', 'hash');
+SELECT master_create_worker_shards('temp_nations', 4, 2);
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
 
 -- commands with a RETURNING clause are unsupported

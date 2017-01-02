@@ -67,8 +67,23 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
                              1
 (1 row)
 
+-- commands with a USING a non distributed table error out
+CREATE TABLE temp_nations(name text, key integer);
+SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
+ERROR:  relation temp_nations is not distributed
 -- commands with a USING clause are unsupported
-CREATE TEMP TABLE temp_nations(name text, key integer);
+SELECT master_create_distributed_table('temp_nations', 'name', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('temp_nations', 4, 2);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test USING temp_nations WHERE multi_shard_modify_test.t_value = temp_nations.key AND temp_nations.name = ''foobar'' ');
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Joins are not supported in distributed modifications.
