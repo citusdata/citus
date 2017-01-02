@@ -88,6 +88,8 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	List *taskList = NIL;
 	int32 affectedTupleCount = 0;
 
+	EnsureSchemaNode();
+
 	queryTreeNode = ParseTreeNode(queryString);
 	if (IsA(queryTreeNode, DeleteStmt))
 	{
