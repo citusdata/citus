@@ -24,6 +24,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
+#include "distributed/placement_connection.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 
@@ -160,6 +161,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
+				ResetPlacementConnectionManagement();
 				AfterXactConnectionHandling(true);
 			}
 
@@ -196,6 +198,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* close connections etc. */
 			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
 			{
+				ResetPlacementConnectionManagement();
 				AfterXactConnectionHandling(false);
 			}
 
@@ -233,6 +236,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				break;
 			}
 
+			/*
+			 * TODO: It'd probably be a good idea to force constraints and
+			 * such to 'immediate' here. Deferred triggers might try to send
+			 * stuff to the remote side, which'd not be good.  Doing so
+			 * remotely would also catch a class of errors where committing
+			 * fails, which can lead to divergence when not using 2PC.
+			 */
+
+			/*
+			 * Check whether the coordinated transaction is in a state we want
+			 * to persist, or whether we want to error out.  This handles the
+			 * case that iteratively executed commands marked all placements
+			 * as invalid.
+			 */
+			CheckForFailedPlacements(true, CurrentTransactionUse2PC);
 
 			if (CurrentTransactionUse2PC)
 			{
@@ -257,6 +275,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * (e.g. if the remote commit failed).
 			 */
 			RouterExecutorPreCommitCheck();
+
+			/*
+			 *
+			 * Check again whether shards/placement successfully
+			 * committed. This handles failure at COMMIT/PREPARE time.
+			 */
+			CheckForFailedPlacements(false, CurrentTransactionUse2PC);
 		}
 		break;
 

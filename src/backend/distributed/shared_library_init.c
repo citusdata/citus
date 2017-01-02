@@ -33,6 +33,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
+#include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
@@ -160,6 +161,7 @@ _PG_init(void)
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
 	InitializeConnectionManagement();
+	InitPlacementConnectionManagement();
 
 	/* enable modification of pg_catalog tables during pg_upgrade */
 	if (IsBinaryUpgrade)
