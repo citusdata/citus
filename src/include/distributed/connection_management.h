@@ -129,6 +129,7 @@ extern void CloseConnection(MultiConnection *connection);
 extern void CloseConnectionByPGconn(struct pg_conn *pqConn);
 
 /* dealing with a connection */
+extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);

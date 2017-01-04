@@ -256,6 +256,7 @@ sysopen my $fh, "tmp_check/tmp-bin/psql", O_CREAT|O_TRUNC|O_RDWR, 0700
 print $fh "#!/bin/bash\n";
 print $fh "exec psql ";
 print $fh "--variable=master_port=$masterPort ";
+print $fh "--variable=default_user=$user ";
 print $fh "--variable=SHOW_CONTEXT=always ";
 for my $workeroff (0 .. $#workerPorts)
 {

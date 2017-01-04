@@ -4024,6 +4024,7 @@ CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType, char *queryStrin
 	task->jobId = jobId;
 	task->taskId = taskId;
 	task->taskType = taskType;
+	task->replicationModel = REPLICATION_MODEL_INVALID;
 	task->queryString = queryString;
 
 	return task;
