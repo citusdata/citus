@@ -506,6 +506,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_BOOL_FIELD(assignmentConstrained);
 	WRITE_NODE_FIELD(taskExecution);
 	WRITE_BOOL_FIELD(upsertQuery);
+	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(insertSelectQuery);
 	WRITE_NODE_FIELD(relationShardList);
 }

@@ -303,6 +303,7 @@ ReadTask(READFUNC_ARGS)
 	READ_BOOL_FIELD(assignmentConstrained);
 	READ_NODE_FIELD(taskExecution);
 	READ_BOOL_FIELD(upsertQuery);
+	READ_CHAR_FIELD(replicationModel);
 	READ_BOOL_FIELD(insertSelectQuery);
 	READ_NODE_FIELD(relationShardList);
 

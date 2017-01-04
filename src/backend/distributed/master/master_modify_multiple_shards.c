@@ -201,6 +201,7 @@ ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, Oid relation
 		task->taskType = SQL_TASK;
 		task->queryString = shardQueryString->data;
 		task->dependedTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 
