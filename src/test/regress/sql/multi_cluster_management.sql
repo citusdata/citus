@@ -27,6 +27,11 @@ SELECT master_remove_node('localhost', :worker_2_port);
 -- verify that the node has been deleted
 SELECT master_get_active_worker_nodes();
 
+-- try to disable a node with no placements see that node is removed
+SELECT master_add_node('localhost', :worker_2_port);
+SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_get_active_worker_nodes();
+
 -- add some shard placements to the cluster
 SELECT master_add_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
@@ -39,6 +44,17 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
+
+-- try to disable a node with active placements see that node is removed
+-- observe that a notification is displayed
+SELECT master_disable_node('localhost', :worker_2_port); 
+SELECT master_get_active_worker_nodes();
+
+-- restore the node for next tests
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- try to remove a node with active placements and see that node removal is failed
+SELECT master_remove_node('localhost', :worker_2_port); 
 
 -- mark all placements in the candidate node as inactive
 UPDATE pg_dist_shard_placement SET shardstate=3 WHERE nodeport=:worker_2_port;
