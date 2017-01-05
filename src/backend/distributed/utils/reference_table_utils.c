@@ -13,9 +13,12 @@
 #include "miscadmin.h"
 
 #include "access/heapam.h"
+#include "access/htup_details.h"
+#include "access/genam.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/reference_table_utils.h"
@@ -23,14 +26,16 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/rel.h"
 
 
 /* local function forward declarations */
 static void ReplicateSingleShardTableToAllWorkers(Oid relationId);
 static void ReplicateShardToAllWorkers(ShardInterval *shardInterval);
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
-
+static List * ReferenceTableOidList(void);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -90,6 +95,66 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	ReplicateSingleShardTableToAllWorkers(relationId);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * ReplicateAllReferenceTablesToAllNodes function finds all reference tables and
+ * replicates them to all worker nodes. It also modifies pg_dist_colocation table to
+ * update the replication factor column. This function skips a worker node if that node
+ * already has healthy placement of a particular reference table to prevent unnecessary
+ * data transfer.
+ */
+void
+ReplicateAllReferenceTablesToAllNodes()
+{
+	List *referenceTableList = ReferenceTableOidList();
+	ListCell *referenceTableCell = NULL;
+
+	Relation pgDistNode = NULL;
+	List *workerNodeList = NIL;
+	int workerCount = 0;
+
+	Oid firstReferenceTableId = InvalidOid;
+	uint32 referenceTableColocationId = INVALID_COLOCATION_ID;
+
+	/* if there is no reference table, we do not need to do anything */
+	if (list_length(referenceTableList) == 0)
+	{
+		return;
+	}
+
+	/* we do not use pgDistNode, we only obtain a lock on it to prevent modifications */
+	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+	workerNodeList = WorkerNodeList();
+	workerCount = list_length(workerNodeList);
+
+	foreach(referenceTableCell, referenceTableList)
+	{
+		Oid referenceTableId = lfirst_oid(referenceTableCell);
+		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
+		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+		uint64 shardId = shardInterval->shardId;
+		char *relationName = get_rel_name(referenceTableId);
+
+		LockShardDistributionMetadata(shardId, ExclusiveLock);
+
+		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to all workers",
+								relationName)));
+
+		ReplicateShardToAllWorkers(shardInterval);
+	}
+
+	/*
+	 * After replicating reference tables, we will update replication factor column for
+	 * colocation group of reference tables so that worker count will be equal to
+	 * replication factor again.
+	 */
+	firstReferenceTableId = linitial_oid(referenceTableList);
+	referenceTableColocationId = TableColocationId(firstReferenceTableId);
+	UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
+
+	heap_close(pgDistNode, NoLock);
 }
 
 
@@ -176,6 +241,7 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 		ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																	 nodeName, nodePort,
 																	 missingWorkerOk);
+
 		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 		{
 			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
@@ -249,4 +315,36 @@ CreateReferenceTableColocationId()
 	}
 
 	return colocationId;
+}
+
+
+/*
+ * ReferenceTableOidList function scans pg_dist_partition to create a list of all
+ * reference tables. To create the list, it performs sequential scan. Since it is not
+ * expected that this function will be called frequently, it is OK not to use index scan.
+ * If this function becomes performance bottleneck, it is possible to modify this function
+ * to perform index scan.
+ */
+static List *
+ReferenceTableOidList()
+{
+	List *distTableOidList = DistTableOidList();
+	ListCell *distTableOidCell = NULL;
+
+	List *referenceTableList = NIL;
+
+	foreach(distTableOidCell, distTableOidList)
+	{
+		DistTableCacheEntry *cacheEntry = NULL;
+		Oid relationId = lfirst_oid(distTableOidCell);
+
+		cacheEntry = DistributedTableCacheEntry(relationId);
+
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			referenceTableList = lappend_oid(referenceTableList, relationId);
+		}
+	}
+
+	return referenceTableList;
 }
