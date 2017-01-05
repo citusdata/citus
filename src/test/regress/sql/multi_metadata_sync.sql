@@ -525,14 +525,30 @@ WHERE
 	
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
 
--- Cleanup
-SELECT worker_drop_distributed_table('mx_ref'::regclass);
+-- Check that DDL commands are propagated to reference tables on workers
+\c - - - :master_port
+ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
+CREATE INDEX mx_ref_index ON mx_ref(col_1);
+\d mx_ref
 
+\c - - - :worker_1_port
+\d mx_ref
+	
+-- Check that metada is cleaned successfully upon drop table
+\c - - - :master_port
+DROP TABLE mx_ref;
+\d mx_ref
+
+\c - - - :worker_1_port
+\d mx_ref
+SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
+
+-- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
-DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 

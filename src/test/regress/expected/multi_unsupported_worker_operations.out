@@ -28,6 +28,13 @@ SELECT create_distributed_table('mx_table_2', 'col_1');
  
 (1 row)
 
+CREATE TABLE mx_ref_table (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
 -- Check that the created tables are colocated MX tables
 SELECT logicalrelid, repmodel, colocationid 
 FROM pg_dist_partition 
@@ -46,6 +53,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 COPY mx_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
+INSERT INTO mx_ref_table VALUES (-37, 'morbi');
+INSERT INTO mx_ref_table VALUES (-78, 'sapien');
+INSERT INTO mx_ref_table VALUES (-34, 'augue');
 SELECT * FROM mx_table ORDER BY col_1;
  col_1 |  col_2   | col_3 
 -------+----------+-------
@@ -98,6 +108,35 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
      5
 (1 row)
 
+-- INSERT/UPDATE/DELETE on reference tables
+SELECT * FROM mx_ref_table ORDER BY col_1;
+ col_1 | col_2  
+-------+--------
+   -78 | sapien
+   -37 | morbi
+   -34 | augue
+(3 rows)
+
+INSERT INTO mx_ref_table (col_1, col_2) VALUES (-6, 'vestibulum');
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Modifications to reference tables are supported only from the schema node.
+UPDATE mx_ref_table SET col_2 = 'habitant' WHERE col_1 = -37;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Modifications to reference tables are supported only from the schema node.
+DELETE FROM mx_ref_table WHERE col_1 = -78;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Modifications to reference tables are supported only from the schema node.
+SELECT * FROM mx_ref_table ORDER BY col_1;
+ col_1 | col_2  
+-------+--------
+   -78 | sapien
+   -37 | morbi
+   -34 | augue
+(3 rows)
+
+\c - - - :master_port
+DROP TABLE mx_ref_table;
+\c - - - :worker_1_port
 -- DDL commands
 \d mx_table
                            Table "public.mx_table"
