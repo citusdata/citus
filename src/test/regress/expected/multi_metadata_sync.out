@@ -1221,19 +1221,56 @@ WHERE
 
 	
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
--- Cleanup
-SELECT worker_drop_distributed_table('mx_ref'::regclass);
- worker_drop_distributed_table 
--------------------------------
- 
-(1 row)
+-- Check that DDL commands are propagated to reference tables on workers
+\c - - - :master_port
+ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+CREATE INDEX mx_ref_index ON mx_ref(col_1);
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+Indexes:
+    "mx_ref_index" btree (col_1)
 
+\c - - - :worker_1_port
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+Indexes:
+    "mx_ref_index" btree (col_1)
+
+	
+-- Check that metada is cleaned successfully upon drop table
+\c - - - :master_port
+DROP TABLE mx_ref;
+\d mx_ref
+\c - - - :worker_1_port
+\d mx_ref
+SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+-- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
-DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
 ----------------------------

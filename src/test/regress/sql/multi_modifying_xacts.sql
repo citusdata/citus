@@ -758,6 +758,10 @@ AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
+-- connect back to the worker and set rename the test_user back
+\c - :default_user - :worker_1_port
+ALTER USER test_user_new RENAME TO test_user;
+
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second;
