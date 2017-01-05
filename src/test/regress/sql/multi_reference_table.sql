@@ -986,5 +986,5 @@ ROLLBACK;
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
-		   reference_table_test_fourth, reference_table_ddl;
+		   reference_table_test_fourth, reference_table_ddl, reference_table_composite;
 DROP SCHEMA reference_schema CASCADE;
