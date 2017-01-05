@@ -58,6 +58,7 @@ static Oid distNodeRelationId = InvalidOid;
 static Oid distLocalGroupRelationId = InvalidOid;
 static Oid distColocationRelationId = InvalidOid;
 static Oid distColocationConfigurationIndexId = InvalidOid;
+static Oid distColocationColocationidIndexId = InvalidOid;
 static Oid distPartitionRelationId = InvalidOid;
 static Oid distPartitionLogicalRelidIndexId = InvalidOid;
 static Oid distPartitionColocationidIndexId = InvalidOid;
@@ -105,7 +106,6 @@ static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
-static List * DistTableOidList(void);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
 static List * LookupDistShardTuples(Oid relationId);
@@ -759,6 +759,17 @@ DistColocationConfigurationIndexId(void)
 						 &distColocationConfigurationIndexId);
 
 	return distColocationConfigurationIndexId;
+}
+
+
+/* return oid of pg_dist_colocation_pkey index */
+Oid
+DistColocationColocationidIndexId(void)
+{
+	CachedRelationLookup("pg_dist_colocation_pkey",
+						 &distColocationColocationidIndexId);
+
+	return distColocationColocationidIndexId;
 }
 
 
@@ -1565,6 +1576,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distNodeRelationId = InvalidOid;
 		distColocationRelationId = InvalidOid;
 		distColocationConfigurationIndexId = InvalidOid;
+		distColocationColocationidIndexId = InvalidOid;
 		distPartitionRelationId = InvalidOid;
 		distPartitionLogicalRelidIndexId = InvalidOid;
 		distPartitionColocationidIndexId = InvalidOid;
@@ -1583,7 +1595,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
  * DistTableOidList iterates over the pg_dist_partition table and returns
  * a list that consists of the logicalrelids.
  */
-static List *
+List *
 DistTableOidList(void)
 {
 	SysScanDesc scanDescriptor = NULL;

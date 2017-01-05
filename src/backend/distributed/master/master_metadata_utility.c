@@ -31,6 +31,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
+#include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_shard_placement.h"
@@ -864,6 +865,63 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistShardPlacement, NoLock);
+}
+
+
+/*
+ * UpdateColocationGroupReplicationFactor finds colocation group record for given
+ * colocationId and updates its replication factor to given replicationFactor value.
+ * Since we do not cache pg_dist_colocation table, we do not need to invalidate the
+ * cache after updating replication factor.
+ */
+void
+UpdateColocationGroupReplicationFactor(uint32 colocationId, int replicationFactor)
+{
+	Relation pgDistColocation = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	HeapTuple heapTuple = NULL;
+	TupleDesc tupleDescriptor = NULL;
+
+	Datum values[Natts_pg_dist_colocation];
+	bool isnull[Natts_pg_dist_colocation];
+	bool replace[Natts_pg_dist_colocation];
+
+	/* we first search for colocation group by its colocation id */
+	pgDistColocation = heap_open(DistColocationRelationId(), RowExclusiveLock);
+	tupleDescriptor = RelationGetDescr(pgDistColocation);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_colocation_colocationid, BTEqualStrategyNumber,
+				F_OIDEQ, ObjectIdGetDatum(colocationId));
+
+	scanDescriptor = systable_beginscan(pgDistColocation,
+										DistColocationColocationidIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_OBJECT),
+						errmsg("could not find valid entry for colocation group "
+							   "%d", colocationId)));
+	}
+
+	/* after we find colocation group, we update it with new values */
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_colocation_replicationfactor - 1] = Int32GetDatum(
+		replicationFactor);
+	isnull[Anum_pg_dist_colocation_replicationfactor - 1] = false;
+	replace[Anum_pg_dist_colocation_replicationfactor - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	simple_heap_update(pgDistColocation, &heapTuple->t_self, heapTuple);
+
+	CatalogUpdateIndexes(pgDistColocation, heapTuple);
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistColocation, NoLock);
 }
 
 
