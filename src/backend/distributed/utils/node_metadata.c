@@ -30,6 +30,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -48,7 +49,7 @@ int GroupSize = 1;
 
 /* local function forward declarations */
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
-							 char *nodeRack, bool hasMetadata);
+							 char *nodeRack, bool hasMetadata, bool *nodeAlreadyExists);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static uint32 GetMaxGroupId(void);
@@ -67,7 +68,8 @@ PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
 
 /*
- * master_add_node function adds a new node to the cluster and returns its data.
+ * master_add_node function adds a new node to the cluster and returns its data. It also
+ * replicates all reference tables to the new node.
  */
 Datum
 master_add_node(PG_FUNCTION_ARGS)
@@ -78,9 +80,21 @@ master_add_node(PG_FUNCTION_ARGS)
 	int32 groupId = 0;
 	char *nodeRack = WORKER_DEFAULT_RACK;
 	bool hasMetadata = false;
+	bool nodeAlreadyExists = false;
 
 	Datum returnData = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-									   hasMetadata);
+									   hasMetadata, &nodeAlreadyExists);
+
+	/*
+	 * After adding new node, if the node is not already exist, we  replicate all existing
+	 * reference tables to the new node. ReplicateAllReferenceTablesToAllNodes replicates
+	 * reference tables to all nodes however, it skips nodes which already has healthy
+	 * placement of particular reference table.
+	 */
+	if (!nodeAlreadyExists)
+	{
+		ReplicateAllReferenceTablesToAllNodes();
+	}
 
 	PG_RETURN_CSTRING(returnData);
 }
@@ -137,13 +151,14 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
 	ListCell *workerNodeCell = NULL;
 	List *workerNodes = ParseWorkerNodeFileAndRename();
+	bool nodeAlreadyExists = false;
 
 	foreach(workerNodeCell, workerNodes)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 
 		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, 0,
-						workerNode->workerRack, false);
+						workerNode->workerRack, false, &nodeAlreadyExists);
 	}
 
 	PG_RETURN_BOOL(true);
@@ -336,7 +351,7 @@ ReadWorkerNodes()
  */
 static Datum
 AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
-				bool hasMetadata)
+				bool hasMetadata, bool *nodeAlreadyExists)
 {
 	Relation pgDistNode = NULL;
 	int nextNodeIdInt = 0;
@@ -348,6 +363,8 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 
 	EnsureSchemaNode();
 	EnsureSuperUser();
+
+	*nodeAlreadyExists = false;
 
 	/* acquire a lock so that no one can do this concurrently */
 	pgDistNode = heap_open(DistNodeRelationId(), AccessExclusiveLock);
@@ -361,6 +378,8 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 
 		/* close the heap */
 		heap_close(pgDistNode, AccessExclusiveLock);
+
+		*nodeAlreadyExists = true;
 
 		PG_RETURN_DATUM(returnData);
 	}

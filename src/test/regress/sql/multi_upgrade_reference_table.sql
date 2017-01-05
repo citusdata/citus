@@ -6,6 +6,7 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1360000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1360000;
 
 -- test with not distributed table
 CREATE TABLE upgrade_reference_table_local(column1 int);
@@ -91,7 +92,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -122,7 +124,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -155,7 +158,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -186,7 +190,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -221,7 +226,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -252,7 +258,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -285,7 +292,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -316,7 +324,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -350,7 +359,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -383,7 +393,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -417,7 +428,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
@@ -450,7 +462,8 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
 
-SELECT *
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
 FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid

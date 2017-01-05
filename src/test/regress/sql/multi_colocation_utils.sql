@@ -219,11 +219,11 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 
 -- check effects of dropping tables
 DROP TABLE table1_groupA;
-SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 
 -- dropping all tables in a colocation group also deletes the colocation group
 DROP TABLE table2_groupA;
-SELECT * FROM pg_dist_colocation WHERE colocationid = 1;
+SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 
 -- create dropped colocation group again
 SET citus.shard_count = 2;
