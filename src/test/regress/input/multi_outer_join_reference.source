@@ -449,3 +449,9 @@ SELECT
 FROM 
 	multi_outer_join_right_reference FULL JOIN 
 	multi_outer_join_third_reference ON (t_custkey = r_custkey);
+
+-- DROP unused tables to clean up workspace
+DROP TABLE multi_outer_join_left_hash;
+DROP TABLE multi_outer_join_right_reference;
+DROP TABLE multi_outer_join_third_reference;
+DROP TABLE multi_outer_join_right_hash;

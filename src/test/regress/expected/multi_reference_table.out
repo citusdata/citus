@@ -1574,7 +1574,7 @@ ERROR:  single-shard DML commands must not appear in transaction blocks which co
 ROLLBACK;
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
-		   reference_table_test_fourth, reference_table_ddl;
+		   reference_table_test_fourth, reference_table_ddl, reference_table_composite;
 DROP SCHEMA reference_schema CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table reference_schema.reference_table_test_sixth
