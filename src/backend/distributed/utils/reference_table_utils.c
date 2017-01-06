@@ -20,6 +20,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
@@ -248,18 +249,45 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 																	 nodeName, nodePort,
 																	 missingWorkerOk);
 
+		/*
+		 * Although this function is used for reference tables and reference table shard
+		 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
+		 * a non-reference table to reference table, unhealty placements may exist. In
+		 * this case, we repair the shard placement and update its state in
+		 * pg_dist_shard_placement table.
+		 */
 		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 		{
+			uint64 placementId = 0;
+
 			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 													   ddlCommandList);
 			if (targetPlacement == NULL)
 			{
-				InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, FILE_FINALIZED, 0,
+				placementId = GetNextPlacementId();
+				InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0,
 										nodeName, nodePort);
 			}
 			else
 			{
-				UpdateShardPlacementState(targetPlacement->placementId, FILE_FINALIZED);
+				placementId = targetPlacement->placementId;
+				UpdateShardPlacementState(placementId, FILE_FINALIZED);
+			}
+
+			/*
+			 * Although ReplicateShardToAllWorkers is used only for reference tables,
+			 * during the upgrade phase, the placements are created before the table is
+			 * marked as a reference table. All metadata (including the placement
+			 * metadata) will be copied to workers after all reference table changed
+			 * are finished.
+			 */
+			if (ShouldSyncTableMetadata(shardInterval->relationId))
+			{
+				char *placementCommand = PlacementUpsertCommand(shardId, placementId,
+																FILE_FINALIZED, 0,
+																nodeName, nodePort);
+
+				SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
 			}
 		}
 	}

@@ -13,6 +13,9 @@ SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_pla
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART 100000;
 
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
+
 -- Create the necessary test utility function
 CREATE FUNCTION master_metadata_snapshot()
     RETURNS text[]
@@ -544,11 +547,45 @@ DROP TABLE mx_ref;
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 
+-- Check that master_add_node propagates the metadata about new placements of a reference table
+\c - - - :master_port
+CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT master_remove_node('localhost', :worker_2_port);
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+
+\c - - - :master_port
+SELECT master_add_node('localhost', :worker_2_port);
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+
+\c - - - :master_port
+INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
+DROP TABLE tmp_shard_placement;
+
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
@@ -556,5 +593,7 @@ RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.multi_shard_commit_protocol;
 
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
