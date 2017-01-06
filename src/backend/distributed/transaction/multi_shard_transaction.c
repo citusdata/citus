@@ -44,7 +44,6 @@ OpenTransactionsToAllShardPlacements(List *shardIntervalList, char *userName)
 {
 	ListCell *shardIntervalCell = NULL;
 	List *newConnectionList = NIL;
-	ListCell *connectionCell = NULL;
 
 	if (shardConnectionHash == NULL)
 	{
@@ -121,12 +120,7 @@ OpenTransactionsToAllShardPlacements(List *shardIntervalList, char *userName)
 	}
 
 	/* finish connection establishment newly opened connections */
-	foreach(connectionCell, newConnectionList)
-	{
-		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
-
-		FinishConnectionEstablishment(connection);
-	}
+	FinishConnectionListEstablishment(newConnectionList);
 
 	/* the special BARE mode (for e.g. VACUUM/ANALYZE) skips BEGIN */
 	if (MultiShardCommitProtocol > COMMIT_PROTOCOL_BARE)
