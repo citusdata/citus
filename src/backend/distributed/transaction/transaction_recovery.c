@@ -23,14 +23,12 @@
 #include "access/relscan.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
-#include "distributed/commit_protocol.h"
 #include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/pg_dist_transaction.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
-#include "distributed/worker_transaction.h"
 #include "lib/stringinfo.h"
 #include "storage/lmgr.h"
 #include "storage/lock.h"
@@ -68,35 +66,6 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
 	recoveredTransactionCount = RecoverPreparedTransactions();
 
 	PG_RETURN_INT32(recoveredTransactionCount);
-}
-
-
-/*
- * LogPreparedTransactions logs a commit record for all prepared transactions
- * on connections in connectionList. The remote transaction is safe to commit
- * once the record has been durably stored (i.e. the local transaction is
- * committed).
- */
-void
-LogPreparedTransactions(List *connectionList)
-{
-	ListCell *connectionCell = NULL;
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-
-		char transactionState PG_USED_FOR_ASSERTS_ONLY =
-			transactionConnection->transactionState;
-		int groupId = transactionConnection->groupId;
-		int64 connectionId = transactionConnection->connectionId;
-		StringInfo transactionName = BuildTransactionName(connectionId);
-
-		Assert(transactionState == TRANSACTION_STATE_PREPARED);
-
-		LogTransactionRecord(groupId, transactionName->data);
-	}
 }
 
 
