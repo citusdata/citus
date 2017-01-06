@@ -37,8 +37,6 @@ extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags, List *taskList
 extern void RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count);
 extern void RouterExecutorFinish(QueryDesc *queryDesc);
 extern void RouterExecutorEnd(QueryDesc *queryDesc);
-extern void RouterExecutorPreCommitCheck(void);
-extern void RouterExecutorPostCommit(void);
 
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
 
