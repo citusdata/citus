@@ -12,11 +12,7 @@
 #define TRANSACTION_RECOVERY_H
 
 
-#include "nodes/pg_list.h"
-
-
 /* Functions declarations for worker transactions */
-extern void LogPreparedTransactions(List *connectionList);
 extern void LogTransactionRecord(int groupId, char *transactionName);
 
 
