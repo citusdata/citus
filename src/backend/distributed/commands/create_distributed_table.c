@@ -79,7 +79,7 @@ static void CreateHashDistributedTable(Oid relationId, char *distributionColumnN
 									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
-
+static void CreateTableMetadataOnWorkers(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -177,18 +177,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		List *commandList = GetDistributedTableDDLEvents(relationId);
-		ListCell *commandCell = NULL;
-
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-
-		/* send the commands one by one */
-		foreach(commandCell, commandList)
-		{
-			char *command = (char *) lfirst(commandCell);
-
-			SendCommandToWorkers(WORKERS_WITH_METADATA, command);
-		}
+		CreateTableMetadataOnWorkers(relationId);
 	}
 
 	PG_RETURN_VOID();
@@ -244,6 +233,8 @@ CreateReferenceTable(Oid relationId)
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
+
+	CreateTableMetadataOnWorkers(relationId);
 }
 
 
@@ -988,4 +979,30 @@ ColumnType(Oid relationId, char *columnName)
 	Oid columnType = get_atttype(relationId, columnIndex);
 
 	return columnType;
+}
+
+
+/*
+ * CreateTableMetadataOnWorkers creates the list of commands needed to create the
+ * given distributed table and sends these commands to all metadata workers i.e. workers
+ * with hasmetadata=true. Before sending the commands, in order to prevent recursive
+ * propagation, DDL propagation on workers are disabled with a
+ * `SET citus.enable_ddl_propagation TO off;` command.
+ */
+static void
+CreateTableMetadataOnWorkers(Oid relationId)
+{
+	List *commandList = GetDistributedTableDDLEvents(relationId);
+	ListCell *commandCell = NULL;
+
+	/* prevenet recursive propagation */
+	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+	/* send the commands one by one */
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+	}
 }
