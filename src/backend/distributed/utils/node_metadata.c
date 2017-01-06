@@ -121,19 +121,22 @@ master_remove_node(PG_FUNCTION_ARGS)
 	EnsureSuperUser();
 
 	hasShardPlacements = NodeHasActiveShardPlacements(nodeNameString, nodePort);
-	if (hasShardPlacements && force)
+	if (hasShardPlacements)
 	{
-		ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some "
-								"queries may fail after this operation. Use "
-								"select master_add_node('%s', %d) to add this "
-								"node back.",
-								nodeNameString, nodePort, nodeNameString,
-								nodePort)));
-	}
-	else if (hasShardPlacements)
-	{
-		ereport(ERROR, (errmsg("you cannot remove a node which has active "
-							   "shard placements")));
+		if (force)
+		{
+			ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some "
+									"queries may fail after this operation. Use "
+									"select master_add_node('%s', %d) to add this "
+									"node back.",
+									nodeNameString, nodePort, nodeNameString,
+									nodePort)));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("you cannot remove a node which has active "
+								   "shard placements")));
+		}
 	}
 
 	workerNode = FindWorkerNode(nodeNameString, nodePort);
