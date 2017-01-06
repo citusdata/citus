@@ -111,15 +111,14 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
 
--- this logic even applies to router SELECTs occurring after a modification:
--- selecting from the modified node is fine...
+-- SELECTs may occur after a modification: First check that selecting
+-- from the modified node works.
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
 ABORT;
 
--- but if a SELECT needs to go to new node, that's a problem...
-
+-- then check that SELECT going to new node still is fine
 BEGIN;
 
 UPDATE pg_dist_shard_placement AS sp SET shardstate = 3
