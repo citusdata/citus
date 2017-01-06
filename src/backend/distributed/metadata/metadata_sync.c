@@ -671,6 +671,24 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 
 
 /*
+ * PlacementUpsertCommand creates a SQL command for upserting a pg_dist_shard_placment
+ * entry with the given properties. In the case of a conflict on placementId, the command
+ * updates all properties (excluding the placementId) with the given ones.
+ */
+char *
+PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
+					   uint64 shardLength, char *nodeName, uint32 nodePort)
+{
+	StringInfo command = makeStringInfo();
+
+	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardState, shardLength,
+					 quote_literal_cstr(nodeName), nodePort, placementId);
+
+	return command->data;
+}
+
+
+/*
  * LocalGroupIdUpdateCommand creates the SQL command required to set the local group id
  * of a worker and returns the command in a string.
  */
