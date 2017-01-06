@@ -23,8 +23,8 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 --------------+------------+---------+--------------+----------
 (0 rows)
 
--- Show that, with no MX tables, metadata snapshot contains only the delete commands and 
--- pg_dist_node entries
+-- Show that, with no MX tables, metadata snapshot contains only the delete commands,
+-- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot());
                                                                                          unnest                                                                                         
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1181,12 +1181,59 @@ DROP USER mx_user;
 DROP USER mx_user;
 \c - - - :worker_2_port
 DROP USER mx_user;
+-- Check that create_reference_table creates the metadata on workers
+\c - - - :master_port
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+
+\c - - - :worker_1_port
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+
+SELECT
+	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
+FROM
+	pg_dist_partition 
+	NATURAL JOIN pg_dist_shard
+	NATURAL JOIN pg_dist_shard_placement
+WHERE
+	logicalrelid = 'mx_ref'::regclass;
+ logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
+--------------+------------+----------+---------+-------------+-----------+----------
+ mx_ref       | n          | t        | 1310183 |      100184 | localhost |    57638
+ mx_ref       | n          | t        | 1310183 |      100183 | localhost |    57637
+(2 rows)
+
+	
+SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
 -- Cleanup
+SELECT worker_drop_distributed_table('mx_ref'::regclass);
+ worker_drop_distributed_table 
+-------------------------------
+ 
+(1 row)
+
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
 ----------------------------

@@ -436,19 +436,30 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	char *partitionKeyString = cacheEntry->partitionKeyString;
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
-	char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
 	uint32 colocationId = cacheEntry->colocationId;
 	char replicationModel = cacheEntry->replicationModel;
+	StringInfo tablePartitionKeyString = makeStringInfo();
+
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	{
+		appendStringInfo(tablePartitionKeyString, "NULL");
+	}
+	else
+	{
+		char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
+						 quote_literal_cstr(qualifiedRelationName),
+						 quote_literal_cstr(partitionKeyColumnName));
+	}
 
 	appendStringInfo(insertDistributionCommand,
 					 "INSERT INTO pg_dist_partition "
 					 "(logicalrelid, partmethod, partkey, colocationid, repmodel) "
 					 "VALUES "
-					 "(%s::regclass, '%c', column_name_to_column(%s,%s), %d, '%c')",
+					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
-					 quote_literal_cstr(qualifiedRelationName),
-					 quote_literal_cstr(partitionKeyColumnName),
+					 tablePartitionKeyString->data,
 					 colocationId,
 					 replicationModel);
 
@@ -511,20 +522,12 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertShardCommand = makeStringInfo();
 	int shardCount = list_length(shardIntervalList);
 	int processedShardCount = 0;
-	int processedShardPlacementCount = 0;
 
 	/* if there are no shards, return empty list */
 	if (shardCount == 0)
 	{
 		return commandList;
 	}
-
-	/* generate the shard placement query without any values yet */
-	appendStringInfo(insertPlacementCommand,
-					 "INSERT INTO pg_dist_shard_placement "
-					 "(shardid, shardstate, shardlength,"
-					 " nodename, nodeport, placementid) "
-					 "VALUES ");
 
 	/* add placements to insertPlacementCommand */
 	foreach(shardIntervalCell, shardIntervalList)
@@ -533,25 +536,33 @@ ShardListInsertCommand(List *shardIntervalList)
 		uint64 shardId = shardInterval->shardId;
 
 		List *shardPlacementList = FinalizedShardPlacementList(shardId);
-		ShardPlacement *placement = NULL;
+		ListCell *shardPlacementCell = NULL;
 
-		/* the function only handles single placement per shard */
-		Assert(list_length(shardPlacementList) == 1);
-
-		placement = (ShardPlacement *) linitial(shardPlacementList);
-
-		appendStringInfo(insertPlacementCommand,
-						 "(%lu, 1, %lu, %s, %d, %lu)",
-						 shardId,
-						 placement->shardLength,
-						 quote_literal_cstr(placement->nodeName),
-						 placement->nodePort,
-						 placement->placementId);
-
-		processedShardPlacementCount++;
-		if (processedShardPlacementCount != shardCount)
+		foreach(shardPlacementCell, shardPlacementList)
 		{
-			appendStringInfo(insertPlacementCommand, ",");
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+
+			if (insertPlacementCommand->len == 0)
+			{
+				/* generate the shard placement query without any values yet */
+				appendStringInfo(insertPlacementCommand,
+								 "INSERT INTO pg_dist_shard_placement "
+								 "(shardid, shardstate, shardlength,"
+								 " nodename, nodeport, placementid) "
+								 "VALUES ");
+			}
+			else
+			{
+				appendStringInfo(insertPlacementCommand, ",");
+			}
+
+			appendStringInfo(insertPlacementCommand,
+							 "(%lu, 1, %lu, %s, %d, %lu)",
+							 shardId,
+							 placement->shardLength,
+							 quote_literal_cstr(placement->nodeName),
+							 placement->nodePort,
+							 placement->placementId);
 		}
 	}
 
@@ -573,17 +584,37 @@ ShardListInsertCommand(List *shardIntervalList)
 		Oid distributedRelationId = shardInterval->relationId;
 		char *qualifiedRelationName = generate_qualified_relation_name(
 			distributedRelationId);
+		StringInfo minHashToken = makeStringInfo();
+		StringInfo maxHashToken = makeStringInfo();
 
-		int minHashToken = DatumGetInt32(shardInterval->minValue);
-		int maxHashToken = DatumGetInt32(shardInterval->maxValue);
+		if (shardInterval->minValueExists)
+		{
+			appendStringInfo(minHashToken, "'%d'", DatumGetInt32(
+								 shardInterval->minValue));
+		}
+		else
+		{
+			appendStringInfo(minHashToken, "NULL");
+		}
+
+
+		if (shardInterval->maxValueExists)
+		{
+			appendStringInfo(maxHashToken, "'%d'", DatumGetInt32(
+								 shardInterval->maxValue));
+		}
+		else
+		{
+			appendStringInfo(maxHashToken, "NULL");
+		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %lu, '%c', '%d', '%d')",
+						 "(%s::regclass, %lu, '%c', %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
-						 minHashToken,
-						 maxHashToken);
+						 minHashToken->data,
+						 maxHashToken->data);
 
 		processedShardCount++;
 		if (processedShardCount != shardCount)

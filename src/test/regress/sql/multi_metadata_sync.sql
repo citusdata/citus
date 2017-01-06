@@ -25,8 +25,8 @@ COMMENT ON FUNCTION master_metadata_snapshot()
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 
--- Show that, with no MX tables, metadata snapshot contains only the delete commands and 
--- pg_dist_node entries
+-- Show that, with no MX tables, metadata snapshot contains only the delete commands,
+-- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot());
 
 -- Create a test table with constraints and SERIAL
@@ -506,11 +506,33 @@ DROP USER mx_user;
 \c - - - :worker_2_port
 DROP USER mx_user;
 
+-- Check that create_reference_table creates the metadata on workers
+\c - - - :master_port
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+\d mx_ref
+
+\c - - - :worker_1_port
+\d mx_ref
+SELECT
+	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
+FROM
+	pg_dist_partition 
+	NATURAL JOIN pg_dist_shard
+	NATURAL JOIN pg_dist_shard_placement
+WHERE
+	logicalrelid = 'mx_ref'::regclass;
+	
+SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
+
 -- Cleanup
+SELECT worker_drop_distributed_table('mx_ref'::regclass);
+
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
