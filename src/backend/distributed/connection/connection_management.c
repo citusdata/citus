@@ -23,6 +23,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/placement_connection.h"
 #include "mb/pg_wchar.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
@@ -234,6 +235,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port, 
 	connection = StartConnectionEstablishment(&key);
 
 	dlist_push_tail(entry->connections, &connection->connectionNode);
+	ResetShardPlacementAssociation(connection);
 
 	if (flags & SESSION_LIFESPAN)
 	{
@@ -333,6 +335,7 @@ CloseNodeConnections(char *nodeName, int nodePort)
 
 			/* same for transaction state */
 			CloseRemoteTransaction(connection);
+			CloseShardPlacementAssociation(connection);
 
 			/* we leave the per-host entry alive */
 			pfree(connection);
@@ -366,8 +369,9 @@ CloseConnection(MultiConnection *connection)
 		/* unlink from list of open connections */
 		dlist_delete(&connection->connectionNode);
 
-		/* same for transaction state */
+		/* same for transaction state and shard/placement machinery */
 		CloseRemoteTransaction(connection);
+		CloseShardPlacementAssociation(connection);
 
 		/* we leave the per-host entry alive */
 		pfree(connection);
@@ -692,6 +696,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 		{
 			/* reset per-transaction state */
 			ResetRemoteTransaction(connection);
+			ResetShardPlacementAssociation(connection);
 
 			UnclaimConnection(connection);
 		}

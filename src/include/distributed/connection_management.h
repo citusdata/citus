@@ -33,7 +33,11 @@ enum MultiConnectionMode
 	FORCE_NEW_CONNECTION = 1 << 0,
 
 	/* mark returned connection as having session lifespan */
-	SESSION_LIFESPAN = 1 << 1
+	SESSION_LIFESPAN = 1 << 1,
+
+	FOR_DDL = 1 << 2,
+
+	FOR_DML = 1 << 3
 };
 
 
@@ -68,6 +72,9 @@ typedef struct MultiConnection
 
 	/* membership in list of in-progress transactions */
 	dlist_node transactionNode;
+
+	/* list of all placements referenced by this connection */
+	dlist_head referencedPlacements;
 } MultiConnection;
 
 
