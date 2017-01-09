@@ -24,8 +24,10 @@
 #include "commands/copy.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_server_executor.h"
@@ -68,6 +70,8 @@ static const char * RemoteTableOwner(const char *nodeName, uint32 nodePort,
 static StringInfo ForeignFilePath(const char *nodeName, uint32 nodePort,
 								  const char *tableName);
 static bool check_log_statement(List *stmt_list);
+static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName);
+static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* exports for SQL callable functions */
@@ -75,6 +79,7 @@ PG_FUNCTION_INFO_V1(worker_fetch_partition_file);
 PG_FUNCTION_INFO_V1(worker_fetch_query_results_file);
 PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
+PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
@@ -444,6 +449,51 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 											   rightShardSchemaName);
 	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
 				   None_Receiver, NULL);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_apply_sequence_command takes a CREATE SEQUENCE command string, runs the
+ * CREATE SEQUENCE command then creates and runs an ALTER SEQUENCE statement
+ * which adjusts the minvalue and maxvalue of the sequence such that the sequence
+ * creates globally unique values.
+ */
+Datum
+worker_apply_sequence_command(PG_FUNCTION_ARGS)
+{
+	text *commandText = PG_GETARG_TEXT_P(0);
+	const char *commandString = text_to_cstring(commandText);
+	Node *commandNode = ParseTreeNode(commandString);
+	CreateSeqStmt *createSequenceStatement = NULL;
+	char *sequenceName = NULL;
+	char *sequenceSchema = NULL;
+	Oid sequenceRelationId = InvalidOid;
+
+	NodeTag nodeType = nodeTag(commandNode);
+	if (nodeType != T_CreateSeqStmt)
+	{
+		ereport(ERROR,
+				(errmsg("must call worker_apply_sequence_command with a CREATE"
+						" SEQUENCE command string")));
+	}
+
+	/* run the CREATE SEQUENCE command */
+	ProcessUtility(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL,
+				   NULL, None_Receiver, NULL);
+
+	createSequenceStatement = (CreateSeqStmt *) commandNode;
+
+	sequenceName = createSequenceStatement->sequence->relname;
+	sequenceSchema = createSequenceStatement->sequence->schemaname;
+	createSequenceStatement = (CreateSeqStmt *) commandNode;
+
+	sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
+										  AccessShareLock, false);
+	Assert(sequenceRelationId != InvalidOid);
+
+	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName);
 
 	PG_RETURN_VOID();
 }
@@ -1243,4 +1293,96 @@ check_log_statement(List *statementList)
 	}
 
 	return false;
+}
+
+
+/*
+ * AlterSequenceMinMax arranges the min and max value of the given sequence. The function
+ * creates ALTER SEQUENCE statemenet which sets the start, minvalue and maxvalue of
+ * the given sequence.
+ *
+ * The function provides the uniqueness by shifting the start of the sequence by
+ * GetLocalGroupId() << 48 + 1 and sets a maxvalue which stops it from passing out any
+ * values greater than: (GetLocalGroupID() + 1) << 48.
+ *
+ * This is to ensure every group of workers passes out values from a unique range,
+ * and therefore that all values generated for the sequence are globally unique.
+ */
+static void
+AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
+{
+	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceId);
+	int64 startValue = 0;
+	int64 maxValue = 0;
+
+	/* calculate min/max values that the sequence can generate in this worker */
+	startValue = (((int64) GetLocalGroupId()) << 48) + 1;
+	maxValue = startValue + ((int64) 1 << 48);
+
+	/*
+	 * We alter the sequence if the previously set min and max values are not equal to
+	 * their correct values. This happens when the sequence has been created
+	 * during shard, before the current worker having the metadata.
+	 */
+	if (sequenceData->min_value != startValue || sequenceData->max_value != maxValue)
+	{
+		StringInfo startNumericString = makeStringInfo();
+		StringInfo maxNumericString = makeStringInfo();
+		Node *startFloatArg = NULL;
+		Node *maxFloatArg = NULL;
+		AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
+		const char *dummyString = "-";
+
+		alterSequenceStatement->sequence = makeRangeVar(schemaName, sequenceName, -1);
+
+		/*
+		 * DefElem->arg can only hold literal ints up to int4, in order to represent
+		 * larger numbers we need to construct a float represented as a string.
+		 */
+		appendStringInfo(startNumericString, "%lu", startValue);
+		startFloatArg = (Node *) makeFloat(startNumericString->data);
+
+		appendStringInfo(maxNumericString, "%lu", maxValue);
+		maxFloatArg = (Node *) makeFloat(maxNumericString->data);
+
+		SetDefElemArg(alterSequenceStatement, "start", startFloatArg);
+		SetDefElemArg(alterSequenceStatement, "minvalue", startFloatArg);
+		SetDefElemArg(alterSequenceStatement, "maxvalue", maxFloatArg);
+
+		SetDefElemArg(alterSequenceStatement, "restart", startFloatArg);
+
+		/* since the command is an AlterSeqStmt, a dummy command string works fine */
+		ProcessUtility((Node *) alterSequenceStatement, dummyString,
+					   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+	}
+}
+
+
+/*
+ * SetDefElemArg scans through all the DefElem's of an AlterSeqStmt and
+ * and sets the arg of the one with a defname of name to arg.
+ *
+ * If a DefElem with the given defname does not exist it is created and
+ * added to the AlterSeqStmt.
+ */
+static void
+SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
+{
+	DefElem *defElem = NULL;
+	ListCell *optionCell = NULL;
+
+	foreach(optionCell, statement->options)
+	{
+		defElem = (DefElem *) lfirst(optionCell);
+
+		if (strcmp(defElem->defname, name) == 0)
+		{
+			pfree(defElem->arg);
+			defElem->arg = arg;
+			return;
+		}
+	}
+
+	defElem = makeDefElem((char *) name, arg);
+	statement->options = lappend(statement->options, defElem);
 }

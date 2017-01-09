@@ -44,6 +44,7 @@
 #include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/worker_manager.h"
 #include "foreign/foreign.h"
@@ -69,7 +70,6 @@ int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 
 
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
-static char * SchemaOwner(Oid schemaId);
 
 
 /* exports for SQL callable functions */
@@ -617,7 +617,7 @@ GetTableDDLEvents(Oid relationId)
 	ListCell *sequenceIdCell;
 	char *tableSchemaDef = NULL;
 	char *tableColumnOptionsDef = NULL;
-	char *schemaName = NULL;
+	char *createSchemaCommand = NULL;
 	Oid schemaId = InvalidOid;
 
 	Relation pgIndex = NULL;
@@ -652,14 +652,10 @@ GetTableDDLEvents(Oid relationId)
 
 	/* create schema if the table is not in the default namespace (public) */
 	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
-	if (strncmp(schemaName, "public", NAMEDATALEN) != 0)
+	createSchemaCommand = CreateSchemaDDLCommand(schemaId);
+	if (createSchemaCommand != NULL)
 	{
-		StringInfo schemaNameDef = makeStringInfo();
-		char *ownerName = SchemaOwner(schemaId);
-		appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, schemaName, ownerName);
-
-		tableDDLEventList = lappend(tableDDLEventList, schemaNameDef->data);
+		tableDDLEventList = lappend(tableDDLEventList, createSchemaCommand);
 	}
 
 	/* create sequences if needed */
@@ -889,48 +885,4 @@ WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor)
 	workerNodeDatum = HeapTupleGetDatum(workerNodeTuple);
 
 	return workerNodeDatum;
-}
-
-
-/*
- * SchemaOwner returns the name of the owner of the specified schema.
- */
-char *
-SchemaOwner(Oid schemaId)
-{
-	const int scanKeyCount = 1;
-
-	Relation namespaceRelation = heap_open(NamespaceRelationId, AccessShareLock);
-	ScanKeyData scanKeyData[scanKeyCount];
-	SysScanDesc scanDescriptor = NULL;
-	HeapTuple tuple = NULL;
-	char *ownerName = NULL;
-
-	/* start scan */
-	ScanKeyInit(&scanKeyData[0],
-				ObjectIdAttributeNumber,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(schemaId));
-
-	scanDescriptor = systable_beginscan(namespaceRelation, NamespaceOidIndexId, true,
-										SnapshotSelf, 1, &scanKeyData[0]);
-	tuple = systable_getnext(scanDescriptor);
-
-	if (HeapTupleIsValid(tuple))
-	{
-		Form_pg_namespace nsptup = (Form_pg_namespace) GETSTRUCT(tuple);
-		Oid ownerId = nsptup->nspowner;
-
-		ownerName = GetUserNameFromId(ownerId, false);
-	}
-	else
-	{
-		/* if the schema is not found, then return the name of current user */
-		ownerName = GetUserNameFromId(GetUserId(), false);
-	}
-
-	systable_endscan(scanDescriptor);
-	heap_close(namespaceRelation, NoLock);
-
-	return ownerName;
 }

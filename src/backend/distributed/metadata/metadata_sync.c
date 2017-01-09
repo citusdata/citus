@@ -20,10 +20,13 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
@@ -40,11 +43,18 @@
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/syscache.h"
+#include "utils/tqual.h"
 
 
 static char * LocalGroupIdUpdateCommand(uint32 groupId);
 static void MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata);
+static List * SequenceDDLCommandsForTable(Oid relationId);
+static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
+static Oid TypeOfColumn(Oid tableId, int16 columnId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
+static char * OwnerName(Oid objectId);
+static bool HasMetadataWorkers(void);
 
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
@@ -88,6 +98,8 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 								nodeNameString, nodePort)));
 	}
 
+	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+
 	/* generate and add the local group id's update query */
 	localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
@@ -112,8 +124,6 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	 */
 	SendCommandListToWorkerInSingleTransaction(nodeNameString, nodePort, extensionOwner,
 											   recreateMetadataSnapshotCommandList);
-
-	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
 	PG_RETURN_VOID();
 }
@@ -217,11 +227,14 @@ MetadataCreateCommands(void)
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		Oid relationId = cacheEntry->relationId;
 
-		List *commandList = GetTableDDLEvents(relationId);
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		List *ddlCommandList = GetTableDDLEvents(relationId);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  commandList);
+												  workerSequenceDDLCommands);
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  ddlCommandList);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
 	}
@@ -288,12 +301,19 @@ GetDistributedTableDDLEvents(Oid relationId)
 	List *commandList = NIL;
 	List *foreignConstraintCommands = NIL;
 	List *shardMetadataInsertCommandList = NIL;
+	List *sequenceDDLCommands = NIL;
+	List *tableDDLCommands = NIL;
 	char *tableOwnerResetCommand = NULL;
 	char *metadataCommand = NULL;
 	char *truncateTriggerCreateCommand = NULL;
 
+	/* commands to create sequences */
+	sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+	commandList = list_concat(commandList, sequenceDDLCommands);
+
 	/* commands to create the table */
-	commandList = GetTableDDLEvents(relationId);
+	tableDDLCommands = GetTableDDLEvents(relationId);
+	commandList = list_concat(commandList, tableDDLCommands);
 
 	/* command to reset the table owner */
 	tableOwnerResetCommand = TableOwnerResetCommand(relationId);
@@ -689,6 +709,131 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 
 
 /*
+ * SequenceDDLCommandsForTable returns a list of commands which create sequences (and
+ * their schemas) to run on workers before creating the relation. The sequence creation
+ * commands are wrapped with a `worker_apply_sequence_command` call, which sets the
+ * sequence space uniquely for each worker. Notice that this function is relevant only
+ * during metadata propagation to workers and adds nothing to the list of sequence
+ * commands if none of the workers is marked as receiving metadata changes.
+ */
+List *
+SequenceDDLCommandsForTable(Oid relationId)
+{
+	List *sequenceDDLList = NIL;
+	List *ownedSequences = getOwnedSequences(relationId);
+	ListCell *listCell;
+	char *ownerName = TableOwner(relationId);
+
+	foreach(listCell, ownedSequences)
+	{
+		Oid sequenceOid = (Oid) lfirst_oid(listCell);
+		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
+		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
+		StringInfo wrappedSequenceDef = makeStringInfo();
+		StringInfo sequenceGrantStmt = makeStringInfo();
+		Oid schemaId = InvalidOid;
+		char *createSchemaCommand = NULL;
+		char *sequenceName = generate_qualified_relation_name(sequenceOid);
+
+		EnsureSupportedSequenceColumnType(sequenceOid);
+
+		/* create schema if needed */
+		schemaId = get_rel_namespace(sequenceOid);
+		createSchemaCommand = CreateSchemaDDLCommand(schemaId);
+		if (createSchemaCommand != NULL)
+		{
+			sequenceDDLList = lappend(sequenceDDLList, createSchemaCommand);
+		}
+
+		appendStringInfo(wrappedSequenceDef,
+						 WORKER_APPLY_SEQUENCE_COMMAND,
+						 escapedSequenceDef);
+
+		appendStringInfo(sequenceGrantStmt,
+						 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
+						 quote_identifier(ownerName));
+
+		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
+		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+	}
+
+	return sequenceDDLList;
+}
+
+
+/*
+ * CreateSchemaDDLCommand returns a "CREATE SCHEMA..." SQL string for creating the given
+ * schema if not exists and with proper authorization.
+ */
+char *
+CreateSchemaDDLCommand(Oid schemaId)
+{
+	char *schemaName = get_namespace_name(schemaId);
+	StringInfo schemaNameDef = NULL;
+	char *ownerName = NULL;
+
+	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
+	{
+		return NULL;
+	}
+
+	schemaNameDef = makeStringInfo();
+	ownerName = OwnerName(schemaId);
+	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, schemaName, ownerName);
+
+	return schemaNameDef->data;
+}
+
+
+/*
+ * EnsureSupportedSequenceColumnType looks at the column which depends on this sequence
+ * (which it Assert's exists) and makes sure its type is suitable for use in a disributed
+ * manner.
+ *
+ * Any column which depends on a sequence (and will therefore be replicated) but which is
+ * not a BIGINT cannot be used for an mx table, because there aren't enough values to
+ * ensure that generated numbers are globally unique.
+ */
+static void
+EnsureSupportedSequenceColumnType(Oid sequenceOid)
+{
+	Oid tableId = InvalidOid;
+	Oid columnType = InvalidOid;
+	int32 columnId = 0;
+	bool shouldSyncMetadata = false;
+	bool hasMetadataWorkers = HasMetadataWorkers();
+
+	/* call sequenceIsOwned in order to get the tableId and columnId */
+	sequenceIsOwned(sequenceOid, &tableId, &columnId);
+
+	shouldSyncMetadata = ShouldSyncTableMetadata(tableId);
+
+	columnType = TypeOfColumn(tableId, (int16) columnId);
+
+	if (columnType != INT8OID && shouldSyncMetadata && hasMetadataWorkers)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot create an mx table with columns which use "
+							   "sequences, but are not BIGINT")));
+	}
+}
+
+
+/*
+ * TypeOfColumn returns the Oid of the type of the provided column of the provided table.
+ */
+static Oid
+TypeOfColumn(Oid tableId, int16 columnId)
+{
+	Relation tableRelation = relation_open(tableId, NoLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(tableRelation);
+	Form_pg_attribute attrForm = tupleDescriptor->attrs[columnId - 1];
+	relation_close(tableRelation, NoLock);
+	return attrForm->atttypid;
+}
+
+
+/*
  * TruncateTriggerCreateCommand creates a SQL query calling worker_create_truncate_trigger
  * function, which creates the truncate trigger on the worker.
  */
@@ -703,4 +848,54 @@ TruncateTriggerCreateCommand(Oid relationId)
 					 quote_literal_cstr(tableName));
 
 	return triggerCreateCommand->data;
+}
+
+
+/*
+ * OwnerName returns the name of the owner of the specified object.
+ */
+static char *
+OwnerName(Oid objectId)
+{
+	HeapTuple tuple = NULL;
+	Oid ownerId = InvalidOid;
+	char *ownerName = NULL;
+
+	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(objectId));
+	if (HeapTupleIsValid(tuple))
+	{
+		ownerId = ((Form_pg_class) GETSTRUCT(tuple))->relowner;
+	}
+	else
+	{
+		ownerId = GetUserId();
+	}
+
+	ownerName = GetUserNameFromId(ownerId, false);
+
+	return ownerName;
+}
+
+
+/*
+ * HasMetadataWorkers returns true if any of the workers in the cluster has its
+ * hasmetadata column set to true, which happens when start_metadata_sync_to_node
+ * command is run.
+ */
+static bool
+HasMetadataWorkers(void)
+{
+	List *workerNodeList = WorkerNodeList();
+	ListCell *workerNodeCell = NULL;
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		if (workerNode->hasMetadata)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

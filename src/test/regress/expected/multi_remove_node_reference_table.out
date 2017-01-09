@@ -5,6 +5,8 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
 -- create copy of pg_dist_shard_placement to reload after the test
 CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
@@ -34,9 +36,9 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-          master_add_node          
------------------------------------
- (15,15,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380000,1380000,localhost,57638,default,f)
 (1 row)
 
 -- remove a node with reference table
@@ -116,9 +118,9 @@ ERROR:  could not find valid entry for node "localhost:57638"
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-          master_add_node          
------------------------------------
- (16,16,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380001,1380001,localhost,57638,default,f)
 (1 row)
 
 -- remove node in a transaction and ROLLBACK
@@ -257,9 +259,9 @@ WHERE colocationid IN
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-          master_add_node          
------------------------------------
- (17,17,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380002,1380002,localhost,57638,default,f)
 (1 row)
 
 -- test inserting a value then removing a node in a transaction
@@ -339,9 +341,9 @@ SELECT * FROM remove_node_reference_table;
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-          master_add_node          
------------------------------------
- (18,18,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380003,1380003,localhost,57638,default,f)
 (1 row)
 
 -- test executing DDL command then removing a node in a transaction
@@ -424,9 +426,9 @@ Table "public.remove_node_reference_table"
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-          master_add_node          
------------------------------------
- (19,19,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380004,1380004,localhost,57638,default,f)
 (1 row)
 
 -- test DROP table after removing a node in a transaction
@@ -521,9 +523,9 @@ WHERE colocationid IN
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
 NOTICE:  Replicating reference table "table1" to all workers
-          master_add_node          
------------------------------------
- (20,20,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380005,1380005,localhost,57638,default,f)
 (1 row)
 
 -- test with master_disable_node
@@ -597,9 +599,9 @@ WHERE colocationid IN
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
 NOTICE:  Replicating reference table "table1" to all workers
-          master_add_node          
------------------------------------
- (21,21,localhost,57638,default,f)
+               master_add_node               
+---------------------------------------------
+ (1380006,1380006,localhost,57638,default,f)
 (1 row)
 
 -- DROP tables to clean workspace
