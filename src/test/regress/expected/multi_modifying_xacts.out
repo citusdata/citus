@@ -140,8 +140,8 @@ INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 ERROR:  no transaction participant matches localhost:57638
 DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
 COMMIT;
--- this logic even applies to router SELECTs occurring after a modification:
--- selecting from the modified node is fine...
+-- SELECTs may occur after a modification: First check that selecting
+-- from the modified node works.
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
@@ -151,7 +151,7 @@ SELECT count(*) FROM researchers WHERE lab_id = 6;
 (1 row)
 
 ABORT;
--- but if a SELECT needs to go to new node, that's a problem...
+-- then check that SELECT going to new node still is fine
 BEGIN;
 UPDATE pg_dist_shard_placement AS sp SET shardstate = 3
 FROM   pg_dist_shard AS s
@@ -161,8 +161,11 @@ AND    sp.nodeport = :worker_1_port
 AND    s.logicalrelid = 'researchers'::regclass;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
+ count 
+-------
+     0
+(1 row)
+
 ABORT;
 -- applies to DDL, too
 BEGIN;
@@ -494,7 +497,9 @@ WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:57637
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:57638
-ERROR:  could not commit transaction on any active nodes
+WARNING:  could not commit transaction for shard 1200002 on any active node
+WARNING:  could not commit transaction for shard 1200003 on any active node
+ERROR:  could not commit transaction on any active node
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
  id | name 
@@ -530,6 +535,7 @@ INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
 WARNING:  failed to commit transaction on localhost:57637
+WARNING:  could not commit transaction for shard 1200002 on any active node
 \set VERBOSITY default
 -- data to objects should be persisted, but labs should not...
 SELECT * FROM objects WHERE id = 1;
