@@ -226,6 +226,29 @@ WITH RECURSIVE hierarchy as (
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
 
+-- CTE with queries other than SELECT is not supported
+WITH new_article AS (
+    INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
+)
+SELECT * FROM new_article;
+
+-- Modifying statement in nested CTE case is covered by PostgreSQL itself
+WITH new_article AS (
+    WITH nested_cte AS (
+        INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
+    )
+    SELECT * FROM nested_cte
+)
+SELECT * FROM new_article;
+
+-- Modifying statement in a CTE in subquwey is also covered by PostgreSQL
+SELECT * FROM (
+    WITH new_article AS (
+        INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
+    )
+    SELECT * FROM new_article
+) AS subquery_cte;
+
 -- grouping sets are supported on single shard
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)
