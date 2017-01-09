@@ -268,8 +268,13 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 		appendStringInfo(dropSeqCommand, " %s", TextDatumGetCString(sequenceText));
 	}
 
-	SendCommandToWorkers(ALL_WORKERS, DISABLE_DDL_PROPAGATION);
-	SendCommandToWorkers(ALL_WORKERS, dropSeqCommand->data);
+	if (dropSeqCommand->len != 0)
+	{
+		appendStringInfoString(dropSeqCommand, " CASCADE");
+
+		SendCommandToWorkers(ALL_WORKERS, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkers(ALL_WORKERS, dropSeqCommand->data);
+	}
 
 	PG_RETURN_VOID();
 }
