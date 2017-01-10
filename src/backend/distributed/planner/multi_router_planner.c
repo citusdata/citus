@@ -127,7 +127,7 @@ static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
 														   Oid *
 														   selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
-
+static void ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 /*
  * MultiRouterPlanCreate creates a multi plan for the queries
@@ -202,8 +202,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	}
 	else
 	{
-		Assert(commandType == CMD_SELECT);
-
+		ErrorIfQueryHasModifyingCTE(query);
 		task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
 	}
 
@@ -2849,4 +2848,44 @@ InstantiatePartitionQual(Node *node, void *context)
 	}
 
 	return expression_tree_mutator(node, InstantiatePartitionQual, context);
+}
+
+
+/*
+ * ErrorIfQueryHasModifyingCTE checks if the query contains modifying common table
+ * expressions and errors out if it does.
+ */
+static void
+ErrorIfQueryHasModifyingCTE(Query *queryTree)
+{
+	ListCell *cteCell = NULL;
+
+	Assert(queryTree->commandType == CMD_SELECT);
+
+	/* we do not need to do anything if there are no CTEs */
+	if (queryTree->cteList == NIL)
+	{
+		return;
+	}
+
+	foreach(cteCell, queryTree->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+		Query *cteQuery = (Query *) cte->ctequery;
+
+		/*
+		 * Here we only check for command type of top level query. Normally there can be
+		 * nested CTE, however PostgreSQL dictates that data-modifying statements must
+		 * be at top level of CTE. Therefore it is OK to just check for top level.
+		 * Similarly, we do not need to check for subqueries.
+		 */
+		if (cteQuery->commandType != CMD_SELECT)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "modification"),
+							errdetail("Data-modifying statements are not supported in "
+									  "the WITH clauses of distributed queries.")));
+		}
+	}
 }
