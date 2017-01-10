@@ -101,7 +101,7 @@ if (defined $bindir)
 # context diffs pg_regress defaults to.  Change default to avoid
 # everyone having to (re-)learn how to change that setting.  Also add
 # a bit more context to make it easier to locate failed test sections.
-$ENV{PG_REGRESS_DIFF_OPTS} = '-du10';
+$ENV{PG_REGRESS_DIFF_OPTS} = '-dU10';
 
 my $plainRegress = "$pgxsdir/src/test/regress/pg_regress";
 my $isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
