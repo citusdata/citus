@@ -125,46 +125,59 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 void
 ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 {
-	char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
-	char *messagePrimary = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
-	char *messageDetail = PQresultErrorField(result, PG_DIAG_MESSAGE_DETAIL);
-	char *messageHint = PQresultErrorField(result, PG_DIAG_MESSAGE_HINT);
-	char *messageContext = PQresultErrorField(result, PG_DIAG_CONTEXT);
-
-	char *nodeName = connection->hostname;
-	int nodePort = connection->port;
-	int sqlState = ERRCODE_INTERNAL_ERROR;
-
-	if (sqlStateString != NULL)
+	/* we release PQresult when throwing an error because the caller can't */
+	PG_TRY();
 	{
-		sqlState = MAKE_SQLSTATE(sqlStateString[0], sqlStateString[1], sqlStateString[2],
-								 sqlStateString[3], sqlStateString[4]);
-	}
+		char *sqlStateString = PQresultErrorField(result, PG_DIAG_SQLSTATE);
+		char *messagePrimary = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
+		char *messageDetail = PQresultErrorField(result, PG_DIAG_MESSAGE_DETAIL);
+		char *messageHint = PQresultErrorField(result, PG_DIAG_MESSAGE_HINT);
+		char *messageContext = PQresultErrorField(result, PG_DIAG_CONTEXT);
 
-	/*
-	 * If the PGresult did not contain a message, the connection may provide a
-	 * suitable top level one. At worst, this is an empty string.
-	 */
-	if (messagePrimary == NULL)
-	{
-		char *lastNewlineIndex = NULL;
+		char *nodeName = connection->hostname;
+		int nodePort = connection->port;
+		int sqlState = ERRCODE_INTERNAL_ERROR;
 
-		messagePrimary = PQerrorMessage(connection->pgConn);
-		lastNewlineIndex = strrchr(messagePrimary, '\n');
-
-		/* trim trailing newline, if any */
-		if (lastNewlineIndex != NULL)
+		if (sqlStateString != NULL)
 		{
-			*lastNewlineIndex = '\0';
+			sqlState = MAKE_SQLSTATE(sqlStateString[0],
+									 sqlStateString[1],
+									 sqlStateString[2],
+									 sqlStateString[3],
+									 sqlStateString[4]);
 		}
-	}
 
-	ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
-					 messageDetail ? errdetail("%s", messageDetail) : 0,
-					 messageHint ? errhint("%s", messageHint) : 0,
-					 messageContext ? errcontext("%s", messageContext) : 0,
-					 errcontext("while executing command on %s:%d",
-								nodeName, nodePort)));
+		/*
+		 * If the PGresult did not contain a message, the connection may provide a
+		 * suitable top level one. At worst, this is an empty string.
+		 */
+		if (messagePrimary == NULL)
+		{
+			char *lastNewlineIndex = NULL;
+
+			messagePrimary = PQerrorMessage(connection->pgConn);
+			lastNewlineIndex = strrchr(messagePrimary, '\n');
+
+			/* trim trailing newline, if any */
+			if (lastNewlineIndex != NULL)
+			{
+				*lastNewlineIndex = '\0';
+			}
+		}
+
+		ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
+						 messageDetail ? errdetail("%s", messageDetail) : 0,
+						 messageHint ? errhint("%s", messageHint) : 0,
+						 messageContext ? errcontext("%s", messageContext) : 0,
+						 errcontext("while executing command on %s:%d",
+									nodeName, nodePort)));
+	}
+	PG_CATCH();
+	{
+		PQclear(result);
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
 }
 
 
