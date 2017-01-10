@@ -45,6 +45,9 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 SELECT master_remove_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
 
+-- insert a row so that master_disable_node() exercises closing connections
+INSERT INTO test_reference_table VALUES (1, '1');
+
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
 SELECT master_disable_node('localhost', :worker_2_port); 
