@@ -96,6 +96,13 @@ if (defined $bindir)
     $ENV{PATH} = ($ENV{PATH} || '').":$bindir";
 }
 
+
+# Most people are used to unified diffs these days, rather than the
+# context diffs pg_regress defaults to.  Change default to avoid
+# everyone having to (re-)learn how to change that setting.  Also add
+# a bit more context to make it easier to locate failed test sections.
+$ENV{PG_REGRESS_DIFF_OPTS} = '-du10';
+
 my $plainRegress = "$pgxsdir/src/test/regress/pg_regress";
 my $isolationRegress = "${postgresBuilddir}/src/test/isolation/pg_isolation_regress";
 if ($isolationtester && ! -f "$isolationRegress")
