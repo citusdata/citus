@@ -333,12 +333,7 @@ CloseNodeConnections(char *nodeName, int nodePort)
 			MultiConnection *connection =
 				dlist_container(MultiConnection, connectionNode, currentNode);
 
-			/* same for transaction state */
-			CloseRemoteTransaction(connection);
-			CloseShardPlacementAssociation(connection);
-
-			/* we leave the per-host entry alive */
-			pfree(connection);
+			CloseConnection(connection);
 		}
 	}
 }
