@@ -1168,13 +1168,12 @@ SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 		ExtractParametersFromParamListInfo(paramListInfo, &parameterTypes,
 										   &parameterValues);
 
-		querySent = PQsendQueryParams(connection->pgConn, query,
-									  parameterCount, parameterTypes, parameterValues,
-									  NULL, NULL, 0);
+		querySent = SendRemoteCommandParams(connection, query, parameterCount,
+											parameterTypes, parameterValues);
 	}
 	else
 	{
-		querySent = PQsendQuery(connection->pgConn, query);
+		querySent = SendRemoteCommand(connection, query);
 	}
 
 	if (querySent == 0)
@@ -1307,8 +1306,9 @@ StoreQueryResult(MaterialState *routerState, MultiConnection *connection,
 		uint32 rowCount = 0;
 		uint32 columnCount = 0;
 		ExecStatusType resultStatus = 0;
+		bool doRaiseInterrupts = true;
 
-		PGresult *result = PQgetResult(connection->pgConn);
+		PGresult *result = GetRemoteCommandResult(connection, doRaiseInterrupts);
 		if (result == NULL)
 		{
 			break;
@@ -1410,13 +1410,14 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 	*rows = 0;
 
 	/*
-	 * Due to single row mode we have to do multiple PQgetResult() to finish
-	 * processing of this query, even without RETURNING. For single-row mode
-	 * we have to loop until all rows are consumed.
+	 * Due to single row mode we have to do multiple GetRemoteCommandResult()
+	 * to finish processing of this query, even without RETURNING. For
+	 * single-row mode we have to loop until all rows are consumed.
 	 */
 	while (true)
 	{
-		PGresult *result = PQgetResult(connection->pgConn);
+		const bool doRaiseInterrupts = true;
+		PGresult *result = GetRemoteCommandResult(connection, doRaiseInterrupts);
 		ExecStatusType status = PGRES_COMMAND_OK;
 
 		if (result == NULL)
