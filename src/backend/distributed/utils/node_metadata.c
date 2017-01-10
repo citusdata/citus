@@ -48,6 +48,7 @@ int GroupSize = 1;
 
 
 /* local function forward declarations */
+static void RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove);
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
 							 char *nodeRack, bool hasMetadata, bool *nodeAlreadyExists);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
@@ -63,6 +64,7 @@ static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapT
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
+PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
 
@@ -112,30 +114,27 @@ master_remove_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-	char *nodeDeleteCommand = NULL;
-	bool hasShardPlacements = false;
-	WorkerNode *workerNode = NULL;
+	bool forceRemove = false;
+	RemoveNodeFromCluster(nodeNameString, nodePort, forceRemove);
 
-	EnsureSchemaNode();
-	EnsureSuperUser();
+	PG_RETURN_VOID();
+}
 
-	hasShardPlacements = NodeHasActiveShardPlacements(nodeNameString, nodePort);
-	if (hasShardPlacements)
-	{
-		ereport(ERROR, (errmsg("you cannot remove a node which has active "
-							   "shard placements")));
-	}
 
-	workerNode = FindWorkerNode(nodeNameString, nodePort);
-
-	DeleteNodeRow(nodeNameString, nodePort);
-
-	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
-
-	/* make sure we don't have any open connections */
-	CloseNodeConnections(nodeNameString, nodePort);
-
-	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
+/*
+ * master_disable_node function removes the provided node from the pg_dist_node table of
+ * the master node and all nodes with metadata regardless of the node having an active
+ * shard placement.
+ * The call to the master_remove_node should be done by the super user.
+ */
+Datum
+master_disable_node(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeNameString = text_to_cstring(nodeName);
+	bool forceRemove = true;
+	RemoveNodeFromCluster(nodeNameString, nodePort, forceRemove);
 
 	PG_RETURN_VOID();
 }
@@ -337,6 +336,55 @@ ReadWorkerNodes()
 	heap_close(pgDistNode, AccessExclusiveLock);
 
 	return workerNodeList;
+}
+
+
+/*
+ * RemoveNodeFromCluster removes the provided node from the pg_dist_node table of
+ * the master node and all nodes with metadata.
+ * The call to the master_remove_node should be done by the super user. If there are
+ * active shard placements on the node; the function removes the node when forceRemove
+ * flag is set, it errors out otherwise.
+ */
+static void
+RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
+{
+	char *nodeDeleteCommand = NULL;
+	bool hasShardPlacements = false;
+	WorkerNode *workerNode = NULL;
+
+	EnsureSchemaNode();
+	EnsureSuperUser();
+
+	hasShardPlacements = NodeHasActiveShardPlacements(nodeName, nodePort);
+	if (hasShardPlacements)
+	{
+		if (forceRemove)
+		{
+			ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some "
+									"queries may fail after this operation. Use "
+									"select master_add_node('%s', %d) to add this "
+									"node back.",
+									nodeName, nodePort, nodeName, nodePort)));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("you cannot remove a node which has active "
+								   "shard placements"),
+							errhint("Consider using master_disable_node.")));
+		}
+	}
+
+	workerNode = FindWorkerNode(nodeName, nodePort);
+
+	DeleteNodeRow(nodeName, nodePort);
+
+	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+
+	/* make sure we don't have any open connections */
+	CloseNodeConnections(nodeName, nodePort);
+
+	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeDeleteCommand);
 }
 
 
