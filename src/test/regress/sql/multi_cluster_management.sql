@@ -40,6 +40,17 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 SELECT master_remove_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
 
+-- try to remove a node with active placements with force = true and see that node is removed
+SELECT master_remove_node('localhost', :worker_2_port, true); 
+SELECT master_get_active_worker_nodes();
+
+-- restore the node for next tests
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- try to remove a node with active placements with force = false and see that node
+-- removal is failed
+SELECT master_remove_node('localhost', :worker_2_port, false); 
+
 -- mark all placements in the candidate node as inactive
 UPDATE pg_dist_shard_placement SET shardstate=3 WHERE nodeport=:worker_2_port;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;

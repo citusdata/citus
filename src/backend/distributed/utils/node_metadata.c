@@ -111,6 +111,7 @@ master_remove_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	bool force = PG_GETARG_BOOL(2);
 	char *nodeNameString = text_to_cstring(nodeName);
 	char *nodeDeleteCommand = NULL;
 	bool hasShardPlacements = false;
@@ -122,8 +123,20 @@ master_remove_node(PG_FUNCTION_ARGS)
 	hasShardPlacements = NodeHasActiveShardPlacements(nodeNameString, nodePort);
 	if (hasShardPlacements)
 	{
-		ereport(ERROR, (errmsg("you cannot remove a node which has active "
-							   "shard placements")));
+		if (force)
+		{
+			ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some "
+									"queries may fail after this operation. Use "
+									"select master_add_node('%s', %d) to add this "
+									"node back.",
+									nodeNameString, nodePort, nodeNameString,
+									nodePort)));
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("you cannot remove a node which has active "
+								   "shard placements")));
+		}
 	}
 
 	workerNode = FindWorkerNode(nodeNameString, nodePort);
