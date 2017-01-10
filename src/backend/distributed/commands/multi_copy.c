@@ -1819,7 +1819,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		/* we don't support copy to reference tables from workers */
-		EnsureSchemaNode();
+		EnsureCoordinator();
 	}
 	else
 	{

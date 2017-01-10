@@ -4,14 +4,9 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250000;
 CREATE TABLE reference_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 
 -- insert some data, and make sure that cannot be create_distributed_table
-INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-05');
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 
--- should error out given that there exists data
-SELECT create_reference_table('reference_table_test');
-
-TRUNCATE reference_table_test;
-
--- now should be able to create the reference table
+-- create the reference table
 SELECT create_reference_table('reference_table_test');
 
 -- see that partkey is NULL
@@ -36,8 +31,10 @@ FROM
 WHERE
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass);
 
+-- check whether data was copied into distributed table
+SELECT * FROM reference_table_test;
+
 -- now, execute some modification queries
-INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 INSERT INTO reference_table_test VALUES (3, 3.0, '3', '2016-12-03');
 INSERT INTO reference_table_test VALUES (4, 4.0, '4', '2016-12-04');
