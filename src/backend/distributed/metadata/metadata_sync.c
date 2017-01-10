@@ -384,12 +384,12 @@ NodeListInsertCommand(List *workerNodeList)
 		char *hasMetadaString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, '%s', %s)",
+						 "(%d, %d, %s, %d, %s, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
 						 workerNode->workerPort,
-						 workerNode->workerRack,
+						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadaString);
 
 		processedWorkerNodeCount++;
