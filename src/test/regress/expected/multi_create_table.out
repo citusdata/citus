@@ -75,12 +75,6 @@ CREATE TABLE nation (
 	n_name char(25) not null,
 	n_regionkey integer not null,
 	n_comment varchar(152));
-\COPY nation FROM STDIN WITH CSV
-SELECT master_create_distributed_table('nation', 'n_nationkey', 'append');
-ERROR:  cannot distribute relation "nation"
-DETAIL:  Relation "nation" contains data.
-HINT:  Empty your table before distributing it.
-TRUNCATE nation;
 SELECT create_reference_table('nation');
  create_reference_table 
 ------------------------
@@ -360,6 +354,48 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 
 DROP TABLE repmodel_test;
 RESET citus.replication_model;
+-- Test initial data loading
+CREATE TABLE data_load_test (col1 int, col2 text);
+INSERT INTO data_load_test VALUES (132, 'hello');
+INSERT INTO data_load_test VALUES (243, 'world');
+-- create_distributed_table copies data into the distributed table
+SELECT create_distributed_table('data_load_test', 'col1');
+NOTICE:  Copying data from local table...
+NOTICE:  Copied 2 rows
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT * FROM data_load_test;
+ col1 | col2  
+------+-------
+  132 | hello
+  243 | world
+(2 rows)
+
+DROP TABLE data_load_test;
+-- Test data loading after dropping a column
+CREATE TABLE data_load_test (col1 int, col2 text, col3 text);
+INSERT INTO data_load_test VALUES (132, 'hello', 'world');
+INSERT INTO data_load_test VALUES (243, 'world', 'hello');
+ALTER TABLE data_load_test DROP COLUMN col2;
+SELECT create_distributed_table('data_load_test', 'col1');
+NOTICE:  Copying data from local table...
+NOTICE:  Copied 2 rows
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT * FROM data_load_test;
+ col1 | col3  
+------+-------
+  132 | world
+  243 | hello
+(2 rows)
+
+DROP TABLE data_load_test;
 SET citus.shard_replication_factor TO default;
 SET citus.shard_count to 4;
 CREATE TABLE lineitem_hash_part (like lineitem);
