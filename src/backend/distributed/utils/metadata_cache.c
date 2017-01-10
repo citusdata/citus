@@ -246,6 +246,52 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * ShardPlacementList returns the list of placements for the given shard from
+ * the cache.
+ *
+ * The returned list is deep copied from the cache and thus can be modified
+ * and pfree()d freely.
+ */
+List *
+ShardPlacementList(uint64 shardId)
+{
+	ShardCacheEntry *shardEntry = NULL;
+	DistTableCacheEntry *tableEntry = NULL;
+	ShardPlacement *placementArray = NULL;
+	int numberOfPlacements = 0;
+	List *placementList = NIL;
+	int i = 0;
+
+	shardEntry = LookupShardCacheEntry(shardId);
+	tableEntry = shardEntry->tableEntry;
+
+	/* the offset better be in a valid range */
+	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
+
+	placementArray = tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
+	numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
+
+	for (i = 0; i < numberOfPlacements; i++)
+	{
+		/* copy placement into target context */
+		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
+		CopyShardPlacement(&placementArray[i], placement);
+
+		placementList = lappend(placementList, placement);
+	}
+
+	/* if no shard placements are found, warn the user */
+	if (numberOfPlacements == 0)
+	{
+		ereport(WARNING, (errmsg("could not find any shard placements for shardId "
+								 UINT64_FORMAT, shardId)));
+	}
+
+	return placementList;
+}
+
+
+/*
  * LookupShardCacheEntry returns the cache entry belonging to a shard, or
  * errors out if that shard is unknown.
  */
@@ -541,6 +587,15 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 													shardIntervalArrayLength *
 													sizeof(ShardInterval *));
 
+		cacheEntry->arrayOfPlacementArrays =
+			MemoryContextAllocZero(CacheMemoryContext,
+								   shardIntervalArrayLength *
+								   sizeof(ShardPlacement *));
+		cacheEntry->arrayOfPlacementArrayLengths =
+			MemoryContextAllocZero(CacheMemoryContext,
+								   shardIntervalArrayLength *
+								   sizeof(int));
+
 		foreach(distShardTupleCell, distShardTupleList)
 		{
 			HeapTuple shardTuple = lfirst(distShardTupleCell);
@@ -625,12 +680,38 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		ShardCacheEntry *shardEntry = NULL;
 		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		bool foundInCache = false;
+		List *placementList = NIL;
+		MemoryContext oldContext = NULL;
+		ListCell *placementCell = NULL;
+		ShardPlacement *placementArray = NULL;
+		int placementOffset = 0;
+		int numberOfPlacements = 0;
 
 		shardEntry = hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_ENTER,
 								 &foundInCache);
 		Assert(!foundInCache);
 		shardEntry->shardIndex = shardIndex;
 		shardEntry->tableEntry = cacheEntry;
+
+		/* build list of shard placements */
+		placementList = BuildShardPlacementList(shardInterval);
+		numberOfPlacements = list_length(placementList);
+
+		/* and copy that list into the cache entry */
+		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+		placementArray = palloc0(numberOfPlacements * sizeof(ShardPlacement));
+		foreach(placementCell, placementList)
+		{
+			ShardPlacement *srcPlacement = (ShardPlacement *) lfirst(placementCell);
+
+			CopyShardPlacement(srcPlacement, &placementArray[placementOffset]);
+
+			placementOffset++;
+		}
+		MemoryContextSwitchTo(oldContext);
+
+		cacheEntry->arrayOfPlacementArrays[shardIndex] = placementArray;
+		cacheEntry->arrayOfPlacementArrayLengths[shardIndex] = numberOfPlacements;
 	}
 
 	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
@@ -1609,65 +1690,99 @@ WorkerNodeHashCode(const void *key, Size keySize)
 void
 ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 {
+	int shardIndex = 0;
+
 	if (cacheEntry->partitionKeyString != NULL)
 	{
 		pfree(cacheEntry->partitionKeyString);
 		cacheEntry->partitionKeyString = NULL;
 	}
 
-	if (cacheEntry->shardIntervalArrayLength > 0)
+	if (cacheEntry->shardIntervalCompareFunction != NULL)
 	{
-		int i = 0;
+		pfree(cacheEntry->shardIntervalCompareFunction);
+		cacheEntry->shardIntervalCompareFunction = NULL;
+	}
 
-		for (i = 0; i < cacheEntry->shardIntervalArrayLength; i++)
+	if (cacheEntry->hashFunction)
+	{
+		pfree(cacheEntry->hashFunction);
+		cacheEntry->hashFunction = NULL;
+	}
+
+	if (cacheEntry->shardIntervalArrayLength == 0)
+	{
+		return;
+	}
+
+	for (shardIndex = 0; shardIndex < cacheEntry->shardIntervalArrayLength;
+		 shardIndex++)
+	{
+		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
+		ShardPlacement *placementArray = cacheEntry->arrayOfPlacementArrays[shardIndex];
+		int numberOfPlacements = cacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+		bool valueByVal = shardInterval->valueByVal;
+		bool foundInCache = false;
+		int placementIndex = 0;
+
+		/* delete the shard's placements */
+		for (placementIndex = 0;
+			 placementIndex < numberOfPlacements;
+			 placementIndex++)
 		{
-			ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[i];
-			bool valueByVal = shardInterval->valueByVal;
-			bool foundInCache = false;
+			ShardPlacement *placement = &placementArray[placementIndex];
 
-			/* delete per-shard cache-entry */
-			hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_REMOVE,
-						&foundInCache);
-			Assert(foundInCache);
-
-			/* delete data pointed to by ShardInterval */
-			if (!valueByVal)
+			if (placement->nodeName)
 			{
-				if (shardInterval->minValueExists)
-				{
-					pfree(DatumGetPointer(shardInterval->minValue));
-				}
-
-				if (shardInterval->maxValueExists)
-				{
-					pfree(DatumGetPointer(shardInterval->maxValue));
-				}
+				pfree(placement->nodeName);
 			}
 
-			/* and finally the ShardInterval itself */
-			pfree(shardInterval);
+			/* placement itself is deleted as part of the array */
+		}
+		pfree(placementArray);
+
+		/* delete per-shard cache-entry */
+		hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_REMOVE,
+					&foundInCache);
+		Assert(foundInCache);
+
+		/* delete data pointed to by ShardInterval */
+		if (!valueByVal)
+		{
+			if (shardInterval->minValueExists)
+			{
+				pfree(DatumGetPointer(shardInterval->minValue));
+			}
+
+			if (shardInterval->maxValueExists)
+			{
+				pfree(DatumGetPointer(shardInterval->maxValue));
+			}
 		}
 
+		/* and finally the ShardInterval itself */
+		pfree(shardInterval);
+	}
+
+	if (cacheEntry->sortedShardIntervalArray)
+	{
 		pfree(cacheEntry->sortedShardIntervalArray);
 		cacheEntry->sortedShardIntervalArray = NULL;
-		cacheEntry->shardIntervalArrayLength = 0;
-
-		cacheEntry->hasUninitializedShardInterval = false;
-		cacheEntry->hasUniformHashDistribution = false;
-
-		if (cacheEntry->shardIntervalCompareFunction != NULL)
-		{
-			pfree(cacheEntry->shardIntervalCompareFunction);
-			cacheEntry->shardIntervalCompareFunction = NULL;
-		}
-
-		/* we only allocated hash function for hash distributed tables */
-		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
-		{
-			pfree(cacheEntry->hashFunction);
-			cacheEntry->hashFunction = NULL;
-		}
 	}
+	if (cacheEntry->arrayOfPlacementArrayLengths)
+	{
+		pfree(cacheEntry->arrayOfPlacementArrayLengths);
+		cacheEntry->arrayOfPlacementArrayLengths = NULL;
+	}
+	if (cacheEntry->arrayOfPlacementArrays)
+	{
+		pfree(cacheEntry->arrayOfPlacementArrays);
+		cacheEntry->arrayOfPlacementArrays = NULL;
+	}
+
+	cacheEntry->shardIntervalArrayLength = 0;
+	cacheEntry->hasUninitializedShardInterval = false;
+	cacheEntry->hasUniformHashDistribution = false;
 }
 
 
