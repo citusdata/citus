@@ -244,9 +244,10 @@ FixedJoinOrderList(FromExpr *fromExpr, List *tableEntryList)
 		{
 			/* re-partitioning for OUTER joins is not implemented */
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning on this query"),
-							errdetail("Shards of relations in outer join queries must "
-									  "have 1-to-1 shard partitioning")));
+							errmsg("cannot run outer join query if join is not on the "
+								   "partition column"),
+							errdetail("Outer joins requiring repartitioning are not "
+									  "supported.")));
 		}
 
 		if (joinType != JOIN_INNER)
