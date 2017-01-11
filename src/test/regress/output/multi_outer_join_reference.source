@@ -214,8 +214,8 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -278,8 +278,8 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_nationkey = r_nationkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- Anti-join should return customers for which there is no row in the right table
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -337,8 +337,8 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left_hash a RIGHT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -601,8 +601,8 @@ SELECT
 FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner join  + single shard left join should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -676,8 +676,8 @@ FROM
 	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner (local) join  + 2 shards left (dual partition) join should work
 SELECT
 	l_custkey, t_custkey, r_custkey
