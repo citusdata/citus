@@ -62,13 +62,13 @@ extern List * LoadShardIntervalList(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval);
+extern void CopyShardPlacement(ShardPlacement *srcPlacement,
+							   ShardPlacement *destPlacement);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeHasActiveShardPlacements(char *nodeName, int32 nodePort);
 extern List * FinalizedShardPlacementList(uint64 shardId);
 extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
-extern List * ShardPlacementList(uint64 shardId);
-extern ShardPlacement * TupleToShardPlacement(TupleDesc tupleDesc,
-											  HeapTuple heapTuple);
+extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,

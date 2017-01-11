@@ -49,6 +49,10 @@ typedef struct
 
 	FmgrInfo *shardIntervalCompareFunction; /* NULL if no shard intervals exist */
 	FmgrInfo *hashFunction; /* NULL if table is not distributed by hash */
+
+	/* pg_dist_shard_placement metadata */
+	ShardPlacement **arrayOfPlacementArrays;
+	int *arrayOfPlacementArrayLengths;
 } DistTableCacheEntry;
 
 
@@ -58,6 +62,7 @@ extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern int GetLocalGroupId(void);
 extern List * DistTableOidList(void);
+extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 
