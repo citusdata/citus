@@ -55,6 +55,8 @@
 static uint64 * AllocateUint64(uint64 value);
 static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 												  Node *distributionKey);
+static ShardPlacement * TupleToShardPlacement(TupleDesc tupleDesc,
+											  HeapTuple heapTuple);
 
 
 /* exports for SQL callable functions */
@@ -241,6 +243,24 @@ CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInterval)
 
 
 /*
+ * CopyShardPlacement copies the values of the source placement into the
+ * target placement.
+ */
+void
+CopyShardPlacement(ShardPlacement *srcPlacement, ShardPlacement *destPlacement)
+{
+	/* first copy all by-value fields */
+	memcpy(destPlacement, srcPlacement, sizeof(ShardPlacement));
+
+	/* and then the fields pointing to external values */
+	if (srcPlacement->nodeName)
+	{
+		destPlacement->nodeName = pstrdup(srcPlacement->nodeName);
+	}
+}
+
+
+/*
  * ShardLength finds shard placements for the given shardId, extracts the length
  * of a finalized shard, and returns the shard's length. This function errors
  * out if we cannot find any finalized shard placements for the given shardId.
@@ -361,13 +381,17 @@ FinalizedShardPlacement(uint64 shardId, bool missingOk)
 
 
 /*
- * ShardPlacementList finds shard placements for the given shardId from system
- * catalogs, converts these placements to their in-memory representation, and
- * returns the converted shard placements in a new list.
+ * BuildShardPlacementList finds shard placements for the given shardId from
+ * system catalogs, converts these placements to their in-memory
+ * representation, and returns the converted shard placements in a new list.
+ *
+ * This probably only should be called from metadata_cache.c.  Resides here
+ * because it shares code with other routines in this file.
  */
 List *
-ShardPlacementList(uint64 shardId)
+BuildShardPlacementList(ShardInterval *shardInterval)
 {
+	int64 shardId = shardInterval->shardId;
 	List *shardPlacementList = NIL;
 	Relation pgShardPlacement = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -399,13 +423,6 @@ ShardPlacementList(uint64 shardId)
 	systable_endscan(scanDescriptor);
 	heap_close(pgShardPlacement, AccessShareLock);
 
-	/* if no shard placements are found, warn the user */
-	if (shardPlacementList == NIL)
-	{
-		ereport(WARNING, (errmsg("could not find any shard placements for shardId "
-								 UINT64_FORMAT, shardId)));
-	}
-
 	return shardPlacementList;
 }
 
@@ -415,7 +432,7 @@ ShardPlacementList(uint64 shardId)
  * and converts this tuple to in-memory struct. The function assumes the
  * caller already has locks on the tuple, and doesn't perform any locking.
  */
-ShardPlacement *
+static ShardPlacement *
 TupleToShardPlacement(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 {
 	ShardPlacement *shardPlacement = NULL;
