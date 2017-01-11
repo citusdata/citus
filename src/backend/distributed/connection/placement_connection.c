@@ -25,10 +25,6 @@
  */
 typedef struct ConnectionReference
 {
-	/* identity information about the connection */
-	uint64 shardId;
-	uint64 placementId;
-
 	/*
 	 * The user used to read/modify the placement. We cannot reuse connections
 	 * that were performed using a different role, since it would not have the
@@ -213,8 +209,6 @@ StartPlacementConnection(uint32 flags, ShardPlacement *placement, const char *us
 		returnConnectionReference->connection = connection;
 		returnConnectionReference->hadDDL = false;
 		returnConnectionReference->hadDML = false;
-		returnConnectionReference->shardId = placement->shardId;
-		returnConnectionReference->placementId = placement->placementId;
 		returnConnectionReference->userName =
 			MemoryContextStrdup(TopTransactionContext, userName);
 		dlist_push_tail(&placementEntry->connectionReferences,
