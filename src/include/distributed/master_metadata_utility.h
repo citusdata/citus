@@ -53,6 +53,9 @@ typedef struct ShardPlacement
 	RelayFileState shardState;
 	char *nodeName;
 	uint32 nodePort;
+	char partitionMethod;
+	uint32 colocationGroupId;
+	uint32 representativeValue;
 } ShardPlacement;
 
 
