@@ -596,7 +596,7 @@ ConnectionHashCompare(const void *a, const void *b, Size keysize)
 	ConnectionHashKey *ca = (ConnectionHashKey *) a;
 	ConnectionHashKey *cb = (ConnectionHashKey *) b;
 
-	if (strncmp(ca->hostname, cb->hostname, NAMEDATALEN) != 0 ||
+	if (strncmp(ca->hostname, cb->hostname, MAX_NODE_LENGTH) != 0 ||
 		ca->port != cb->port ||
 		strncmp(ca->user, cb->user, NAMEDATALEN) != 0 ||
 		strncmp(ca->database, cb->database, NAMEDATALEN) != 0)
