@@ -1,0 +1,29 @@
+# ----------
+# $Id$
+#
+# Regression tests for MX. This schedule runs tests for worker metadata
+# and MX tables. The tests mostly aim for running SQL queries from the worker
+# nodes and metadata operations from the schema node.
+#
+# Note that we use variant comparison files to test version dependent regression
+# test results. For more information:
+# http://www.postgresql.org/docs/9.5/static/regress-variant.html
+# ----------
+
+# ---
+# Tests around schema changes, these are run first, so there's no preexisting objects.
+# ---
+test: multi_extension
+test: multi_cluster_management
+
+test: multi_mx_create_table
+test: multi_mx_copy_data multi_mx_router_planner
+test: multi_mx_schema_support multi_mx_tpch_query1 multi_mx_tpch_query10
+test: multi_mx_tpch_query12 multi_mx_tpch_query14 multi_mx_tpch_query19
+test: multi_mx_tpch_query3 multi_mx_tpch_query6 multi_mx_tpch_query7
+test: multi_mx_tpch_query7_nested multi_mx_ddl
+test: multi_mx_repartition_udt_prepare
+test: multi_mx_repartition_join_w1 multi_mx_repartition_join_w2 multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2
+test: multi_mx_metadata multi_mx_modifications multi_mx_modifying_xacts
+test: multi_mx_explain
+test: multi_mx_reference_table

@@ -1,0 +1,33 @@
+--
+-- MULTI_MX_COPY_DATA
+--
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 290000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
+
+\COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+
+SET search_path TO citus_mx_test_schema;
+\COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\COPY citus_mx_test_schema_join_1.nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\COPY citus_mx_test_schema_join_1.nation_hash_2 FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+\COPY citus_mx_test_schema_join_2.nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+
+-- now try loading data from worker node
+\c - - - :worker_1_port
+SET search_path TO public;
+
+\COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+\COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+
+\COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
+\COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+
+-- and use second worker as well
+\c - - - :worker_2_port
+SET search_path TO public;
+
+\COPY customer_mx FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'
+\COPY nation_mx FROM '@abs_srcdir@/data/nation.data' with delimiter '|'
+\COPY part_mx FROM '@abs_srcdir@/data/part.data' with delimiter '|'
+\COPY supplier_mx FROM '@abs_srcdir@/data/supplier.data' with delimiter '|'

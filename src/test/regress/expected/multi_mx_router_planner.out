@@ -1,0 +1,1521 @@
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 840000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 840000;
+-- ===================================================================
+-- test router planner functionality for single shard select queries
+-- ===================================================================
+-- run all the router queries from the one of the workers
+\c - - - :worker_1_port
+-- this table is used in a CTE test
+CREATE TABLE authors_hash_mx ( name text, id bigint );
+-- create a bunch of test data
+INSERT INTO articles_hash_mx VALUES ( 1,  1, 'arsenous', 9572);
+INSERT INTO articles_hash_mx VALUES ( 2,  2, 'abducing', 13642);
+INSERT INTO articles_hash_mx VALUES ( 3,  3, 'asternal', 10480);
+INSERT INTO articles_hash_mx VALUES ( 4,  4, 'altdorfer', 14551);
+INSERT INTO articles_hash_mx VALUES ( 5,  5, 'aruru', 11389);
+INSERT INTO articles_hash_mx VALUES ( 6,  6, 'atlases', 15459);
+INSERT INTO articles_hash_mx VALUES ( 7,  7, 'aseptic', 12298);
+INSERT INTO articles_hash_mx VALUES ( 8,  8, 'agatized', 16368);
+INSERT INTO articles_hash_mx VALUES ( 9,  9, 'alligate', 438);
+INSERT INTO articles_hash_mx VALUES (10, 10, 'aggrandize', 17277);
+INSERT INTO articles_hash_mx VALUES (11,  1, 'alamo', 1347);
+INSERT INTO articles_hash_mx VALUES (12,  2, 'archiblast', 18185);
+INSERT INTO articles_hash_mx VALUES (13,  3, 'aseyev', 2255);
+INSERT INTO articles_hash_mx VALUES (14,  4, 'andesite', 19094);
+INSERT INTO articles_hash_mx VALUES (15,  5, 'adversa', 3164);
+INSERT INTO articles_hash_mx VALUES (16,  6, 'allonym', 2);
+INSERT INTO articles_hash_mx VALUES (17,  7, 'auriga', 4073);
+INSERT INTO articles_hash_mx VALUES (18,  8, 'assembly', 911);
+INSERT INTO articles_hash_mx VALUES (19,  9, 'aubergiste', 4981);
+INSERT INTO articles_hash_mx VALUES (20, 10, 'absentness', 1820);
+INSERT INTO articles_hash_mx VALUES (21,  1, 'arcading', 5890);
+INSERT INTO articles_hash_mx VALUES (22,  2, 'antipope', 2728);
+INSERT INTO articles_hash_mx VALUES (23,  3, 'abhorring', 6799);
+INSERT INTO articles_hash_mx VALUES (24,  4, 'audacious', 3637);
+INSERT INTO articles_hash_mx VALUES (25,  5, 'antehall', 7707);
+INSERT INTO articles_hash_mx VALUES (26,  6, 'abington', 4545);
+INSERT INTO articles_hash_mx VALUES (27,  7, 'arsenous', 8616);
+INSERT INTO articles_hash_mx VALUES (28,  8, 'aerophyte', 5454);
+INSERT INTO articles_hash_mx VALUES (29,  9, 'amateur', 9524);
+INSERT INTO articles_hash_mx VALUES (30, 10, 'andelee', 6363);
+INSERT INTO articles_hash_mx VALUES (31,  1, 'athwartships', 7271);
+INSERT INTO articles_hash_mx VALUES (32,  2, 'amazon', 11342);
+INSERT INTO articles_hash_mx VALUES (33,  3, 'autochrome', 8180);
+INSERT INTO articles_hash_mx VALUES (34,  4, 'amnestied', 12250);
+INSERT INTO articles_hash_mx VALUES (35,  5, 'aminate', 9089);
+INSERT INTO articles_hash_mx VALUES (36,  6, 'ablation', 13159);
+INSERT INTO articles_hash_mx VALUES (37,  7, 'archduchies', 9997);
+INSERT INTO articles_hash_mx VALUES (38,  8, 'anatine', 14067);
+INSERT INTO articles_hash_mx VALUES (39,  9, 'anchises', 10906);
+INSERT INTO articles_hash_mx VALUES (40, 10, 'attemper', 14976);
+INSERT INTO articles_hash_mx VALUES (41,  1, 'aznavour', 11814);
+INSERT INTO articles_hash_mx VALUES (42,  2, 'ausable', 15885);
+INSERT INTO articles_hash_mx VALUES (43,  3, 'affixal', 12723);
+INSERT INTO articles_hash_mx VALUES (44,  4, 'anteport', 16793);
+INSERT INTO articles_hash_mx VALUES (45,  5, 'afrasia', 864);
+INSERT INTO articles_hash_mx VALUES (46,  6, 'atlanta', 17702);
+INSERT INTO articles_hash_mx VALUES (47,  7, 'abeyance', 1772);
+INSERT INTO articles_hash_mx VALUES (48,  8, 'alkylic', 18610);
+INSERT INTO articles_hash_mx VALUES (49,  9, 'anyone', 2681);
+INSERT INTO articles_hash_mx VALUES (50, 10, 'anjanette', 19519);
+SET citus.task_executor_type TO 'real-time';
+SET citus.large_table_shard_count TO 2;
+SET client_min_messages TO 'DEBUG2';
+-- insert a single row for the test
+INSERT INTO articles_single_shard_hash_mx VALUES (50, 10, 'anjanette', 19519);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- single-shard tests
+-- test simple select for a single row
+SELECT * FROM articles_hash_mx WHERE author_id = 10 AND id = 50;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |   title   | word_count 
+----+-----------+-----------+------------
+ 50 |        10 | anjanette |      19519
+(1 row)
+
+-- get all titles by a single author
+SELECT title FROM articles_hash_mx WHERE author_id = 10;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+   title    
+------------
+ aggrandize
+ absentness
+ andelee
+ attemper
+ anjanette
+(5 rows)
+
+-- try ordering them by word count
+SELECT title, word_count FROM articles_hash_mx
+	WHERE author_id = 10
+	ORDER BY word_count DESC NULLS LAST;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+   title    | word_count 
+------------+------------
+ anjanette  |      19519
+ aggrandize |      17277
+ attemper   |      14976
+ andelee    |       6363
+ absentness |       1820
+(5 rows)
+
+-- look at last two articles by an author
+SELECT title, id FROM articles_hash_mx
+	WHERE author_id = 5
+	ORDER BY id
+	LIMIT 2;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+  title  | id 
+---------+----
+ aruru   |  5
+ adversa | 15
+(2 rows)
+
+-- find all articles by two authors in same shard
+-- but plan is not router executable due to order by
+SELECT title, author_id FROM articles_hash_mx
+	WHERE author_id = 7 OR author_id = 8
+	ORDER BY author_id ASC, id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+    title    | author_id 
+-------------+-----------
+ aseptic     |         7
+ auriga      |         7
+ arsenous    |         7
+ archduchies |         7
+ abeyance    |         7
+ agatized    |         8
+ assembly    |         8
+ aerophyte   |         8
+ anatine     |         8
+ alkylic     |         8
+(10 rows)
+
+-- same query is router executable with no order by
+SELECT title, author_id FROM articles_hash_mx
+	WHERE author_id = 7 OR author_id = 8;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+    title    | author_id 
+-------------+-----------
+ aseptic     |         7
+ agatized    |         8
+ auriga      |         7
+ assembly    |         8
+ arsenous    |         7
+ aerophyte   |         8
+ archduchies |         7
+ anatine     |         8
+ abeyance    |         7
+ alkylic     |         8
+(10 rows)
+
+-- add in some grouping expressions, still on same shard
+-- having queries unsupported in Citus
+SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash_mx
+	WHERE author_id = 1 OR author_id = 7 OR author_id = 8 OR author_id = 10
+	GROUP BY author_id
+	HAVING sum(word_count) > 1000
+	ORDER BY sum(word_count) DESC;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ author_id | corpus_size 
+-----------+-------------
+        10 |       59955
+         8 |       55410
+         7 |       36756
+         1 |       35894
+(4 rows)
+
+-- however having clause is supported if it goes to a single shard
+SELECT author_id, sum(word_count) AS corpus_size FROM articles_hash_mx
+	WHERE author_id = 1
+	GROUP BY author_id
+	HAVING sum(word_count) > 1000
+	ORDER BY sum(word_count) DESC;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ author_id | corpus_size 
+-----------+-------------
+         1 |       35894
+(1 row)
+
+-- query is a single shard query but can't do shard pruning,
+-- not router-plannable due to <= and IN
+SELECT * FROM articles_hash_mx WHERE author_id <= 1; 
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+SELECT * FROM articles_hash_mx WHERE author_id IN (1, 3); 
+NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
+HINT:  Consider rewriting the expression with OR/AND clauses.
+NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
+HINT:  Consider rewriting the expression with OR/AND clauses.
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+  3 |         3 | asternal     |      10480
+ 11 |         1 | alamo        |       1347
+ 13 |         3 | aseyev       |       2255
+ 21 |         1 | arcading     |       5890
+ 23 |         3 | abhorring    |       6799
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+ 41 |         1 | aznavour     |      11814
+ 43 |         3 | affixal      |      12723
+(10 rows)
+
+-- queries with CTEs are supported
+WITH first_author AS ( SELECT id FROM articles_hash_mx WHERE author_id = 1)
+SELECT * FROM first_author;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id 
+----
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- queries with CTEs are supported even if CTE is not referenced inside query
+WITH first_author AS ( SELECT id FROM articles_hash_mx WHERE author_id = 1)
+SELECT title FROM articles_hash_mx WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+    title     
+--------------
+ arsenous
+ alamo
+ arcading
+ athwartships
+ aznavour
+(5 rows)
+
+-- two CTE joins are supported if they go to the same worker
+WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 1)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | id |    title     
+----+-----------+----+--------------
+  1 |         1 |  1 | arsenous
+ 11 |         1 | 11 | alamo
+ 21 |         1 | 21 | arcading
+ 31 |         1 | 31 | athwartships
+ 41 |         1 | 41 | aznavour
+(5 rows)
+
+WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 3)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | id | title 
+----+-----------+----+-------
+(0 rows)
+
+-- CTE joins are not supported if table shards are at different workers
+WITH id_author AS ( SELECT id, author_id FROM articles_hash_mx WHERE author_id = 1),
+id_title AS (SELECT id, title from articles_hash_mx WHERE author_id = 2)
+SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220104
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- recursive CTEs are supported when filtered on partition column
+INSERT INTO company_employees_mx values(1, 1, 0);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(1, 2, 1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(1, 3, 1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(1, 4, 2);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(1, 5, 4);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(3, 1, 0);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(3, 15, 1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+INSERT INTO company_employees_mx values(3, 3, 1);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- find employees at top 2 level within company hierarchy
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees_mx
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees_mx ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 1))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  predicate pruning for shardId 1220108
+DEBUG:  predicate pruning for shardId 1220109
+DEBUG:  predicate pruning for shardId 1220110
+DEBUG:  predicate pruning for shardId 1220108
+DEBUG:  predicate pruning for shardId 1220109
+DEBUG:  predicate pruning for shardId 1220110
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ company_id | employee_id | manager_id | level 
+------------+-------------+------------+-------
+          1 |           1 |          0 |     1
+          1 |           2 |          1 |     2
+          1 |           3 |          1 |     2
+(3 rows)
+
+-- query becomes not router plannble and gets rejected
+-- if filter on company is dropped
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees_mx
+		WHERE company_id = 1 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees_mx ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  predicate pruning for shardId 1220108
+DEBUG:  predicate pruning for shardId 1220109
+DEBUG:  predicate pruning for shardId 1220110
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- logically wrong query, query involves different shards
+-- from the same table, but still router plannable due to
+-- shard being placed on the same worker.
+WITH RECURSIVE hierarchy as (
+	SELECT *, 1 AS level
+		FROM company_employees_mx
+		WHERE company_id = 3 and manager_id = 0 
+	UNION
+	SELECT ce.*, (h.level+1)
+		FROM hierarchy h JOIN company_employees_mx ce
+			ON (h.employee_id = ce.manager_id AND
+				h.company_id = ce.company_id AND
+				ce.company_id = 2))
+SELECT * FROM hierarchy WHERE LEVEL <= 2;
+DEBUG:  predicate pruning for shardId 1220107
+DEBUG:  predicate pruning for shardId 1220109
+DEBUG:  predicate pruning for shardId 1220110
+DEBUG:  predicate pruning for shardId 1220107
+DEBUG:  predicate pruning for shardId 1220108
+DEBUG:  predicate pruning for shardId 1220109
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- grouping sets are supported on single shard
+SELECT
+	id, substring(title, 2, 1) AS subtitle, count(*)
+	FROM articles_hash_mx
+	WHERE author_id = 1 or author_id = 3
+	GROUP BY GROUPING SETS ((id),(subtitle));
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | subtitle | count 
+----+----------+-------
+  1 |          |     1
+  3 |          |     1
+ 11 |          |     1
+ 13 |          |     1
+ 21 |          |     1
+ 23 |          |     1
+ 31 |          |     1
+ 33 |          |     1
+ 41 |          |     1
+ 43 |          |     1
+    | b        |     1
+    | f        |     1
+    | l        |     1
+    | r        |     2
+    | s        |     2
+    | t        |     1
+    | u        |     1
+    | z        |     1
+(18 rows)
+
+-- grouping sets are not supported on multiple shards
+SELECT
+	id, substring(title, 2, 1) AS subtitle, count(*)
+	FROM articles_hash_mx
+	WHERE author_id = 1 or author_id = 2
+	GROUP BY GROUPING SETS ((id),(subtitle));
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- queries which involve functions in FROM clause are supported if it goes to a single worker.
+SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count | position 
+----+-----------+--------------+------------+----------
+  1 |         1 | arsenous     |       9572 |        3
+ 11 |         1 | alamo        |       1347 |        3
+ 21 |         1 | arcading     |       5890 |        3
+ 31 |         1 | athwartships |       7271 |        3
+ 41 |         1 | aznavour     |      11814 |        3
+(5 rows)
+
+SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 3;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count | position 
+----+-----------+--------------+------------+----------
+  1 |         1 | arsenous     |       9572 |        3
+  3 |         3 | asternal     |      10480 |        3
+ 11 |         1 | alamo        |       1347 |        3
+ 13 |         3 | aseyev       |       2255 |        3
+ 21 |         1 | arcading     |       5890 |        3
+ 23 |         3 | abhorring    |       6799 |        3
+ 31 |         1 | athwartships |       7271 |        3
+ 33 |         3 | autochrome   |       8180 |        3
+ 41 |         1 | aznavour     |      11814 |        3
+ 43 |         3 | affixal      |      12723 |        3
+(10 rows)
+
+-- they are not supported if multiple workers are involved
+SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- subqueries are not supported in WHERE clause in Citus
+SELECT * FROM articles_hash_mx WHERE author_id IN (SELECT id FROM authors_hash_mx WHERE name LIKE '%a');
+ERROR:  cannot plan queries that include both regular and partitioned relations
+SELECT * FROM articles_hash_mx WHERE author_id IN (SELECT author_id FROM articles_hash_mx WHERE author_id = 1 or author_id = 3);
+ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
+HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+SELECT * FROM articles_hash_mx WHERE author_id = (SELECT 1);
+ERROR:  could not run distributed query with subquery outside the FROM clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- subqueries are supported in FROM clause but they are not router plannable
+SELECT articles_hash_mx.id,test.word_count
+FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test WHERE test.id = articles_hash_mx.id
+ORDER BY articles_hash_mx.id;
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 11
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 11
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 14
+ERROR:  cannot use real time executor with repartition jobs
+HINT:  Set citus.task_executor_type to "task-tracker".
+SELECT articles_hash_mx.id,test.word_count
+FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test 
+WHERE test.id = articles_hash_mx.id and articles_hash_mx.author_id = 1
+ORDER BY articles_hash_mx.id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 11
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 14
+ERROR:  cannot use real time executor with repartition jobs
+HINT:  Set citus.task_executor_type to "task-tracker".
+-- subqueries are not supported in SELECT clause
+SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash_mx a2 WHERE a.id = a2.id  LIMIT 1)
+						 AS special_price FROM articles_hash_mx a;
+ERROR:  could not run distributed query with subquery outside the FROM clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- simple lookup query
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- below query hits a single shard, router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 OR author_id = 17;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- below query hits two shards, not router plannable + not router executable
+-- handled by real-time executor
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 OR author_id = 18;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- rename the output columns
+SELECT id as article_id, word_count * id as random_value
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ article_id | random_value 
+------------+--------------
+          1 |         9572
+         11 |        14817
+         21 |       123690
+         31 |       225401
+         41 |       484374
+(5 rows)
+
+-- we can push down co-located joins to a single worker
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash_mx a, articles_hash_mx b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	LIMIT 3;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+           10 |             17277
+           10 |              1820
+           10 |              6363
+(3 rows)
+
+-- following join is router plannable since the same worker 
+-- has both shards
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash_mx a, articles_single_shard_hash_mx b
+	WHERE a.author_id = 10 and a.author_id = b.author_id
+	LIMIT 3;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ first_author | second_word_count 
+--------------+-------------------
+           10 |             19519
+           10 |             19519
+           10 |             19519
+(3 rows)
+
+	
+-- following join is not router plannable since there are no
+-- workers containing both shards, added a CTE to make this fail
+-- at logical planner
+WITH single_shard as (SELECT * FROM articles_single_shard_hash_mx)
+SELECT a.author_id as first_author, b.word_count as second_word_count
+	FROM articles_hash_mx a, single_shard b
+	WHERE a.author_id = 2 and a.author_id = b.author_id
+	LIMIT 3;
+DEBUG:  predicate pruning for shardId 1220104
+DEBUG:  Found no worker with all shard placements
+ERROR:  could not run distributed query with complex table expressions
+-- single shard select with limit is router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	LIMIT 3;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+ 21 |         1 | arcading |       5890
+(3 rows)
+
+-- single shard select with limit + offset is router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	LIMIT 2
+	OFFSET 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+ 11 |         1 | alamo    |       1347
+ 21 |         1 | arcading |       5890
+(2 rows)
+
+-- single shard select with limit + offset + order by is router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	ORDER BY id desc
+	LIMIT 2
+	OFFSET 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+ 31 |         1 | athwartships |       7271
+ 21 |         1 | arcading     |       5890
+(2 rows)
+
+	
+-- single shard select with group by on non-partition column is router plannable
+SELECT id
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	GROUP BY id
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id 
+----
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- single shard select with distinct is router plannable
+SELECT distinct id
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id 
+----
+  1
+ 11
+ 21
+ 31
+ 41
+(5 rows)
+
+-- single shard aggregate is router plannable
+SELECT avg(word_count)
+	FROM articles_hash_mx
+	WHERE author_id = 2;
+DEBUG:  predicate pruning for shardId 1220104
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+        avg         
+--------------------
+ 12356.400000000000
+(1 row)
+
+-- max, min, sum, count are router plannable on single shard
+SELECT max(word_count) as max, min(word_count) as min,
+	   sum(word_count) as sum, count(word_count) as cnt
+	FROM articles_hash_mx
+	WHERE author_id = 2;
+DEBUG:  predicate pruning for shardId 1220104
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+  max  | min  |  sum  | cnt 
+-------+------+-------+-----
+ 18185 | 2728 | 61782 |   5
+(1 row)
+
+-- queries with aggregates and group by supported on single shard
+SELECT max(word_count)
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	GROUP BY author_id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+  max  
+-------
+ 11814
+(1 row)
+
+	
+-- router plannable union queries are supported
+(SELECT * FROM articles_hash_mx WHERE author_id = 1)
+UNION
+(SELECT * FROM articles_hash_mx WHERE author_id = 3);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  3 |         3 | asternal     |      10480
+ 43 |         3 | affixal      |      12723
+ 23 |         3 | abhorring    |       6799
+ 13 |         3 | aseyev       |       2255
+ 11 |         1 | alamo        |       1347
+ 41 |         1 | aznavour     |      11814
+  1 |         1 | arsenous     |       9572
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+(10 rows)
+
+SELECT * FROM (
+	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
+	UNION
+	(SELECT * FROM articles_hash_mx WHERE author_id = 3)) uu;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  3 |         3 | asternal     |      10480
+ 43 |         3 | affixal      |      12723
+ 23 |         3 | abhorring    |       6799
+ 13 |         3 | aseyev       |       2255
+ 11 |         1 | alamo        |       1347
+ 41 |         1 | aznavour     |      11814
+  1 |         1 | arsenous     |       9572
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+(10 rows)
+
+(SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 1)
+UNION
+(SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 3);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ left 
+------
+ a
+(1 row)
+
+(SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 1)
+INTERSECT
+(SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 3);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ left 
+------
+ a
+(1 row)
+
+(SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 1)
+EXCEPT
+(SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 3);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ left 
+------
+ at
+ az
+ ar
+ al
+(4 rows)
+
+-- union queries are not supported if not router plannable
+-- there is an inconsistency on shard pruning between
+-- ubuntu/mac disabling log messages for this queries only
+SET client_min_messages to 'NOTICE';
+(SELECT * FROM articles_hash_mx WHERE author_id = 1)
+UNION
+(SELECT * FROM articles_hash_mx WHERE author_id = 2);
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT * FROM (
+	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
+	UNION
+	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries without group by clause are not supported yet
+-- error out for queries with repartition jobs
+SELECT *
+	FROM articles_hash_mx a, articles_hash_mx b
+	WHERE a.id = b.id  AND a.author_id = 1;
+ERROR:  cannot use real time executor with repartition jobs
+HINT:  Set citus.task_executor_type to "task-tracker".
+-- queries which hit more than 1 shards are not router plannable or executable
+-- handled by real-time executor
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id >= 1 AND author_id <= 3;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+  3 |         3 | asternal     |      10480
+ 11 |         1 | alamo        |       1347
+ 13 |         3 | aseyev       |       2255
+ 21 |         1 | arcading     |       5890
+ 23 |         3 | abhorring    |       6799
+ 31 |         1 | athwartships |       7271
+ 33 |         3 | autochrome   |       8180
+ 41 |         1 | aznavour     |      11814
+ 43 |         3 | affixal      |      12723
+  2 |         2 | abducing     |      13642
+ 12 |         2 | archiblast   |      18185
+ 22 |         2 | antipope     |       2728
+ 32 |         2 | amazon       |      11342
+ 42 |         2 | ausable      |      15885
+(15 rows)
+
+SET citus.task_executor_type TO 'real-time';
+-- Test various filtering options for router plannable check
+SET client_min_messages to 'DEBUG2';
+-- this is definitely single shard
+-- and router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 and author_id >= 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- not router plannable due to or
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 or id = 1;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+	
+-- router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 and (id = 1 or id = 41);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+ 41 |         1 | aznavour |      11814
+(2 rows)
+
+-- router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 and (id = random()::int  * 0);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- not router plannable due to function call on the right side
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = (random()::int  * 0 + 1);
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- not router plannable due to or
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 or id = 1;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+	
+-- router plannable due to abs(-1) getting converted to 1 by postgresql
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = abs(-1);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- not router plannable due to abs() function
+SELECT *
+	FROM articles_hash_mx
+	WHERE 1 = abs(author_id);
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- not router plannable due to abs() function
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = abs(author_id - 2);
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable, function on different field
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1 and (id = abs(id - 2));
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+(1 row)
+
+-- not router plannable due to is true
+SELECT *
+	FROM articles_hash_mx
+	WHERE (author_id = 1) is true;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable, (boolean expression) = true is collapsed to (boolean expression)
+SELECT *
+	FROM articles_hash_mx
+	WHERE (author_id = 1) = true;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable, between operator is on another column
+SELECT *
+	FROM articles_hash_mx
+	WHERE (author_id = 1) and id between 0 and 20;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+(2 rows)
+
+-- router plannable, partition column expression is and'ed to rest
+SELECT *
+	FROM articles_hash_mx
+	WHERE (author_id = 1) and (id = 1 or id = 31) and title like '%s';
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 31 |         1 | athwartships |       7271
+(2 rows)
+
+-- router plannable, order is changed
+SELECT *
+	FROM articles_hash_mx
+	WHERE (id = 1 or id = 31) and title like '%s' and (author_id = 1);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 31 |         1 | athwartships |       7271
+(2 rows)
+
+-- router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE (title like '%s' or title like 'a%') and (author_id = 1);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- router plannable
+SELECT *
+	FROM articles_hash_mx
+	WHERE (title like '%s' or title like 'a%') and (author_id = 1) and (word_count < 3000 or word_count > 8000);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+ 11 |         1 | alamo    |       1347
+ 41 |         1 | aznavour |      11814
+(3 rows)
+
+-- window functions are supported if query is router plannable
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+	FROM articles_hash_mx
+	WHERE author_id = 5;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+   prev   |  title   | word_count 
+----------+----------+------------
+          | afrasia  |        864
+ afrasia  | adversa  |       3164
+ adversa  | antehall |       7707
+ antehall | aminate  |       9089
+ aminate  | aruru    |      11389
+(5 rows)
+
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+	FROM articles_hash_mx
+	WHERE author_id = 5
+	ORDER BY word_count DESC;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+   prev   |  title   | word_count 
+----------+----------+------------
+ aminate  | aruru    |      11389
+ antehall | aminate  |       9089
+ adversa  | antehall |       7707
+ afrasia  | adversa  |       3164
+          | afrasia  |        864
+(5 rows)
+
+SELECT id, MIN(id) over (order by word_count)
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | min 
+----+-----
+ 11 |  11
+ 21 |  11
+ 31 |  11
+  1 |   1
+ 41 |   1
+(5 rows)
+
+SELECT id, word_count, AVG(word_count) over (order by word_count)
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | word_count |          avg          
+----+------------+-----------------------
+ 11 |       1347 | 1347.0000000000000000
+ 21 |       5890 | 3618.5000000000000000
+ 31 |       7271 | 4836.0000000000000000
+  1 |       9572 | 6020.0000000000000000
+ 41 |      11814 | 7178.8000000000000000
+(5 rows)
+
+SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)  
+	FROM articles_hash_mx 
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ word_count | rank 
+------------+------
+       1347 |    1
+       5890 |    2
+       7271 |    3
+       9572 |    4
+      11814 |    5
+(5 rows)
+
+-- window functions are not supported for not router plannable queries
+SELECT id, MIN(id) over (order by word_count)
+	FROM articles_hash_mx
+	WHERE author_id = 1 or author_id = 2;
+ERROR:  could not run distributed query with window functions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
+	FROM articles_hash_mx
+	WHERE author_id = 5 or author_id = 2;
+ERROR:  could not run distributed query with window functions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- complex query hitting a single shard 	
+SELECT
+	count(DISTINCT CASE
+			WHEN 
+				word_count > 100
+			THEN
+				id
+			ELSE
+				NULL
+			END) as c
+	FROM
+		articles_hash_mx
+	WHERE
+		author_id = 5;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ c 
+---
+ 5
+(1 row)
+
+-- same query is not router plannable if hits multiple shards
+SELECT
+	count(DISTINCT CASE
+			WHEN 
+				word_count > 100
+			THEN
+				id
+			ELSE
+				NULL
+			END) as c
+	FROM
+		articles_hash_mx
+ 	GROUP BY
+		author_id;
+ c 
+---
+ 4
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+ 5
+(10 rows)
+
+-- queries inside transactions can be router plannable
+BEGIN;
+SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+END;
+-- cursor queries are router plannable
+BEGIN;
+DECLARE test_cursor CURSOR FOR 
+	SELECT *
+		FROM articles_hash_mx
+		WHERE author_id = 1
+		ORDER BY id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+FETCH test_cursor;
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+(1 row)
+
+FETCH test_cursor;
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+ 11 |         1 | alamo |       1347
+(1 row)
+
+END;
+-- queries inside copy can be router plannable
+COPY (
+	SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	ORDER BY id) TO STDOUT;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+1	1	arsenous	9572
+11	1	alamo	1347
+21	1	arcading	5890
+31	1	athwartships	7271
+41	1	aznavour	11814
+	
+-- table creation queries inside can be router plannable
+CREATE TEMP TABLE temp_articles_hash_mx as
+	SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- router plannable queries may include filter for aggragates
+SELECT count(*), count(*) FILTER (WHERE id < 3)
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count | count 
+-------+-------
+     5 |     1
+(1 row)
+
+-- non-router plannable queries support filters as well
+SELECT count(*), count(*) FILTER (WHERE id < 3)
+	FROM articles_hash_mx
+	WHERE author_id = 1 or author_id = 2;
+ count | count 
+-------+-------
+    10 |     2
+(1 row)
+
+-- prepare queries can be router plannable
+PREPARE author_1_articles as
+	SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+EXECUTE author_1_articles;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- parametric prepare queries can be router plannable
+PREPARE author_articles(int) as
+	SELECT *
+	FROM articles_hash_mx
+	WHERE author_id = $1;
+EXECUTE author_articles(1);
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+-- queries inside plpgsql functions could be router plannable
+CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
+DECLARE
+  max_id integer;
+BEGIN
+	SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1
+		into max_id;
+	return max_id;
+END;
+$$ LANGUAGE plpgsql;
+SELECT author_articles_max_id();
+DEBUG:  predicate pruning for shardId 1220105
+CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+DEBUG:  predicate pruning for shardId 1220105
+CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+DEBUG:  predicate pruning for shardId 1220105
+CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+DEBUG:  Plan is router executable
+CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+ author_articles_max_id 
+------------------------
+                     41
+(1 row)
+
+-- plpgsql function that return query results are not router plannable
+CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
+DECLARE
+BEGIN
+	RETURN QUERY
+		SELECT ah.id, ah.word_count
+		FROM articles_hash_mx ah
+		WHERE author_id = 1;
+
+END;
+$$ LANGUAGE plpgsql;
+SELECT * FROM author_articles_id_word_count();
+DEBUG:  predicate pruning for shardId 1220105
+CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
+		FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+DEBUG:  Creating router plan
+CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
+		FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+DEBUG:  Plan is router executable
+CONTEXT:  PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+ id | word_count 
+----+------------
+  1 |       9572
+ 11 |       1347
+ 21 |       5890
+ 31 |       7271
+ 41 |      11814
+(5 rows)
+
+-- materialized views can be created for router plannable queries
+CREATE MATERIALIZED VIEW mv_articles_hash_mx AS
+	SELECT * FROM articles_hash_mx WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+SELECT * FROM mv_articles_hash_mx;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+SET client_min_messages to 'INFO';
+DROP MATERIALIZED VIEW mv_articles_hash_mx;
+SET client_min_messages to 'DEBUG2';
+CREATE MATERIALIZED VIEW mv_articles_hash_mx_error AS
+	SELECT * FROM articles_hash_mx WHERE author_id in (1,2);
+NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
+HINT:  Consider rewriting the expression with OR/AND clauses.
+NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
+HINT:  Consider rewriting the expression with OR/AND clauses.
+ERROR:  cannot create temporary table within security-restricted operation
+	
+-- router planner/executor is disabled for task-tracker executor
+-- following query is router plannable, but router planner is disabled
+-- TODO: Uncomment once we fix task-tracker issue
+--SET citus.task_executor_type to 'task-tracker';
+--SELECT id
+--	FROM articles_hash_mx
+--	WHERE author_id = 1;
+-- insert query is router plannable even under task-tracker
+INSERT INTO articles_hash_mx VALUES (51,  1, 'amateus', 1814);
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+-- verify insert is successfull (not router plannable and executable)
+SELECT id
+	FROM articles_hash_mx
+	WHERE author_id = 1;
+DEBUG:  predicate pruning for shardId 1220105
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id 
+----
+  1
+ 11
+ 21
+ 31
+ 41
+ 51
+(6 rows)
+
