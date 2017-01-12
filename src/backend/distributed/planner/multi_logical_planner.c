@@ -17,6 +17,7 @@
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "commands/defrem.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
@@ -57,6 +58,7 @@ static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join
 static MultiNode * MultiPlanTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
+static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static void ErrorIfSubqueryNotSupported(Query *subqueryTree);
 static bool HasTablesample(Query *queryTree);
 static bool HasOuterJoin(Query *queryTree);
@@ -362,95 +364,118 @@ MultiPlanTree(Query *queryTree)
 static void
 ErrorIfQueryNotSupported(Query *queryTree)
 {
-	char *errorDetail = NULL;
+	char *errorMessage = NULL;
 	bool hasTablesample = false;
 	bool hasUnsupportedJoin = false;
 	bool hasComplexJoinOrder = false;
 	bool hasComplexRangeTableType = false;
 	bool preconditionsSatisfied = true;
+	const char *errorHint = NULL;
+	const char *joinHint = "Consider joining tables on partition column and have "
+						   "equal filter on joining columns.";
+	const char *filterHint = "Consider using an equality filter on the distributed "
+							 "table's partition column.";
 
 	if (queryTree->hasSubLinks)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Subqueries other than in from-clause are currently unsupported";
+		errorMessage = "could not run distributed query with subquery outside the "
+					   "FROM clause";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->hasWindowFuncs)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Window functions are currently unsupported";
+		errorMessage = "could not run distributed query with window functions";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->setOperations)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Union, Intersect, or Except are currently unsupported";
+		errorMessage = "could not run distributed query with UNION, INTERSECT, or "
+					   "EXCEPT";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->hasRecursive)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Recursive queries are currently unsupported";
+		errorMessage = "could not run distributed query with RECURSIVE";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->cteList)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Common Table Expressions are currently unsupported";
+		errorMessage = "could not run distributed query with common table expressions";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->hasForUpdate)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "For Update/Share commands are currently unsupported";
+		errorMessage = "could not run distributed query with FOR UPDATE/SHARE commands";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->distinctClause)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Distinct clause is currently unsupported";
+		errorMessage = "could not run distributed query with DISTINCT clause";
+		errorHint = filterHint;
 	}
 
 	if (queryTree->groupingSets)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Grouping sets, cube, and rollup is currently unsupported";
+		errorMessage = "could not run distributed query with GROUPING SETS, CUBE, "
+					   "or ROLLUP";
+		errorHint = filterHint;
 	}
 
 	hasTablesample = HasTablesample(queryTree);
 	if (hasTablesample)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Tablesample is currently unsupported";
+		errorMessage = "could not run distributed query which use TABLESAMPLE";
+		errorHint = filterHint;
 	}
 
 	hasUnsupportedJoin = HasUnsupportedJoinWalker((Node *) queryTree->jointree, NULL);
 	if (hasUnsupportedJoin)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Join types other than inner/outer joins are currently unsupported";
+		errorMessage = "could not run distributed query with join types other than "
+					   "INNER or OUTER JOINS";
+		errorHint = joinHint;
 	}
 
 	hasComplexJoinOrder = HasComplexJoinOrder(queryTree);
 	if (hasComplexJoinOrder)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Complex join orders are currently unsupported";
+		errorMessage = "could not run distributed query with complex join orders";
+		errorHint = joinHint;
 	}
 
 	hasComplexRangeTableType = HasComplexRangeTableType(queryTree);
 	if (hasComplexRangeTableType)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Complex table expressions are currently unsupported";
+		errorMessage = "could not run distributed query with complex table expressions";
+		errorHint = filterHint;
 	}
+
 
 	/* finally check and error out if not satisfied */
 	if (!preconditionsSatisfied)
 	{
+		bool showHint = ErrorHintRequired(errorHint, queryTree);
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning on this query"),
-						errdetail("%s", errorDetail)));
+						errmsg("%s", errorMessage),
+						showHint ? errhint("%s", errorHint) : 0));
 	}
 }
 
@@ -511,6 +536,56 @@ HasUnsupportedJoinWalker(Node *node, void *context)
 	}
 
 	return hasUnsupportedJoin;
+}
+
+
+/*
+ * ErrorHintRequired returns true if error hint shold be displayed with the
+ * query error message. Error hint is valid only for queries involving reference
+ * and hash partitioned tables. If more than one hash distributed table is
+ * present we display the hint only if the tables are colocated. If the query
+ * only has reference table(s), then it is handled by router planner.
+ */
+static bool
+ErrorHintRequired(const char *errorHint, Query *queryTree)
+{
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+	List *colocationIdList = NIL;
+
+	if (errorHint == NULL)
+	{
+		return false;
+	}
+
+	ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rangeTableCell);
+		Oid relationId = rte->relid;
+		char partitionMethod = PartitionMethod(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			int colocationId = TableColocationId(relationId);
+			colocationIdList = list_append_unique_int(colocationIdList, colocationId);
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	/* do not display the hint if there are more than one colocation group */
+	if (list_length(colocationIdList) > 1)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 
