@@ -315,7 +315,7 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
- * GetCommandResult is a wrapper around PQgetResult() that handles interrupts.
+ * GetRemoteCommandResult is a wrapper around PQgetResult() that handles interrupts.
  *
  * If raiseInterrupts is true and an interrupt arrives, e.g. the query is
  * being cancelled, CHECK_FOR_INTERRUPTS() will be called, which then throws
