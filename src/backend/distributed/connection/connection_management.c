@@ -307,11 +307,11 @@ GetConnectionFromPGconn(struct pg_conn *pqConn)
 
 
 /*
- * CloseNodeConnections closes all the connections to a particular node.
- * This is mainly used when a worker leaves the cluster
+ * CloseNodeConnectionsAfterTransaction sets the sessionLifespan flag of the connections
+ * to a particular node as false. This is mainly used when a worker leaves the cluster.
  */
 void
-CloseNodeConnections(char *nodeName, int nodePort)
+CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort)
 {
 	HASH_SEQ_STATUS status;
 	ConnectionHashEntry *entry;
@@ -319,21 +319,21 @@ CloseNodeConnections(char *nodeName, int nodePort)
 	hash_seq_init(&status, ConnectionHash);
 	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
 	{
-		dlist_head *connections = entry->connections;
+		dlist_iter iter;
+		dlist_head *connections = NULL;
 
 		if (strcmp(entry->key.hostname, nodeName) != 0 || entry->key.port != nodePort)
 		{
 			continue;
 		}
 
-		while (!dlist_is_empty(connections))
+		connections = entry->connections;
+		dlist_foreach(iter, connections)
 		{
-			dlist_node *currentNode = dlist_pop_head_node(connections);
-
 			MultiConnection *connection =
-				dlist_container(MultiConnection, connectionNode, currentNode);
+				dlist_container(MultiConnection, connectionNode, iter.cur);
 
-			CloseConnection(connection);
+			connection->sessionLifespan = false;
 		}
 	}
 }

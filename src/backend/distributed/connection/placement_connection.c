@@ -546,35 +546,20 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry,
 	{
 		ConnectionPlacementHashEntry *placementEntry =
 			dlist_container(ConnectionPlacementHashEntry, shardNode, placementIter.cur);
-		dlist_iter referenceIter;
+		ConnectionReference *modifyingConnection = placementEntry->modifyingConnection;
+		MultiConnection *connection = NULL;
 
-		dlist_foreach(referenceIter, &placementEntry->connectionReferences)
+		/* we only consider shards that are modified */
+		if (modifyingConnection == NULL)
 		{
-			ConnectionReference *reference =
-				dlist_container(ConnectionReference, placementNode, referenceIter.cur);
-			MultiConnection *connection = reference->connection;
-
-			/*
-			 * If neither DDL nor DML were executed, there's no need for
-			 * invalidation.
-			 */
-			if (!reference->hadDDL && !reference->hadDML)
-			{
-				continue;
-			}
-
-			/*
-			 * Failed if connection was closed, or remote transaction was
-			 * unsuccessful.
-			 */
-			if (!connection || connection->remoteTransaction.transactionFailed)
-			{
-				placementEntry->failed = true;
-			}
+			continue;
 		}
 
-		if (placementEntry->failed)
+		connection = modifyingConnection->connection;
+
+		if (!connection || connection->remoteTransaction.transactionFailed)
 		{
+			placementEntry->failed = true;
 			failures++;
 		}
 		else
