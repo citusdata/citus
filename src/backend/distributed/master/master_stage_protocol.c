@@ -44,7 +44,7 @@
 
 
 /* Local functions forward declarations */
-static bool WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId,
+static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
 
@@ -570,10 +570,8 @@ UpdateShardStatistics(int64 shardId)
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
-		char *workerName = placement->nodeName;
-		uint32 workerPort = placement->nodePort;
 
-		statsOK = WorkerShardStats(workerName, workerPort, relationId, shardQualifiedName,
+		statsOK = WorkerShardStats(placement, relationId, shardQualifiedName,
 								   &shardSize, &minValue, &maxValue);
 		if (statsOK)
 		{
@@ -636,9 +634,12 @@ UpdateShardStatistics(int64 shardId)
  * we assume have changed after new table data have been appended to the shard.
  */
 static bool
-WorkerShardStats(char *nodeName, uint32 nodePort, Oid relationId, char *shardName,
+WorkerShardStats(ShardPlacement *placement, Oid relationId, char *shardName,
 				 uint64 *shardSize, text **shardMinValue, text **shardMaxValue)
 {
+	char *nodeName = placement->nodeName;
+	uint32 nodePort = placement->nodePort;
+
 	char *quotedShardName = NULL;
 	bool cstoreTable = false;
 	StringInfo tableSizeQuery = makeStringInfo();
