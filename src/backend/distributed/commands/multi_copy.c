@@ -563,8 +563,15 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 													   &shardConnectionsFound);
 			if (!shardConnectionsFound)
 			{
+				bool stopOnFailure = false;
+
+				if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+				{
+					stopOnFailure = true;
+				}
+
 				/* open connections and initiate COPY on shard placements */
-				OpenCopyTransactions(copyStatement, shardConnections, false,
+				OpenCopyTransactions(copyStatement, shardConnections, stopOnFailure,
 									 copyOutState->binary);
 
 				/* send copy binary headers to shard placements */
@@ -598,7 +605,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		/* close the COPY input on all shard placements */
 		EndRemoteCopy(connectionList, true);
 
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+			cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
 		{
 			PrepareRemoteTransactions(connectionList);
 		}
@@ -1051,7 +1059,8 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 
 	/*
 	 * If stopOnFailure is true, we just error out and code execution should
-	 * never reach to this point. This is the case for copy from worker nodes.
+	 * never reach to this point. This is the case for reference tables and
+	 * copy from worker nodes.
 	 */
 	Assert(!stopOnFailure || list_length(failedPlacementList) == 0);
 
