@@ -178,8 +178,7 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Complex table expressions are currently unsupported
+ERROR:  could not run distributed query with complex table expressions
 -- Check that we error out if queries in union do not include partition columns.
 SELECT count(*) FROM
 (
