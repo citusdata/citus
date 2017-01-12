@@ -268,6 +268,10 @@ ReadShardPlacement(READFUNC_ARGS)
 	READ_ENUM_FIELD(shardState, RelayFileState);
 	READ_STRING_FIELD(nodeName);
 	READ_UINT_FIELD(nodePort);
+	/* so we can deal with 0 */
+	READ_INT_FIELD(partitionMethod);
+	READ_UINT_FIELD(colocationGroupId);
+	READ_UINT_FIELD(representativeValue);
 
 	READ_DONE();
 }
