@@ -177,3 +177,47 @@ TRUNCATE TABLE "a b append";
 SELECT shardid FROM pg_dist_shard where logicalrelid = '"a b append"'::regclass;
 
 DROP TABLE "a b append";
+
+-- Truncate local data only
+CREATE TABLE test_local_truncate (x int, y int);
+INSERT INTO test_local_truncate VALUES (1,2);
+SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
+
+BEGIN;
+SET LOCAL citus.enable_ddl_propagation TO off;
+TRUNCATE test_local_truncate;
+COMMIT;
+
+-- Ensure distributed data is not truncated
+SELECT * FROM test_local_truncate;
+
+-- Undistribute table
+SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
+DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
+
+-- Ensure local data is truncated
+SELECT * FROM test_local_truncate;
+
+DROP TABLE test_local_truncate;
+
+-- Truncate local data, but roll back
+CREATE TABLE test_local_truncate (x int, y int);
+INSERT INTO test_local_truncate VALUES (1,2);
+SELECT create_distributed_table('test_local_truncate', 'x', colocate_with => 'none');
+
+BEGIN;
+SET LOCAL citus.enable_ddl_propagation TO off;
+TRUNCATE test_local_truncate;
+ROLLBACK;
+
+-- Ensure distributed data is not truncated
+SELECT * FROM test_local_truncate;
+
+-- Undistribute table
+SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
+DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
+
+-- Ensure local data is not truncated
+SELECT * FROM test_local_truncate;
+
+DROP TABLE test_local_truncate;

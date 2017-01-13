@@ -260,8 +260,6 @@ SELECT master_remove_node('localhost', 5432);
 TRUNCATE mx_table;
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-CONTEXT:  SQL statement "SELECT master_modify_multiple_shards(commandText)"
-PL/pgSQL function citus_truncate_trigger() line 17 at PERFORM
 SELECT count(*) FROM mx_table;
  count 
 -------
