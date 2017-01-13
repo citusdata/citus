@@ -1,5 +1,6 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 
 -- ===================================================================
 -- create test utility function
