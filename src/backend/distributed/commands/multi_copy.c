@@ -45,86 +45,33 @@
  */
 
 #include "postgres.h"
-#include "fmgr.h"
-#include "funcapi.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
-#include "plpgsql.h"
 
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include <arpa/inet.h> /* for htons */
+#include <netinet/in.h> /* for htons */
 #include <string.h>
 
-#include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/htup.h"
-#include "access/nbtree.h"
 #include "access/sdir.h"
-#include "access/tupdesc.h"
-#include "access/xact.h"
 #include "catalog/namespace.h"
-#include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
-#include "catalog/pg_am.h"
-#include "catalog/pg_collation.h"
-#include "commands/extension.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
-#include "distributed/citus_ruleutils.h"
-#include "distributed/commit_protocol.h"
-#include "distributed/connection_cache.h"
-#include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
-#include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_shard_transaction.h"
-#include "distributed/pg_dist_partition.h"
+#include "distributed/placement_connection.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
-#include "distributed/shardinterval_utils.h"
-#include "distributed/worker_protocol.h"
-#include "executor/execdesc.h"
 #include "executor/executor.h"
-#include "executor/instrument.h"
-#include "executor/tuptable.h"
-#include "lib/stringinfo.h"
-#include "nodes/execnodes.h"
-#include "nodes/makefuncs.h"
-#include "nodes/memnodes.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/nodes.h"
-#include "nodes/params.h"
-#include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
-#include "nodes/plannodes.h"
-#include "nodes/primnodes.h"
-#include "optimizer/clauses.h"
-#include "optimizer/cost.h"
-#include "optimizer/planner.h"
-#include "optimizer/var.h"
-#include "parser/parser.h"
-#include "parser/analyze.h"
-#include "parser/parse_node.h"
-#include "parser/parsetree.h"
-#include "parser/parse_type.h"
-#include "storage/lock.h"
-#include "tcop/dest.h"
-#include "tcop/tcopprot.h"
-#include "tcop/utility.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
-#include "utils/elog.h"
-#include "utils/errcodes.h"
-#include "utils/guc.h"
 #include "utils/lsyscache.h"
-#include "utils/typcache.h"
-#include "utils/palloc.h"
 #include "utils/rel.h"
-#include "utils/relcache.h"
-#include "utils/snapmgr.h"
-#include "utils/tuplestore.h"
 #include "utils/memutils.h"
 
 
@@ -132,7 +79,7 @@
 static const char BinarySignature[11] = "PGCOPY\n\377\r\n\0";
 
 /* use a global connection to the master node in order to skip passing it around */
-static PGconn *masterConnection = NULL;
+static MultiConnection *masterConnection = NULL;
 
 
 /* Local functions forward declarations */
@@ -141,29 +88,33 @@ static void CopyToExistingShards(CopyStmt *copyStatement, char *completionTag);
 static void CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId);
 static char MasterPartitionMethod(RangeVar *relation);
 static void RemoveMasterOptions(CopyStmt *copyStatement);
-static void OpenCopyTransactions(CopyStmt *copyStatement,
-								 ShardConnections *shardConnections, bool stopOnFailure,
-								 bool useBinaryCopyFormat);
+static void OpenCopyConnections(CopyStmt *copyStatement,
+								ShardConnections *shardConnections, bool stopOnFailure,
+								bool useBinaryCopyFormat);
+
 static bool CanUseBinaryCopyFormat(TupleDesc tupleDescription,
 								   CopyOutState rowOutputState);
 static List * MasterShardPlacementList(uint64 shardId);
 static List * RemoteFinalizedShardPlacementList(uint64 shardId);
-static void SendCopyBinaryHeaders(CopyOutState copyOutState, List *connectionList);
-static void SendCopyBinaryFooters(CopyOutState copyOutState, List *connectionList);
+
+static void SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId,
+								  List *connectionList);
+static void SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId,
+								  List *connectionList);
+
 static StringInfo ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId,
 										 bool useBinaryCopyFormat);
-static void SendCopyDataToAll(StringInfo dataBuffer, List *connectionList);
-static void SendCopyDataToPlacement(StringInfo dataBuffer, PGconn *connection,
-									int64 shardId);
-static void EndRemoteCopy(List *connectionList, bool stopOnFailure);
-static void ReportCopyError(PGconn *connection, PGresult *result);
+static void SendCopyDataToAll(StringInfo dataBuffer, int64 shardId, List *connectionList);
+static void SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId,
+									MultiConnection *connection);
+static void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure);
+static void ReportCopyError(MultiConnection *connection, PGresult *result);
 static uint32 AvailableColumnCount(TupleDesc tupleDescriptor);
-static void StartCopyToNewShard(ShardConnections *shardConnections,
-								CopyStmt *copyStatement, bool useBinaryCopyFormat);
+static int64 StartCopyToNewShard(ShardConnections *shardConnections,
+								 CopyStmt *copyStatement, bool useBinaryCopyFormat);
 static int64 MasterCreateEmptyShard(char *relationName);
 static int64 CreateEmptyShard(char *relationName);
 static int64 RemoteCreateEmptyShard(char *relationName);
-static void FinalizeCopyToNewShard(ShardConnections *shardConnections);
 static void MasterUpdateShardStatistics(uint64 shardId);
 static void RemoteUpdateShardStatistics(uint64 shardId);
 
@@ -187,6 +138,12 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 {
 	bool isCopyFromWorker = false;
 
+	BeginOrContinueCoordinatedTransaction();
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
+
 	/* disallow COPY to/from file or program except for superusers */
 	if (copyStatement->filename != NULL && !superuser())
 	{
@@ -208,6 +165,7 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 		}
 	}
 
+	masterConnection = NULL; /* reset, might still be set after error */
 	isCopyFromWorker = IsCopyFromWorker(copyStatement);
 	if (isCopyFromWorker)
 	{
@@ -268,79 +226,41 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 	NodeAddress *masterNodeAddress = MasterNodeAddress(copyStatement);
 	char *nodeName = masterNodeAddress->nodeName;
 	int32 nodePort = masterNodeAddress->nodePort;
-	char *nodeUser = CurrentUserName();
+	Oid relationId = InvalidOid;
+	char partitionMethod = 0;
+	char *schemaName = NULL;
+	uint32 connectionFlags = FOR_DML;
 
-	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	masterConnection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+	ClaimConnectionExclusively(masterConnection);
+
+	RemoteTransactionBeginIfNecessary(masterConnection);
+
+	/* strip schema name for local reference */
+	schemaName = copyStatement->relation->schemaname;
+	copyStatement->relation->schemaname = NULL;
+
+	relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
+
+	/* put schema name back */
+	copyStatement->relation->schemaname = schemaName;
+	partitionMethod = MasterPartitionMethod(copyStatement->relation);
+	if (partitionMethod != DISTRIBUTE_BY_APPEND)
 	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("distributed copy operations must not appear in "
-							   "transaction blocks containing other distributed "
-							   "modifications")));
+		ereport(ERROR, (errmsg("copy from worker nodes is only supported "
+							   "for append-partitioned tables")));
 	}
 
-	masterConnection = ConnectToNode(nodeName, nodePort, nodeUser);
+	/*
+	 * Remove master node options from the copy statement because they are not
+	 * recognized by PostgreSQL machinery.
+	 */
+	RemoveMasterOptions(copyStatement);
 
-	PG_TRY();
-	{
-		PGresult *queryResult = NULL;
-		Oid relationId = InvalidOid;
-		char partitionMethod = 0;
+	CopyToNewShards(copyStatement, completionTag, relationId);
 
-		/* strip schema name for local reference */
-		char *schemaName = copyStatement->relation->schemaname;
-		copyStatement->relation->schemaname = NULL;
-
-		relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
-
-		/* put schema name back */
-		copyStatement->relation->schemaname = schemaName;
-
-		partitionMethod = MasterPartitionMethod(copyStatement->relation);
-		if (partitionMethod != DISTRIBUTE_BY_APPEND)
-		{
-			ereport(ERROR, (errmsg("copy from worker nodes is only supported "
-								   "for append-partitioned tables")));
-		}
-
-		/* run all metadata commands in a transaction */
-		queryResult = PQexec(masterConnection, "BEGIN");
-		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-		{
-			ereport(ERROR, (errmsg("could not start to update master node metadata")));
-		}
-
-		PQclear(queryResult);
-
-		/*
-		 * Remove master node options from the copy statement because they are not
-		 * recognized by PostgreSQL machinery.
-		 */
-		RemoveMasterOptions(copyStatement);
-
-		CopyToNewShards(copyStatement, completionTag, relationId);
-
-		/* commit metadata transactions */
-		queryResult = PQexec(masterConnection, "COMMIT");
-		if (PQresultStatus(queryResult) != PGRES_COMMAND_OK)
-		{
-			ereport(ERROR, (errmsg("could not commit master node metadata changes")));
-		}
-
-		PQclear(queryResult);
-
-		/* close the connection */
-		CloseConnectionByPGconn(masterConnection);
-		masterConnection = NULL;
-	}
-	PG_CATCH();
-	{
-		/* close the connection */
-		CloseConnectionByPGconn(masterConnection);
-		masterConnection = NULL;
-
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	UnclaimConnection(masterConnection);
+	masterConnection = NULL;
 }
 
 
@@ -371,9 +291,10 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	ShardInterval **shardIntervalCache = NULL;
 	bool useBinarySearch = false;
 
-	HTAB *copyConnectionHash = NULL;
+	HTAB *shardConnectionHash = NULL;
 	ShardConnections *shardConnections = NULL;
-	List *connectionList = NIL;
+	List *shardConnectionsList = NIL;
+	ListCell *shardConnectionsCell = NULL;
 
 	EState *executorState = NULL;
 	MemoryContext executorTupleContext = NULL;
@@ -386,6 +307,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	Var *partitionColumn = PartitionColumn(tableId, 0);
 	char partitionMethod = PartitionMethod(tableId);
+
+	ErrorContextCallback errorCallback;
 
 	/* get hash function for partition column */
 	hashFunction = cacheEntry->hashFunction;
@@ -454,6 +377,11 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		useBinarySearch = true;
 	}
 
+	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
+
 	/* initialize copy state to read from COPY data source */
 	copyState = BeginCopyFrom(distributedRelation,
 							  copyStatement->filename,
@@ -475,175 +403,140 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, copyOutState->binary);
 
-	/*
-	 * Create a mapping of shard id to a connection for each of its placements.
-	 * The hash should be initialized before the PG_TRY, since it is used in
-	 * PG_CATCH. Otherwise, it may be undefined in the PG_CATCH (see sigsetjmp
-	 * documentation).
-	 */
-	copyConnectionHash = CreateShardConnectionHash(TopTransactionContext);
+	/* create a mapping of shard id to a connection for each of its placements */
+	shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
 
-	/* we use a PG_TRY block to roll back on errors (e.g. in NextCopyFrom) */
-	PG_TRY();
+	/* set up callback to identify error line number */
+	errorCallback.callback = CopyFromErrorCallback;
+	errorCallback.arg = (void *) copyState;
+	errorCallback.previous = error_context_stack;
+	error_context_stack = &errorCallback;
+
+	while (true)
 	{
-		ErrorContextCallback errorCallback;
+		bool nextRowFound = false;
+		Datum partitionColumnValue = 0;
+		ShardInterval *shardInterval = NULL;
+		int64 shardId = 0;
+		bool shardConnectionsFound = false;
+		MemoryContext oldContext = NULL;
 
-		/* set up callback to identify error line number */
-		errorCallback.callback = CopyFromErrorCallback;
-		errorCallback.arg = (void *) copyState;
-		errorCallback.previous = error_context_stack;
-		error_context_stack = &errorCallback;
+		ResetPerTupleExprContext(executorState);
 
-		/* ensure transactions have unique names on worker nodes */
-		InitializeDistributedTransaction();
+		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		while (true)
+		/* parse a row from the input */
+		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+									columnValues, columnNulls, NULL);
+
+		if (!nextRowFound)
 		{
-			bool nextRowFound = false;
-			Datum partitionColumnValue = 0;
-			ShardInterval *shardInterval = NULL;
-			int64 shardId = 0;
-			bool shardConnectionsFound = false;
-			MemoryContext oldContext = NULL;
-
-			ResetPerTupleExprContext(executorState);
-
-			oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-			/* parse a row from the input */
-			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-										columnValues, columnNulls, NULL);
-
-			if (!nextRowFound)
-			{
-				MemoryContextSwitchTo(oldContext);
-				break;
-			}
-
-			CHECK_FOR_INTERRUPTS();
-
-			/*
-			 * Find the partition column value and corresponding shard interval
-			 * for non-reference tables.
-			 * Get the existing (and only a single) shard interval for the reference
-			 * tables. Note that, reference tables has NULL partition column values so
-			 * skip the check.
-			 */
-			if (partitionColumn != NULL)
-			{
-				if (columnNulls[partitionColumn->varattno - 1])
-				{
-					ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-									errmsg("cannot copy row with NULL value "
-										   "in partition column")));
-				}
-
-				partitionColumnValue = columnValues[partitionColumn->varattno - 1];
-			}
-
-			/*
-			 * Find the shard interval and id for the partition column value for
-			 * non-reference tables.
-			 * For reference table, this function blindly returns the tables single
-			 * shard.
-			 */
-			shardInterval = FindShardInterval(partitionColumnValue,
-											  shardIntervalCache,
-											  shardCount, partitionMethod,
-											  compareFunction, hashFunction,
-											  useBinarySearch);
-
-			if (shardInterval == NULL)
-			{
-				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-								errmsg("could not find shard for partition column "
-									   "value")));
-			}
-
-			shardId = shardInterval->shardId;
-
 			MemoryContextSwitchTo(oldContext);
-
-			/* get existing connections to the shard placements, if any */
-			shardConnections = GetShardHashConnections(copyConnectionHash, shardId,
-													   &shardConnectionsFound);
-			if (!shardConnectionsFound)
-			{
-				bool stopOnFailure = false;
-
-				if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-				{
-					stopOnFailure = true;
-				}
-
-				/* open connections and initiate COPY on shard placements */
-				OpenCopyTransactions(copyStatement, shardConnections, stopOnFailure,
-									 copyOutState->binary);
-
-				/* send copy binary headers to shard placements */
-				if (copyOutState->binary)
-				{
-					SendCopyBinaryHeaders(copyOutState,
-										  shardConnections->connectionList);
-				}
-			}
-
-			/* replicate row to shard placements */
-			resetStringInfo(copyOutState->fe_msgbuf);
-			AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-							  copyOutState, columnOutputFunctions);
-			SendCopyDataToAll(copyOutState->fe_msgbuf, shardConnections->connectionList);
-
-			processedRowCount += 1;
+			break;
 		}
 
-		connectionList = ConnectionList(copyConnectionHash);
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * Find the partition column value and corresponding shard interval
+		 * for non-reference tables.
+		 * Get the existing (and only a single) shard interval for the reference
+		 * tables. Note that, reference tables has NULL partition column values so
+		 * skip the check.
+		 */
+		if (partitionColumn != NULL)
+		{
+			if (columnNulls[partitionColumn->varattno - 1])
+			{
+				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+								errmsg("cannot copy row with NULL value "
+									   "in partition column")));
+			}
+
+			partitionColumnValue = columnValues[partitionColumn->varattno - 1];
+		}
+
+		/*
+		 * Find the shard interval and id for the partition column value for
+		 * non-reference tables.
+		 * For reference table, this function blindly returns the tables single
+		 * shard.
+		 */
+		shardInterval = FindShardInterval(partitionColumnValue,
+										  shardIntervalCache,
+										  shardCount, partitionMethod,
+										  compareFunction, hashFunction,
+										  useBinarySearch);
+
+		if (shardInterval == NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("could not find shard for partition column "
+								   "value")));
+		}
+
+		shardId = shardInterval->shardId;
+
+		MemoryContextSwitchTo(oldContext);
+
+		/* get existing connections to the shard placements, if any */
+		shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
+												   &shardConnectionsFound);
+		if (!shardConnectionsFound)
+		{
+			bool stopOnFailure = false;
+
+			if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+			{
+				stopOnFailure = true;
+			}
+
+			/* open connections and initiate COPY on shard placements */
+			OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
+								copyOutState->binary);
+
+			/* send copy binary headers to shard placements */
+			if (copyOutState->binary)
+			{
+				SendCopyBinaryHeaders(copyOutState, shardId,
+									  shardConnections->connectionList);
+			}
+		}
+
+		/* replicate row to shard placements */
+		resetStringInfo(copyOutState->fe_msgbuf);
+		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+						  copyOutState, columnOutputFunctions);
+		SendCopyDataToAll(copyOutState->fe_msgbuf, shardId,
+						  shardConnections->connectionList);
+
+		processedRowCount += 1;
+	}
+
+	/* all lines have been copied, stop showing line number in errors */
+	error_context_stack = errorCallback.previous;
+
+	shardConnectionsList = ShardConnectionList(shardConnectionHash);
+	foreach(shardConnectionsCell, shardConnectionsList)
+	{
+		ShardConnections *shardConnections = (ShardConnections *) lfirst(
+			shardConnectionsCell);
 
 		/* send copy binary footers to all shard placements */
 		if (copyOutState->binary)
 		{
-			SendCopyBinaryFooters(copyOutState, connectionList);
+			SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
+								  shardConnections->connectionList);
 		}
-
-		/* all lines have been copied, stop showing line number in errors */
-		error_context_stack = errorCallback.previous;
 
 		/* close the COPY input on all shard placements */
-		EndRemoteCopy(connectionList, true);
-
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
-			cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
-		{
-			PrepareRemoteTransactions(connectionList);
-		}
-
-		EndCopyFrom(copyState);
-		heap_close(distributedRelation, NoLock);
-
-		/* check for cancellation one last time before committing */
-		CHECK_FOR_INTERRUPTS();
+		EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList, true);
 	}
-	PG_CATCH();
-	{
-		List *abortConnectionList = NIL;
 
-		/* roll back all transactions */
-		abortConnectionList = ConnectionList(copyConnectionHash);
-		EndRemoteCopy(abortConnectionList, false);
-		AbortRemoteTransactions(abortConnectionList);
-		CloseConnections(abortConnectionList);
+	EndCopyFrom(copyState);
+	heap_close(distributedRelation, NoLock);
 
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-
-	/*
-	 * Ready to commit the transaction, this code is below the PG_TRY block because
-	 * we do not want any of the transactions rolled back if a failure occurs. Instead,
-	 * they should be rolled forward.
-	 */
-	CommitRemoteTransactions(connectionList, false);
-	CloseConnections(connectionList);
+	CHECK_FOR_INTERRUPTS();
 
 	if (completionTag != NULL)
 	{
@@ -676,11 +569,13 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
-	/*
-	 * Shard connections should be initialized before the PG_TRY, since it is
-	 * used in PG_CATCH. Otherwise, it may be undefined in the PG_CATCH
-	 * (see sigsetjmp documentation).
-	 */
+	ErrorContextCallback errorCallback;
+
+	int64 currentShardId = INVALID_SHARD_ID;
+	uint64 shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
+	uint64 copiedDataSizeInBytes = 0;
+	uint64 processedRowCount = 0;
+
 	ShardConnections *shardConnections =
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
@@ -701,140 +596,124 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 
 	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, copyOutState->binary);
 
-	/* we use a PG_TRY block to close connections on errors (e.g. in NextCopyFrom) */
-	PG_TRY();
+	/* set up callback to identify error line number */
+	errorCallback.callback = CopyFromErrorCallback;
+	errorCallback.arg = (void *) copyState;
+	errorCallback.previous = error_context_stack;
+
+	while (true)
 	{
-		uint64 shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
-		uint64 copiedDataSizeInBytes = 0;
-		uint64 processedRowCount = 0;
+		bool nextRowFound = false;
+		MemoryContext oldContext = NULL;
+		uint64 messageBufferSize = 0;
 
-		/* set up callback to identify error line number */
-		ErrorContextCallback errorCallback;
+		ResetPerTupleExprContext(executorState);
 
-		errorCallback.callback = CopyFromErrorCallback;
-		errorCallback.arg = (void *) copyState;
-		errorCallback.previous = error_context_stack;
+		/* switch to tuple memory context and start showing line number in errors */
+		error_context_stack = &errorCallback;
+		oldContext = MemoryContextSwitchTo(executorTupleContext);
 
-		while (true)
+		/* parse a row from the input */
+		nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+									columnValues, columnNulls, NULL);
+
+		if (!nextRowFound)
 		{
-			bool nextRowFound = false;
-			MemoryContext oldContext = NULL;
-			uint64 messageBufferSize = 0;
-
-			ResetPerTupleExprContext(executorState);
-
-			/* switch to tuple memory context and start showing line number in errors */
-			error_context_stack = &errorCallback;
-			oldContext = MemoryContextSwitchTo(executorTupleContext);
-
-			/* parse a row from the input */
-			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
-										columnValues, columnNulls, NULL);
-
-			if (!nextRowFound)
-			{
-				/* switch to regular memory context and stop showing line number in errors */
-				MemoryContextSwitchTo(oldContext);
-				error_context_stack = errorCallback.previous;
-				break;
-			}
-
-			CHECK_FOR_INTERRUPTS();
-
 			/* switch to regular memory context and stop showing line number in errors */
 			MemoryContextSwitchTo(oldContext);
 			error_context_stack = errorCallback.previous;
-
-			/*
-			 * If copied data size is zero, this means either this is the first
-			 * line in the copy or we just filled the previous shard up to its
-			 * capacity. Either way, we need to create a new shard and
-			 * start copying new rows into it.
-			 */
-			if (copiedDataSizeInBytes == 0)
-			{
-				/* create shard and open connections to shard placements */
-				StartCopyToNewShard(shardConnections, copyStatement,
-									copyOutState->binary);
-
-				/* send copy binary headers to shard placements */
-				if (copyOutState->binary)
-				{
-					SendCopyBinaryHeaders(copyOutState,
-										  shardConnections->connectionList);
-				}
-			}
-
-			/* replicate row to shard placements */
-			resetStringInfo(copyOutState->fe_msgbuf);
-			AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-							  copyOutState, columnOutputFunctions);
-			SendCopyDataToAll(copyOutState->fe_msgbuf, shardConnections->connectionList);
-
-			messageBufferSize = copyOutState->fe_msgbuf->len;
-			copiedDataSizeInBytes = copiedDataSizeInBytes + messageBufferSize;
-
-			/*
-			 * If we filled up this shard to its capacity, send copy binary footers
-			 * to shard placements, commit copy transactions, close connections
-			 * and finally update shard statistics.
-			 *
-			 * */
-			if (copiedDataSizeInBytes > shardMaxSizeInBytes)
-			{
-				if (copyOutState->binary)
-				{
-					SendCopyBinaryFooters(copyOutState,
-										  shardConnections->connectionList);
-				}
-				FinalizeCopyToNewShard(shardConnections);
-				MasterUpdateShardStatistics(shardConnections->shardId);
-
-				copiedDataSizeInBytes = 0;
-			}
-
-			processedRowCount += 1;
+			break;
 		}
 
-		/*
-		 * For the last shard, send copy binary footers to shard placements,
-		 * commit copy transactions, close connections and finally update shard
-		 * statistics. If no row is send, there is no shard to finalize the
-		 * copy command.
-		 */
-		if (copiedDataSizeInBytes > 0)
-		{
-			if (copyOutState->binary)
-			{
-				SendCopyBinaryFooters(copyOutState,
-									  shardConnections->connectionList);
-			}
-			FinalizeCopyToNewShard(shardConnections);
-			MasterUpdateShardStatistics(shardConnections->shardId);
-		}
-
-		EndCopyFrom(copyState);
-		heap_close(distributedRelation, NoLock);
-
-		/* check for cancellation one last time before returning */
 		CHECK_FOR_INTERRUPTS();
 
-		if (completionTag != NULL)
-		{
-			snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
-					 "COPY " UINT64_FORMAT, processedRowCount);
-		}
-	}
-	PG_CATCH();
-	{
-		/* roll back all transactions */
-		EndRemoteCopy(shardConnections->connectionList, false);
-		AbortRemoteTransactions(shardConnections->connectionList);
-		CloseConnections(shardConnections->connectionList);
+		/* switch to regular memory context and stop showing line number in errors */
+		MemoryContextSwitchTo(oldContext);
+		error_context_stack = errorCallback.previous;
 
-		PG_RE_THROW();
+		/*
+		 * If copied data size is zero, this means either this is the first
+		 * line in the copy or we just filled the previous shard up to its
+		 * capacity. Either way, we need to create a new shard and
+		 * start copying new rows into it.
+		 */
+		if (copiedDataSizeInBytes == 0)
+		{
+			/* create shard and open connections to shard placements */
+			currentShardId = StartCopyToNewShard(shardConnections, copyStatement,
+												 copyOutState->binary);
+
+			/* send copy binary headers to shard placements */
+			if (copyOutState->binary)
+			{
+				SendCopyBinaryHeaders(copyOutState, currentShardId,
+									  shardConnections->connectionList);
+			}
+		}
+
+		/* replicate row to shard placements */
+		resetStringInfo(copyOutState->fe_msgbuf);
+		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+						  copyOutState, columnOutputFunctions);
+		SendCopyDataToAll(copyOutState->fe_msgbuf, currentShardId,
+						  shardConnections->connectionList);
+
+		messageBufferSize = copyOutState->fe_msgbuf->len;
+		copiedDataSizeInBytes = copiedDataSizeInBytes + messageBufferSize;
+
+		/*
+		 * If we filled up this shard to its capacity, send copy binary footers
+		 * to shard placements, and update shard statistics.
+		 */
+		if (copiedDataSizeInBytes > shardMaxSizeInBytes)
+		{
+			Assert(currentShardId != INVALID_SHARD_ID);
+
+			if (copyOutState->binary)
+			{
+				SendCopyBinaryFooters(copyOutState, currentShardId,
+									  shardConnections->connectionList);
+			}
+
+			EndRemoteCopy(currentShardId, shardConnections->connectionList, true);
+			MasterUpdateShardStatistics(shardConnections->shardId);
+
+			copiedDataSizeInBytes = 0;
+			currentShardId = INVALID_SHARD_ID;
+		}
+
+		processedRowCount += 1;
 	}
-	PG_END_TRY();
+
+	/*
+	 * For the last shard, send copy binary footers to shard placements,
+	 * and update shard statistics. If no row is send, there is no shard
+	 * to finalize the copy command.
+	 */
+	if (copiedDataSizeInBytes > 0)
+	{
+		Assert(currentShardId != INVALID_SHARD_ID);
+
+		if (copyOutState->binary)
+		{
+			SendCopyBinaryFooters(copyOutState, currentShardId,
+								  shardConnections->connectionList);
+		}
+		EndRemoteCopy(currentShardId, shardConnections->connectionList, true);
+		MasterUpdateShardStatistics(shardConnections->shardId);
+	}
+
+	EndCopyFrom(copyState);
+	heap_close(distributedRelation, NoLock);
+
+	/* check for cancellation one last time before returning */
+	CHECK_FOR_INTERRUPTS();
+
+	if (completionTag != NULL)
+	{
+		snprintf(completionTag, COMPLETION_TAG_BUFSIZE,
+				 "COPY " UINT64_FORMAT, processedRowCount);
+	}
 }
 
 
@@ -890,7 +769,7 @@ MasterPartitionMethod(RangeVar *relation)
 	StringInfo partitionMethodCommand = makeStringInfo();
 	appendStringInfo(partitionMethodCommand, PARTITION_METHOD_QUERY, qualifiedName);
 
-	queryResult = PQexec(masterConnection, partitionMethodCommand->data);
+	queryResult = PQexec(masterConnection->pgConn, partitionMethodCommand->data);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		char *partitionMethodString = PQgetvalue((PGresult *) queryResult, 0, 0);
@@ -904,7 +783,7 @@ MasterPartitionMethod(RangeVar *relation)
 	}
 	else
 	{
-		WarnRemoteError(masterConnection, queryResult);
+		ReportResultError(masterConnection, queryResult, WARNING);
 		ereport(ERROR, (errmsg("could not get the partition method of the "
 							   "distributed table")));
 	}
@@ -945,24 +824,23 @@ RemoveMasterOptions(CopyStmt *copyStatement)
 
 
 /*
- * OpenCopyTransactions opens a connection for each placement of a shard and
- * starts a COPY transaction. If a connection cannot be opened, then the shard
- * placement is marked as inactive and the COPY continues with the remaining
+ * OpenCopyConnections opens a connection for each placement of a shard and
+ * starts a COPY transaction if necessary. If a connection cannot be opened,
+ * then the shard placement is marked as inactive and the COPY continues with the remaining
  * shard placements.
  */
 static void
-OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections,
-					 bool stopOnFailure, bool useBinaryCopyFormat)
+OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
+					bool stopOnFailure, bool useBinaryCopyFormat)
 {
 	List *finalizedPlacementList = NIL;
 	List *failedPlacementList = NIL;
 	ListCell *placementCell = NULL;
-	ListCell *failedPlacementCell = NULL;
 	List *connectionList = NULL;
 	int64 shardId = shardConnections->shardId;
 
 	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "OpenCopyTransactions",
+													   "OpenCopyConnections",
 													   ALLOCSET_DEFAULT_MINSIZE,
 													   ALLOCSET_DEFAULT_INITSIZE,
 													   ALLOCSET_DEFAULT_MAXSIZE);
@@ -974,7 +852,7 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 
 	MemoryContextSwitchTo(oldContext);
 
-	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	if (XactModificationLevel > XACT_MODIFICATION_DATA)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("distributed copy operations must not appear in "
@@ -987,27 +865,15 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeName = placement->nodeName;
 		int nodePort = placement->nodePort;
-		WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
-		int workerGroupId = 0;
 		char *nodeUser = CurrentUserName();
-		PGconn *connection = ConnectToNode(nodeName, nodePort, nodeUser);
-
-		TransactionConnection *transactionConnection = NULL;
+		MultiConnection *connection = NULL;
+		uint32 connectionFlags = FOR_DML;
 		StringInfo copyCommand = NULL;
 		PGresult *result = NULL;
 
-		/*
-		 * When a copy is initiated from a worker, the information about the connected
-		 * worker node may not be found if pg_dist_node entries are not synced to this
-		 * node. In that case we leave the groupId as 0. Fortunately, it is unused since
-		 * COPY from a worker does not initiate a 2PC.
-		 */
-		if (workerNode != NULL)
-		{
-			workerGroupId = workerNode->groupId;
-		}
+		connection = GetPlacementConnection(connectionFlags, placement, nodeUser);
 
-		if (connection == NULL)
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
 			if (stopOnFailure)
 			{
@@ -1019,42 +885,35 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 			continue;
 		}
 
-		result = PQexec(connection, "BEGIN");
-		if (PQresultStatus(result) != PGRES_COMMAND_OK)
+		/*
+		 * If errors are supposed to cause immediate aborts (i.e. we don't
+		 * want to/can't invalidate placements), mark the connection as
+		 * critical so later errors cause failures.
+		 */
+		if (stopOnFailure)
 		{
-			WarnRemoteError(connection, result);
-			failedPlacementList = lappend(failedPlacementList, placement);
-
-			PQclear(result);
-			continue;
+			MarkRemoteTransactionCritical(connection);
 		}
-
-		PQclear(result);
+		ClaimConnectionExclusively(connection);
+		RemoteTransactionBeginIfNecessary(connection);
 		copyCommand = ConstructCopyStatement(copyStatement, shardConnections->shardId,
 											 useBinaryCopyFormat);
+		result = PQexec(connection->pgConn, copyCommand->data);
 
-		result = PQexec(connection, copyCommand->data);
 		if (PQresultStatus(result) != PGRES_COPY_IN)
 		{
-			WarnRemoteError(connection, result);
-			failedPlacementList = lappend(failedPlacementList, placement);
+			ReportConnectionError(connection, WARNING);
+			MarkRemoteTransactionFailed(connection, true);
 
 			PQclear(result);
+
+			/* failed placements will be invalidated by transaction machinery */
+			failedPlacementList = lappend(failedPlacementList, placement);
 			continue;
 		}
 
 		PQclear(result);
-
-		transactionConnection = palloc0(sizeof(TransactionConnection));
-
-		transactionConnection->groupId = workerGroupId;
-		transactionConnection->connectionId = shardConnections->shardId;
-		transactionConnection->transactionState = TRANSACTION_STATE_COPY_STARTED;
-		transactionConnection->connection = connection;
-		transactionConnection->nodeName = nodeName;
-		transactionConnection->nodePort = nodePort;
-
-		connectionList = lappend(connectionList, transactionConnection);
+		connectionList = lappend(connectionList, connection);
 	}
 
 	/* if all placements failed, error out */
@@ -1069,14 +928,6 @@ OpenCopyTransactions(CopyStmt *copyStatement, ShardConnections *shardConnections
 	 * copy from worker nodes.
 	 */
 	Assert(!stopOnFailure || list_length(failedPlacementList) == 0);
-
-	/* otherwise, mark failed placements as inactive: they're stale */
-	foreach(failedPlacementCell, failedPlacementList)
-	{
-		ShardPlacement *failedPlacement = (ShardPlacement *) lfirst(failedPlacementCell);
-
-		UpdateShardPlacementState(failedPlacement->placementId, FILE_INACTIVE);
-	}
 
 	shardConnections->connectionList = connectionList;
 
@@ -1161,7 +1012,7 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 	StringInfo shardPlacementsCommand = makeStringInfo();
 	appendStringInfo(shardPlacementsCommand, FINALIZED_SHARD_PLACEMENTS_QUERY, shardId);
 
-	queryResult = PQexec(masterConnection, shardPlacementsCommand->data);
+	queryResult = PQexec(masterConnection->pgConn, shardPlacementsCommand->data);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		int rowCount = PQntuples(queryResult);
@@ -1196,21 +1047,21 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 
 /* Send copy binary headers to given connections */
 static void
-SendCopyBinaryHeaders(CopyOutState copyOutState, List *connectionList)
+SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId, List *connectionList)
 {
 	resetStringInfo(copyOutState->fe_msgbuf);
 	AppendCopyBinaryHeaders(copyOutState);
-	SendCopyDataToAll(copyOutState->fe_msgbuf, connectionList);
+	SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, connectionList);
 }
 
 
 /* Send copy binary footers to given connections */
 static void
-SendCopyBinaryFooters(CopyOutState copyOutState, List *connectionList)
+SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId, List *connectionList)
 {
 	resetStringInfo(copyOutState->fe_msgbuf);
 	AppendCopyBinaryFooters(copyOutState);
-	SendCopyDataToAll(copyOutState->fe_msgbuf, connectionList);
+	SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, connectionList);
 }
 
 
@@ -1253,17 +1104,13 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
  * SendCopyDataToAll sends copy data to all connections in a list.
  */
 static void
-SendCopyDataToAll(StringInfo dataBuffer, List *connectionList)
+SendCopyDataToAll(StringInfo dataBuffer, int64 shardId, List *connectionList)
 {
 	ListCell *connectionCell = NULL;
 	foreach(connectionCell, connectionList)
 	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-		int64 shardId = transactionConnection->connectionId;
-
-		SendCopyDataToPlacement(dataBuffer, connection, shardId);
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+		SendCopyDataToPlacement(dataBuffer, shardId, connection);
 	}
 }
 
@@ -1273,73 +1120,61 @@ SendCopyDataToAll(StringInfo dataBuffer, List *connectionList)
  * over the given connection.
  */
 static void
-SendCopyDataToPlacement(StringInfo dataBuffer, PGconn *connection, int64 shardId)
+SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId, MultiConnection *connection)
 {
-	int copyResult = PQputCopyData(connection, dataBuffer->data, dataBuffer->len);
+	int copyResult = PQputCopyData(connection->pgConn, dataBuffer->data, dataBuffer->len);
 	if (copyResult != 1)
 	{
-		char *nodeName = ConnectionGetOptionValue(connection, "host");
-		char *nodePort = ConnectionGetOptionValue(connection, "port");
-
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-						errmsg("failed to COPY to shard %ld on %s:%s",
-							   shardId, nodeName, nodePort)));
+						errmsg("failed to COPY to shard %ld on %s:%d",
+							   shardId, connection->hostname, connection->port),
+						errdetail("failed to send %d bytes %s", dataBuffer->len,
+								  dataBuffer->data)));
 	}
 }
 
 
 /*
- * EndRemoteCopy ends the COPY input on all connections. If stopOnFailure
- * is true, then EndRemoteCopy reports an error on failure, otherwise it
- * reports a warning or continues.
+ * EndRemoteCopy ends the COPY input on all connections, and unclaims connections.
+ * If stopOnFailure is true, then EndRemoteCopy reports an error on failure,
+ * otherwise it reports a warning or continues.
  */
 static void
-EndRemoteCopy(List *connectionList, bool stopOnFailure)
+EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure)
 {
 	ListCell *connectionCell = NULL;
 
 	foreach(connectionCell, connectionList)
 	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-		int64 shardId = transactionConnection->connectionId;
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		int copyEndResult = 0;
 		PGresult *result = NULL;
 
-		if (transactionConnection->transactionState != TRANSACTION_STATE_COPY_STARTED)
-		{
-			/* a failure occurred after having previously called EndRemoteCopy */
-			continue;
-		}
-
 		/* end the COPY input */
-		copyEndResult = PQputCopyEnd(connection, NULL);
-		transactionConnection->transactionState = TRANSACTION_STATE_OPEN;
+		copyEndResult = PQputCopyEnd(connection->pgConn, NULL);
 
 		if (copyEndResult != 1)
 		{
 			if (stopOnFailure)
 			{
-				char *nodeName = ConnectionGetOptionValue(connection, "host");
-				char *nodePort = ConnectionGetOptionValue(connection, "port");
-
 				ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-								errmsg("failed to COPY to shard %ld on %s:%s",
-									   shardId, nodeName, nodePort)));
+								errmsg("failed to COPY to shard %ld on %s:%d",
+									   shardId, connection->hostname, connection->port)));
 			}
 
 			continue;
 		}
 
 		/* check whether there were any COPY errors */
-		result = PQgetResult(connection);
+		result = PQgetResult(connection->pgConn);
 		if (PQresultStatus(result) != PGRES_COMMAND_OK && stopOnFailure)
 		{
 			ReportCopyError(connection, result);
 		}
 
 		PQclear(result);
+		ForgetResults(connection);
+		UnclaimConnection(connection);
 	}
 }
 
@@ -1349,7 +1184,7 @@ EndRemoteCopy(List *connectionList, bool stopOnFailure)
  * the remote COPY error messages.
  */
 static void
-ReportCopyError(PGconn *connection, PGresult *result)
+ReportCopyError(MultiConnection *connection, PGresult *result)
 {
 	char *remoteMessage = PQresultErrorField(result, PG_DIAG_MESSAGE_PRIMARY);
 
@@ -1365,10 +1200,8 @@ ReportCopyError(PGconn *connection, PGresult *result)
 	{
 		/* probably a connection problem, get the message from the connection */
 		char *lastNewlineIndex = NULL;
-		char *nodeName = ConnectionGetOptionValue(connection, "host");
-		char *nodePort = ConnectionGetOptionValue(connection, "port");
 
-		remoteMessage = PQerrorMessage(connection);
+		remoteMessage = PQerrorMessage(connection->pgConn);
 		lastNewlineIndex = strrchr(remoteMessage, '\n');
 
 		/* trim trailing newline, if any */
@@ -1378,7 +1211,8 @@ ReportCopyError(PGconn *connection, PGresult *result)
 		}
 
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-						errmsg("failed to complete COPY on %s:%s", nodeName, nodePort),
+						errmsg("failed to complete COPY on %s:%d", connection->hostname,
+							   connection->port),
 						errdetail("%s", remoteMessage)));
 	}
 }
@@ -1581,23 +1415,25 @@ AppendCopyBinaryFooters(CopyOutState footerOutputState)
  * StartCopyToNewShard creates a new shard and related shard placements and
  * opens connections to shard placements.
  */
-static void
+static int64
 StartCopyToNewShard(ShardConnections *shardConnections, CopyStmt *copyStatement,
 					bool useBinaryCopyFormat)
 {
 	char *relationName = copyStatement->relation->relname;
 	char *schemaName = copyStatement->relation->schemaname;
 	char *qualifiedName = quote_qualified_identifier(schemaName, relationName);
-
 	int64 shardId = MasterCreateEmptyShard(qualifiedName);
+	bool stopOnFailure = true;
 
 	shardConnections->shardId = shardId;
 
-	list_free_deep(shardConnections->connectionList);
 	shardConnections->connectionList = NIL;
 
 	/* connect to shards placements and start transactions */
-	OpenCopyTransactions(copyStatement, shardConnections, true, useBinaryCopyFormat);
+	OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
+						useBinaryCopyFormat);
+
+	return shardId;
 }
 
 
@@ -1654,7 +1490,7 @@ RemoteCreateEmptyShard(char *relationName)
 	StringInfo createEmptyShardCommand = makeStringInfo();
 	appendStringInfo(createEmptyShardCommand, CREATE_EMPTY_SHARD_QUERY, relationName);
 
-	queryResult = PQexec(masterConnection, createEmptyShardCommand->data);
+	queryResult = PQexec(masterConnection->pgConn, createEmptyShardCommand->data);
 	if (PQresultStatus(queryResult) == PGRES_TUPLES_OK)
 	{
 		char *shardIdString = PQgetvalue((PGresult *) queryResult, 0, 0);
@@ -1663,29 +1499,13 @@ RemoteCreateEmptyShard(char *relationName)
 	}
 	else
 	{
-		WarnRemoteError(masterConnection, queryResult);
+		ReportResultError(masterConnection, queryResult, WARNING);
 		ereport(ERROR, (errmsg("could not create a new empty shard on the remote node")));
 	}
 
 	PQclear(queryResult);
 
 	return shardId;
-}
-
-
-/*
- * FinalizeCopyToNewShard commits copy transaction and closes connections to
- * shard placements.
- */
-static void
-FinalizeCopyToNewShard(ShardConnections *shardConnections)
-{
-	/* close the COPY input on all shard placements */
-	EndRemoteCopy(shardConnections->connectionList, true);
-
-	/* commit transactions and close connections */
-	CommitRemoteTransactions(shardConnections->connectionList, true);
-	CloseConnections(shardConnections->connectionList);
 }
 
 
@@ -1719,7 +1539,7 @@ RemoteUpdateShardStatistics(uint64 shardId)
 	appendStringInfo(updateShardStatisticsCommand, UPDATE_SHARD_STATISTICS_QUERY,
 					 shardId);
 
-	queryResult = PQexec(masterConnection, updateShardStatisticsCommand->data);
+	queryResult = PQexec(masterConnection->pgConn, updateShardStatisticsCommand->data);
 	if (PQresultStatus(queryResult) != PGRES_TUPLES_OK)
 	{
 		ereport(ERROR, (errmsg("could not update shard statistics")));
