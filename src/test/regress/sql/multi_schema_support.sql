@@ -504,7 +504,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and no
 SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
 -- verify shardstate
-SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000;
+SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
 
 
 --test with search_path is set
@@ -515,7 +515,7 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1190000 and no
 SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
 -- verify shardstate
-SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000;
+SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
 
 
 -- test master_apply_delete_command with schemas
