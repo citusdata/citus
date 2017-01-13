@@ -197,7 +197,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360009 |          1 |        8192 | localhost |    57637
@@ -304,7 +306,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360010 |          1 |           0 | localhost |    57637
@@ -361,7 +365,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360011 |          1 |           0 | localhost |    57637
@@ -414,7 +420,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360011 |          1 |           0 | localhost |    57637
@@ -469,7 +477,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360012 |          1 |           0 | localhost |    57637
@@ -522,7 +532,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360012 |          1 |           0 | localhost |    57637
@@ -741,7 +753,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
+ORDER BY
+    nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1360014 |          1 |           0 | localhost |    57637

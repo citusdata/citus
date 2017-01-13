@@ -130,7 +130,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_append'::regclass)
+ORDER BY
+    nodeport;
 
 -- test valid cases, shard exists at one worker
 CREATE TABLE upgrade_reference_table_one_worker(column1 int);
@@ -196,7 +198,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_worker'::regclass)
+ORDER BY
+    nodeport;
 
 -- test valid cases, shard exists at both workers but one is unhealthy
 SET citus.shard_replication_factor TO 2;
@@ -232,7 +236,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
+ORDER BY
+    nodeport;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_one_unhealthy');
 
@@ -264,7 +270,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_one_unhealthy'::regclass)
+ORDER BY
+    nodeport;
 
 -- test valid cases, shard exists at both workers and both are healthy
 CREATE TABLE upgrade_reference_table_both_healthy(column1 int);
@@ -298,7 +306,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
+ORDER BY
+    nodeport;
 
 SELECT upgrade_to_reference_table('upgrade_reference_table_both_healthy');
 
@@ -330,7 +340,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_both_healthy'::regclass)
+ORDER BY
+    nodeport;
 
 -- test valid cases, do it in transaction and ROLLBACK
 SET citus.shard_replication_factor TO 1;
@@ -468,7 +480,9 @@ FROM pg_dist_shard_placement
 WHERE shardid IN
     (SELECT shardid
      FROM pg_dist_shard
-     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass);
+     WHERE logicalrelid = 'upgrade_reference_table_transaction_commit'::regclass)
+ORDER BY
+    nodeport;
 
 -- verify that shard is replicated to other worker
 \c - - - :worker_2_port
