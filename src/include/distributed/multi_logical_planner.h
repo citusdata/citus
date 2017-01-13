@@ -199,6 +199,7 @@ extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 extern List * WhereClauseList(FromExpr *fromExpr);
 extern List * QualifierList(FromExpr *fromExpr);
 extern List * TableEntryList(List *rangeTableList);
+extern List * UsedTableEntryList(Query *query);
 extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
 extern List * pull_var_clause_default(Node *node);

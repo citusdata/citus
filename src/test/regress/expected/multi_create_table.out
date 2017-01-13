@@ -187,3 +187,18 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regcl
 
 DROP TABLE mx_table_test; 
 SET citus.shard_replication_factor TO default;
+SET citus.shard_count to 4;
+CREATE TABLE lineitem_hash_part (like lineitem);
+SELECT create_distributed_table('lineitem_hash_part', 'l_orderkey');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE orders_hash_part (like orders);
+SELECT create_distributed_table('orders_hash_part', 'o_orderkey');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+

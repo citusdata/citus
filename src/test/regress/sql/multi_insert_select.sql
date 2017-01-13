@@ -744,9 +744,19 @@ COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
 \.
 ROLLBACK;
 
--- Views does not work
+-- selecting from views works
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
+INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
+                         (16, now(), 60, 600, 6000.1, 60000);
+SELECT count(*) FROM raw_events_second;
 INSERT INTO raw_events_second SELECT * FROM test_view;
+INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
+                         (17, now(), 60, 600, 6000.1, 60000);
+INSERT INTO raw_events_second SELECT * FROM test_view WHERE user_id = 17 GROUP BY 1,2,3,4,5,6;
+SELECT count(*) FROM raw_events_second;
+
+-- inserting into views does not
+INSERT INTO test_view SELECT * FROM raw_events_second;
 
 -- we need this in our next test
 truncate raw_events_first;
