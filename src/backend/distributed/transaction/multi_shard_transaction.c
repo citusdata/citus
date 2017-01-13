@@ -202,12 +202,12 @@ GetShardHashConnections(HTAB *connectionHash, int64 shardId, bool *connectionsFo
 
 
 /*
- * ConnectionList flattens the connection hash to a list of placement connections.
+ * ShardConnectionList returns the list of ShardConnections in connectionHash.
  */
 List *
-ConnectionList(HTAB *connectionHash)
+ShardConnectionList(HTAB *connectionHash)
 {
-	List *connectionList = NIL;
+	List *shardConnectionsList = NIL;
 	HASH_SEQ_STATUS status;
 	ShardConnections *shardConnections = NULL;
 
@@ -221,13 +221,12 @@ ConnectionList(HTAB *connectionHash)
 	shardConnections = (ShardConnections *) hash_seq_search(&status);
 	while (shardConnections != NULL)
 	{
-		List *shardConnectionsList = list_copy(shardConnections->connectionList);
-		connectionList = list_concat(connectionList, shardConnectionsList);
+		shardConnectionsList = lappend(shardConnectionsList, shardConnections);
 
 		shardConnections = (ShardConnections *) hash_seq_search(&status);
 	}
 
-	return connectionList;
+	return shardConnectionsList;
 }
 
 

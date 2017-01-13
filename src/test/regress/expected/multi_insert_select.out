@@ -1456,17 +1456,15 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100
 ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 ROLLBACK;
 -- Insert after copy is currently disallowed because of the way the 
--- transaction modification state is currently handled. Copy still
--- goes through despite rollback.
+-- transaction modification state is currently handled. Copy is also
+-- rolled back.
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 ERROR:  multi-shard data modifications must not appear in transaction blocks which contain single-shard DML commands
 ROLLBACK;
 -- Insert after copy is currently allowed for single-shard operation.
--- Since the COPY commits immediately, the result is visible in the
--- next operation. Copy goes through despite rollback, while insert
--- rolls back.
+-- Both insert and copy are rolled back successfully.
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 101;
@@ -1477,9 +1475,7 @@ SELECT user_id FROM raw_events_first WHERE user_id = 101;
 (1 row)
 
 ROLLBACK;
--- Copy after insert is disallowed since the insert is not immediately
--- committed and the copy uses different connections that will not yet
--- see the result of the insert.
+-- Copy after insert is currently disallowed.
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
@@ -1489,8 +1485,6 @@ ROLLBACK;
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY raw_events_first, line 1: "103,103"
 ROLLBACK;
 -- selecting from views works
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
@@ -1499,7 +1493,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 SELECT count(*) FROM raw_events_second;
  count 
 -------
-    11
+     9
 (1 row)
 
 INSERT INTO raw_events_second SELECT * FROM test_view;
@@ -1509,7 +1503,7 @@ INSERT INTO raw_events_second SELECT * FROM test_view WHERE user_id = 17 GROUP B
 SELECT count(*) FROM raw_events_second;
  count 
 -------
-    13
+    11
 (1 row)
 
 -- inserting into views does not
