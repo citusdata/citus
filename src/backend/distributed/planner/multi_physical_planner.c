@@ -1515,7 +1515,6 @@ UpdateColumnAttributes(Var *column, List *rangeTableList, List *dependedJobList)
 static Index
 NewTableId(Index originalTableId, List *rangeTableList)
 {
-	Index newTableId = 0;
 	Index rangeTableIndex = 1;
 	ListCell *rangeTableCell = NULL;
 
@@ -1530,14 +1529,15 @@ NewTableId(Index originalTableId, List *rangeTableList)
 		listMember = list_member_int(originalTableIdList, originalTableId);
 		if (listMember)
 		{
-			newTableId = rangeTableIndex;
-			break;
+			return rangeTableIndex;
 		}
 
 		rangeTableIndex++;
 	}
 
-	return newTableId;
+	ereport(ERROR, (errmsg("Unrecognized range table id %d", (int) originalTableId)));
+
+	return 0;
 }
 
 

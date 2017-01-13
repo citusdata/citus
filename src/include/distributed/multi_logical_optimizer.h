@@ -122,7 +122,9 @@ extern bool ExtractQueryWalker(Node *node, List **queryList);
 extern bool LeafQuery(Query *queryTree);
 extern List * PartitionColumnOpExpressionList(Query *query);
 extern List * ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn);
-extern bool IsPartitionColumnRecursive(Expr *columnExpression, Query *query);
+extern bool IsPartitionColumn(Expr *columnExpression, Query *query);
+extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList,
+									  Query *query, Oid *relationId, Var **column);
 
 
 #endif   /* MULTI_LOGICAL_OPTIMIZER_H */
