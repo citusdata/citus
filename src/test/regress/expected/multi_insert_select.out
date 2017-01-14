@@ -1112,7 +1112,8 @@ INSERT INTO agg_events
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- We do support some CTEs
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
@@ -1218,7 +1219,8 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 -- error cases
 -- no part column at all
 INSERT INTO raw_events_second
@@ -1228,7 +1230,7 @@ FROM   raw_events_first;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT because the query doesn't include the target table's partition column
 INSERT INTO raw_events_second
             (value_1)
 SELECT user_id
@@ -1236,7 +1238,7 @@ FROM   raw_events_first;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT because the query doesn't include the target table's partition column
 INSERT INTO raw_events_second
             (user_id)
 SELECT value_1
@@ -1244,7 +1246,8 @@ FROM   raw_events_first;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id * 2
@@ -1252,7 +1255,9 @@ FROM   raw_events_first;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id :: bigint
@@ -1260,7 +1265,9 @@ FROM   raw_events_first;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an explicit cast in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1277,7 +1284,9 @@ GROUP  BY user_id;
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1295,7 +1304,8 @@ GROUP  BY user_id,
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- tables should be co-located
 INSERT INTO agg_events (user_id)
 SELECT
@@ -1305,7 +1315,8 @@ FROM
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- unsupported joins between subqueries
 -- we do not return bare partition column on the inner query
 INSERT INTO agg_events
@@ -1333,7 +1344,9 @@ ON (f.id = f2.id);
 DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-ERROR:  SELECT query should return bare partition column on the same ordinal position as the INSERT's partition column
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 -- the second part of the query is not routable since
 -- no GROUP BY on the partition column
 INSERT INTO agg_events
@@ -1994,6 +2007,74 @@ GROUP BY
   store_id;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Volatile functions are not allowed in INSERT ... SELECT queries
+-- do some more error/error message checks
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE text_table (part_col text, val int);
+CREATE TABLE char_table (part_col char[], val int);
+create table table_with_starts_with_defaults (a int DEFAULT 5, b int, c int);
+SELECT create_distributed_table('text_table', 'part_col');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('char_table','part_col');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('table_with_starts_with_defaults', 'c');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO text_table (part_col) 
+  SELECT 
+    CASE WHEN part_col = 'onder' THEN 'marco'
+      END 
+FROM text_table ;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains a case expression in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT COALESCE(part_col, 'onder') FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains a coalesce expression in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT GREATEST(part_col, 'jason') FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains a min/max expression in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT LEAST(part_col, 'andres') FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains a min/max expression in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT NULLIF(part_col, 'metin') FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT part_col isnull FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT part_col::text from char_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT (part_col = 'burak') is true FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+INSERT INTO text_table (part_col) SELECT val FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
+INSERT INTO text_table (part_col) SELECT val::text FROM text_table;
+ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.
+HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+insert into table_with_starts_with_defaults (b,c) select b,c FROM table_with_starts_with_defaults;
 DROP TABLE raw_events_first CASCADE;
 NOTICE:  drop cascades to view test_view
 DROP TABLE raw_events_second;
@@ -2001,3 +2082,6 @@ DROP TABLE reference_table;
 DROP TABLE agg_events;
 DROP TABLE table_with_defaults;
 DROP TABLE table_with_serial;
+DROP TABLE text_table;
+DROP TABLE char_table;
+DROP TABLE table_with_starts_with_defaults;
