@@ -820,77 +820,211 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 	uint32 rangeTableId = 1;
 	Oid insertRelationId = insertRte->relid;
 	Var *insertPartitionColumn = PartitionColumn(insertRelationId, rangeTableId);
-	bool partitionColumnsMatch = false;
 	Query *subquery = subqueryRte->subquery;
+	bool targetTableHasPartitionColumn = false;
 
 	foreach(targetEntryCell, query->targetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		List *insertTargetEntryColumnList = pull_var_clause_default((Node *) targetEntry);
+		Var *insertVar = NULL;
+		AttrNumber originalAttrNo = InvalidAttrNumber;
+		TargetEntry *subqueryTargetEntry = NULL;
+		Expr *selectTargetExpr = NULL;
+		Oid subqueryPartitionColumnRelationId = InvalidOid;
+		Var *subqueryPartitionColumn = NULL;
+		List *parentQueryList = NIL;
 
-		if (IsA(targetEntry->expr, Var))
+		/*
+		 * We only consider target entries that include a single column. Note that this
+		 * is slightly different than directly checking the whether the targetEntry->expr
+		 * is a var since the var could be wrapped into an implicit/explicit casting.
+		 *
+		 * Also note that we skip the target entry if it does not contain a Var, which
+		 * corresponds to columns with DEFAULT values on the target list.
+		 */
+		if (list_length(insertTargetEntryColumnList) != 1)
 		{
-			Var *insertVar = (Var *) targetEntry->expr;
-			AttrNumber originalAttrNo = get_attnum(insertRelationId,
-												   targetEntry->resname);
-			TargetEntry *subqeryTargetEntry = NULL;
-			Oid originalRelationId = InvalidOid;
-			Var *originalColumn = NULL;
-			List *parentQueryList = NIL;
-
-			if (originalAttrNo != insertPartitionColumn->varattno)
-			{
-				continue;
-			}
-
-			subqeryTargetEntry = list_nth(subquery->targetList,
-										  insertVar->varattno - 1);
-
-			if (!IsA(subqeryTargetEntry->expr, Var))
-			{
-				partitionColumnsMatch = false;
-				break;
-			}
-
-			parentQueryList = list_make2(query, subquery);
-			FindReferencedTableColumn(subqeryTargetEntry->expr,
-									  parentQueryList, subquery,
-									  &originalRelationId,
-									  &originalColumn);
-
-			if (originalRelationId == InvalidOid)
-			{
-				partitionColumnsMatch = false;
-				break;
-			}
-
-			/*
-			 * Reference tables doesn't have a partition column, thus partition columns
-			 * cannot match at all.
-			 */
-			if (PartitionMethod(originalRelationId) == DISTRIBUTE_BY_NONE)
-			{
-				partitionColumnsMatch = false;
-				break;
-			}
-
-			if (!IsPartitionColumn(subqeryTargetEntry->expr, subquery))
-			{
-				partitionColumnsMatch = false;
-				break;
-			}
-
-			partitionColumnsMatch = true;
-			*selectPartitionColumnTableId = originalRelationId;
-			break;
+			continue;
 		}
+
+		insertVar = (Var *) linitial(insertTargetEntryColumnList);
+		originalAttrNo = targetEntry->resno;
+
+		/* skip processing of target table non-partition columns */
+		if (originalAttrNo != insertPartitionColumn->varattno)
+		{
+			continue;
+		}
+
+		/* INSERT query includes the partition column */
+		targetTableHasPartitionColumn = true;
+
+		subqueryTargetEntry = list_nth(subquery->targetList,
+									   insertVar->varattno - 1);
+		selectTargetExpr = subqueryTargetEntry->expr;
+
+		parentQueryList = list_make2(query, subquery);
+		FindReferencedTableColumn(selectTargetExpr,
+								  parentQueryList, subquery,
+								  &subqueryPartitionColumnRelationId,
+								  &subqueryPartitionColumn);
+
+		/*
+		 * Corresponding (i.e., in the same ordinal position as the target table's
+		 * partition column) select target entry does not directly belong a table.
+		 * Evaluate its expression type and error out properly.
+		 */
+		if (subqueryPartitionColumnRelationId == InvalidOid)
+		{
+			char *errorDetailTemplate = "Subquery contains %s in the "
+										"same position as the target table's "
+										"partition column.";
+
+			char *exprDescription = "";
+
+			switch (selectTargetExpr->type)
+			{
+				case T_Const:
+				{
+					exprDescription = "a constant value";
+					break;
+				}
+
+				case T_OpExpr:
+				{
+					exprDescription = "an operator";
+					break;
+				}
+
+				case T_FuncExpr:
+				{
+					FuncExpr *subqueryFunctionExpr = (FuncExpr *) selectTargetExpr;
+
+					switch (subqueryFunctionExpr->funcformat)
+					{
+						case COERCE_EXPLICIT_CALL:
+						{
+							exprDescription = "a function call";
+							break;
+						}
+
+						case COERCE_EXPLICIT_CAST:
+						{
+							exprDescription = "an explicit cast";
+							break;
+						}
+
+						case COERCE_IMPLICIT_CAST:
+						{
+							exprDescription = "an implicit cast";
+							break;
+						}
+
+						default:
+						{
+							exprDescription = "a function call";
+							break;
+						}
+					}
+					break;
+				}
+
+				case T_Aggref:
+				{
+					exprDescription = "an aggregation";
+					break;
+				}
+
+				case T_CaseExpr:
+				{
+					exprDescription = "a case expression";
+					break;
+				}
+
+				case T_CoalesceExpr:
+				{
+					exprDescription = "a coalesce expression";
+					break;
+				}
+
+				case T_RowExpr:
+				{
+					exprDescription = "a row expression";
+					break;
+				}
+
+				case T_MinMaxExpr:
+				{
+					exprDescription = "a min/max expression";
+					break;
+				}
+
+				case T_CoerceViaIO:
+				{
+					exprDescription = "an explicit coercion";
+					break;
+				}
+
+				default:
+				{
+					exprDescription =
+						"an expression that is not a simple column reference";
+					break;
+				}
+			}
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot plan INSERT INTO ... SELECT  "
+								   "because partition columns in the target table "
+								   "and the subquery do not match"),
+							errdetail(errorDetailTemplate, exprDescription),
+							errhint("Ensure the target table's partition column has a "
+									"corresponding simple column reference to a distributed "
+									"table's partition column in the subquery.")));
+		}
+
+		/*
+		 * Insert target expression could only be non-var if the select target
+		 * entry does not have the same type (i.e., target column requires casting).
+		 */
+		if (!IsA(targetEntry->expr, Var))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot plan INSERT INTO ... SELECT  "
+								   "because partition columns in the target table "
+								   "and the subquery do not match"),
+							errdetail(
+								"The data type of the target table's partition column "
+								"should exactly match the data type of the "
+								"corresponding simple column reference in the subquery.")));
+		}
+
+		/* finally, check that the select target column is a partition column */
+		if (!IsPartitionColumn(selectTargetExpr, subquery))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot plan INSERT INTO ... SELECT  "
+								   "because partition columns in the target table "
+								   "and the subquery do not match"),
+							errdetail(
+								"The target table's partition column "
+								"should correspond to a partition column "
+								"in the subquery.")));
+		}
+
+		/* we can set the select relation id */
+		*selectPartitionColumnTableId = subqueryPartitionColumnRelationId;
+
+		break;
 	}
 
-	if (!partitionColumnsMatch)
+	if (!targetTableHasPartitionColumn)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("SELECT query should return bare partition column on "
-							   "the same ordinal position as the INSERT's partition "
-							   "column")));
+						errmsg("cannot plan INSERT INTO ... SELECT "
+							   "because the query doesn't include the target table's "
+							   "partition column")));
 	}
 }
 
@@ -905,7 +1039,7 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
  *   (i)  Set operations are present on the top level query
  *   (ii) Target list does not include a bare partition column.
  *
- * Note that if the input query is not an INSERT .. SELECT the assertion fails. Lastly,
+ * Note that if the input query is not an INSERT ... SELECT the assertion fails. Lastly,
  * if all the participating tables in the query are reference tables, we implicitly
  * skip adding the quals to the query since IsPartitionColumnRecursive() always returns
  * false for reference tables.
@@ -2552,7 +2686,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 			IsA(oldInsertTargetEntry->expr, FieldStore))
 		{
 			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-							errmsg("cannot plan distributed INSERT INTO .. SELECT query"),
+							errmsg(
+								"cannot plan distributed INSERT INTO ... SELECT query"),
 							errhint("Do not use array references and field stores "
 									"on the INSERT target list.")));
 		}
