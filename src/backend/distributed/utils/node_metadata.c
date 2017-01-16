@@ -23,6 +23,7 @@
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "commands/sequence.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
@@ -107,6 +108,9 @@ master_add_node(PG_FUNCTION_ARGS)
  * the master node and all nodes with metadata.
  * The call to the master_remove_node should be done by the super user and the specified
  * node should not have any active placements.
+ * This function also deletes all reference table placements belong to the given node from
+ * pg_dist_shard_placement, but it does not drop actual placement at the node. In the case
+ * of re-adding the node, master_add_node first drops and re-creates the reference tables.
  */
 Datum
 master_remove_node(PG_FUNCTION_ARGS)
@@ -126,6 +130,9 @@ master_remove_node(PG_FUNCTION_ARGS)
  * the master node and all nodes with metadata regardless of the node having an active
  * shard placement.
  * The call to the master_remove_node should be done by the super user.
+ * This function also deletes all reference table placements belong to the given node from
+ * pg_dist_shard_placement, but it does not drop actual placement at the node. In the case
+ * of re-adding the node, master_add_node first drops and re-creates the reference tables.
  */
 Datum
 master_disable_node(PG_FUNCTION_ARGS)
@@ -345,6 +352,10 @@ ReadWorkerNodes()
  * The call to the master_remove_node should be done by the super user. If there are
  * active shard placements on the node; the function removes the node when forceRemove
  * flag is set, it errors out otherwise.
+ * This function also deletes all reference table placements belong to the given node from
+ * pg_dist_shard_placement, but it does not drop actual placement at the node. It also
+ * modifies replication factor of the colocation group of reference tables, so that
+ * replication factor will be equal to worker count.
  */
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
@@ -352,9 +363,33 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 	char *nodeDeleteCommand = NULL;
 	bool hasShardPlacements = false;
 	WorkerNode *workerNode = NULL;
+	List *referenceTableList = NIL;
 
 	EnsureSchemaNode();
 	EnsureSuperUser();
+
+	workerNode = FindWorkerNode(nodeName, nodePort);
+
+	DeleteNodeRow(nodeName, nodePort);
+
+	DeleteAllReferenceTablePlacementsFromNode(nodeName, nodePort);
+
+	/*
+	 * After deleting reference tables placements, we will update replication factor
+	 * column for colocation group of reference tables so that replication factor will
+	 * be equal to worker count.
+	 */
+	referenceTableList = ReferenceTableOidList();
+	if (list_length(referenceTableList) != 0)
+	{
+		Oid firstReferenceTableId = linitial_oid(referenceTableList);
+		uint32 referenceTableColocationId = TableColocationId(firstReferenceTableId);
+
+		List *workerNodeList = WorkerNodeList();
+		int workerCount = list_length(workerNodeList);
+
+		UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
+	}
 
 	hasShardPlacements = NodeHasActiveShardPlacements(nodeName, nodePort);
 	if (hasShardPlacements)
@@ -374,10 +409,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 							errhint("Consider using master_disable_node.")));
 		}
 	}
-
-	workerNode = FindWorkerNode(nodeName, nodePort);
-
-	DeleteNodeRow(nodeName, nodePort);
 
 	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
