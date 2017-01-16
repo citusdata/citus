@@ -473,6 +473,10 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_ENUM_FIELD(shardState, RelayFileState);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
+	/* so we can deal with 0 */
+	WRITE_INT_FIELD(partitionMethod);
+	WRITE_UINT_FIELD(colocationGroupId);
+	WRITE_UINT_FIELD(representativeValue);
 }
 
 
