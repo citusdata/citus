@@ -703,9 +703,31 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		foreach(placementCell, placementList)
 		{
 			ShardPlacement *srcPlacement = (ShardPlacement *) lfirst(placementCell);
+			ShardPlacement *dstPlacement = &placementArray[placementOffset];
 
-			CopyShardPlacement(srcPlacement, &placementArray[placementOffset]);
+			CopyShardPlacement(srcPlacement, dstPlacement);
 
+			/* fill in remaining fields */
+			Assert(cacheEntry->partitionMethod != 0);
+			dstPlacement->partitionMethod = cacheEntry->partitionMethod;
+			dstPlacement->colocationGroupId = cacheEntry->colocationId;
+			if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
+			{
+				Assert(shardInterval->minValueExists);
+				Assert(shardInterval->valueTypeId == INT4OID);
+
+				/*
+				 * Use the lower boundary of the interval's range to identify
+				 * it for colocation purposes. That remains meaningful even if
+				 * a concurrent session splits a shard.
+				 */
+				dstPlacement->representativeValue =
+					DatumGetInt32(shardInterval->minValue);
+			}
+			else
+			{
+				dstPlacement->representativeValue = 0;
+			}
 			placementOffset++;
 		}
 		MemoryContextSwitchTo(oldContext);
