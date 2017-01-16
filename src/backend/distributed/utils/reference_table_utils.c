@@ -382,10 +382,17 @@ DeleteAllReferenceTablePlacementsFromNode(char *workerName, uint32 workerPort)
 		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 		uint64 shardId = shardInterval->shardId;
+		uint64 placementId = INVALID_PLACEMENT_ID;
+		StringInfo deletePlacementCommand = makeStringInfo();
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		DeleteShardPlacementRow(shardId, workerName, workerPort);
+		placementId = DeleteShardPlacementRow(shardId, workerName, workerPort);
+
+		appendStringInfo(deletePlacementCommand,
+						 "DELETE FROM pg_dist_shard_placement WHERE placementid=%lu",
+						 placementId);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
 	}
 }
 
