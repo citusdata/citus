@@ -721,7 +721,8 @@ WHERE
 	colocated_table_test_2.value_2 = reference_table_test.value_2
 RETURNING value_1, value_2;
 
--- partition column value comes from reference table which should error out
+-- partition column value comes from reference table but still first error is
+-- on data type mismatch
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -731,6 +732,18 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
+
+-- partition column value comes from reference table which should error out
+INSERT INTO
+	colocated_table_test (value_1, value_2)
+SELECT
+	reference_table_test.value_1, colocated_table_test_2.value_1
+FROM
+	colocated_table_test_2, reference_table_test
+WHERE
+	colocated_table_test_2.value_4 = reference_table_test.value_4
+RETURNING value_1, value_2;
+
 
 -- some tests for mark_tables_colocated
 -- should error out
