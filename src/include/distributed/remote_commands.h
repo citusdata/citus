@@ -13,6 +13,9 @@
 
 #include "distributed/connection_management.h"
 
+/* errors which ExecuteRemoteCommand might return */
+#define QUERY_SEND_FAILED 1
+#define RESPONSE_NOT_OKAY 2
 
 struct pg_result; /* target of the PGresult typedef */
 
@@ -34,6 +37,9 @@ extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 /* wrappers around libpq functions, with command logging support */
 extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
+extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
+										const char *command,
+										PGresult **result);
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,

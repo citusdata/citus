@@ -210,9 +210,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	{
 		char *transactionName = (char *) lfirst(pendingTransactionCell);
 		StringInfo command = makeStringInfo();
-		int querySent = 0;
+		int executeCommand = 0;
 		PGresult *result = NULL;
-		bool raiseInterrupts = true;
 
 		bool shouldCommit = FindMatchingName(unconfirmedTransactionArray,
 											 unconfirmedTransactionCount,
@@ -230,20 +229,13 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			appendStringInfo(command, "ROLLBACK PREPARED '%s'", transactionName);
 		}
 
-		querySent = SendRemoteCommand(connection, command->data);
-		if (querySent == 0)
+		executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
+		if (executeCommand == QUERY_SEND_FAILED)
 		{
-			ReportConnectionError(connection, WARNING);
-
 			break;
 		}
-
-		result = GetRemoteCommandResult(connection, raiseInterrupts);
-		if (!IsResponseOK(result))
+		if (executeCommand == RESPONSE_NOT_OKAY)
 		{
-			ReportResultError(connection, result, WARNING);
-			PQclear(result);
-
 			/* cannot recover this transaction right now */
 			continue;
 		}
