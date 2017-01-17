@@ -230,6 +230,42 @@ ExecuteCriticalRemoteCommand(MultiConnection *connection, const char *command)
 
 
 /*
+ * ExecuteOptionalRemoteCommand executes a remote command. If the command fails a WARNING
+ * is emitted but execution continues.
+ *
+ * could return 0, QUERY_SEND_FAILED, or RESPONSE_NOT_OKAY
+ * result is only set if there was no error
+ */
+int
+ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
+							 PGresult **result)
+{
+	int querySent = 0;
+	PGresult *localResult = NULL;
+	bool raiseInterrupts = true;
+
+	querySent = SendRemoteCommand(connection, command);
+	if (querySent == 0)
+	{
+		ReportConnectionError(connection, WARNING);
+		return QUERY_SEND_FAILED;
+	}
+
+	localResult = GetRemoteCommandResult(connection, raiseInterrupts);
+	if (!IsResponseOK(localResult))
+	{
+		ReportResultError(connection, localResult, WARNING);
+		PQclear(localResult);
+		ForgetResults(connection);
+		return RESPONSE_NOT_OKAY;
+	}
+
+	*result = localResult;
+	return 0;
+}
+
+
+/*
  * SendRemoteCommand is a PQsendQuery wrapper that logs remote commands, and
  * accepts a MultiConnection instead of a plain PGconn.  It makes sure it can
  * send commands asynchronously without blocking (at the potential expense of
