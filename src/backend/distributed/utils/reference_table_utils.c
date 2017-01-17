@@ -55,6 +55,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	List *shardIntervalList = NIL;
 	ShardInterval *shardInterval = NULL;
 	uint64 shardId = INVALID_SHARD_ID;
+	DistTableCacheEntry *tableEntry = NULL;
 
 	EnsureSchemaNode();
 
@@ -68,12 +69,24 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	tableEntry = DistributedTableCacheEntry(relationId);
+
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("cannot upgrade to reference table"),
 						errdetail("Relation \"%s\" is already a reference table",
+								  relationName)));
+	}
+
+	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
+	{
+		char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot upgrade to reference table"),
+						errdetail("Upgrade is only supported for statement-based "
+								  "replicated tables but \"%s\" is streaming replicated",
 								  relationName)));
 	}
 
@@ -199,11 +212,18 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 	ReplicateShardToAllWorkers(shardInterval);
 
 	/*
-	 * After copying the shards, we need to update metadata tables to mark this table as
-	 * reference table. We modify pg_dist_partition, pg_dist_colocation and pg_dist_shard
-	 * tables in ConvertToReferenceTableMetadata function.
+	 * We need to update metadata tables to mark this table as reference table. We modify
+	 * pg_dist_partition, pg_dist_colocation and pg_dist_shard tables in
+	 * ConvertToReferenceTableMetadata function.
 	 */
 	ConvertToReferenceTableMetadata(relationId, shardId);
+
+	/*
+	 * After the table has been officially marked as a reference table, we need to create
+	 * the reference table itself and insert its pg_dist_partition, pg_dist_shard and
+	 * existing pg_dist_shard_placement rows.
+	 */
+	CreateTableMetadataOnWorkers(relationId);
 }
 
 

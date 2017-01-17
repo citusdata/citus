@@ -952,3 +952,29 @@ HasMetadataWorkers(void)
 
 	return false;
 }
+
+
+/*
+ * CreateTableMetadataOnWorkers creates the list of commands needed to create the
+ * given distributed table and sends these commands to all metadata workers i.e. workers
+ * with hasmetadata=true. Before sending the commands, in order to prevent recursive
+ * propagation, DDL propagation on workers are disabled with a
+ * `SET citus.enable_ddl_propagation TO off;` command.
+ */
+void
+CreateTableMetadataOnWorkers(Oid relationId)
+{
+	List *commandList = GetDistributedTableDDLEvents(relationId);
+	ListCell *commandCell = NULL;
+
+	/* prevent recursive propagation */
+	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+	/* send the commands one by one */
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+	}
+}

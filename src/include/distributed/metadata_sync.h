@@ -33,6 +33,7 @@ extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, char *nodeName, uint32 nodePort);
+extern void CreateTableMetadataOnWorkers(Oid relationId);
 
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node"
