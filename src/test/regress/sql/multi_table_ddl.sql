@@ -32,9 +32,22 @@ DROP TABLE testtableddl;
 
 -- verify that the table can dropped even if shards exist
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
+
+-- create table as MX table to do create empty shard test here, too
+SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
 SELECT 1 FROM master_create_empty_shard('testtableddl');
+
+-- this'll error out
+SET citus.shard_replication_factor TO 2;
+SELECT 1 FROM master_create_empty_shard('testtableddl');
+
+-- now actually drop table and shards
 DROP TABLE testtableddl;
+
+RESET citus.shard_replication_factor;
+RESET citus.replication_model;
 
 -- ensure no metadata of distributed tables are remaining
 SELECT * FROM pg_dist_partition;
