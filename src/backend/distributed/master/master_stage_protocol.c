@@ -127,6 +127,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 								  "on reference tables")));
 	}
 
+	EnsureReplicationSettings(relationId);
+
 	/* generate new and unique shardId from sequence */
 	shardId = GetNextShardId();
 
