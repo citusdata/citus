@@ -315,7 +315,9 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-(6 rows)
+   6 |    60
+   6 |      
+(8 rows)
 
 DROP TABLE temp_table;
 -- clean-up functions

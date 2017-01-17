@@ -167,6 +167,9 @@ MultiExplainOnePlan(PlannedStmt *plan, IntoClause *into,
 
 	multiPlan = GetMultiPlan(plan);
 
+	/* ensure plan is executable */
+	VerifyMultiPlanValidity(multiPlan);
+
 	if (!ExplainDistributedQueries)
 	{
 		appendStringInfo(es->str, "explain statements for distributed queries ");

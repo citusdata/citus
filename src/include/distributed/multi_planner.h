@@ -57,5 +57,6 @@ extern struct MultiPlan * GetMultiPlan(PlannedStmt *planStatement);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
 extern bool IsModifyCommand(Query *query);
+extern void VerifyMultiPlanValidity(struct MultiPlan *multiPlan);
 
 #endif /* MULTI_PLANNER_H */

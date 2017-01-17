@@ -52,6 +52,9 @@ multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
 		MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
 		Job *workerJob = multiPlan->workerJob;
 
+		/* ensure plan is executable */
+		VerifyMultiPlanValidity(multiPlan);
+
 		ExecCheckRTPerms(planStatement->rtable, true);
 
 		executorType = JobExecutorType(multiPlan);
