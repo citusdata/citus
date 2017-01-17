@@ -183,9 +183,8 @@ SELECT plpgsql_test_1();
 SELECT plpgsql_test_2();
 
 -- run PL/pgsql functions with different parameters
--- FIXME: temporarily disabled, waiting for proper parametrized query support
--- SELECT plpgsql_test_6(155);
--- SELECT plpgsql_test_6(1555);
+SELECT plpgsql_test_6(155);
+SELECT plpgsql_test_6(1555);
 
 -- test router executor parameterized PL/pgsql functions
 CREATE TABLE plpgsql_table (
@@ -276,15 +275,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT router_partition_column_select(1);
 SELECT router_partition_column_select(2);
 SELECT router_partition_column_select(3);
 SELECT router_partition_column_select(4);
 SELECT router_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT router_partition_column_select(6);
+SELECT router_partition_column_select(6);
 
 CREATE FUNCTION router_non_partition_column_select(value_arg int)
 	RETURNS TABLE(key int, value int) AS $$
@@ -305,6 +302,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT router_non_partition_column_select(10);
 SELECT router_non_partition_column_select(20);
 SELECT router_non_partition_column_select(30);
@@ -331,15 +329,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT real_time_non_partition_column_select(10);
 SELECT real_time_non_partition_column_select(20);
 SELECT real_time_non_partition_column_select(30);
 SELECT real_time_non_partition_column_select(40);
 SELECT real_time_non_partition_column_select(50);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_non_partition_column_select(60);
+SELECT real_time_non_partition_column_select(60);
 
 CREATE FUNCTION real_time_partition_column_select(key_arg int)
 	RETURNS TABLE(key int, value int) AS $$
@@ -360,15 +356,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT real_time_partition_column_select(1);
 SELECT real_time_partition_column_select(2);
 SELECT real_time_partition_column_select(3);
 SELECT real_time_partition_column_select(4);
 SELECT real_time_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_partition_column_select(6);
+SELECT real_time_partition_column_select(6);
 
 -- check task-tracker executor
 SET citus.task_executor_type TO 'task-tracker';
@@ -391,15 +385,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_non_partition_column_select(10);
 SELECT task_tracker_non_partition_column_select(20);
 SELECT task_tracker_non_partition_column_select(30);
 SELECT task_tracker_non_partition_column_select(40);
 SELECT task_tracker_non_partition_column_select(50);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_non_partition_column_select(60);
+SELECT real_time_non_partition_column_select(60);
 
 CREATE FUNCTION task_tracker_partition_column_select(key_arg int)
 	RETURNS TABLE(key int, value int) AS $$
@@ -420,15 +412,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_partition_column_select(1);
 SELECT task_tracker_partition_column_select(2);
 SELECT task_tracker_partition_column_select(3);
 SELECT task_tracker_partition_column_select(4);
 SELECT task_tracker_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT task_tracker_partition_column_select(6);
+SELECT task_tracker_partition_column_select(6);
 
 SET citus.task_executor_type TO 'real-time';
 
@@ -445,8 +435,7 @@ SELECT partition_parameter_update(2, 21);
 SELECT partition_parameter_update(3, 31);
 SELECT partition_parameter_update(4, 41);
 SELECT partition_parameter_update(5, 51);
--- This fails with an unexpected error message
-SELECT partition_parameter_update(5, 52);
+SELECT partition_parameter_update(6, 61);
 
 CREATE FUNCTION non_partition_parameter_update(int, int) RETURNS void as $$
 BEGIN
@@ -472,13 +461,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- execute 6 times to trigger prepared statement usage
 SELECT partition_parameter_delete(1, 11);
 SELECT partition_parameter_delete(2, 21);
 SELECT partition_parameter_delete(3, 31);
 SELECT partition_parameter_delete(4, 41);
 SELECT partition_parameter_delete(5, 51);
--- This fails with an unexpected error message
-SELECT partition_parameter_delete(0, 10);
+SELECT partition_parameter_delete(6, 61);
 
 CREATE FUNCTION  non_partition_parameter_delete(int) RETURNS void as $$
 BEGIN

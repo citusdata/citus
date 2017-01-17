@@ -25,6 +25,7 @@
 #include "executor/executor.h"
 
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 
 #include "optimizer/planner.h"
 
@@ -42,11 +43,13 @@ static PlannedStmt * MultiQueryContainerNode(PlannedStmt *result,
 static struct PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan,
 												  Query *originalQuery,
 												  Query *query,
+												  ParamListInfo boundParams,
 												  RelationRestrictionContext *
 												  restrictionContext);
 static RelationRestrictionContext * CreateAndPushRestrictionContext(void);
 static RelationRestrictionContext * CurrentRestrictionContext(void);
 static void PopRestrictionContext(void);
+static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 
 
 /* Distributed planner hook */
@@ -103,7 +106,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		if (needsDistributedPlanning)
 		{
 			result = CreateDistributedPlan(result, originalQuery, parse,
-										   restrictionContext);
+										   boundParams, restrictionContext);
 		}
 	}
 	PG_CATCH();
@@ -140,28 +143,48 @@ IsModifyCommand(Query *query)
 
 
 /*
+ * VerifyMultiPlanValidity verifies that multiPlan is ready for execution, or
+ * errors out if not.
+ *
+ * A plan may e.g. not be ready for execution because CreateDistributedPlan()
+ * couldn't find a plan due to unresolved prepared statement parameters, but
+ * didn't error out, because we expect custom plans to come to our rescue.
+ * But sql (not plpgsql) functions unfortunately don't go through a codepath
+ * supporting custom plans.
+ */
+void
+VerifyMultiPlanValidity(MultiPlan *multiPlan)
+{
+	if (multiPlan->planningError)
+	{
+		RaiseDeferredError(multiPlan->planningError, ERROR);
+	}
+}
+
+
+/*
  * CreateDistributedPlan encapsulates the logic needed to transform a particular
  * query into a distributed plan.
  */
 static PlannedStmt *
 CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
+					  ParamListInfo boundParams,
 					  RelationRestrictionContext *restrictionContext)
 {
 	MultiPlan *distributedPlan = NULL;
+	PlannedStmt *resultPlan = NULL;
+	bool hasUnresolvedParams = false;
+
+	if (HasUnresolvedExternParamsWalker((Node *) query, boundParams))
+	{
+		hasUnresolvedParams = true;
+	}
 
 	if (IsModifyCommand(query))
 	{
-		/*
-		 * Modifications are always routed through the same
-		 * planner/executor. As there's currently no other way to plan these,
-		 * error out if the query is unsupported.
-		 */
+		/* modifications are always routed through the same planner/executor */
 		distributedPlan = CreateModifyPlan(originalQuery, query, restrictionContext);
 		Assert(distributedPlan);
-		if (distributedPlan->planningError)
-		{
-			RaiseDeferredError(distributedPlan->planningError, ERROR);
-		}
 	}
 	else
 	{
@@ -182,8 +205,13 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			}
 		}
 
-		/* router didn't yield a plan, try the full distributed planner */
-		if (!distributedPlan || distributedPlan->planningError)
+		/*
+		 * Router didn't yield a plan, try the full distributed planner. As
+		 * real-time/task-tracker don't support prepared statement parameters,
+		 * skip planning in that case (we'll later trigger an error in that
+		 * case if necessary).
+		 */
+		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
 			/* Create and optimize logical plan */
 			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
@@ -206,8 +234,62 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		}
 	}
 
+	/*
+	 * If no plan was generated, prepare a generic error to be emitted.
+	 * Normally this error message will never returned to the user, as it's
+	 * usually due to unresolved prepared statement parameters - in that case
+	 * the logic below will force a custom plan (i.e. with parameters bound to
+	 * specific values) to be generated.  But sql (not plpgsql) functions
+	 * unfortunately don't go through a codepath supporting custom plans - so
+	 * we still need to have an error prepared.
+	 */
+	if (!distributedPlan)
+	{
+		/* currently always should have a more specific error otherwise */
+		Assert(hasUnresolvedParams);
+		distributedPlan = CitusMakeNode(MultiPlan);
+		distributedPlan->planningError =
+			DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+						  "could not create distributed plan",
+						  "Possibly this is caused by the use of parameters in SQL "
+						  "functions, which is not supported in Citus.",
+						  "Consider using PLPGSQL functions instead.");
+	}
+
+	/*
+	 * Error out if none of the planners resulted in a usable plan, unless the
+	 * error was possibly triggered by missing parameters.  In that case we'll
+	 * not error out here, but instead rely on postgres' custom plan logic.
+	 * Postgres re-plans prepared statements the first five executions
+	 * (i.e. it produces custom plans), after that the cost of a generic plan
+	 * is compared with the average custom plan cost.  We support otherwise
+	 * unsupported prepared statement parameters by assigning an exorbitant
+	 * cost to the unsupported query.  That'll lead to the custom plan being
+	 * chosen.  But for that to be possible we can't error out here, as
+	 * otherwise that logic is never reached.
+	 */
+	if (distributedPlan->planningError && !hasUnresolvedParams)
+	{
+		RaiseDeferredError(distributedPlan->planningError, ERROR);
+	}
+
 	/* store required data into the planned statement */
-	return MultiQueryContainerNode(localPlan, distributedPlan);
+	resultPlan = MultiQueryContainerNode(localPlan, distributedPlan);
+
+	/*
+	 * As explained above, force planning costs to be unrealistically high if
+	 * query planning failed (possibly) due to prepared statement parameters.
+	 */
+	if (distributedPlan->planningError && hasUnresolvedParams)
+	{
+		/*
+		 * Arbitraryly high cost, but low enough that it can be added up
+		 * without overflowing by choose_custom_plan().
+		 */
+		resultPlan->planTree->total_cost = FLT_MAX / 100000000;
+	}
+
+	return resultPlan;
 }
 
 
@@ -501,4 +583,71 @@ static void
 PopRestrictionContext(void)
 {
 	relationRestrictionContextList = list_delete_first(relationRestrictionContextList);
+}
+
+
+/*
+ * HasUnresolvedExternParamsWalker returns true if the passed in expression
+ * has external parameters that are not contained in boundParams, false
+ * otherwise.
+ */
+static bool
+HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
+{
+	if (expression == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(expression, Param))
+	{
+		Param *param = (Param *) expression;
+		int paramId = param->paramid;
+
+		/* only care about user supplied parameters */
+		if (param->paramkind != PARAM_EXTERN)
+		{
+			return false;
+		}
+
+		/* don't care about our special parameter, it'll be removed during planning */
+		if (paramId == UNINSTANTIATED_PARAMETER_ID)
+		{
+			return false;
+		}
+
+		/* check whether parameter is available (and valid) */
+		if (boundParams && paramId > 0 && paramId <= boundParams->numParams)
+		{
+			ParamExternData *externParam = &boundParams->params[paramId - 1];
+
+			/* give hook a chance in case parameter is dynamic */
+			if (!OidIsValid(externParam->ptype) && boundParams->paramFetch != NULL)
+			{
+				(*boundParams->paramFetch)(boundParams, paramId);
+			}
+
+			if (OidIsValid(externParam->ptype))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/* keep traversing */
+	if (IsA(expression, Query))
+	{
+		return query_tree_walker((Query *) expression,
+								 HasUnresolvedExternParamsWalker,
+								 boundParams,
+								 0);
+	}
+	else
+	{
+		return expression_tree_walker(expression,
+									  HasUnresolvedExternParamsWalker,
+									  boundParams);
+	}
 }
