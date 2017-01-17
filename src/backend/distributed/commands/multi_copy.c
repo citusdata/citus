@@ -1163,14 +1163,16 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 
 		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
-			char *nodeName = PQgetvalue(queryResult, rowIndex, 0);
-
-			char *nodePortString = PQgetvalue(queryResult, rowIndex, 1);
+			char *placementIdString = PQgetvalue(queryResult, rowIndex, 0);
+			char *nodeName = PQgetvalue(queryResult, rowIndex, 1);
+			char *nodePortString = PQgetvalue(queryResult, rowIndex, 2);
 			uint32 nodePort = atoi(nodePortString);
+			uint64 placementId = atoll(placementIdString);
 
 			ShardPlacement *shardPlacement =
 				(ShardPlacement *) palloc0(sizeof(ShardPlacement));
 
+			shardPlacement->placementId = placementId;
 			shardPlacement->nodeName = nodeName;
 			shardPlacement->nodePort = nodePort;
 
