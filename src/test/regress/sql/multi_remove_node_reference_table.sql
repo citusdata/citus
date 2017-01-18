@@ -392,11 +392,47 @@ SELECT master_add_node('localhost', :worker_2_port);
 
 
 -- test DROP table after removing a node in a transaction
+
+-- status before master_remove_node
+SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'remove_node_reference_table'::regclass);
+
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
 DROP TABLE remove_node_reference_table;
-ROLLBACK;
+COMMIT;
 
+-- status after master_remove_node
+SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
+
+-- re-add the node for next tests
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- re-create remove_node_reference_table
+CREATE TABLE remove_node_reference_table(column1 int);
+SELECT create_reference_table('remove_node_reference_table');
 
 -- test removing a node while there is a reference table at another schema
 CREATE SCHEMA remove_node_reference_table_schema;
