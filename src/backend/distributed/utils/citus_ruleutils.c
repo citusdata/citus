@@ -32,7 +32,6 @@
 #include "catalog/pg_index.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
-#include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -184,10 +183,32 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	char *qualifiedSequenceName = NULL;
 	char *sequenceDef = NULL;
 	Form_pg_sequence pgSequenceForm = NULL;
-	Relation sequenceRel = NULL;
-	AclResult permissionCheck = ACLCHECK_NO_PRIV;
+
+	pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
+
+	/* build our DDL command */
+	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
+	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
+						   pgSequenceForm->max_value, pgSequenceForm->cache_value,
+						   pgSequenceForm->is_cycled ? "" : "NO ");
+
+	return sequenceDef;
+}
+
+
+/*
+ * pg_get_sequencedef returns the Form_pg_sequence data about the sequence with the given
+ * object id.
+ */
+Form_pg_sequence
+pg_get_sequencedef(Oid sequenceRelationId)
+{
+	Form_pg_sequence pgSequenceForm = NULL;
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
+	Relation sequenceRel = NULL;
+	AclResult permissionCheck = ACLCHECK_NO_PRIV;
 
 	/* open and lock sequence */
 	sequenceRel = heap_open(sequenceRelationId, AccessShareLock);
@@ -212,18 +233,11 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 
 	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
 
-	/* build our DDL command */
-	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
-	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
-						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
-						   pgSequenceForm->max_value, pgSequenceForm->cache_value,
-						   pgSequenceForm->is_cycled ? "" : "NO ");
-
 	systable_endscan(scanDescriptor);
 
 	heap_close(sequenceRel, AccessShareLock);
 
-	return sequenceDef;
+	return pgSequenceForm;
 }
 
 

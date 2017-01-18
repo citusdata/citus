@@ -6,6 +6,8 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1270000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1270000;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
 
 -- Set the colocation id to a safe value so that 
 -- it is not affected by future changes to colocation id sequence

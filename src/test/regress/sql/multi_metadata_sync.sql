@@ -30,7 +30,7 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 SELECT unnest(master_metadata_snapshot());
 
 -- Create a test table with constraints and SERIAL
-CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 SERIAL);
+CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
 SELECT master_create_worker_shards('mx_test_table', 8, 1);
 
@@ -380,36 +380,131 @@ SELECT logicalrelid, repmodel FROM pg_dist_partition WHERE logicalrelid = 'mx_te
 
 DROP TABLE mx_temp_drop_test;
 
--- Create an MX table with sequences
+-- Check that MX tables can be created with SERIAL columns, but error out on metadata sync
 \c - - - :master_port	
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+DROP TABLE mx_table_with_small_sequence;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
+-- Show that create_distributed_table errors out if the table has a SERIAL column and 
+-- there are metadata workers
+CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
+SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
+DROP TABLE mx_table_with_small_sequence;
+
+-- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
 SELECT create_distributed_table('mx_table_with_sequence', 'a');
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
--- Check that the sequences created on the worker as well
+-- Check that the sequences created on the metadata worker as well
 \c - - - :worker_1_port
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
--- Check that dropping the mx table with sequences works as expected
+-- Check that the sequences on the worker have their own space
+SELECT nextval('mx_table_with_sequence_b_seq');
+SELECT nextval('mx_table_with_sequence_c_seq');
+
+-- Check that adding a new metadata node sets the sequence space correctly
 \c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+
+\c - - - :worker_2_port
+SELECT groupid FROM pg_dist_local_group;
+\d mx_table_with_sequence
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+SELECT nextval('mx_table_with_sequence_b_seq');
+SELECT nextval('mx_table_with_sequence_c_seq');
+
+-- Check that dropping the mx table with sequences works as expected, even the metadata
+-- syncing is stopped to one of the workers
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 DROP TABLE mx_table_with_sequence;
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
--- Check that the sequences are dropped from the worker as well
+-- Check that the sequences are dropped from the workers
 \c - - - :worker_1_port
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
+
+-- Check that the sequences are dropped from the workers
+\c - - - :worker_2_port
+\ds mx_table_with_sequence_b_seq
+\ds mx_table_with_sequence_c_seq
+
+-- Check that MX sequences play well with non-super users
+\c - - - :master_port
+
+-- Remove a node so that shards and sequences won't be created on table creation. Therefore,
+-- we can test that start_metadata_sync_to_node can actually create the sequence with proper
+-- owner
+CREATE TABLE pg_dist_shard_placement_temp AS SELECT * FROM pg_dist_shard_placement;
+CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
+DELETE FROM pg_dist_shard_placement;
+DELETE FROM pg_dist_partition;
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE USER mx_user;
+\c - - - :worker_1_port
+CREATE USER mx_user;
+\c - - - :worker_2_port
+CREATE USER mx_user;
+
+\c - mx_user - :master_port
+-- Create an mx table as a different user
+CREATE TABLE mx_table (a int, b BIGSERIAL);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('mx_table', 'a');
+
+\c - postgres - :master_port
+SELECT master_add_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+
+\c - mx_user - :worker_1_port
+SELECT nextval('mx_table_b_seq');
+INSERT INTO mx_table (a) VALUES (37);
+INSERT INTO mx_table (a) VALUES (38);
+SELECT * FROM mx_table ORDER BY a;
+
+\c - mx_user - :worker_2_port
+SELECT nextval('mx_table_b_seq');
+INSERT INTO mx_table (a) VALUES (39);
+INSERT INTO mx_table (a) VALUES (40);
+SELECT * FROM mx_table ORDER BY a;
+
+\c - mx_user - :master_port
+DROP TABLE mx_table;
+
+\c - postgres - :master_port
+INSERT INTO pg_dist_shard_placement SELECT * FROM pg_dist_shard_placement_temp;
+INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
+DROP TABLE pg_dist_shard_placement_temp;
+DROP TABLE pg_dist_partition_temp;
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+
+DROP USER mx_user;
+\c - - - :worker_1_port
+DROP USER mx_user;
+\c - - - :worker_2_port
+DROP USER mx_user;
 
 -- Cleanup
 \c - - - :master_port
