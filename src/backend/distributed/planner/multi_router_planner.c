@@ -1923,9 +1923,24 @@ TargetShardIntervalForModify(Query *query)
 	char partitionMethod = cacheEntry->partitionMethod;
 	bool fastShardPruningPossible = false;
 	CmdType commandType = query->commandType;
-	bool updateOrDelete = (commandType == CMD_UPDATE || commandType == CMD_DELETE);
+	const char *commandName = NULL;
 
 	Assert(commandType != CMD_SELECT);
+
+
+	if (commandType == CMD_INSERT)
+	{
+		commandName = "INSERT";
+	}
+	else if (commandType == CMD_UPDATE)
+	{
+		commandName = "UPDATE";
+	}
+	else
+	{
+		Assert(commandType == CMD_DELETE);
+		commandName = "DELETE";
+	}
 
 	/* error out if no shards exist for the table */
 	shardCount = cacheEntry->shardIntervalArrayLength;
@@ -1974,56 +1989,52 @@ TargetShardIntervalForModify(Query *query)
 		char *partitionKeyString = cacheEntry->partitionKeyString;
 		char *partitionColumnName = ColumnNameToColumn(relationId, partitionKeyString);
 		StringInfo errorHint = makeStringInfo();
-		char *errorDetail = NULL;
+		const char *targetCountType = NULL;
+		bool showHint = false;
 
 		if (prunedShardCount == 0)
 		{
-			errorDetail = "This command modifies no shards.";
+			targetCountType = "no";
 		}
-		else if (prunedShardCount == shardCount)
+		else
 		{
-			errorDetail = "This command modifies all shards.";
+			targetCountType = "multiple";
 		}
 
-		if (updateOrDelete)
+		if (commandType == CMD_INSERT && prunedShardCount == 0)
 		{
-			appendStringInfo(errorHint,
-							 "Consider using an equality filter on partition column "
-							 "\"%s\". You can use master_modify_multiple_shards() to "
-							 "perform multi-shard delete or update operations.",
+			appendStringInfo(errorHint, "Make sure you have created a shard which "
+										"can receive this partition column value.");
+		}
+		else if (commandType == CMD_INSERT)
+		{
+			appendStringInfo(errorHint, "Make sure the value for partition column "
+										"\"%s\" falls into a single shard.",
 							 partitionColumnName);
 		}
 		else
 		{
-			appendStringInfo(errorHint,
-							 "Make sure the value for partition column \"%s\" falls into "
-							 "a single shard.", partitionColumnName);
+			appendStringInfo(errorHint, "Consider using an equality filter on "
+										"partition column \"%s\" to target a "
+										"single shard. If you'd like to run a "
+										"multi-shard operation, use "
+										"master_modify_multiple_shards().",
+							 partitionColumnName);
 		}
-
 
 		if (commandType == CMD_DELETE && partitionMethod == DISTRIBUTE_BY_APPEND)
 		{
-			appendStringInfo(errorHint,
-							 " You can also use master_apply_delete_command() to drop "
-							 "all shards satisfying delete criteria.");
+			appendStringInfo(errorHint, " You can also use "
+										"master_apply_delete_command() to drop "
+										"all shards satisfying delete criteria.");
 		}
 
+		showHint = errorHint->len > 0;
 
-		if (errorDetail == NULL)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributed modifications must target exactly one "
-								   "shard"),
-							errhint("%s", errorHint->data)));
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributed modifications must target exactly one "
-								   "shard"),
-							errdetail("%s", errorDetail),
-							errhint("%s", errorHint->data)));
-		}
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot run %s command which targets %s shards",
+							   commandName, targetCountType),
+						showHint ? errhint("%s", errorHint->data) : 0));
 	}
 
 	return (ShardInterval *) linitial(prunedShardList);
