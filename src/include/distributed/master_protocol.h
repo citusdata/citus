@@ -97,6 +97,7 @@ extern bool SchemaNode(void);
 /* Function declarations local to the distributed module */
 extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
+extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName);
 extern List * GetTableDDLEvents(Oid relationId);
 extern List * GetTableForeignConstraintCommands(Oid relationId);

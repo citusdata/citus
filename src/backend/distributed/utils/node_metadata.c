@@ -364,11 +364,17 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 	bool hasShardPlacements = false;
 	WorkerNode *workerNode = NULL;
 	List *referenceTableList = NIL;
+	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
 
 	EnsureSchemaNode();
 	EnsureSuperUser();
 
 	workerNode = FindWorkerNode(nodeName, nodePort);
+
+	if (workerNode != NULL)
+	{
+		deletedNodeId = workerNode->nodeId;
+	}
 
 	DeleteNodeRow(nodeName, nodePort);
 
@@ -410,7 +416,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 		}
 	}
 
-	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
+	nodeDeleteCommand = NodeDeleteCommand(deletedNodeId);
 
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(nodeName, nodePort);
@@ -728,6 +734,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 								  NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(heapScan);
+
 	if (!HeapTupleIsValid(heapTuple))
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",

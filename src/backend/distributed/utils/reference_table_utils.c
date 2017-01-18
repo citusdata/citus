@@ -20,6 +20,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
@@ -54,6 +55,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	List *shardIntervalList = NIL;
 	ShardInterval *shardInterval = NULL;
 	uint64 shardId = INVALID_SHARD_ID;
+	DistTableCacheEntry *tableEntry = NULL;
 
 	EnsureSchemaNode();
 
@@ -67,12 +69,24 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 								"create_reference_table('%s');", relationName)));
 	}
 
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	tableEntry = DistributedTableCacheEntry(relationId);
+
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		char *relationName = get_rel_name(relationId);
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("cannot upgrade to reference table"),
 						errdetail("Relation \"%s\" is already a reference table",
+								  relationName)));
+	}
+
+	if (tableEntry->replicationModel == REPLICATION_MODEL_STREAMING)
+	{
+		char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot upgrade to reference table"),
+						errdetail("Upgrade is only supported for statement-based "
+								  "replicated tables but \"%s\" is streaming replicated",
 								  relationName)));
 	}
 
@@ -198,11 +212,18 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 	ReplicateShardToAllWorkers(shardInterval);
 
 	/*
-	 * After copying the shards, we need to update metadata tables to mark this table as
-	 * reference table. We modify pg_dist_partition, pg_dist_colocation and pg_dist_shard
-	 * tables in ConvertToReferenceTableMetadata function.
+	 * We need to update metadata tables to mark this table as reference table. We modify
+	 * pg_dist_partition, pg_dist_colocation and pg_dist_shard tables in
+	 * ConvertToReferenceTableMetadata function.
 	 */
 	ConvertToReferenceTableMetadata(relationId, shardId);
+
+	/*
+	 * After the table has been officially marked as a reference table, we need to create
+	 * the reference table itself and insert its pg_dist_partition, pg_dist_shard and
+	 * existing pg_dist_shard_placement rows.
+	 */
+	CreateTableMetadataOnWorkers(relationId);
 }
 
 
@@ -248,18 +269,45 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 																	 nodeName, nodePort,
 																	 missingWorkerOk);
 
+		/*
+		 * Although this function is used for reference tables and reference table shard
+		 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
+		 * a non-reference table to reference table, unhealty placements may exist. In
+		 * this case, we repair the shard placement and update its state in
+		 * pg_dist_shard_placement table.
+		 */
 		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 		{
+			uint64 placementId = 0;
+
 			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
 													   ddlCommandList);
 			if (targetPlacement == NULL)
 			{
-				InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, FILE_FINALIZED, 0,
+				placementId = GetNextPlacementId();
+				InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0,
 										nodeName, nodePort);
 			}
 			else
 			{
-				UpdateShardPlacementState(targetPlacement->placementId, FILE_FINALIZED);
+				placementId = targetPlacement->placementId;
+				UpdateShardPlacementState(placementId, FILE_FINALIZED);
+			}
+
+			/*
+			 * Although ReplicateShardToAllWorkers is used only for reference tables,
+			 * during the upgrade phase, the placements are created before the table is
+			 * marked as a reference table. All metadata (including the placement
+			 * metadata) will be copied to workers after all reference table changed
+			 * are finished.
+			 */
+			if (ShouldSyncTableMetadata(shardInterval->relationId))
+			{
+				char *placementCommand = PlacementUpsertCommand(shardId, placementId,
+																FILE_FINALIZED, 0,
+																nodeName, nodePort);
+
+				SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
 			}
 		}
 	}
@@ -354,10 +402,17 @@ DeleteAllReferenceTablePlacementsFromNode(char *workerName, uint32 workerPort)
 		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 		uint64 shardId = shardInterval->shardId;
+		uint64 placementId = INVALID_PLACEMENT_ID;
+		StringInfo deletePlacementCommand = makeStringInfo();
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		DeleteShardPlacementRow(shardId, workerName, workerPort);
+		placementId = DeleteShardPlacementRow(shardId, workerName, workerPort);
+
+		appendStringInfo(deletePlacementCommand,
+						 "DELETE FROM pg_dist_shard_placement WHERE placementid=%lu",
+						 placementId);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
 	}
 }
 

@@ -63,11 +63,11 @@ PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 
 /*
  * start_metadata_sync_to_node function creates the metadata in a worker for preparing the
- * worker for accepting MX-table queries. The function first sets the localGroupId of the
- * worker so that the worker knows which tuple in pg_dist_node table represents itself.
- * After that, SQL statetemens for re-creating metadata about mx distributed
- * tables are sent to the worker. Finally, the hasmetadata column of the target node in
- * pg_dist_node is marked as true.
+ * worker for accepting queries. The function first sets the localGroupId of the worker
+ * so that the worker knows which tuple in pg_dist_node table represents itself. After
+ * that, SQL statetemens for re-creating metadata of MX-eligible distributed tables are
+ * sent to the worker. Finally, the hasmetadata column of the target node in pg_dist_node
+ * is marked as true.
  */
 Datum
 start_metadata_sync_to_node(PG_FUNCTION_ARGS)
@@ -132,7 +132,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 /*
  * stop_metadata_sync_to_node function sets the hasmetadata column of the specified node
  * to false in pg_dist_node table, thus indicating that the specified worker node does not
- * receive DDL changes anymore and cannot be used for issuing mx queries.
+ * receive DDL changes anymore and cannot be used for issuing queries.
  */
 Datum
 stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
@@ -159,19 +159,24 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 
 /*
- * ShouldSyncTableMetadata checks if a distributed table has streaming replication model
- * and hash distribution. In that case the distributed table is considered an MX table,
- * and its metadata is required to exist on the worker nodes.
+ * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
+ * propagated to metadata workers, i.e. the table is an MX table or reference table.
+ * Tables with streaming replication model (which means RF=1) and hash distribution are
+ * considered as MX tables while tables with none distribution are reference tables.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
 	DistTableCacheEntry *tableEntry = DistributedTableCacheEntry(relationId);
-	bool usesHashDistribution = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
-	bool usesStreamingReplication =
+
+	bool hashDistributed = (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH);
+	bool streamingReplicated =
 		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
 
-	if (usesStreamingReplication && usesHashDistribution)
+	bool mxTable = (streamingReplicated && hashDistributed);
+	bool referenceTable = (tableEntry->partitionMethod == DISTRIBUTE_BY_NONE);
+
+	if (mxTable || referenceTable)
 	{
 		return true;
 	}
@@ -199,7 +204,7 @@ MetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
-	List *mxTableList = NIL;
+	List *propagatedTableList = NIL;
 	List *workerNodeList = WorkerNodeList();
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
@@ -209,19 +214,19 @@ MetadataCreateCommands(void)
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  nodeListInsertCommand);
 
-	/* create the list of mx tables */
+	/* create the list of tables whose metadata will be created */
 	foreach(distributedTableCell, distributedTableList)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
 		if (ShouldSyncTableMetadata(cacheEntry->relationId))
 		{
-			mxTableList = lappend(mxTableList, cacheEntry);
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
 		}
 	}
 
-	/* create the mx tables, but not the metadata */
-	foreach(distributedTableCell, mxTableList)
+	/* create the tables, but not the metadata */
+	foreach(distributedTableCell, propagatedTableList)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
@@ -240,7 +245,7 @@ MetadataCreateCommands(void)
 	}
 
 	/* construct the foreign key constraints after all tables are created */
-	foreach(distributedTableCell, mxTableList)
+	foreach(distributedTableCell, propagatedTableList)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
@@ -253,7 +258,7 @@ MetadataCreateCommands(void)
 	}
 
 	/* after all tables are created, create the metadata */
-	foreach(distributedTableCell, mxTableList)
+	foreach(distributedTableCell, propagatedTableList)
 	{
 		DistTableCacheEntry *cacheEntry =
 			(DistTableCacheEntry *) lfirst(distributedTableCell);
@@ -323,7 +328,7 @@ GetDistributedTableDDLEvents(Oid relationId)
 	metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
 
-	/* commands to create the truncate trigger of the mx table */
+	/* commands to create the truncate trigger of the table */
 	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
 	commandList = lappend(commandList, truncateTriggerCreateCommand);
 
@@ -436,19 +441,30 @@ DistributionCreateCommand(DistTableCacheEntry *cacheEntry)
 	char *partitionKeyString = cacheEntry->partitionKeyString;
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
-	char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
 	uint32 colocationId = cacheEntry->colocationId;
 	char replicationModel = cacheEntry->replicationModel;
+	StringInfo tablePartitionKeyString = makeStringInfo();
+
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	{
+		appendStringInfo(tablePartitionKeyString, "NULL");
+	}
+	else
+	{
+		char *partitionKeyColumnName = ColumnNameToColumn(relationId, partitionKeyString);
+		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
+						 quote_literal_cstr(qualifiedRelationName),
+						 quote_literal_cstr(partitionKeyColumnName));
+	}
 
 	appendStringInfo(insertDistributionCommand,
 					 "INSERT INTO pg_dist_partition "
 					 "(logicalrelid, partmethod, partkey, colocationid, repmodel) "
 					 "VALUES "
-					 "(%s::regclass, '%c', column_name_to_column(%s,%s), %d, '%c')",
+					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
-					 quote_literal_cstr(qualifiedRelationName),
-					 quote_literal_cstr(partitionKeyColumnName),
+					 tablePartitionKeyString->data,
 					 colocationId,
 					 replicationModel);
 
@@ -511,20 +527,12 @@ ShardListInsertCommand(List *shardIntervalList)
 	StringInfo insertShardCommand = makeStringInfo();
 	int shardCount = list_length(shardIntervalList);
 	int processedShardCount = 0;
-	int processedShardPlacementCount = 0;
 
 	/* if there are no shards, return empty list */
 	if (shardCount == 0)
 	{
 		return commandList;
 	}
-
-	/* generate the shard placement query without any values yet */
-	appendStringInfo(insertPlacementCommand,
-					 "INSERT INTO pg_dist_shard_placement "
-					 "(shardid, shardstate, shardlength,"
-					 " nodename, nodeport, placementid) "
-					 "VALUES ");
 
 	/* add placements to insertPlacementCommand */
 	foreach(shardIntervalCell, shardIntervalList)
@@ -533,25 +541,33 @@ ShardListInsertCommand(List *shardIntervalList)
 		uint64 shardId = shardInterval->shardId;
 
 		List *shardPlacementList = FinalizedShardPlacementList(shardId);
-		ShardPlacement *placement = NULL;
+		ListCell *shardPlacementCell = NULL;
 
-		/* the function only handles single placement per shard */
-		Assert(list_length(shardPlacementList) == 1);
-
-		placement = (ShardPlacement *) linitial(shardPlacementList);
-
-		appendStringInfo(insertPlacementCommand,
-						 "(%lu, 1, %lu, %s, %d, %lu)",
-						 shardId,
-						 placement->shardLength,
-						 quote_literal_cstr(placement->nodeName),
-						 placement->nodePort,
-						 placement->placementId);
-
-		processedShardPlacementCount++;
-		if (processedShardPlacementCount != shardCount)
+		foreach(shardPlacementCell, shardPlacementList)
 		{
-			appendStringInfo(insertPlacementCommand, ",");
+			ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
+
+			if (insertPlacementCommand->len == 0)
+			{
+				/* generate the shard placement query without any values yet */
+				appendStringInfo(insertPlacementCommand,
+								 "INSERT INTO pg_dist_shard_placement "
+								 "(shardid, shardstate, shardlength,"
+								 " nodename, nodeport, placementid) "
+								 "VALUES ");
+			}
+			else
+			{
+				appendStringInfo(insertPlacementCommand, ",");
+			}
+
+			appendStringInfo(insertPlacementCommand,
+							 "(%lu, 1, %lu, %s, %d, %lu)",
+							 shardId,
+							 placement->shardLength,
+							 quote_literal_cstr(placement->nodeName),
+							 placement->nodePort,
+							 placement->placementId);
 		}
 	}
 
@@ -573,17 +589,36 @@ ShardListInsertCommand(List *shardIntervalList)
 		Oid distributedRelationId = shardInterval->relationId;
 		char *qualifiedRelationName = generate_qualified_relation_name(
 			distributedRelationId);
+		StringInfo minHashToken = makeStringInfo();
+		StringInfo maxHashToken = makeStringInfo();
 
-		int minHashToken = DatumGetInt32(shardInterval->minValue);
-		int maxHashToken = DatumGetInt32(shardInterval->maxValue);
+		if (shardInterval->minValueExists)
+		{
+			appendStringInfo(minHashToken, "'%d'", DatumGetInt32(
+								 shardInterval->minValue));
+		}
+		else
+		{
+			appendStringInfo(minHashToken, "NULL");
+		}
+
+		if (shardInterval->maxValueExists)
+		{
+			appendStringInfo(maxHashToken, "'%d'", DatumGetInt32(
+								 shardInterval->maxValue));
+		}
+		else
+		{
+			appendStringInfo(maxHashToken, "NULL");
+		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %lu, '%c', '%d', '%d')",
+						 "(%s::regclass, %lu, '%c', %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
-						 minHashToken,
-						 maxHashToken);
+						 minHashToken->data,
+						 maxHashToken->data);
 
 		processedShardCount++;
 		if (processedShardCount != shardCount)
@@ -630,6 +665,24 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 							  "SET colocationid = %d "
 							  "WHERE logicalrelid = %s::regclass",
 					 colocationId, quote_literal_cstr(qualifiedRelationName));
+
+	return command->data;
+}
+
+
+/*
+ * PlacementUpsertCommand creates a SQL command for upserting a pg_dist_shard_placment
+ * entry with the given properties. In the case of a conflict on placementId, the command
+ * updates all properties (excluding the placementId) with the given ones.
+ */
+char *
+PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
+					   uint64 shardLength, char *nodeName, uint32 nodePort)
+{
+	StringInfo command = makeStringInfo();
+
+	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardState, shardLength,
+					 quote_literal_cstr(nodeName), nodePort, placementId);
 
 	return command->data;
 }
@@ -898,4 +951,30 @@ HasMetadataWorkers(void)
 	}
 
 	return false;
+}
+
+
+/*
+ * CreateTableMetadataOnWorkers creates the list of commands needed to create the
+ * given distributed table and sends these commands to all metadata workers i.e. workers
+ * with hasmetadata=true. Before sending the commands, in order to prevent recursive
+ * propagation, DDL propagation on workers are disabled with a
+ * `SET citus.enable_ddl_propagation TO off;` command.
+ */
+void
+CreateTableMetadataOnWorkers(Oid relationId)
+{
+	List *commandList = GetDistributedTableDDLEvents(relationId);
+	ListCell *commandCell = NULL;
+
+	/* prevent recursive propagation */
+	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+
+	/* send the commands one by one */
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+	}
 }

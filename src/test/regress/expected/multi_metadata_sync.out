@@ -8,6 +8,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_placement_id
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART 100000;
+SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
+SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
 -- Create the necessary test utility function
 CREATE FUNCTION master_metadata_snapshot()
     RETURNS text[]
@@ -23,8 +25,8 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 --------------+------------+---------+--------------+----------
 (0 rows)
 
--- Show that, with no MX tables, metadata snapshot contains only the delete commands and 
--- pg_dist_node entries
+-- Show that, with no MX tables, metadata snapshot contains only the delete commands,
+-- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot());
                                                                                          unnest                                                                                         
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1120,7 +1122,7 @@ SELECT create_distributed_table('mx_table', 'a');
 SELECT master_add_node('localhost', :worker_2_port);
          master_add_node         
 ---------------------------------
- (3,3,localhost,57638,default,f)
+ (4,4,localhost,57638,default,f)
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
@@ -1147,20 +1149,20 @@ SELECT * FROM mx_table ORDER BY a;
 
 \c - mx_user - :worker_2_port
 SELECT nextval('mx_table_b_seq');
-     nextval     
------------------
- 844424930131969
+     nextval      
+------------------
+ 1125899906842625
 (1 row)
 
 INSERT INTO mx_table (a) VALUES (39);
 INSERT INTO mx_table (a) VALUES (40);
 SELECT * FROM mx_table ORDER BY a;
- a  |        b        
-----+-----------------
- 37 | 281474976710658
- 38 | 281474976710659
- 39 | 844424930131970
- 40 | 844424930131971
+ a  |        b         
+----+------------------
+ 37 |  281474976710658
+ 38 |  281474976710659
+ 39 | 1125899906842626
+ 40 | 1125899906842627
 (4 rows)
 
 \c - mx_user - :master_port
@@ -1181,12 +1183,161 @@ DROP USER mx_user;
 DROP USER mx_user;
 \c - - - :worker_2_port
 DROP USER mx_user;
+-- Check that create_reference_table creates the metadata on workers
+\c - - - :master_port
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+
+\c - - - :worker_1_port
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+
+SELECT
+	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
+FROM
+	pg_dist_partition 
+	NATURAL JOIN pg_dist_shard
+	NATURAL JOIN pg_dist_shard_placement
+WHERE
+	logicalrelid = 'mx_ref'::regclass;
+ logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
+--------------+------------+----------+---------+-------------+-----------+----------
+ mx_ref       | n          | t        | 1310183 |      100184 | localhost |    57638
+ mx_ref       | n          | t        | 1310183 |      100183 | localhost |    57637
+(2 rows)
+
+	
+SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
+-- Check that DDL commands are propagated to reference tables on workers
+\c - - - :master_port
+ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+CREATE INDEX mx_ref_index ON mx_ref(col_1);
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+Indexes:
+    "mx_ref_index" btree (col_1)
+
+\c - - - :worker_1_port
+\d mx_ref
+    Table "public.mx_ref"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | numeric | default 0
+Indexes:
+    "mx_ref_index" btree (col_1)
+
+	
+-- Check that metada is cleaned successfully upon drop table
+\c - - - :master_port
+DROP TABLE mx_ref;
+\d mx_ref
+\c - - - :worker_1_port
+\d mx_ref
+SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue 
+--------------+---------+--------------+---------------+---------------
+(0 rows)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
+ shardid | shardstate | shardlength | nodename | nodeport | placementid 
+---------+------------+-------------+----------+----------+-------------
+(0 rows)
+
+-- Check that master_add_node propagates the metadata about new placements of a reference table
+\c - - - :master_port
+CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE mx_ref (col_1 int, col_2 text);
+SELECT create_reference_table('mx_ref');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310184 | localhost |    57637
+(1 row)
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310184 | localhost |    57637
+(1 row)
+
+\c - - - :master_port
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating reference table "mx_ref" to all workers
+         master_add_node         
+---------------------------------
+ (5,5,localhost,57638,default,f)
+(1 row)
+
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310184 | localhost |    57637
+ 1310184 | localhost |    57638
+(2 rows)
+
+\c - - - :worker_1_port
+SELECT shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_ref'::regclass;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+ 1310184 | localhost |    57637
+ 1310184 | localhost |    57638
+(2 rows)
+
+\c - - - :master_port
+INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
+DROP TABLE tmp_shard_placement;
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 NOTICE:  drop cascades to constraint mx_fk_constraint_2 on table mx_test_schema_1.mx_table_1
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
+DROP TABLE mx_ref;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node 
 ----------------------------
@@ -1202,5 +1353,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 RESET citus.multi_shard_commit_protocol;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;

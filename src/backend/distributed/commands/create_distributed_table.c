@@ -80,7 +80,6 @@ static void CreateHashDistributedTable(Oid relationId, char *distributionColumnN
 									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
 
-
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
 PG_FUNCTION_INFO_V1(create_distributed_table);
@@ -177,18 +176,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		List *commandList = GetDistributedTableDDLEvents(relationId);
-		ListCell *commandCell = NULL;
-
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-
-		/* send the commands one by one */
-		foreach(commandCell, commandList)
-		{
-			char *command = (char *) lfirst(commandCell);
-
-			SendCommandToWorkers(WORKERS_WITH_METADATA, command);
-		}
+		CreateTableMetadataOnWorkers(relationId);
 	}
 
 	PG_RETURN_VOID();
@@ -244,6 +232,8 @@ CreateReferenceTable(Oid relationId)
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
+
+	CreateTableMetadataOnWorkers(relationId);
 }
 
 

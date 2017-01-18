@@ -400,6 +400,12 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	columnValues = palloc0(columnCount * sizeof(Datum));
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
+	/* we don't support copy to reference tables from workers */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		EnsureSchemaNode();
+	}
+
 	/* load the list of shards and verify that we have shards to copy into */
 	shardIntervalList = LoadShardIntervalList(tableId);
 	if (shardIntervalList == NIL)
