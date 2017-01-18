@@ -7,6 +7,8 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
+ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
+ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
 
 -- create copy of pg_dist_shard_placement to reload after the test
 CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
