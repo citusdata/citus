@@ -345,14 +345,39 @@ DROP TABLE replicate_reference_table_ddl;
 CREATE TABLE replicate_reference_table_drop(column1 int);
 SELECT create_reference_table('replicate_reference_table_drop');
 
+-- status before master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
+
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 DROP TABLE replicate_reference_table_drop;
-ROLLBACK;
+COMMIT;
 
-DROP TABLE replicate_reference_table_drop;
+-- status after master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1370009;
 
 -- test adding a node while there is a reference table at another schema
+SELECT master_remove_node('localhost', :worker_2_port);
+
 CREATE SCHEMA replicate_reference_table_schema;
 CREATE TABLE replicate_reference_table_schema.table1(column1 int);
 SELECT create_reference_table('replicate_reference_table_schema.table1');

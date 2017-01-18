@@ -526,6 +526,28 @@ SELECT create_reference_table('replicate_reference_table_drop');
  
 (1 row)
 
+-- status before master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport 
+---------+------------+-------------+----------+----------
+(0 rows)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+      1370009 |          1 |                 1 |                      0
+(1 row)
+
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_drop" to all workers
@@ -535,12 +557,30 @@ NOTICE:  Replicating reference table "replicate_reference_table_drop" to all wor
 (1 row)
 
 DROP TABLE replicate_reference_table_drop;
-ERROR:  DROP distributed table cannot run inside a transaction block
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
-ROLLBACK;
-DROP TABLE replicate_reference_table_drop;
+COMMIT;
+-- status after master_add_node
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport 
+---------+------------+-------------+----------+----------
+(0 rows)
+
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1370009;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
 -- test adding a node while there is a reference table at another schema
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
 CREATE SCHEMA replicate_reference_table_schema;
 CREATE TABLE replicate_reference_table_schema.table1(column1 int);
 SELECT create_reference_table('replicate_reference_table_schema.table1');
