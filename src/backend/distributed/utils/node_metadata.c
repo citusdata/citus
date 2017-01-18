@@ -411,8 +411,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 		else
 		{
 			ereport(ERROR, (errmsg("you cannot remove a node which has active "
-								   "shard placements"),
-							errhint("Consider using master_disable_node.")));
+								   "shard placements")));
 		}
 	}
 
