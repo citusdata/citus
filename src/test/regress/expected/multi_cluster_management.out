@@ -113,7 +113,6 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 
 ERROR:  you cannot remove a node which has active shard placements
-HINT:  Consider using master_disable_node.
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
 --------------------------------
@@ -148,7 +147,6 @@ SELECT master_add_node('localhost', :worker_2_port);
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 
 ERROR:  you cannot remove a node which has active shard placements
-HINT:  Consider using master_disable_node.
 -- mark all placements in the candidate node as inactive
 UPDATE pg_dist_shard_placement SET shardstate=3 WHERE nodeport=:worker_2_port;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
