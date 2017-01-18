@@ -360,6 +360,8 @@ SELECT create_distributed_table('replicate_reference_table_hash', 'column1');
  
 (1 row)
 
+-- update replication model to statement-based replication since streaming replicated tables cannot be upgraded to reference tables
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='replicate_reference_table_hash'::regclass;
 CREATE TABLE replicate_reference_table_reference_two(column1 int);
 -- status before master_add_node
 SELECT
@@ -388,11 +390,12 @@ SELECT
 FROM
     pg_dist_partition
 WHERE
-    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two');
+    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
+ORDER BY logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
  replicate_reference_table_reference_one | n          |      1370004 | t
- replicate_reference_table_hash          | h          |      1370005 | s
+ replicate_reference_table_hash          | h          |      1370005 | c
 (2 rows)
 
 BEGIN;
@@ -448,7 +451,9 @@ SELECT
 FROM
     pg_dist_partition
 WHERE
-    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two');
+    logicalrelid IN ('replicate_reference_table_reference_one', 'replicate_reference_table_hash', 'replicate_reference_table_reference_two')
+ORDER BY 
+	logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
  replicate_reference_table_reference_one | n          |      1370004 | t

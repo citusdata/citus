@@ -46,7 +46,7 @@ SELECT master_create_empty_shard('test_truncate_append');
 (1 row)
 
 -- verify 3 shards are presents
-SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::regclass;
+SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_append'::regclass ORDER BY shardid;
  shardid 
 ---------
  1210000
@@ -113,7 +113,7 @@ SELECT count(*) FROM test_truncate_range;
 (1 row)
 
 -- verify 3 shards are presents
-SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass;
+SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass ORDER BY shardid;
  shardid 
 ---------
  1210003
@@ -130,7 +130,7 @@ SELECT count(*) FROM test_truncate_range;
 (1 row)
 
 -- verify 3 shards are still present
-SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass;
+SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_range'::regclass ORDER BY shardid;
  shardid 
 ---------
  1210003
@@ -190,7 +190,7 @@ SELECT count(*) FROM test_truncate_hash;
 (1 row)
 
 -- verify 4 shards are present
-SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass;
+SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass ORDER BY shardid;
  shardid 
 ---------
 (0 rows)
@@ -221,7 +221,7 @@ SELECT count(*) FROM test_truncate_hash;
 (1 row)
 
 -- verify 4 shards are still presents
-SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass;
+SELECT shardid FROM pg_dist_shard where logicalrelid = 'test_truncate_hash'::regclass ORDER BY shardid;
  shardid 
 ---------
  1210006

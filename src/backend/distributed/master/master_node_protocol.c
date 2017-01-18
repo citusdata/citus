@@ -307,10 +307,9 @@ GetNextShardId()
 
 
 /*
- * master_get_new_placementid allocates and returns a unique placementId for
- * the placement to be created. This allocation occurs both in shared memory
- * and in write ahead logs; writing to logs avoids the risk of having shardId
- * collisions.
+ * master_get_new_placementid is a user facing wrapper function around
+ * GetNextPlacementId() which allocates and returns a unique placement id for the
+ * placement to be created.
  *
  * NB: This can be called by any user; for now we have decided that that's
  * ok. We might want to restrict this to users part of a specific role or such
@@ -319,24 +318,50 @@ GetNextShardId()
 Datum
 master_get_new_placementid(PG_FUNCTION_ARGS)
 {
+	uint64 placementId = 0;
+	Datum placementIdDatum = 0;
+
+	EnsureSchemaNode();
+
+	placementId = GetNextPlacementId();
+	placementIdDatum = Int64GetDatum(placementId);
+
+	PG_RETURN_DATUM(placementIdDatum);
+}
+
+
+/*
+ * GetNextPlacementId allocates and returns a unique placementId for
+ * the placement to be created. This allocation occurs both in shared memory
+ * and in write ahead logs; writing to logs avoids the risk of having shardId
+ * collisions.
+ *
+ * NB: This can be called by any user; for now we have decided that that's
+ * ok. We might want to restrict this to users part of a specific role or such
+ * at some later point.
+ */
+uint64
+GetNextPlacementId(void)
+{
 	text *sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
 	Oid sequenceId = ResolveRelationId(sequenceName);
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-	Datum shardIdDatum = 0;
-
-	EnsureSchemaNode();
+	Datum placementIdDatum = 0;
+	uint64 placementId = 0;
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 
-	/* generate new and unique shardId from sequence */
-	shardIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
+	/* generate new and unique placement id from sequence */
+	placementIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
-	PG_RETURN_DATUM(shardIdDatum);
+	placementId = DatumGetInt64(placementIdDatum);
+
+	return placementId;
 }
 
 
