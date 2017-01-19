@@ -95,8 +95,6 @@ static Task * RouterModifyTask(Query *originalQuery, Query *query);
 static ShardInterval * TargetShardIntervalForModify(Query *query);
 static List * QueryRestrictList(Query *query);
 static bool FastShardPruningPossible(CmdType commandType, char partitionMethod);
-static ShardInterval * FastShardPruning(Oid distributedTableId,
-										Const *partionColumnValue);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
 static Task * RouterSelectTask(Query *originalQuery,
 							   RelationRestrictionContext *restrictionContext,
@@ -1890,7 +1888,8 @@ TargetShardIntervalForModify(Query *query)
 	{
 		uint32 rangeTableId = 1;
 		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-		Const *partitionValue = ExtractInsertPartitionValue(query, partitionColumn);
+		Const *partitionValueConst = ExtractInsertPartitionValue(query, partitionColumn);
+		Datum partitionValue = partitionValueConst->constvalue;
 		ShardInterval *shardInterval = FastShardPruning(distributedTableId,
 														partitionValue);
 
@@ -2001,8 +2000,8 @@ FastShardPruningPossible(CmdType commandType, char partitionMethod)
  * the corresponding shard interval that the partitionValue should be in. FastShardPruning
  * returns NULL if no ShardIntervals exist for the given partitionValue.
  */
-static ShardInterval *
-FastShardPruning(Oid distributedTableId, Const *partitionValue)
+ShardInterval *
+FastShardPruning(Oid distributedTableId, Datum partitionValue)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	int shardCount = cacheEntry->shardIntervalArrayLength;
@@ -2030,9 +2029,8 @@ FastShardPruning(Oid distributedTableId, Const *partitionValue)
 	 * Call FindShardInterval to find the corresponding shard interval for the
 	 * given partition value.
 	 */
-	shardInterval = FindShardInterval(partitionValue->constvalue,
-									  sortedShardIntervalArray, shardCount,
-									  partitionMethod,
+	shardInterval = FindShardInterval(partitionValue, sortedShardIntervalArray,
+									  shardCount, partitionMethod,
 									  shardIntervalCompareFunction, hashFunction,
 									  useBinarySearch);
 

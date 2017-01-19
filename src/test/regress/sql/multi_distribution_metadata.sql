@@ -234,8 +234,8 @@ SELECT create_distributed_table('get_shardid_test_table2', 'column1');
 {a, b, c}|1
 {d, e, f}|2
 \.
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}'::text[]);
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}');
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}');
 
 -- verify result of the get_shard_id_for_distribution_column
 \c - - - :worker_1_port
@@ -244,7 +244,7 @@ SELECT * FROM get_shardid_test_table2_540011;
 \c - - - :master_port
 
 -- test mismatching data type
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a'::text);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a');
 
 -- test NULL distribution column value for hash distributed table
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2');
@@ -268,8 +268,8 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', NULL);
 
 -- test different data types for reference table
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 1);
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a'::text);
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a');
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}');
 
 -- test range distributed table
 CREATE TABLE get_shardid_test_table5(column1 int, column2 int);

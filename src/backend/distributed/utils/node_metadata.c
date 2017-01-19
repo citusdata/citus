@@ -30,6 +30,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/shardinterval_utils.h"
@@ -40,6 +41,7 @@
 #include "storage/fd.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
 
@@ -179,20 +181,9 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 Datum
 get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 {
-	Oid relationId = InvalidOid;
-	Datum distributionValue = 0;
-
-	Var *distributionColumn = NULL;
-	char distributionMethod = 0;
-	Oid expectedElementType = InvalidOid;
-	Oid inputElementType = InvalidOid;
-	DistTableCacheEntry *cacheEntry = NULL;
-	int shardCount = 0;
-	ShardInterval **shardIntervalArray = NULL;
-	FmgrInfo *hashFunction = NULL;
-	FmgrInfo *compareFunction = NULL;
-	bool useBinarySearch = true;
 	ShardInterval *shardInterval = NULL;
+	char distributionMethod = 0;
+	Oid relationId = InvalidOid;
 
 	/*
 	 * To have optional parameter as NULL, we defined this UDF as not strict, therefore
@@ -227,6 +218,13 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	else if (distributionMethod == DISTRIBUTE_BY_HASH ||
 			 distributionMethod == DISTRIBUTE_BY_RANGE)
 	{
+		Var *distributionColumn = NULL;
+		Oid distributionDataType = InvalidOid;
+		Oid inputDataType = InvalidOid;
+		char *distributionValueString = NULL;
+		Datum inputDatum = 0;
+		Datum distributionValueDatum = 0;
+
 		/* if given table is not reference table, distributionValue cannot be NULL */
 		if (PG_ARGISNULL(1))
 		{
@@ -235,36 +233,17 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 								   "than reference tables.")));
 		}
 
-		distributionValue = PG_GETARG_DATUM(1);
+		inputDatum = PG_GETARG_DATUM(1);
+		inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
+		distributionValueString = DatumToString(inputDatum, inputDataType);
 
 		distributionColumn = PartitionKey(relationId);
-		expectedElementType = distributionColumn->vartype;
-		inputElementType = get_fn_expr_argtype(fcinfo->flinfo, 1);
-		if (expectedElementType != inputElementType)
-		{
-			ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-							errmsg("invalid distribution value type"),
-							errdetail("Type of the value does not match the type of the "
-									  "distribution column. Expected type id: %d, given "
-									  "type id: %d", expectedElementType,
-									  inputElementType)));
-		}
+		distributionDataType = distributionColumn->vartype;
 
-		cacheEntry = DistributedTableCacheEntry(relationId);
+		distributionValueDatum = StringToDatum(distributionValueString,
+											   distributionDataType);
 
-		if (distributionMethod == DISTRIBUTE_BY_HASH &&
-			cacheEntry->hasUniformHashDistribution)
-		{
-			useBinarySearch = false;
-		}
-
-		shardCount = cacheEntry->shardIntervalArrayLength;
-		shardIntervalArray = cacheEntry->sortedShardIntervalArray;
-		hashFunction = cacheEntry->hashFunction;
-		compareFunction = cacheEntry->shardIntervalCompareFunction;
-		shardInterval = FindShardInterval(distributionValue, shardIntervalArray,
-										  shardCount, distributionMethod, compareFunction,
-										  hashFunction, useBinarySearch);
+		shardInterval = FastShardPruning(relationId, distributionValueDatum);
 	}
 	else
 	{
@@ -939,4 +918,41 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	workerNode->hasMetadata = DatumGetBool(hasMetadata);
 
 	return workerNode;
+}
+
+
+/*
+ * StringToDatum transforms a string representation into a Datum.
+ */
+Datum
+StringToDatum(char *inputString, Oid dataType)
+{
+	Oid typIoFunc = InvalidOid;
+	Oid typIoParam = InvalidOid;
+	int32 typeModifier = -1;
+	Datum datum = 0;
+
+	getTypeInputInfo(dataType, &typIoFunc, &typIoParam);
+	getBaseTypeAndTypmod(dataType, &typeModifier);
+
+	datum = OidInputFunctionCall(typIoFunc, inputString, typIoParam, typeModifier);
+
+	return datum;
+}
+
+
+/*
+ * DatumToString returns the string representation of the given datum.
+ */
+char *
+DatumToString(Datum datum, Oid dataType)
+{
+	char *outputString = NULL;
+	Oid typIoFunc = InvalidOid;
+	bool typIsVarlena = false;
+
+	getTypeOutputInfo(dataType, &typIoFunc, &typIsVarlena);
+	outputString = OidOutputFunctionCall(typIoFunc, datum);
+
+	return outputString;
 }

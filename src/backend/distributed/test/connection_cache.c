@@ -28,10 +28,6 @@
 #include "utils/lsyscache.h"
 
 
-/* local function forward declarations */
-static Datum ExtractIntegerDatum(char *input);
-
-
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(initialize_remote_temp_table);
 PG_FUNCTION_INFO_V1(count_remote_temp_table_rows);
@@ -98,7 +94,7 @@ count_remote_temp_table_rows(PG_FUNCTION_ARGS)
 	else
 	{
 		char *countText = PQgetvalue(result, 0, 0);
-		count = ExtractIntegerDatum(countText);
+		count = StringToDatum(countText, INT4OID);
 	}
 
 	PQclear(result);
@@ -188,25 +184,4 @@ set_connection_status_bad(PG_FUNCTION_ARGS)
 	Assert(pqStatus == 0); /* expect failure */
 
 	PG_RETURN_BOOL(true);
-}
-
-
-/*
- * ExtractIntegerDatum transforms an integer in textual form into a Datum.
- */
-static Datum
-ExtractIntegerDatum(char *input)
-{
-	Oid typIoFunc = InvalidOid;
-	Oid typIoParam = InvalidOid;
-	Datum intDatum = 0;
-	FmgrInfo fmgrInfo;
-	memset(&fmgrInfo, 0, sizeof(fmgrInfo));
-
-	getTypeInputInfo(INT4OID, &typIoFunc, &typIoParam);
-	fmgr_info(typIoFunc, &fmgrInfo);
-
-	intDatum = InputFunctionCall(&fmgrInfo, input, typIoFunc, -1);
-
-	return intDatum;
 }
