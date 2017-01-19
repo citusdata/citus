@@ -77,6 +77,9 @@ static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
+static void MultiExplainOnePlan(PlannedStmt *plan, IntoClause *into,
+								ExplainState *es, const char *queryString,
+								ParamListInfo params, const instr_time *planDuration);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
@@ -98,17 +101,10 @@ void
 MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 					 const char *queryString, ParamListInfo params)
 {
-	MultiPlan *multiPlan = NULL;
-	CmdType commandType = CMD_UNKNOWN;
-	PlannedStmt *initialPlan = NULL;
-	Job *workerJob = NULL;
-	bool routerExecutablePlan = false;
 	instr_time planStart;
 	instr_time planDuration;
-	Query *originalQuery = NULL;
-	RelationRestrictionContext *restrictionContext = NULL;
-	bool localQuery = !NeedsDistributedPlanning(query);
 	int cursorOptions = 0;
+	PlannedStmt *plan = NULL;
 
 #if PG_VERSION_NUM >= 90600
 
@@ -122,71 +118,54 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	}
 #endif
 
-	/* handle local queries in the same way as ExplainOneQuery */
-	if (localQuery)
-	{
-		PlannedStmt *plan = NULL;
-
-		INSTR_TIME_SET_CURRENT(planStart);
-
-		/* plan the query */
-		plan = pg_plan_query(query, cursorOptions, params);
-
-		INSTR_TIME_SET_CURRENT(planDuration);
-		INSTR_TIME_SUBTRACT(planDuration, planStart);
-
-		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, &planDuration);
-
-		return;
-	}
-
-	/*
-	 * standard_planner scribbles on it's input, but for deparsing we need the
-	 * unmodified form. So copy once we're sure it's a distributed query.
-	 */
-	originalQuery = copyObject(query);
-
-	/* measure the full planning time to display in EXPLAIN ANALYZE */
+	/* plan query, just like ExplainOneQuery does */
 	INSTR_TIME_SET_CURRENT(planStart);
 
-	restrictionContext = CreateAndPushRestrictionContext();
-
-	PG_TRY();
-	{
-		/* call standard planner to modify the query structure before multi planning */
-		initialPlan = standard_planner(query, cursorOptions, params);
-
-		commandType = initialPlan->commandType;
-		if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-			commandType == CMD_DELETE)
-		{
-			if (es->analyze)
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("Using ANALYZE for INSERT/UPDATE/DELETE on "
-									   "distributed tables is not supported.")));
-			}
-		}
-
-		multiPlan = CreatePhysicalPlan(originalQuery, query, restrictionContext);
-	}
-	PG_CATCH();
-	{
-		PopRestrictionContext();
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
-
-	PopRestrictionContext();
+	/* plan the query */
+	plan = pg_plan_query(query, cursorOptions, params);
 
 	INSTR_TIME_SET_CURRENT(planDuration);
 	INSTR_TIME_SUBTRACT(planDuration, planStart);
 
+	/* if not a distributed query, use plain explain infrastructure */
+	if (!HasCitusToplevelNode(plan))
 	{
+		/* run it (if needed) and produce output */
+		ExplainOnePlan(plan, into, es, queryString, params, &planDuration);
+	}
+	else
+	{
+		MultiExplainOnePlan(plan, into, es, queryString, params, &planDuration);
+	}
+}
 
+
+/*
+ * MultiExplainOnePlan explains the plan for an individual distributed query.
+ */
+static void
+MultiExplainOnePlan(PlannedStmt *plan, IntoClause *into,
+					ExplainState *es, const char *queryString,
+					ParamListInfo params, const instr_time *planDuration)
+{
+	MultiPlan *multiPlan = NULL;
+	CmdType commandType = CMD_UNKNOWN;
+	Job *workerJob = NULL;
+	bool routerExecutablePlan = false;
+
+	commandType = plan->commandType;
+	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
+		commandType == CMD_DELETE)
+	{
+		if (es->analyze)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("Using ANALYZE for INSERT/UPDATE/DELETE on "
+								   "distributed tables is not supported.")));
+		}
 	}
 
+	multiPlan = GetMultiPlan(plan);
 
 	if (!ExplainDistributedQueries)
 	{
@@ -252,8 +231,6 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 
 	if (!routerExecutablePlan)
 	{
-		PlannedStmt *masterPlan = MultiQueryContainerNode(initialPlan, multiPlan);
-
 		if (es->format == EXPLAIN_FORMAT_TEXT)
 		{
 			appendStringInfoSpaces(es->str, es->indent * 2);
@@ -263,7 +240,7 @@ MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 
 		ExplainOpenGroup("Master Query", "Master Query", false, es);
 
-		ExplainMasterPlan(masterPlan, into, es, queryString, params, &planDuration);
+		ExplainMasterPlan(plan, into, es, queryString, params, planDuration);
 
 		ExplainCloseGroup("Master Query", "Master Query", false, es);
 
