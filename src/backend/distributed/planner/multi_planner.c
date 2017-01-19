@@ -36,10 +36,15 @@ static List *relationRestrictionContextList = NIL;
 
 /* local function forward declarations */
 static void CheckNodeIsDumpable(Node *node);
-
-
-/* local function forward declarations */
 static char * GetMultiPlanString(PlannedStmt *result);
+static PlannedStmt * MultiQueryContainerNode(PlannedStmt *result,
+											 struct MultiPlan *multiPlan);
+static struct MultiPlan * CreatePhysicalPlan(Query *originalQuery, Query *query,
+											 RelationRestrictionContext *
+											 restrictionContext);
+static RelationRestrictionContext * CreateAndPushRestrictionContext(void);
+static RelationRestrictionContext * CurrentRestrictionContext(void);
+static void PopRestrictionContext(void);
 
 
 /* Distributed planner hook */
@@ -123,7 +128,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
  * target shards. SELECT queries go through the full logical plan/optimize/
  * physical plan process needed to produce distributed query plans.
  */
-MultiPlan *
+static MultiPlan *
 CreatePhysicalPlan(Query *originalQuery, Query *query,
 				   RelationRestrictionContext *restrictionContext)
 {
