@@ -319,6 +319,29 @@ VACUUM dustbunnies;
 WARNING:  not propagating VACUUM command to worker nodes
 HINT:  Set citus.enable_ddl_propagation to true in order to send targeted VACUUM commands to worker nodes.
 SET citus.enable_ddl_propagation to DEFAULT;
+-- test worker_hash
+SELECT worker_hash(123);
+ worker_hash 
+-------------
+  -205084363
+(1 row)
+
+SELECT worker_hash('1997-08-08'::date);
+ worker_hash 
+-------------
+  -499701663
+(1 row)
+
+-- test a custom type (this test should run after multi_data_types)
+SELECT worker_hash('(1, 2)');
+ERROR:  cannot find a hash function for the input type
+HINT:  Cast input to a data type with a hash function.
+SELECT worker_hash('(1, 2)'::test_composite_type);
+ worker_hash 
+-------------
+ -1895345704
+(1 row)
+
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
 -- VACUUM (FULL, VERBOSE) dustbunnies;
