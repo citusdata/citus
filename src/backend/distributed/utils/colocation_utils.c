@@ -841,7 +841,11 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 	if ((partitionMethod == DISTRIBUTE_BY_APPEND) ||
 		(partitionMethod == DISTRIBUTE_BY_RANGE))
 	{
-		colocatedShardList = lappend(colocatedShardList, shardInterval);
+		ShardInterval *copyShardInterval = CitusMakeNode(ShardInterval);
+		CopyShardInterval(shardInterval, copyShardInterval);
+
+		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
+
 		return colocatedShardList;
 	}
 
@@ -857,6 +861,7 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		DistTableCacheEntry *colocatedTableCacheEntry =
 			DistributedTableCacheEntry(colocatedTableId);
 		ShardInterval *colocatedShardInterval = NULL;
+		ShardInterval *copyShardInterval = NULL;
 
 		/*
 		 * Since we iterate over co-located tables, shard count of each table should be
@@ -868,7 +873,10 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 		colocatedShardInterval =
 			colocatedTableCacheEntry->sortedShardIntervalArray[shardIntervalIndex];
 
-		colocatedShardList = lappend(colocatedShardList, colocatedShardInterval);
+		copyShardInterval = CitusMakeNode(ShardInterval);
+		CopyShardInterval(colocatedShardInterval, copyShardInterval);
+
+		colocatedShardList = lappend(colocatedShardList, copyShardInterval);
 	}
 
 	Assert(list_length(colocatedTableList) == list_length(colocatedShardList));
