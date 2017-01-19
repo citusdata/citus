@@ -50,10 +50,6 @@
 #include "utils/palloc.h"
 
 
-/* local function forward declarations */
-static text * IntegerToText(int32 value);
-
-
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_create_worker_shards);
 
@@ -418,7 +414,7 @@ CheckHashPartitionedTable(Oid distributedTableId)
 
 
 /* Helper function to convert an integer value to a text type */
-static text *
+text *
 IntegerToText(int32 value)
 {
 	text *valueText = NULL;

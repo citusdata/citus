@@ -46,4 +46,6 @@ extern void WarnRemoteError(PGconn *connection, PGresult *result);
 extern void ReraiseRemoteError(PGconn *connection, PGresult *result);
 extern PGconn * ConnectToNode(char *nodeName, int nodePort, char *nodeUser);
 extern char * ConnectionGetOptionValue(PGconn *connection, char *optionKeyword);
+
+
 #endif /* CONNECTION_CACHE_H */
