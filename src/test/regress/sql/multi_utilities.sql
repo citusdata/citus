@@ -209,6 +209,14 @@ SET citus.enable_ddl_propagation to false;
 VACUUM dustbunnies;
 SET citus.enable_ddl_propagation to DEFAULT;
 
+-- test worker_hash
+SELECT worker_hash(123);
+SELECT worker_hash('1997-08-08'::date);
+
+-- test a custom type (this test should run after multi_data_types)
+SELECT worker_hash('(1, 2)');
+SELECT worker_hash('(1, 2)'::test_composite_type);
+
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
 -- VACUUM (FULL, VERBOSE) dustbunnies;
