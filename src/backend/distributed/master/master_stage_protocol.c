@@ -265,9 +265,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		char *workerName = shardPlacement->nodeName;
-		uint32 workerPort = shardPlacement->nodePort;
-		List *queryResultList = NIL;
+		MultiConnection *connection = GetPlacementConnection(FOR_DML, shardPlacement,
+															 NULL);
+		PGresult *queryResult = NULL;
+		int executeCommand = 0;
 
 		StringInfo workerAppendQuery = makeStringInfo();
 		appendStringInfo(workerAppendQuery, WORKER_APPEND_TABLE_TO_SHARD,
@@ -275,10 +276,12 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
-		/* inserting data should be performed by the current user */
-		queryResultList = ExecuteRemoteQuery(workerName, workerPort, NULL,
-											 workerAppendQuery);
-		if (queryResultList != NIL)
+		executeCommand = ExecuteOptionalRemoteCommand(connection, workerAppendQuery->data,
+													  &queryResult);
+		PQclear(queryResult);
+		ForgetResults(connection);
+
+		if (executeCommand == 0)
 		{
 			succeededPlacementList = lappend(succeededPlacementList, shardPlacement);
 		}
