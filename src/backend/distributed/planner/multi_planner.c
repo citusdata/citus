@@ -405,7 +405,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
  * CreateAndPushRestrictionContext creates a new restriction context, inserts it to the
  * beginning of the context list, and returns the newly created context.
  */
-RelationRestrictionContext *
+static RelationRestrictionContext *
 CreateAndPushRestrictionContext(void)
 {
 	RelationRestrictionContext *restrictionContext =
@@ -425,7 +425,7 @@ CreateAndPushRestrictionContext(void)
  * CurrentRestrictionContext returns the the last restriction context from the
  * list.
  */
-RelationRestrictionContext *
+static RelationRestrictionContext *
 CurrentRestrictionContext(void)
 {
 	RelationRestrictionContext *restrictionContext = NULL;
@@ -443,7 +443,7 @@ CurrentRestrictionContext(void)
  * PopRestrictionContext removes the most recently added restriction context from
  * context list. The function assumes the list is not empty.
  */
-void
+static void
 PopRestrictionContext(void)
 {
 	relationRestrictionContextList = list_delete_first(relationRestrictionContextList);
