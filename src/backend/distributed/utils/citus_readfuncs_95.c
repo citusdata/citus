@@ -1519,6 +1519,8 @@ CitusParseNodeString(void)
 		return_value = ReadRelationShard();
 	else if (MATCH("TASK", 4))
 		return_value = ReadTask();
+	else if (MATCH("DEFERREDERRORMESSAGE", 20))
+		return_value = ReadDeferredErrorMessage();
 /* XXX: END Citus Nodes */
 	else
 	{
