@@ -366,13 +366,13 @@ SELECT create_distributed_table('get_shardid_test_table2', 'column1');
 (1 row)
 
 \COPY get_shardid_test_table2 FROM STDIN with delimiter '|';
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{a, b, c}');
  get_shard_id_for_distribution_column 
 --------------------------------------
                                540013
 (1 row)
 
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f}');
  get_shard_id_for_distribution_column 
 --------------------------------------
                                540011
@@ -394,9 +394,9 @@ SELECT * FROM get_shardid_test_table2_540011;
 
 \c - - - :master_port
 -- test mismatching data type
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a'::text);
-ERROR:  invalid distribution value type
-DETAIL:  Type of the value does not match the type of the distribution column. Expected type id: 1009, given type id: 25
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a');
+ERROR:  malformed array literal: "a"
+DETAIL:  Array value must start with "{" or dimension information.
 -- test NULL distribution column value for hash distributed table
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2');
 ERROR:  distribution value cannot be NULL for tables other than reference tables.
@@ -443,13 +443,13 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 1);
                                540014
 (1 row)
 
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a'::text);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', 'a');
  get_shard_id_for_distribution_column 
 --------------------------------------
                                540014
 (1 row)
 
-SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}'::text[]);
+SELECT get_shard_id_for_distribution_column('get_shardid_test_table4', '{a, b, c}');
  get_shard_id_for_distribution_column 
 --------------------------------------
                                540014
