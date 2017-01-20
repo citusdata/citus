@@ -39,9 +39,11 @@ static void CheckNodeIsDumpable(Node *node);
 static char * GetMultiPlanString(PlannedStmt *result);
 static PlannedStmt * MultiQueryContainerNode(PlannedStmt *result,
 											 struct MultiPlan *multiPlan);
-static struct MultiPlan * CreatePhysicalPlan(Query *originalQuery, Query *query,
-											 RelationRestrictionContext *
-											 restrictionContext);
+static struct PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan,
+												  Query *originalQuery,
+												  Query *query,
+												  RelationRestrictionContext *
+												  restrictionContext);
 static RelationRestrictionContext * CreateAndPushRestrictionContext(void);
 static RelationRestrictionContext * CurrentRestrictionContext(void);
 static void PopRestrictionContext(void);
@@ -100,11 +102,8 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 		if (needsDistributedPlanning)
 		{
-			MultiPlan *physicalPlan = CreatePhysicalPlan(originalQuery, parse,
-														 restrictionContext);
-
-			/* store required data into the planned statement */
-			result = MultiQueryContainerNode(result, physicalPlan);
+			result = CreateDistributedPlan(result, originalQuery, parse,
+										   restrictionContext);
 		}
 	}
 	PG_CATCH();
@@ -122,15 +121,15 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
- * CreatePhysicalPlan encapsulates the logic needed to transform a particular
- * query into a physical plan. For modifications, queries immediately enter
+ * CreateDistributedPlan encapsulates the logic needed to transform a particular
+ * query into a distributed plan. For modifications, queries immediately enter
  * the physical planning stage, since they are essentially "routed" to remote
  * target shards. SELECT queries go through the full logical plan/optimize/
  * physical plan process needed to produce distributed query plans.
  */
-static MultiPlan *
-CreatePhysicalPlan(Query *originalQuery, Query *query,
-				   RelationRestrictionContext *restrictionContext)
+static PlannedStmt *
+CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
+					  RelationRestrictionContext *restrictionContext)
 {
 	MultiPlan *physicalPlan = MultiRouterPlanCreate(originalQuery, query,
 													restrictionContext);
@@ -153,7 +152,8 @@ CreatePhysicalPlan(Query *originalQuery, Query *query,
 		physicalPlan = MultiPhysicalPlanCreate(logicalPlan);
 	}
 
-	return physicalPlan;
+	/* store required data into the planned statement */
+	return MultiQueryContainerNode(localPlan, physicalPlan);
 }
 
 
