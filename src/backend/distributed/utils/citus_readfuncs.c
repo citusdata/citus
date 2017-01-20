@@ -187,6 +187,7 @@ ReadMultiPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(masterQuery);
 	READ_STRING_FIELD(masterTableName);
 	READ_BOOL_FIELD(routerExecutable);
+	READ_NODE_FIELD(planningError);
 
 	READ_DONE();
 }

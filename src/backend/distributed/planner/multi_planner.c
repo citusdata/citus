@@ -121,39 +121,93 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
+ * IsModifyCommand returns true if the query performs modifications, false
+ * otherwise.
+ */
+bool
+IsModifyCommand(Query *query)
+{
+	CmdType commandType = query->commandType;
+
+	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
+		commandType == CMD_DELETE || query->hasModifyingCTE)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * CreateDistributedPlan encapsulates the logic needed to transform a particular
- * query into a distributed plan. For modifications, queries immediately enter
- * the physical planning stage, since they are essentially "routed" to remote
- * target shards. SELECT queries go through the full logical plan/optimize/
- * physical plan process needed to produce distributed query plans.
+ * query into a distributed plan.
  */
 static PlannedStmt *
 CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
 					  RelationRestrictionContext *restrictionContext)
 {
-	MultiPlan *physicalPlan = MultiRouterPlanCreate(originalQuery, query,
-													restrictionContext);
-	if (physicalPlan == NULL)
+	MultiPlan *distributedPlan = NULL;
+
+	if (IsModifyCommand(query))
 	{
-		/* Create and optimize logical plan */
-		MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
-		MultiLogicalPlanOptimize(logicalPlan);
-
 		/*
-		 * This check is here to make it likely that all node types used in
-		 * Citus are dumpable. Explain can dump logical and physical plans
-		 * using the extended outfuncs infrastructure, but it's infeasible to
-		 * test most plans. MultiQueryContainerNode always serializes the
-		 * physical plan, so there's no need to check that separately.
+		 * Modifications are always routed through the same
+		 * planner/executor. As there's currently no other way to plan these,
+		 * error out if the query is unsupported.
 		 */
-		CheckNodeIsDumpable((Node *) logicalPlan);
+		distributedPlan = CreateModifyPlan(originalQuery, query, restrictionContext);
+		Assert(distributedPlan);
+		if (distributedPlan->planningError)
+		{
+			RaiseDeferredError(distributedPlan->planningError, ERROR);
+		}
+	}
+	else
+	{
+		/*
+		 * For select queries we, if router executor is enabled, first try to
+		 * plan the query as a router query. If not supported, otherwise try
+		 * the full blown plan/optimize/physical planing process needed to
+		 * produce distributed query plans.
+		 */
+		if (EnableRouterExecution)
+		{
+			distributedPlan = CreateRouterPlan(originalQuery, query, restrictionContext);
 
-		/* Create the physical plan */
-		physicalPlan = MultiPhysicalPlanCreate(logicalPlan);
+			/* for debugging it's useful to display why query was not router plannable */
+			if (distributedPlan && distributedPlan->planningError)
+			{
+				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+			}
+		}
+
+		/* router didn't yield a plan, try the full distributed planner */
+		if (!distributedPlan || distributedPlan->planningError)
+		{
+			/* Create and optimize logical plan */
+			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
+			MultiLogicalPlanOptimize(logicalPlan);
+
+			/*
+			 * This check is here to make it likely that all node types used in
+			 * Citus are dumpable. Explain can dump logical and physical plans
+			 * using the extended outfuncs infrastructure, but it's infeasible to
+			 * test most plans. MultiQueryContainerNode always serializes the
+			 * physical plan, so there's no need to check that separately.
+			 */
+			CheckNodeIsDumpable((Node *) logicalPlan);
+
+			/* Create the physical plan */
+			distributedPlan = MultiPhysicalPlanCreate(logicalPlan);
+
+			/* distributed plan currently should always succeed or error out */
+			Assert(distributedPlan && distributedPlan->planningError == NULL);
+		}
 	}
 
 	/* store required data into the planned statement */
-	return MultiQueryContainerNode(localPlan, physicalPlan);
+	return MultiQueryContainerNode(localPlan, distributedPlan);
 }
 
 
