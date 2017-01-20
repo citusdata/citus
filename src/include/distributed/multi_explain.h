@@ -13,8 +13,6 @@
 #include "executor/executor.h"
 
 /* Config variables managed via guc.c to explain distributed query plans */
-extern bool ExplainMultiLogicalPlan;
-extern bool ExplainMultiPhysicalPlan;
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 
