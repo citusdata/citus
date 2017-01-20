@@ -98,5 +98,9 @@ extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSuperUser(void);
 extern bool TableReferenced(Oid relationId);
+extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
+extern Datum StringToDatum(char *inputString, Oid dataType);
+extern char * DatumToString(Datum datum, Oid dataType);
+
 
 #endif   /* MASTER_METADATA_UTILITY_H */

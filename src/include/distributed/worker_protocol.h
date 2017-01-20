@@ -155,5 +155,8 @@ extern Datum worker_append_table_to_shard(PG_FUNCTION_ARGS);
 extern Datum worker_foreign_file_path(PG_FUNCTION_ARGS);
 extern Datum worker_find_block_local_path(PG_FUNCTION_ARGS);
 
+/* Function declaration for calculating hashed value */
+extern Datum worker_hash(PG_FUNCTION_ARGS);
+
 
 #endif   /* WORKER_PROTOCOL_H */

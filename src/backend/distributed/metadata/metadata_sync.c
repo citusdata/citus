@@ -513,7 +513,7 @@ TableOwnerResetCommand(Oid relationId)
 
 
 /*
- * ShardListInsertCommand generates a singe command that can be
+ * ShardListInsertCommand generates a single command that can be
  * executed to replicate shard and shard placement metadata for the
  * given shard intervals. The function assumes that each shard has a
  * single placement, and asserts this information.
@@ -629,6 +629,37 @@ ShardListInsertCommand(List *shardIntervalList)
 
 	/* finally add the command to the list that we'll return */
 	commandList = lappend(commandList, insertShardCommand->data);
+
+	return commandList;
+}
+
+
+/*
+ * ShardListDeleteCommand generates a command list that can be executed to delete
+ * shard and shard placement metadata for the given shard.
+ */
+List *
+ShardDeleteCommandList(ShardInterval *shardInterval)
+{
+	uint64 shardId = shardInterval->shardId;
+	List *commandList = NIL;
+	StringInfo deletePlacementCommand = NULL;
+	StringInfo deleteShardCommand = NULL;
+
+	/* create command to delete shard placements */
+	deletePlacementCommand = makeStringInfo();
+	appendStringInfo(deletePlacementCommand,
+					 "DELETE FROM pg_dist_shard_placement WHERE shardid = %lu",
+					 shardId);
+
+	commandList = lappend(commandList, deletePlacementCommand->data);
+
+	/* create command to delete shard */
+	deleteShardCommand = makeStringInfo();
+	appendStringInfo(deleteShardCommand,
+					 "DELETE FROM pg_dist_shard WHERE shardid = %lu", shardId);
+
+	commandList = lappend(commandList, deleteShardCommand->data);
 
 	return commandList;
 }
