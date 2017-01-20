@@ -1091,7 +1091,7 @@ FROM
 	colocated_table_test, colocated_table_test_2
 WHERE
 	colocated_table_test.value_1 = colocated_table_test.value_1;
-ERROR:  If data inserted into a reference table, all of the participating tables in the INSERT INTO ... SELECT query should be reference tables.
+ERROR:  only reference tables may be queried when targeting a reference table with INSERT ... SELECT
 -- should error out, same as the above
 INSERT INTO
 	reference_table_test (value_1)
@@ -1101,7 +1101,7 @@ FROM
 	colocated_table_test, reference_table_test
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
-ERROR:  If data inserted into a reference table, all of the participating tables in the INSERT INTO ... SELECT query should be reference tables.
+ERROR:  only reference tables may be queried when targeting a reference table with INSERT ... SELECT
 -- now, insert into the hash partitioned table and use reference 
 -- tables in the SELECT queries
 INSERT INTO
@@ -1146,7 +1146,7 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
-ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 -- partition column value comes from reference table which should error out
 INSERT INTO
@@ -1158,7 +1158,7 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
-ERROR:  cannot plan INSERT INTO ... SELECT  because partition columns in the target table and the subquery do not match
+ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- some tests for mark_tables_colocated
 -- should error out

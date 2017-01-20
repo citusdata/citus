@@ -14,6 +14,7 @@
 
 #include "c.h"
 
+#include "distributed/errormessage.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
@@ -28,10 +29,13 @@
 
 extern bool EnableRouterExecution;
 
-extern MultiPlan * MultiRouterPlanCreate(Query *originalQuery, Query *query,
-										 RelationRestrictionContext *restrictionContext);
+extern MultiPlan * CreateRouterPlan(Query *originalQuery, Query *query,
+									RelationRestrictionContext *restrictionContext);
+extern MultiPlan * CreateModifyPlan(Query *originalQuery, Query *query,
+									RelationRestrictionContext *restrictionContext);
+
 extern void AddUninstantiatedPartitionRestriction(Query *originalQuery);
-extern void ErrorIfModifyQueryNotSupported(Query *queryTree);
+extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,
 											  RangeTblEntry *subqueryRte);
