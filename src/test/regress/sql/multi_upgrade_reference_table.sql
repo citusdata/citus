@@ -423,9 +423,6 @@ FROM
 WHERE
     logicalrelid = 'upgrade_reference_table_transaction_rollback'::regclass;
 
--- eliminate the duplicate intermediate duplicate rows in pg_dist_colocation
-VACUUM ANALYZE pg_dist_colocation;
-    
 SELECT *
 FROM pg_dist_colocation
 WHERE colocationid IN

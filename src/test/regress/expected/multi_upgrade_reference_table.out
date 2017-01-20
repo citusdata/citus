@@ -650,9 +650,6 @@ WHERE
  1360013 | f                   | f
 (1 row)
 
--- eliminate the duplicate intermediate duplicate rows in pg_dist_colocation
-VACUUM ANALYZE pg_dist_colocation;
-    
 SELECT *
 FROM pg_dist_colocation
 WHERE colocationid IN
