@@ -56,7 +56,8 @@ typedef enum CitusNodeTag
 	T_Task,
 	T_ShardInterval,
 	T_ShardPlacement,
-	T_RelationShard
+	T_RelationShard,
+	T_DeferredErrorMessage
 } CitusNodeTag;
 
 
@@ -98,6 +99,8 @@ CitusNodeTagI(Node *node)
 
 
 #else
+
+#include "nodes/nodes.h"
 
 typedef CitusNodeTag CitusNode;
 /*

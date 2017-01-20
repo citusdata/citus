@@ -14,6 +14,7 @@
 #include <math.h>
 
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/errormessage.h"
 #include "distributed/multi_planner.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
@@ -313,6 +314,24 @@ ReadTask(READFUNC_ARGS)
 
 	READ_DONE();
 }
+
+
+READFUNC_RET
+ReadDeferredErrorMessage(READFUNC_ARGS)
+{
+	READ_LOCALS(DeferredErrorMessage);
+
+	READ_INT_FIELD(code);
+	READ_STRING_FIELD(message);
+	READ_STRING_FIELD(detail);
+	READ_STRING_FIELD(hint);
+	READ_STRING_FIELD(filename);
+	READ_INT_FIELD(linenumber);
+	READ_STRING_FIELD(functionname);
+
+	READ_DONE();
+}
+
 
 READFUNC_RET
 ReadUnsupportedCitusNode(READFUNC_ARGS)
