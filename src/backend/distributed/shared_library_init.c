@@ -369,7 +369,7 @@ RegisterCitusConfigVariables(void)
 					 "configuration value at sharded table creation time, "
 					 "and later reuse the initially read value."),
 		&ShardReplicationFactor,
-		2, 1, 100,
+		1, 1, 100,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
