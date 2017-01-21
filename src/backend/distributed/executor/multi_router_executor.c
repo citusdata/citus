@@ -28,7 +28,6 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
-#include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
