@@ -82,7 +82,8 @@ typedef enum
 	MAP_OUTPUT_FETCH_TASK = 5,
 	MERGE_FETCH_TASK = 6,
 	MODIFY_TASK = 7,
-	ROUTER_TASK = 8
+	ROUTER_TASK = 8,
+	DDL_TASK = 9
 } TaskType;
 
 
