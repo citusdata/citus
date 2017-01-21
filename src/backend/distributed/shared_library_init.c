@@ -296,30 +296,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.explain_multi_logical_plan",
-		gettext_noop("Enables Explain to print out distributed logical plans."),
-		gettext_noop("We use this private configuration entry as a debugging aid. "
-					 "If enabled, the Explain command prints out the optimized "
-					 "logical plan for distributed queries."),
-		&ExplainMultiLogicalPlan,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.explain_multi_physical_plan",
-		gettext_noop("Enables Explain to print out distributed physical plans."),
-		gettext_noop("We use this private configuration entry as a debugging aid. "
-					 "If enabled, the Explain command prints out the physical "
-					 "plan for distributed queries."),
-		&ExplainMultiPhysicalPlan,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
 		gettext_noop("Enables Explain for distributed queries."),
 		gettext_noop("When enabled, the Explain command shows remote and local "
@@ -393,7 +369,7 @@ RegisterCitusConfigVariables(void)
 					 "configuration value at sharded table creation time, "
 					 "and later reuse the initially read value."),
 		&ShardReplicationFactor,
-		2, 1, 100,
+		1, 1, 100,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

@@ -192,36 +192,177 @@ SELECT * FROM labs WHERE id = 6;
 ----+------
 (0 rows)
 
--- COPY can't happen second,
+-- COPY can happen after single row INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "10,Weyland-Yutani"
 COMMIT;
--- though it will work if before any modifications
+-- COPY can happen before single row INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
 SELECT name FROM labs WHERE id = 10;
       name      
 ----------------
  Weyland-Yutani
-(1 row)
+ Weyland-Yutani
+(2 rows)
 
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
--- but a double-copy isn't allowed (the first will persist)
+-- two consecutive COPYs in a transaction are allowed
 BEGIN;
 \copy labs from stdin delimiter ','
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety"
 COMMIT;
-SELECT name FROM labs WHERE id = 11;
+SELECT name FROM labs WHERE id = 11 OR id = 12 ORDER BY id;
       name      
 ----------------
  Planet Express
+ fsociety
+(2 rows)
+
+-- 1pc failure test
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
 (1 row)
+
+-- copy with unique index violation
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+\copy researchers FROM STDIN delimiter ','
+ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
+DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
+COMMIT;
+-- verify rollback
+SELECT * FROM researchers WHERE lab_id = 6;
+ id | lab_id | name 
+----+--------+------
+(0 rows)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+-- 2pc failure and success tests
+SET citus.multi_shard_commit_protocol TO '2pc';
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+-- copy with unique index violation
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+\copy researchers FROM STDIN delimiter ','
+ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
+DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
+COMMIT;
+-- verify rollback
+SELECT * FROM researchers WHERE lab_id = 6;
+ id | lab_id | name 
+----+--------+------
+(0 rows)
+
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     0
+(1 row)
+
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+\copy researchers FROM STDIN delimiter ','
+COMMIT;
+-- verify success
+SELECT * FROM researchers WHERE lab_id = 6;
+ id | lab_id |         name         
+----+--------+----------------------
+ 17 |      6 |  'Bjarne Stroustrup'
+ 18 |      6 |  'Dennis Ritchie'
+(2 rows)
+
+-- verify 2pc
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     2
+(1 row)
+
+RESET citus.multi_shard_commit_protocol;
+-- create a check function
+SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
+    BEGIN
+        IF (NEW.id > 30) THEN
+            RAISE ''illegal value'';
+        END IF;
+
+        RETURN NEW;
+    END;
+$rli$ LANGUAGE plpgsql;')
+ORDER BY nodeport;
+ nodename  | nodeport | success |     result      
+-----------+----------+---------+-----------------
+ localhost |    57637 | t       | CREATE FUNCTION
+ localhost |    57638 | t       | CREATE FUNCTION
+(2 rows)
+
+-- register after insert trigger
+SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
+ORDER BY nodeport, shardid;
+ nodename  | nodeport | shardid | success |     result     
+-----------+----------+---------+---------+----------------
+ localhost |    57637 | 1200000 | t       | CREATE TRIGGER
+ localhost |    57637 | 1200001 | t       | CREATE TRIGGER
+ localhost |    57638 | 1200000 | t       | CREATE TRIGGER
+ localhost |    57638 | 1200001 | t       | CREATE TRIGGER
+(4 rows)
+
+-- hide postgresql version dependend messages for next test only
+\set VERBOSITY terse
+-- deferred check should abort the transaction
+BEGIN;
+DELETE FROM researchers WHERE lab_id = 6;
+\copy researchers FROM STDIN delimiter ','
+\copy researchers FROM STDIN delimiter ','
+COMMIT;
+WARNING:  illegal value
+WARNING:  failed to commit transaction on localhost:57638
+WARNING:  illegal value
+WARNING:  failed to commit transaction on localhost:57637
+WARNING:  could not commit transaction for shard 1200001 on any active node
+ERROR:  could not commit transaction on any active node
+\unset VERBOSITY
+-- verify everyhing including delete is rolled back
+SELECT * FROM researchers WHERE lab_id = 6;
+ id | lab_id |         name         
+----+--------+----------------------
+ 17 |      6 |  'Bjarne Stroustrup'
+ 18 |      6 |  'Dennis Ritchie'
+(2 rows)
+
+-- cleanup triggers and the function
+SELECT * from run_command_on_placements('researchers', 'drop trigger reject_large_researcher_id on %s')
+ORDER BY nodeport, shardid;
+ nodename  | nodeport | shardid | success |    result    
+-----------+----------+---------+---------+--------------
+ localhost |    57637 | 1200000 | t       | DROP TRIGGER
+ localhost |    57637 | 1200001 | t       | DROP TRIGGER
+ localhost |    57638 | 1200000 | t       | DROP TRIGGER
+ localhost |    57638 | 1200001 | t       | DROP TRIGGER
+(4 rows)
+
+SELECT * FROM run_command_on_workers('drop function reject_large_id()')
+ORDER BY nodeport;
+ nodename  | nodeport | success |    result     
+-----------+----------+---------+---------------
+ localhost |    57637 | t       | DROP FUNCTION
+ localhost |    57638 | t       | DROP FUNCTION
+(2 rows)
 
 -- finally, ALTER and copy aren't compatible
 BEGIN;
@@ -237,11 +378,6 @@ COMMIT;
 --------+--------+-----------
  id     | bigint | not null
  name   | text   | not null
-
-SELECT * FROM labs WHERE id = 12;
- id | name 
-----+------
-(0 rows)
 
 -- and if the copy is before the ALTER...
 BEGIN;
@@ -269,7 +405,7 @@ ALTER TABLE labs ADD COLUMN motto text;
 SELECT master_modify_multiple_shards('DELETE FROM labs');
  master_modify_multiple_shards 
 -------------------------------
-                             5
+                             7
 (1 row)
 
 ALTER TABLE labs ADD COLUMN score float;

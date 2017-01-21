@@ -148,7 +148,7 @@ COMMIT;
 \d labs
 SELECT * FROM labs WHERE id = 6;
 
--- COPY can't happen second,
+-- COPY can happen after single row INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
@@ -156,7 +156,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 \.
 COMMIT;
 
--- though it will work if before any modifications
+-- COPY can happen before single row INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
 10,Weyland-Yutani
@@ -165,7 +165,7 @@ SELECT name FROM labs WHERE id = 10;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
 
--- but a double-copy isn't allowed (the first will persist)
+-- two consecutive COPYs in a transaction are allowed
 BEGIN;
 \copy labs from stdin delimiter ','
 11,Planet Express
@@ -175,7 +175,93 @@ BEGIN;
 \.
 COMMIT;
 
-SELECT name FROM labs WHERE id = 11;
+SELECT name FROM labs WHERE id = 11 OR id = 12 ORDER BY id;
+
+-- 1pc failure test
+SELECT recover_prepared_transactions();
+-- copy with unique index violation
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+17, 6, 'Bjarne Stroustrup'
+\.
+\copy researchers FROM STDIN delimiter ','
+18, 6, 'Bjarne Stroustrup'
+\.
+COMMIT;
+-- verify rollback
+SELECT * FROM researchers WHERE lab_id = 6;
+SELECT count(*) FROM pg_dist_transaction;
+
+-- 2pc failure and success tests
+SET citus.multi_shard_commit_protocol TO '2pc';
+SELECT recover_prepared_transactions();
+-- copy with unique index violation
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+17, 6, 'Bjarne Stroustrup'
+\.
+\copy researchers FROM STDIN delimiter ','
+18, 6, 'Bjarne Stroustrup'
+\.
+COMMIT;
+-- verify rollback
+SELECT * FROM researchers WHERE lab_id = 6;
+SELECT count(*) FROM pg_dist_transaction;
+
+BEGIN;
+\copy researchers FROM STDIN delimiter ','
+17, 6, 'Bjarne Stroustrup'
+\.
+\copy researchers FROM STDIN delimiter ','
+18, 6, 'Dennis Ritchie'
+\.
+COMMIT;
+-- verify success
+SELECT * FROM researchers WHERE lab_id = 6;
+-- verify 2pc
+SELECT count(*) FROM pg_dist_transaction;
+
+RESET citus.multi_shard_commit_protocol;
+
+-- create a check function
+SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
+    BEGIN
+        IF (NEW.id > 30) THEN
+            RAISE ''illegal value'';
+        END IF;
+
+        RETURN NEW;
+    END;
+$rli$ LANGUAGE plpgsql;')
+ORDER BY nodeport;
+
+-- register after insert trigger
+SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
+ORDER BY nodeport, shardid;
+
+-- hide postgresql version dependend messages for next test only
+\set VERBOSITY terse
+-- deferred check should abort the transaction
+BEGIN;
+DELETE FROM researchers WHERE lab_id = 6;
+\copy researchers FROM STDIN delimiter ','
+31, 6, 'Bjarne Stroustrup'
+\.
+\copy researchers FROM STDIN delimiter ','
+30, 6, 'Dennis Ritchie'
+\.
+COMMIT;
+\unset VERBOSITY
+
+-- verify everyhing including delete is rolled back
+SELECT * FROM researchers WHERE lab_id = 6;
+
+-- cleanup triggers and the function
+SELECT * from run_command_on_placements('researchers', 'drop trigger reject_large_researcher_id on %s')
+ORDER BY nodeport, shardid;
+
+SELECT * FROM run_command_on_workers('drop function reject_large_id()')
+ORDER BY nodeport;
 
 -- finally, ALTER and copy aren't compatible
 BEGIN;
@@ -187,7 +273,6 @@ COMMIT;
 
 -- but the DDL should correctly roll back
 \d labs
-SELECT * FROM labs WHERE id = 12;
 
 -- and if the copy is before the ALTER...
 BEGIN;
