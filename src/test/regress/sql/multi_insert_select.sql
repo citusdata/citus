@@ -706,8 +706,8 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100
 ROLLBACK;
 
 -- Insert after copy is currently disallowed because of the way the 
--- transaction modification state is currently handled. Copy still
--- goes through despite rollback.
+-- transaction modification state is currently handled. Copy is also
+-- rolled back.
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 100,100
@@ -716,9 +716,7 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 ROLLBACK;
 
 -- Insert after copy is currently allowed for single-shard operation.
--- Since the COPY commits immediately, the result is visible in the
--- next operation. Copy goes through despite rollback, while insert
--- rolls back.
+-- Both insert and copy are rolled back successfully.
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 101,101
@@ -727,9 +725,7 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 101
 SELECT user_id FROM raw_events_first WHERE user_id = 101;
 ROLLBACK;
 
--- Copy after insert is disallowed since the insert is not immediately
--- committed and the copy uses different connections that will not yet
--- see the result of the insert.
+-- Copy after insert is currently disallowed.
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
