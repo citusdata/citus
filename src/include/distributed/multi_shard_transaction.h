@@ -27,13 +27,14 @@ typedef struct ShardConnections
 } ShardConnections;
 
 
-extern void OpenTransactionsToAllShardPlacements(List *shardIdList, char *relationOwner);
+extern HTAB * OpenTransactionsToAllShardPlacements(List *shardIdList,
+												   int connectionFlags);
 extern HTAB * CreateShardConnectionHash(MemoryContext memoryContext);
-extern ShardConnections * GetShardConnections(int64 shardId, bool *shardConnectionsFound);
 extern ShardConnections * GetShardHashConnections(HTAB *connectionHash, int64 shardId,
 												  bool *connectionsFound);
 extern List * ShardConnectionList(HTAB *connectionHash);
 extern void ResetShardPlacementTransactionState(void);
+extern void UnclaimAllShardConnections(HTAB *shardConnectionHash);
 
 
 #endif /* MULTI_SHARD_TRANSACTION_H */
