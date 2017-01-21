@@ -70,6 +70,7 @@
 
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
+bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
 static void ReacquireMetadataLocks(List *taskList);
@@ -838,7 +839,8 @@ GetModifyConnections(List *taskPlacementList, bool markCritical, bool noNewTrans
 		{
 			RemoteTransaction *transaction = &multiConnection->remoteTransaction;
 
-			if (transaction->transactionState == REMOTE_TRANS_INVALID)
+			if (EnableDeadlockPrevention &&
+				transaction->transactionState == REMOTE_TRANS_INVALID)
 			{
 				ereport(ERROR, (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
 								errmsg("no transaction participant matches %s:%d",
