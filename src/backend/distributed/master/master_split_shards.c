@@ -16,7 +16,6 @@
 
 #include "catalog/pg_class.h"
 #include "distributed/colocation_utils.h"
-#include "distributed/connection_cache.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"

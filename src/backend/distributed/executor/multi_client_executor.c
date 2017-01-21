@@ -19,7 +19,6 @@
 
 #include "commands/dbcommands.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"

@@ -26,7 +26,6 @@
 #include "commands/event_trigger.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
-#include "distributed/connection_cache.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
