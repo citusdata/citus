@@ -39,7 +39,7 @@ extern void ExecuteCriticalRemoteCommand(MultiConnection *connection,
 										 const char *command);
 extern int ExecuteOptionalRemoteCommand(MultiConnection *connection,
 										const char *command,
-										PGresult **result);
+										struct pg_result **result);
 extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,
