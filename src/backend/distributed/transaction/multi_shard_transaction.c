@@ -14,8 +14,6 @@
 #include "postgres.h"
 
 #include "distributed/colocation_utils.h"
-#include "distributed/commit_protocol.h"
-#include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
@@ -248,24 +246,5 @@ ResetShardPlacementTransactionState(void)
 	{
 		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
 		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-	}
-}
-
-
-/*
- * CloseConnections closes all connections in connectionList.
- */
-void
-CloseConnections(List *connectionList)
-{
-	ListCell *connectionCell = NULL;
-
-	foreach(connectionCell, connectionList)
-	{
-		TransactionConnection *transactionConnection =
-			(TransactionConnection *) lfirst(connectionCell);
-		PGconn *connection = transactionConnection->connection;
-
-		CloseConnectionByPGconn(connection);
 	}
 }

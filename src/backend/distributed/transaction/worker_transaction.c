@@ -13,13 +13,12 @@
 
 #include "postgres.h"
 #include "miscadmin.h"
+#include "libpq-fe.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "access/xact.h"
-#include "distributed/commit_protocol.h"
-#include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_shard_transaction.h"

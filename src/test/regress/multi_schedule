@@ -126,7 +126,7 @@ test: multi_outer_join
 # is independed from the rest of the group, it is added to increase parallelism.
 # ---
 test: multi_create_fdw
-test: multi_connection_cache multi_complex_count_distinct
+test: multi_complex_count_distinct
 test: multi_distribution_metadata
 test: multi_generate_ddl_commands
 test: multi_create_shards
