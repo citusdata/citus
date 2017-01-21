@@ -900,6 +900,7 @@ UpdateColocationGroupReplicationFactor(uint32 colocationId, int replicationFacto
 	int scanKeyCount = 1;
 	bool indexOK = true;
 	HeapTuple heapTuple = NULL;
+	HeapTuple newHeapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
 	Datum values[Natts_pg_dist_colocation];
@@ -925,17 +926,22 @@ UpdateColocationGroupReplicationFactor(uint32 colocationId, int replicationFacto
 	}
 
 	/* after we find colocation group, we update it with new values */
-	memset(replace, 0, sizeof(replace));
+	memset(replace, false, sizeof(replace));
+	memset(isnull, false, sizeof(isnull));
+	memset(values, 0, sizeof(values));
 
 	values[Anum_pg_dist_colocation_replicationfactor - 1] = Int32GetDatum(
 		replicationFactor);
-	isnull[Anum_pg_dist_colocation_replicationfactor - 1] = false;
 	replace[Anum_pg_dist_colocation_replicationfactor - 1] = true;
 
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-	simple_heap_update(pgDistColocation, &heapTuple->t_self, heapTuple);
+	newHeapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+	simple_heap_update(pgDistColocation, &newHeapTuple->t_self, newHeapTuple);
 
-	CatalogUpdateIndexes(pgDistColocation, heapTuple);
+	CatalogUpdateIndexes(pgDistColocation, newHeapTuple);
+
+	CommandCounterIncrement();
+
+	heap_freetuple(newHeapTuple);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistColocation, NoLock);
