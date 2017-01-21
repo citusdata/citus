@@ -111,6 +111,13 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
 
+-- unless we disable deadlock prevention
+BEGIN;
+SET citus.enable_deadlock_prevention TO off;
+INSERT INTO labs VALUES (6, 'Bell Labs');
+INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
+ABORT;
+
 -- SELECTs may occur after a modification: First check that selecting
 -- from the modified node works.
 BEGIN;
@@ -657,6 +664,19 @@ BEGIN;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO reference_modifying_xacts VALUES (10, 10);
 COMMIT;
+
+-- it is allowed when turning off deadlock prevention
+BEGIN;
+SET citus.enable_deadlock_prevention TO off;
+INSERT INTO hash_modifying_xacts VALUES (1, 1);
+INSERT INTO reference_modifying_xacts VALUES (10, 10);
+ABORT;
+
+BEGIN;
+SET citus.enable_deadlock_prevention TO off;
+INSERT INTO hash_modifying_xacts VALUES (1, 1);
+INSERT INTO hash_modifying_xacts VALUES (2, 2);
+ABORT;
 
 -- lets fail one of the workers before COMMIT time for the hash table
 \c - - - :worker_1_port
