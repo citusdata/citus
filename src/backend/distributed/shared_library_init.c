@@ -20,7 +20,6 @@
 #include "executor/executor.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
-#include "distributed/commit_protocol.h"
 #include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
