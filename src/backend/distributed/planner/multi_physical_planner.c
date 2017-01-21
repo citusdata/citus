@@ -1713,6 +1713,8 @@ UniqueJobId(void)
 	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 	Datum jobIdDatum = 0;
 	int64 jobId = 0;
+	int64 localizedJobId = 0;
+	int64 localGroupId = GetLocalGroupId();
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 
@@ -1723,8 +1725,15 @@ UniqueJobId(void)
 	jobIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
 	jobId = DatumGetInt64(jobIdDatum);
 
+	/*
+	 * Add the local group id information to the jobId to
+	 * prevent concurrent jobs on different groups to conflict.
+	 */
+	localizedJobId = jobId | (localGroupId << 32);
+
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-	return jobId;
+
+	return localizedJobId;
 }
 
 
