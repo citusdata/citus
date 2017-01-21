@@ -22,11 +22,7 @@ typedef struct ShardConnections
 {
 	int64 shardId;
 
-	/*
-	 * XXX: this list contains MultiConnection for multi-shard transactions
-	 * or TransactionConnection for COPY, the latter should be converted to
-	 * use MultiConnection as well.
-	 */
+	/* list of MultiConnection structs */
 	List *connectionList;
 } ShardConnections;
 
@@ -36,7 +32,7 @@ extern HTAB * CreateShardConnectionHash(MemoryContext memoryContext);
 extern ShardConnections * GetShardConnections(int64 shardId, bool *shardConnectionsFound);
 extern ShardConnections * GetShardHashConnections(HTAB *connectionHash, int64 shardId,
 												  bool *connectionsFound);
-extern List * ConnectionList(HTAB *connectionHash);
+extern List * ShardConnectionList(HTAB *connectionHash);
 extern void CloseConnections(List *connectionList);
 extern void ResetShardPlacementTransactionState(void);
 
