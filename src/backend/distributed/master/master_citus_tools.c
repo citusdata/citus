@@ -18,7 +18,6 @@
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
-#include "distributed/connection_cache.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_server_executor.h"
@@ -222,7 +221,6 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 										 int commmandCount)
 {
 	int commandIndex = 0;
-	char *nodeUser = CurrentUserName();
 	PGconn **connectionArray = palloc0(commmandCount * sizeof(PGconn *));
 	int finishedCount = 0;
 
@@ -231,19 +229,24 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 	{
 		char *nodeName = nodeNameArray[commandIndex]->data;
 		int nodePort = nodePortArray[commandIndex];
-		PGconn *connection = ConnectToNode(nodeName, nodePort, nodeUser);
+		int connectionFlags = FORCE_NEW_CONNECTION;
+		MultiConnection *multiConnection =
+			GetNodeConnection(connectionFlags, nodeName, nodePort);
+		PGconn *connection = multiConnection->pgConn;
 		StringInfo queryResultString = resultStringArray[commandIndex];
 
 		statusArray[commandIndex] = true;
 
-		connectionArray[commandIndex] = connection;
-
-		if (connection == NULL)
+		if (PQstatus(multiConnection->pgConn) != CONNECTION_OK)
 		{
 			appendStringInfo(queryResultString, "failed to connect to %s:%d", nodeName,
 							 (int) nodePort);
 			statusArray[commandIndex] = false;
 			finishedCount++;
+		}
+		else
+		{
+			connectionArray[commandIndex] = connection;
 		}
 	}
 
@@ -491,37 +494,27 @@ static bool
 ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 							StringInfo queryResultString)
 {
-	char *nodeUser = CurrentUserName();
-	PGconn *nodeConnection = ConnectToNode(nodeName, nodePort, nodeUser);
+	int connectionFlags = FORCE_NEW_CONNECTION;
+	MultiConnection *multiConnection =
+		GetNodeConnection(connectionFlags, nodeName, nodePort);
+	PGconn *nodeConnection = multiConnection->pgConn;
 	bool success = false;
+	PGresult *queryResult = NULL;
 
-	if (nodeConnection == NULL)
+	if (PQstatus(multiConnection->pgConn) != CONNECTION_OK)
 	{
 		appendStringInfo(queryResultString, "failed to connect to %s:%d", nodeName,
 						 (int) nodePort);
 		return false;
 	}
 
-	PG_TRY();
-	{
-		PGresult *queryResult = PQexec(nodeConnection, queryString);
-		success = EvaluateQueryResult(nodeConnection, queryResult, queryResultString);
+	queryResult = PQexec(nodeConnection, queryString);
+	success = EvaluateQueryResult(nodeConnection, queryResult, queryResultString);
 
-		PQclear(queryResult);
+	PQclear(queryResult);
 
-		/* close the connection */
-		CloseConnectionByPGconn(nodeConnection);
-		nodeConnection = NULL;
-	}
-	PG_CATCH();
-	{
-		StoreErrorMessage(nodeConnection, queryResultString);
-
-		/* close the connection */
-		CloseConnectionByPGconn(nodeConnection);
-		nodeConnection = NULL;
-	}
-	PG_END_TRY();
+	/* close the connection */
+	CloseConnection(multiConnection);
 
 	return success;
 }
