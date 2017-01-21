@@ -988,7 +988,6 @@ DeleteColocationGroup(uint32 colocationId)
 	{
 		simple_heap_delete(pgDistColocation, &(heapTuple->t_self));
 
-		CatalogUpdateIndexes(pgDistColocation, heapTuple);
 		CitusInvalidateRelcacheByRelid(DistColocationRelationId());
 		CommandCounterIncrement();
 	}
