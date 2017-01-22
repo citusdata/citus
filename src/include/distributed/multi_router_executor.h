@@ -31,6 +31,7 @@ typedef struct XactShardConnSet
 
 /* Config variables managed via guc.c */
 extern bool AllModificationsCommutative;
+extern bool EnableDeadlockPrevention;
 
 
 extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags, List *taskList);
