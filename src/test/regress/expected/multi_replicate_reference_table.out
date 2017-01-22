@@ -71,7 +71,6 @@ SELECT create_reference_table('replicate_reference_table_unhealthy');
 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_unhealthy" to all workers
 ERROR:  could not find any healthy placement for shard 1370000
 -- verify node is not added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -123,7 +122,7 @@ WHERE colocationid IN
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_valid" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_valid" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370002,1370002,localhost,57638,default,f)
@@ -244,7 +243,7 @@ WHERE colocationid IN
 
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_rollback" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_rollback" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370003,1370003,localhost,57638,default,f)
@@ -306,7 +305,7 @@ WHERE colocationid IN
 
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_commit" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_commit" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370004,1370004,localhost,57638,default,f)
@@ -400,13 +399,14 @@ ORDER BY logicalrelid;
 
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_reference_one" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_reference_one" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370005,1370005,localhost,57638,default,f)
 (1 row)
 
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
+NOTICE:  Replicating reference table "replicate_reference_table_hash" to the node localhost:57638
  upgrade_to_reference_table 
 ----------------------------
  
@@ -481,7 +481,7 @@ SELECT create_reference_table('replicate_reference_table_insert');
 BEGIN;
 INSERT INTO replicate_reference_table_insert VALUES(1);
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_insert" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_insert" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_insert;
@@ -496,7 +496,7 @@ SELECT create_reference_table('replicate_reference_table_copy');
 BEGIN;
 COPY replicate_reference_table_copy FROM STDIN;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_copy" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_copy" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_copy;
@@ -513,7 +513,7 @@ ALTER TABLE replicate_reference_table_ddl ADD column2 int;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_ddl" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_ddl" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
 DROP TABLE replicate_reference_table_ddl;
@@ -527,7 +527,7 @@ SELECT create_reference_table('replicate_reference_table_drop');
 
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "replicate_reference_table_drop" to all workers
+NOTICE:  Replicating reference table "replicate_reference_table_drop" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370009,1370009,localhost,57638,default,f)
@@ -571,7 +571,7 @@ WHERE colocationid IN
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "table1" to all workers
+NOTICE:  Replicating reference table "table1" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1370010,1370010,localhost,57638,default,f)
@@ -602,6 +602,130 @@ WHERE colocationid IN
 
 DROP TABLE replicate_reference_table_schema.table1;
 DROP SCHEMA replicate_reference_table_schema CASCADE;
+-- do some tests with manually disabling reference table replication
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+CREATE TABLE initially_not_replicated_reference_table (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE initially_not_replicated_reference_table_second (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table_second');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE append_test_table(key int);
+SELECT create_distributed_table('append_test_table', 'key', 'append');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT master_add_node('localhost', :worker_2_port, activate_node := false);
+               master_add_node               
+---------------------------------------------
+ (1370011,1370011,localhost,57638,default,f)
+(1 row)
+
+-- we should see only two shard placements
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid IN 
+                    ('initially_not_replicated_reference_table', 'initially_not_replicated_reference_table_second'))
+ORDER BY 1,4,5;
+ shardid | shardstate | shardlength | nodename  | nodeport 
+---------+------------+-------------+-----------+----------
+ 1370012 |          1 |           0 | localhost |    57637
+ 1370013 |          1 |           0 | localhost |    57637
+(2 rows)
+
+-- now, see that certain operations are disallowed
+CREATE TABLE disallow_test_table (key int);
+SELECT create_reference_table('disallow_test_table');
+ERROR:  operation is not allowed because localhost:57638 is not activated
+DETAIL:  At least one of the reference tables is under-replicated: "initially_not_replicated_reference_table"
+HINT:  Use SELECT master_activate_node('localhost', 57638) to replicate under-replicated reference tables to the given node.
+SELECT create_distributed_table('disallow_test_table', 'key');
+ERROR:  operation is not allowed because localhost:57638 is not activated
+DETAIL:  At least one of the reference tables is under-replicated: "initially_not_replicated_reference_table"
+HINT:  Use SELECT master_activate_node('localhost', 57638) to replicate under-replicated reference tables to the given node.
+SELECT master_create_empty_shard('append_test_table');
+ERROR:  operation is not allowed because localhost:57638 is not activated
+DETAIL:  At least one of the reference tables is under-replicated: "initially_not_replicated_reference_table"
+HINT:  Use SELECT master_activate_node('localhost', 57638) to replicate under-replicated reference tables to the given node.
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ERROR:  operation is not allowed because localhost:57638 is not activated
+DETAIL:  At least one of the reference tables is under-replicated: "initially_not_replicated_reference_table"
+HINT:  Use SELECT master_activate_node('localhost', 57638) to replicate under-replicated reference tables to the given node.
+COPY append_test_table FROM STDIN;
+ERROR:  operation is not allowed because localhost:57638 is not activated
+DETAIL:  At least one of the reference tables is under-replicated: "initially_not_replicated_reference_table"
+HINT:  Use SELECT master_activate_node('localhost', 57638) to replicate under-replicated reference tables to the given node.
+SELECT master_activate_node('localhost', :worker_2_port);
+NOTICE:  Replicating reference table "initially_not_replicated_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "initially_not_replicated_reference_table_second" to the node localhost:57638
+ master_activate_node 
+----------------------
+ 
+(1 row)
+
+-- we should see the four shard placements
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid IN 
+                    ('initially_not_replicated_reference_table', 'initially_not_replicated_reference_table_second'))
+ORDER BY 1,4,5;
+ shardid | shardstate | shardlength | nodename  | nodeport 
+---------+------------+-------------+-----------+----------
+ 1370012 |          1 |           0 | localhost |    57637
+ 1370012 |          1 |           0 | localhost |    57638
+ 1370013 |          1 |           0 | localhost |    57637
+ 1370013 |          1 |           0 | localhost |    57638
+(4 rows)
+
+-- this should have no effect
+SELECT master_add_node('localhost', :worker_2_port);
+               master_add_node               
+---------------------------------------------
+ (1370011,1370011,localhost,57638,default,f)
+(1 row)
+
+-- now, should be able to create tables
+CREATE TABLE initially_not_replicated_reference_table_third (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table_third');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+-- drop unnecassary tables
+DROP TABLE initially_not_replicated_reference_table_third, initially_not_replicated_reference_table_second, 
+           initially_not_replicated_reference_table, append_test_table;
 -- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
 DROP TABLE tmp_shard_placement;

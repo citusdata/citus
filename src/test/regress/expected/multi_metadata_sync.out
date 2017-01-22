@@ -1286,7 +1286,8 @@ SELECT create_reference_table('mx_ref');
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637
@@ -1295,7 +1296,8 @@ WHERE logicalrelid='mx_ref'::regclass;
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637
@@ -1303,7 +1305,7 @@ WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "mx_ref" to all workers
+NOTICE:  Replicating reference table "mx_ref" to the node localhost:57638
          master_add_node         
 ---------------------------------
  (5,5,localhost,57638,default,f)
@@ -1311,7 +1313,8 @@ NOTICE:  Replicating reference table "mx_ref" to all workers
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637
@@ -1321,7 +1324,8 @@ WHERE logicalrelid='mx_ref'::regclass;
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637

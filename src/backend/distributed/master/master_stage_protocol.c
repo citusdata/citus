@@ -34,6 +34,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
@@ -90,6 +91,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
+	EnsureAllNodesActivated();
 
 	/*
 	 * We check whether the table is a foreign table or not. If it is, we set

@@ -32,6 +32,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
@@ -67,6 +68,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	Oid distributedTableId = ResolveRelationId(tableNameText);
 
 	EnsureSchemaNode();
+	EnsureAllNodesActivated();
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
 

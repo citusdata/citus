@@ -51,6 +51,7 @@ int GroupSize = 1;
 
 
 /* local function forward declarations */
+static void ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove);
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
 							 char *nodeRack, bool hasMetadata, bool *nodeAlreadyExists);
@@ -70,17 +71,20 @@ PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_initialize_node_metadata);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
+PG_FUNCTION_INFO_V1(master_activate_node);
 
 
 /*
  * master_add_node function adds a new node to the cluster and returns its data. It also
- * replicates all reference tables to the new node.
+ * replicates all reference tables to the new node if replicateReferenceTables is true.
  */
 Datum
 master_add_node(PG_FUNCTION_ARGS)
 {
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	bool activateNode = PG_GETARG_BOOL(2);
+
 	char *nodeNameString = text_to_cstring(nodeName);
 	int32 groupId = 0;
 	char *nodeRack = WORKER_DEFAULT_RACK;
@@ -96,9 +100,9 @@ master_add_node(PG_FUNCTION_ARGS)
 	 * reference tables to all nodes however, it skips nodes which already has healthy
 	 * placement of particular reference table.
 	 */
-	if (!nodeAlreadyExists)
+	if (!nodeAlreadyExists && activateNode)
 	{
-		ReplicateAllReferenceTablesToAllNodes();
+		ActivateNode(nodeNameString, nodePort);
 	}
 
 	PG_RETURN_CSTRING(returnData);
@@ -259,6 +263,43 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_INT64(NULL);
+}
+
+
+/*
+ * For the time-being master_activate_node is a wrapper around
+ * ReplicateAllReferenceTablesToNode().
+ */
+Datum
+master_activate_node(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+
+	char *nodeNameString = text_to_cstring(nodeName);
+	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						(errmsg("cannot replicate reference tables to a "
+								"non-existing node"))));
+	}
+
+	ActivateNode(nodeNameString, nodePort);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * ActivateNode activates the node with nodeName and nodePort. Currently, activation
+ * includes only replicating the reference tables.
+ */
+static void
+ActivateNode(char *nodeName, int nodePort)
+{
+	ReplicateAllReferenceTablesToNode(nodeName, nodePort);
 }
 
 

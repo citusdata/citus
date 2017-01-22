@@ -46,7 +46,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -64,7 +66,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -78,7 +82,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -96,7 +102,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -116,7 +124,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -134,7 +144,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -150,7 +162,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -168,7 +182,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -182,7 +198,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -200,7 +218,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -216,7 +236,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -234,7 +256,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -251,7 +275,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -269,7 +295,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port     
      
@@ -286,7 +314,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -307,7 +337,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 SELECT * FROM remove_node_reference_table;
     
@@ -327,7 +359,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -345,7 +379,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -362,7 +398,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -380,7 +418,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -412,8 +452,8 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port
-ORDER BY
-    shardid;
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -431,7 +471,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
@@ -463,7 +505,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port     
      
@@ -483,7 +527,7 @@ FROM
 WHERE
     nodeport = :worker_2_port
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -501,7 +545,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port     
      
@@ -515,7 +561,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
 
 SELECT *
 FROM pg_dist_colocation
@@ -533,7 +581,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
     
 \c - - - :master_port
 
