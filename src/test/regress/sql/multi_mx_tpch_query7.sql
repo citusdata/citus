@@ -6,7 +6,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1230000;
 
--- connect to the schema node
+-- connect to the coordinator
 \c - - - :master_port
 
 -- Change configuration to treat lineitem AND orders tables as large

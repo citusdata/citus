@@ -170,7 +170,7 @@ multi_ProcessUtility(Node *parsetree,
 					 DestReceiver *dest,
 					 char *completionTag)
 {
-	bool schemaNode = SchemaNode();
+	bool isCoordinator = IsCoordinator();
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -228,7 +228,7 @@ multi_ProcessUtility(Node *parsetree,
 
 	/*
 	 * DDL commands are propagated to workers only if EnableDDLPropagation is
-	 * set to true and the current node is the schema node
+	 * set to true and the current node is the coordinator
 	 */
 	if (EnableDDLPropagation)
 	{
@@ -296,7 +296,7 @@ multi_ProcessUtility(Node *parsetree,
 									  "move all tables.")));
 		}
 	}
-	else if (!schemaNode)
+	else if (!isCoordinator)
 	{
 		if (IsA(parsetree, AlterTableStmt))
 		{
@@ -304,7 +304,7 @@ multi_ProcessUtility(Node *parsetree,
 			if (alterTableStmt->relkind == OBJECT_TABLE)
 			{
 				/*
-				 * When the schema node issues an ALTER TABLE ... ADD FOREIGN KEY
+				 * When the coordinator issues an ALTER TABLE ... ADD FOREIGN KEY
 				 * command, the validation step should be skipped on the distributed
 				 * table of the worker. Therefore, we check whether the given ALTER
 				 * TABLE statement is a FOREIGN KEY constraint and if so disable the
@@ -1975,7 +1975,7 @@ ExecuteDistributedDDLCommand(Oid relationId, const char *ddlCommandString,
 							   "modifications")));
 	}
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	ShowNoticeIfNotUsing2PC();
 
 	if (shouldSyncMetadata)
@@ -2017,7 +2017,7 @@ ExecuteDistributedForeignKeyCommand(Oid leftRelationId, Oid rightRelationId,
 							   "modifications")));
 	}
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	ShowNoticeIfNotUsing2PC();
 
 	/*

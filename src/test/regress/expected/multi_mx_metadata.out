@@ -187,7 +187,7 @@ SELECT create_distributed_table('objects_for_xacts2', 'id');
 (1 row)
 
 ROLLBACK;
--- show that the table not exists on the schema node
+-- show that the table not exists on the coordinator
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
  count 
 -------
@@ -212,7 +212,7 @@ SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and s
 -- make sure that master_drop_all_shards does not work from the worker nodes
 SELECT master_drop_all_shards('citus_mx_schema_for_xacts.objects_for_xacts'::regclass, 'citus_mx_schema_for_xacts', 'objects_for_xacts');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
  recover_prepared_transactions 

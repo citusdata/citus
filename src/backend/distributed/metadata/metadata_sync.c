@@ -83,7 +83,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	List *dropMetadataCommandList = NIL;
 	List *createMetadataCommandList = NIL;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	EnsureSuperUser();
 
 	PreventTransactionChain(true, "start_metadata_sync_to_node");
@@ -142,7 +142,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	char *nodeNameString = text_to_cstring(nodeName);
 	WorkerNode *workerNode = NULL;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	EnsureSuperUser();
 
 	workerNode = FindWorkerNode(nodeNameString, nodePort);

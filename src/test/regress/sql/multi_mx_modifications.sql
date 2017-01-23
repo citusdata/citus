@@ -183,7 +183,7 @@ SELECT symbol, bidder_id FROM limit_orders_mx WHERE id = 246;
 -- IMMUTABLE functions are allowed -- even in returning
 UPDATE limit_orders_mx SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, LOWER(symbol), symbol;
 
--- connect schema node to run the DDL
+-- connect coordinator to run the DDL
 \c - - - :master_port
 ALTER TABLE limit_orders_mx ADD COLUMN array_of_values integer[];
 
@@ -219,7 +219,7 @@ UPDATE limit_orders_mx SET bidder_id = temp_strict_func(1, null) WHERE id = 246;
 
 SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
 
--- connect schema node to run the DDL
+-- connect coordinator to run the DDL
 \c - - - :master_port
 ALTER TABLE limit_orders_mx DROP array_of_values;
 

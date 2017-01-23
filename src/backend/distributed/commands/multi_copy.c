@@ -326,7 +326,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	/* we don't support copy to reference tables from workers */
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		EnsureSchemaNode();
+		EnsureCoordinator();
 	}
 
 	/* load the list of shards and verify that we have shards to copy into */

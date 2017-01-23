@@ -20,7 +20,7 @@ SELECT master_modify_multiple_shards('UPDATE mx_ddl_table SET version=0.1 WHERE 
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
 
 
--- See that the changes are applied on schema node, worker tables and shards
+-- See that the changes are applied on coordinator, worker tables and shards
 \d mx_ddl_table
 
 \c - - - :worker_1_port
@@ -38,7 +38,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
 
--- Switch to the schema node
+-- Switch to the coordinator
 \c - - - :master_port
 
 
@@ -50,7 +50,7 @@ INSERT INTO mx_ddl_table VALUES (78, 83, 2.1);
 \c - - - :worker_1_port
 SELECT * FROM mx_ddl_table ORDER BY key;
 
--- Switch to the schema node
+-- Switch to the coordinator
 \c - - - :master_port
 
 -- DROP INDEX
@@ -66,7 +66,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 ALTER TABLE mx_ddl_table DROP COLUMN version;
 
 
--- See that the changes are applied on schema node, worker tables and shards
+-- See that the changes are applied on coordinator, worker tables and shards
 \d mx_ddl_table
 
 \c - - - :worker_1_port

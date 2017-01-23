@@ -62,7 +62,7 @@ extern uint32 WorkerGetLiveNodeCount(void);
 extern List * WorkerNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
-extern void EnsureSchemaNode(void);
+extern void EnsureCoordinator(void);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
