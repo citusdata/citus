@@ -267,7 +267,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 		MultiConnection *connection = GetPlacementConnection(FOR_DML, shardPlacement,
 															 NULL);
 		PGresult *queryResult = NULL;
-		int executeCommand = 0;
+		int executeResult = 0;
 
 		StringInfo workerAppendQuery = makeStringInfo();
 		appendStringInfo(workerAppendQuery, WORKER_APPEND_TABLE_TO_SHARD,
@@ -275,16 +275,24 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
-		executeCommand = ExecuteOptionalRemoteCommand(connection, workerAppendQuery->data,
-													  &queryResult);
+		executeResult = ExecuteOptionalRemoteCommand(connection, workerAppendQuery->data,
+													 &queryResult);
 		PQclear(queryResult);
 		ForgetResults(connection);
 
-		if (executeCommand != 0)
+		if (executeResult != 0)
 		{
 			MarkRemoteTransactionFailed(connection, false);
 		}
 	}
+
+	/*
+	 * Abort if all placements failed, mark placements invalid if only some failed. By
+	 * doing this UpdateShardStatistics never works on failed placements.
+	 *
+	 * (Pass false for using2PC arbitrarily, the parameter is not used)
+	 */
+	CheckForFailedPlacements(true, false);
 
 	/* update shard statistics and get new shard size */
 	newShardSize = UpdateShardStatistics(shardId);
