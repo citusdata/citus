@@ -215,3 +215,8 @@ test: multi_foreign_key
 test: multi_upgrade_reference_table
 test: multi_replicate_reference_table
 test: multi_remove_node_reference_table
+
+# ----------
+# multi_transactional_drop_shards tests for dropping shards using connection API
+# ----------
+test: multi_transactional_drop_shards

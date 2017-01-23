@@ -246,6 +246,48 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
+ * LoadShardPlacement returns the, cached, metadata about a shard placement.
+ *
+ * The return value is a copy of the cached ShardPlacement struct and may
+ * therefore be modified and/or freed.
+ */
+ShardPlacement *
+LoadShardPlacement(uint64 shardId, uint64 placementId)
+{
+	ShardCacheEntry *shardEntry = NULL;
+	DistTableCacheEntry *tableEntry = NULL;
+
+	ShardPlacement *placementArray = NULL;
+	int numberOfPlacements = 0;
+
+	int i = 0;
+
+	shardEntry = LookupShardCacheEntry(shardId);
+	tableEntry = shardEntry->tableEntry;
+
+	/* the offset better be in a valid range */
+	Assert(shardEntry->shardIndex < tableEntry->shardIntervalArrayLength);
+
+	placementArray = tableEntry->arrayOfPlacementArrays[shardEntry->shardIndex];
+	numberOfPlacements = tableEntry->arrayOfPlacementArrayLengths[shardEntry->shardIndex];
+
+	for (i = 0; i < numberOfPlacements; i++)
+	{
+		if (placementArray[i].placementId == placementId)
+		{
+			ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
+			CopyShardPlacement(&placementArray[i], shardPlacement);
+
+			return shardPlacement;
+		}
+	}
+
+	ereport(ERROR, (errmsg("could not find valid entry for shard placement "
+						   UINT64_FORMAT, placementId)));
+}
+
+
+/*
  * ShardPlacementList returns the list of placements for the given shard from
  * the cache.
  *

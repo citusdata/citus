@@ -648,6 +648,35 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to all worker
 (1 row)
 
 -- test DROP table after removing a node in a transaction
+-- status before master_remove_node
+SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+ count 
+-------
+     1
+(1 row)
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename  | nodeport 
+---------+------------+-------------+-----------+----------
+ 1380000 |          1 |           0 | localhost |    57638
+(1 row)
+
+SELECT *
+FROM pg_dist_colocation
+WHERE colocationid IN
+    (SELECT colocationid
+     FROM pg_dist_partition
+     WHERE logicalrelid = 'remove_node_reference_table'::regclass);
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+      1380000 |          1 |                 2 |                      0
+(1 row)
+
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
@@ -656,10 +685,44 @@ SELECT master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 DROP TABLE remove_node_reference_table;
-ERROR:  DROP distributed table cannot run inside a transaction block
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
-ROLLBACK;
+COMMIT;
+-- status after master_remove_node
+SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+ count 
+-------
+     0
+(1 row)
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    nodeport = :worker_2_port;
+ shardid | shardstate | shardlength | nodename | nodeport 
+---------+------------+-------------+----------+----------
+(0 rows)
+
+SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
+ colocationid | shardcount | replicationfactor | distributioncolumntype 
+--------------+------------+-------------------+------------------------
+(0 rows)
+
+-- re-add the node for next tests
+SELECT master_add_node('localhost', :worker_2_port);
+               master_add_node               
+---------------------------------------------
+ (1380005,1380005,localhost,57638,default,f)
+(1 row)
+
+-- re-create remove_node_reference_table
+CREATE TABLE remove_node_reference_table(column1 int);
+SELECT create_reference_table('remove_node_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
 -- test removing a node while there is a reference table at another schema
 CREATE SCHEMA remove_node_reference_table_schema;
 CREATE TABLE remove_node_reference_table_schema.table1(column1 int);
@@ -686,8 +749,8 @@ ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1380000 |          1 |           0 | localhost |    57638
  1380001 |          1 |           0 | localhost |    57638
+ 1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
 SELECT *
@@ -698,7 +761,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1380000 |          1 |                 2 |                      0
+      1380001 |          1 |                 2 |                      0
 (1 row)
 
      
@@ -717,8 +780,8 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1380000 |          1 |           0 | localhost |    57638
  1380001 |          1 |           0 | localhost |    57638
+ 1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
     
@@ -754,7 +817,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1380000 |          1 |                 1 |                      0
+      1380001 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -783,7 +846,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to all worker
 NOTICE:  Replicating reference table "table1" to all workers
                master_add_node               
 ---------------------------------------------
- (1380005,1380005,localhost,57638,default,f)
+ (1380006,1380006,localhost,57638,default,f)
 (1 row)
 
 -- test with master_disable_node
@@ -804,8 +867,8 @@ ORDER BY
     shardid;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1380000 |          1 |           0 | localhost |    57638
  1380001 |          1 |           0 | localhost |    57638
+ 1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
 SELECT *
@@ -816,7 +879,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1380000 |          1 |                 2 |                      0
+      1380001 |          1 |                 2 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -834,8 +897,8 @@ WHERE
     nodeport = :worker_2_port;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
- 1380000 |          1 |           0 | localhost |    57638
  1380001 |          1 |           0 | localhost |    57638
+ 1380002 |          1 |           0 | localhost |    57638
 (2 rows)
 
     
@@ -872,7 +935,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'remove_node_reference_table'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1380000 |          1 |                 1 |                      0
+      1380001 |          1 |                 1 |                      0
 (1 row)
 
 \c - - - :worker_1_port
@@ -900,7 +963,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to all worker
 NOTICE:  Replicating reference table "table1" to all workers
                master_add_node               
 ---------------------------------------------
- (1380006,1380006,localhost,57638,default,f)
+ (1380007,1380007,localhost,57638,default,f)
 (1 row)
 
 -- DROP tables to clean workspace
