@@ -925,11 +925,18 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 {
 	int64 totalAffectedTupleCount = 0;
 	ListCell *taskCell = NULL;
-	char *userName = CurrentUserName();
+	Task *firstTask = NULL;
+	int connectionFlags = 0;
 	List *shardIntervalList = NIL;
 	List *affectedTupleCountList = NIL;
+	HTAB *shardConnectionHash = NULL;
 	bool tasksPending = true;
 	int placementIndex = 0;
+
+	if (taskList == NIL)
+	{
+		return 0;
+	}
 
 	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
@@ -944,8 +951,28 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	/* ensure that there are no concurrent modifications on the same shards */
 	AcquireExecutorMultiShardLocks(taskList);
 
+	BeginOrContinueCoordinatedTransaction();
+
+	firstTask = (Task *) linitial(taskList);
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+		firstTask->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
+
+	if (firstTask->taskType == DDL_TASK)
+	{
+		connectionFlags = FOR_DDL;
+	}
+	else
+	{
+		connectionFlags = FOR_DML;
+	}
+
 	/* open connection to all relevant placements, if not already open */
-	OpenTransactionsToAllShardPlacements(shardIntervalList, userName);
+	shardConnectionHash = OpenTransactionsToAllShardPlacements(shardIntervalList,
+															   connectionFlags);
 
 	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
 
@@ -968,7 +995,8 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			MultiConnection *connection = NULL;
 			bool queryOK = false;
 
-			shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
+			shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
+													   &shardConnectionsFound);
 			connectionList = shardConnections->connectionList;
 
 			if (placementIndex >= list_length(connectionList))
@@ -1003,7 +1031,8 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			/* abort in case of cancellation */
 			CHECK_FOR_INTERRUPTS();
 
-			shardConnections = GetShardConnections(shardId, &shardConnectionsFound);
+			shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
+													   &shardConnectionsFound);
 			connectionList = shardConnections->connectionList;
 
 			if (placementIndex >= list_length(connectionList))
@@ -1073,6 +1102,8 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 
 		placementIndex++;
 	}
+
+	UnclaimAllShardConnections(shardConnectionHash);
 
 	CHECK_FOR_INTERRUPTS();
 
