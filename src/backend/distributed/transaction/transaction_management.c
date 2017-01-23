@@ -48,7 +48,7 @@ static bool subXactAbortAttempted = false;
  * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
  * MultiShardCommitProtocol was set to 2PC.
  */
-static bool CurrentTransactionUse2PC = false;
+bool CoordinatedTransactionUses2PC = false;
 
 /* transaction management functions */
 static void CoordinatedTransactionCallback(XactEvent event, void *arg);
@@ -113,7 +113,7 @@ CoordinatedTransactionUse2PC(void)
 {
 	Assert(InCoordinatedTransaction());
 
-	CurrentTransactionUse2PC = true;
+	CoordinatedTransactionUses2PC = true;
 }
 
 
@@ -167,7 +167,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
-			CurrentTransactionUse2PC = false;
+			CoordinatedTransactionUses2PC = false;
 		}
 		break;
 
@@ -202,7 +202,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
-			CurrentTransactionUse2PC = false;
+			CoordinatedTransactionUses2PC = false;
 			subXactAbortAttempted = false;
 		}
 		break;
@@ -247,9 +247,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * case that iteratively executed commands marked all placements
 			 * as invalid.
 			 */
-			CheckForFailedPlacements(true, CurrentTransactionUse2PC);
+			CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
 
-			if (CurrentTransactionUse2PC)
+			if (CoordinatedTransactionUses2PC)
 			{
 				CoordinatedRemoteTransactionsPrepare();
 				CurrentCoordinatedTransactionState = COORD_TRANS_PREPARED;
@@ -270,7 +270,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * Check again whether shards/placement successfully
 			 * committed. This handles failure at COMMIT/PREPARE time.
 			 */
-			CheckForFailedPlacements(false, CurrentTransactionUse2PC);
+			CheckForFailedPlacements(false, CoordinatedTransactionUses2PC);
 		}
 		break;
 

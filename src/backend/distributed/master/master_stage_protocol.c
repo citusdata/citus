@@ -36,6 +36,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
@@ -289,10 +290,8 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	/*
 	 * Abort if all placements failed, mark placements invalid if only some failed. By
 	 * doing this UpdateShardStatistics never works on failed placements.
-	 *
-	 * (Pass false for using2PC arbitrarily, the parameter is not used)
 	 */
-	CheckForFailedPlacements(true, false);
+	CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
 
 	/* update shard statistics and get new shard size */
 	newShardSize = UpdateShardStatistics(shardId);
