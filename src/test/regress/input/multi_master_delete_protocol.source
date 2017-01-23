@@ -52,7 +52,8 @@ SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
                                            WHERE c_custkey > 1000');
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
 
--- Verify that master_apply_delete_command cannot be called in a transaction block
+-- Verify that master_apply_delete_command can be called in a transaction block
+SELECT 1 AS one FROM master_create_empty_shard('customer_delete_protocol');
 BEGIN;
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
-ROLLBACK;
+COMMIT;

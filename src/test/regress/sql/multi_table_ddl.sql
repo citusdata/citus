@@ -20,12 +20,16 @@ ALTER TABLE testtableddl ALTER COLUMN distributecol TYPE text;
 -- verify that the distribution column can't be dropped
 ALTER TABLE testtableddl DROP COLUMN distributecol;
 
--- verify that the table cannot be dropped in a transaction block
+-- verify that the table can be dropped in a transaction block
 \set VERBOSITY terse
 BEGIN;
 DROP TABLE testtableddl;
-ROLLBACK;
+COMMIT;
 \set VERBOSITY default
+
+-- recreate testtableddl
+CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
+SELECT master_create_distributed_table('testtableddl', 'distributecol', 'append');
 
 -- verify that the table can be dropped
 DROP TABLE testtableddl;

@@ -837,7 +837,18 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry,
 
 		if (placementEntry->failed)
 		{
-			UpdateShardPlacementState(placementEntry->key.placementId, FILE_INACTIVE);
+			uint64 shardId = shardEntry->key.shardId;
+			uint64 placementId = placementEntry->key.placementId;
+			ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
+
+			/*
+			 * We only set shard state if its current state is FILE_FINALIZED, which
+			 * prevents overwriting shard state if it is already set at somewhere else.
+			 */
+			if (shardPlacement->shardState == FILE_FINALIZED)
+			{
+				UpdateShardPlacementState(placementEntry->key.placementId, FILE_INACTIVE);
+			}
 		}
 	}
 
