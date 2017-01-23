@@ -1124,7 +1124,7 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = SQL_TASK;
+		task->taskType = DDL_TASK;
 		task->queryString = pstrdup(vacuumString->data);
 		task->dependedTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
@@ -2094,7 +2094,7 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = SQL_TASK;
+		task->taskType = DDL_TASK;
 		task->queryString = applyCommand->data;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->dependedTaskList = NULL;
@@ -2158,7 +2158,7 @@ ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = SQL_TASK;
+		task->taskType = DDL_TASK;
 		task->queryString = applyCommand->data;
 		task->dependedTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
