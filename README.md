@@ -40,7 +40,7 @@ The fastest way to get up and running is to create a Citus Cloud account. You ca
 
 #### Citus Cloud
 
-Citus Cloud runs on top of AWS as a fully managed database as a service and has development plans available for getting started. You can provision a Citus Cloud account at [https://console.citusdata.com](https://console.citusdata.com) and get started with just a few clicks.
+Citus Cloud runs on top of AWS as a fully managed database as a service and has development plans available for getting started. You can provision a Citus Cloud account at [https://console.citusdata.com](https://console.citusdata.com/users/sign_up) and get started with just a few clicks.
 
 #### Local Citus Cluster
 
