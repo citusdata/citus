@@ -13,6 +13,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/errormessage.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_planner.h"
 
@@ -33,7 +34,8 @@ static const char *CitusNodeTagNamesD[] = {
 	"Task",
 	"ShardInterval",
 	"ShardPlacement",
-	"RelationShard"
+	"RelationShard",
+	"DeferredErrorMessage"
 };
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
@@ -383,6 +385,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(ShardPlacement),
 	DEFINE_NODE_METHODS(RelationShard),
 	DEFINE_NODE_METHODS(Task),
+	DEFINE_NODE_METHODS(DeferredErrorMessage),
 
 	/* nodes with only output support */
 	DEFINE_NODE_METHODS_NO_READ(MultiNode),

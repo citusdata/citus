@@ -265,9 +265,18 @@ SELECT plpgsql_test_2();
 (1 row)
 
 -- run PL/pgsql functions with different parameters
--- FIXME: temporarily disabled, waiting for proper parametrized query support
--- SELECT plpgsql_test_6(155);
--- SELECT plpgsql_test_6(1555);
+SELECT plpgsql_test_6(155);
+ plpgsql_test_6 
+----------------
+          11811
+(1 row)
+
+SELECT plpgsql_test_6(1555);
+ plpgsql_test_6 
+----------------
+          10183
+(1 row)
+
 -- test router executor parameterized PL/pgsql functions
 CREATE TABLE plpgsql_table (
 	key int,
@@ -365,9 +374,11 @@ SELECT single_parameter_insert(5);
 (1 row)
 
 SELECT single_parameter_insert(6);
-ERROR:  values given for the partition column must be constants or constant expressions
-CONTEXT:  SQL statement "INSERT INTO plpgsql_table (key) VALUES (key_arg)"
-PL/pgSQL function single_parameter_insert(integer) line 3 at SQL statement
+ single_parameter_insert 
+-------------------------
+ 
+(1 row)
+
 CREATE FUNCTION double_parameter_insert(key_arg int, value_arg int)
 	RETURNS void as $$
 BEGIN
@@ -406,9 +417,11 @@ SELECT double_parameter_insert(5, 50);
 (1 row)
 
 SELECT double_parameter_insert(6, 60);
-ERROR:  values given for the partition column must be constants or constant expressions
-CONTEXT:  SQL statement "INSERT INTO plpgsql_table (key, value) VALUES (key_arg, value_arg)"
-PL/pgSQL function double_parameter_insert(integer,integer) line 3 at SQL statement
+ double_parameter_insert 
+-------------------------
+ 
+(1 row)
+
 CREATE FUNCTION non_partition_parameter_insert(value_arg int)
 	RETURNS void as $$
 BEGIN
@@ -478,7 +491,9 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
    4 |      
    5 |    50
    5 |      
-(22 rows)
+   6 |    60
+   6 |      
+(24 rows)
 
 -- check router executor select
 CREATE FUNCTION router_partition_column_select(key_arg int)
@@ -498,6 +513,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT router_partition_column_select(1);
  router_partition_column_select 
 --------------------------------
@@ -533,9 +549,13 @@ SELECT router_partition_column_select(5);
  (5,)
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT router_partition_column_select(6);
+SELECT router_partition_column_select(6);
+ router_partition_column_select 
+--------------------------------
+ (6,60)
+ (6,)
+(2 rows)
+
 CREATE FUNCTION router_non_partition_column_select(value_arg int)
 	RETURNS TABLE(key int, value int) AS $$
 DECLARE
@@ -554,6 +574,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT router_non_partition_column_select(10);
  router_non_partition_column_select 
 ------------------------------------
@@ -608,6 +629,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT real_time_non_partition_column_select(10);
  real_time_non_partition_column_select 
 ---------------------------------------
@@ -643,9 +665,13 @@ SELECT real_time_non_partition_column_select(50);
  (5,50)
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_non_partition_column_select(60);
+SELECT real_time_non_partition_column_select(60);
+ real_time_non_partition_column_select 
+---------------------------------------
+ (0,60)
+ (6,60)
+(2 rows)
+
 CREATE FUNCTION real_time_partition_column_select(key_arg int)
 	RETURNS TABLE(key int, value int) AS $$
 DECLARE
@@ -664,6 +690,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT real_time_partition_column_select(1);
  real_time_partition_column_select 
 -----------------------------------
@@ -708,9 +735,15 @@ SELECT real_time_partition_column_select(5);
  (5,)
 (4 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_partition_column_select(6);
+SELECT real_time_partition_column_select(6);
+ real_time_partition_column_select 
+-----------------------------------
+ (0,10)
+ (1,10)
+ (6,60)
+ (6,)
+(4 rows)
+
 -- check task-tracker executor
 SET citus.task_executor_type TO 'task-tracker';
 CREATE FUNCTION task_tracker_non_partition_column_select(value_arg int)
@@ -730,6 +763,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_non_partition_column_select(10);
  task_tracker_non_partition_column_select 
 ------------------------------------------
@@ -765,9 +799,13 @@ SELECT task_tracker_non_partition_column_select(50);
  (5,50)
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT real_time_non_partition_column_select(60);
+SELECT real_time_non_partition_column_select(60);
+ real_time_non_partition_column_select 
+---------------------------------------
+ (0,60)
+ (6,60)
+(2 rows)
+
 CREATE FUNCTION task_tracker_partition_column_select(key_arg int)
 	RETURNS TABLE(key int, value int) AS $$
 DECLARE
@@ -786,6 +824,7 @@ BEGIN
 		value;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT task_tracker_partition_column_select(1);
  task_tracker_partition_column_select 
 --------------------------------------
@@ -830,9 +869,15 @@ SELECT task_tracker_partition_column_select(5);
  (5,)
 (4 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- SELECT task_tracker_partition_column_select(6);
+SELECT task_tracker_partition_column_select(6);
+ task_tracker_partition_column_select 
+--------------------------------------
+ (0,10)
+ (1,10)
+ (6,60)
+ (6,)
+(4 rows)
+
 SET citus.task_executor_type TO 'real-time';
 -- check updates
 CREATE FUNCTION partition_parameter_update(int, int) RETURNS void as $$
@@ -871,8 +916,7 @@ SELECT partition_parameter_update(5, 51);
  
 (1 row)
 
--- This fails with an unexpected error message
-SELECT partition_parameter_update(5, 52);
+SELECT partition_parameter_update(6, 61);
 ERROR:  distributed modifications must target exactly one shard
 DETAIL:  This command modifies all shards.
 HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
@@ -946,7 +990,9 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
    4 |    41
    5 |    51
    5 |    51
-(22 rows)
+   6 |    60
+   6 |      
+(24 rows)
 
 -- check deletes
 CREATE FUNCTION partition_parameter_delete(int, int) RETURNS void as $$
@@ -954,6 +1000,7 @@ BEGIN
 	DELETE FROM plpgsql_table WHERE key = $1 AND value = $2;
 END;
 $$ LANGUAGE plpgsql;
+-- execute 6 times to trigger prepared statement usage
 SELECT partition_parameter_delete(1, 11);
  partition_parameter_delete 
 ----------------------------
@@ -984,8 +1031,7 @@ SELECT partition_parameter_delete(5, 51);
  
 (1 row)
 
--- This fails with an unexpected error message
-SELECT partition_parameter_delete(0, 10);
+SELECT partition_parameter_delete(6, 61);
 ERROR:  distributed modifications must target exactly one shard
 DETAIL:  This command modifies all shards.
 HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
@@ -1043,7 +1089,9 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-(6 rows)
+   6 |    60
+   6 |      
+(8 rows)
 
 -- check whether we can handle execute parameters
 CREATE TABLE execute_parameter_test (key int, val date);

@@ -149,8 +149,7 @@ EXECUTE prepared_test_2;
 
 -- execute prepared statements with different parameters
 EXECUTE prepared_test_6(155);
--- FIXME: temporarily disabled
--- EXECUTE prepared_test_6(1555);
+EXECUTE prepared_test_6(1555);
 
 -- test router executor with parameterized non-partition columns
 
@@ -194,12 +193,12 @@ EXECUTE prepared_select(4, 40);
 EXECUTE prepared_select(5, 50);
 EXECUTE prepared_select(6, 60);
 
--- test that we don't crash on failing parameterized insert on the partition column
+-- Test that parameterized partition column for an insert is supported
 
 PREPARE prepared_partition_column_insert(bigint) AS
 INSERT INTO router_executor_table VALUES ($1, 'arsenous', '(1,10)');
 
--- we error out on the 6th execution
+-- execute 6 times to trigger prepared statement usage
 EXECUTE prepared_partition_column_insert(1);
 EXECUTE prepared_partition_column_insert(2);
 EXECUTE prepared_partition_column_insert(3);
@@ -282,10 +281,7 @@ EXECUTE prepared_router_partition_column_select(2);
 EXECUTE prepared_router_partition_column_select(3);
 EXECUTE prepared_router_partition_column_select(4);
 EXECUTE prepared_router_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_router_partition_column_select(6);
+EXECUTE prepared_router_partition_column_select(6);
 
 PREPARE prepared_router_non_partition_column_select(int) AS
 	SELECT
@@ -325,10 +321,7 @@ EXECUTE prepared_real_time_non_partition_column_select(20);
 EXECUTE prepared_real_time_non_partition_column_select(30);
 EXECUTE prepared_real_time_non_partition_column_select(40);
 EXECUTE prepared_real_time_non_partition_column_select(50);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_real_time_non_partition_column_select(60);
+EXECUTE prepared_real_time_non_partition_column_select(60);
 
 PREPARE prepared_real_time_partition_column_select(int) AS
 	SELECT
@@ -348,10 +341,7 @@ EXECUTE prepared_real_time_partition_column_select(2);
 EXECUTE prepared_real_time_partition_column_select(3);
 EXECUTE prepared_real_time_partition_column_select(4);
 EXECUTE prepared_real_time_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_real_time_partition_column_select(6);
+EXECUTE prepared_real_time_partition_column_select(6);
 
 -- check task-tracker executor
 SET citus.task_executor_type TO 'task-tracker';
@@ -373,10 +363,7 @@ EXECUTE prepared_task_tracker_non_partition_column_select(20);
 EXECUTE prepared_task_tracker_non_partition_column_select(30);
 EXECUTE prepared_task_tracker_non_partition_column_select(40);
 EXECUTE prepared_task_tracker_non_partition_column_select(50);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_task_tracker_non_partition_column_select(60);
+EXECUTE prepared_task_tracker_non_partition_column_select(60);
 
 PREPARE prepared_task_tracker_partition_column_select(int) AS
 	SELECT
@@ -396,10 +383,7 @@ EXECUTE prepared_task_tracker_partition_column_select(2);
 EXECUTE prepared_task_tracker_partition_column_select(3);
 EXECUTE prepared_task_tracker_partition_column_select(4);
 EXECUTE prepared_task_tracker_partition_column_select(5);
-
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_task_tracker_partition_column_select(6);
+EXECUTE prepared_task_tracker_partition_column_select(6);
 
 SET citus.task_executor_type TO 'real-time';
 
@@ -413,8 +397,7 @@ EXECUTE prepared_partition_parameter_update(2, 21);
 EXECUTE prepared_partition_parameter_update(3, 31);
 EXECUTE prepared_partition_parameter_update(4, 41);
 EXECUTE prepared_partition_parameter_update(5, 51);
--- This fails with an unexpected error message
-EXECUTE prepared_partition_parameter_update(5, 52);
+EXECUTE prepared_partition_parameter_update(6, 61);
 
 PREPARE prepared_non_partition_parameter_update(int, int) AS
 	UPDATE prepare_table SET value = $2 WHERE key = 0 AND value = $1;
@@ -439,8 +422,7 @@ EXECUTE prepared_partition_parameter_delete(2, 21);
 EXECUTE prepared_partition_parameter_delete(3, 31);
 EXECUTE prepared_partition_parameter_delete(4, 41);
 EXECUTE prepared_partition_parameter_delete(5, 51);
--- This fails with an unexpected error message
-EXECUTE prepared_partition_parameter_delete(0, 10);
+EXECUTE prepared_partition_parameter_delete(6, 61);
 
 PREPARE prepared_non_partition_parameter_delete(int) AS
 	DELETE FROM prepare_table WHERE key = 0 AND value = $1;

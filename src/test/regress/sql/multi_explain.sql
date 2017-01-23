@@ -227,3 +227,8 @@ EXPLAIN EXECUTE router_executor_query;
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
+
+-- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
+-- at least make sure to fail without crashing
+PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
+EXPLAIN EXECUTE router_executor_query_param(5);

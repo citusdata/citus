@@ -444,8 +444,7 @@ WITH new_article AS (
     INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
 )
 SELECT * FROM new_article;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Data-modifying statements are not supported in the WITH clauses of distributed queries.
+ERROR:  data-modifying statements are not supported in the WITH clauses of distributed queries
 -- Modifying statement in nested CTE case is covered by PostgreSQL itself
 WITH new_article AS (
     WITH nested_cte AS (
