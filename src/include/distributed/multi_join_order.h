@@ -92,6 +92,7 @@ extern Var * RightColumn(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * PartitionKey(Oid relationId);
 extern char PartitionMethod(Oid relationId);
+extern char TableReplicationModel(Oid relationId);
 
 
 #endif   /* MULTI_JOIN_ORDER_H */

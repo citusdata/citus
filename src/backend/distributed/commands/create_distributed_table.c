@@ -60,11 +60,14 @@
 #include "utils/inval.h"
 
 
+/* Replication model to use when creating distributed tables */
+int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
+
+
 /* local function forward declarations */
 static void CreateReferenceTable(Oid relationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
-									  char distributionMethod, uint32 colocationId,
-									  char replicationModel);
+									  char distributionMethod, uint32 colocationId);
 static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -106,8 +109,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	EnsureSchemaNode();
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
-							  distributionMethod, INVALID_COLOCATION_ID,
-							  REPLICATION_MODEL_COORDINATOR);
+							  distributionMethod, INVALID_COLOCATION_ID);
 
 	PG_RETURN_VOID();
 }
@@ -164,8 +166,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
 		ConvertToDistributedTable(relationId, distributionColumnName,
-								  distributionMethod, INVALID_COLOCATION_ID,
-								  REPLICATION_MODEL_COORDINATOR);
+								  distributionMethod, INVALID_COLOCATION_ID);
 		PG_RETURN_VOID();
 	}
 
@@ -228,7 +229,7 @@ CreateReferenceTable(Oid relationId)
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
-							  DISTRIBUTE_BY_NONE, colocationId, REPLICATION_MODEL_2PC);
+							  DISTRIBUTE_BY_NONE, colocationId);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
@@ -250,14 +251,27 @@ CreateReferenceTable(Oid relationId)
  */
 static void
 ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
-						  char distributionMethod, uint32 colocationId,
-						  char replicationModel)
+						  char distributionMethod, uint32 colocationId)
 {
 	Relation relation = NULL;
 	TupleDesc relationDesc = NULL;
 	char *relationName = NULL;
 	char relationKind = 0;
 	Var *distributionColumn = NULL;
+	char replicationModel = REPLICATION_MODEL_INVALID;
+
+	/* check global replication settings before continuing */
+	EnsureReplicationSettings(InvalidOid);
+
+	/* distribute by none tables use 2PC replication; otherwise use GUC setting */
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	{
+		replicationModel = REPLICATION_MODEL_2PC;
+	}
+	else
+	{
+		replicationModel = ReplicationModel;
+	}
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -891,20 +905,9 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
-	char replicationModel = 0;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
 	distributedRelation = relation_open(relationId, AccessShareLock);
-
-	/* all hash-distributed tables with repfactor=1 are treated as MX tables */
-	if (replicationFactor == 1)
-	{
-		replicationModel = REPLICATION_MODEL_STREAMING;
-	}
-	else
-	{
-		replicationModel = REPLICATION_MODEL_COORDINATOR;
-	}
 
 	/*
 	 * Get an exclusive lock on the colocation system catalog. Therefore, we
@@ -946,7 +949,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 	/* create distributed table metadata */
 	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
-							  colocationId, replicationModel);
+							  colocationId);
 
 	/* create shards */
 	if (sourceRelationId != InvalidOid)
@@ -978,4 +981,35 @@ ColumnType(Oid relationId, char *columnName)
 	Oid columnType = get_atttype(relationId, columnIndex);
 
 	return columnType;
+}
+
+
+/*
+ * Check that the current replication factor setting is compatible with the
+ * replication model of relationId, if valid. If InvalidOid, check that the
+ * global replication model setting instead. Errors out if an invalid state
+ * is detected.
+ */
+void
+EnsureReplicationSettings(Oid relationId)
+{
+	char replicationModel = (char) ReplicationModel;
+	char *msgSuffix = "the streaming replication model";
+	char *extraHint = " or setting \"citus.replication_model\" to \"statement\"";
+
+	if (relationId != InvalidOid)
+	{
+		replicationModel = TableReplicationModel(relationId);
+		msgSuffix = "tables which use the streaming replication model";
+		extraHint = "";
+	}
+
+	if (replicationModel == REPLICATION_MODEL_STREAMING && ShardReplicationFactor != 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("replication factors above one are incompatible with %s",
+							   msgSuffix),
+						errhint("Try again after reducing \"citus.shard_replication_"
+								"factor\" to one%s.", extraHint)));
+	}
 }

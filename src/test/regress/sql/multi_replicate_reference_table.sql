@@ -228,6 +228,7 @@ SELECT create_reference_table('replicate_reference_table_reference_one');
 
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 CREATE TABLE replicate_reference_table_hash(column1 int);
 SELECT create_distributed_table('replicate_reference_table_hash', 'column1');
 
@@ -395,3 +396,6 @@ DROP SCHEMA replicate_reference_table_schema CASCADE;
 -- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
 DROP TABLE tmp_shard_placement;
+
+RESET citus.shard_replication_factor;
+RESET citus.replication_model;
