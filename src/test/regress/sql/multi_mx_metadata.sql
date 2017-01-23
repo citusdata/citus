@@ -117,7 +117,7 @@ SELECT create_distributed_table('objects_for_xacts2', 'id');
 
 ROLLBACK;
 
--- show that the table not exists on the schema node
+-- show that the table not exists on the coordinator
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
 
 \c - - - :worker_1_port

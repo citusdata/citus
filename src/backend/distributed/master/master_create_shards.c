@@ -67,7 +67,7 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 
 	Oid distributedTableId = ResolveRelationId(tableNameText);
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
 

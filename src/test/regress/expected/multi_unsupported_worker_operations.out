@@ -73,15 +73,15 @@ CREATE TABLE mx_table_worker(col_1 text);
 -- master_create_distributed_table
 SELECT master_create_distributed_table('mx_table_worker', 'col_1', 'hash');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 -- create_distributed_table
 SELECT create_distributed_table('mx_table_worker', 'col_1');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 -- create_reference_table
 SELECT create_reference_table('mx_table_worker');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM pg_dist_partition WHERE logicalrelid='mx_table_worker'::regclass;
  count 
 -------
@@ -95,7 +95,7 @@ SELECT * FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
 DELETE FROM pg_dist_shard WHERE logicalrelid = 'mx_table'::regclass;
 SELECT master_create_worker_shards('mx_table', 5, 1);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='mx_table'::regclass;
  count 
 -------
@@ -120,16 +120,16 @@ SELECT * FROM mx_ref_table ORDER BY col_1;
 
 INSERT INTO mx_ref_table (col_1, col_2) VALUES (-6, 'vestibulum');
 ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the schema node.
+DETAIL:  Modifications to reference tables are supported only from the coordinator.
 UPDATE mx_ref_table SET col_2 = 'habitant' WHERE col_1 = -37;
 ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the schema node.
+DETAIL:  Modifications to reference tables are supported only from the coordinator.
 DELETE FROM mx_ref_table WHERE col_1 = -78;
 ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Modifications to reference tables are supported only from the schema node.
+DETAIL:  Modifications to reference tables are supported only from the coordinator.
 COPY mx_ref_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT * FROM mx_ref_table ORDER BY col_1;
  col_1 | col_2  
 -------+--------
@@ -152,13 +152,13 @@ DROP TABLE mx_ref_table;
 
 CREATE INDEX mx_test_index ON mx_table(col_1);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 ALTER TABLE mx_table ADD COLUMN col_4 int;
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERENCES mx_table(col_1);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 \d mx_table
                            Table "public.mx_table"
  Column |  Type   |                        Modifiers                         
@@ -170,7 +170,7 @@ HINT:  Connect to the schema node and run it again.
 -- master_modify_multiple_shards
 SELECT master_modify_multiple_shards('UPDATE mx_table SET col_2=''none''');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table WHERE col_2='none';
  count 
 -------
@@ -185,7 +185,7 @@ SELECT count(*) FROM mx_table WHERE col_2!='none';
 
 SELECT master_modify_multiple_shards('DELETE FROM mx_table');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table;
  count 
 -------
@@ -195,7 +195,7 @@ SELECT count(*) FROM mx_table;
 -- master_drop_all_shards
 SELECT master_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
  count 
 -------
@@ -205,7 +205,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 -- master_apply_delete_command
 SELECT master_apply_delete_command('DELETE FROM mx_table');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table;
  count 
 -------
@@ -215,7 +215,7 @@ SELECT count(*) FROM mx_table;
 -- master_add_node
 SELECT master_add_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
  nodeid | groupid | nodename | nodeport | noderack | hasmetadata 
 --------+---------+----------+----------+----------+-------------
@@ -232,7 +232,7 @@ SELECT master_add_node('localhost', 5432);
 \c - - - :worker_1_port
 SELECT master_remove_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
  nodeid  | groupid | nodename  | nodeport | noderack | hasmetadata 
 ---------+---------+-----------+----------+----------+-------------
@@ -250,7 +250,7 @@ SELECT master_remove_node('localhost', 5432);
 \c - - - :worker_1_port
 TRUNCATE mx_table;
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 CONTEXT:  SQL statement "SELECT master_modify_multiple_shards(commandText)"
 PL/pgSQL function citus_truncate_trigger() line 17 at PERFORM
 SELECT count(*) FROM mx_table;
@@ -262,7 +262,7 @@ SELECT count(*) FROM mx_table;
 -- INSERT / SELECT
 INSERT INTO mx_table_2 SELECT * FROM mx_table;
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table_2;
  count 
 -------
@@ -273,7 +273,7 @@ SELECT count(*) FROM mx_table_2;
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT colocationid FROM pg_dist_partition WHERE logicalrelid='mx_table_2'::regclass;
  colocationid 
 --------------
@@ -289,7 +289,7 @@ WHERE logicalrelid='mx_table_2'::regclass;
 -- start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  hasmetadata 
 -------------
@@ -307,7 +307,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  hasmetadata 
@@ -340,7 +340,7 @@ SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition;
 -- DROP TABLE
 DROP TABLE mx_table;
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
 PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
 SELECT count(*) FROM mx_table;
@@ -352,7 +352,7 @@ SELECT count(*) FROM mx_table;
 -- master_drop_distributed_table_metadata
 SELECT master_drop_distributed_table_metadata('mx_table'::regclass, 'public', 'mx_table');
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT count(*) FROM mx_table;
  count 
 -------
@@ -369,7 +369,7 @@ INSERT INTO pg_dist_shard_placement (nodename, nodeport, shardid, shardstate, sh
 VALUES ('localhost', :worker_2_port, :testshardid, 3, 0);
 SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 SELECT shardid, nodename, nodeport, shardstate 
 FROM pg_dist_shard_placement
 WHERE shardid = :testshardid
@@ -384,7 +384,7 @@ DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port AND shardid 
 -- master_get_new_placementid
 SELECT master_get_new_placementid();
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the schema node and run it again.
+HINT:  Connect to the coordinator and run it again.
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_table;

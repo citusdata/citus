@@ -110,7 +110,7 @@ static bool workerNodeHashValid = false;
 
 static bool invalidationRegistered = false;
 
-/* default value is -1, for schema node it's 0 and for worker nodes > 0 */
+/* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int LocalGroupId = -1;
 
 /* built first time through in InitializePartitionCache */
