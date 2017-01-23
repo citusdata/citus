@@ -22,6 +22,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/errormessage.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
@@ -279,6 +280,7 @@ OutMultiPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(masterQuery);
 	WRITE_STRING_FIELD(masterTableName);
 	WRITE_BOOL_FIELD(routerExecutable);
+	WRITE_NODE_FIELD(planningError);
 }
 
 
@@ -515,6 +517,23 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(relationShardList);
 }
 
+
+void
+OutDeferredErrorMessage(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(DeferredErrorMessage);
+	WRITE_NODE_TYPE("DEFERREDERRORMESSAGE");
+
+	WRITE_INT_FIELD(code);
+	WRITE_STRING_FIELD(message);
+	WRITE_STRING_FIELD(detail);
+	WRITE_STRING_FIELD(hint);
+	WRITE_STRING_FIELD(filename);
+	WRITE_INT_FIELD(linenumber);
+	WRITE_STRING_FIELD(functionname);
+}
+
+
 #if (PG_VERSION_NUM < 90600)
 
 /*
@@ -632,6 +651,12 @@ outNode(StringInfo str, const void *obj)
 		case T_RelationShard:
 			appendStringInfoChar(str, '{');
 			OutRelationShard(str, obj);
+			appendStringInfoChar(str, '}');
+			break;
+
+		case T_DeferredErrorMessage:
+			appendStringInfoChar(str, '{');
+			OutDeferredErrorMessage(str, obj);
 			appendStringInfoChar(str, '}');
 			break;
 

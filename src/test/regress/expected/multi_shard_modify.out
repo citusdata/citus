@@ -92,8 +92,7 @@ SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE 
 ERROR:  master_modify_multiple_shards() does not support RETURNING
 -- commands containing a CTE are unsupported
 SELECT master_modify_multiple_shards('WITH deleted_stuff AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) DELETE FROM multi_shard_modify_test');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Common table expressions are not supported in distributed modifications.
+ERROR:  common table expressions are not supported in distributed modifications
 -- Check that we can successfully delete from multiple shards with 1PC
 SET citus.multi_shard_commit_protocol TO '1pc';
 SELECT count(*) FROM multi_shard_modify_test;
@@ -234,8 +233,7 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_name=
 ERROR:  master_modify_multiple_shards() does not support RETURNING
 -- commands containing a CTE are unsupported
 SELECT master_modify_multiple_shards('WITH t AS (INSERT INTO multi_shard_modify_test DEFAULT VALUES RETURNING *) UPDATE multi_shard_modify_test SET t_name = ''FAIL'' ');
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Common table expressions are not supported in distributed modifications.
+ERROR:  common table expressions are not supported in distributed modifications
 -- updates referencing just a var are supported
 SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value=t_key WHERE t_key = 10');
  master_modify_multiple_shards 

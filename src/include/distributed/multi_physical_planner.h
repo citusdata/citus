@@ -19,6 +19,7 @@
 
 #include "datatype/timestamp.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/errormessage.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
 #include "lib/stringinfo.h"
@@ -215,6 +216,13 @@ typedef struct MultiPlan
 	Query *masterQuery;
 	char *masterTableName;
 	bool routerExecutable;
+
+	/*
+	 * NULL if this a valid plan, an error description otherwise. This will
+	 * e.g. be set if SQL features are present that a planner doesn't support,
+	 * or if prepared statement parameters prevented successful planning.
+	 */
+	DeferredErrorMessage *planningError;
 } MultiPlan;
 
 

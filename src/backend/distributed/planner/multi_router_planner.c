@@ -25,6 +25,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
+#include "distributed/errormessage.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -74,7 +75,8 @@ typedef struct WalkerState
 bool EnableRouterExecution = true;
 
 /* planner functions forward declarations */
-static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
+static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
+											  Query *query,
 											  RelationRestrictionContext *
 											  restrictionContext);
 static MultiPlan * CreateInsertSelectRouterPlan(Query *originalQuery,
@@ -114,58 +116,64 @@ static bool MultiRouterPlannableQuery(Query *query,
 static RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
 static Node * InstantiatePartitionQual(Node *node, void *context);
-static void ErrorIfInsertSelectQueryNotSupported(Query *queryTree,
-												 RangeTblEntry *insertRte,
-												 RangeTblEntry *subqueryRte,
-												 bool allReferenceTables);
-static void ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query);
-static void ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query,
-														   RangeTblEntry *insertRte,
-														   RangeTblEntry *subqueryRte,
-														   Oid *
-														   selectPartitionColumnTableId);
+static DeferredErrorMessage * InsertSelectQuerySupported(Query *queryTree,
+														 RangeTblEntry *insertRte,
+														 RangeTblEntry *subqueryRte,
+														 bool allReferenceTables);
+static DeferredErrorMessage * MultiTaskRouterSelectQuerySupported(Query *query);
+static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
+																 RangeTblEntry *insertRte,
+																 RangeTblEntry *
+																 subqueryRte,
+																 Oid *
+																 selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
-static void ErrorIfQueryHasModifyingCTE(Query *queryTree);
+static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
+
 
 /*
- * MultiRouterPlanCreate creates a multi plan for the queries
- * that includes the following:
- *   (i)  modification queries that hit a single shard
- *   (ii) select queries  hat can be executed on a single worker
- *   node and does not require any operations on the master node.
- *   (iii) INSERT INTO .... SELECT queries
- *
- * The function returns NULL if it cannot create the plan for SELECT
- * queries and errors out if it cannot plan the modify queries.
+ * CreateRouterPlan attempts to create a router executor plan for the given
+ * SELECT statement.  If planning fails either NULL is returned, or
+ * ->planningError is set to a description of the failure.
  */
 MultiPlan *
-MultiRouterPlanCreate(Query *originalQuery, Query *query,
-					  RelationRestrictionContext *restrictionContext)
+CreateRouterPlan(Query *originalQuery, Query *query,
+				 RelationRestrictionContext *restrictionContext)
 {
-	MultiPlan *multiPlan = NULL;
+	Assert(EnableRouterExecution);
 
-	bool routerPlannable = MultiRouterPlannableQuery(query, restrictionContext);
-	if (!routerPlannable)
+	if (MultiRouterPlannableQuery(query, restrictionContext))
 	{
-		return NULL;
+		return CreateSingleTaskRouterPlan(originalQuery, query,
+										  restrictionContext);
 	}
 
+	/*
+	 * TODO: Instead have MultiRouterPlannableQuery set an error describing
+	 * why router cannot support the query.
+	 */
+	return NULL;
+}
+
+
+/*
+ * CreateModifyPlan attempts to create a plan the given modification
+ * statement.  If planning fails ->planningError is set to a description of
+ * the failure.
+ */
+MultiPlan *
+CreateModifyPlan(Query *originalQuery, Query *query,
+				 RelationRestrictionContext *restrictionContext)
+{
 	if (InsertSelectQuery(originalQuery))
 	{
-		multiPlan = CreateInsertSelectRouterPlan(originalQuery, restrictionContext);
+		return CreateInsertSelectRouterPlan(originalQuery, restrictionContext);
 	}
 	else
 	{
-		multiPlan = CreateSingleTaskRouterPlan(originalQuery, query, restrictionContext);
+		return CreateSingleTaskRouterPlan(originalQuery, query,
+										  restrictionContext);
 	}
-
-	/* plans created by router planner are always router executable */
-	if (multiPlan != NULL)
-	{
-		multiPlan->routerExecutable = true;
-	}
-
-	return multiPlan;
 }
 
 
@@ -173,8 +181,8 @@ MultiRouterPlanCreate(Query *originalQuery, Query *query,
  * CreateSingleTaskRouterPlan creates a physical plan for given query. The created plan is
  * either a modify task that changes a single shard, or a router task that returns
  * query results from a single worker. Supported modify queries (insert/update/delete)
- * are router plannable by default. If query is not router plannable then the function
- * returns NULL.
+ * are router plannable by default. If query is not router plannable then either NULL is
+ * returned, or the returned plan has planningError set to a description of the problem.
  */
 static MultiPlan *
 CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
@@ -185,7 +193,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	Job *job = NULL;
 	Task *task = NULL;
 	List *placementList = NIL;
-	MultiPlan *multiPlan = NULL;
+	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
@@ -195,12 +203,23 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	if (modifyTask)
 	{
-		ErrorIfModifyQueryNotSupported(query);
+		/* FIXME: this should probably rather be inlined into CreateModifyPlan */
+		multiPlan->planningError = ModifyQuerySupported(query);
+		if (multiPlan->planningError)
+		{
+			return multiPlan;
+		}
 		task = RouterModifyTask(originalQuery, query);
+		Assert(task);
 	}
 	else
 	{
-		ErrorIfQueryHasModifyingCTE(query);
+		/* FIXME: this should probably rather be inlined into CreateSelectPlan */
+		multiPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
+		if (multiPlan->planningError)
+		{
+			return multiPlan;
+		}
 		task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
 	}
 
@@ -213,10 +232,10 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	job = RouterQueryJob(originalQuery, task, placementList);
 
-	multiPlan = CitusMakeNode(MultiPlan);
 	multiPlan->workerJob = job;
 	multiPlan->masterQuery = NULL;
 	multiPlan->masterTableName = NULL;
+	multiPlan->routerExecutable = true;
 
 	return multiPlan;
 }
@@ -237,7 +256,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	uint32 taskIdIndex = 1;     /* 0 is reserved for invalid taskId */
 	Job *workerJob = NULL;
 	uint64 jobId = INVALID_JOB_ID;
-	MultiPlan *multiPlan = NULL;
+	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
 	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
@@ -249,8 +268,13 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	 * Error semantics for INSERT ... SELECT queries are different than regular
 	 * modify queries. Thus, handle separately.
 	 */
-	ErrorIfInsertSelectQueryNotSupported(originalQuery, insertRte, subqueryRte,
-										 allReferenceTables);
+	multiPlan->planningError = InsertSelectQuerySupported(originalQuery, insertRte,
+														  subqueryRte,
+														  allReferenceTables);
+	if (multiPlan->planningError)
+	{
+		return multiPlan;
+	}
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -291,10 +315,10 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	workerJob->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* and finally the multi plan */
-	multiPlan = CitusMakeNode(MultiPlan);
 	multiPlan->workerJob = workerJob;
 	multiPlan->masterTableName = NULL;
 	multiPlan->masterQuery = NULL;
+	multiPlan->routerExecutable = true;
 
 	return multiPlan;
 }
@@ -628,18 +652,19 @@ ExtractInsertRangeTableEntry(Query *query)
 
 
 /*
- * ErrorIfInsertSelectQueryNotSupported errors out for unsupported
- * INSERT ... SELECT queries.
+ * InsertSelectQueryNotSupported returns NULL if the INSERT ... SELECT query
+ * is supported, or a description why not.
  */
-static void
-ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
-									 RangeTblEntry *subqueryRte, bool allReferenceTables)
+static DeferredErrorMessage *
+InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
+						   RangeTblEntry *subqueryRte, bool allReferenceTables)
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
 	Oid targetRelationId = insertRte->relid;
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
+	DeferredErrorMessage *error = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
@@ -653,8 +678,9 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 		if (rangeTableEntry->rtekind == RTE_RELATION &&
 			rangeTableEntry->relkind == RELKIND_VIEW)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot insert into view over distributed table")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot insert into view over distributed table",
+								 NULL, NULL);
 		}
 	}
 
@@ -662,15 +688,18 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 
 	if (contain_volatile_functions((Node *) queryTree))
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given "
-							   "modification"),
-						errdetail("Volatile functions are not allowed in "
-								  "INSERT ... SELECT queries")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "volatile functions are not allowed in INSERT ... SELECT "
+							 "queries",
+							 NULL, NULL);
 	}
 
 	/* we don't support LIMIT, OFFSET and WINDOW functions */
-	ErrorIfMultiTaskRouterSelectQueryUnsupported(subquery);
+	error = MultiTaskRouterSelectQuerySupported(subquery);
+	if (error)
+	{
+		return error;
+	}
 
 	/*
 	 * If we're inserting into a reference table, all participating tables
@@ -680,18 +709,23 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 	{
 		if (!allReferenceTables)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("If data inserted into a reference table, "
-								   "all of the participating tables in the "
-								   "INSERT INTO ... SELECT query should be "
-								   "reference tables.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "only reference tables may be queried when targeting "
+								 "a reference table with INSERT ... SELECT",
+								 NULL, NULL);
 		}
 	}
 	else
 	{
+		DeferredErrorMessage *error = NULL;
+
 		/* ensure that INSERT's partition column comes from SELECT's partition column */
-		ErrorIfInsertPartitionColumnDoesNotMatchSelect(queryTree, insertRte, subqueryRte,
-													   &selectPartitionColumnTableId);
+		error = InsertPartitionColumnMatchesSelect(queryTree, insertRte, subqueryRte,
+												   &selectPartitionColumnTableId);
+		if (error)
+		{
+			return error;
+		}
 
 		/*
 		 * We expect partition column values come from colocated tables. Note that we
@@ -700,22 +734,23 @@ ErrorIfInsertSelectQueryNotSupported(Query *queryTree, RangeTblEntry *insertRte,
 		 */
 		if (!TablesColocated(insertRte->relid, selectPartitionColumnTableId))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("INSERT target table and the source relation "
-								   "of the SELECT partition column value "
-								   "must be colocated")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "INSERT target table and the source relation of the SELECT partition "
+								 "column value must be colocated",
+								 NULL, NULL);
 		}
 	}
+
+	return NULL;
 }
 
 
 /*
- *  ErrorUnsupportedMultiTaskSelectQuery errors out on queries that we support
- *  for single task router queries, but, cannot allow for multi task router
- *  queries. We do these checks recursively to prevent any wrong results.
+ * MultiTaskRouterSelectQuerySupported returns NULL if the query may be used
+ * as the source for an INSERT ... SELECT or returns a description why not.
  */
-static void
-ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
+static DeferredErrorMessage *
+MultiTaskRouterSelectQuerySupported(Query *query)
 {
 	List *queryList = NIL;
 	ListCell *queryCell = NULL;
@@ -730,21 +765,19 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 		/* pushing down limit per shard would yield wrong results */
 		if (subquery->limitCount != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("LIMIT clauses are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "LIMIT clauses are not allowed in INSERT ... SELECT "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		/* pushing down limit offest per shard would yield wrong results */
 		if (subquery->limitOffset != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("OFFSET clauses are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "OFFSET clauses are not allowed in INSERT ... SELECT "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		/*
@@ -754,21 +787,19 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 		 */
 		if (subquery->windowClause != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("Window functions are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "window functions are not allowed in INSERT ... SELECT "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		/* see comment on AddUninstantiatedPartitionRestriction() */
 		if (subquery->setOperations != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("Set operations are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "set operations are not allowed in INSERT ... SELECT "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		/*
@@ -779,11 +810,10 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 		 */
 		if (subquery->groupingSets != NULL)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("Grouping sets are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "grouping sets are not allowed in INSERT ... SELECT "
+								 "queries",
+								 NULL, NULL);
 		}
 
 		/*
@@ -792,27 +822,29 @@ ErrorIfMultiTaskRouterSelectQueryUnsupported(Query *query)
 		 */
 		if (subquery->hasDistinctOn)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("DISTINCT ON clauses are not allowed in "
-									  "INSERT ... SELECT queries")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "DISTINCT ON clauses are not allowed in "
+								 "INSERT ... SELECT queries",
+								 NULL, NULL);
 		}
 	}
+
+	return NULL;
 }
 
 
 /*
- * ErrorIfInsertPartitionColumnDoesNotMatchSelect checks whether the INSERTed table's
- * partition column value matches with the any of the SELECTed table's partition column.
+ * InsertPartitionColumnMatchesSelect returns NULL the partition column in the
+ * table targeted by INSERTed matches with the any of the SELECTed table's
+ * partition column.  Returns the error description if there's no match.
  *
- * On return without error (i.e., if partition columns match), the function also sets
- * selectPartitionColumnTableId.
+ * On return without error (i.e., if partition columns match), the function
+ * also sets selectPartitionColumnTableId.
  */
-static void
-ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *insertRte,
-											   RangeTblEntry *subqueryRte,
-											   Oid *selectPartitionColumnTableId)
+static DeferredErrorMessage *
+InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
+								   RangeTblEntry *subqueryRte,
+								   Oid *selectPartitionColumnTableId)
 {
 	ListCell *targetEntryCell = NULL;
 	uint32 rangeTableId = 1;
@@ -972,14 +1004,13 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 				}
 			}
 
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot plan INSERT INTO ... SELECT  "
-								   "because partition columns in the target table "
-								   "and the subquery do not match"),
-							errdetail(errorDetailTemplate, exprDescription),
-							errhint("Ensure the target table's partition column has a "
-									"corresponding simple column reference to a distributed "
-									"table's partition column in the subquery.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "INSERT INTO ... SELECT partition columns in the source "
+								 "table and subquery do not match",
+								 psprintf(errorDetailTemplate, exprDescription),
+								 "Ensure the target table's partition column has a "
+								 "corresponding simple column reference to a distributed "
+								 "table's partition column in the subquery.");
 		}
 
 		/*
@@ -988,27 +1019,24 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 		 */
 		if (!IsA(targetEntry->expr, Var))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot plan INSERT INTO ... SELECT  "
-								   "because partition columns in the target table "
-								   "and the subquery do not match"),
-							errdetail(
-								"The data type of the target table's partition column "
-								"should exactly match the data type of the "
-								"corresponding simple column reference in the subquery.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "INSERT INTO ... SELECT partition columns in the source "
+								 "table and subquery do not match",
+								 "The data type of the target table's partition column "
+								 "should exactly match the data type of the "
+								 "corresponding simple column reference in the subquery.",
+								 NULL);
 		}
 
 		/* finally, check that the select target column is a partition column */
 		if (!IsPartitionColumn(selectTargetExpr, subquery))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot plan INSERT INTO ... SELECT  "
-								   "because partition columns in the target table "
-								   "and the subquery do not match"),
-							errdetail(
-								"The target table's partition column "
-								"should correspond to a partition column "
-								"in the subquery.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "INSERT INTO ... SELECT partition columns in the source "
+								 "table and subquery do not match",
+								 "The target table's partition column should correspond "
+								 "to a partition column in the subquery.",
+								 NULL);
 		}
 
 		/* we can set the select relation id */
@@ -1019,11 +1047,15 @@ ErrorIfInsertPartitionColumnDoesNotMatchSelect(Query *query, RangeTblEntry *inse
 
 	if (!targetTableHasPartitionColumn)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot plan INSERT INTO ... SELECT "
-							   "because the query doesn't include the target table's "
-							   "partition column")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "INSERT INTO ... SELECT partition columns in the source "
+							 "table and subquery do not match",
+							 "the query doesn't include the target table's "
+							 "partition column",
+							 NULL);
 	}
+
+	return NULL;
 }
 
 
@@ -1155,11 +1187,11 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 
 
 /*
- * ErrorIfModifyQueryNotSupported checks if the query contains unsupported features,
- * and errors out if it does.
+ * ModifyQuerySupported returns NULL if the query only contains supported
+ * features, otherwise it returns an error description.
  */
-void
-ErrorIfModifyQueryNotSupported(Query *queryTree)
+DeferredErrorMessage *
+ModifyQuerySupported(Query *queryTree)
 {
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
@@ -1185,21 +1217,18 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	 */
 	if (queryTree->hasSubLinks == true)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("Subqueries are not supported in distributed"
-								  " modifications.")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "subqueries are not supported in distributed modifications",
+							 NULL, NULL);
 	}
 
 	/* reject queries which include CommonTableExpr */
 	if (queryTree->cteList != NIL)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("Common table expressions are not supported in"
-								  " distributed modifications.")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "common table expressions are not supported in distributed "
+							 "modifications",
+							 NULL, NULL);
 	}
 
 	/* extract range table entries */
@@ -1227,11 +1256,12 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 
 			if (referenceTable && !schemaNode)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot perform distributed planning for the given"
-									   " modification"),
-								errdetail("Modifications to reference tables are "
-										  "supported only from the schema node.")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot perform distributed planning for the given"
+									 " modification",
+									 "Modifications to reference tables are "
+									 "supported only from the schema node.",
+									 NULL);
 			}
 
 			queryTableCount++;
@@ -1239,8 +1269,9 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			/* we do not expect to see a view in modify query */
 			if (rangeTableEntry->relkind == RELKIND_VIEW)
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot modify views over distributed tables")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot modify views over distributed tables",
+									 NULL, NULL);
 			}
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
@@ -1277,10 +1308,11 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 				rangeTableEntryErrorDetail = "Unrecognized range table entry.";
 			}
 
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given"
-								   " modifications"),
-							errdetail("%s", rangeTableEntryErrorDetail)));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot perform distributed planning for the given "
+								 "modifications",
+								 rangeTableEntryErrorDetail,
+								 NULL);
 		}
 	}
 
@@ -1291,11 +1323,12 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	 */
 	if (commandType != CMD_INSERT && queryTableCount != 1)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("Joins are not supported in distributed "
-								  "modifications.")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed planning for the given"
+							 " modification",
+							 "Joins are not supported in distributed "
+							 "modifications.",
+							 NULL);
 	}
 
 	/* reject queries which involve multi-row inserts */
@@ -1308,11 +1341,12 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		 * with a constant, and if you're inserting multiple rows at once the function
 		 * should return a different value for each row.
 		 */
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning for the given"
-							   " modification"),
-						errdetail("Multi-row INSERTs to distributed tables are not "
-								  "supported.")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed planning for the given"
+							 " modification",
+							 "Multi-row INSERTs to distributed tables are not "
+							 "supported.",
+							 NULL);
 	}
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -1347,9 +1381,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			if (commandType == CMD_UPDATE &&
 				contain_volatile_functions((Node *) targetEntry->expr))
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("functions used in UPDATE queries on distributed "
-									   "tables must not be VOLATILE")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "functions used in UPDATE queries on distributed "
+									 "tables must not be VOLATILE",
+									 NULL, NULL);
 			}
 
 			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
@@ -1362,9 +1397,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			if (commandType == CMD_INSERT && targetEntryPartitionColumn &&
 				!IsA(targetEntry->expr, Const))
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("values given for the partition column must be"
-									   " constants or constant expressions")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "values given for the partition column must be"
+									 " constants or constant expressions",
+									 NULL, NULL);
 			}
 
 			if (commandType == CMD_UPDATE &&
@@ -1379,10 +1415,10 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 		{
 			if (contain_volatile_functions(joinTree->quals))
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("functions used in the WHERE clause of "
-									   "modification queries on distributed tables "
-									   "must not be VOLATILE")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "functions used in the WHERE clause of modification "
+									 "queries on distributed tables must not be VOLATILE",
+									 NULL, NULL);
 			}
 			else if (MasterIrreducibleExpression(joinTree->quals, &hasVarArgument,
 												 &hasBadCoalesce))
@@ -1393,23 +1429,26 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 
 		if (hasVarArgument)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("STABLE functions used in UPDATE queries"
-								   " cannot be called with column references")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "STABLE functions used in UPDATE queries "
+								 "cannot be called with column references",
+								 NULL, NULL);
 		}
 
 		if (hasBadCoalesce)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("non-IMMUTABLE functions are not allowed in CASE or"
-								   " COALESCE statements")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "non-IMMUTABLE functions are not allowed in CASE or "
+								 "COALESCE statements",
+								 NULL, NULL);
 		}
 
 		if (contain_mutable_functions((Node *) queryTree->returningList))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("non-IMMUTABLE functions are not allowed in the"
-								   " RETURNING clause")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "non-IMMUTABLE functions are not allowed in the "
+								 "RETURNING clause",
+								 NULL, NULL);
 		}
 	}
 
@@ -1470,10 +1509,11 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 			}
 			else if (contain_mutable_functions((Node *) setTargetEntry->expr))
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("functions used in the DO UPDATE SET clause of "
-									   "INSERTs on distributed tables must be marked "
-									   "IMMUTABLE")));
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "functions used in the DO UPDATE SET clause of "
+									 "INSERTs on distributed tables must be marked "
+									 "IMMUTABLE",
+									 NULL, NULL);
 			}
 		}
 	}
@@ -1482,17 +1522,22 @@ ErrorIfModifyQueryNotSupported(Query *queryTree)
 	if (contain_mutable_functions((Node *) arbiterWhere) ||
 		contain_mutable_functions((Node *) onConflictWhere))
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("functions used in the WHERE clause of the ON CONFLICT "
-							   "clause of INSERTs on distributed tables must be marked "
-							   "IMMUTABLE")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "functions used in the WHERE clause of the "
+							 "ON CONFLICT clause of INSERTs on distributed "
+							 "tables must be marked IMMUTABLE",
+							 NULL, NULL);
 	}
 
 	if (specifiesPartitionValue)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("modifying the partition value of rows is not allowed")));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "modifying the partition value of rows is not "
+							 "allowed",
+							 NULL, NULL);
 	}
+
+	return NULL;
 }
 
 
@@ -2579,7 +2624,7 @@ RouterQueryJob(Query *query, Task *task, List *placementList)
  * the same node. Router plannable checks for select queries can be turned off
  * by setting citus.enable_router_execution flag to false.
  */
-bool
+static bool
 MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionContext)
 {
 	CmdType commandType = query->commandType;
@@ -3021,18 +3066,12 @@ InstantiatePartitionQual(Node *node, void *context)
  * ErrorIfQueryHasModifyingCTE checks if the query contains modifying common table
  * expressions and errors out if it does.
  */
-static void
+static DeferredErrorMessage *
 ErrorIfQueryHasModifyingCTE(Query *queryTree)
 {
 	ListCell *cteCell = NULL;
 
 	Assert(queryTree->commandType == CMD_SELECT);
-
-	/* we do not need to do anything if there are no CTEs */
-	if (queryTree->cteList == NIL)
-	{
-		return;
-	}
 
 	foreach(cteCell, queryTree->cteList)
 	{
@@ -3047,11 +3086,13 @@ ErrorIfQueryHasModifyingCTE(Query *queryTree)
 		 */
 		if (cteQuery->commandType != CMD_SELECT)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot perform distributed planning for the given "
-								   "modification"),
-							errdetail("Data-modifying statements are not supported in "
-									  "the WITH clauses of distributed queries.")));
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "data-modifying statements are not supported in "
+								 "the WITH clauses of distributed queries",
+								 NULL, NULL);
 		}
 	}
+
+	/* everything OK */
+	return NULL;
 }

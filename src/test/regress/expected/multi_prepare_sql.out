@@ -240,8 +240,12 @@ EXECUTE prepared_test_6(155);
  11811
 (1 row)
 
--- FIXME: temporarily disabled
--- EXECUTE prepared_test_6(1555);
+EXECUTE prepared_test_6(1555);
+ count 
+-------
+ 10183
+(1 row)
+
 -- test router executor with parameterized non-partition columns
 -- create a custom type which also exists on worker nodes
 CREATE TYPE test_composite_type AS (
@@ -325,17 +329,16 @@ EXECUTE prepared_select(6, 60);
      1
 (1 row)
 
--- test that we don't crash on failing parameterized insert on the partition column
+-- Test that parameterized partition column for an insert is supported
 PREPARE prepared_partition_column_insert(bigint) AS
 INSERT INTO router_executor_table VALUES ($1, 'arsenous', '(1,10)');
--- we error out on the 6th execution
+-- execute 6 times to trigger prepared statement usage
 EXECUTE prepared_partition_column_insert(1);
 EXECUTE prepared_partition_column_insert(2);
 EXECUTE prepared_partition_column_insert(3);
 EXECUTE prepared_partition_column_insert(4);
 EXECUTE prepared_partition_column_insert(5);
 EXECUTE prepared_partition_column_insert(6);
-ERROR:  values given for the partition column must be constants or constant expressions
 DROP TYPE test_composite_type CASCADE;
 NOTICE:  drop cascades to table router_executor_table column stats
 -- test router executor with prepare statements
@@ -373,7 +376,6 @@ EXECUTE prepared_single_parameter_insert(3);
 EXECUTE prepared_single_parameter_insert(4);
 EXECUTE prepared_single_parameter_insert(5);
 EXECUTE prepared_single_parameter_insert(6);
-ERROR:  values given for the partition column must be constants or constant expressions
 PREPARE prepared_double_parameter_insert(int, int) AS
 	INSERT INTO prepare_table (key, value) VALUES ($1, $2);
 -- execute 6 times to trigger prepared statement usage
@@ -383,7 +385,6 @@ EXECUTE prepared_double_parameter_insert(3, 30);
 EXECUTE prepared_double_parameter_insert(4, 40);
 EXECUTE prepared_double_parameter_insert(5, 50);
 EXECUTE prepared_double_parameter_insert(6, 60);
-ERROR:  values given for the partition column must be constants or constant expressions
 PREPARE prepared_non_partition_parameter_insert(int) AS
 	INSERT INTO prepare_table (key, value) VALUES (0, $1);
 -- execute 6 times to trigger prepared statement usage
@@ -419,7 +420,9 @@ SELECT * FROM prepare_table ORDER BY key, value;
    4 |      
    5 |    50
    5 |      
-(22 rows)
+   6 |    60
+   6 |      
+(24 rows)
 
 -- check router executor select
 PREPARE prepared_router_partition_column_select(int) AS
@@ -468,9 +471,13 @@ EXECUTE prepared_router_partition_column_select(5);
    5 |      
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_router_partition_column_select(6);
+EXECUTE prepared_router_partition_column_select(6);
+ key | value 
+-----+-------
+   6 |    60
+   6 |      
+(2 rows)
+
 PREPARE prepared_router_non_partition_column_select(int) AS
 	SELECT
 		prepare_table.key,
@@ -566,9 +573,13 @@ EXECUTE prepared_real_time_non_partition_column_select(50);
    5 |    50
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_real_time_non_partition_column_select(60);
+EXECUTE prepared_real_time_non_partition_column_select(60);
+ key | value 
+-----+-------
+   0 |    60
+   6 |    60
+(2 rows)
+
 PREPARE prepared_real_time_partition_column_select(int) AS
 	SELECT
 		prepare_table.key,
@@ -625,9 +636,15 @@ EXECUTE prepared_real_time_partition_column_select(5);
    5 |      
 (4 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_real_time_partition_column_select(6);
+EXECUTE prepared_real_time_partition_column_select(6);
+ key | value 
+-----+-------
+   0 |    10
+   1 |    10
+   6 |    60
+   6 |      
+(4 rows)
+
 -- check task-tracker executor
 SET citus.task_executor_type TO 'task-tracker';
 PREPARE prepared_task_tracker_non_partition_column_select(int) AS
@@ -676,9 +693,13 @@ EXECUTE prepared_task_tracker_non_partition_column_select(50);
    5 |    50
 (2 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_task_tracker_non_partition_column_select(60);
+EXECUTE prepared_task_tracker_non_partition_column_select(60);
+ key | value 
+-----+-------
+   0 |    60
+   6 |    60
+(2 rows)
+
 PREPARE prepared_task_tracker_partition_column_select(int) AS
 	SELECT
 		prepare_table.key,
@@ -735,9 +756,15 @@ EXECUTE prepared_task_tracker_partition_column_select(5);
    5 |      
 (4 rows)
 
--- FIXME: 6th execution is failing. We don't want to run the failing test
--- because of changing output. After implementing this feature, uncomment this.
--- EXECUTE prepared_task_tracker_partition_column_select(6);
+EXECUTE prepared_task_tracker_partition_column_select(6);
+ key | value 
+-----+-------
+   0 |    10
+   1 |    10
+   6 |    60
+   6 |      
+(4 rows)
+
 SET citus.task_executor_type TO 'real-time';
 -- check updates
 PREPARE prepared_partition_parameter_update(int, int) AS
@@ -748,8 +775,7 @@ EXECUTE prepared_partition_parameter_update(2, 21);
 EXECUTE prepared_partition_parameter_update(3, 31);
 EXECUTE prepared_partition_parameter_update(4, 41);
 EXECUTE prepared_partition_parameter_update(5, 51);
--- This fails with an unexpected error message
-EXECUTE prepared_partition_parameter_update(5, 52);
+EXECUTE prepared_partition_parameter_update(6, 61);
 ERROR:  distributed modifications must target exactly one shard
 DETAIL:  This command modifies all shards.
 HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
@@ -788,7 +814,9 @@ SELECT * FROM prepare_table ORDER BY key, value;
    4 |    41
    5 |    51
    5 |    51
-(22 rows)
+   6 |    60
+   6 |      
+(24 rows)
 
 -- check deletes
 PREPARE prepared_partition_parameter_delete(int, int) AS
@@ -798,8 +826,7 @@ EXECUTE prepared_partition_parameter_delete(2, 21);
 EXECUTE prepared_partition_parameter_delete(3, 31);
 EXECUTE prepared_partition_parameter_delete(4, 41);
 EXECUTE prepared_partition_parameter_delete(5, 51);
--- This fails with an unexpected error message
-EXECUTE prepared_partition_parameter_delete(0, 10);
+EXECUTE prepared_partition_parameter_delete(6, 61);
 ERROR:  distributed modifications must target exactly one shard
 DETAIL:  This command modifies all shards.
 HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
@@ -822,7 +849,9 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-(6 rows)
+   6 |    60
+   6 |      
+(8 rows)
 
 -- verify placement state updates invalidate shard state
 --

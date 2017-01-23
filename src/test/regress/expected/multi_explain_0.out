@@ -698,3 +698,10 @@ Distributed Query into pg_merge_job_570039
 Master Query
   ->  Aggregate
         ->  Seq Scan on pg_merge_job_570039
+-- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
+-- at least make sure to fail without crashing
+PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
+EXPLAIN EXECUTE router_executor_query_param(5);
+ERROR:  could not create distributed plan
+DETAIL:  Possibly this is caused by the use of parameters in SQL functions, which is not supported in Citus.
+HINT:  Consider using PLPGSQL functions instead.
