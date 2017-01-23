@@ -86,8 +86,6 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	EnsureSchemaNode();
 	EnsureSuperUser();
 
-	PreventTransactionChain(true, "start_metadata_sync_to_node");
-
 	workerNode = FindWorkerNode(nodeNameString, nodePort);
 
 	if (workerNode == NULL)
