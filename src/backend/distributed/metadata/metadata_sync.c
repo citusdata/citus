@@ -875,7 +875,7 @@ CreateSchemaDDLCommand(Oid schemaId)
  * manner.
  *
  * Any column which depends on a sequence (and will therefore be replicated) but which is
- * not a BIGINT cannot be used for an mx table, because there aren't enough values to
+ * not a bigserial cannot be used for an mx table, because there aren't enough values to
  * ensure that generated numbers are globally unique.
  */
 static void
@@ -897,8 +897,9 @@ EnsureSupportedSequenceColumnType(Oid sequenceOid)
 	if (columnType != INT8OID && shouldSyncMetadata && hasMetadataWorkers)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot create an mx table with columns which use "
-							   "sequences, but are not BIGINT")));
+						errmsg("cannot create an mx table with a serial or smallserial "
+							   "column "),
+						errdetail("Only bigserial is supported in mx tables.")));
 	}
 }
 

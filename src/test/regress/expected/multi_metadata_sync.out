@@ -909,7 +909,8 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  cannot create an mx table with columns which use sequences, but are not BIGINT
+ERROR:  cannot create an mx table with a serial or smallserial column 
+DETAIL:  Only bigserial is supported in mx tables.
 DROP TABLE mx_table_with_small_sequence;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
@@ -921,7 +922,8 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- there are metadata workers
 CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-ERROR:  cannot create an mx table with columns which use sequences, but are not BIGINT
+ERROR:  cannot create an mx table with a serial or smallserial column 
+DETAIL:  Only bigserial is supported in mx tables.
 DROP TABLE mx_table_with_small_sequence;
 -- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
