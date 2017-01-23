@@ -66,6 +66,9 @@ extern CoordinatedTransactionState CurrentCoordinatedTransactionState;
 /* list of connections that are part of the current coordinated transaction */
 extern dlist_head InProgressTransactions;
 
+/* whether we've been asked to use 2PC (by calling CoordinatedTransactionUse2PC()) */
+extern bool CoordinatedTransactionUses2PC;
+
 /*
  * Coordinated transaction management.
  */

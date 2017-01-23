@@ -36,6 +36,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
@@ -206,10 +207,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *shardTableName = NULL;
 	char *shardQualifiedName = NULL;
 	List *shardPlacementList = NIL;
-	List *succeededPlacementList = NIL;
-	List *failedPlacementList = NIL;
 	ListCell *shardPlacementCell = NULL;
-	ListCell *failedPlacementCell = NULL;
 	uint64 newShardSize = 0;
 	uint64 shardMaxSizeInBytes = 0;
 	float4 shardFillLevel = 0.0;
@@ -261,13 +259,16 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						errhint("Try running master_create_empty_shard() first")));
 	}
 
+	BeginOrContinueCoordinatedTransaction();
+
 	/* issue command to append table to each shard placement */
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		char *workerName = shardPlacement->nodeName;
-		uint32 workerPort = shardPlacement->nodePort;
-		List *queryResultList = NIL;
+		MultiConnection *connection = GetPlacementConnection(FOR_DML, shardPlacement,
+															 NULL);
+		PGresult *queryResult = NULL;
+		int executeResult = 0;
 
 		StringInfo workerAppendQuery = makeStringInfo();
 		appendStringInfo(workerAppendQuery, WORKER_APPEND_TABLE_TO_SHARD,
@@ -275,43 +276,22 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
-		/* inserting data should be performed by the current user */
-		queryResultList = ExecuteRemoteQuery(workerName, workerPort, NULL,
-											 workerAppendQuery);
-		if (queryResultList != NIL)
+		executeResult = ExecuteOptionalRemoteCommand(connection, workerAppendQuery->data,
+													 &queryResult);
+		PQclear(queryResult);
+		ForgetResults(connection);
+
+		if (executeResult != 0)
 		{
-			succeededPlacementList = lappend(succeededPlacementList, shardPlacement);
-		}
-		else
-		{
-			failedPlacementList = lappend(failedPlacementList, shardPlacement);
+			MarkRemoteTransactionFailed(connection, false);
 		}
 	}
 
-	/* before updating metadata, check that we appended to at least one shard */
-	if (succeededPlacementList == NIL)
-	{
-		ereport(ERROR, (errmsg("could not append table to any shard placement")));
-	}
-
-	/* make sure we don't process cancel signals */
-	HOLD_INTERRUPTS();
-
-	/* mark shard placements that we couldn't append to as inactive */
-	foreach(failedPlacementCell, failedPlacementList)
-	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(failedPlacementCell);
-		uint64 placementId = placement->placementId;
-		char *workerName = placement->nodeName;
-		uint32 workerPort = placement->nodePort;
-
-		UpdateShardPlacementState(placementId, FILE_INACTIVE);
-
-		ereport(WARNING, (errmsg("could not append table to shard \"%s\" on node "
-								 "\"%s:%u\"", shardQualifiedName, workerName,
-								 workerPort),
-						  errdetail("Marking this shard placement as inactive")));
-	}
+	/*
+	 * Abort if all placements failed, mark placements invalid if only some failed. By
+	 * doing this UpdateShardStatistics never works on failed placements.
+	 */
+	CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
 
 	/* update shard statistics and get new shard size */
 	newShardSize = UpdateShardStatistics(shardId);
@@ -319,8 +299,6 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	/* calculate ratio of current shard size compared to shard max size */
 	shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
 	shardFillLevel = ((float4) newShardSize / (float4) shardMaxSizeInBytes);
-
-	RESUME_INTERRUPTS();
 
 	PG_RETURN_FLOAT4(shardFillLevel);
 }
