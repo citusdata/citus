@@ -89,7 +89,11 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
 
 -- Make sure that start_metadata_sync_to_node considers foreign key constraints
 \c - - - :master_port
+
+-- Since we're superuser, we can set the replication model to 'streaming' to
+-- create some MX tables
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 
 CREATE SCHEMA mx_testing_schema_2;
 
@@ -111,6 +115,7 @@ DROP TABLE mx_testing_schema_2.fk_test_2;
 DROP TABLE mx_testing_schema.fk_test_1;
 
 RESET citus.shard_replication_factor;
+RESET citus.replication_model;
 
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
@@ -136,6 +141,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE TABLE mx_query_test (a int, b text, c int);
@@ -177,6 +183,7 @@ CREATE SCHEMA mx_test_schema_2;
 
 -- Create MX tables
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 CREATE TABLE mx_test_schema_1.mx_table_1 (col1 int UNIQUE, col2 text);
 CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 (col1);
 
@@ -302,6 +309,7 @@ SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gse
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 10000;
 SET citus.shard_count TO 7;
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 
 CREATE TABLE mx_colocation_test_1 (a int);
 SELECT create_distributed_table('mx_colocation_test_1', 'a');
@@ -370,6 +378,7 @@ DROP TABLE mx_colocation_test_2;
 \c - - - :master_port	
 SET citus.shard_count TO 7;
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 
 CREATE TABLE mx_temp_drop_test (a int);
 SELECT create_distributed_table('mx_temp_drop_test', 'a');
@@ -387,6 +396,7 @@ DROP TABLE mx_temp_drop_test;
 \c - - - :master_port	
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
@@ -465,7 +475,8 @@ DELETE FROM pg_dist_shard_placement;
 DELETE FROM pg_dist_partition;
 SELECT master_remove_node('localhost', :worker_2_port);
 
-CREATE USER mx_user;
+ -- the master user needs superuser permissions to change the replication model
+CREATE USER mx_user WITH SUPERUSER;
 \c - - - :worker_1_port
 CREATE USER mx_user;
 \c - - - :worker_2_port
@@ -475,6 +486,7 @@ CREATE USER mx_user;
 -- Create an mx table as a different user
 CREATE TABLE mx_table (a int, b BIGSERIAL);
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
@@ -591,6 +603,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
+RESET citus.replication_model;
 RESET citus.multi_shard_commit_protocol;
 
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;

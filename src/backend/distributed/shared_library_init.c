@@ -21,6 +21,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
@@ -32,6 +33,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
+#include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/task_tracker.h"
@@ -60,6 +62,12 @@ static const struct config_enum_entry task_assignment_policy_options[] = {
 	{ "greedy", TASK_ASSIGNMENT_GREEDY, false },
 	{ "first-replica", TASK_ASSIGNMENT_FIRST_REPLICA, false },
 	{ "round-robin", TASK_ASSIGNMENT_ROUND_ROBIN, false },
+	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry replication_model_options[] = {
+	{ "statement", REPLICATION_MODEL_COORDINATOR, false },
+	{ "streaming", REPLICATION_MODEL_STREAMING, false },
 	{ NULL, 0, false }
 };
 
@@ -569,6 +577,20 @@ RegisterCitusConfigVariables(void)
 		task_assignment_policy_options,
 		PGC_USERSET,
 		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.replication_model",
+		gettext_noop("Sets the replication model to be used for distributed tables."),
+		gettext_noop("Depending upon the execution environment, statement- or streaming-"
+					 "based replication modes may be employed. Though most Citus deploy-"
+					 "ments will simply use statement replication, hosted and MX-style"
+					 "deployments should set this parameter to 'streaming'."),
+		&ReplicationModel,
+		REPLICATION_MODEL_COORDINATOR,
+		replication_model_options,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(

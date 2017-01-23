@@ -59,6 +59,9 @@ typedef struct ShardPlacement
 } ShardPlacement;
 
 
+/* Config variable managed via guc.c */
+extern int ReplicationModel;
+
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
@@ -97,6 +100,7 @@ extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSuperUser(void);
+extern void EnsureReplicationSettings(Oid relationId);
 extern bool TableReferenced(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern Datum StringToDatum(char *inputString, Oid dataType);

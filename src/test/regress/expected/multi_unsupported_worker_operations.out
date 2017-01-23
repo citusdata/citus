@@ -12,6 +12,7 @@ SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gse
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 150000;
 -- Prepare the environment
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO 'streaming';
 SET citus.shard_count TO 5;
 -- Create test tables
 CREATE TABLE mx_table (col_1 int, col_2 text, col_3 BIGSERIAL);
@@ -403,3 +404,5 @@ SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition;
 
 \c - - - :master_port
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
+RESET citus.shard_replication_factor;
+RESET citus.replication_model;
