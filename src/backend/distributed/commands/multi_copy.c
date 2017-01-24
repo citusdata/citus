@@ -536,6 +536,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	EndCopyFrom(copyState);
 	heap_close(distributedRelation, NoLock);
 
+	/* mark failed placements as inactive */
+	CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
+
 	CHECK_FOR_INTERRUPTS();
 
 	if (completionTag != NULL)
