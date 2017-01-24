@@ -174,6 +174,20 @@ multi_ProcessUtility(Node *parsetree,
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 
+	if (IsA(parsetree, TransactionStmt))
+	{
+		/*
+		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
+		 * transactions in which case a lot of checks cannot be done safely in
+		 * that state. Since we never need to intercept transaction statements,
+		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
+		standard_ProcessUtility(parsetree, queryString, context,
+								params, dest, completionTag);
+
+		return;
+	}
+
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
 	 * it's no overlaid onto COPY, but with FORMAT = 'transmit' instead of the
