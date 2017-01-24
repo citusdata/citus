@@ -187,8 +187,7 @@ static bool CanUseExistingConnection(uint32 flags, const char *userName,
 									 ConnectionReference *connectionReference);
 static void AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 										ShardPlacement *placement);
-static bool CheckShardPlacements(ConnectionShardHashEntry *shardEntry, bool preCommit,
-								 bool using2PC);
+static bool CheckShardPlacements(ConnectionShardHashEntry *shardEntry);
 static uint32 ColocatedPlacementsHashHash(const void *key, Size keysize);
 static int ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize);
 
@@ -723,38 +722,83 @@ ResetPlacementConnectionManagement(void)
 
 
 /*
- * CheckForFailedPlacements checks which placements have to be marked as
- * invalid, and/or whether sufficiently many placements have failed to abort
- * the entire coordinated transaction.
+ * MarkFailedShardPlacements looks through every connection in the connection shard hash
+ * and marks the placements associated with failed connections invalid.
  *
- * This will usually be called twice. Once before the remote commit is done,
- * and once after. This is so we can abort before executing remote commits,
- * and so we can handle remote transactions that failed during commit.
+ * Every shard must have at least one placement connection which did not fail. If all
+ * modifying connections for a shard failed then the transaction will be aborted.
  *
- * When preCommit or using2PC is true, failures on transactions marked as
- * critical will abort the entire coordinated transaction. If not we can't
- * roll back, because some remote transactions might have already committed.
+ * This will be called just before commit, so we can abort before executing remote
+ * commits. It should also be called after modification statements, to ensure that we
+ * don't run future statements against placements which are not up to date.
  */
 void
-CheckForFailedPlacements(bool preCommit, bool using2PC)
+MarkFailedShardPlacements()
+{
+	HASH_SEQ_STATUS status;
+	ConnectionShardHashEntry *shardEntry = NULL;
+
+	hash_seq_init(&status, ConnectionShardHash);
+	while ((shardEntry = (ConnectionShardHashEntry *) hash_seq_search(&status)) != 0)
+	{
+		if (!CheckShardPlacements(shardEntry))
+		{
+			ereport(ERROR,
+					(errmsg("could not make changes to shard " INT64_FORMAT
+							" on any node",
+							shardEntry->key.shardId)));
+		}
+	}
+}
+
+
+/*
+ * PostCommitMarkFailedShardPlacements marks placements invalid and checks whether
+ * sufficiently many placements have failed to abort the entire coordinated
+ * transaction.
+ *
+ * This will be called just after a coordinated commit so we can handle remote
+ * transactions which failed during commit.
+ *
+ * When using2PC is set as least one placement must succeed per shard. If all placements
+ * fail for a shard the entire transaction is aborted. If using2PC is not set then a only
+ * a warning will be emitted; we cannot abort because some remote transactions might have
+ * already been committed.
+ */
+void
+PostCommitMarkFailedShardPlacements(bool using2PC)
 {
 	HASH_SEQ_STATUS status;
 	ConnectionShardHashEntry *shardEntry = NULL;
 	int successes = 0;
 	int attempts = 0;
 
+	int elevel = using2PC ? ERROR : WARNING;
+
 	hash_seq_init(&status, ConnectionShardHash);
 	while ((shardEntry = (ConnectionShardHashEntry *) hash_seq_search(&status)) != 0)
 	{
 		attempts++;
-		if (CheckShardPlacements(shardEntry, preCommit, using2PC))
+		if (CheckShardPlacements(shardEntry))
 		{
 			successes++;
+		}
+		else
+		{
+			/*
+			 * Only error out if we're using 2PC. If we're not using 2PC we can't error
+			 * out otherwise we can end up with a state where some shard modifications
+			 * have already committed successfully.
+			 */
+			ereport(elevel,
+					(errmsg("could not commit transaction for shard " INT64_FORMAT
+							" on any active node",
+							shardEntry->key.shardId)));
 		}
 	}
 
 	/*
-	 * If no shards could be modified at all, error out. Doesn't matter if
+	 * If no shards could be modified at all, error out. Doesn't matter whether
 	 * we're post-commit - there's nothing to invalidate.
 	 */
 	if (attempts > 0 && successes == 0)
@@ -769,8 +813,7 @@ CheckForFailedPlacements(bool preCommit, bool using2PC)
  * performs the per-shard work.
  */
 static bool
-CheckShardPlacements(ConnectionShardHashEntry *shardEntry,
-					 bool preCommit, bool using2PC)
+CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 {
 	int failures = 0;
 	int successes = 0;
@@ -804,28 +847,6 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry,
 
 	if (failures > 0 && successes == 0)
 	{
-		int elevel = 0;
-
-		/*
-		 * Only error out if we're pre-commit or using 2PC. Can't error
-		 * otherwise as we can end up with a state where some shard
-		 * modifications have already committed successfully.  If no
-		 * modifications at all succeed, CheckForFailedPlacements() will error
-		 * out.  This sucks.
-		 */
-		if (preCommit || using2PC)
-		{
-			elevel = ERROR;
-		}
-		else
-		{
-			elevel = WARNING;
-		}
-
-		ereport(elevel,
-				(errmsg("could not commit transaction for shard " INT64_FORMAT
-						" on any active node",
-						shardEntry->key.shardId)));
 		return false;
 	}
 
