@@ -920,6 +920,44 @@ SELECT id
 
 SET client_min_messages to 'NOTICE';
 
+-- test that a connection failure marks placements invalid
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE failure_test (a int, b int);
+SELECT master_create_distributed_table('failure_test', 'a', 'hash');
+SELECT master_create_worker_shards('failure_test', 2);
+
+CREATE USER router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+\c - - - :worker_1_port
+CREATE USER router_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
+\c - router_user - :master_port
+-- first test that it is marked invalid inside a transaction block
+-- we will fail to connect to worker 2, since the user does not exist
+BEGIN;
+INSERT INTO failure_test VALUES (1, 1);
+SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
+	WHERE shardid IN (
+		SELECT shardid FROM pg_dist_shard
+		WHERE logicalrelid = 'failure_test'::regclass
+	)
+	ORDER BY placementid;
+ROLLBACK;
+INSERT INTO failure_test VALUES (2, 1);
+SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
+	WHERE shardid IN (
+		SELECT shardid FROM pg_dist_shard
+		WHERE logicalrelid = 'failure_test'::regclass
+	)
+	ORDER BY placementid;
+\c - postgres - :worker_1_port
+DROP OWNED BY router_user;
+DROP USER router_user;
+\c - - - :master_port
+DROP OWNED BY router_user;
+DROP USER router_user;
+DROP TABLE failure_test;
+
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 
