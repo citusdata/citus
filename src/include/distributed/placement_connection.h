@@ -23,7 +23,8 @@ extern MultiConnection * StartPlacementConnection(uint32 flags,
 												  const char *userName);
 
 extern void ResetPlacementConnectionManagement(void);
-extern void CheckForFailedPlacements(bool preCommit, bool using2PC);
+extern void MarkFailedShardPlacements(void);
+extern void PostCommitMarkFailedShardPlacements(bool using2PC);
 
 extern void CloseShardPlacementAssociation(struct MultiConnection *connection);
 extern void ResetShardPlacementAssociation(struct MultiConnection *connection);

@@ -244,10 +244,10 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/*
 			 * Check whether the coordinated transaction is in a state we want
 			 * to persist, or whether we want to error out.  This handles the
-			 * case that iteratively executed commands marked all placements
+			 * case where iteratively executed commands marked all placements
 			 * as invalid.
 			 */
-			CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
+			MarkFailedShardPlacements();
 
 			if (CoordinatedTransactionUses2PC)
 			{
@@ -266,11 +266,10 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 
 			/*
-			 *
 			 * Check again whether shards/placement successfully
 			 * committed. This handles failure at COMMIT/PREPARE time.
 			 */
-			CheckForFailedPlacements(false, CoordinatedTransactionUses2PC);
+			PostCommitMarkFailedShardPlacements(CoordinatedTransactionUses2PC);
 		}
 		break;
 

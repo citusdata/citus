@@ -792,6 +792,9 @@ ExecuteSingleModifyTask(QueryDesc *queryDesc, Task *task,
 		ereport(ERROR, (errmsg("could not modify any active placements")));
 	}
 
+	/* if some placements failed, ensure future statements don't access them */
+	MarkFailedShardPlacements();
+
 	executorState->es_processed = affectedTupleCount;
 
 	if (IsTransactionBlock())

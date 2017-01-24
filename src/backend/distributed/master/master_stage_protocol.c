@@ -289,11 +289,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 		}
 	}
 
-	/*
-	 * Abort if all placements failed, mark placements invalid if only some failed. By
-	 * doing this UpdateShardStatistics never works on failed placements.
-	 */
-	CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
+	MarkFailedShardPlacements();
 
 	/* update shard statistics and get new shard size */
 	newShardSize = UpdateShardStatistics(shardId);
