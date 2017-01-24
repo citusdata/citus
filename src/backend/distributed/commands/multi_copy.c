@@ -888,14 +888,11 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 		}
 
 		/*
-		 * If errors are supposed to cause immediate aborts (i.e. we don't
+		 * Errors are supposed to cause immediate aborts (i.e. we don't
 		 * want to/can't invalidate placements), mark the connection as
 		 * critical so later errors cause failures.
 		 */
-		if (stopOnFailure)
-		{
-			MarkRemoteTransactionCritical(connection);
-		}
+		MarkRemoteTransactionCritical(connection);
 		ClaimConnectionExclusively(connection);
 		RemoteTransactionBeginIfNecessary(connection);
 		copyCommand = ConstructCopyStatement(copyStatement, shardConnections->shardId,
@@ -904,13 +901,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 
 		if (PQresultStatus(result) != PGRES_COPY_IN)
 		{
-			ReportConnectionError(connection, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-
-			PQclear(result);
-
-			failedPlacementCount++;
-			continue;
+			ReportResultError(connection, result, ERROR);
 		}
 
 		PQclear(result);
