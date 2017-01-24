@@ -37,7 +37,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-task-tracker-extra check-multi-binary check-worker
+check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-multi-binary check-worker
 
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
@@ -59,6 +59,10 @@ check-isolation: all tempinstall-main
 
 check-vanilla: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
+	
+check-multi-mx: all tempinstall-main
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
