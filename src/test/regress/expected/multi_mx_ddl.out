@@ -30,7 +30,7 @@ SELECT master_modify_multiple_shards('UPDATE mx_ddl_table SET version=0.1 WHERE 
 
 -- SET NOT NULL
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
--- See that the changes are applied on schema node, worker tables and shards
+-- See that the changes are applied on coordinator, worker tables and shards
 \d mx_ddl_table
       Table "public.mx_ddl_table"
  Column  |  Type   |     Modifiers      
@@ -70,7 +70,7 @@ Indexes:
 \d mx_ddl_table_1600001
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
--- Switch to the schema node
+-- Switch to the coordinator
 \c - - - :master_port
 -- SET DATA TYPE
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET DATA TYPE double precision;
@@ -94,7 +94,7 @@ SELECT * FROM mx_ddl_table ORDER BY key;
   78 |    83 |     2.1
 (11 rows)
 
--- Switch to the schema node
+-- Switch to the coordinator
 \c - - - :master_port
 -- DROP INDEX
 DROP INDEX ddl_test_index;
@@ -106,7 +106,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP DEFAULT;
 ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 -- DROP COLUMN
 ALTER TABLE mx_ddl_table DROP COLUMN version;
--- See that the changes are applied on schema node, worker tables and shards
+-- See that the changes are applied on coordinator, worker tables and shards
 \d mx_ddl_table
  Table "public.mx_ddl_table"
  Column |  Type   | Modifiers 

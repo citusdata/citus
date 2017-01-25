@@ -345,7 +345,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort, bool forceRemove)
 	List *referenceTableList = NIL;
 	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	EnsureSuperUser();
 
 	workerNode = FindWorkerNode(nodeName, nodePort);
@@ -424,7 +424,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	char *nodeInsertCommand = NULL;
 	List *workerNodeList = NIL;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 	EnsureSuperUser();
 
 	*nodeAlreadyExists = false;
@@ -628,18 +628,18 @@ GetNextNodeId()
 
 
 /*
- * EnsureSchemaNode checks if the current node is the schema node. If it does not,
+ * EnsureCoordinator checks if the current node is the coordinator. If it does not,
  * the function errors out.
  */
 void
-EnsureSchemaNode(void)
+EnsureCoordinator(void)
 {
 	int localGroupId = GetLocalGroupId();
 
 	if (localGroupId != 0)
 	{
 		ereport(ERROR, (errmsg("operation is not allowed on this node"),
-						errhint("Connect to the schema node and run it again.")));
+						errhint("Connect to the coordinator and run it again.")));
 	}
 }
 

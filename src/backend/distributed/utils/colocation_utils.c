@@ -74,7 +74,7 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 							   "operation")));
 	}
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
 

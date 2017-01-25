@@ -106,7 +106,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, INVALID_COLOCATION_ID);
@@ -132,7 +132,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	text *colocateWithTableNameText = NULL;
 	char *colocateWithTableName = NULL;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	/* guard against a binary update without a function update */
 	if (PG_NARGS() >= 4)
@@ -213,7 +213,7 @@ CreateReferenceTable(Oid relationId)
 	int replicationFactor = list_length(workerNodeList);
 	char *distributionColumnName = NULL;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	/* if there are no workers, error out */
 	if (replicationFactor == 0)

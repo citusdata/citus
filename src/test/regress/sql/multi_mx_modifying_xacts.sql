@@ -13,7 +13,7 @@ INSERT INTO researchers_mx VALUES (2, 1, 'Niklaus Wirth');
 INSERT INTO researchers_mx VALUES (3, 2, 'Tony Hoare');
 INSERT INTO researchers_mx VALUES (4, 2, 'Kenneth Iverson');
 
--- replace a researcher, reusing their id on the schema node
+-- replace a researcher, reusing their id on the coordinator
 BEGIN;
 DELETE FROM researchers_mx WHERE lab_id = 1 AND id = 2;
 INSERT INTO researchers_mx VALUES (2, 1, 'John Backus');
