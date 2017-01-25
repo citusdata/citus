@@ -33,17 +33,17 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1410000 |          1 | localhost |    57637
  1410000 |          1 | localhost |    57638
- 1410001 |          1 | localhost |    57638
  1410001 |          1 | localhost |    57637
+ 1410001 |          1 | localhost |    57638
  1410002 |          1 | localhost |    57637
  1410002 |          1 | localhost |    57638
- 1410003 |          1 | localhost |    57638
  1410003 |          1 | localhost |    57637
+ 1410003 |          1 | localhost |    57638
 (8 rows)
 
 -- verify table is not dropped
@@ -94,7 +94,7 @@ FROM
 WHERE
     shardid IN (1410000, 1410001, 1410002, 1410003)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
 ---------+------------+----------+----------
 (0 rows)
@@ -141,11 +141,11 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
- 1410004 |          1 | localhost |    57638
  1410004 |          1 | localhost |    57637
+ 1410004 |          1 | localhost |    57638
 (2 rows)
 
 -- verify shards are not dropped
@@ -179,7 +179,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename | nodeport 
 ---------+------------+----------+----------
 (0 rows)
@@ -216,7 +216,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1410005 |          1 | localhost |    57637
@@ -259,7 +259,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1410005 |          1 | localhost |    57637
@@ -300,7 +300,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1410005 |          1 | localhost |    57637
@@ -391,7 +391,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1410005 |          1 | localhost |    57637
