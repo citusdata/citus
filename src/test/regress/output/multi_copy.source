@@ -769,7 +769,6 @@ SELECT shardid, nodename, nodeport
 SELECT master_add_node('localhost', :worker_1_port);
 NOTICE:  Replicating reference table "nation" to all workers
 NOTICE:  Replicating reference table "supplier" to all workers
-NOTICE:  Replicating reference table "reference_failure_test" to all workers
          master_add_node         
 ---------------------------------
  (3,3,localhost,57637,default,f)
@@ -798,7 +797,17 @@ SELECT shardid, nodename, nodeport
 
 DROP TABLE numbers_append;
 -- Test copy failures against connection failures
--- switch to a test user, it was previously created
+-- create and switch to test user
+CREATE USER test_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT * FROM run_command_on_workers('CREATE USER test_user');
+ nodename  | nodeport | success |   result    
+-----------+----------+---------+-------------
+ localhost |    57637 | t       | CREATE ROLE
+ localhost |    57638 | t       | CREATE ROLE
+(2 rows)
+
 \c - test_user
 SET citus.shard_count to 4;
 CREATE TABLE numbers_hash (a int, b int);
@@ -950,6 +959,9 @@ SELECT shardid, shardstate, nodename, nodeport
 -- re-enable test_user on the first worker
 \c - :default_user - :worker_1_port
 ALTER USER test_user WITH login;
+-- there is a dangling shard in worker_2, drop it
+\c - test_user - :worker_2_port
+DROP TABLE numbers_hash_other_560176;
 \c - test_user - :master_port
 DROP TABLE numbers_hash;
 DROP TABLE numbers_hash_other;
@@ -995,3 +1007,11 @@ SELECT shardid, shardstate, nodename, nodeport
 (8 rows)
 
 DROP TABLE numbers_hash;
+SELECT * FROM run_command_on_workers('DROP USER test_user');
+ nodename  | nodeport | success |  result   
+-----------+----------+---------+-----------
+ localhost |    57637 | t       | DROP ROLE
+ localhost |    57638 | t       | DROP ROLE
+(2 rows)
+
+DROP USER test_user;
