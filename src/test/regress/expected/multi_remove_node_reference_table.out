@@ -68,7 +68,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -98,7 +100,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -124,7 +128,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -152,7 +158,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -164,7 +172,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 ERROR:  could not find valid entry for node "localhost:57638"
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380001,1380001,localhost,57638,default,f)
@@ -183,7 +191,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -213,7 +223,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -241,7 +253,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -270,7 +284,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -291,7 +307,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -321,7 +339,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -349,7 +369,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -378,7 +400,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -387,7 +411,7 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380002,1380002,localhost,57638,default,f)
@@ -406,7 +430,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -435,7 +461,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -465,7 +493,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -500,7 +530,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -516,7 +548,7 @@ SELECT * FROM remove_node_reference_table;
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380003,1380003,localhost,57638,default,f)
@@ -535,7 +567,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -564,7 +598,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380000 |          1 |           0 | localhost |    57638
@@ -595,7 +631,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -624,7 +662,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -641,7 +681,7 @@ Table "public.remove_node_reference_table"
 
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380004,1380004,localhost,57638,default,f)
@@ -745,8 +785,8 @@ FROM
     pg_dist_shard_placement
 WHERE
     nodeport = :worker_2_port
-ORDER BY
-    shardid;
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380001 |          1 |           0 | localhost |    57638
@@ -777,7 +817,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380001 |          1 |           0 | localhost |    57638
@@ -832,7 +874,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -842,8 +886,8 @@ WHERE
      
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-NOTICE:  Replicating reference table "table1" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "table1" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380006,1380006,localhost,57638,default,f)
@@ -864,7 +908,7 @@ FROM
 WHERE
     nodeport = :worker_2_port
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380001 |          1 |           0 | localhost |    57638
@@ -894,7 +938,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport 
 ---------+------------+-------------+-----------+----------
  1380001 |          1 |           0 | localhost |    57638
@@ -922,7 +968,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -950,7 +998,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY 
+    shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport 
 ---------+------------+-------------+----------+----------
 (0 rows)
@@ -959,8 +1009,8 @@ WHERE
 \c - - - :master_port
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "remove_node_reference_table" to all workers
-NOTICE:  Replicating reference table "table1" to all workers
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+NOTICE:  Replicating reference table "table1" to the node localhost:57638
                master_add_node               
 ---------------------------------------------
  (1380007,1380007,localhost,57638,default,f)

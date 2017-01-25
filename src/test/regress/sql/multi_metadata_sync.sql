@@ -569,24 +569,28 @@ SELECT create_reference_table('mx_ref');
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
 
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
 
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
 
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodename, nodeport;
 
 \c - - - :master_port
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);

@@ -417,6 +417,76 @@ WHERE colocationid IN
 DROP TABLE replicate_reference_table_schema.table1;
 DROP SCHEMA replicate_reference_table_schema CASCADE;
 
+-- do some tests with manually disabling reference table replication
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE initially_not_replicated_reference_table (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table');
+
+CREATE TABLE initially_not_replicated_reference_table_second (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table_second');
+
+CREATE TABLE append_test_table(key int);
+SELECT create_distributed_table('append_test_table', 'key', 'append');
+
+SELECT master_add_node('localhost', :worker_2_port, activate_node := false);
+
+-- we should see only two shard placements
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid IN 
+                    ('initially_not_replicated_reference_table', 'initially_not_replicated_reference_table_second'))
+ORDER BY 1,4,5;
+
+
+-- now, see that certain operations are disallowed
+CREATE TABLE disallow_test_table (key int);
+SELECT create_reference_table('disallow_test_table');
+SELECT create_distributed_table('disallow_test_table', 'key');
+SELECT master_create_empty_shard('append_test_table');
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+
+COPY append_test_table FROM STDIN;
+1
+2
+3
+\.
+
+SELECT master_activate_node('localhost', :worker_2_port);
+
+-- we should see the four shard placements
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid IN 
+                    ('initially_not_replicated_reference_table', 'initially_not_replicated_reference_table_second'))
+ORDER BY 1,4,5;
+
+-- this should have no effect
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- now, should be able to create tables
+CREATE TABLE initially_not_replicated_reference_table_third (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table_third');
+
+-- drop unnecassary tables
+DROP TABLE initially_not_replicated_reference_table_third, initially_not_replicated_reference_table_second, 
+           initially_not_replicated_reference_table, append_test_table;
 
 -- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
