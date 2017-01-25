@@ -723,7 +723,7 @@ CREATE TABLE numbers_hash(a int, b int);
 SELECT create_distributed_table('numbers_hash', 'a');
 
 \c - - - :worker_1_port
-ALTER TABLE numbers_hash_560180 ADD COLUMN c int;
+ALTER TABLE numbers_hash_560180 DROP COLUMN b;
 \c - - - :master_port
 
 -- operation will fail to modify a shard and roll back
@@ -739,7 +739,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 \.
 
 -- verify no row is inserted
-SELECT * FROM numbers_hash;
+SELECT count(a) FROM numbers_hash;
 
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
