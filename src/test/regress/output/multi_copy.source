@@ -978,17 +978,19 @@ SELECT create_distributed_table('numbers_hash', 'a');
 (1 row)
 
 \c - - - :worker_1_port
-ALTER TABLE numbers_hash_560180 ADD COLUMN c int;
+ALTER TABLE numbers_hash_560180 DROP COLUMN b;
 \c - - - :master_port
 -- operation will fail to modify a shard and roll back
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
-ERROR:  row field count is 2, expected 3
-DETAIL:  (null)
+ERROR:  column "b" of relation "numbers_hash_560180" does not exist
+CONTEXT:  while executing command on localhost:57637
+COPY numbers_hash, line 1: "1,1"
 -- verify no row is inserted
-SELECT * FROM numbers_hash;
- a | b 
----+---
-(0 rows)
+SELECT count(a) FROM numbers_hash;
+ count 
+-------
+     0
+(1 row)
 
 -- verify shard is still marked as valid
 SELECT shardid, shardstate, nodename, nodeport
