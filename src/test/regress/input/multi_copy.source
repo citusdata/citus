@@ -538,3 +538,204 @@ SELECT master_create_distributed_table('composite_partition_column_table', 'comp
 1,"(1,1)"
 2,"(2,2)"
 \.
+
+
+-- Test copy on append distributed tables do not create shards on removed workers
+CREATE TABLE numbers_append (a int, b int);
+SELECT master_create_distributed_table('numbers_append', 'a', 'append');
+
+-- no shards is created yet
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+\.
+
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+3,5
+4,6
+\.
+
+-- verify there are shards at both workers
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+
+-- disable the first node
+SELECT master_disable_node('localhost', :worker_1_port);
+-- set replication factor to 1 so that copy will
+-- succeed without replication count error 
+SET citus.shard_replication_factor TO 1;
+
+-- add two new shards and verify they are created at the other node
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+5,7
+6,8
+\.
+
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+7,9
+8,10
+\.
+
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+
+-- add the node back
+SELECT master_add_node('localhost', :worker_1_port);
+RESET citus.shard_replication_factor;
+-- add two new shards and verify they are created at both workers
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+9,11
+10,12
+\.
+
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+11,13
+12,14
+\.
+
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+DROP TABLE numbers_append;
+
+-- Test copy failures against connection failures
+-- switch to a test user, it was previously created
+\c - test_user
+SET citus.shard_count to 4;
+CREATE TABLE numbers_hash (a int, b int);
+SELECT create_distributed_table('numbers_hash', 'a');
+
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+3,3
+4,4
+5,5
+6,6
+7,7
+8,8
+\.
+
+-- verify each placement is active
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+
+-- create a reference table
+CREATE TABLE numbers_reference(a int, b int);
+SELECT create_reference_table('numbers_reference');
+COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+\.
+
+-- create another hash distributed table
+CREATE TABLE numbers_hash_other(a int, b int);
+SELECT create_distributed_table('numbers_hash_other', 'a');
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+
+-- manually corrupt pg_dist_shard such that both copies of one shard is placed in
+-- worker_1. This is to test the behavior when no replica of a shard is accessible.
+-- Whole copy operation is supposed to fail and rollback.
+\c - :default_user
+UPDATE pg_dist_shard_placement SET nodeport = :worker_1_port WHERE shardid = 560176;
+
+-- disable test_user on the first worker
+\c - :default_user - :worker_1_port
+ALTER USER test_user WITH nologin;
+\c - test_user - :master_port
+
+-- reissue copy
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+3,3
+4,4
+5,5
+6,6
+7,7
+8,8
+\.
+
+-- verify shards in the first worker as marked invalid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+
+-- try to insert into a reference table copy should fail
+COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
+3,1
+4,2
+\.
+
+-- verify shards for reference table are still valid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
+
+
+-- try to insert into numbers_hash_other. copy should fail and rollback
+-- since it can not insert into either copies of a shard. shards are expected to
+-- stay valid since the operation is rolled back.
+COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+3,3
+\.
+
+-- verify shards for numbers_hash_other are still valid
+-- since copy has failed altogether
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+
+-- re-enable test_user on the first worker
+\c - :default_user - :worker_1_port
+ALTER USER test_user WITH login;
+\c - test_user - :master_port
+
+DROP TABLE numbers_hash;
+DROP TABLE numbers_hash_other;
+DROP TABLE numbers_reference;
+\c - :default_user
+
+-- test copy failure inside the node
+-- it will be done by changing definition of a shard table
+SET citus.shard_count to 4;
+CREATE TABLE numbers_hash(a int, b int);
+SELECT create_distributed_table('numbers_hash', 'a');
+
+\c - - - :worker_1_port
+ALTER TABLE numbers_hash_560180 ADD COLUMN c int;
+\c - - - :master_port
+
+-- operation will fail to modify a shard and roll back
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+3,3
+4,4
+5,5
+6,6
+7,7
+8,8
+\.
+
+-- verify no row is inserted
+SELECT * FROM numbers_hash;
+
+-- verify shard is still marked as valid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+
+DROP TABLE numbers_hash;
+
