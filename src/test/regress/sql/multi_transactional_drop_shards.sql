@@ -26,7 +26,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify table is not dropped
 \d transactional_drop_shards;
@@ -51,7 +51,7 @@ FROM
 WHERE
     shardid IN (1410000, 1410001, 1410002, 1410003)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify table is dropped
 \d transactional_drop_shards;
@@ -80,7 +80,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
@@ -102,7 +102,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify shards are dropped
 \c - - - :worker_1_port
@@ -127,7 +127,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify table is not dropped
 \d transactional_drop_shards;
@@ -153,7 +153,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
@@ -184,7 +184,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify table is not dropped
 \d transactional_drop_shards;
@@ -237,7 +237,7 @@ FROM
 WHERE
     shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid)
 ORDER BY
-    shardid;
+    shardid, nodename, nodeport;
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
