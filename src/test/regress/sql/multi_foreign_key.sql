@@ -220,6 +220,13 @@ CREATE TABLE referencing_table(id int, ref_id int);
 SELECT master_create_distributed_table('referencing_table', 'ref_id', 'hash');
 SELECT master_create_worker_shards('referencing_table', 4, 1);
 
+-- verify that we skip foreign key validation when propagation is turned off
+-- not skipping validation would result in a distributed query, which emits debug messages
+BEGIN;
+SET LOCAL citus.enable_ddl_propagation TO off;
+SET LOCAL client_min_messages TO DEBUG2;
+ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY (ref_id) REFERENCES referenced_table (id);
+ABORT;
 
 -- test foreign constraint creation
 -- test foreign constraint creation with not supported parameters
