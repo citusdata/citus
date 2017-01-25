@@ -228,7 +228,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid 
 ---------+------------+-------------+-----------+----------+-------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -358,7 +358,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid 
 ---------+------------+-------------+-----------+----------+-------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -654,7 +654,7 @@ SELECT * FROM pg_dist_shard;
 --------------+---------+--------------+---------------+---------------
 (0 rows)
 
-SELECT * FROM pg_dist_shard_placement;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport | placementid 
 ---------+------------+-------------+----------+----------+-------------
 (0 rows)

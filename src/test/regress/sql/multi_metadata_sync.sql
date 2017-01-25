@@ -78,7 +78,7 @@ SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 \d mx_testing_schema.mx_test_table
 
 -- Check that pg_dist_colocation is not synced
@@ -126,7 +126,7 @@ SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 \d mx_testing_schema.mx_test_table
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
@@ -254,7 +254,7 @@ ORDER BY
 
 SELECT * FROM pg_dist_partition;
 SELECT * FROM pg_dist_shard;
-SELECT * FROM pg_dist_shard_placement;
+SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 
 -- Check that CREATE INDEX statement is propagated
 \c - - - :master_port
