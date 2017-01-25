@@ -605,7 +605,10 @@ SELECT shardid, nodename, nodeport
 DROP TABLE numbers_append;
 
 -- Test copy failures against connection failures
--- switch to a test user, it was previously created
+-- create and switch to test user
+CREATE USER test_user;
+SELECT * FROM run_command_on_workers('CREATE USER test_user');
+
 \c - test_user
 SET citus.shard_count to 4;
 CREATE TABLE numbers_hash (a int, b int);
@@ -700,11 +703,17 @@ SELECT shardid, shardstate, nodename, nodeport
 -- re-enable test_user on the first worker
 \c - :default_user - :worker_1_port
 ALTER USER test_user WITH login;
+
+-- there is a dangling shard in worker_2, drop it
+\c - test_user - :worker_2_port
+DROP TABLE numbers_hash_other_560176;
+
 \c - test_user - :master_port
 
 DROP TABLE numbers_hash;
 DROP TABLE numbers_hash_other;
 DROP TABLE numbers_reference;
+
 \c - :default_user
 
 -- test copy failure inside the node
@@ -738,4 +747,5 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
 
 DROP TABLE numbers_hash;
-
+SELECT * FROM run_command_on_workers('DROP USER test_user');
+DROP USER test_user;

@@ -869,4 +869,7 @@ ALTER USER test_user_new RENAME TO test_user;
 
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
-DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second;
+DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second, reference_failure_test;
+
+SELECT * FROM run_command_on_workers('DROP USER test_user');
+DROP USER test_user;
