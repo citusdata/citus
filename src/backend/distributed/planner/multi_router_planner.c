@@ -669,7 +669,7 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	/* we do not expect to see a view in modify target */
 	foreach(rangeTableCell, queryTree->rtable)
@@ -1196,7 +1196,7 @@ ModifyQuerySupported(Query *queryTree)
 	Oid distributedTableId = ExtractFirstDistributedTableId(queryTree);
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-	bool schemaNode = SchemaNode();
+	bool isCoordinator = IsCoordinator();
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
 	bool hasValuesScan = false;
@@ -1254,13 +1254,13 @@ ModifyQuerySupported(Query *queryTree)
 				referenceTable = true;
 			}
 
-			if (referenceTable && !schemaNode)
+			if (referenceTable && !isCoordinator)
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "cannot perform distributed planning for the given"
 									 " modification",
 									 "Modifications to reference tables are "
-									 "supported only from the schema node.",
+									 "supported only from the coordinator.",
 									 NULL);
 			}
 

@@ -111,7 +111,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	char partitionMethod = 0;
 	bool failOK = false;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
@@ -208,7 +208,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
@@ -242,7 +242,7 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);

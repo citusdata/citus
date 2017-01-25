@@ -38,7 +38,7 @@ master_drop_distributed_table_metadata(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 

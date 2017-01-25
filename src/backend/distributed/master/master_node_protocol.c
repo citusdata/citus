@@ -264,7 +264,7 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 	uint64 shardId = 0;
 	Datum shardIdDatum = 0;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	shardId = GetNextShardId();
 	shardIdDatum = Int64GetDatum(shardId);
@@ -321,7 +321,7 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 	uint64 placementId = 0;
 	Datum placementIdDatum = 0;
 
-	EnsureSchemaNode();
+	EnsureCoordinator();
 
 	placementId = GetNextPlacementId();
 	placementIdDatum = Int64GetDatum(placementId);
@@ -876,11 +876,11 @@ ShardStorageType(Oid relationId)
 
 
 /*
- * SchemaNode function returns true if this node is identified as the
+ * IsCoordinator function returns true if this node is identified as the
  * schema/coordinator/master node of the cluster.
  */
 bool
-SchemaNode(void)
+IsCoordinator(void)
 {
 	return (GetLocalGroupId() == 0);
 }
