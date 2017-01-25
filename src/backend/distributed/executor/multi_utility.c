@@ -170,10 +170,23 @@ multi_ProcessUtility(Node *parsetree,
 					 DestReceiver *dest,
 					 char *completionTag)
 {
-	bool isCoordinator = IsCoordinator();
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
+
+	if (IsA(parsetree, TransactionStmt))
+	{
+		/*
+		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
+		 * transactions in which case a lot of checks cannot be done safely in
+		 * that state. Since we never need to intercept transaction statements,
+		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
+		standard_ProcessUtility(parsetree, queryString, context,
+								params, dest, completionTag);
+
+		return;
+	}
 
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
@@ -296,19 +309,30 @@ multi_ProcessUtility(Node *parsetree,
 									  "move all tables.")));
 		}
 	}
-	else if (!isCoordinator)
+	else
 	{
+		/*
+		 * citus.enable_ddl_propagation is disabled, which means that PostgreSQL
+		 * should handle the DDL command on a distributed table directly, without
+		 * Citus intervening. Advanced Citus users use this to implement their own
+		 * DDL propagation. We also use it to avoid re-propagating DDL commands
+		 * when changing MX tables on workers. Below, we also make sure that DDL
+		 * commands don't run queries that might get intercepted by Citus and error
+		 * out, specifically we skip validation in foreign keys.
+		 */
+
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 			if (alterTableStmt->relkind == OBJECT_TABLE)
 			{
 				/*
-				 * When the coordinator issues an ALTER TABLE ... ADD FOREIGN KEY
-				 * command, the validation step should be skipped on the distributed
-				 * table of the worker. Therefore, we check whether the given ALTER
-				 * TABLE statement is a FOREIGN KEY constraint and if so disable the
-				 * validation step. Note that validation is done on the shard level.
+				 * When issuing an ALTER TABLE ... ADD FOREIGN KEY command, the
+				 * the validation step should be skipped on the distributed table.
+				 * Therefore, we check whether the given ALTER TABLE statement is a
+				 * FOREIGN KEY constraint and if so disable the validation step.
+				 * Note that validation is done on the shard level when DDL
+				 * propagation is enabled.
 				 */
 				parsetree = WorkerProcessAlterTableStmt(alterTableStmt, queryString);
 			}
