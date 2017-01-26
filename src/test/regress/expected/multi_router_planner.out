@@ -2073,9 +2073,6 @@ INSERT INTO failure_test VALUES (1, 1);
 WARNING:  connection error: localhost:57638
 DETAIL:  no connection to the server
 
-WARNING:  connection error: localhost:57638
-DETAIL:  no connection to the server
-
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
 		SELECT shardid FROM pg_dist_shard
