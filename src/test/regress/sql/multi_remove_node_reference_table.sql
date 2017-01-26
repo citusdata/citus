@@ -467,8 +467,9 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
-    
+    nodeport = :worker_2_port
+ORDER BY
+	shardid;
 \c - - - :master_port
 
 SELECT master_remove_node('localhost', :worker_2_port);
