@@ -1150,6 +1150,205 @@ DEBUG:  StartTransactionCommand
 DEBUG:  StartTransaction
 DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  set operations are not allowed in INSERT ... SELECT queries
+-- some supported LEFT JOINs
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first  LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647))
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_second.user_id = 10;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id = 20;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  Skipping target shard interval 13300008 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
+DEBUG:  ProcessQuery
+DEBUG:  Plan is router executable
+DEBUG:  CommitTransactionCommand
+DEBUG:  CommitTransaction
+DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+-- some unsupported LEFT/INNER JOINs
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+  WHERE raw_events_first.user_id = 10;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+  WHERE raw_events_first.user_id = 10;
+DEBUG:  StartTransactionCommand
+DEBUG:  StartTransaction
+DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 -- unsupported JOIN
 INSERT INTO agg_events
             (value_4_agg,
@@ -2039,3 +2238,10 @@ DROP TABLE table_with_serial;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;
+-- clean any 2PC transactions we've used
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+

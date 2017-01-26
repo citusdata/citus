@@ -496,6 +496,63 @@ FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
+
+-- some supported LEFT JOINs
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first  LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_second.user_id = 10;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id = 20;
+
+
+-- some unsupported LEFT/INNER JOINs
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+  WHERE raw_events_first.user_id = 10;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+  WHERE raw_events_first.user_id = 10;
+
 -- unsupported JOIN
 INSERT INTO agg_events
             (value_4_agg,
@@ -979,3 +1036,6 @@ DROP TABLE table_with_serial;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;
+
+-- clean any 2PC transactions we've used
+SELECT recover_prepared_transactions();
