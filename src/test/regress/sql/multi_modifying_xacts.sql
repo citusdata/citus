@@ -832,6 +832,11 @@ CREATE USER test_user;
 CREATE TABLE reference_failure_test (key int, value int);
 SELECT create_reference_table('reference_failure_test');
 
+-- create a hash distributed table
+SET citus.shard_count TO 4;
+CREATE TABLE numbers_hash_failure_test(key int, value int);
+SELECT create_distributed_table('numbers_hash_failure_test', 'key');
+
 -- ensure that the shard is created for this user
 \c - test_user - :worker_1_port
 \dt reference_failure_test_1200015
@@ -851,8 +856,15 @@ BEGIN;
 INSERT INTO reference_failure_test VALUES (1, '1');
 COMMIT;
 
+BEGIN;
+COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
+2,2
+\.
+COMMIT;
+
 -- show that no data go through the table and shard states are good
 SELECT * FROM reference_failure_test;
+
 
 -- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
@@ -863,13 +875,60 @@ AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
+BEGIN;
+COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+\.
+
+-- some placements are invalid before abort
+SELECT shardid, shardstate, nodename, nodeport
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
+ORDER BY shardid, nodeport;
+
+ABORT;
+
+-- verify nothing is inserted
+SELECT count(*) FROM numbers_hash_failure_test;
+
+-- all placements to be market valid
+SELECT shardid, shardstate, nodename, nodeport
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
+ORDER BY shardid, nodeport;
+
+BEGIN;
+COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
+1,1
+2,2
+\.
+
+-- check shard states before commit
+SELECT shardid, shardstate, nodename, nodeport
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
+ORDER BY shardid, nodeport;
+
+COMMIT;
+
+-- expect some placements to be market invalid after commit
+SELECT shardid, shardstate, nodename, nodeport
+FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
+ORDER BY shardid, nodeport;
+
+-- verify data is inserted
+SELECT count(*) FROM numbers_hash_failure_test;
+
 -- connect back to the worker and set rename the test_user back
 \c - :default_user - :worker_1_port
 ALTER USER test_user_new RENAME TO test_user;
 
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
-DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second, reference_failure_test;
+DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
+	reference_failure_test, numbers_hash_failure_test;
 
 SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
