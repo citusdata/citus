@@ -72,6 +72,19 @@ typedef struct WalkerState
 	bool badCoalesce;
 } WalkerState;
 
+typedef struct InstantiateQualWalker
+{
+	ShardInterval *targetShardInterval;
+	Var *relationPartitionColumn;
+}InstantiateQualWalker;
+
+typedef struct EqualityCheckOnPartitionColumnWalker
+{
+	Var *relationPartitionColumn;
+	bool partitionColumnEqualityExists;
+}PartitionColumnEqualityCheckWalker;
+
+
 bool EnableRouterExecution = true;
 
 /* planner functions forward declarations */
@@ -128,6 +141,7 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
+static Node * PartitionColumnEqualityWalker(Node *originalNode, void *context);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -356,11 +370,13 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	ListCell *restrictionCell = NULL;
 	Task *modifyTask = NULL;
 	List *selectPlacementList = NIL;
+	List *insertShardPlacementList = NULL;
+	List *intersectedPlacementList = NULL;
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
 	List *relationShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
-	List *insertShardPlacementList = NULL;
-	List *intersectedPlacementList = NULL;
+	ShardInterval *anchorShardInterval = NULL;
+	ListCell *relationShardCell = NULL;
 	bool routerPlannable = false;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
@@ -377,6 +393,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		InstantiateQualWalker *instantiateQualWalker = palloc0(
+			sizeof(InstantiateQualWalker));
+		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
 		/*
 		 * We haven't added the quals if all participating tables are reference
@@ -387,9 +406,12 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			break;
 		}
 
+		instantiateQualWalker->relationPartitionColumn = relationPartitionKey;
+		instantiateQualWalker->targetShardInterval = shardInterval;
+
 		originalBaserestrictInfo =
 			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
-											  shardInterval);
+											  instantiateQualWalker);
 	}
 
 	/*
@@ -436,15 +458,40 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 		return NULL;
 	}
 
+	/*
+	 * If the anchorShardInterval belongs to a reference table and the target tables it
+	 * not a reference table, find another shard interval that does not belong to a
+	 * reference table.
+	 */
+	anchorShardInterval = LoadShardInterval(selectAnchorShardId);
+	if (PartitionMethod(anchorShardInterval->relationId) == DISTRIBUTE_BY_NONE &&
+		!restrictionContext->allReferenceTables)
+	{
+		foreach(relationShardCell, relationShardList)
+		{
+			RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
+
+			if (PartitionMethod(relationShard->relationId) != DISTRIBUTE_BY_NONE)
+			{
+				anchorShardInterval = LoadShardInterval(relationShard->shardId);
+				break;
+			}
+		}
+	}
+
+	/* this case indicate*/
+	if (!ShardsColocated(anchorShardInterval, shardInterval))
+	{
+		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
+								"SELECT query for it pruned away", shardId)));
+
+		return NULL;
+	}
+
 	/* get the placements for insert target shard and its intersection with select */
 	insertShardPlacementList = FinalizedShardPlacementList(shardId);
 	intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 													  selectPlacementList);
-
-	/*
-	 * If insert target does not have exactly the same placements with the select,
-	 * we sholdn't run the query.
-	 */
 	if (list_length(insertShardPlacementList) != list_length(intersectedPlacementList))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -453,7 +500,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 						errdetail("Insert query cannot be executed on all placements "
 								  "for shard %ld", shardId)));
 	}
-
 
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
@@ -479,7 +525,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK, queryString->data);
 	modifyTask->dependedTaskList = NULL;
 	modifyTask->anchorShardId = shardId;
-	modifyTask->taskPlacementList = insertShardPlacementList;
+	modifyTask->taskPlacementList = FinalizedShardPlacementList(shardId);
 	modifyTask->upsertQuery = upsertQuery;
 	modifyTask->relationShardList = relationShardList;
 	modifyTask->replicationModel = cacheEntry->replicationModel;
@@ -1142,8 +1188,22 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 	Oid equalsOperator = InvalidOid;
 	Oid greaterOperator = InvalidOid;
 	bool hashable = false;
+	PartitionColumnEqualityCheckWalker *walker =
+		palloc0(sizeof(PartitionColumnEqualityCheckWalker));
 
 	AssertArg(query->commandType == CMD_SELECT);
+
+	walker->partitionColumnEqualityExists = false;
+	walker->relationPartitionColumn = partitionColumn;
+
+	/* if the query already includes part_column = const, we don't need to add another. In fact,
+	 * adding another equality qual breaks lots of things.
+	 */
+	PartitionColumnEqualityWalker((Node *) query->jointree->quals, walker);
+	if (walker->partitionColumnEqualityExists)
+	{
+		return;
+	}
 
 	/* get the necessary equality operator */
 	get_sort_group_operators(partitionColumn->vartype, false, true, false,
@@ -1183,6 +1243,51 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 		query->jointree->quals = make_and_qual(query->jointree->quals,
 											   (Node *) uninstantiatedEqualityQual);
 	}
+}
+
+
+/*
+ *
+ */
+static Node *
+PartitionColumnEqualityWalker(Node *originalNode, void *context)
+{
+	PartitionColumnEqualityCheckWalker *walker =
+		(PartitionColumnEqualityCheckWalker *) context;
+
+	if (originalNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(originalNode, OpExpr) && list_length(((OpExpr *) originalNode)->args) == 2)
+	{
+		OpExpr *op = (OpExpr *) originalNode;
+		Node *leftop = get_leftop((Expr *) op);
+		Node *rightop = get_rightop((Expr *) op);
+
+
+		if (IsA(leftop, Var) && IsA(rightop, Const) &&
+			OperatorImplementsEquality(op->opno))
+		{
+			if (((Var *) leftop)->varattno == walker->relationPartitionColumn->varattno)
+			{
+				walker->partitionColumnEqualityExists = true;
+
+				return NULL;
+			}
+		}
+		else if (IsA(leftop, Const) && IsA(rightop, Var) &&
+				 OperatorImplementsEquality(op->opno))
+		{
+			walker->partitionColumnEqualityExists = true;
+			return NULL;
+		}
+	}
+
+
+	return expression_tree_mutator(originalNode, PartitionColumnEqualityWalker,
+								   (void *) context);
 }
 
 
@@ -2950,7 +3055,10 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 static Node *
 InstantiatePartitionQual(Node *node, void *context)
 {
-	ShardInterval *shardInterval = (ShardInterval *) context;
+	InstantiateQualWalker *instantiateContext = ((InstantiateQualWalker *) context);
+	ShardInterval *shardInterval = instantiateContext->targetShardInterval;
+	Var *relationPartitionColumn = instantiateContext->relationPartitionColumn;
+
 	Assert(shardInterval->minValueExists);
 	Assert(shardInterval->maxValueExists);
 
@@ -2974,6 +3082,7 @@ InstantiatePartitionQual(Node *node, void *context)
 		Node *leftop = get_leftop((Expr *) op);
 		Node *rightop = get_rightop((Expr *) op);
 		Param *param = NULL;
+		Var *currentPartitionColumn = NULL;
 
 		Var *hashedGEColumn = NULL;
 		OpExpr *hashedGEOpExpr = NULL;
@@ -2989,17 +3098,26 @@ InstantiatePartitionQual(Node *node, void *context)
 		Oid integer4LEoperatorId = InvalidOid;
 
 		/* look for the Params */
-		if (IsA(leftop, Param))
+		if (IsA(leftop, Param) && IsA(rightop, Var))
 		{
 			param = (Param *) leftop;
+			currentPartitionColumn = (Var *) rightop;
 		}
-		else if (IsA(rightop, Param))
+		else if (IsA(rightop, Param) & IsA(leftop, Var))
 		{
 			param = (Param *) rightop;
+			currentPartitionColumn = (Var *) leftop;
 		}
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return node;
+		}
+
+		/* if the qual is not on the partition column, skip it */
+		if (relationPartitionColumn && currentPartitionColumn->varattno !=
+			relationPartitionColumn->varattno)
 		{
 			return node;
 		}
