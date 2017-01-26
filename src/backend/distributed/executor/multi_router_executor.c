@@ -733,6 +733,18 @@ ExecuteSingleModifyTask(QueryDesc *queryDesc, Task *task,
 		bool failOnError = false;
 		int64 currentAffectedTupleCount = 0;
 
+		if (connection->remoteTransaction.transactionFailed)
+		{
+			/*
+			 * If GetModifyConnections failed to send BEGIN this connection will have
+			 * been marked as failed, and should not have any more commands sent to
+			 * it! Skip it for now, at the bottom of this method we call
+			 * MarkFailedShardPlacements() to ensure future statements will not use this
+			 * placement.
+			 */
+			continue;
+		}
+
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
