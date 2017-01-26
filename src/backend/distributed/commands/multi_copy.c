@@ -536,6 +536,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	EndCopyFrom(copyState);
 	heap_close(distributedRelation, NoLock);
 
+	/* mark failed placements as inactive */
+	CheckForFailedPlacements(true, CoordinatedTransactionUses2PC);
+
 	CHECK_FOR_INTERRUPTS();
 
 	if (completionTag != NULL)
@@ -834,7 +837,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 					bool stopOnFailure, bool useBinaryCopyFormat)
 {
 	List *finalizedPlacementList = NIL;
-	List *failedPlacementList = NIL;
+	int failedPlacementCount = 0;
 	ListCell *placementCell = NULL;
 	List *connectionList = NULL;
 	int64 shardId = shardConnections->shardId;
@@ -863,8 +866,6 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 	foreach(placementCell, finalizedPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
-		char *nodeName = placement->nodeName;
-		int nodePort = placement->nodePort;
 		char *nodeUser = CurrentUserName();
 		MultiConnection *connection = NULL;
 		uint32 connectionFlags = FOR_DML;
@@ -877,23 +878,24 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 		{
 			if (stopOnFailure)
 			{
-				ereport(ERROR, (errmsg("could not open connection to %s:%d",
-									   nodeName, nodePort)));
+				ReportConnectionError(connection, ERROR);
 			}
+			else
+			{
+				ReportConnectionError(connection, WARNING);
+				MarkRemoteTransactionFailed(connection, true);
 
-			failedPlacementList = lappend(failedPlacementList, placement);
-			continue;
+				failedPlacementCount++;
+				continue;
+			}
 		}
 
 		/*
-		 * If errors are supposed to cause immediate aborts (i.e. we don't
+		 * Errors are supposed to cause immediate aborts (i.e. we don't
 		 * want to/can't invalidate placements), mark the connection as
 		 * critical so later errors cause failures.
 		 */
-		if (stopOnFailure)
-		{
-			MarkRemoteTransactionCritical(connection);
-		}
+		MarkRemoteTransactionCritical(connection);
 		ClaimConnectionExclusively(connection);
 		RemoteTransactionBeginIfNecessary(connection);
 		copyCommand = ConstructCopyStatement(copyStatement, shardConnections->shardId,
@@ -902,14 +904,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 
 		if (PQresultStatus(result) != PGRES_COPY_IN)
 		{
-			ReportConnectionError(connection, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-
-			PQclear(result);
-
-			/* failed placements will be invalidated by transaction machinery */
-			failedPlacementList = lappend(failedPlacementList, placement);
-			continue;
+			ReportResultError(connection, result, ERROR);
 		}
 
 		PQclear(result);
@@ -917,9 +912,9 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 	}
 
 	/* if all placements failed, error out */
-	if (list_length(failedPlacementList) == list_length(finalizedPlacementList))
+	if (failedPlacementCount == list_length(finalizedPlacementList))
 	{
-		ereport(ERROR, (errmsg("could not find any active placements")));
+		ereport(ERROR, (errmsg("could not connect to any active placements")));
 	}
 
 	/*
@@ -927,7 +922,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 	 * never reach to this point. This is the case for reference tables and
 	 * copy from worker nodes.
 	 */
-	Assert(!stopOnFailure || list_length(failedPlacementList) == 0);
+	Assert(!stopOnFailure || failedPlacementCount == 0);
 
 	shardConnections->connectionList = connectionList;
 

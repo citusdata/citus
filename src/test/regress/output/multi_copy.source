@@ -708,3 +708,310 @@ CONTEXT:  while executing command on localhost:57638
 WARNING:  could not get statistics for shard public.composite_partition_column_table_560164
 DETAIL:  Setting shard statistics to NULL
 ERROR:  failure on connection marked as essential: localhost:57637
+-- Test copy on append distributed tables do not create shards on removed workers
+CREATE TABLE numbers_append (a int, b int);
+SELECT master_create_distributed_table('numbers_append', 'a', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+-- no shards is created yet
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+ shardid | nodename | nodeport 
+---------+----------+----------
+(0 rows)
+
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+-- verify there are shards at both workers
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+  560165 | localhost |    57637
+  560165 | localhost |    57638
+  560166 | localhost |    57638
+  560166 | localhost |    57637
+(4 rows)
+
+-- disable the first node
+SELECT master_disable_node('localhost', :worker_1_port);
+NOTICE:  Node localhost:57637 has active shard placements. Some queries may fail after this operation. Use select master_add_node('localhost', 57637) to add this node back.
+ master_disable_node 
+---------------------
+ 
+(1 row)
+
+-- set replication factor to 1 so that copy will
+-- succeed without replication count error 
+SET citus.shard_replication_factor TO 1;
+-- add two new shards and verify they are created at the other node
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+  560165 | localhost |    57637
+  560165 | localhost |    57638
+  560166 | localhost |    57638
+  560166 | localhost |    57637
+  560167 | localhost |    57638
+  560168 | localhost |    57638
+(6 rows)
+
+-- add the node back
+SELECT master_add_node('localhost', :worker_1_port);
+NOTICE:  Replicating reference table "nation" to all workers
+NOTICE:  Replicating reference table "supplier" to all workers
+         master_add_node         
+---------------------------------
+ (3,3,localhost,57637,default,f)
+(1 row)
+
+RESET citus.shard_replication_factor;
+-- add two new shards and verify they are created at both workers
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+COPY numbers_append FROM STDIN WITH (FORMAT 'csv');
+SELECT shardid, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
+ shardid | nodename  | nodeport 
+---------+-----------+----------
+  560165 | localhost |    57637
+  560165 | localhost |    57638
+  560166 | localhost |    57638
+  560166 | localhost |    57637
+  560167 | localhost |    57638
+  560168 | localhost |    57638
+  560169 | localhost |    57637
+  560169 | localhost |    57638
+  560170 | localhost |    57638
+  560170 | localhost |    57637
+(10 rows)
+
+DROP TABLE numbers_append;
+-- Test copy failures against connection failures
+-- create and switch to test user
+CREATE USER test_user;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT * FROM run_command_on_workers('CREATE USER test_user');
+ nodename  | nodeport | success |   result    
+-----------+----------+---------+-------------
+ localhost |    57637 | t       | CREATE ROLE
+ localhost |    57638 | t       | CREATE ROLE
+(2 rows)
+
+\c - test_user
+SET citus.shard_count to 4;
+CREATE TABLE numbers_hash (a int, b int);
+SELECT create_distributed_table('numbers_hash', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+-- verify each placement is active
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560171 |          1 | localhost |    57637
+  560171 |          1 | localhost |    57638
+  560172 |          1 | localhost |    57638
+  560172 |          1 | localhost |    57637
+  560173 |          1 | localhost |    57637
+  560173 |          1 | localhost |    57638
+  560174 |          1 | localhost |    57638
+  560174 |          1 | localhost |    57637
+(8 rows)
+
+-- create a reference table
+CREATE TABLE numbers_reference(a int, b int);
+SELECT create_reference_table('numbers_reference');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
+-- create another hash distributed table
+CREATE TABLE numbers_hash_other(a int, b int);
+SELECT create_distributed_table('numbers_hash_other', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560176 |          1 | localhost |    57638
+  560176 |          1 | localhost |    57637
+  560177 |          1 | localhost |    57637
+  560177 |          1 | localhost |    57638
+  560178 |          1 | localhost |    57638
+  560178 |          1 | localhost |    57637
+  560179 |          1 | localhost |    57637
+  560179 |          1 | localhost |    57638
+(8 rows)
+
+-- manually corrupt pg_dist_shard such that both copies of one shard is placed in
+-- worker_1. This is to test the behavior when no replica of a shard is accessible.
+-- Whole copy operation is supposed to fail and rollback.
+\c - :default_user
+UPDATE pg_dist_shard_placement SET nodeport = :worker_1_port WHERE shardid = 560176;
+-- disable test_user on the first worker
+\c - :default_user - :worker_1_port
+ALTER USER test_user WITH nologin;
+\c - test_user - :master_port
+-- reissue copy
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash, line 1: "1,1"
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash, line 2: "2,2"
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash, line 3: "3,3"
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash, line 6: "6,6"
+-- verify shards in the first worker as marked invalid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560171 |          3 | localhost |    57637
+  560171 |          1 | localhost |    57638
+  560172 |          1 | localhost |    57638
+  560172 |          3 | localhost |    57637
+  560173 |          3 | localhost |    57637
+  560173 |          1 | localhost |    57638
+  560174 |          1 | localhost |    57638
+  560174 |          3 | localhost |    57637
+(8 rows)
+
+-- try to insert into a reference table copy should fail
+COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
+ERROR:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_reference, line 1: "3,1"
+-- verify shards for reference table are still valid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_reference'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560175 |          1 | localhost |    57637
+  560175 |          1 | localhost |    57638
+(2 rows)
+
+-- try to insert into numbers_hash_other. copy should fail and rollback
+-- since it can not insert into either copies of a shard. shards are expected to
+-- stay valid since the operation is rolled back.
+COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
+WARNING:  connection error: localhost:57637
+DETAIL:  FATAL:  role "test_user" is not permitted to log in
+
+CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
+ERROR:  could not connect to any active placements
+CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
+-- verify shards for numbers_hash_other are still valid
+-- since copy has failed altogether
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560176 |          1 | localhost |    57637
+  560176 |          1 | localhost |    57637
+  560177 |          1 | localhost |    57637
+  560177 |          1 | localhost |    57638
+  560178 |          1 | localhost |    57638
+  560178 |          1 | localhost |    57637
+  560179 |          1 | localhost |    57637
+  560179 |          1 | localhost |    57638
+(8 rows)
+
+-- re-enable test_user on the first worker
+\c - :default_user - :worker_1_port
+ALTER USER test_user WITH login;
+-- there is a dangling shard in worker_2, drop it
+\c - test_user - :worker_2_port
+DROP TABLE numbers_hash_other_560176;
+\c - test_user - :master_port
+DROP TABLE numbers_hash;
+DROP TABLE numbers_hash_other;
+DROP TABLE numbers_reference;
+\c - :default_user
+-- test copy failure inside the node
+-- it will be done by changing definition of a shard table
+SET citus.shard_count to 4;
+CREATE TABLE numbers_hash(a int, b int);
+SELECT create_distributed_table('numbers_hash', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+\c - - - :worker_1_port
+ALTER TABLE numbers_hash_560180 ADD COLUMN c int;
+\c - - - :master_port
+-- operation will fail to modify a shard and roll back
+COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
+ERROR:  row field count is 2, expected 3
+DETAIL:  (null)
+-- verify no row is inserted
+SELECT * FROM numbers_hash;
+ a | b 
+---+---
+(0 rows)
+
+-- verify shard is still marked as valid
+SELECT shardid, shardstate, nodename, nodeport
+	FROM pg_dist_shard_placement join pg_dist_shard using(shardid) 
+	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
+ shardid | shardstate | nodename  | nodeport 
+---------+------------+-----------+----------
+  560180 |          1 | localhost |    57637
+  560180 |          1 | localhost |    57638
+  560181 |          1 | localhost |    57638
+  560181 |          1 | localhost |    57637
+  560182 |          1 | localhost |    57637
+  560182 |          1 | localhost |    57638
+  560183 |          1 | localhost |    57638
+  560183 |          1 | localhost |    57637
+(8 rows)
+
+DROP TABLE numbers_hash;
+SELECT * FROM run_command_on_workers('DROP USER test_user');
+ nodename  | nodeport | success |  result   
+-----------+----------+---------+-----------
+ localhost |    57637 | t       | DROP ROLE
+ localhost |    57638 | t       | DROP ROLE
+(2 rows)
+
+DROP USER test_user;

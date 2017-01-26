@@ -1324,7 +1324,8 @@ NOTICE:  Replicating reference table "mx_ref" to all workers
 
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637
@@ -1334,7 +1335,8 @@ WHERE logicalrelid='mx_ref'::regclass;
 \c - - - :worker_1_port
 SELECT shardid, nodename, nodeport 
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
-WHERE logicalrelid='mx_ref'::regclass;
+WHERE logicalrelid='mx_ref'::regclass
+ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
  1310184 | localhost |    57637
