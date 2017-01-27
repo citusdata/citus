@@ -78,12 +78,6 @@ typedef struct InstantiateQualWalker
 	Var *relationPartitionColumn;
 }InstantiateQualWalker;
 
-typedef struct EqualityCheckOnPartitionColumnWalker
-{
-	Var *relationPartitionColumn;
-	bool partitionColumnEqualityExists;
-}PartitionColumnEqualityCheckWalker;
-
 
 bool EnableRouterExecution = true;
 
@@ -141,7 +135,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
-static Node * PartitionColumnEqualityWalker(Node *originalNode, void *context);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -479,11 +472,17 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 		}
 	}
 
-	/* this case indicate*/
-	if (!ShardsColocated(anchorShardInterval, shardInterval))
+	/*
+	 * We should not let the anchor shard interval and target shard interval
+	 * being not colocated. This case is mostly valid once original query already
+	 * includes a partition column
+	 */
+	if (!ShardsIntervalsEqual(anchorShardInterval, shardInterval))
 	{
 		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
-								"SELECT query for it pruned away", shardId)));
+								"it doesn't have the same shard range with the select "
+								"anchor shard interval %ld",
+								shardId, anchorShardInterval->shardId)));
 
 		return NULL;
 	}
@@ -492,6 +491,11 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	insertShardPlacementList = FinalizedShardPlacementList(shardId);
 	intersectedPlacementList = IntersectPlacementList(insertShardPlacementList,
 													  selectPlacementList);
+
+	/*
+	 * If insert target does not have exactly the same placements with the select,
+	 * we sholdn't run the query.
+	 */
 	if (list_length(insertShardPlacementList) != list_length(intersectedPlacementList))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1188,22 +1192,6 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 	Oid equalsOperator = InvalidOid;
 	Oid greaterOperator = InvalidOid;
 	bool hashable = false;
-	PartitionColumnEqualityCheckWalker *walker =
-		palloc0(sizeof(PartitionColumnEqualityCheckWalker));
-
-	AssertArg(query->commandType == CMD_SELECT);
-
-	walker->partitionColumnEqualityExists = false;
-	walker->relationPartitionColumn = partitionColumn;
-
-	/* if the query already includes part_column = const, we don't need to add another. In fact,
-	 * adding another equality qual breaks lots of things.
-	 */
-	PartitionColumnEqualityWalker((Node *) query->jointree->quals, walker);
-	if (walker->partitionColumnEqualityExists)
-	{
-		return;
-	}
 
 	/* get the necessary equality operator */
 	get_sort_group_operators(partitionColumn->vartype, false, true, false,
@@ -1243,51 +1231,6 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 		query->jointree->quals = make_and_qual(query->jointree->quals,
 											   (Node *) uninstantiatedEqualityQual);
 	}
-}
-
-
-/*
- *
- */
-static Node *
-PartitionColumnEqualityWalker(Node *originalNode, void *context)
-{
-	PartitionColumnEqualityCheckWalker *walker =
-		(PartitionColumnEqualityCheckWalker *) context;
-
-	if (originalNode == NULL)
-	{
-		return NULL;
-	}
-
-	if (IsA(originalNode, OpExpr) && list_length(((OpExpr *) originalNode)->args) == 2)
-	{
-		OpExpr *op = (OpExpr *) originalNode;
-		Node *leftop = get_leftop((Expr *) op);
-		Node *rightop = get_rightop((Expr *) op);
-
-
-		if (IsA(leftop, Var) && IsA(rightop, Const) &&
-			OperatorImplementsEquality(op->opno))
-		{
-			if (((Var *) leftop)->varattno == walker->relationPartitionColumn->varattno)
-			{
-				walker->partitionColumnEqualityExists = true;
-
-				return NULL;
-			}
-		}
-		else if (IsA(leftop, Const) && IsA(rightop, Var) &&
-				 OperatorImplementsEquality(op->opno))
-		{
-			walker->partitionColumnEqualityExists = true;
-			return NULL;
-		}
-	}
-
-
-	return expression_tree_mutator(originalNode, PartitionColumnEqualityWalker,
-								   (void *) context);
 }
 
 
