@@ -473,9 +473,14 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	}
 
 	/*
-	 * We should not let the anchor shard interval and target shard interval
-	 * being not colocated. This case is mostly valid once original query already
-	 * includes a partition column
+	 * It doesn't make sense that the anchor shard interval and target shard interval
+	 * have different ranges. This case is valid once original query already
+	 * includes a partition column equality qual and there is a JOIN on the
+	 * same column.
+	 *
+	 * We actually could skip adding this check here since the subquery would return zero
+	 * rows given that we already have AddShardIntervalRestrictionToSelect(). However, by
+	 * adding this check we prevent unnecessary round-trips to the workers.
 	 */
 	if (!ShardsIntervalsEqual(anchorShardInterval, shardInterval))
 	{
@@ -3025,7 +3030,7 @@ InstantiatePartitionQual(Node *node, void *context)
 		Node *leftop = get_leftop((Expr *) op);
 		Node *rightop = get_rightop((Expr *) op);
 		Param *param = NULL;
-		Var *currentPartitionColumn = NULL;
+		Var *currentColumn = NULL;
 
 		Var *hashedGEColumn = NULL;
 		OpExpr *hashedGEOpExpr = NULL;
@@ -3041,15 +3046,23 @@ InstantiatePartitionQual(Node *node, void *context)
 		Oid integer4LEoperatorId = InvalidOid;
 
 		/* look for the Params */
-		if (IsA(leftop, Param) && IsA(rightop, Var))
+		if (IsA(leftop, Param))
 		{
 			param = (Param *) leftop;
-			currentPartitionColumn = (Var *) rightop;
+
+			if (IsA(rightop, Var))
+			{
+				 currentColumn = (Var *) rightop;
+			}
 		}
-		else if (IsA(rightop, Param) & IsA(leftop, Var))
+		else if (IsA(rightop, Param))
 		{
 			param = (Param *) rightop;
-			currentPartitionColumn = (Var *) leftop;
+
+			if (IsA(leftop, Var))
+			{
+				currentColumn = (Var *) leftop;
+			}
 		}
 
 		/* not an interesting param for our purpose, so return */
@@ -3058,9 +3071,9 @@ InstantiatePartitionQual(Node *node, void *context)
 			return node;
 		}
 
-		/* if the qual is not on the partition column, skip it */
-		if (relationPartitionColumn && currentPartitionColumn->varattno !=
-			relationPartitionColumn->varattno)
+		/* if the qual is not on the partition column, do not instantiate */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
 		{
 			return node;
 		}

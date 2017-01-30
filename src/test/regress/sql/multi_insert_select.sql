@@ -525,33 +525,82 @@ FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
   WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id = 20;
 
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id IN (19, 20, 21);
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_second.user_id IN (19, 20, 21);
 
 -- some unsupported LEFT/INNER JOINs
+
+-- JOIN on one table with partition column other is not
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
 
-INSERT INTO agg_events (user_id)
-SELECT
-  raw_events_first.user_id
-FROM
-  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
-  WHERE raw_events_first.user_id = 10;
-
+-- same as the above with INNER JOIN
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
 
+-- both tables joined on non-partition columns
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
+
+-- same as the above with INNER JOIN
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+-- JOIN on one table with partition column other is not
+-- also an equality qual is added on the partition key 
+--INSERT INTO agg_events (user_id)
+--SELECT
+--  raw_events_first.user_id
+--FROM
+--  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+--  WHERE raw_events_first.user_id = 10;
+
+-- same as the above with INNER JOIN
+--INSERT INTO agg_events (user_id)
+--SELECT
+--  raw_events_first.user_id
+--FROM
+--  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+--  WHERE raw_events_first.user_id = 10;
+
+-- make things a bit more complicate with IN clauses
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
-  WHERE raw_events_first.user_id = 10;
+  WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
+
+-- implicit join on non partition column should also not be pushed down
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1; 
 
 -- unsupported JOIN
 INSERT INTO agg_events
