@@ -539,8 +539,19 @@ FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
   WHERE raw_events_first.user_id = 10 AND raw_events_second.user_id IN (19, 20, 21);
 
--- some unsupported LEFT/INNER JOINs
+-- the following is a very tricky query for Citus
+-- although we do not support pushing down JOINs on non-partition
+-- columns here it is safe to push it down given that we're looking for
+-- a specific value (i.e., value_1 = 12) on the joning column.
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1 
+       AND raw_events_first.value_1 = 12; 
 
+-- some unsupported LEFT/INNER JOINs
 -- JOIN on one table with partition column other is not
 INSERT INTO agg_events (user_id)
 SELECT
@@ -571,20 +582,21 @@ FROM
 
 -- JOIN on one table with partition column other is not
 -- also an equality qual is added on the partition key 
---INSERT INTO agg_events (user_id)
---SELECT
---  raw_events_first.user_id
---FROM
---  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
---  WHERE raw_events_first.user_id = 10;
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+WHERE 
+  raw_events_first.user_id = 10;
 
 -- same as the above with INNER JOIN
---INSERT INTO agg_events (user_id)
---SELECT
---  raw_events_first.user_id
---FROM
---  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
---  WHERE raw_events_first.user_id = 10;
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+WHERE raw_events_first.user_id = 10;
 
 -- make things a bit more complicate with IN clauses
 INSERT INTO agg_events (user_id)
@@ -601,6 +613,17 @@ SELECT raw_events_first.user_id
 FROM   raw_events_first, 
        raw_events_second 
 WHERE  raw_events_second.user_id = raw_events_first.value_1; 
+
+-- the following is again a very tricky query for Citus
+-- if the given filter was on value_1 as shown in the above, Citus could
+-- push it down. But here the query is refused
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1 
+       AND raw_events_first.value_2 = 12; 
 
 -- unsupported JOIN
 INSERT INTO agg_events

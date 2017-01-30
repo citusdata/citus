@@ -78,6 +78,12 @@ typedef struct InstantiateQualWalker
 	Var *relationPartitionColumn;
 }InstantiateQualWalker;
 
+typedef struct PartitionColumnEqualityCheckWalker
+{
+	Query *subquery;
+	bool partitionColumnEqualityExists;
+}PartitionColumnEqualityCheckWalker;
+
 
 bool EnableRouterExecution = true;
 
@@ -135,6 +141,7 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
+static bool PartitionColumnEqualityWalker(Node *inputNode, void *context);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -475,8 +482,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	/*
 	 * It doesn't make sense that the anchor shard interval and target shard interval
 	 * have different ranges. This case is valid once original query already
-	 * includes a partition column equality qual and there is a JOIN on the
-	 * same column.
+	 * includes a partition column equality qual.
 	 *
 	 * We actually could skip adding this check here since the subquery would return zero
 	 * rows given that we already have AddShardIntervalRestrictionToSelect(). However, by
@@ -534,7 +540,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask = CreateBasicTask(jobId, taskIdIndex, MODIFY_TASK, queryString->data);
 	modifyTask->dependedTaskList = NULL;
 	modifyTask->anchorShardId = shardId;
-	modifyTask->taskPlacementList = FinalizedShardPlacementList(shardId);
+	modifyTask->taskPlacementList = insertShardPlacementList;
 	modifyTask->upsertQuery = upsertQuery;
 	modifyTask->relationShardList = relationShardList;
 	modifyTask->replicationModel = cacheEntry->replicationModel;
@@ -1197,6 +1203,22 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 	Oid equalsOperator = InvalidOid;
 	Oid greaterOperator = InvalidOid;
 	bool hashable = false;
+	PartitionColumnEqualityCheckWalker *walker =
+		palloc0(sizeof(PartitionColumnEqualityCheckWalker));
+
+	AssertArg(query->commandType == CMD_SELECT);
+
+	walker->partitionColumnEqualityExists = false;
+	walker->subquery = query;
+
+	/* if the query already includes part_column = const, we don't need to add another */
+	PartitionColumnEqualityWalker((Node *) query->jointree->quals, walker);
+	if (walker->partitionColumnEqualityExists)
+	{
+		ereport(DEBUG2, (errmsg("skipping to add uninstantiated equality qual")));
+
+		return;
+	}
 
 	/* get the necessary equality operator */
 	get_sort_group_operators(partitionColumn->vartype, false, true, false,
@@ -1236,6 +1258,53 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 		query->jointree->quals = make_and_qual(query->jointree->quals,
 											   (Node *) uninstantiatedEqualityQual);
 	}
+}
+
+
+/*
+ * PartitionColumnEqualityWalker walks over the quals of a join tree and checks
+ * whether the quals include any (partitionColumn = Const) expression. If so, context
+ * is marked accordingly and the iteration is terminated.
+ */
+static bool
+PartitionColumnEqualityWalker(Node *inputNode, void *context)
+{
+	PartitionColumnEqualityCheckWalker *walker =
+		(PartitionColumnEqualityCheckWalker *) context;
+
+	if (inputNode == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(inputNode, OpExpr) && list_length(((OpExpr *) inputNode)->args) == 2)
+	{
+		OpExpr *op = (OpExpr *) inputNode;
+		Node *leftop = get_leftop((Expr *) op);
+		Node *rightop = get_rightop((Expr *) op);
+		Var *column = NULL;
+
+		if (IsA(leftop, Var) && IsA(rightop, Const) &&
+			OperatorImplementsEquality(op->opno))
+		{
+			column = (Var *) leftop;
+		}
+		else if (IsA(leftop, Const) && IsA(rightop, Var) &&
+				 OperatorImplementsEquality(op->opno))
+		{
+			column = (Var *) rightop;
+		}
+
+		if (column && IsPartitionColumn((Expr *) column, walker->subquery))
+		{
+			walker->partitionColumnEqualityExists = true;
+
+			return true;
+		}
+	}
+
+	return expression_tree_walker(inputNode, PartitionColumnEqualityWalker,
+								  (void *) context);
 }
 
 
@@ -3052,7 +3121,7 @@ InstantiatePartitionQual(Node *node, void *context)
 
 			if (IsA(rightop, Var))
 			{
-				 currentColumn = (Var *) rightop;
+				currentColumn = (Var *) rightop;
 			}
 		}
 		else if (IsA(rightop, Param))
