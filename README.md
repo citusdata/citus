@@ -7,28 +7,28 @@
 ### What is Citus?
 
 * **Open-source** PostgreSQL extension (not a fork)
-* **Scalable** across multiple hosts through sharding and replication
+* **Scalable** across multiple machines through sharding and replication
 * **Distributed** engine for query parallelization
-* **Highly available** in the face of host failures
+* **Database** designed to scale multi-tenant applications
 
-Citus horizontally scales PostgreSQL across commodity servers using
-sharding and replication. Its query engine parallelizes incoming
-SQL queries across these servers to enable real-time responses on
-large datasets.
+Citus is a distributed database that scales across commodity servers using transparent
+sharding and replication. Citus extends the underlying database rather than forking it,
+giving developers and enterprises the power and familiarity of a relational database. As
+an extension, Citus supports new PostgreSQL releases, and allows you to benefit from new
+features while maintaining compatibility with existing PostgreSQL tools.
 
-Citus extends the underlying database rather than forking it, which
-gives developers and enterprises the power and familiarity of a
-traditional relational database. As an extension, Citus supports
-new PostgreSQL releases, allowing users to benefit from new features
-while maintaining compatibility with existing PostgreSQL tools.
-Note that Citus supports many (but not all) SQL commands; see the
-[FAQ][faq] for more details.
+Citus serves many use cases. Two common ones are:
 
-Common Use-Cases:
-* Powering real-time analytic dashboards
-* Exploratory queries on events as they happen
-* Large dataset archival and reporting
-* Session analytics (funnels, segmentation, and cohorts)
+1. [Multi-tenant database](https://www.citusdata.com/blog/2016/10/03/designing-your-saas-database-for-high-scalability):
+Most B2B applications already have the notion of a tenant /
+customer / account built into their data model. Citus allows you to scale out your
+transactional relational database to 100K+ tenants with minimal changes to your
+application.
+
+2. [Real-time analytics](https://www.citusdata.com/blog/2017/01/27/getting-started-with-github-events-data):
+Citus enables ingesting large volumes of data and running
+analytical queries on that data in human real-time. Example applications include analytic
+dashboards with subsecond response times and exploratory queries on unfolding events.
 
 To learn more, visit [citusdata.com](https://www.citusdata.com) and join
 the [mailing list](https://groups.google.com/forum/#!forum/citus-users) to
@@ -78,8 +78,8 @@ If you're looking to get started locally, you can follow the following steps to 
 <tr>
   <td>Documentation</td>
   <td>Try the <a
-  href="https://docs.citusdata.com/en/v5.2/tutorials/tut-hash-distribution.html">Citus
-  tutorials</a> for a hands-on introduction or <br/>the <a
+  href="https://docs.citusdata.com/en/v6.0/tutorials/tut-hash-distribution.html">Citus
+  tutorial</a> for a hands-on introduction or <br/>the <a
   href="https://docs.citusdata.com">documentation</a> for
   a more comprehensive reference.</td>
 </tr>
@@ -105,21 +105,12 @@ If you're looking to get started locally, you can follow the following steps to 
   <td>Follow <a href="https://twitter.com/citusdata">@citusdata</a>
   for general updates and PostgreSQL scaling tips.</td>
 </tr>
-<tr>
-  <td>Training and Support</td>
-  <td>See our <a
-  href="https://www.citusdata.com/support">support
-  page</a> for training and dedicated support options.</td>
-</tr>
 </table>
 
 ### Contributing
 
-Citus is built on and of open source. We welcome your contributions,
-and have added a
-[helpwanted](https://github.com/citusdata/citus/labels/helpwanted) label
-to issues which are accessible to new contributors. The
-[CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
+Citus is built on and of open source, and we welcome your contributions.
+The [CONTRIBUTING.md](CONTRIBUTING.md) file explains how to get started
 developing the Citus extension itself and our code quality guidelines.
 
 ### Who is Using Citus?
