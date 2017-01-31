@@ -235,14 +235,13 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	Datum sequenceText = 0;
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
+	bool coordinator = IsCoordinator();
 
-	/* do nothing if DDL propagation is switched off */
-	if (!EnableDDLPropagation)
+	/* do nothing if DDL propagation is switched off or this is not the coordinator */
+	if (!EnableDDLPropagation || !coordinator)
 	{
 		PG_RETURN_VOID();
 	}
-
-	EnsureCoordinator();
 
 	/* iterate over sequence names to build single command to DROP them all */
 	sequenceIterator = array_create_iterator(sequenceNamesArray, 0, NULL);
