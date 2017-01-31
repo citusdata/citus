@@ -15,6 +15,7 @@
 
 #include <stddef.h>
 
+
 #include "access/stratnum.h"
 #include "access/xact.h"
 #include "catalog/pg_opfamily.h"
@@ -78,12 +79,6 @@ typedef struct InstantiateQualWalker
 	Var *relationPartitionColumn;
 }InstantiateQualWalker;
 
-typedef struct PartitionColumnEqualityCheckWalker
-{
-	Query *subquery;
-	bool partitionColumnEqualityExists;
-}PartitionColumnEqualityCheckWalker;
-
 
 bool EnableRouterExecution = true;
 
@@ -141,7 +136,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
-static bool PartitionColumnEqualityWalker(Node *inputNode, void *context);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -375,8 +369,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
 	List *relationShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
-	ShardInterval *anchorShardInterval = NULL;
-	ListCell *relationShardCell = NULL;
 	bool routerPlannable = false;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
@@ -393,6 +385,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		List *originalJoinInfo = restriction->relOptInfo->joininfo;
 		InstantiateQualWalker *instantiateQualWalker = palloc0(
 			sizeof(InstantiateQualWalker));
 		Var *relationPartitionKey = PartitionKey(restriction->relationId);
@@ -411,6 +404,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 		originalBaserestrictInfo =
 			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
+											  instantiateQualWalker);
+
+		originalJoinInfo =
+			(List *) InstantiatePartitionQual((Node *) originalJoinInfo,
 											  instantiateQualWalker);
 	}
 
@@ -454,46 +451,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
 								"SELECT query for it pruned away", shardId)));
-
-		return NULL;
-	}
-
-	/*
-	 * If the anchorShardInterval belongs to a reference table and the target tables it
-	 * not a reference table, find another shard interval that does not belong to a
-	 * reference table.
-	 */
-	anchorShardInterval = LoadShardInterval(selectAnchorShardId);
-	if (PartitionMethod(anchorShardInterval->relationId) == DISTRIBUTE_BY_NONE &&
-		!restrictionContext->allReferenceTables)
-	{
-		foreach(relationShardCell, relationShardList)
-		{
-			RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
-
-			if (PartitionMethod(relationShard->relationId) != DISTRIBUTE_BY_NONE)
-			{
-				anchorShardInterval = LoadShardInterval(relationShard->shardId);
-				break;
-			}
-		}
-	}
-
-	/*
-	 * It doesn't make sense that the anchor shard interval and target shard interval
-	 * have different ranges. This case is valid once original query already
-	 * includes a partition column equality qual.
-	 *
-	 * We actually could skip adding this check here since the subquery would return zero
-	 * rows given that we already have AddShardIntervalRestrictionToSelect(). However, by
-	 * adding this check we prevent unnecessary round-trips to the workers.
-	 */
-	if (!ShardsIntervalsEqual(anchorShardInterval, shardInterval))
-	{
-		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
-								"it doesn't have the same shard range with the select "
-								"anchor shard interval %ld",
-								shardId, anchorShardInterval->shardId)));
 
 		return NULL;
 	}
@@ -1203,22 +1160,8 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 	Oid equalsOperator = InvalidOid;
 	Oid greaterOperator = InvalidOid;
 	bool hashable = false;
-	PartitionColumnEqualityCheckWalker *walker =
-		palloc0(sizeof(PartitionColumnEqualityCheckWalker));
 
 	AssertArg(query->commandType == CMD_SELECT);
-
-	walker->partitionColumnEqualityExists = false;
-	walker->subquery = query;
-
-	/* if the query already includes part_column = const, we don't need to add another */
-	PartitionColumnEqualityWalker((Node *) query->jointree->quals, walker);
-	if (walker->partitionColumnEqualityExists)
-	{
-		ereport(DEBUG2, (errmsg("skipping to add uninstantiated equality qual")));
-
-		return;
-	}
 
 	/* get the necessary equality operator */
 	get_sort_group_operators(partitionColumn->vartype, false, true, false,
@@ -1258,53 +1201,6 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 		query->jointree->quals = make_and_qual(query->jointree->quals,
 											   (Node *) uninstantiatedEqualityQual);
 	}
-}
-
-
-/*
- * PartitionColumnEqualityWalker walks over the quals of a join tree and checks
- * whether the quals include any (partitionColumn = Const) expression. If so, context
- * is marked accordingly and the iteration is terminated.
- */
-static bool
-PartitionColumnEqualityWalker(Node *inputNode, void *context)
-{
-	PartitionColumnEqualityCheckWalker *walker =
-		(PartitionColumnEqualityCheckWalker *) context;
-
-	if (inputNode == NULL)
-	{
-		return false;
-	}
-
-	if (IsA(inputNode, OpExpr) && list_length(((OpExpr *) inputNode)->args) == 2)
-	{
-		OpExpr *op = (OpExpr *) inputNode;
-		Node *leftop = get_leftop((Expr *) op);
-		Node *rightop = get_rightop((Expr *) op);
-		Var *column = NULL;
-
-		if (IsA(leftop, Var) && IsA(rightop, Const) &&
-			OperatorImplementsEquality(op->opno))
-		{
-			column = (Var *) leftop;
-		}
-		else if (IsA(leftop, Const) && IsA(rightop, Var) &&
-				 OperatorImplementsEquality(op->opno))
-		{
-			column = (Var *) rightop;
-		}
-
-		if (column && IsPartitionColumn((Expr *) column, walker->subquery))
-		{
-			walker->partitionColumnEqualityExists = true;
-
-			return true;
-		}
-	}
-
-	return expression_tree_walker(inputNode, PartitionColumnEqualityWalker,
-								  (void *) context);
 }
 
 
@@ -2519,6 +2415,7 @@ TargetShardIntervalsForSelect(Query *query,
 		int shardCount = cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
+
 		List *prunedShardList = NIL;
 		int shardIndex = 0;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
@@ -2526,6 +2423,7 @@ TargetShardIntervalsForSelect(Query *query,
 		bool whereFalseQuery = false;
 
 		relationRestriction->prunedShardIntervalList = NIL;
+		restrictClauseList = list_concat(restrictClauseList, pseudoRestrictionList);
 
 		/*
 		 * Queries may have contradiction clauses like 'false', or '1=0' in
@@ -3084,6 +2982,7 @@ InstantiatePartitionQual(Node *node, void *context)
 		return NULL;
 	}
 
+
 	/*
 	 * Look for operator expressions with two arguments.
 	 *
@@ -3133,6 +3032,7 @@ InstantiatePartitionQual(Node *node, void *context)
 				currentColumn = (Var *) leftop;
 			}
 		}
+
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
