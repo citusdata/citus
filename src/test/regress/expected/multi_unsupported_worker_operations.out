@@ -385,6 +385,36 @@ DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port AND shardid 
 SELECT master_get_new_placementid();
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
+-- Show that sequences can be created and dropped on worker nodes
+CREATE TABLE some_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
+DROP TABLE some_table_with_sequence;
+CREATE SEQUENCE some_sequence;
+DROP SEQUENCE some_sequence;
+-- Show that dropping the sequence of an MX table with cascade harms the table and shards
+BEGIN;
+\d mx_table
+                           Table "public.mx_table"
+ Column |  Type   |                        Modifiers                         
+--------+---------+----------------------------------------------------------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
+
+DROP SEQUENCE mx_table_col_3_seq CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to default for table mx_table_1270000 column col_3
+drop cascades to default for table mx_table_1270002 column col_3
+drop cascades to default for table mx_table_1270004 column col_3
+drop cascades to default for table mx_table column col_3
+\d mx_table
+   Table "public.mx_table"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ col_1  | integer | 
+ col_2  | text    | 
+ col_3  | bigint  | not null
+
+ROLLBACK;
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_table;
