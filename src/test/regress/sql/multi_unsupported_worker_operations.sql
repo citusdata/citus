@@ -204,6 +204,19 @@ DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port AND shardid 
 -- master_get_new_placementid
 SELECT master_get_new_placementid();
 
+-- Show that sequences can be created and dropped on worker nodes
+CREATE TABLE some_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
+DROP TABLE some_table_with_sequence;
+CREATE SEQUENCE some_sequence;
+DROP SEQUENCE some_sequence;
+
+-- Show that dropping the sequence of an MX table with cascade harms the table and shards
+BEGIN;
+\d mx_table
+DROP SEQUENCE mx_table_col_3_seq CASCADE;
+\d mx_table
+ROLLBACK;
+
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_table;
