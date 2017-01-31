@@ -46,6 +46,7 @@ static void EnsureShardCanBeRepaired(int64 shardId, char *sourceNodeName,
 									 int32 sourceNodePort, char *targetNodeName,
 									 int32 targetNodePort);
 static List * RecreateTableDDLCommandList(Oid relationId);
+static List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
@@ -247,27 +248,20 @@ List *
 CopyShardCommandList(ShardInterval *shardInterval,
 					 char *sourceNodeName, int32 sourceNodePort)
 {
+	int64 shardId = shardInterval->shardId;
 	char *shardName = ConstructQualifiedShardName(shardInterval);
-	List *ddlCommandList = NIL;
-	ListCell *ddlCommandCell = NULL;
+	List *tableRecreationCommandList = NIL;
+	List *indexCommandList = NIL;
 	List *copyShardToNodeCommandsList = NIL;
 	StringInfo copyShardDataCommand = makeStringInfo();
+	Oid relationId = shardInterval->relationId;
 
-	ddlCommandList = RecreateTableDDLCommandList(shardInterval->relationId);
+	tableRecreationCommandList = RecreateTableDDLCommandList(relationId);
+	tableRecreationCommandList =
+		WorkerApplyShardDDLCommandList(tableRecreationCommandList, shardId);
 
-	foreach(ddlCommandCell, ddlCommandList)
-	{
-		char *ddlCommand = lfirst(ddlCommandCell);
-		char *escapedDdlCommand = quote_literal_cstr(ddlCommand);
-
-		StringInfo applyDdlCommand = makeStringInfo();
-		appendStringInfo(applyDdlCommand,
-						 WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA,
-						 shardInterval->shardId, escapedDdlCommand);
-
-		copyShardToNodeCommandsList = lappend(copyShardToNodeCommandsList,
-											  applyDdlCommand->data);
-	}
+	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
+											  tableRecreationCommandList);
 
 	appendStringInfo(copyShardDataCommand, WORKER_APPEND_TABLE_TO_SHARD,
 					 quote_literal_cstr(shardName), /* table to append */
@@ -277,6 +271,12 @@ CopyShardCommandList(ShardInterval *shardInterval,
 
 	copyShardToNodeCommandsList = lappend(copyShardToNodeCommandsList,
 										  copyShardDataCommand->data);
+
+	indexCommandList = GetTableIndexAndConstraintCommands(relationId);
+	indexCommandList = WorkerApplyShardDDLCommandList(indexCommandList, shardId);
+
+	copyShardToNodeCommandsList = list_concat(copyShardToNodeCommandsList,
+											  indexCommandList);
 
 	return copyShardToNodeCommandsList;
 }
@@ -368,8 +368,8 @@ ConstructQualifiedShardName(ShardInterval *shardInterval)
 
 /*
  * RecreateTableDDLCommandList returns a list of DDL statements similar to that
- * returned by GetTableDDLEvents except that the list begins with a "DROP TABLE"
- * or "DROP FOREIGN TABLE" statement to facilitate total recreation of a placement.
+ * returned by GetTableCreationCommands except that the list begins with a "DROP TABLE"
+ * or "DROP FOREIGN TABLE" statement to facilitate idempotent recreation of a placement.
  */
 static List *
 RecreateTableDDLCommandList(Oid relationId)
@@ -405,10 +405,36 @@ RecreateTableDDLCommandList(Oid relationId)
 	}
 
 	dropCommandList = list_make1(dropCommand->data);
-
-	createCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
-
+	createCommandList = GetTableCreationCommands(relationId, includeSequenceDefaults);
 	recreateCommandList = list_concat(dropCommandList, createCommandList);
 
 	return recreateCommandList;
+}
+
+
+/*
+ * WorkerApplyShardDDLCommandList wraps all DDL commands in ddlCommandList
+ * in a call to worker_apply_shard_ddl_command to apply the DDL command to
+ * the shard specified by shardId.
+ */
+static List *
+WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId)
+{
+	List *applyDdlCommandList = NIL;
+	ListCell *ddlCommandCell = NULL;
+
+	foreach(ddlCommandCell, ddlCommandList)
+	{
+		char *ddlCommand = lfirst(ddlCommandCell);
+		char *escapedDdlCommand = quote_literal_cstr(ddlCommand);
+
+		StringInfo applyDdlCommand = makeStringInfo();
+		appendStringInfo(applyDdlCommand,
+						 WORKER_APPLY_SHARD_DDL_COMMAND_WITHOUT_SCHEMA,
+						 shardId, escapedDdlCommand);
+
+		applyDdlCommandList = lappend(applyDdlCommandList, applyDdlCommand->data);
+	}
+
+	return applyDdlCommandList;
 }
