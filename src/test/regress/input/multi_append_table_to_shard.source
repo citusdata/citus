@@ -138,5 +138,16 @@ WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
 
 SELECT * FROM multi_append_table_to_shard_date;
 
+-- When run inside aborted transaction does not persist changes
+INSERT INTO multi_append_table_to_shard_stage VALUES ('2016-02-02', 4);
+BEGIN;
+SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
+FROM
+		pg_dist_shard
+WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
+ROLLBACK;
+
+SELECT * FROM multi_append_table_to_shard_date;
+
 DROP TABLE multi_append_table_to_shard_stage;
 DROP TABLE multi_append_table_to_shard_date;
