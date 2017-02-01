@@ -126,22 +126,81 @@ SELECT create_distributed_table('mx_table_test', 'col1');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
 DROP TABLE mx_table_test;
 
+-- Show that master_create_distributed_table ignores citus.replication_model GUC
+CREATE TABLE s_table(a int);
+SELECT master_create_distributed_table('s_table', 'a', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='s_table'::regclass;
+
+-- Show that master_create_worker_shards complains when RF>1 and replication model is streaming
+UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid='s_table'::regclass;
+SELECT master_create_worker_shards('s_table', 4, 2);
+
+DROP TABLE s_table;
+
 RESET citus.replication_model;
 
--- Show that it is not possible to create an mx table with the old 
--- master_create_distributed_table function
-CREATE TABLE mx_table_test (col1 int, col2 text);
-SELECT master_create_distributed_table('mx_table_test', 'col1', 'hash');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
-DROP TABLE mx_table_test;
-
--- Show that when replication factor > 1 the table is created as coordinator-replicated
+-- Show that create_distributed_table with append and range distributions ignore 
+-- citus.replication_model GUC
 SET citus.shard_replication_factor TO 2;
-CREATE TABLE mx_table_test (col1 int, col2 text);
-SELECT create_distributed_table('mx_table_test', 'col1');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
-DROP TABLE mx_table_test; 
+SET citus.replication_model TO streaming;
 
+CREATE TABLE repmodel_test (a int);
+SELECT create_distributed_table('repmodel_test', 'a', 'append');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT create_distributed_table('repmodel_test', 'a', 'range');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+-- Show that master_create_distributed_table created statement replicated tables no matter
+-- what citus.replication_model set to
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+-- Check that the replication_model overwrite behavior is the same with RF=1
+SET citus.shard_replication_factor TO 1;
+
+CREATE TABLE repmodel_test (a int);
+SELECT create_distributed_table('repmodel_test', 'a', 'append');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT create_distributed_table('repmodel_test', 'a', 'range');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+CREATE TABLE repmodel_test (a int);
+SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
+DROP TABLE repmodel_test;
+
+RESET citus.replication_model;
 SET citus.shard_replication_factor TO default;
 
 SET citus.shard_count to 4;

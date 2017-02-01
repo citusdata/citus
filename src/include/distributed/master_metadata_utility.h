@@ -100,7 +100,7 @@ extern char * TableOwner(Oid relationId);
 extern void EnsureTablePermissions(Oid relationId, AclMode mode);
 extern void EnsureTableOwner(Oid relationId);
 extern void EnsureSuperUser(void);
-extern void EnsureReplicationSettings(Oid relationId);
+extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern bool TableReferenced(Oid relationId);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern Datum StringToDatum(char *inputString, Oid dataType);
