@@ -278,6 +278,8 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 						 quote_literal_cstr(sourceTableName),
 						 quote_literal_cstr(sourceNodeName), sourceNodePort);
 
+		RemoteTransactionBeginIfNecessary(connection);
+
 		executeResult = ExecuteOptionalRemoteCommand(connection, workerAppendQuery->data,
 													 &queryResult);
 		PQclear(queryResult);
