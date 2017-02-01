@@ -16,10 +16,12 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
 
 #include "executor/executor.h"
@@ -37,7 +39,6 @@ static List *relationRestrictionContextList = NIL;
 
 /* local function forward declarations */
 static void CheckNodeIsDumpable(Node *node);
-static char * GetMultiPlanString(PlannedStmt *result);
 static PlannedStmt * MultiQueryContainerNode(PlannedStmt *result,
 											 struct MultiPlan *multiPlan);
 static struct PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan,
@@ -293,19 +294,25 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 }
 
 
+static CustomScanMethods CitusCustomScanMethods = {
+	"CitusScan",
+	CitusCreateScan
+};
+
+
 /*
- * GetMultiPlan returns the associated MultiPlan for a PlannedStmt if the
- * statement requires distributed execution, NULL otherwise.
+ * GetMultiPlan returns the associated MultiPlan for a CustomScan.
  */
 MultiPlan *
-GetMultiPlan(PlannedStmt *result)
+GetMultiPlan(CustomScan *customScan)
 {
-	char *serializedMultiPlan = NULL;
 	MultiPlan *multiPlan = NULL;
 
-	serializedMultiPlan = GetMultiPlanString(result);
-	multiPlan = (MultiPlan *) CitusStringToNode(serializedMultiPlan);
-	Assert(CitusIsA(multiPlan, MultiPlan));
+	Assert(IsA(customScan, CustomScan));
+	Assert(customScan->methods == &CitusCustomScanMethods);
+	Assert(list_length(customScan->custom_private) == 1);
+
+	multiPlan = DeSerializeMultiPlan(linitial(customScan->custom_private));
 
 	return multiPlan;
 }
@@ -315,24 +322,49 @@ GetMultiPlan(PlannedStmt *result)
 bool
 HasCitusToplevelNode(PlannedStmt *result)
 {
-	/*
-	 * Can't be a distributed query if the extension hasn't been loaded
-	 * yet. Directly return false, part of the required infrastructure for
-	 * further checks might not be present.
-	 */
-	if (!CitusHasBeenLoaded())
-	{
-		return false;
-	}
+	elog(ERROR, "gone");
+}
 
-	if (GetMultiPlanString(result) == NULL)
-	{
-		return false;
-	}
-	else
-	{
-		return true;
-	}
+
+Node *
+SerializableMultiPlan(MultiPlan *multiPlan)
+{
+	/*
+	 * FIXME: This should be improved for 9.6+, we we can copy trees
+	 * efficiently. I.e. we should introduce copy support for relevant node
+	 * types, and just return the MultiPlan as-is for 9.6.
+	 */
+	char *serializedPlan = NULL;
+	Const *multiPlanData = NULL;
+
+	serializedPlan = CitusNodeToString(multiPlan);
+
+	multiPlanData = makeNode(Const);
+	multiPlanData->consttype = CSTRINGOID;
+	multiPlanData->constlen = strlen(serializedPlan);
+	multiPlanData->constvalue = CStringGetDatum(serializedPlan);
+	multiPlanData->constbyval = false;
+	multiPlanData->location = -1;
+
+	return (Node *) multiPlanData;
+}
+
+
+MultiPlan *
+DeSerializeMultiPlan(Node *node)
+{
+	Const *multiPlanData = NULL;
+	char *serializedMultiPlan = NULL;
+	MultiPlan *multiPlan = NULL;
+
+	Assert(IsA(node, Const));
+	multiPlanData = (Const *) node;
+	serializedMultiPlan = DatumGetCString(multiPlanData->constvalue);
+
+	multiPlan = (MultiPlan *) CitusStringToNode(serializedMultiPlan);
+	Assert(CitusIsA(multiPlan, MultiPlan));
+
+	return multiPlan;
 }
 
 
@@ -346,124 +378,98 @@ HasCitusToplevelNode(PlannedStmt *result)
  * which should not be referred to outside this file, as it's likely to become
  * version dependant. Use GetMultiPlan() and HasCitusToplevelNode() to access.
  *
+ * FIXME
+ *
  * Internally the data is stored as arguments to a 'citus_extradata_container'
  * function, which has to be removed from the really executed plan tree before
  * query execution.
  */
 PlannedStmt *
-MultiQueryContainerNode(PlannedStmt *result, MultiPlan *multiPlan)
+MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 {
-	FunctionScan *fauxFunctionScan = NULL;
-	RangeTblFunction *fauxFunction = NULL;
-	FuncExpr *fauxFuncExpr = NULL;
-	Const *multiPlanData = NULL;
-	char *serializedPlan = NULL;
+	PlannedStmt *resultPlan = NULL;
+	CustomScan *customScan = makeNode(CustomScan);
+	Node *multiPlanData = SerializableMultiPlan(multiPlan);
 
-	/* pass multiPlan serialized as a constant function argument */
-	serializedPlan = CitusNodeToString(multiPlan);
-	multiPlanData = makeNode(Const);
-	multiPlanData->consttype = CSTRINGOID;
-	multiPlanData->constlen = strlen(serializedPlan);
-	multiPlanData->constvalue = CStringGetDatum(serializedPlan);
-	multiPlanData->constbyval = false;
-	multiPlanData->location = -1;
+	customScan->methods = &CitusCustomScanMethods;
+	customScan->custom_private = list_make1(multiPlanData);
 
-	fauxFuncExpr = makeNode(FuncExpr);
-	fauxFuncExpr->funcid = CitusExtraDataContainerFuncId();
-	fauxFuncExpr->funcretset = true;
-	fauxFuncExpr->location = -1;
-
-	fauxFuncExpr->args = list_make1(multiPlanData);
-	fauxFunction = makeNode(RangeTblFunction);
-	fauxFunction->funcexpr = (Node *) fauxFuncExpr;
-
-	fauxFunctionScan = makeNode(FunctionScan);
-	fauxFunctionScan->functions = lappend(fauxFunctionScan->functions, fauxFunction);
-
-	/* copy original targetlist, accessed for RETURNING queries  */
-	fauxFunctionScan->scan.plan.targetlist = copyObject(result->planTree->targetlist);
+	/* FIXME: This probably ain't correct */
+	if (ExecSupportsBackwardScan(originalPlan->planTree))
+	{
+		customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
+	}
 
 	/*
-	 * Add set returning function to target list if the original (postgres
-	 * created) plan doesn't support backward scans; doing so prevents
-	 * backward scans being supported by the new plantree as well.  This is
-	 * ugly as hell, but until we can rely on custom scans (which can signal
-	 * this via CUSTOMPATH_SUPPORT_BACKWARD_SCAN), there's not really a pretty
-	 * method to achieve this.
-	 *
-	 * FIXME: This should really be done on the master select plan.
+	 * FIXME: these two branches/pieces of code should probably be moved into
+	 * router / logical planner code respectively.
 	 */
-	if (!ExecSupportsBackwardScan(result->planTree))
+	if (multiPlan->masterQuery)
 	{
-		FuncExpr *funcExpr = makeNode(FuncExpr);
-		TargetEntry *targetEntry = NULL;
-		bool resjunkAttribute = true;
+		resultPlan = MasterNodeSelectPlan(multiPlan, customScan);
+		resultPlan->queryId = originalPlan->queryId;
+		resultPlan->utilityStmt = originalPlan->utilityStmt;
+	}
+	else
+	{
+		ListCell *lc = NULL;
+		List *targetList = NIL;
+		bool foundJunk = false;
+		RangeTblEntry *rangeTableEntry = NULL;
+		List *columnNames = NIL;
+		int newRTI = list_length(originalPlan->rtable) + 1;
 
-		funcExpr->funcretset = true;
+		/*
+		 * XXX: This basically just builds a targetlist to "read" from the
+		 * custom scan output.
+		 */
+		foreach(lc, originalPlan->planTree->targetlist)
+		{
+			TargetEntry *te = lfirst(lc);
+			Var *newVar = NULL;
+			TargetEntry *newTargetEntry = NULL;
 
-		targetEntry = makeTargetEntry((Expr *) funcExpr, InvalidAttrNumber, NULL,
-									  resjunkAttribute);
+			Assert(IsA(te, TargetEntry));
 
-		fauxFunctionScan->scan.plan.targetlist =
-			lappend(fauxFunctionScan->scan.plan.targetlist,
-					targetEntry);
+			/*
+			 * XXX: I can't think of a case where we'd need resjunk stuff at
+			 * the toplevel of a router query - all things needing it have
+			 * been pushed down.
+			 */
+			if (te->resjunk)
+			{
+				foundJunk = true;
+				continue;
+			}
+
+			if (foundJunk)
+			{
+				ereport(ERROR, (errmsg("unexpected !junk entry after resjunk entry")));
+			}
+
+			/* build TE pointing to custom scan */
+			newVar = makeVarFromTargetEntry(newRTI, te);
+			newTargetEntry = flatCopyTargetEntry(te);
+			newTargetEntry->expr = (Expr *) newVar;
+			targetList = lappend(targetList, newTargetEntry);
+
+			columnNames = lappend(columnNames, makeString(te->resname));
+		}
+
+		/* XXX: can't think of a better RTE type than VALUES */
+		rangeTableEntry = makeNode(RangeTblEntry);
+		rangeTableEntry->rtekind = RTE_VALUES; /* can't look up relation */
+		rangeTableEntry->eref = makeAlias("remote_scan", columnNames);
+		rangeTableEntry->inh = false;
+		rangeTableEntry->inFromCl = true;
+
+		resultPlan = originalPlan;
+		resultPlan->planTree = (Plan *) customScan;
+		resultPlan->rtable = lappend(resultPlan->rtable, rangeTableEntry);
+		customScan->scan.plan.targetlist = targetList;
 	}
 
-	result->planTree = (Plan *) fauxFunctionScan;
-
-	return result;
-}
-
-
-/*
- * GetMultiPlanString returns either NULL, if the plan is not a distributed
- * one, or the string representing the distributed plan.
- */
-static char *
-GetMultiPlanString(PlannedStmt *result)
-{
-	FunctionScan *fauxFunctionScan = NULL;
-	RangeTblFunction *fauxFunction = NULL;
-	FuncExpr *fauxFuncExpr = NULL;
-	Const *multiPlanData = NULL;
-
-	if (!IsA(result->planTree, FunctionScan))
-	{
-		return NULL;
-	}
-
-	fauxFunctionScan = (FunctionScan *) result->planTree;
-
-	if (list_length(fauxFunctionScan->functions) != 1)
-	{
-		return NULL;
-	}
-
-	fauxFunction = linitial(fauxFunctionScan->functions);
-
-	if (!IsA(fauxFunction->funcexpr, FuncExpr))
-	{
-		return NULL;
-	}
-
-	fauxFuncExpr = (FuncExpr *) fauxFunction->funcexpr;
-
-	if (fauxFuncExpr->funcid != CitusExtraDataContainerFuncId())
-	{
-		return NULL;
-	}
-
-	if (list_length(fauxFuncExpr->args) != 1)
-	{
-		ereport(ERROR, (errmsg("unexpected number of function arguments to "
-							   "citus_extradata_container")));
-	}
-
-	multiPlanData = (Const *) linitial(fauxFuncExpr->args);
-	Assert(IsA(multiPlanData, Const));
-	Assert(multiPlanData->consttype == CSTRINGOID);
-
-	return DatumGetCString(multiPlanData->constvalue);
+	return resultPlan;
 }
 
 
