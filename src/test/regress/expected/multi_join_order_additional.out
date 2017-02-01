@@ -6,6 +6,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 650000;
 -- Set configuration to print table join order and pruned shards
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
+SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwhise
 SET client_min_messages TO DEBUG2;
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance.
@@ -139,10 +140,11 @@ DEBUG:  join prunable for intervals [13473,14947] and [2951,4455]
 DEBUG:  join prunable for intervals [13473,14947] and [4480,5986]
 DEBUG:  join prunable for intervals [13473,14947] and [8997,10560]
 DEBUG:  join prunable for intervals [13473,14947] and [10560,12036]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   explain statements for distributed queries are not enabled
+(2 rows)
 
 -- Update configuration to treat lineitem and orders tables as large
 SET citus.large_table_shard_count TO 2;
@@ -154,10 +156,12 @@ EXPLAIN SELECT count(*) FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey AND l_quantity > 5)
 	OR (l_orderkey = o_orderkey AND l_quantity < 10);
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 EXPLAIN SELECT l_quantity FROM lineitem, orders
 	WHERE (l_orderkey = o_orderkey OR l_quantity > 5);
@@ -173,28 +177,34 @@ BEGIN;
 EXPLAIN SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders" ][ single partition join "lineitem_hash" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Verify we handle local joins between two hash-partitioned tables.
 EXPLAIN SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
 LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
 EXPLAIN SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
 LOG:  join order: [ "customer_hash" ][ broadcast join "nation" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Update the large table shard count for all the following tests.
 SET citus.large_table_shard_count TO 1;
@@ -203,30 +213,36 @@ SET citus.large_table_shard_count TO 1;
 EXPLAIN SELECT count(*) FROM orders, lineitem, customer
 	WHERE o_custkey = l_partkey AND o_custkey = c_nationkey;
 LOG:  join order: [ "orders" ][ dual partition join "lineitem" ][ dual partition join "customer" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Validate that we don't chose a single-partition join method with a
 -- hash-partitioned base table
 EXPLAIN SELECT count(*) FROM orders, customer_hash
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Validate that we can re-partition a hash partitioned table to join with a
 -- range partitioned one.
 EXPLAIN SELECT count(*) FROM orders_hash, customer
 	WHERE c_custkey = o_custkey;
 LOG:  join order: [ "orders_hash" ][ single partition join "customer" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 COMMIT;
 -- Reset client logging level to its previous value

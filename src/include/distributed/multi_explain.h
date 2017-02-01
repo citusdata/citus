@@ -16,7 +16,4 @@
 extern bool ExplainDistributedQueries;
 extern bool ExplainAllTasks;
 
-extern void MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-								 const char *queryString, ParamListInfo params);
-
 #endif /* MULTI_EXPLAIN_H */

@@ -65,9 +65,6 @@ typedef struct RemoteExplainPlan
 
 
 /* Explain functions for distributed queries */
-static void ExplainMasterPlan(PlannedStmt *masterPlan, IntoClause *into,
-							  ExplainState *es, const char *queryString,
-							  ParamListInfo params, const instr_time *planDuration);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
@@ -77,9 +74,6 @@ static void ExplainTask(Task *task, int placementIndex, List *explainOutputList,
 static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOutputList,
 								 ExplainState *es);
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
-static void MultiExplainOnePlan(PlannedStmt *plan, IntoClause *into,
-								ExplainState *es, const char *queryString,
-								ParamListInfo params, const instr_time *planDuration);
 
 /* Static Explain functions copied from explain.c */
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
@@ -90,290 +84,62 @@ static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
 static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 
-
-/*
- * MultiExplainOneQuery takes the given query, and checks if the query is local
- * or distributed. If the query is local, the function runs the standard explain
- * logic. If the query is distributed, the function looks up configuration and
- * prints out the distributed logical and physical plans as appropriate.
- */
 void
-MultiExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-					 const char *queryString, ParamListInfo params)
+CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
-	instr_time planStart;
-	instr_time planDuration;
-	int cursorOptions = 0;
-	PlannedStmt *plan = NULL;
-
-#if PG_VERSION_NUM >= 90600
-
-	/*
-	 * Allow parallel plans in 9.6+ unless selecting into a table.
-	 * Without this, we're breaking explain for non-Citus plans.
-	 */
-	if (!into)
-	{
-		cursorOptions |= CURSOR_OPT_PARALLEL_OK;
-	}
-#endif
-
-	/* plan query, just like ExplainOneQuery does */
-	INSTR_TIME_SET_CURRENT(planStart);
-
-	/* plan the query */
-	plan = pg_plan_query(query, cursorOptions, params);
-
-	INSTR_TIME_SET_CURRENT(planDuration);
-	INSTR_TIME_SUBTRACT(planDuration, planStart);
-
-	/* if not a distributed query, use plain explain infrastructure */
-	if (!HasCitusToplevelNode(plan))
-	{
-		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, &planDuration);
-	}
-	else
-	{
-		MultiExplainOnePlan(plan, into, es, queryString, params, &planDuration);
-	}
-}
-
-
-/*
- * MultiExplainOnePlan explains the plan for an individual distributed query.
- */
-static void
-MultiExplainOnePlan(PlannedStmt *plan, IntoClause *into,
-					ExplainState *es, const char *queryString,
-					ParamListInfo params, const instr_time *planDuration)
-{
-	MultiPlan *multiPlan = NULL;
-	CmdType commandType = CMD_UNKNOWN;
-	Job *workerJob = NULL;
-	bool routerExecutablePlan = false;
-
-	commandType = plan->commandType;
-	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE)
-	{
-		if (es->analyze)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("Using ANALYZE for INSERT/UPDATE/DELETE on "
-								   "distributed tables is not supported.")));
-		}
-	}
-
-	multiPlan = GetMultiPlan(plan);
-
-	/* ensure plan is executable */
-	VerifyMultiPlanValidity(multiPlan);
+	CitusScanState *scanState = (CitusScanState *) node;
+	MultiPlan *multiPlan = scanState->multiPlan;
+	const char *executorName = NULL;
 
 	if (!ExplainDistributedQueries)
 	{
+		appendStringInfoSpaces(es->str, es->indent * 2);
 		appendStringInfo(es->str, "explain statements for distributed queries ");
 		appendStringInfo(es->str, "are not enabled\n");
 		return;
 	}
 
-	ExplainOpenGroup("Distributed Query", NULL, true, es);
-
-	if (es->format == EXPLAIN_FORMAT_TEXT)
-	{
-		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfo(es->str, "Distributed Query");
-
-		if (multiPlan->masterTableName != NULL)
-		{
-			appendStringInfo(es->str, " into %s", multiPlan->masterTableName);
-		}
-
-		appendStringInfo(es->str, "\n");
-
-		es->indent += 1;
-	}
-
-	routerExecutablePlan = multiPlan->routerExecutable;
-
-	if (routerExecutablePlan)
-	{
-		ExplainPropertyText("Executor", "Router", es);
-	}
-	else
-	{
-		switch (TaskExecutorType)
-		{
-			case MULTI_EXECUTOR_REAL_TIME:
-			{
-				ExplainPropertyText("Executor", "Real-Time", es);
-			}
-			break;
-
-			case MULTI_EXECUTOR_TASK_TRACKER:
-			{
-				ExplainPropertyText("Executor", "Task-Tracker", es);
-			}
-			break;
-
-			default:
-			{
-				ExplainPropertyText("Executor", "Other", es);
-			}
-			break;
-		}
-	}
-
-	workerJob = multiPlan->workerJob;
-	ExplainJob(workerJob, es);
-
-	if (es->format == EXPLAIN_FORMAT_TEXT)
-	{
-		es->indent -= 1;
-	}
-
-	if (!routerExecutablePlan)
-	{
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-		{
-			appendStringInfoSpaces(es->str, es->indent * 2);
-			appendStringInfo(es->str, "Master Query\n");
-			es->indent += 1;
-		}
-
-		ExplainOpenGroup("Master Query", "Master Query", false, es);
-
-		ExplainMasterPlan(plan, into, es, queryString, params, planDuration);
-
-		ExplainCloseGroup("Master Query", "Master Query", false, es);
-
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-		{
-			es->indent -= 1;
-		}
-	}
-
-	ExplainCloseGroup("Distributed Query", NULL, true, es);
-}
-
-
-/*
- * ExplainMasterPlan generates EXPLAIN output for the master query that merges results.
- * When using EXPLAIN ANALYZE, this function shows the execution time of the master query
- * in isolation. Calling ExplainOnePlan directly would show the overall execution time of
- * the distributed query, which makes it hard to determine how much time the master query
- * took.
- *
- * Parts of this function are copied directly from ExplainOnePlan.
- */
-static void
-ExplainMasterPlan(PlannedStmt *masterPlan, IntoClause *into,
-				  ExplainState *es, const char *queryString,
-				  ParamListInfo params, const instr_time *planDuration)
-{
-	DestReceiver *dest = NULL;
-	int eflags = 0;
-	QueryDesc *queryDesc = NULL;
-	int instrument_option = 0;
-
-	if (es->analyze && es->timing)
-	{
-		instrument_option |= INSTRUMENT_TIMER;
-	}
-	else if (es->analyze)
-	{
-		instrument_option |= INSTRUMENT_ROWS;
-	}
-
-	if (es->buffers)
-	{
-		instrument_option |= INSTRUMENT_BUFFERS;
-	}
+	/*
+	 * XXX: can we get by without the open/close group somehow - then we'd not
+	 * copy any code from explain.c? Seems unlikely.
+	 */
+	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
 	/*
-	 * Use a snapshot with an updated command ID to ensure this query sees
-	 * results of any previously executed queries.
+	 * XXX: might be worthwhile to put this somewhere central, e.g. for
+	 * debugging output.
 	 */
-	PushCopiedSnapshot(GetActiveSnapshot());
-	UpdateActiveSnapshotCommandId();
-
-	/*
-	 * Normally we discard the query's output, but if explaining CREATE TABLE
-	 * AS, we'd better use the appropriate tuple receiver.
-	 */
-	if (into)
+	switch (scanState->executorType)
 	{
-		dest = CreateIntoRelDestReceiver(into);
-	}
-	else
-	{
-		dest = None_Receiver;
-	}
-
-	/* Create a QueryDesc for the query */
-	queryDesc = CreateQueryDesc(masterPlan, queryString,
-								GetActiveSnapshot(), InvalidSnapshot,
-								dest, params, instrument_option);
-
-	/* Select execution options */
-	if (es->analyze)
-	{
-		eflags = 0;             /* default run-to-completion flags */
-	}
-	else
-	{
-		eflags = EXEC_FLAG_EXPLAIN_ONLY;
-	}
-	if (into)
-	{
-		eflags |= GetIntoRelEFlags(into);
-	}
-
-	/*
-	 * ExecutorStart creates the merge table. If using ANALYZE, it also executes the
-	 * worker job and populates the merge table.
-	 */
-	ExecutorStart(queryDesc, eflags);
-
-	if (es->analyze)
-	{
-		ScanDirection dir;
-
-		/* if using analyze, then finish query execution */
-
-		/* EXPLAIN ANALYZE CREATE TABLE AS WITH NO DATA is weird */
-		if (into && into->skipData)
+		case MULTI_EXECUTOR_ROUTER:
 		{
-			dir = NoMovementScanDirection;
+			executorName = "Router";
 		}
-		else
+		break;
+
+		case MULTI_EXECUTOR_REAL_TIME:
 		{
-			dir = ForwardScanDirection;
+			executorName = "Real-Time";
 		}
+		break;
 
-		/* run the plan */
-		ExecutorRun(queryDesc, dir, 0L);
+		case MULTI_EXECUTOR_TASK_TRACKER:
+		{
+			executorName = "Task-Tracker";
+		}
+		break;
 
-		/* run cleanup too */
-		ExecutorFinish(queryDesc);
+		default:
+		{
+			executorName = "Other";
+		}
+		break;
 	}
+	ExplainPropertyText("Executor", executorName, es);
 
-	/*
-	 * ExplainOnePlan executes the master query again, which ensures that the execution
-	 * time only shows the execution time of the master query itself, instead of the
-	 * overall execution time.
-	 */
-	ExplainOnePlan(queryDesc->plannedstmt, into, es, queryString, params, planDuration);
+	ExplainJob(multiPlan->workerJob, es);
 
-	/*
-	 * ExecutorEnd for the distributed query is deferred until after the master query
-	 * is executed again, otherwise the merge table would be dropped.
-	 */
-	ExecutorEnd(queryDesc);
-
-	FreeQueryDesc(queryDesc);
-
-	PopActiveSnapshot();
+	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 }
 
 
