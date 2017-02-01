@@ -50,15 +50,9 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
                          (5, now(), 50, 500, 5000.1, 50000);
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (6, now(), 60, 600, 6000.1, 60000);
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- raw table to raw table
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -75,17 +69,9 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- see that our first multi shard INSERT...SELECT works expected
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 SELECT
    raw_events_first.user_id
 FROM
@@ -189,14 +175,8 @@ ERROR:  volatile functions are not allowed in INSERT ... SELECT queries
 INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
 -- try a single shard query
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (user_id, time) SELECT user_id, time FROM raw_events_first WHERE user_id = 7;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -216,24 +196,13 @@ DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- add one more row
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (8, now(), 80, 800, 8000, 80000);
 -- reorder columns
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
 SELECT 
    value_2, value_1, value_3, value_4, user_id, time 
@@ -241,9 +210,6 @@ FROM
    raw_events_first
 WHERE
    user_id = 8;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -263,11 +229,7 @@ DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- a zero shard select
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
 SELECT 
@@ -276,18 +238,11 @@ FROM
    raw_events_first
 WHERE
    false;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- another zero shard select
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
 SELECT 
@@ -296,31 +251,17 @@ FROM
    raw_events_first
 WHERE
    0 != 0;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- add one more row
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (9, now(), 90, 900, 9000, 90000);
 -- show that RETURNING also works
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (user_id, value_1, value_3) 
 SELECT 
    user_id, value_1, value_3
@@ -329,9 +270,6 @@ FROM
 WHERE
    value_3 = 9000 
 RETURNING *;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -348,11 +286,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE ((value_3 = (9000)::double precision) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
  user_id | time | value_1 | value_2 | value_3 | value_4 
 ---------+------+---------+---------+---------+---------
        9 |      |      90 |         |    9000 |        
@@ -367,9 +301,6 @@ FROM
 WHERE
    user_id = 9 OR user_id = 16 
 RETURNING *;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -388,7 +319,6 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id, value_1, value_3) SELECT user_id, value_1, value_3 FROM public.raw_events_first_13300003 raw_events_first WHERE (((user_id = 9) OR (user_id = 16)) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))) RETURNING citus_table_alias.user_id, citus_table_alias."time", citus_table_alias.value_1, citus_table_alias.value_2, citus_table_alias.value_3, citus_table_alias.value_4
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300007"
 DETAIL:  Key (user_id, value_1)=(9, 90) already exists.
@@ -401,9 +331,6 @@ FROM
    raw_events_first
 GROUP BY
    user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -420,11 +347,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_2_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, avg(value_2) AS avg, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- group by column not exists on the SELECT target list
 INSERT INTO agg_events (value_3_agg, value_4_agg, value_1_agg, user_id) 
 SELECT
@@ -434,9 +357,6 @@ FROM
 GROUP BY
    value_2, user_id
 RETURNING *;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -453,7 +373,6 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_3_agg, value_4_agg) SELECT user_id, sum(value_1) AS sum, sum(value_3) AS sum, count(value_4) AS count FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY value_2, user_id RETURNING citus_table_alias.user_id, citus_table_alias.value_1_agg, citus_table_alias.value_2_agg, citus_table_alias.value_3_agg, citus_table_alias.value_4_agg, citus_table_alias.agg_time
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
@@ -470,9 +389,6 @@ FROM   (SELECT raw_events_second.user_id AS id,
                raw_events_second 
         WHERE  raw_events_first.user_id = raw_events_second.user_id) AS foo 
 GROUP  BY id; 
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -501,7 +417,6 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT id, sum(value_1) AS sum FROM (SELECT raw_events_second.user_id AS id, raw_events_second.value_1 FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id)) foo WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647)) GROUP BY id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(5, 50) already exists.
@@ -521,9 +436,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second 
         WHERE  raw_events_first.user_id = raw_events_second.user_id 
         GROUP  BY raw_events_second.user_id) AS foo; 
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -552,7 +464,6 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg, value_4_agg) SELECT id, v1, v4 FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id) foo WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(5, 50) already exists.
@@ -580,9 +491,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.user_id
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -623,11 +531,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT f2.id FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id))) WHERE ((hashint4(f2.id) >= 1073741824) AND (hashint4(f2.id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- add one more level subqueris on top of subquery JOINs
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -657,9 +561,6 @@ FROM
 ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -700,11 +601,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_4_agg) SELECT id, max(value) AS max FROM (SELECT f2.id, f2.v4 AS value FROM ((SELECT foo.id FROM (SELECT reference_table.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.reference_table_13300012 reference_table WHERE (raw_events_first.user_id = reference_table.user_id)) foo) f JOIN (SELECT foo2.v4, foo2.v1, foo2.id FROM (SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.user_id AS id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.user_id HAVING (sum(raw_events_second.value_4) > (10)::numeric)) foo2) f2 ON ((f.id = f2.id)))) outer_most WHERE ((hashint4(id) >= 1073741824) AND (hashint4(id) <= 2147483647)) GROUP BY id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- subqueries in WHERE clause
 INSERT INTO raw_events_second
             (user_id)
@@ -713,9 +610,6 @@ FROM   raw_events_first
 WHERE  user_id IN (SELECT user_id
                    FROM   raw_events_second
                    WHERE  user_id = 2);
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -744,11 +638,7 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -764,9 +654,6 @@ ON conflict (user_id, value_1_agg)
 DO UPDATE
    SET    agg_time = EXCLUDED.agg_time 
    WHERE  ae.agg_time < EXCLUDED.agg_time;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -783,11 +670,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time)
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- upserts with returning
 INSERT INTO agg_events AS ae 
             ( 
@@ -804,9 +687,6 @@ DO UPDATE
    SET    agg_time = EXCLUDED.agg_time 
    WHERE  ae.agg_time < EXCLUDED.agg_time
 RETURNING user_id, value_1_agg;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -823,11 +703,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS ae (user_id, value_1_agg, agg_time) SELECT user_id, value_1, "time" FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) ON CONFLICT(user_id, value_1_agg) DO UPDATE SET agg_time = excluded.agg_time WHERE (ae.agg_time < excluded.agg_time) RETURNING ae.user_id, ae.value_1_agg
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
  user_id | value_1_agg 
 ---------+-------------
        7 |            
@@ -838,9 +714,6 @@ SELECT
    user_id, sum(value_1 + value_2)
 FROM
    raw_events_first GROUP BY user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -857,20 +730,13 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 --  FILTER CLAUSE
 INSERT INTO agg_events (user_id, value_1_agg)
 SELECT
    user_id, sum(value_1 + value_2) FILTER (where value_3 = 15)
 FROM
    raw_events_first GROUP BY user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -887,11 +753,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT user_id, sum((value_1 + value_2)) FILTER (WHERE (value_3 = (15)::double precision)) AS sum FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)) GROUP BY user_id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- a test with reference table JOINs
 INSERT INTO
   agg_events (user_id, value_1_agg)
@@ -903,9 +765,6 @@ WHERE
   raw_events_first.user_id = reference_table.user_id
 GROUP BY
   raw_events_first.user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -922,11 +781,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT raw_events_first.user_id, sum(raw_events_first.value_1) AS sum FROM public.reference_table_13300012 reference_table, public.raw_events_first_13300003 raw_events_first WHERE ((raw_events_first.user_id = reference_table.user_id) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647))) GROUP BY raw_events_first.user_id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- a note on the outer joins is that
 -- we filter out outer join results
 -- where partition column returns
@@ -934,10 +789,6 @@ DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid:
 -- than we expect from subquery result.
 -- see the following tests
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- we don't want to see constraint vialotions, so truncate first
 TRUNCATE agg_events;
 -- add a row to first table to make table contents different
@@ -966,10 +817,7 @@ SELECT t1.user_id AS col1,
       |   10
 (10 rows)
 
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- we insert 10 rows since we filtered out
 -- NULL partition column values
 INSERT INTO agg_events (user_id, value_1_agg)
@@ -978,9 +826,6 @@ SELECT t1.user_id AS col1,
 FROM   raw_events_first t1
        FULL JOIN raw_events_second t2
               ON t1.user_id = t2.user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1009,16 +854,8 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT t1.user_id AS col1, t2.user_id AS col2 FROM (public.raw_events_first_13300003 t1 FULL JOIN public.raw_events_second_13300007 t2 ON ((t1.user_id = t2.user_id))) WHERE ((hashint4(t1.user_id) >= 1073741824) AND (hashint4(t1.user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- see that the results are different from the SELECT query
 SELECT 
   user_id, value_1_agg
@@ -1042,19 +879,13 @@ ORDER BY
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
 TRUNCATE agg_events;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- DISTINCT clause
 INSERT INTO agg_events (value_1_agg, user_id)
   SELECT
     DISTINCT value_1, user_id
   FROM
     raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1071,31 +902,17 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 truncate agg_events;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- we do not support DISTINCT ON clauses
 INSERT INTO agg_events (value_1_agg, user_id)
   SELECT
     DISTINCT ON (value_1) value_1, user_id
   FROM
     raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  DISTINCT ON clauses are not allowed in INSERT ... SELECT queries
 -- We do not support some CTEs
 WITH fist_table_agg AS
@@ -1106,9 +923,6 @@ INSERT INTO agg_events
               v1_agg, user_id
             FROM
               fist_table_agg;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- We do support some CTEs
@@ -1118,9 +932,6 @@ INSERT INTO agg_events
     raw_events_first.user_id, (SELECT * FROM sub_cte)
   FROM
     raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1137,11 +948,7 @@ DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300003 raw_events_first WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1150,18 +957,12 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first) UNION
    (SELECT user_id FROM raw_events_second)) as foo;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  set operations are not allowed in INSERT ... SELECT queries
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  set operations are not allowed in INSERT ... SELECT queries
 -- We do not support any set operations
 INSERT INTO
@@ -1171,9 +972,6 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  set operations are not allowed in INSERT ... SELECT queries
 -- unsupported JOIN
 INSERT INTO agg_events
@@ -1190,9 +988,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id != raw_events_second.user_id
         GROUP  BY raw_events_second.user_id) AS foo;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
 -- INSERT partition column does not match with SELECT partition column
@@ -1210,9 +1005,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id = raw_events_second.user_id
         GROUP  BY raw_events_second.value_3) AS foo;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
 -- error cases
@@ -1221,36 +1013,24 @@ INSERT INTO raw_events_second
             (value_1)
 SELECT value_1
 FROM   raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  the query doesn't include the target table's partition column
 INSERT INTO raw_events_second
             (value_1)
 SELECT user_id
 FROM   raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  the query doesn't include the target table's partition column
 INSERT INTO raw_events_second
             (user_id)
 SELECT value_1
 FROM   raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id * 2
 FROM   raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
@@ -1258,9 +1038,6 @@ INSERT INTO raw_events_second
             (user_id)
 SELECT user_id :: bigint
 FROM   raw_events_first;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit cast in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
@@ -1277,9 +1054,6 @@ SELECT SUM(value_3),
        Avg(value_2)
 FROM   raw_events_first
 GROUP  BY user_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
@@ -1297,9 +1071,6 @@ SELECT SUM(value_3),
 FROM   raw_events_first
 GROUP  BY user_id,
           value_2;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- tables should be co-located
@@ -1308,9 +1079,6 @@ SELECT
   user_id
 FROM
   reference_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 -- unsupported joins between subqueries
@@ -1337,9 +1105,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
@@ -1367,9 +1132,6 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
 -- cannot pushdown the query since the JOIN is not equi JOIN
@@ -1400,9 +1162,6 @@ outer_most.id, max(outer_most.value)
             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1421,16 +1180,9 @@ SELECT user_id,
        Sum(value_2) AS sum_val2
 FROM   raw_events_second
 GROUP  BY grouping sets ( ( user_id ), ( value_1 ), ( user_id, value_1 ), ( ) );
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 ERROR:  grouping sets are not allowed in INSERT ... SELECT queries
 -- set back to INFO
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- avoid constraint violations
 TRUNCATE raw_events_first;
 -- Altering a table and selecting from it using a multi-shard statement
@@ -1506,15 +1258,9 @@ INSERT INTO test_view SELECT * FROM raw_events_second;
 ERROR:  cannot insert into view over distributed table
 -- we need this in our next test
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- first show that the query works now
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1531,26 +1277,12 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- now show that it works for a single shard query as well
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1570,28 +1302,14 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- if a single shard of the SELECT is unhealty, the query should fail
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- this should fail
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1599,9 +1317,6 @@ ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Insert query cannot be executed on all placements for shard 13300000
 -- this should also fail
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1609,9 +1324,6 @@ ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Insert query cannot be executed on all placements for shard 13300000
 -- but this should work given that it hits different shard
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 6;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
@@ -1631,30 +1343,16 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- mark the unhealthy placement as healthy again for the next tests
 UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
 -- now that we should show that it works if one of the target shard interval is not healthy
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300000 AND nodeport = :worker_1_port;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- this should work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1671,26 +1369,12 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.raw_events_first_13300003 AS citus_table_alias (user_id, "time", value_1, value_2, value_3, value_4) SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.raw_events_second_13300007 raw_events_second WHERE ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- this should also work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
@@ -1710,16 +1394,8 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  Skipping target shard interval 13300003 since SELECT query for it pruned away
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 SET client_min_messages TO INFO;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- some tests with DEFAULT columns and constant values
 -- this test is mostly importantly intended for deparsing the query correctly
 -- but still it is preferable to have this test here instead of multi_deparse_shard_query
@@ -1740,150 +1416,91 @@ SELECT create_distributed_table('table_with_defaults', 'store_id');
 (1 row)
 
 -- let's see the queries
-SET client_min_messages TO DEBUG4;
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
+SET client_min_messages TO DEBUG2;
 -- a very simple query
 INSERT INTO table_with_defaults SELECT * FROM table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, default_1, last_name, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- see that defaults are filled
 INSERT INTO table_with_defaults (store_id, first_name)
 SELECT
   store_id, first_name
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- shuffle one of the defaults and skip the other
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
 SELECT
   default_2, store_id, first_name
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, 1 AS default_1, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- shuffle both defaults
 INSERT INTO table_with_defaults (default_2, store_id, default_1, first_name)
 SELECT
   default_2, store_id, default_1, first_name
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, first_name, default_1, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- use constants instead of non-default column
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name)
 SELECT
   default_2, 'Freund', store_id, 'Andres'
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- use constants instead of non-default column and skip both defauls
 INSERT INTO table_with_defaults (last_name, store_id, first_name)
 SELECT
   'Freund', store_id, 'Andres'
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, 'Freund'::text AS last_name, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- use constants instead of default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
   20, last_name, store_id, first_name, 10
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, first_name, 10, last_name, 20 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- use constants instead of both default columns and non-default columns
 INSERT INTO table_with_defaults (default_2, last_name, store_id, first_name, default_1)
 SELECT
   20, 'Freund', store_id, 'Andres', 10
 FROM
   table_with_defaults;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer))
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, last_name, default_2) SELECT store_id, 'Andres'::text AS first_name, 10, 'Freund'::text AS last_name, 20 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647))
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 -- some of the the ultimate queries where we have constants,
 -- defaults and group by entry is not on the target entry
 INSERT INTO table_with_defaults (default_2, store_id, first_name)
@@ -1893,18 +1510,11 @@ FROM
   table_with_defaults
 GROUP BY
   last_name, store_id;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1 AS default_1, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -1912,18 +1522,11 @@ FROM
   table_with_defaults
 GROUP BY
   last_name, store_id, first_name;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 INSERT INTO table_with_defaults (default_1, store_id, first_name, default_2)
 SELECT
   1000, store_id, 'Andres', '2000'
@@ -1931,18 +1534,11 @@ FROM
   table_with_defaults
 GROUP BY
   last_name, store_id, first_name, default_2;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2000'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name, default_2
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 INSERT INTO table_with_defaults (default_1, store_id, first_name)
 SELECT
   1000, store_id, 'Andres'
@@ -1950,23 +1546,12 @@ FROM
   table_with_defaults
 GROUP BY
   last_name, store_id, first_name, default_2;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 DEBUG:  predicate pruning for shardId 13300014
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300013 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300013 table_with_defaults WHERE ((hashint4(store_id) >= '-2147483648'::integer) AND (hashint4(store_id) <= '-1'::integer)) GROUP BY last_name, store_id, first_name, default_2
 DEBUG:  predicate pruning for shardId 13300013
 DEBUG:  distributed statement: INSERT INTO public.table_with_defaults_13300014 AS citus_table_alias (store_id, first_name, default_1, default_2) SELECT store_id, 'Andres'::text AS first_name, 1000, '2'::text AS default_2 FROM public.table_with_defaults_13300014 table_with_defaults WHERE ((hashint4(store_id) >= 0) AND (hashint4(store_id) <= 2147483647)) GROUP BY last_name, store_id, first_name, default_2
-DEBUG:  ProcessQuery
 DEBUG:  Plan is router executable
-DEBUG:  CommitTransactionCommand
-DEBUG:  CommitTransaction
-DEBUG:  name: unnamed; blockState:       STARTED; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
 RESET client_min_messages;
-DEBUG:  StartTransactionCommand
-DEBUG:  StartTransaction
-DEBUG:  name: unnamed; blockState:       DEFAULT; state: INPROGR, xid/subid/cid: 0/1/0, nestlvl: 1, children: 
-DEBUG:  ProcessUtility
 -- Stable function in default should be allowed
 ALTER TABLE table_with_defaults ADD COLUMN t timestamptz DEFAULT now();
 INSERT INTO table_with_defaults (store_id, first_name, last_name)
