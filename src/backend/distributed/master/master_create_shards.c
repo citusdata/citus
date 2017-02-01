@@ -30,6 +30,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -70,6 +71,11 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
+
+	if (ShouldSyncTableMetadata(distributedTableId))
+	{
+		CreateShardMetadataOnWorkers(distributedTableId);
+	}
 
 	PG_RETURN_VOID();
 }

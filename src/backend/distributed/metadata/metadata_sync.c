@@ -988,9 +988,9 @@ HasMetadataWorkers(void)
 
 /*
  * CreateTableMetadataOnWorkers creates the list of commands needed to create the
- * given distributed table and sends these commands to all metadata workers i.e. workers
- * with hasmetadata=true. Before sending the commands, in order to prevent recursive
- * propagation, DDL propagation on workers are disabled with a
+ * distributed table with metadata for it and its shards and sends these commands to all
+ * metadata workers i.e. workers with hasmetadata=true. Before sending the commands, in
+ * order to prevent recursive propagation, DDL propagation on workers are disabled with a
  * `SET citus.enable_ddl_propagation TO off;` command.
  */
 void
@@ -1003,6 +1003,31 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
 
 	/* send the commands one by one */
+	foreach(commandCell, commandList)
+	{
+		char *command = (char *) lfirst(commandCell);
+
+		SendCommandToWorkers(WORKERS_WITH_METADATA, command);
+	}
+}
+
+
+/*
+ * CreateShardMetadataOnWorkers creates the shard metadata of the given relation on
+ * metadata workers. The function first creates commands for inserting relevant tuples
+ * to pg_dist_shard and pg_dist_shard_placement then sends these commands to metadata
+ * workers.
+ */
+void
+CreateShardMetadataOnWorkers(Oid relationId)
+{
+	List *shardIntervalList = NIL;
+	List *commandList = NIL;
+	ListCell *commandCell = NULL;
+
+	shardIntervalList = LoadShardIntervalList(relationId);
+	commandList = ShardListInsertCommand(shardIntervalList);
+
 	foreach(commandCell, commandList)
 	{
 		char *command = (char *) lfirst(commandCell);
