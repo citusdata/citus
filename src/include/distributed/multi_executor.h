@@ -12,6 +12,10 @@
 
 #include "executor/execdesc.h"
 #include "nodes/parsenodes.h"
+#include "nodes/execnodes.h"
+
+#include "distributed/multi_physical_planner.h"
+#include "distributed/multi_server_executor.h"
 
 /* signal currently executed statement is a master select statement or router execution */
 #define EXEC_FLAG_CITUS_MASTER_SELECT 0x100
@@ -23,10 +27,26 @@
 #define tuplecount_t long
 #endif
 
-extern void multi_ExecutorStart(QueryDesc *queryDesc, int eflags);
-extern void multi_ExecutorRun(QueryDesc *queryDesc,
-							  ScanDirection direction, tuplecount_t count);
-extern void multi_ExecutorFinish(QueryDesc *queryDesc);
-extern void multi_ExecutorEnd(QueryDesc *queryDesc);
+
+typedef struct CitusScanState
+{
+	CustomScanState customScanState;
+	MultiPlan *multiPlan;
+	MultiExecutorType executorType;
+
+	/* state for router */
+	bool finishedUnderlyingScan;
+	Tuplestorestate *tuplestorestate;
+} CitusScanState;
+
+Node * CitusCreateScan(CustomScan *scan);
+extern void CitusBeginScan(CustomScanState *node,
+						   EState *estate,
+						   int eflags);
+extern TupleTableSlot * CitusExecScan(CustomScanState *node);
+extern void CitusEndScan(CustomScanState *node);
+extern void CitusReScan(CustomScanState *node);
+extern void CitusExplainScan(CustomScanState *node, List *ancestors,
+							 struct ExplainState *es);
 
 #endif /* MULTI_EXECUTOR_H */

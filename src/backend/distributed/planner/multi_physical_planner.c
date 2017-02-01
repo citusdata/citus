@@ -221,6 +221,7 @@ MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
 	multiPlan->masterQuery = masterQuery;
 	multiPlan->masterTableName = jobSchemaName->data;
 	multiPlan->routerExecutable = MultiPlanRouterExecutable(multiPlan);
+	multiPlan->operation = CMD_SELECT;
 
 	return multiPlan;
 }

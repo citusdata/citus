@@ -173,9 +173,9 @@ EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol
 	WHERE repartition_udt.pk > 1;
 LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_other" ]
-                               QUERY PLAN                                
--------------------------------------------------------------------------
- Distributed Query into pg_merge_job_535003
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
    Executor: Task-Tracker
    Task Count: 4
    Tasks Shown: None, not supported for re-partition queries
@@ -185,9 +185,7 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
    ->  MapMergeJob
          Map Task Count: 5
          Merge Task Count: 4
- Master Query
-   ->  Seq Scan on pg_merge_job_535003  (cost=0.00..0.00 rows=0 width=0)
-(12 rows)
+(10 rows)
 
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.udtcol = repartition_udt_other.udtcol

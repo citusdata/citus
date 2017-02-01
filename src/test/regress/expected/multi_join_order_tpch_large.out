@@ -6,6 +6,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 660000;
 -- Enable configuration to print table join order
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
+SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwhise
 SET client_min_messages TO LOG;
 -- Change configuration to treat lineitem, orders, customer, and part tables as
 -- large. The following queries are basically the same as the ones in tpch_small
@@ -23,10 +24,12 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Query #3 from the TPC-H decision support benchmark
 EXPLAIN SELECT
@@ -52,10 +55,15 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                                QUERY PLAN                                
+--------------------------------------------------------------------------
+ Sort  (cost=0.00..0.00 rows=0 width=0)
+   Sort Key: sum((sum(revenue))) DESC, o_orderdate
+   ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+         Group Key: l_orderkey, o_orderdate, o_shippriority
+         ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+               explain statements for distributed queries are not enabled
+(6 rows)
 
 -- Query #10 from the TPC-H decision support benchmark
 EXPLAIN SELECT
@@ -90,10 +98,15 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ][ broadcast join "nation" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                                       QUERY PLAN                                       
+----------------------------------------------------------------------------------------
+ Sort  (cost=0.00..0.00 rows=0 width=0)
+   Sort Key: sum((sum(revenue))) DESC
+   ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+         Group Key: c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment
+         ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+               explain statements for distributed queries are not enabled
+(6 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
 EXPLAIN SELECT
@@ -126,10 +139,12 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ single partition join "part" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Query to test multiple re-partition jobs in a single query
 EXPLAIN SELECT
@@ -143,10 +158,13 @@ WHERE
 GROUP BY
       l_partkey;
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single partition join "part" ][ single partition join "customer" ]
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                             QUERY PLAN                             
+--------------------------------------------------------------------
+ HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+   Group Key: l_partkey
+   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(4 rows)
 
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
