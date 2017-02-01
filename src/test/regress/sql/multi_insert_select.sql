@@ -39,7 +39,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
                          (6, now(), 60, 600, 6000.1, 60000);
 
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- raw table to raw table
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
@@ -144,7 +144,7 @@ INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
 
 -- try a single shard query
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (user_id, time) SELECT user_id, time FROM raw_events_first WHERE user_id = 7;
 
 
@@ -156,7 +156,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 
 
 -- reorder columns
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (value_2, value_1, value_3, value_4, user_id, time) 
 SELECT 
    value_2, value_1, value_3, value_4, user_id, time 
@@ -191,7 +191,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 
 
 -- show that RETURNING also works
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 INSERT INTO raw_events_second (user_id, value_1, value_3) 
 SELECT 
    user_id, value_1, value_3
@@ -411,7 +411,7 @@ SELECT t1.user_id AS col1,
   ORDER  BY t1.user_id,
             t2.user_id;
 
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 -- we insert 10 rows since we filtered out
 -- NULL partition column values
 INSERT INTO agg_events (user_id, value_1_agg)
@@ -433,7 +433,7 @@ ORDER BY
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
 TRUNCATE agg_events;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- DISTINCT clause
 INSERT INTO agg_events (value_1_agg, user_id)
@@ -445,7 +445,7 @@ INSERT INTO agg_events (value_1_agg, user_id)
 -- we don't want to see constraint vialotions, so truncate first
 SET client_min_messages TO INFO;
 truncate agg_events;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- we do not support DISTINCT ON clauses
 INSERT INTO agg_events (value_1_agg, user_id)
@@ -757,14 +757,14 @@ INSERT INTO test_view SELECT * FROM raw_events_second;
 -- we need this in our next test
 truncate raw_events_first;
 
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- first show that the query works now
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 
 SET client_min_messages TO INFO;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- now show that it works for a single shard query as well
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
@@ -774,7 +774,7 @@ SET client_min_messages TO INFO;
 -- if a single shard of the SELECT is unhealty, the query should fail
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300004 AND nodeport = :worker_1_port;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- this should fail
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
@@ -793,14 +793,14 @@ UPDATE pg_dist_shard_placement SET shardstate = 1 WHERE shardid = 13300004 AND n
 -- now that we should show that it works if one of the target shard interval is not healthy
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 13300000 AND nodeport = :worker_1_port;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- this should work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 
 SET client_min_messages TO INFO;
 truncate raw_events_first;
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- this should also work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
@@ -824,7 +824,7 @@ SET citus.shard_count = 2;
 SELECT create_distributed_table('table_with_defaults', 'store_id');
 
 -- let's see the queries
-SET client_min_messages TO DEBUG4;
+SET client_min_messages TO DEBUG2;
 
 -- a very simple query
 INSERT INTO table_with_defaults SELECT * FROM table_with_defaults;
