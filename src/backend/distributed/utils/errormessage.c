@@ -6,6 +6,7 @@
  */
 
 #include "postgres.h"
+#include "utils/memutils.h"
 
 #include "distributed/citus_nodes.h"
 #include "distributed/errormessage.h"
@@ -53,6 +54,8 @@ RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel)
 	errorData->filename = pstrdup(error->filename);
 	errorData->lineno = error->linenumber;
 	errorData->funcname = error->functionname;
+
+	errorData->assoc_context = ErrorContext;
 
 	ThrowErrorData(errorData);
 }
