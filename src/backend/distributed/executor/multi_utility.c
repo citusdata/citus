@@ -188,6 +188,18 @@ multi_ProcessUtility(Node *parsetree,
 		return;
 	}
 
+	if (!CitusHasBeenLoaded())
+	{
+		/*
+		 * Ensure that utility commands do not behave any differently until CREATE
+		 * EXTENSION is invoked.
+		 */
+		standard_ProcessUtility(parsetree, queryString, context,
+								params, dest, completionTag);
+
+		return;
+	}
+
 	/*
 	 * TRANSMIT used to be separate command, but to avoid patching the grammar
 	 * it's no overlaid onto COPY, but with FORMAT = 'transmit' instead of the
@@ -301,7 +313,7 @@ multi_ProcessUtility(Node *parsetree,
 		 * AlterTableMoveAllStmt. At the moment we do not support this functionality in
 		 * the distributed environment. We warn out here.
 		 */
-		if (IsA(parsetree, AlterTableMoveAllStmt) && CitusHasBeenLoaded())
+		if (IsA(parsetree, AlterTableMoveAllStmt))
 		{
 			ereport(WARNING, (errmsg("not propagating ALTER TABLE ALL IN TABLESPACE "
 									 "commands to worker nodes"),
@@ -339,14 +351,8 @@ multi_ProcessUtility(Node *parsetree,
 		}
 	}
 
-	/*
-	 * Inform the user about potential caveats.
-	 *
-	 * To prevent failures in aborted transactions, CitusHasBeenLoaded() needs
-	 * to be the second condition. See RelationIdGetRelation() which is called
-	 * by CitusHasBeenLoaded().
-	 */
-	if (IsA(parsetree, CreatedbStmt) && CitusHasBeenLoaded())
+	/* inform the user about potential caveats */
+	if (IsA(parsetree, CreatedbStmt))
 	{
 		ereport(NOTICE, (errmsg("Citus partially supports CREATE DATABASE for "
 								"distributed databases"),
@@ -355,7 +361,7 @@ multi_ProcessUtility(Node *parsetree,
 						 errhint("You can manually create a database and its "
 								 "extensions on workers.")));
 	}
-	else if (IsA(parsetree, CreateRoleStmt) && CitusHasBeenLoaded())
+	else if (IsA(parsetree, CreateRoleStmt))
 	{
 		ereport(NOTICE, (errmsg("not propagating CREATE ROLE/USER commands to worker"
 								" nodes"),
