@@ -634,6 +634,18 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_unique_job_ids",
+		gettext_noop("Enables unique job IDs by prepending the local process ID and "
+					 "group ID. This should usually be enabled, but can be disabled "
+					 "for repeatable output in regression tests."),
+		NULL,
+		&EnableUniqueJobIds,
+		true,
+		PGC_USERSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
