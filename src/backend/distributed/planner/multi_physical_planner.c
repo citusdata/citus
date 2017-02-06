@@ -22,6 +22,7 @@
 #include "access/heapam.h"
 #include "access/nbtree.h"
 #include "access/skey.h"
+#include "access/xlog.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_operator.h"
 #include "catalog/pg_type.h"
@@ -63,6 +64,7 @@
 
 /* Policy to use when assigning tasks to worker nodes */
 int TaskAssignmentPolicy = TASK_ASSIGNMENT_GREEDY;
+bool EnableUniqueJobIds = true;
 
 
 /*
@@ -1693,41 +1695,61 @@ ChildNodeList(MultiNode *multiNode)
 
 /*
  * UniqueJobId allocates and returns a unique jobId for the job to be executed.
- * This allocation occurs both in shared memory and in write ahead logs; writing
- * to logs avoids the risk of having jobId collisions.
  *
- * Please note that the jobId sequence wraps around after 2^32 integers. This
- * leaves the upper 32-bits to slave nodes and their jobs.
+ * The resulting job ID is built up as:
+ * <16-bit group ID><24-bit process ID><1-bit secondary flag><23-bit local counter>
+ *
+ * When citus.enable_unique_job_ids is off then only the local counter is
+ * included to get repeatable results.
  */
 static uint64
 UniqueJobId(void)
 {
-	text *sequenceName = cstring_to_text(JOBID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
-	Datum jobIdDatum = 0;
-	int64 jobId = 0;
-	int64 localizedJobId = 0;
-	int64 localGroupId = GetLocalGroupId();
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
+	static uint32 jobIdCounter = 0;
 
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	uint64 jobId = 0;
+	uint64 jobIdNumber = 0;
+	uint64 processId = 0;
+	uint64 localGroupId = 0;
 
-	/* generate new and unique jobId from sequence */
-	jobIdDatum = DirectFunctionCall1(nextval_oid, sequenceIdDatum);
-	jobId = DatumGetInt64(jobIdDatum);
+	jobIdCounter++;
+
+	if (EnableUniqueJobIds)
+	{
+		/*
+		 * Add the local group id information to the jobId to
+		 * prevent concurrent jobs on different groups to conflict.
+		 */
+		localGroupId = GetLocalGroupId() & 0xFF;
+		jobId = jobId | (localGroupId << 48);
+
+		/*
+		 * Add the current process ID to distinguish jobs by this
+		 * backends from jobs started by other backends. Process
+		 * IDs can have at most 24-bits on platforms supported by
+		 * Citus.
+		 */
+		processId = MyProcPid & 0xFFFFFF;
+		jobId = jobId | (processId << 24);
+
+		/*
+		 * Add an extra bit for secondaries to distinguish their
+		 * jobs from primaries.
+		 */
+		if (RecoveryInProgress())
+		{
+			jobId = jobId | (1 << 23);
+		}
+	}
 
 	/*
-	 * Add the local group id information to the jobId to
-	 * prevent concurrent jobs on different groups to conflict.
+	 * Use the remaining 23 bits to distinguish jobs by the
+	 * same backend.
 	 */
-	localizedJobId = jobId | (localGroupId << 32);
+	jobIdNumber = jobIdCounter & 0x1FFFFFF;
+	jobId = jobId | jobIdNumber;
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
-	return localizedJobId;
+	return jobId;
 }
 
 
@@ -2144,8 +2166,7 @@ SubquerySqlTaskList(Job *job)
 		sqlTask->dependedTaskList = dataFetchTaskList;
 
 		/* log the query string we generated */
-		ereport(DEBUG4, (errmsg("generated sql query for job " UINT64_FORMAT
-								" and task %d", sqlTask->jobId, sqlTask->taskId),
+		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
 						 errdetail("query string: \"%s\"", sqlQueryString->data)));
 
 		sqlTask->anchorShardId = AnchorShardId(fragmentCombination, anchorRangeTableId);
@@ -2260,8 +2281,7 @@ SqlTaskList(Job *job)
 		sqlTask->dependedTaskList = dataFetchTaskList;
 
 		/* log the query string we generated */
-		ereport(DEBUG4, (errmsg("generated sql query for job " UINT64_FORMAT
-								" and task %d", sqlTask->jobId, sqlTask->taskId),
+		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
 						 errdetail("query string: \"%s\"", sqlQueryString->data)));
 
 		sqlTask->anchorShardId = INVALID_SHARD_ID;
