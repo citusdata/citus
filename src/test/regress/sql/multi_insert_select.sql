@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13300000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 13300000;
 
 -- create co-located tables
 SET citus.shard_count = 4;

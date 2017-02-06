@@ -2,7 +2,6 @@
 -- MULTI_SQL_FUNCTION
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1230000;
 CREATE FUNCTION sql_test_no_1() RETURNS bigint AS '
 	SELECT
 		count(*)

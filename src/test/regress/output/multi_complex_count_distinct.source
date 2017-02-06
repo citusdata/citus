@@ -2,7 +2,6 @@
 -- COMPLEX_COUNT_DISTINCT
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 240000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 240000;
 CREATE TABLE lineitem_hash (
 	l_orderkey bigint not null,
 	l_partkey integer not null,

@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 950000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 950000;
 
 
 -- Change configuration to treat lineitem and orders tables as large

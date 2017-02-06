@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1220000;
 
 -- Tests functions related to cluster membership
 

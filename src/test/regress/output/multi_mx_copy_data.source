@@ -2,7 +2,6 @@
 -- MULTI_MX_COPY_DATA
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 290000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 290000;
 \COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 SET search_path TO citus_mx_test_schema;
 \COPY nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';

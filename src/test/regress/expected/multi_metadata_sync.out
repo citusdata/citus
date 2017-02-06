@@ -4,7 +4,6 @@
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_placement_id
 \gset
 ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART 100000;

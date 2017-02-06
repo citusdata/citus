@@ -8,7 +8,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 100200300400500;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 9000000;
 
 
 -- Load additional data to start using large shard identifiers.

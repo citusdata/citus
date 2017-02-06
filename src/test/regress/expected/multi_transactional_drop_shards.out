@@ -3,7 +3,6 @@
 --
 -- Tests that check the metadata returned by the master node.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1410000;
 SET citus.shard_count TO 4;
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then ROLLBACK
 CREATE TABLE transactional_drop_shards(column1 int);

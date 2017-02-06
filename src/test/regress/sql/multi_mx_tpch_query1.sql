@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 
 -- connect to the coordinator
 \c - - - :master_port
@@ -41,7 +40,6 @@ ORDER BY
 \c - - - :worker_1_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 
 -- Change configuration to treat lineitem and orders tables as large
 
@@ -75,7 +73,6 @@ ORDER BY
 \c - - - :worker_2_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 
 -- Change configuration to treat lineitem and orders tables as large
 

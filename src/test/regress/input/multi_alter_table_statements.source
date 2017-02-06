@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 220000;
 
 
 -- Check that we can run ALTER TABLE statements on distributed tables.

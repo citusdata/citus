@@ -8,7 +8,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 780000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 780000;
 
 
 CREATE FUNCTION plpgsql_test_1() RETURNS TABLE(count bigint) AS $$

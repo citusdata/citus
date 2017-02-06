@@ -8,7 +8,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1260000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1260000;
 
 -- connect to the coordinator
 \c - - - :master_port
@@ -40,7 +39,6 @@ ORDER BY
 \c - - - :worker_1_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1260000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1260000;
 
 SELECT
 	l_orderkey,
@@ -69,7 +67,6 @@ ORDER BY
 \c - - - :worker_2_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1260000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1260000;
 
 SELECT
 	l_orderkey,

@@ -5,7 +5,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1360000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1360000;
 
 -- test with not distributed table

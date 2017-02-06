@@ -2,7 +2,6 @@
 -- MULTI_COPY
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 560000;
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,

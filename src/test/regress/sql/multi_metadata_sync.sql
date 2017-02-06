@@ -7,7 +7,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1310000;
 
 SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_placement_id
 \gset

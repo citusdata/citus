@@ -7,7 +7,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 760000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 760000;
 
 
 SET client_min_messages TO DEBUG2;

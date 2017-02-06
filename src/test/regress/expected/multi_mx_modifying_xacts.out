@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1340000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1340000;
 -- ===================================================================
 -- test end-to-end modification functionality for mx tables in transactions
 -- ===================================================================
