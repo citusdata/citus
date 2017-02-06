@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 225000;
 
 SET citus.multi_shard_commit_protocol = '2pc';
 

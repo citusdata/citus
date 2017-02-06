@@ -5,7 +5,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 740000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 740000;
 
 
 SELECT part_storage_type, part_key, part_replica_count, part_max_size,

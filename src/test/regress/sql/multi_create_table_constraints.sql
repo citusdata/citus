@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 365000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 365000;
 
 --  test that Citus forbids unique and EXCLUDE constraints on append-partitioned tables.
 

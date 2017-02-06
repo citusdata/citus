@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1210000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1210000;
 
 -- connect to a worker node and run some queries
 \c - - - :worker_1_port

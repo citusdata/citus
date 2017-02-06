@@ -2,7 +2,6 @@
 -- MULTI_ALTER_TABLE_STATEMENTS
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 220000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 220000;
 -- Check that we can run ALTER TABLE statements on distributed tables.
 -- We set the shardid sequence here so that the shardids in this test
 -- aren't affected by changes to the previous tests.

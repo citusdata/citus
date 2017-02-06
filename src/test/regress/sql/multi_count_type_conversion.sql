@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 400000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 400000;
 
 
 -- Verify that we can sort count(*) results correctly. We perform this check as

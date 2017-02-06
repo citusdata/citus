@@ -2,7 +2,6 @@
 -- MULTI_METADATA_ACCESS
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1360000;
 CREATE USER no_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.

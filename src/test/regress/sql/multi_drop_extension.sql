@@ -5,7 +5,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 550000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 550000;
 
 
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);

@@ -5,7 +5,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 860000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 860000;
 
 
 SET citus.task_executor_type TO 'task-tracker';

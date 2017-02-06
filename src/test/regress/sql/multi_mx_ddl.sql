@@ -1,7 +1,6 @@
 -- Tests related to distributed DDL commands on mx cluster
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1600000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1600000;
 
 SELECT * FROM mx_ddl_table ORDER BY key;
 

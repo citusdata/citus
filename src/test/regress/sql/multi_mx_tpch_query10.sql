@@ -8,7 +8,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1300000;
 
 -- connect to master
 \c - - - :master_port
@@ -51,7 +50,6 @@ LIMIT 20;
 \c - - - :worker_1_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1300000;
 
 SELECT
 	c_custkey,
@@ -90,7 +88,6 @@ LIMIT 20;
 \c - - - :worker_2_port
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1300000;
 
 SELECT
 	c_custkey,
