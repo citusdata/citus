@@ -2,7 +2,6 @@
 -- MULTI_SUBQUERY
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 270000;
 -- print major version to make version-specific tests clear
 SHOW server_version \gset
 SELECT substring(:'server_version', '\d+\.\d+') AS major_version;

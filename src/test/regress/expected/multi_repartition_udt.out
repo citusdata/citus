@@ -2,7 +2,6 @@
 -- MULTI_REPARTITION_UDT
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 535000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 -- START type creation
 CREATE TYPE test_udt AS (i integer, i2 integer);
 -- ... as well as a function to use as its comparator...

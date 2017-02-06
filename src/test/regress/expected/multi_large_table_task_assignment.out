@@ -6,7 +6,6 @@
 -- from a sql task to its depended tasks. Note that we set the executor type to task
 -- tracker executor here, as we cannot run repartition jobs with real time executor.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 710000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 710000;
 BEGIN;
 SET client_min_messages TO DEBUG3;
 DEBUG:  CommitTransactionCommand
@@ -186,19 +185,6 @@ SET citus.large_table_shard_count TO 2;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
--- The next test, dual hash repartition join, uses the current jobId to assign
--- tasks in a round-robin fashion. We therefore need to ensure that jobIds start
--- with an odd number here to get consistent test output.
-SELECT case when (currval('pg_dist_jobid_seq') % 2) = 0
-       	    then nextval('pg_dist_jobid_seq') % 2
-	    else 1 end;
-DEBUG:  StartTransactionCommand
-DEBUG:  CommitTransactionCommand
- case 
-------
-    1
-(1 row)
-
 -- Dual hash repartition join which tests the separate hash repartition join
 -- task assignment algorithm.
 SELECT
@@ -247,10 +233,10 @@ DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 44
 DEBUG:  pruning merge fetch taskId 11
 DETAIL:  Creating dependency on merge taskId 19
-DEBUG:  assigned task 3 to node localhost:57637
-DEBUG:  assigned task 6 to node localhost:57638
-DEBUG:  assigned task 9 to node localhost:57637
-DEBUG:  assigned task 12 to node localhost:57638
+DEBUG:  assigned task 3 to node localhost:57638
+DEBUG:  assigned task 6 to node localhost:57637
+DEBUG:  assigned task 9 to node localhost:57638
+DEBUG:  assigned task 12 to node localhost:57637
 DEBUG:  CommitTransactionCommand
  count 
 -------

@@ -6,12 +6,11 @@
 -- the resource owner should automatically clean up these intermediate query
 -- result files.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 810000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 810000;
+SET citus.enable_unique_job_ids TO off;
 BEGIN;
 -- pg_ls_dir() displays jobids. We explicitly set the jobId sequence
 -- here so that the regression output becomes independent of the
 -- number of jobs executed prior to running this test.
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250;
 SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
     revenue    
 ---------------
@@ -218,26 +217,26 @@ FETCH 1 FROM c_19;
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
         f        
 -----------------
- master_job_1256
- master_job_1257
- master_job_1258
- master_job_1259
- master_job_1260
- master_job_1261
- master_job_1262
- master_job_1263
- master_job_1264
- master_job_1265
- master_job_1266
- master_job_1267
- master_job_1268
- master_job_1269
- master_job_1270
- master_job_1271
- master_job_1272
- master_job_1273
- master_job_1274
- master_job_1275
+ master_job_0007
+ master_job_0008
+ master_job_0009
+ master_job_0010
+ master_job_0011
+ master_job_0012
+ master_job_0013
+ master_job_0014
+ master_job_0015
+ master_job_0016
+ master_job_0017
+ master_job_0018
+ master_job_0019
+ master_job_0020
+ master_job_0021
+ master_job_0022
+ master_job_0023
+ master_job_0024
+ master_job_0025
+ master_job_0026
 (20 rows)
 
 -- close first, 17th (first after re-alloc) and last cursor.
@@ -247,23 +246,23 @@ CLOSE c_19;
 SELECT * FROM pg_ls_dir('base/pgsql_job_cache') f ORDER BY f;
         f        
 -----------------
- master_job_1257
- master_job_1258
- master_job_1259
- master_job_1260
- master_job_1261
- master_job_1262
- master_job_1263
- master_job_1264
- master_job_1265
- master_job_1266
- master_job_1267
- master_job_1268
- master_job_1269
- master_job_1270
- master_job_1271
- master_job_1273
- master_job_1274
+ master_job_0008
+ master_job_0009
+ master_job_0010
+ master_job_0011
+ master_job_0012
+ master_job_0013
+ master_job_0014
+ master_job_0015
+ master_job_0016
+ master_job_0017
+ master_job_0018
+ master_job_0019
+ master_job_0020
+ master_job_0021
+ master_job_0022
+ master_job_0024
+ master_job_0025
 (17 rows)
 
 ROLLBACK;
