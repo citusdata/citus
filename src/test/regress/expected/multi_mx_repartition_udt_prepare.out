@@ -2,7 +2,6 @@
 -- MULTI_MX_REPARTITION_UDT_PREPARE
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 535000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 -- START type creation
 CREATE TYPE test_udt AS (i integer, i2 integer);
 -- ... as well as a function to use as its comparator...
@@ -202,6 +201,4 @@ LOG:  join order: [ "repartition_udt" ][ dual partition join "repartition_udt_ot
 
 	
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;

@@ -9,7 +9,7 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 810000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 810000;
+SET citus.enable_unique_job_ids TO off;
 
 
 BEGIN;
@@ -17,7 +17,6 @@ BEGIN;
 -- pg_ls_dir() displays jobids. We explicitly set the jobId sequence
 -- here so that the regression output becomes independent of the
 -- number of jobs executed prior to running this test.
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250;
 
 SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
 SELECT sum(l_extendedprice * l_discount) as revenue FROM lineitem;
