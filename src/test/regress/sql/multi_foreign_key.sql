@@ -254,6 +254,9 @@ CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referenced_table', 'id', 'hash');
 SELECT create_distributed_table('referencing_table', 'ref_id', 'hash');
 
+-- columns for the referenced table is empty
+ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(ref_id) REFERENCES referenced_table ON DELETE CASCADE;
+
 -- test foreign constraint creation on non-partition columns
 ALTER TABLE referencing_table ADD CONSTRAINT test_constraint FOREIGN KEY(id) REFERENCES referenced_table(id);
 

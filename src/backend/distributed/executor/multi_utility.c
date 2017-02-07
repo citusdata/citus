@@ -1592,6 +1592,19 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				}
 
 				/*
+				 * The following logic requires the referenced columns to exists in
+				 * the statement. Otherwise, we cannot apply some of the checks.
+				 */
+				if (constraint->pk_attrs == NULL)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create foreign key constraint "
+										   "because referenced column list is empty"),
+									errhint("Add column names to \"REFERENCES\" part of "
+											"the statement.")));
+				}
+
+				/*
 				 * Referencing column's list length should be equal to referenced columns
 				 * list length.
 				 */
