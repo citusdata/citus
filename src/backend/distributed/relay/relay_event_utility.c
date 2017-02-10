@@ -667,31 +667,18 @@ AppendShardIdToName(char **name, uint64 shardId)
 
 /*
  * shard_name() provides a PG function interface to AppendShardNameToId above.
+ * Returns the name of a shard as a quoted schema-qualified identifier.
  */
 Datum
 shard_name(PG_FUNCTION_ARGS)
 {
-	Oid relationId = InvalidOid;
-	int64 shardId = 0;
+	Oid relationId = PG_GETARG_OID(0);
+	int64 shardId = PG_GETARG_INT64(1);
 	char *relationName = NULL;
 
-	/*
-	 * Have to check arguments for NULLness as it can't be declared STRICT
-	 * because of min/max arguments, which have to be NULLable for new shards.
-	 */
-	if (PG_ARGISNULL(0))
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("object_name cannot be null")));
-	}
-	if (PG_ARGISNULL(1))
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("shard_id cannot be null")));
-	}
-
-	relationId = PG_GETARG_OID(0);
-	shardId = PG_GETARG_INT64(1);
+	Oid schemaId = InvalidOid;
+	char *schemaName = NULL;
+	char *qualifiedName = NULL;
 
 	CheckCitusVersion(ERROR);
 
@@ -717,5 +704,10 @@ shard_name(PG_FUNCTION_ARGS)
 	}
 
 	AppendShardIdToName(&relationName, shardId);
-	PG_RETURN_TEXT_P(cstring_to_text(relationName));
+
+	schemaId = get_rel_namespace(relationId);
+	schemaName = get_namespace_name(schemaId);
+	qualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+	PG_RETURN_TEXT_P(cstring_to_text(qualifiedName));
 }
