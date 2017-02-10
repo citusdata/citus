@@ -150,10 +150,30 @@ CREATE TABLE U&"elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E
 SELECT master_create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
 SELECT master_create_worker_shards(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', '2', '2');
 
+-- Verify that quoting is used in shard_name
+SELECT shard_name(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass, min(shardid))
+FROM pg_dist_shard
+WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass;
+
 \c - - - :worker_1_port
 \dt public.elephant_*
 \di public.elephant_*
 \c - - - :master_port
+
+-- Verify that shard_name UDF supports schemas
+CREATE SCHEMA multi_name_lengths;
+CREATE TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890 (
+        col1 integer not null,
+        col2 integer not null);
+SELECT master_create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
+SELECT master_create_worker_shards('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 2, 1);
+
+SELECT shard_name('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass, min(shardid))
+FROM pg_dist_shard
+WHERE logicalrelid = 'multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass;
+
+
+DROP TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890;
 
 -- Clean up.
 DROP TABLE name_lengths CASCADE;

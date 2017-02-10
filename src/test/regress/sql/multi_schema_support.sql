@@ -765,3 +765,20 @@ SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
 SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');
 
 DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
+
+-- test run_command_on_* UDFs with schema
+CREATE SCHEMA run_test_schema;
+CREATE TABLE run_test_schema.test_table(id int);
+SELECT create_distributed_table('run_test_schema.test_table','id');
+
+-- randomly insert data to evaluate below UDFs better
+INSERT INTO run_test_schema.test_table VALUES(1);
+INSERT INTO run_test_schema.test_table VALUES(7);
+INSERT INTO run_test_schema.test_table VALUES(9);
+
+-- try UDFs which call shard_name as a subroutine
+SELECT sum(result::int) FROM run_command_on_placements('run_test_schema.test_table','SELECT pg_table_size(''%s'')');
+SELECT sum(result::int) FROM run_command_on_shards('run_test_schema.test_table','SELECT pg_table_size(''%s'')');
+
+-- Clean up the created schema
+DROP SCHEMA run_test_schema CASCADE;
