@@ -1,3 +1,79 @@
+### citus v6.1.0 (February 9, 2017) ###
+
+* Implements _reference tables_, transactionally replicated to all nodes
+
+* Adds `upgrade_to_reference_table` UDF to upgrade pre-6.1 reference tables
+
+* Expands prepared statement support to nearly all statements
+
+* Adds support for creating `VIEW`s which reference distributed tables
+
+* Adds targeted `VACUUM`/`ANALYZE` support
+
+* Adds support for the `FILTER` clause in aggregate expressions
+
+* Adds support for function evaluation within `INSERT INTO ... SELECT`
+
+* Adds support for creating foreign key constraints with `ALTER TABLE`
+
+* Adds logic to choose router planner for all queries it supports
+
+* Enhances `create_distributed_table` with parameter for explicit colocation
+
+* Adds generally useful utility UDFs previously available as "Citus Tools"
+
+* Adds user-facing UDFs for locking shard resources and metadata
+
+* Refactors connection and transaction management; giving a consistent experience
+
+* Enhances `COPY` with fully transactional semantics
+
+* Improves support for cancellation for a number of queries and commands
+
+* Adds `column_to_column_name` UDF to help users understand `partkey` values
+
+* Adds `master_disable_node` UDF for temporarily disabling nodes
+
+* Adds proper MX ("masterless") metadata propagation logic
+
+* Adds `start_metadata_sync_to_node` UDF to propagate metadata changes to nodes
+
+* Enhances `SERIAL` compatibility with MX tables
+
+* Adds an `node_connection_timeout` parameter to control node connection timeouts
+
+* Adds `enable_deadlock_prevention` setting to permit multi-node transactions
+
+* Adds a `replication_model` setting to specify replication of new tables
+
+* Changes the `shard_replication_factor` setting's default value to one
+
+* Adds code to automatically set `max_prepared_transactions` if not configured
+
+* Accelerates lookup of colocated shard placements
+
+* Fixes a bug affecting `INSERT INTO ... SELECT` queries using constant values
+
+* Fixes a bug by ensuring `COPY` does not mark placements inactive
+
+* Fixes a bug affecting reads from `pg_dist_shard_placement` table
+
+* Fixes a crash triggered by creating a foreign key without a column
+
+* Fixes a crash related to accessing catalog tables after aborted transactions
+
+* Fixes a bug affecting JOIN queries requiring repartitions
+
+* Fixes a bug affecting node insertions to `pg_dist_node` table
+
+* Fixes a crash triggered by queries with modifying common table expressions
+
+* Fixes a bug affecting workloads with concurrent shard appends and deletions
+
+* Addresses various race conditions and deadlocks
+
+* Improves and standardizes error messages
+
 ### citus v6.0.1 (November 29, 2016) ###
 
 * Fixes a bug causing failures during pg_upgrade
