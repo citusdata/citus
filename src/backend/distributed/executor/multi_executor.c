@@ -33,6 +33,16 @@
 #include "utils/memutils.h"
 
 
+/*
+ * FIXME: It'd probably be better to have different set of methods for:
+ * - router readonly queries
+ * - router modify
+ * - router insert ... select
+ * - real-time/task-tracker (no point in seperating those)
+ *
+ * I think it's better however to only have one type of CitusScanState, to
+ * allow to easily share code between routines.
+ */
 static CustomExecMethods CitusCustomExecMethods = {
 	"CitusScan",
 	CitusBeginScan,
@@ -141,8 +151,27 @@ CitusExecScan(CustomScanState *node)
 			}
 
 			tupleDescriptor = node->ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
-			fakeRel = palloc0(sizeof(RelationData));
 
+			/*
+			 * Load data, collected by Multi*Execute() above, into a
+			 * tuplestore. For that first create a tuplestore, and then copy
+			 * the files one-by-one.
+			 *
+			 * FIXME: Should probably be in a separate routine.
+			 *
+			 * Long term it'd be a lot better if Multi*Execute() directly
+			 * filled the tuplestores, but that's a fair bit of work.
+			 */
+
+			/*
+			 * To be able to use copy.c, we need a Relation descriptor.  As
+			 * there's no relation corresponding to the data loaded from
+			 * workers, fake one.  We just need the bare minimal set of fields
+			 * accessed by BeginCopyFrom().
+			 *
+			 * FIXME: should be abstracted into a separate function.
+			 */
+			fakeRel = palloc0(sizeof(RelationData));
 			fakeRel->rd_att = tupleDescriptor;
 			fakeRel->rd_rel = palloc0(sizeof(FormData_pg_class));
 			fakeRel->rd_rel->relkind = RELKIND_RELATION;
@@ -231,5 +260,10 @@ CitusReScan(CustomScanState *node)
 
 	scanState->tuplestorestate = NULL;
 	scanState->finishedUnderlyingScan = true;
+
+	/*
+	 * XXX: this probably already works, but if not should be easily
+	 * supportable - probably hard to exercise right now though.
+	 */
 	elog(WARNING, "unsupported at this point");
 }

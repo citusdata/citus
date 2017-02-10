@@ -400,6 +400,10 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 		customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
 	}
 
+	/*
+	 * FIXME: these two branches/pieces of code should probably be moved into
+	 * router / logical planner code respectively.
+	 */
 	if (multiPlan->masterQuery)
 	{
 		resultPlan = MasterNodeSelectPlan(multiPlan, customScan);
@@ -415,6 +419,10 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 		List *columnNames = NIL;
 		int newRTI = list_length(originalPlan->rtable) + 1;
 
+		/*
+		 * XXX: This basically just builds a targetlist to "read" from the
+		 * custom scan output.
+		 */
 		foreach(lc, originalPlan->planTree->targetlist)
 		{
 			TargetEntry *te = lfirst(lc);
@@ -422,6 +430,12 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 			TargetEntry *newTargetEntry = NULL;
 
 			Assert(IsA(te, TargetEntry));
+
+			/*
+			 * XXX: I can't think of a case where we'd need resjunk stuff at
+			 * the toplevel of a router query - all things needing it have
+			 * been pushed down.
+			 */
 			if (te->resjunk)
 			{
 				foundJunk = true;
@@ -433,6 +447,7 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 				ereport(ERROR, (errmsg("unexpected !junk entry after resjunk entry")));
 			}
 
+			/* build TE pointing to custom scan */
 			newVar = makeVarFromTargetEntry(newRTI, te);
 			newTargetEntry = flatCopyTargetEntry(te);
 			newTargetEntry->expr = (Expr *) newVar;
@@ -441,6 +456,7 @@ MultiQueryContainerNode(PlannedStmt *originalPlan, MultiPlan *multiPlan)
 			columnNames = lappend(columnNames, makeString(te->resname));
 		}
 
+		/* XXX: can't think of a better RTE type than VALUES */
 		rangeTableEntry = makeNode(RangeTblEntry);
 		rangeTableEntry->rtekind = RTE_VALUES; /* can't look up relation */
 		rangeTableEntry->eref = makeAlias("remote_scan", columnNames);

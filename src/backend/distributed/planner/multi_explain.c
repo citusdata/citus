@@ -99,8 +99,16 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		return;
 	}
 
+	/*
+	 * XXX: can we get by without the open/close group somehow - then we'd not
+	 * copy any code from explain.c? Seems unlikely.
+	 */
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
+	/*
+	 * XXX: might be worthwhile to put this somewhere central, e.g. for
+	 * debugging output.
+	 */
 	switch (scanState->executorType)
 	{
 		case MULTI_EXECUTOR_ROUTER:

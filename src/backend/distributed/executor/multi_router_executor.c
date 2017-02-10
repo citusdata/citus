@@ -442,6 +442,7 @@ RouterExecScan(CitusScanState *scanState)
 		bool isModificationQuery = false;
 		CmdType operation = multiPlan->operation;
 
+		/* should use IsModificationStmt or such */
 		if (operation == CMD_INSERT || operation == CMD_UPDATE ||
 			operation == CMD_DELETE)
 		{
@@ -482,9 +483,16 @@ RouterExecScan(CitusScanState *scanState)
 	}
 
 	/* if the underlying query produced output, return it */
+
+	/*
+	 * FIXME: centralize this into function to be shared between router and
+	 * other executors?
+	 */
 	if (scanState->tuplestorestate != NULL)
 	{
 		Tuplestorestate *tupleStore = scanState->tuplestorestate;
+
+		/* XXX: could trivially support backward scans here */
 		tuplestore_gettupleslot(tupleStore, true, false, resultSlot);
 
 		return resultSlot;
@@ -805,6 +813,7 @@ ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 	/* can only support modifications right now */
 	Assert(isModificationQuery);
 
+	/* XXX: Seems very redundant to pass both scanState and tupleDescriptor */
 	affectedTupleCount = ExecuteModifyTasks(taskList, expectResults, paramListInfo,
 											scanState, tupleDescriptor);
 
