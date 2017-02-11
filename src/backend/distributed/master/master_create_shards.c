@@ -30,6 +30,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -71,6 +72,11 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 
 	CreateShardsWithRoundRobinPolicy(distributedTableId, shardCount, replicationFactor);
 
+	if (ShouldSyncTableMetadata(distributedTableId))
+	{
+		CreateShardMetadataOnWorkers(distributedTableId);
+	}
+
 	PG_RETURN_VOID();
 }
 
@@ -97,6 +103,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	uint64 hashTokenIncrement = 0;
 	List *existingShardList = NIL;
 	int64 shardIndex = 0;
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
 	/* make sure table is hash partitioned */
 	CheckHashPartitionedTable(distributedTableId);
@@ -136,6 +143,24 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("replication_factor must be positive")));
+	}
+
+	/* make sure that RF=1 if the table is streaming replicated */
+	if (cacheEntry->replicationModel == REPLICATION_MODEL_STREAMING &&
+		replicationFactor > 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("using replication factor %d with streaming "
+							   "replicated tables are not supported",
+							   replicationFactor),
+						errdetail("When master_create_distributed_table is called with "
+								  "citus.replication_model streaming, then the table is "
+								  "marked for streaming replication and the shard "
+								  "replication factor of streaming replicated tables "
+								  "must be 1."),
+						errhint("Use replication factor 1 or set "
+								"citus.replication_model to streaming and recreate the "
+								"table")));
 	}
 
 	/* calculate the split of the hash space */

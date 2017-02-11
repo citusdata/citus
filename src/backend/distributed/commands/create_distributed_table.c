@@ -111,6 +111,12 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, INVALID_COLOCATION_ID);
 
+	/* create the distributed table metadata on workers */
+	if (ShouldSyncTableMetadata(distributedRelationId))
+	{
+		CreateTableMetadataOnWorkers(distributedRelationId);
+	}
+
 	PG_RETURN_VOID();
 }
 

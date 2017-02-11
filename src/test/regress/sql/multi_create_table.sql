@@ -126,14 +126,17 @@ SELECT create_distributed_table('mx_table_test', 'col1');
 SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
 DROP TABLE mx_table_test;
 
-RESET citus.replication_model;
+-- Show that master_create_distributed_table honors citus.replication_model GUC
+CREATE TABLE s_table(a int);
+SELECT master_create_distributed_table('s_table', 'a', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='s_table'::regclass;
 
--- Show that it is not possible to create an mx table with the old 
--- master_create_distributed_table function
-CREATE TABLE mx_table_test (col1 int, col2 text);
-SELECT master_create_distributed_table('mx_table_test', 'col1', 'hash');
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
-DROP TABLE mx_table_test;
+-- Show that master_create_worker_shards complains when RF>1 and replication model is streaming
+SELECT master_create_worker_shards('s_table', 4, 2);
+
+DROP TABLE s_table;
+
+RESET citus.replication_model;
 
 -- Show that when replication factor > 1 the table is created as coordinator-replicated
 SET citus.shard_replication_factor TO 2;

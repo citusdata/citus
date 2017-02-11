@@ -594,12 +594,55 @@ ORDER BY shardid, nodeport;
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
 DROP TABLE tmp_shard_placement;
 
+-- Show that MX tables can be created with the old distributed table creation APIs
+-- First show that we can create a streaming distributed table
+SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1; -- Prevent the ingenuine error
+CREATE table mx_old_api(a INT, b BIGSERIAL);
+SELECT master_create_distributed_table('mx_old_api', 'a', 'hash');
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_old_api'::regclass;
+
+-- Show that the metadata is created on the worker 
+\c - - - :worker_1_port
+\d mx_old_api
+SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_old_api'::regclass;
+
+-- Create the worker shards and show that the metadata is also on the workers
+\c - - - :master_port
+SELECT master_create_worker_shards('mx_old_api', 4, 1);
+INSERT INTO mx_old_api (a) VALUES (1);
+INSERT INTO mx_old_api (a) VALUES (2);
+INSERT INTO mx_old_api (a) VALUES (3);
+
+SELECT logicalrelid, shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_old_api'::regclass
+ORDER BY shardid, nodename, nodeport;
+
+-- Show that the metadata is good on the worker and queries work from it
+\c - - - :worker_1_port
+INSERT INTO mx_old_api (a) VALUES (10);
+INSERT INTO mx_old_api (a) VALUES (20);
+INSERT INTO mx_old_api (a) VALUES (30);
+
+SELECT logicalrelid, shardid, nodename, nodeport 
+FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
+WHERE logicalrelid='mx_old_api'::regclass
+ORDER BY shardid, nodename, nodeport;
+
+SELECT * FROM mx_old_api ORDER BY a;
+
+-- Get back to the master and check that we can see the rows that INSERTed from the worker
+\c - - - :master_port
+SELECT * FROM mx_old_api ORDER BY a;
+
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_test_schema_2.mx_table_2 CASCADE;
 DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
+DROP TABLE mx_old_api;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
