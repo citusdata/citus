@@ -78,7 +78,7 @@ If you're looking to get started locally, you can follow the following steps to 
 <tr>
   <td>Documentation</td>
   <td>Try the <a
-  href="https://docs.citusdata.com/en/v6.0/tutorials/tut-hash-distribution.html">Citus
+  href="https://docs.citusdata.com/en/v6.1/tutorials/tut-hash-distribution.html">Citus
   tutorial</a> for a hands-on introduction or <br/>the <a
   href="https://docs.citusdata.com">documentation</a> for
   a more comprehensive reference.</td>
@@ -144,4 +144,4 @@ Copyright © 2012–2017 Citus Data, Inc.
 [faq]: https://www.citusdata.com/frequently-asked-questions
 [linux_install]: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04
 [mac_install]: https://www.docker.com/products/docker-toolbox
-[tutorial]: https://docs.citusdata.com/en/v6.0/tutorials/tut-hash-distribution.html
+[tutorial]: https://docs.citusdata.com/en/v6.1/tutorials/tut-hash-distribution.html
