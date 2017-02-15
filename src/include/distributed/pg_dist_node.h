@@ -23,6 +23,7 @@ typedef struct FormData_pg_dist_node
 	text nodename;
 	int nodeport;
 	bool hasmetadata;
+	char noderole;  /* see codes below */
 #endif
 } FormData_pg_dist_node;
 
@@ -37,15 +38,19 @@ typedef FormData_pg_dist_node *Form_pg_dist_node;
  *      compiler constants for pg_dist_node
  * ----------------
  */
-#define Natts_pg_dist_node 6
+#define Natts_pg_dist_node 7
 #define Anum_pg_dist_node_nodeid 1
 #define Anum_pg_dist_node_groupid 2
 #define Anum_pg_dist_node_nodename 3
 #define Anum_pg_dist_node_nodeport 4
 #define Anum_pg_dist_node_noderack 5
 #define Anum_pg_dist_node_hasmetadata 6
+#define Anum_pg_dist_node_noderole 7
 
 #define GROUPID_SEQUENCE_NAME "pg_dist_groupid_seq"
 #define NODEID_SEQUENCE_NAME "pg_dist_node_nodeid_seq"
+
+#define NODE_ROLE_PRIMARY 'p'
+#define NODE_ROLE_SECONDARY 's'
 
 #endif /* PG_DIST_NODE_H */

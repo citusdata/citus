@@ -43,6 +43,7 @@ typedef struct WorkerNode
 	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
 	char workerRack[WORKER_LENGTH];     /* node's network location */
 	bool hasMetadata;                   /* node gets metadata changes */
+	char nodeRole;                      /* whether the node is a primary or secondary */
 } WorkerNode;
 
 

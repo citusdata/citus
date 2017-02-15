@@ -769,9 +769,9 @@ SELECT shardid, nodename, nodeport
 SELECT master_add_node('localhost', :worker_1_port);
 NOTICE:  Replicating reference table "nation" to all workers
 NOTICE:  Replicating reference table "supplier" to all workers
-         master_add_node         
----------------------------------
- (3,3,localhost,57637,default,f)
+          master_add_node          
+-----------------------------------
+ (3,3,localhost,57637,default,f,p)
 (1 row)
 
 RESET citus.shard_replication_factor;

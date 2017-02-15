@@ -25,9 +25,9 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-               master_add_node               
----------------------------------------------
- (1370000,1370000,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370000,1370000,localhost,57638,default,f,p)
 (1 row)
 
 -- verify node is added
@@ -124,9 +124,9 @@ WHERE colocationid IN
 
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_valid" to all workers
-               master_add_node               
----------------------------------------------
- (1370002,1370002,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370002,1370002,localhost,57638,default,f,p)
 (1 row)
 
 -- status after master_add_node
@@ -177,9 +177,9 @@ WHERE colocationid IN
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-               master_add_node               
----------------------------------------------
- (1370002,1370002,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370002,1370002,localhost,57638,default,f,p)
 (1 row)
 
 -- status after master_add_node
@@ -245,9 +245,9 @@ WHERE colocationid IN
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_rollback" to all workers
-               master_add_node               
----------------------------------------------
- (1370003,1370003,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370003,1370003,localhost,57638,default,f,p)
 (1 row)
 
 ROLLBACK;
@@ -307,9 +307,9 @@ WHERE colocationid IN
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_commit" to all workers
-               master_add_node               
----------------------------------------------
- (1370004,1370004,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370004,1370004,localhost,57638,default,f,p)
 (1 row)
 
 COMMIT;
@@ -402,9 +402,9 @@ ORDER BY logicalrelid;
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_reference_one" to all workers
-               master_add_node               
----------------------------------------------
- (1370005,1370005,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370005,1370005,localhost,57638,default,f,p)
 (1 row)
 
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
@@ -551,9 +551,9 @@ WHERE colocationid IN
 BEGIN;
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_drop" to all workers
-               master_add_node               
----------------------------------------------
- (1370009,1370009,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370009,1370009,localhost,57638,default,f,p)
 (1 row)
 
 DROP TABLE replicate_reference_table_drop;
@@ -613,9 +613,9 @@ WHERE colocationid IN
 
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "table1" to all workers
-               master_add_node               
----------------------------------------------
- (1370010,1370010,localhost,57638,default,f)
+                master_add_node                
+-----------------------------------------------
+ (1370010,1370010,localhost,57638,default,f,p)
 (1 row)
 
 -- status after master_add_node
