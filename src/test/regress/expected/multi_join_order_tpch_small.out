@@ -18,10 +18,10 @@ WHERE
 	and l_discount between 0.06 - 0.01 and 0.06 + 0.01
 	and l_quantity < 24;
 LOG:  join order: [ "lineitem" ]
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -49,13 +49,13 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ broadcast join "customer" ][ local partition join "lineitem" ]
-                                QUERY PLAN                                
---------------------------------------------------------------------------
+                                 QUERY PLAN                                  
+-----------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
    Sort Key: sum((sum(revenue))) DESC, o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: l_orderkey, o_orderdate, o_shippriority
-         ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -98,7 +98,7 @@ LOG:  join order: [ "orders" ][ broadcast join "customer" ][ broadcast join "nat
    Sort Key: sum((sum(revenue))) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment
-         ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
 
@@ -133,10 +133,10 @@ WHERE
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
 LOG:  join order: [ "lineitem" ][ broadcast join "part" ]
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 

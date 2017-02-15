@@ -11,7 +11,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 660000;
 
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
-SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwhise
+SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
 SET client_min_messages TO LOG;
 
 -- Change configuration to treat lineitem, orders, customer, and part tables as

@@ -43,8 +43,7 @@ Sort
   Sort Key: COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), l_quantity
   ->  HashAggregate
         Group Key: l_quantity
-        ->  Custom Scan (CitusScan)
-              Executor: Real-Time
+        ->  Custom Scan (Citus Real-Time)
               Task Count: 8
               Tasks Shown: One of 8
               ->  Task
@@ -71,9 +70,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
             {
               "Node Type": "Custom Scan",
               "Parent Relationship": "Outer",
-              "Custom Plan Provider": "CitusScan",
+              "Custom Plan Provider": "Citus Real-Time",
               "Distributed Query": {
-                "Executor": "Real-Time",
                 "Job": {
                   "Task Count": 8,
                   "Tasks Shown": "One of 8",
@@ -140,9 +138,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
               <Parent-Relationship>Outer</Parent-Relationship>
-              <Custom-Plan-Provider>CitusScan</Custom-Plan-Provider>
+              <Custom-Plan-Provider>Citus Real-Time</Custom-Plan-Provider>
               <Distributed-Query>
-                <Executor>Real-Time</Executor>
                 <Job>
                   <Task-Count>8</Task-Count>
                   <Tasks-Shown>One of 8</Tasks-Shown>
@@ -204,9 +201,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Plans: 
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
-            Custom Plan Provider: "CitusScan"
+            Custom Plan Provider: "Citus Real-Time"
             Distributed Query: 
-              Executor: "Real-Time"
               Job: 
                 Task Count: 8
                 Tasks Shown: "One of 8"
@@ -232,8 +228,7 @@ Sort
   Sort Key: COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), l_quantity
   ->  HashAggregate
         Group Key: l_quantity
-        ->  Custom Scan (CitusScan)
-              Executor: Real-Time
+        ->  Custom Scan (Citus Real-Time)
               Task Count: 8
               Tasks Shown: One of 8
               ->  Task
@@ -246,9 +241,8 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 Aggregate
   Output: (sum("?column?") / (sum("?column?_1") / sum("?column?_2")))
-  ->  Custom Scan (CitusScan)
+  ->  Custom Scan (Citus Real-Time)
         Output: "?column?", "?column?_1", "?column?_2"
-        Executor: Real-Time
         Task Count: 8
         Tasks Shown: One of 8
         ->  Task
@@ -265,8 +259,7 @@ EXPLAIN (COSTS FALSE)
 Limit
   ->  Sort
         Sort Key: l_quantity
-        ->  Custom Scan (CitusScan)
-              Executor: Real-Time
+        ->  Custom Scan (Citus Real-Time)
               Task Count: 8
               Tasks Shown: One of 8
               ->  Task
@@ -283,8 +276,7 @@ Limit
 -- Test insert
 EXPLAIN (COSTS FALSE)
 	INSERT INTO lineitem VALUES(1,0);
-Custom Scan (CitusScan)
-  Executor: Router
+Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -296,8 +288,7 @@ EXPLAIN (COSTS FALSE)
 	UPDATE lineitem
 	SET l_suppkey = 12
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (CitusScan)
-  Executor: Router
+Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -312,8 +303,7 @@ Custom Scan (CitusScan)
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
-Custom Scan (CitusScan)
-  Executor: Router
+Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -327,8 +317,7 @@ Custom Scan (CitusScan)
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-Custom Scan (CitusScan)
-  Executor: Router
+Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -347,8 +336,7 @@ t
 EXPLAIN (COSTS FALSE)
 	CREATE TABLE explain_result AS
 	SELECT * FROM lineitem;
-Custom Scan (CitusScan)
-  Executor: Real-Time
+Custom Scan (Citus Real-Time)
   Task Count: 8
   Tasks Shown: One of 8
   ->  Task
@@ -360,10 +348,9 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	HAVING sum(l_quantity) > 100;
 Aggregate
   Output: (sum("?column?") / (sum("?column?_1") / sum("?column?_2")))
-  Filter: (sum("remote scan".worker_column_4) > '100'::numeric)
-  ->  Custom Scan (CitusScan)
+  Filter: (sum(remote_scan.worker_column_4) > '100'::numeric)
+  ->  Custom Scan (Citus Real-Time)
         Output: "?column?", "?column?_1", "?column?_2", worker_column_4
-        Executor: Real-Time
         Task Count: 8
         Tasks Shown: One of 8
         ->  Task
@@ -379,11 +366,10 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	HAVING l_quantity > (100 * random());
 HashAggregate
   Output: l_quantity
-  Group Key: "remote scan".l_quantity
-  Filter: (("remote scan".worker_column_2)::double precision > ('100'::double precision * random()))
-  ->  Custom Scan (CitusScan)
+  Group Key: remote_scan.l_quantity
+  Filter: ((remote_scan.worker_column_2)::double precision > ('100'::double precision * random()))
+  ->  Custom Scan (Citus Real-Time)
         Output: l_quantity, worker_column_2
-        Executor: Real-Time
         Task Count: 8
         Tasks Shown: One of 8
         ->  Task
@@ -398,8 +384,7 @@ SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Real-Time
+  ->  Custom Scan (Citus Real-Time)
         Task Count: 4
         Tasks Shown: All
         ->  Task
@@ -434,8 +419,7 @@ SET citus.explain_all_tasks TO off;
 EXPLAIN (COSTS FALSE)
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Task-Tracker
+  ->  Custom Scan (Citus Task-Tracker)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -452,8 +436,7 @@ EXPLAIN (COSTS FALSE)
 	AND o_custkey = c_custkey
 	AND l_suppkey = s_suppkey;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Task-Tracker
+  ->  Custom Scan (Citus Task-Tracker)
         Task Count: 1
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
@@ -477,9 +460,8 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
         {
           "Node Type": "Custom Scan",
           "Parent Relationship": "Outer",
-          "Custom Plan Provider": "CitusScan",
+          "Custom Plan Provider": "Citus Task-Tracker",
           "Distributed Query": {
-            "Executor": "Task-Tracker",
             "Job": {
               "Task Count": 1,
               "Tasks Shown": "None, not supported for re-partition queries",
@@ -524,9 +506,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
         <Plan>
           <Node-Type>Custom Scan</Node-Type>
           <Parent-Relationship>Outer</Parent-Relationship>
-          <Custom-Plan-Provider>CitusScan</Custom-Plan-Provider>
+          <Custom-Plan-Provider>Citus Task-Tracker</Custom-Plan-Provider>
           <Distributed-Query>
-            <Executor>Task-Tracker</Executor>
             <Job>
               <Task-Count>1</Task-Count>
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
@@ -581,9 +562,8 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Plans: 
       - Node Type: "Custom Scan"
         Parent Relationship: "Outer"
-        Custom Plan Provider: "CitusScan"
+        Custom Plan Provider: "Citus Task-Tracker"
         Distributed Query: 
-          Executor: "Task-Tracker"
           Job: 
             Task Count: 1
             Tasks Shown: "None, not supported for re-partition queries"
@@ -610,8 +590,7 @@ Aggregate
 -- ensure distributed plans don't break
 EXPLAIN (COSTS FALSE) SELECT avg(l_linenumber) FROM lineitem;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Task-Tracker
+  ->  Custom Scan (Citus Task-Tracker)
         Task Count: 8
         Tasks Shown: One of 8
         ->  Task
@@ -623,8 +602,7 @@ PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Task-Tracker
+  ->  Custom Scan (Citus Task-Tracker)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -635,8 +613,7 @@ Aggregate
 SET citus.task_executor_type TO 'real-time';
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
 EXPLAIN EXECUTE router_executor_query;
-Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
-  Executor: Router
+Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task
@@ -649,8 +626,7 @@ PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
 EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 Aggregate
-  ->  Custom Scan (CitusScan)
-        Executor: Real-Time
+  ->  Custom Scan (Citus Real-Time)
         Task Count: 4
         Tasks Shown: One of 4
         ->  Task
@@ -662,8 +638,7 @@ Aggregate
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
-Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
-  Executor: Router
+Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
   Task Count: 1
   Tasks Shown: All
   ->  Task

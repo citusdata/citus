@@ -1312,6 +1312,12 @@ FETCH test_cursor;
  11 |         1 | alamo |       1347
 (1 row)
 
+FETCH BACKWARD test_cursor;
+ id | author_id |  title   | word_count 
+----+-----------+----------+------------
+  1 |         1 | arsenous |       9572
+(1 row)
+
 END;
 -- queries inside copy can be router plannable
 COPY (
@@ -1454,7 +1460,10 @@ CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		WHERE author_id = 1"
 PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
 DEBUG:  Plan is router executable
-CONTEXT:  PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
+		FROM articles_hash_mx ah
+		WHERE author_id = 1"
+PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
  id | word_count 
 ----+------------
   1 |       9572
