@@ -51,14 +51,13 @@ typedef struct RelationShard
 extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
 								   ParamListInfo boundParams);
 
-extern bool HasCitusToplevelNode(PlannedStmt *planStatement);
 struct MultiPlan;
 extern struct MultiPlan * GetMultiPlan(CustomScan *node);
-extern Node * SerializableMultiPlan(struct MultiPlan *multiPlan);
-extern struct MultiPlan * DeSerializeMultiPlan(Node *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
 extern bool IsModifyCommand(Query *query);
-extern void VerifyMultiPlanValidity(struct MultiPlan *multiPlan);
+extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
+extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
+
 
 #endif /* MULTI_PLANNER_H */

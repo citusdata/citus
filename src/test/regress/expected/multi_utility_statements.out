@@ -261,6 +261,12 @@ FETCH ABSOLUTE 5 FROM noHoldCursor;
           1 |            5 |      24.00 |       0.10
 (1 row)
 
+FETCH BACKWARD noHoldCursor;
+ l_orderkey | l_linenumber | l_quantity | l_discount 
+------------+--------------+------------+------------
+          1 |            4 |      28.00 |       0.09
+(1 row)
+
 COMMIT;
 FETCH ABSOLUTE 5 FROM noHoldCursor;
 ERROR:  cursor "noholdcursor" does not exist

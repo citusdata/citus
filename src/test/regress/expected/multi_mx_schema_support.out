@@ -37,6 +37,17 @@ FETCH test_cursor;
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
+FETCH test_cursor;
+ n_nationkey | n_name | n_regionkey | n_comment 
+-------------+--------+-------------+-----------
+(0 rows)
+
+FETCH BACKWARD test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
 END;
 -- test with search_path is set
 SET search_path TO citus_mx_test_schema;
@@ -46,6 +57,17 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_hash
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
+FETCH test_cursor;
+ n_nationkey | n_name | n_regionkey | n_comment 
+-------------+--------+-------------+-----------
+(0 rows)
+
+FETCH BACKWARD test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
 -------------+---------------------------+-------------+------------------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon

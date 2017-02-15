@@ -557,6 +557,7 @@ DECLARE test_cursor CURSOR FOR
 		ORDER BY id;
 FETCH test_cursor;
 FETCH test_cursor;
+FETCH BACKWARD test_cursor;
 END;
 
 -- queries inside copy can be router plannable

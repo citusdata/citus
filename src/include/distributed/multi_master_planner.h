@@ -24,6 +24,6 @@ struct MultiPlan;
 struct CustomScan;
 extern PlannedStmt * MasterNodeSelectPlan(struct MultiPlan *multiPlan,
 										  struct CustomScan *dataScan);
-extern List * MasterTargetList(List *workerTargetList);
+
 
 #endif   /* MULTI_MASTER_PLANNER_H */

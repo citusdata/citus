@@ -196,9 +196,7 @@ MultiPlan *
 MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
 {
 	MultiPlan *multiPlan = NULL;
-	StringInfo jobSchemaName = NULL;
 	Job *workerJob = NULL;
-	uint64 workerJobId = 0;
 	Query *masterQuery = NULL;
 	List *masterDependedJobList = NIL;
 
@@ -207,10 +205,6 @@ MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
 
 	/* create the tree of executable tasks for the worker job */
 	workerJob = BuildJobTreeTaskList(workerJob);
-	workerJobId = workerJob->jobId;
-
-	/* get job schema name */
-	jobSchemaName = JobSchemaName(workerJobId);
 
 	/* build the final merge query to execute on the master */
 	masterDependedJobList = list_make1(workerJob);
@@ -219,7 +213,6 @@ MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
 	multiPlan = CitusMakeNode(MultiPlan);
 	multiPlan->workerJob = workerJob;
 	multiPlan->masterQuery = masterQuery;
-	multiPlan->masterTableName = jobSchemaName->data;
 	multiPlan->routerExecutable = MultiPlanRouterExecutable(multiPlan);
 	multiPlan->operation = CMD_SELECT;
 

@@ -170,30 +170,30 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 -- one shard.
 EXPLAIN SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
 DEBUG:  predicate pruning for shardId 100
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM array_partitioned_table
 	WHERE array_column > '{BA1000U2AMO4ZGX, BZZXSP27F21T6}';
 DEBUG:  predicate pruning for shardId 102
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM composite_partitioned_table
 	WHERE composite_column < '(b,5,c)'::composite_type;
 DEBUG:  predicate pruning for shardId 105
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 

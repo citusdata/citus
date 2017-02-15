@@ -525,6 +525,12 @@ FETCH test_cursor; -- fetch one row after the last
 ---------+---------+---------+---------
 (0 rows)
 
+FETCH BACKWARD test_cursor;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       2 |       2 | 2       | Fri Dec 02 00:00:00 2016
+(1 row)
+
 END;
 -- table creation queries inside can be router plannable
 CREATE TEMP TABLE temp_reference_test as

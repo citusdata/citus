@@ -767,8 +767,7 @@ FROM
                                                                                           QUERY PLAN                                                                                          
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
-         Executor: Real-Time
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
@@ -786,7 +785,7 @@ FROM
                                        Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
                                        ->  Seq Scan on events_270009 events  (cost=0.00..11.79 rows=3 width=556)
                                              Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
-(20 rows)
+(19 rows)
 
 -- Union and left join subquery pushdown
 EXPLAIN SELECT
@@ -855,8 +854,7 @@ GROUP BY
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
    Group Key: hasdone
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
-         Executor: Real-Time
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
@@ -894,7 +892,7 @@ GROUP BY
                                                                      Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
                                                                      ->  Seq Scan on events_270009 events_2  (cost=0.00..12.28 rows=1 width=80)
                                                                            Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
-(41 rows)
+(40 rows)
 
 -- Union, left join and having subquery pushdown
 EXPLAIN SELECT
@@ -1023,8 +1021,7 @@ LIMIT
  Limit  (cost=0.00..0.00 rows=0 width=0)
    ->  Sort  (cost=0.00..0.00 rows=0 width=0)
          Sort Key: user_lastseen DESC
-         ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
-               Executor: Real-Time
+         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
                Task Count: 2
                Tasks Shown: One of 2
                ->  Task
@@ -1047,6 +1044,6 @@ LIMIT
                                                                Sort Key: events.event_time DESC
                                                                ->  Seq Scan on events_270009 events  (cost=0.00..11.95 rows=1 width=524)
                                                                      Filter: (((composite_id).tenant_id = ((users.composite_id).tenant_id)) AND ((composite_id).user_id = ((users.composite_id).user_id)))
-(27 rows)
+(26 rows)
 
 SET citus.enable_router_execution TO 'true';

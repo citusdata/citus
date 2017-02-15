@@ -113,6 +113,8 @@ DECLARE test_cursor CURSOR FOR
         FROM test_schema_support.nation_append
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+FETCH test_cursor;
+FETCH BACKWARD test_cursor;
 END;
 
 -- test with search_path is set
@@ -123,6 +125,8 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_append
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+FETCH test_cursor;
+FETCH BACKWARD test_cursor;
 END;
 
 

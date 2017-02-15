@@ -917,6 +917,7 @@ DECLARE test_cursor CURSOR FOR
 FETCH test_cursor;
 FETCH ALL test_cursor;
 FETCH test_cursor; -- fetch one row after the last
+FETCH BACKWARD test_cursor;
 END;
 
 -- queries inside copy can be router plannable
