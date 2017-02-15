@@ -236,9 +236,13 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	multiPlan->workerJob = job;
 	multiPlan->masterQuery = NULL;
-	multiPlan->masterTableName = NULL;
 	multiPlan->routerExecutable = true;
-	multiPlan->hasReturning = list_length(originalQuery->returningList) > 0;
+	multiPlan->hasReturning = false;
+
+	if (list_length(originalQuery->returningList) > 0)
+	{
+		multiPlan->hasReturning = true;
+	}
 
 	return multiPlan;
 }
@@ -321,10 +325,14 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 
 	/* and finally the multi plan */
 	multiPlan->workerJob = workerJob;
-	multiPlan->masterTableName = NULL;
 	multiPlan->masterQuery = NULL;
 	multiPlan->routerExecutable = true;
-	multiPlan->hasReturning = list_length(originalQuery->returningList) > 0;
+	multiPlan->hasReturning = false;
+
+	if (list_length(originalQuery->returningList) > 0)
+	{
+		multiPlan->hasReturning = true;
+	}
 
 	return multiPlan;
 }

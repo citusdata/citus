@@ -84,12 +84,17 @@ static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
 static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
 
+
+/*
+ * CitusExplainScan is a custom scan explain callback function which is used to
+ * print explain information of a Citus plan which includes both master and
+ * distributed plan.
+ */
 void
 CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
-	const char *executorName = NULL;
 
 	if (!ExplainDistributedQueries)
 	{
@@ -99,43 +104,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 		return;
 	}
 
-	/*
-	 * XXX: can we get by without the open/close group somehow - then we'd not
-	 * copy any code from explain.c? Seems unlikely.
-	 */
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
-
-	/*
-	 * XXX: might be worthwhile to put this somewhere central, e.g. for
-	 * debugging output.
-	 */
-	switch (scanState->executorType)
-	{
-		case MULTI_EXECUTOR_ROUTER:
-		{
-			executorName = "Router";
-		}
-		break;
-
-		case MULTI_EXECUTOR_REAL_TIME:
-		{
-			executorName = "Real-Time";
-		}
-		break;
-
-		case MULTI_EXECUTOR_TASK_TRACKER:
-		{
-			executorName = "Task-Tracker";
-		}
-		break;
-
-		default:
-		{
-			executorName = "Other";
-		}
-		break;
-	}
-	ExplainPropertyText("Executor", executorName, es);
 
 	ExplainJob(multiPlan->workerJob, es);
 

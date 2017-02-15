@@ -155,6 +155,18 @@ FETCH test_cursor;
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
 (1 row)
 
+FETCH test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
+FETCH BACKWARD test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
 END;
 -- test with search_path is set
 SET search_path TO test_schema_support;
@@ -164,6 +176,18 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_append
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
+FETCH test_cursor;
+ n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
+-------------+---------------------------+-------------+------------------------------------------------------------------------------
+           1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon
+(1 row)
+
+FETCH BACKWARD test_cursor;
  n_nationkey |          n_name           | n_regionkey |                                  n_comment                                   
 -------------+---------------------------+-------------+------------------------------------------------------------------------------
            1 | ARGENTINA                 |           1 | al foxes promise slyly according to the regular accounts. bold requests alon

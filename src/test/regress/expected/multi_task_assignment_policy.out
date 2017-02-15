@@ -60,10 +60,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -74,10 +74,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -93,10 +93,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -107,10 +107,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -140,10 +140,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -154,10 +154,10 @@ DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 
@@ -168,10 +168,10 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                             QUERY PLAN                             
---------------------------------------------------------------------
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (CitusScan)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (3 rows)
 

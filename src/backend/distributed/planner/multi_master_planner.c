@@ -15,6 +15,7 @@
 
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
@@ -34,7 +35,7 @@
  * a target target list for the master node. This master target list keeps the
  * temporary table's columns on the master node.
  */
-List *
+static List *
 MasterTargetList(List *workerTargetList)
 {
 	List *masterTargetList = NIL;
@@ -164,52 +165,42 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 
 /*
  * BuildSelectStatement builds the final select statement to run on the master
- * node, before returning results to the user. The function first builds a scan
- * statement for all results fetched to the master, and layers aggregation, sort
+ * node, before returning results to the user. The function first gets the custom
+ * scan node for all results fetched to the master, and layers aggregation, sort
  * and limit plans on top of the scan statement if necessary.
  */
 static PlannedStmt *
-BuildSelectStatement(Query *masterQuery, char *masterTableName,
-					 List *masterTargetList, CustomScan *dataScan)
+BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *dataScan)
 {
 	PlannedStmt *selectStatement = NULL;
-	RangeTblEntry *rangeTableEntry = NULL;
-	RangeTblEntry *queryRangeTableEntry = NULL;
+	RangeTblEntry *customScanRangeTableEntry = NULL;
 	Agg *aggregationPlan = NULL;
 	Plan *topLevelPlan = NULL;
-	ListCell *lc = NULL;
-	List *columnNames = NULL;
-
-	/* (0) compute column names */
-	foreach(lc, masterTargetList)
-	{
-		TargetEntry *te = lfirst(lc);
-		columnNames = lappend(columnNames, makeString(te->resname));
-	}
+	ListCell *targetEntryCell = NULL;
+	List *columnNameList = NULL;
 
 	/* (1) make PlannedStmt and set basic information */
 	selectStatement = makeNode(PlannedStmt);
 	selectStatement->canSetTag = true;
-	selectStatement->relationOids = NIL; /* to be filled in exec_Start */
+	selectStatement->relationOids = NIL;
 	selectStatement->commandType = CMD_SELECT;
 
-	/* prepare the range table entry for our temporary table */
+	/* top level select query should have only one range table entry */
 	Assert(list_length(masterQuery->rtable) == 1);
-	queryRangeTableEntry = (RangeTblEntry *) linitial(masterQuery->rtable);
 
-	rangeTableEntry = copyObject(queryRangeTableEntry);
-	rangeTableEntry->rtekind = RTE_VALUES; /* can't look up relation */
-	rangeTableEntry->eref = makeAlias("remote scan", columnNames);
-	rangeTableEntry->inh = false;
-	rangeTableEntry->inFromCl = true;
+	/* compute column names for the custom range table entry */
+	foreach(targetEntryCell, masterTargetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
+	}
+
+	customScanRangeTableEntry = CustomScanRangeTableEntry(columnNameList);
 
 	/* set the single element range table list */
-	selectStatement->rtable = list_make1(rangeTableEntry);
+	selectStatement->rtable = list_make1(customScanRangeTableEntry);
 
-	/* (2) build and initialize sequential scan node */
-	/* Gone */
-
-	/* (3) add an aggregation plan if needed */
+	/* (2) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
 		dataScan->scan.plan.targetlist = masterTargetList;
@@ -224,7 +215,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 		topLevelPlan = &dataScan->scan.plan;
 	}
 
-	/* (4) add a sorting plan if needed */
+	/* (3) add a sorting plan if needed */
 	if (masterQuery->sortClause)
 	{
 		List *sortClauseList = masterQuery->sortClause;
@@ -242,7 +233,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 		topLevelPlan = (Plan *) sortPlan;
 	}
 
-	/* (5) add a limit plan if needed */
+	/* (4) add a limit plan if needed */
 	if (masterQuery->limitCount || masterQuery->limitOffset)
 	{
 		Node *limitCount = masterQuery->limitCount;
@@ -259,7 +250,7 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
-	/* (6) finally set our top level plan in the plan tree */
+	/* (5) finally set our top level plan in the plan tree */
 	selectStatement->planTree = topLevelPlan;
 
 	return selectStatement;
@@ -270,21 +261,20 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
  * MasterNodeSelectPlan takes in a distributed plan, finds the master node query
  * structure in that plan, and builds the final select plan to execute on the
  * master node. Note that this select plan is executed after result files are
- * retrieved from worker nodes and are merged into a temporary table.
+ * retrieved from worker nodes and filled into the tuple store inside provided
+ * custom scan.
  */
 PlannedStmt *
 MasterNodeSelectPlan(MultiPlan *multiPlan, CustomScan *dataScan)
 {
 	Query *masterQuery = multiPlan->masterQuery;
-	char *tableName = multiPlan->masterTableName;
 	PlannedStmt *masterSelectPlan = NULL;
 
 	Job *workerJob = multiPlan->workerJob;
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
 
-	masterSelectPlan =
-		BuildSelectStatement(masterQuery, tableName, masterTargetList, dataScan);
+	masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList, dataScan);
 
 	return masterSelectPlan;
 }

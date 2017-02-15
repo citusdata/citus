@@ -17,9 +17,6 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 
-/* signal currently executed statement is a master select statement or router execution */
-#define EXEC_FLAG_CITUS_MASTER_SELECT 0x100
-#define EXEC_FLAG_CITUS_ROUTER_EXECUTOR 0x200
 
 #if (PG_VERSION_NUM >= 90600)
 #define tuplecount_t uint64
@@ -30,23 +27,27 @@
 
 typedef struct CitusScanState
 {
-	CustomScanState customScanState;
-	MultiPlan *multiPlan;
-	MultiExecutorType executorType;
-
-	/* state for router */
-	bool finishedUnderlyingScan;
-	Tuplestorestate *tuplestorestate;
+	CustomScanState customScanState;  /* underlying custom scan node */
+	MultiPlan *multiPlan;             /* distributed execution plan */
+	MultiExecutorType executorType;   /* distributed executor type */
+	bool finishedRemoteScan;          /* flag to check if remote scan is finished */
+	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
 } CitusScanState;
 
-Node * CitusCreateScan(CustomScan *scan);
-extern void CitusBeginScan(CustomScanState *node,
-						   EState *estate,
-						   int eflags);
-extern TupleTableSlot * CitusExecScan(CustomScanState *node);
+
+extern Node * RealTimeCreateScan(CustomScan *scan);
+extern Node * TaskTrackerCreateScan(CustomScan *scan);
+extern Node * RouterCreateScan(CustomScan *scan);
+extern Node * InvalidCreateScan(CustomScan *scan);
+extern void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
+extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
+extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
 extern void CitusEndScan(CustomScanState *node);
 extern void CitusReScan(CustomScanState *node);
-extern void CitusExplainScan(CustomScanState *node, List *ancestors,
-							 struct ExplainState *es);
+extern void CitusExplainScan(CustomScanState *node, List *ancestors, struct
+							 ExplainState *es);
+extern void ValidateCitusScanState(CustomScanState *node);
+extern TupleTableSlot * ReadNextTuple(CitusScanState *scanState);
+
 
 #endif /* MULTI_EXECUTOR_H */
