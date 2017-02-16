@@ -125,14 +125,6 @@ static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void BuildCachedShardList(DistTableCacheEntry *cacheEntry);
 static FmgrInfo * ShardIntervalCompareFunction(ShardInterval **shardIntervalArray,
 											   char partitionMethod);
-static ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray,
-											   int shardCount,
-											   FmgrInfo *
-											   shardIntervalSortCompareFunction);
-static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
-									   int shardIntervalArrayLength);
-static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
-										  int shardCount);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
@@ -434,6 +426,28 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 	}
 }
 
+/*
+ * InsertDistTableCacheEntry insert the distributed table metadata for the
+ * passed relationId.
+ */
+void
+InsertDistTableCacheEntry(Oid relationId, DistTableCacheEntry *ent)
+{
+	DistTableCacheEntry *cacheEntry = NULL;
+	bool foundInCache = false;
+
+	if (DistTableCacheHash == NULL)
+	{
+		InitializeDistTableCache();
+	}
+
+	cacheEntry = hash_search(DistTableCacheHash, (const void *)&relationId, HASH_ENTER,
+			&foundInCache);
+	Assert(foundInCache == false);
+	memcpy(cacheEntry, ent, sizeof(DistTableCacheEntry));
+	/* restore relationId */
+	cacheEntry->relationId = relationId;
+}
 
 /*
  * LookupDistTableCacheEntry returns the distributed table metadata for the
@@ -819,7 +833,7 @@ ShardIntervalCompareFunction(ShardInterval **shardIntervalArray, char partitionM
  * SortedShardIntervalArray sorts the input shardIntervalArray. Shard intervals with
  * no min/max values are placed at the end of the array.
  */
-static ShardInterval **
+ShardInterval **
 SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
 					   FmgrInfo *shardIntervalSortCompareFunction)
 {
@@ -847,7 +861,7 @@ SortShardIntervalArray(ShardInterval **shardIntervalArray, int shardCount,
  * has a uniform hash distribution, as produced by master_create_worker_shards for
  * hash partitioned tables.
  */
-static bool
+bool
 HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 						   int shardIntervalArrayLength)
 {
@@ -891,7 +905,7 @@ HasUniformHashDistribution(ShardInterval **shardIntervalArray,
  * ensure that input shard interval array is sorted on shardminvalue and uninitialized
  * shard intervals are at the end of the array.
  */
-static bool
+bool
 HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shardCount)
 {
 	bool hasUninitializedShardInterval = false;
