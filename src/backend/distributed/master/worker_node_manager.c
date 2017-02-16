@@ -18,6 +18,7 @@
 #include "distributed/worker_manager.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/pg_dist_node.h"
 #include "libpq/hba.h"
 #include "libpq/ip.h"
 #include "libpq/libpq-be.h"
@@ -312,6 +313,8 @@ WorkerGetLiveNodeCount(void)
 /*
  * WorkerNodeList iterates over the hash table that includes the worker nodes, and adds
  * them to a list which is returned.
+ *
+ * It only returns nodes which are primaries.
  */
 List *
 WorkerNodeList(void)
@@ -326,6 +329,12 @@ WorkerNodeList(void)
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
 		WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+
+		if(workerNode->nodeRole != NODE_ROLE_PRIMARY)
+		{
+			continue;
+		}
+
 		memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
 		workerNodeList = lappend(workerNodeList, workerNodeCopy);
 	}
