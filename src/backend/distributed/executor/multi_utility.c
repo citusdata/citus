@@ -585,6 +585,10 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 				SelectStmt *selectStmt = makeNode(SelectStmt);
 				ResTarget *selectTarget = makeNode(ResTarget);
 
+				if (IsBulkloadCopy(copyStatement))
+				{
+					elog(ERROR, "Bulkload copy only supports for COPY FROM");
+				}
 				allColumns->fields = list_make1(makeNode(A_Star));
 				allColumns->location = -1;
 

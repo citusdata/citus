@@ -61,11 +61,20 @@ extern List * DistributedTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
+extern void InsertDistTableCacheEntry(Oid relationId, DistTableCacheEntry *ent);
 extern int GetLocalGroupId(void);
 extern List * DistTableOidList(void);
 extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
+extern ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray,
+											   int shardCount,
+											   FmgrInfo *
+											   shardIntervalSortCompareFunction);
+extern bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
+									   int shardIntervalArrayLength);
+extern bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
+										  int shardCount);
 
 extern bool CitusHasBeenLoaded(void);
 
