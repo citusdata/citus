@@ -87,6 +87,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	Oid relationId = ResolveRelationId(relationNameText);
 	char relationKind = get_rel_relkind(relationId);
 	char *relationOwner = TableOwner(relationId);
+	char replicationModel = REPLICATION_MODEL_INVALID;
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -127,7 +128,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 								  "on reference tables")));
 	}
 
-	EnsureReplicationSettings(relationId);
+	replicationModel = TableReplicationModel(relationId);
+
+	EnsureReplicationSettings(relationId, replicationModel);
 
 	/* generate new and unique shardId from sequence */
 	shardId = GetNextShardId();
