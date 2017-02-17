@@ -39,6 +39,7 @@ int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size *
 /* Local functions forward declarations */
 static char * ClientHostAddress(StringInfo remoteHostStringInfo);
 static WorkerNode * FindRandomNodeFromList(List *workerNodeList);
+static WorkerNode * WorkerGetNodeWithName(const char *hostname);
 static bool OddNumber(uint32 number);
 static bool ListMember(List *currentList, WorkerNode *workerNode);
 
@@ -52,8 +53,8 @@ static List * PrimaryNodesNotInList(List *currentList);
 
 /*
  * WorkerGetRandomCandidateNode takes in a list of worker nodes, and then allocates
- * a new worker node. The allocation is performed by randomly picking a worker node
- * which is not in currentNodeList.
+ * a new worker node. The allocation is performed by randomly picking a primary worker
+ * node which is not in currentNodeList.
  *
  * Note that the function returns null if the worker membership list does not
  * contain enough nodes to allocate a new worker node.
@@ -157,7 +158,7 @@ WorkerGetRoundRobinCandidateNode(List *workerNodeList, uint64 shardId,
 
 /*
  * WorkerGetLocalFirstCandidateNode takes in a list of worker nodes, and then
- * allocates a new worker node. The allocation is performed according to the
+ * allocates a new primary worker node. The allocation is performed according to the
  * following policy: if the list is empty, the node where the caller is connecting
  * from is allocated; if the list is not empty, a node is allocated according
  * to random policy.
@@ -270,10 +271,10 @@ ClientHostAddress(StringInfo clientHostStringInfo)
 
 
 /*
- * WorkerGetNodeWithName finds and returns a node from the membership list that
+ * WorkerGetNodeWithName finds and returns a primary node from the membership list that
  * has the given hostname. The function returns null if no such node exists.
  */
-WorkerNode *
+static WorkerNode *
 WorkerGetNodeWithName(const char *hostname)
 {
 	WorkerNode *workerNode = NULL;
@@ -285,7 +286,7 @@ WorkerGetNodeWithName(const char *hostname)
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
 		int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
-		if (nameCompare == 0)
+		if (nameCompare == 0 && workerNode->nodeRole == NODE_ROLE_PRIMARY)
 		{
 			/* we need to terminate the scan since we break */
 			hash_seq_term(&status);

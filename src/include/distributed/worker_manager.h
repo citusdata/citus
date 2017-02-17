@@ -58,7 +58,6 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
 													 uint32 placementIndex);
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
-extern WorkerNode * WorkerGetNodeWithName(const char *hostname);
 extern uint32 WorkerGetLiveNodeCount(void);
 extern List * WorkerNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
