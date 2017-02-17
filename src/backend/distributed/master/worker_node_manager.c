@@ -299,13 +299,26 @@ WorkerGetNodeWithName(const char *hostname)
 
 
 /*
- * WorkerGetLiveNodeCount returns the number of live nodes in the cluster.
- * */
+ * WorkerGetLiveGroupCount returns the number of groups which have a primary capable of
+ * accepting writes.
+ */
 uint32
-WorkerGetLiveNodeCount(void)
+WorkerGetLiveGroupCount(void)
 {
 	HTAB *workerNodeHash = GetWorkerNodeHash();
-	uint32 liveWorkerCount = hash_get_num_entries(workerNodeHash);
+	uint32 liveWorkerCount = 0;
+	HASH_SEQ_STATUS status;
+	WorkerNode *workerNode = NULL;
+
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		if (workerNode->nodeRole == NODE_ROLE_PRIMARY)
+		{
+			liveWorkerCount++;
+		}
+	}
 
 	return liveWorkerCount;
 }

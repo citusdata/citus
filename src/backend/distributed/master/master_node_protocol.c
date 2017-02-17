@@ -398,7 +398,7 @@ master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
 		functionContext->max_calls = ShardReplicationFactor;
 
 		/* if enough live nodes, return an extra candidate node as backup */
-		liveNodeCount = WorkerGetLiveNodeCount();
+		liveNodeCount = WorkerGetLiveGroupCount();
 		if (liveNodeCount > ShardReplicationFactor)
 		{
 			functionContext->max_calls = ShardReplicationFactor + 1;
