@@ -31,6 +31,7 @@ test: multi_master_protocol
 test: multi_load_data
 
 test: multi_insert_select
+test: multi_stage_protocol
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
