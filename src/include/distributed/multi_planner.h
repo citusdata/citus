@@ -38,6 +38,7 @@ typedef struct RelationRestriction
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
 	List *prunedShardIntervalList;
+	List *inputShardIntervalList;
 } RelationRestriction;
 
 typedef struct RelationShard

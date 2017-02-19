@@ -107,7 +107,8 @@ static bool RouterSelectQuery(Query *originalQuery,
 							  List **relationShardList, bool replacePrunedQueryWithDummy);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static List * TargetShardIntervalsForSelect(Query *query,
-											RelationRestrictionContext *restrictionContext);
+											RelationRestrictionContext *restrictionContext,
+											bool continueOnManyShards);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 static List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
@@ -214,12 +215,35 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	}
 	else
 	{
+		ListCell *restrictionCell = NULL;
+
 		/* FIXME: this should probably rather be inlined into CreateSelectPlan */
 		multiPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
 		if (multiPlan->planningError)
 		{
 			return multiPlan;
 		}
+
+		foreach(restrictionCell, restrictionContext->relationRestrictionList)
+		{
+			RelationRestriction *relationRestriction =
+				(RelationRestriction *) lfirst(restrictionCell);
+			List *shardIntervalList = NIL;
+			Oid relationId = relationRestriction->relationId;
+			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+			int shardIndex = 0;
+			int shardCount = cacheEntry->shardIntervalArrayLength;
+
+			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+			{
+				ShardInterval *shardInterval =
+					cacheEntry->sortedShardIntervalArray[shardIndex];
+				shardIntervalList = lappend(shardIntervalList, shardInterval);
+			}
+
+			relationRestriction->inputShardIntervalList = shardIntervalList;
+		}
+
 		task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
 	}
 
@@ -263,6 +287,12 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
+	ListCell *restrictionCell = NULL;
+	List *prunedRelationShardList = NIL;
+	ListCell *relationShardCell = NULL;
+	int prunedShardIndex = 0;
+	bool continueOnManyShards = true;
+	List *sampleRelationShardList = NIL;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
@@ -274,6 +304,62 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	if (multiPlan->planningError)
 	{
 		return multiPlan;
+	}
+
+	/* firstly set inputShardInterval to all shard intervals per relation */
+	foreach(restrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(restrictionCell);
+		List *shardIntervalList = NIL;
+		Oid relationId = relationRestriction->relationId;
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+		int shardIndex = 0;
+		int shardCount = cacheEntry->shardIntervalArrayLength;
+
+		for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
+		{
+			ShardInterval *shardInterval =
+				cacheEntry->sortedShardIntervalArray[shardIndex];
+			shardIntervalList = lappend(shardIntervalList, shardInterval);
+		}
+
+		relationRestriction->inputShardIntervalList = shardIntervalList;
+	}
+
+	/* do a single shard pruning on the relations and restrictions */
+	continueOnManyShards = true;
+	prunedRelationShardList = TargetShardIntervalsForSelect(subqueryRte->subquery,
+															restrictionContext,
+															continueOnManyShards);
+
+	/* now, set the input shard intervals according to the above shard pruning */
+	forboth(restrictionCell, restrictionContext->relationRestrictionList,
+			relationShardCell, prunedRelationShardList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(restrictionCell);
+		List *shardIntervalList = (List *) lfirst(relationShardCell);
+
+		relationRestriction->inputShardIntervalList = shardIntervalList;
+
+
+		if (sampleRelationShardList == NIL)
+		{
+			if (PartitionMethod(relationRestriction->relationId) != DISTRIBUTE_BY_NONE)
+			{
+				sampleRelationShardList = shardIntervalList;
+			}
+			else if (restrictionContext->allReferenceTables)
+			{
+				sampleRelationShardList = shardIntervalList;
+			}
+		}
+	}
+
+	if (list_length(sampleRelationShardList) == 0)
+	{
+		goto noTasks;
 	}
 
 	/*
@@ -291,6 +377,13 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 			targetCacheEntry->sortedShardIntervalArray[shardOffset];
 		Task *modifyTask = NULL;
 
+		/* we're sure shard we wouldn't be pushing such queries */
+		if (!ShardsIntervalsEqual(targetShardInterval,
+								  list_nth(sampleRelationShardList, prunedShardIndex)))
+		{
+			continue;
+		}
+
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
 													  restrictionContext, taskIdIndex);
 
@@ -302,8 +395,16 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 			sqlTaskList = lappend(sqlTaskList, modifyTask);
 		}
 
+		++prunedShardIndex;
+		if (prunedShardIndex == list_length(sampleRelationShardList))
+		{
+			break;
+		}
+
 		++taskIdIndex;
 	}
+
+noTasks:
 
 	/* Create the worker job */
 	workerJob = CitusMakeNode(Job);
@@ -2256,8 +2357,10 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 				  List **placementList, uint64 *anchorShardId, List **relationShardList,
 				  bool replacePrunedQueryWithDummy)
 {
+	bool continueOnManyShards = false;
 	List *prunedRelationShardList = TargetShardIntervalsForSelect(originalQuery,
-																  restrictionContext);
+																  restrictionContext,
+																  continueOnManyShards);
 	uint64 shardId = INVALID_SHARD_ID;
 	CmdType commandType PG_USED_FOR_ASSERTS_ONLY = originalQuery->commandType;
 	ListCell *prunedRelationShardListCell = NULL;
@@ -2379,7 +2482,8 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
  */
 static List *
 TargetShardIntervalsForSelect(Query *query,
-							  RelationRestrictionContext *restrictionContext)
+							  RelationRestrictionContext *restrictionContext,
+							  bool continueOnManyShards)
 {
 	List *prunedRelationShardList = NIL;
 	ListCell *restrictionCell = NULL;
@@ -2398,10 +2502,10 @@ TargetShardIntervalsForSelect(Query *query,
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardList = NIL;
-		int shardIndex = 0;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 		bool whereFalseQuery = false;
+		List *inputShardInterval = relationRestriction->inputShardIntervalList;
 
 		relationRestriction->prunedShardIntervalList = NIL;
 
@@ -2414,18 +2518,9 @@ TargetShardIntervalsForSelect(Query *query,
 		whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
 		if (!whereFalseQuery && shardCount > 0)
 		{
-			List *shardIntervalList = NIL;
-
-			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
-			{
-				ShardInterval *shardInterval =
-					cacheEntry->sortedShardIntervalArray[shardIndex];
-				shardIntervalList = lappend(shardIntervalList, shardInterval);
-			}
-
 			prunedShardList = PruneShardList(relationId, tableId,
 											 restrictClauseList,
-											 shardIntervalList);
+											 inputShardInterval);
 
 			/*
 			 * Quick bail out. The query can not be router plannable if one
@@ -2433,7 +2528,7 @@ TargetShardIntervalsForSelect(Query *query,
 			 * shard left is okay at this point. It will be handled at a later
 			 * stage.
 			 */
-			if (list_length(prunedShardList) > 1)
+			if (!continueOnManyShards && list_length(prunedShardList) > 1)
 			{
 				return NULL;
 			}
@@ -2929,7 +3024,10 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 		/* not copyable, but readonly */
 		newRestriction->plannerInfo = oldRestriction->plannerInfo;
 		newRestriction->prunedShardIntervalList =
-			copyObject(oldRestriction->prunedShardIntervalList);
+			list_copy(oldRestriction->prunedShardIntervalList);
+
+		newRestriction->inputShardIntervalList =
+			list_copy(oldRestriction->inputShardIntervalList);
 
 		newContext->relationRestrictionList =
 			lappend(newContext->relationRestrictionList, newRestriction);
