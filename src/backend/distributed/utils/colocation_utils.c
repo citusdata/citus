@@ -38,8 +38,6 @@
 /* local function forward declarations */
 static void MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId);
 static void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId);
-static bool ShardsIntervalsEqual(ShardInterval *leftShardInterval,
-								 ShardInterval *rightShardInterval);
 static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
@@ -296,7 +294,7 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
  *       and shard min/max values). Thus, always return true for shards of reference
  *       tables.
  */
-static bool
+extern bool
 ShardsIntervalsEqual(ShardInterval *leftShardInterval, ShardInterval *rightShardInterval)
 {
 	char leftIntervalPartitionMethod = PartitionMethod(leftShardInterval->relationId);
