@@ -387,6 +387,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
 		InstantiateQualContext instantiateQualWalker;
 		Var *relationPartitionKey = PartitionKey(restriction->relationId);
+		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
 		/*
 		 * We haven't added the quals if all participating tables are reference
@@ -3036,6 +3037,13 @@ InstantiatePartitionQualWalker(Node *node, void *context)
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return node;
+		}
+
+		/* if the qual is not on the partition column, do not instantiate */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
 		{
 			return node;
 		}
