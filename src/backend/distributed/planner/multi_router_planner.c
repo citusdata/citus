@@ -72,6 +72,14 @@ typedef struct WalkerState
 	bool badCoalesce;
 } WalkerState;
 
+
+typedef struct InstantiateQualContext
+{
+	ShardInterval *targetShardInterval;
+	Var *relationPartitionColumn;
+}InstantiateQualContext;
+
+
 bool EnableRouterExecution = true;
 
 /* planner functions forward declarations */
@@ -115,7 +123,7 @@ static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
-static Node * InstantiatePartitionQual(Node *node, void *context);
+static Node * InstantiatePartitionQualWalker(Node *node, void *context);
 static DeferredErrorMessage * InsertSelectQuerySupported(Query *queryTree,
 														 RangeTblEntry *insertRte,
 														 RangeTblEntry *subqueryRte,
@@ -377,6 +385,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		InstantiateQualContext instantiateQualWalker;
+		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
 		/*
 		 * We haven't added the quals if all participating tables are reference
@@ -387,9 +397,12 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			break;
 		}
 
+		instantiateQualWalker.relationPartitionColumn = relationPartitionKey;
+		instantiateQualWalker.targetShardInterval = shardInterval;
+
 		originalBaserestrictInfo =
-			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
-											  shardInterval);
+			(List *) InstantiatePartitionQualWalker((Node *) originalBaserestrictInfo,
+													&instantiateQualWalker);
 	}
 
 	/*
@@ -2948,9 +2961,13 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
  * (partCol >= shardMinValue && partCol <= shardMaxValue).
  */
 static Node *
-InstantiatePartitionQual(Node *node, void *context)
+InstantiatePartitionQualWalker(Node *node, void *context)
 {
-	ShardInterval *shardInterval = (ShardInterval *) context;
+	ShardInterval *shardInterval =
+		((InstantiateQualContext *) context)->targetShardInterval;
+	Var *relationPartitionColumn =
+		((InstantiateQualContext *) context)->relationPartitionColumn;
+
 	Assert(shardInterval->minValueExists);
 	Assert(shardInterval->maxValueExists);
 
@@ -2974,6 +2991,7 @@ InstantiatePartitionQual(Node *node, void *context)
 		Node *leftop = get_leftop((Expr *) op);
 		Node *rightop = get_rightop((Expr *) op);
 		Param *param = NULL;
+		Var *currentColumn = NULL;
 
 		Var *hashedGEColumn = NULL;
 		OpExpr *hashedGEOpExpr = NULL;
@@ -2992,14 +3010,39 @@ InstantiatePartitionQual(Node *node, void *context)
 		if (IsA(leftop, Param))
 		{
 			param = (Param *) leftop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(rightop, Var))
+			{
+				currentColumn = (Var *) rightop;
+			}
 		}
 		else if (IsA(rightop, Param))
 		{
 			param = (Param *) rightop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(leftop, Var))
+			{
+				currentColumn = (Var *) leftop;
+			}
 		}
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return node;
+		}
+
+		/* if the qual is not on the partition column, do not instantiate */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
 		{
 			return node;
 		}
@@ -3052,13 +3095,13 @@ InstantiatePartitionQual(Node *node, void *context)
 	if (IsA(node, RestrictInfo))
 	{
 		RestrictInfo *restrictInfo = (RestrictInfo *) node;
-		restrictInfo->clause = (Expr *) InstantiatePartitionQual(
+		restrictInfo->clause = (Expr *) InstantiatePartitionQualWalker(
 			(Node *) restrictInfo->clause, context);
 
 		return (Node *) restrictInfo;
 	}
 
-	return expression_tree_mutator(node, InstantiatePartitionQual, context);
+	return expression_tree_mutator(node, InstantiatePartitionQualWalker, context);
 }
 
 
