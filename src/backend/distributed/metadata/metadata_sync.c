@@ -94,7 +94,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("you cannot sync metadata to a non-existent node"),
-						errhint("First, add the node with SELECT master_add_node(%s,%d)",
+						errhint("First, add the node with SELECT master_add_node(\'%s\',%d)",
 								nodeNameString, nodePort)));
 	}
 
