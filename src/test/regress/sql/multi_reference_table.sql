@@ -700,26 +700,26 @@ WHERE
 
 -- now, insert into the hash partitioned table and use reference 
 -- tables in the SELECT queries
-INSERT INTO
-	colocated_table_test (value_1, value_2)
-SELECT 
-	colocated_table_test_2.value_1, reference_table_test.value_2
-FROM
-	colocated_table_test_2, reference_table_test
-WHERE
-	colocated_table_test_2.value_4 = reference_table_test.value_4
-RETURNING value_1, value_2;
+--INSERT INTO
+--	colocated_table_test (value_1, value_2)
+--SELECT 
+--	colocated_table_test_2.value_1, reference_table_test.value_2
+--FROM
+--	colocated_table_test_2, reference_table_test
+--WHERE
+--	colocated_table_test_2.value_4 = reference_table_test.value_4
+--RETURNING value_1, value_2;
 
 -- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
-INSERT INTO
-	colocated_table_test (value_1, value_2)
-SELECT 
-	colocated_table_test_2.value_1, reference_table_test.value_2
-FROM
-	colocated_table_test_2, reference_table_test
-WHERE
-	colocated_table_test_2.value_2 = reference_table_test.value_2
-RETURNING value_1, value_2;
+--INSERT INTO
+--	colocated_table_test (value_1, value_2)
+--SELECT 
+--	colocated_table_test_2.value_1, reference_table_test.value_2
+--FROM
+--	colocated_table_test_2, reference_table_test
+--WHERE
+--	colocated_table_test_2.value_2 = reference_table_test.value_2
+--RETURNING value_1, value_2;
 
 -- partition column value comes from reference table but still first error is
 -- on data type mismatch
