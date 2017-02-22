@@ -135,6 +135,9 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
+static Query * FindTopLevelJoinQuery(Query *query);
+static void AddUninstantiatedEqualityQualToRelation(Query *query);
+static Var * GetFirstTargetListVar(List *targetList);
 static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
@@ -1092,9 +1095,7 @@ AddUninstantiatedPartitionRestriction(Query *originalQuery)
 {
 	Query *subquery = NULL;
 	RangeTblEntry *subqueryEntry = NULL;
-	ListCell *targetEntryCell = NULL;
-	Var *targetPartitionColumnVar = NULL;
-	List *targetList = NULL;
+	Query *topLevelJoinQuery = NULL;
 
 	Assert(InsertSelectQuery(originalQuery));
 
@@ -1113,31 +1114,180 @@ AddUninstantiatedPartitionRestriction(Query *originalQuery)
 		return;
 	}
 
-	/* iterate through the target list and find the partition column on the target list */
-	targetList = subquery->targetList;
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
 
-		if (IsPartitionColumn(targetEntry->expr, subquery) &&
-			IsA(targetEntry->expr, Var))
+	topLevelJoinQuery = FindTopLevelJoinQuery(subquery);
+	if (topLevelJoinQuery != NULL)
+	{
+		FromExpr *joinTree = topLevelJoinQuery->jointree;
+		List *whereClauseList = QualifierList(joinTree);
+		List *joinClauseList = JoinClauseList(whereClauseList);
+
+		OpExpr *operatorExpression = (OpExpr *) linitial(joinClauseList);
+		List *argumentList = operatorExpression->args;
+
+		/* get left and right side of the expression */
+		Node *leftArgument = (Node *) linitial(argumentList);
+
+		List *leftColumnList = pull_var_clause_default(leftArgument);
+		Var *leftColumn = (Var *) linitial(leftColumnList);
+
+		AddUninstantiatedEqualityQual(topLevelJoinQuery, leftColumn);
+	}
+	else
+	{
+		AddUninstantiatedEqualityQualToRelation(subquery);
+	}
+}
+
+
+/*
+ * FindTopLevelJoinQuery recursively traverses the query to find the
+ * top level JOIN query that exists in the query. If found, the query that
+ * includes the JOIN is returned. Else, NULL returned.
+ */
+static Query *
+FindTopLevelJoinQuery(Query *query)
+{
+	FromExpr *joinTree = NULL;
+	List *whereClauseList = NULL;
+	List *joinClauseList = NULL;
+	RangeTblEntry *rte = NULL;
+
+	joinTree = query->jointree;
+	whereClauseList = QualifierList(joinTree);
+	joinClauseList = JoinClauseList(whereClauseList);
+
+	if (list_length(joinClauseList) > 0)
+	{
+		return query;
+	}
+
+	rte = list_nth(query->rtable, 0);
+	if (rte->rtekind == RTE_RELATION)
+	{
+		return NULL;
+	}
+
+	if (rte->rtekind == RTE_SUBQUERY)
+	{
+		return FindTopLevelJoinQuery(rte->subquery);
+	}
+
+	return NULL;
+}
+
+
+/*
+ * AddUninstantiatedEqualityQualToRelation iterates over query's
+ * range table list and finds and adds the partition restriction
+ * to the range table entry that is either (i) RTE_RELATION or
+ * (ii) Recurse in to the two arguments of a set operation until
+ * RTE_RELATION is found.
+ *
+ *	Once RTE_RELATION is found, add the qual using
+ *	AddUninstantiatedEqualityQual().
+ *
+ */
+static void
+AddUninstantiatedEqualityQualToRelation(Query *query)
+{
+	List *rangeTableList = query->rtable;
+	ListCell *rteCell = NULL;
+	foreach(rteCell, rangeTableList)
+	{
+		RangeTblEntry *rte = lfirst(rteCell);
+
+		if (rte->rtekind == RTE_RELATION)
 		{
-			targetPartitionColumnVar = (Var *) targetEntry->expr;
+			if (IsDistributedTable(rte->relid) && PartitionColumn(rte->relid, 1) != NULL)
+			{
+				Var *targetVar = GetFirstTargetListVar(query->targetList);
+				if (targetVar)
+				{
+					AddUninstantiatedEqualityQual(query, PartitionColumn(rte->relid,
+																		 targetVar->varno));
+					return;
+				}
+			}
+		}
+		else if (rte->rtekind == RTE_SUBQUERY)
+		{
+			Query *subquery = rte->subquery;
+			SetOperationStmt *unionStatement = NULL;
+			Query *leftQuery = NULL;
+			Query *rightQuery = NULL;
+			RangeTblRef *leftRangeTableReference = NULL;
+			RangeTblRef *rightRangeTableReference = NULL;
+			List *unionQueryRangeTableList = NULL;
+			int leftTableIndex = 0;
+			int rightTableIndex = 0;
+			RangeTblEntry *leftRangeTableEntry = NULL;
+			RangeTblEntry *rightRangeTableEntry = NULL;
+
+			/* if does not have any set operations, recurse into the subquery */
+			if (subquery->setOperations == NULL)
+			{
+				AddUninstantiatedEqualityQualToRelation(rte->subquery);
+				return;
+			}
+
+			unionStatement = (SetOperationStmt *) subquery->setOperations;
+
+			leftRangeTableReference = (RangeTblRef *) unionStatement->larg;
+			rightRangeTableReference = (RangeTblRef *) unionStatement->rarg;
+			unionQueryRangeTableList = subquery->rtable;
+
+			leftTableIndex = leftRangeTableReference->rtindex - 1;
+			rightTableIndex = rightRangeTableReference->rtindex - 1;
+
+			leftRangeTableEntry = (RangeTblEntry *) list_nth(
+				unionQueryRangeTableList,
+				leftTableIndex);
+			rightRangeTableEntry = (RangeTblEntry *) list_nth(
+				unionQueryRangeTableList,
+				rightTableIndex);
+
+			Assert(leftRangeTableEntry->rtekind == RTE_SUBQUERY);
+			Assert(rightRangeTableEntry->rtekind == RTE_SUBQUERY);
+
+			leftQuery = leftRangeTableEntry->subquery;
+			rightQuery = rightRangeTableEntry->subquery;
+
+			AddUninstantiatedEqualityQualToRelation(leftQuery);
+			AddUninstantiatedEqualityQualToRelation(rightQuery);
+
+			return;
+		}
+		else
+		{
+			ereport(DEBUG4, (errmsg("unexpected rte kind:%d", rte->rtekind)));
+		}
+	}
+}
+
+
+/*
+ * GetFirstTargetListVar iterates through the given target list entries and returns
+ * the first target list entry whose type is Var. Otherwise, the function returns NULL.
+ */
+static Var *
+GetFirstTargetListVar(List *targetList)
+{
+	Var *targetVar = NULL;
+	ListCell *targetListCell = NULL;
+
+	foreach(targetListCell, targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetListCell);
+
+		if (IsA(targetEntry->expr, Var))
+		{
+			targetVar = (Var *) targetEntry->expr;
 			break;
 		}
 	}
 
-	/*
-	 * If we cannot find the bare partition column, no need to add the qual since
-	 * we're already going to error out on the multi planner.
-	 */
-	if (!targetPartitionColumnVar)
-	{
-		return;
-	}
-
-	/* finally add the equality qual of target column to subquery */
-	AddUninstantiatedEqualityQual(subquery, targetPartitionColumnVar);
+	return targetVar;
 }
 
 
