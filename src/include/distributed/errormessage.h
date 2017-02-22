@@ -53,7 +53,8 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
 		RaiseDeferredErrorInternal(error, elevel); \
 		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
 			pg_unreachable(); } \
-	} while (0)
+	} \
+	while (0)
 
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);
 

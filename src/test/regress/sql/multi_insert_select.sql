@@ -326,6 +326,30 @@ WHERE  user_id IN (SELECT user_id
                    FROM   raw_events_second
                    WHERE  user_id = 2);
 
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE  user_id != 2 AND value_1 = 2000)
+ON conflict (user_id, value_1) DO NOTHING;
+
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM  raw_events_second WHERE false);
+
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE value_1 = 1000 OR value_1 = 2000 OR value_1 = 3000);
+
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
             (
@@ -610,10 +634,6 @@ WHERE
   raw_events_first.user_id = 10;
 
 -- same as the above with INNER JOIN
--- however this time query is not pushed down
--- to the worker. This is related to how we process
--- restriction infos, which we're considering to
--- improve
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id

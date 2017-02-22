@@ -2108,26 +2108,37 @@ MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry)
 
 
 /*
- * OperatorImplementsEquality returns true if the given opno represents an
- * equality operator. The function retrieves btree interpretation list for this
- * opno and check if BTEqualStrategyNumber strategy is present.
+ * OperatorImplementsStrategy is a wrapper around OperatorImplementsStrategy using
+ * BTEqualStrategyNumber as the operatostrategy.
  */
 bool
 OperatorImplementsEquality(Oid opno)
 {
-	bool equalityOperator = false;
+	return OperatorImplementsStrategy(opno, BTEqualStrategyNumber);
+}
+
+
+/*
+ * OperatorImplementsEquality returns true if the given opno represents the
+ * operator given strategy. The function retrieves btree interpretation list
+ * for this opno and check if the strategy is present.
+ */
+bool
+OperatorImplementsStrategy(Oid opno, int strategy)
+{
+	bool operatorImplementsStrategy = false;
 	List *btreeIntepretationList = get_op_btree_interpretation(opno);
 	ListCell *btreeInterpretationCell = NULL;
 	foreach(btreeInterpretationCell, btreeIntepretationList)
 	{
 		OpBtreeInterpretation *btreeIntepretation = (OpBtreeInterpretation *)
 													lfirst(btreeInterpretationCell);
-		if (btreeIntepretation->strategy == BTEqualStrategyNumber)
+		if (btreeIntepretation->strategy == strategy)
 		{
-			equalityOperator = true;
+			operatorImplementsStrategy = true;
 			break;
 		}
 	}
 
-	return equalityOperator;
+	return operatorImplementsStrategy;
 }
