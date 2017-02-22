@@ -551,11 +551,7 @@ FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
   WHERE raw_events_second.user_id IN (19, 20, 21);
 
--- the following is a very tricky query for Citus
--- although we do not support pushing down JOINs on non-partition
--- columns here it is safe to push it down given that we're looking for
--- a specific value (i.e., value_1 = 12) on the joining column.
--- Note that the query always hits the same shard on raw_events_second
+-- not supported given that the join is not on the partition column
 INSERT INTO agg_events 
             (user_id) 
 SELECT raw_events_first.user_id 
@@ -858,6 +854,60 @@ outer_most.id, max(outer_most.value)
             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
+
+-- some unsupported LATERAL JOINs
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first WHERE
+      value_4 = reference_ids.user_id) as averages ON true
+    GROUP BY averages.user_id;
+
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.value_4 = reference_ids.user_id
+    GROUP BY averages.user_id;
+
+
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.user_id = reference_ids.user_id
+JOIN LATERAL
+    (SELECT user_id, value_4 FROM agg_events WHERE user_id = 15) as agg_ids ON (agg_ids.value_4 = averages.user_id)
+    GROUP BY averages.user_id;
 
 -- cannot pushdown since subquery returns another column than partition key
 INSERT INTO raw_events_second 

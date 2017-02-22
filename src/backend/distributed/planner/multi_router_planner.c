@@ -127,7 +127,11 @@ static Node * InstantiatePartitionQualWalker(Node *node, void *context);
 static DeferredErrorMessage * InsertSelectQuerySupported(Query *queryTree,
 														 RangeTblEntry *insertRte,
 														 RangeTblEntry *subqueryRte,
-														 bool allReferenceTables);
+														 RelationRestrictionContext *
+														 restrictionContext);
+static bool AllRelationRestrictionsContainUninstantiatedQual(RelationRestrictionContext
+															 *restrictionContext);
+static bool HasUninstantiatedQualWalker(Node *node, void *context);
 static DeferredErrorMessage * MultiTaskRouterSelectQuerySupported(Query *query);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 RangeTblEntry *insertRte,
@@ -270,7 +274,6 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
@@ -278,7 +281,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	 */
 	multiPlan->planningError = InsertSelectQuerySupported(originalQuery, insertRte,
 														  subqueryRte,
-														  allReferenceTables);
+														  restrictionContext);
 	if (multiPlan->planningError)
 	{
 		return multiPlan;
@@ -671,7 +674,8 @@ ExtractInsertRangeTableEntry(Query *query)
  */
 static DeferredErrorMessage *
 InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
-						   RangeTblEntry *subqueryRte, bool allReferenceTables)
+						   RangeTblEntry *subqueryRte,
+						   RelationRestrictionContext *restrictionContext)
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
@@ -679,6 +683,7 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
 	DeferredErrorMessage *error = NULL;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
@@ -755,7 +760,103 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 	}
 
+
+	if (!AllRelationRestrictionsContainUninstantiatedQual(restrictionContext))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan distributed query since all join conditions in the query "
+							 "need include two distribution keys using an equality operator",
+							 NULL, NULL);
+	}
+
 	return NULL;
+}
+
+
+/*
+ * AllRelationRestrictionsContainUninstantiatedQual iterates over the relation
+ * restrictions and returns true if the qual is distributed to all relations.
+ * Otherwise returns false. Reference tables are ignored during the iteration
+ * given that they wouldn't need to have the qual in any case.
+ *
+ * Also, if any relation restriction contains a false clause, the relation is
+ * ignored since its restrictions are removed by postgres.
+ */
+static bool
+AllRelationRestrictionsContainUninstantiatedQual(
+	RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+	bool allRelationsHaveTheQual = true;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *restriction = lfirst(relationRestrictionCell);
+
+		List *baseRestrictInfo = list_copy(restriction->relOptInfo->baserestrictinfo);
+		List *joinInfo = list_copy(restriction->relOptInfo->joininfo);
+		List *allRestrictions = list_concat(baseRestrictInfo, joinInfo);
+		ListCell *restrictionCell = NULL;
+		bool relationHasRestriction = false;
+
+		if (ContainsFalseClause(extract_actual_clauses(allRestrictions, true)))
+		{
+			continue;
+		}
+
+		/* we don't need to check existince of qual for reference tables */
+		if (PartitionMethod(restriction->relationId) == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+
+		foreach(restrictionCell, allRestrictions)
+		{
+			RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictionCell);
+
+			relationHasRestriction = relationHasRestriction ||
+									 HasUninstantiatedQualWalker(
+				(Node *) restrictInfo->clause,
+				NULL);
+
+			if (relationHasRestriction)
+			{
+				break;
+			}
+		}
+
+		allRelationsHaveTheQual = allRelationsHaveTheQual && relationHasRestriction;
+	}
+
+	return allRelationsHaveTheQual;
+}
+
+
+/*
+ * HasUninstantiatedQualWalker returns true if the given expression
+ * constains a parameter with UNINSTANTIATED_PARAMETER_ID.
+ */
+static bool
+HasUninstantiatedQualWalker(Node *node, void *context)
+{
+	Param *param = NULL;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Param))
+	{
+		param = (Param *) node;
+	}
+
+	if (param && param->paramid == UNINSTANTIATED_PARAMETER_ID)
+	{
+		return true;
+	}
+
+	return expression_tree_walker(node, HasUninstantiatedQualWalker, NULL);
 }
 
 
