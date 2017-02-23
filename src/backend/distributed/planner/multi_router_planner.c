@@ -801,6 +801,7 @@ AllRelationRestrictionsContainUninstantiatedQual(
 		List *joinInfo = list_copy(restriction->relOptInfo->joininfo);
 		List *allRestrictions = list_concat(baseRestrictInfo, joinInfo);
 		ListCell *restrictionCell = NULL;
+		Var *relationPartitionKey = NULL;
 		bool relationHasRestriction = false;
 
 		if (ContainsFalseClause(extract_actual_clauses(allRestrictions, true)))
@@ -814,6 +815,8 @@ AllRelationRestrictionsContainUninstantiatedQual(
 			continue;
 		}
 
+		relationPartitionKey = PartitionKey(restriction->relationId);
+
 		foreach(restrictionCell, allRestrictions)
 		{
 			RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictionCell);
@@ -821,7 +824,7 @@ AllRelationRestrictionsContainUninstantiatedQual(
 			relationHasRestriction = relationHasRestriction ||
 									 HasUninstantiatedQualWalker(
 				(Node *) restrictInfo->clause,
-				NULL);
+				relationPartitionKey);
 
 			if (relationHasRestriction)
 			{
@@ -843,24 +846,75 @@ AllRelationRestrictionsContainUninstantiatedQual(
 static bool
 HasUninstantiatedQualWalker(Node *node, void *context)
 {
-	Param *param = NULL;
+	Var *relationPartitionColumn = (Var *) context;
 
 	if (node == NULL)
 	{
 		return false;
 	}
 
-	if (IsA(node, Param))
+	if (IsA(node, OpExpr) && list_length(((OpExpr *) node)->args) == 2)
 	{
-		param = (Param *) node;
-	}
+		OpExpr *op = (OpExpr *) node;
+		Node *leftop = get_leftop((Expr *) op);
+		Node *rightop = get_rightop((Expr *) op);
+		Param *param = NULL;
+		Var *currentColumn = NULL;
 
-	if (param && param->paramid == UNINSTANTIATED_PARAMETER_ID)
-	{
+		/* look for the Params */
+		if (IsA(leftop, Param))
+		{
+			param = (Param *) leftop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(rightop, Var))
+			{
+				currentColumn = (Var *) rightop;
+			}
+		}
+		else if (IsA(rightop, Param))
+		{
+			param = (Param *) rightop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(leftop, Var))
+			{
+				currentColumn = (Var *) leftop;
+			}
+		}
+		else
+		{
+			return expression_tree_walker(node, HasUninstantiatedQualWalker, context);
+		}
+
+		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return false;
+		}
+
+		/* ensure that it is the relation's partition column */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
+		{
+			return false;
+		}
+
+		/*
+		 * We still return true here given that finding the parameter is the
+		 * actual goal of the walker. We only hit here once the query includes
+		 * (partitionColumn = Const) on the query and we artificially added
+		 * the uninstantiated parameter to the query.
+		 */
 		return true;
 	}
 
-	return expression_tree_walker(node, HasUninstantiatedQualWalker, NULL);
+	return expression_tree_walker(node, HasUninstantiatedQualWalker, context);
 }
 
 

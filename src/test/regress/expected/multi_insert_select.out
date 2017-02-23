@@ -1322,22 +1322,14 @@ SELECT
   raw_events_first.user_id
 FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- same as the above with INNER JOIN
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- a not meaningful query
 INSERT INTO agg_events 
             (user_id) 
@@ -1359,11 +1351,7 @@ SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- although we do not support pushing down JOINs on non-partition
 -- columns here it is safe to push it down given that we're looking for
 -- a specific value (i.e., user_id = 10) on the joining column.
@@ -1453,11 +1441,7 @@ SELECT
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
   WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- implicit join on non partition column should also not be pushed down
 INSERT INTO agg_events 
             (user_id) 
@@ -1507,14 +1491,7 @@ FROM
 ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  predicate pruning for shardId 13300007
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- not equals on the partition column cannot be pushed down
 INSERT INTO agg_events
             (value_4_agg,
@@ -1762,11 +1739,7 @@ SELECT user_id
 FROM   raw_events_first 
 WHERE  user_id IN (SELECT value_2 
                    FROM   raw_events_second);
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- we currently not support grouping sets
 INSERT INTO agg_events
             (user_id,
