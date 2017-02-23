@@ -77,7 +77,6 @@ PG_FUNCTION_INFO_V1(master_get_table_metadata);
 PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
 PG_FUNCTION_INFO_V1(master_get_new_placementid);
-PG_FUNCTION_INFO_V1(master_get_local_first_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
 
@@ -363,98 +362,6 @@ GetNextPlacementId(void)
 	placementId = DatumGetInt64(placementIdDatum);
 
 	return placementId;
-}
-
-
-/*
- * master_get_local_first_candidate_nodes returns a set of candidate host names
- * and port numbers on which to place new shards. The function makes sure to
- * always allocate the first candidate node as the node the caller is connecting
- * from; and allocates additional nodes until the shard replication factor is
- * met. The function errors if the caller's remote node name is not found in the
- * membership list, or if the number of available nodes falls short of the
- * replication factor.
- */
-Datum
-master_get_local_first_candidate_nodes(PG_FUNCTION_ARGS)
-{
-	FuncCallContext *functionContext = NULL;
-	uint32 desiredNodeCount = 0;
-	uint32 currentNodeCount = 0;
-
-	if (SRF_IS_FIRSTCALL())
-	{
-		MemoryContext oldContext = NULL;
-		TupleDesc tupleDescriptor = NULL;
-		uint32 liveNodeCount = 0;
-		bool hasOid = false;
-
-		/* create a function context for cross-call persistence */
-		functionContext = SRF_FIRSTCALL_INIT();
-
-		/* switch to memory context appropriate for multiple function calls */
-		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
-
-		functionContext->user_fctx = NIL;
-		functionContext->max_calls = ShardReplicationFactor;
-
-		/* if enough live nodes, return an extra candidate node as backup */
-		liveNodeCount = WorkerGetLiveNodeCount();
-		if (liveNodeCount > ShardReplicationFactor)
-		{
-			functionContext->max_calls = ShardReplicationFactor + 1;
-		}
-
-		/*
-		 * This tuple descriptor must match the output parameters declared for
-		 * the function in pg_proc.
-		 */
-		tupleDescriptor = CreateTemplateTupleDesc(CANDIDATE_NODE_FIELDS, hasOid);
-		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 1, "node_name",
-						   TEXTOID, -1, 0);
-		TupleDescInitEntry(tupleDescriptor, (AttrNumber) 2, "node_port",
-						   INT8OID, -1, 0);
-
-		functionContext->tuple_desc = BlessTupleDesc(tupleDescriptor);
-
-		MemoryContextSwitchTo(oldContext);
-	}
-
-	functionContext = SRF_PERCALL_SETUP();
-	desiredNodeCount = functionContext->max_calls;
-	currentNodeCount = functionContext->call_cntr;
-
-	if (currentNodeCount < desiredNodeCount)
-	{
-		MemoryContext oldContext = NULL;
-		List *currentNodeList = NIL;
-		WorkerNode *candidateNode = NULL;
-		Datum candidateDatum = 0;
-
-		/* switch to memory context appropriate for multiple function calls */
-		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
-		currentNodeList = functionContext->user_fctx;
-
-		candidateNode = WorkerGetLocalFirstCandidateNode(currentNodeList);
-		if (candidateNode == NULL)
-		{
-			ereport(ERROR, (errmsg("could only find %u of %u required nodes",
-								   currentNodeCount, desiredNodeCount)));
-		}
-
-		currentNodeList = lappend(currentNodeList, candidateNode);
-		functionContext->user_fctx = currentNodeList;
-
-		MemoryContextSwitchTo(oldContext);
-
-		candidateDatum = WorkerNodeGetDatum(candidateNode, functionContext->tuple_desc);
-
-		SRF_RETURN_NEXT(functionContext, candidateDatum);
-	}
-	else
-	{
-		SRF_RETURN_DONE(functionContext);
-	}
 }
 
 

@@ -129,14 +129,6 @@ CREATE FUNCTION master_get_new_shardid()
 COMMENT ON FUNCTION master_get_new_shardid()
     IS 'fetch unique shardId';
 
-CREATE FUNCTION master_get_local_first_candidate_nodes(OUT node_name text,
-                                                       OUT node_port bigint)
-    RETURNS SETOF record
-    LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_local_first_candidate_nodes$$;
-COMMENT ON FUNCTION master_get_local_first_candidate_nodes()
-    IS 'fetch set of candidate nodes for shard uploading choosing the local node first';
-
 CREATE FUNCTION master_create_empty_shard(text)
     RETURNS bigint
     LANGUAGE C STRICT
