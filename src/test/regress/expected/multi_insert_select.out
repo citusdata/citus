@@ -613,24 +613,30 @@ WHERE  user_id IN (SELECT user_id
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)))
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)))
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
 DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
@@ -638,6 +644,90 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE (raw_events_second.user_id = 2))) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)))
+DEBUG:  Plan is router executable
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE  user_id != 2 AND value_1 = 2000)
+ON conflict (user_id, value_1) DO NOTHING;
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300000 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300004 raw_events_second WHERE ((raw_events_second.user_id <> 2) AND (raw_events_second.value_1 = 2000)))) AND ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer))) ON CONFLICT(user_id, value_1) DO NOTHING
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second WHERE ((raw_events_second.user_id <> 2) AND (raw_events_second.value_1 = 2000)))) AND ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer))) ON CONFLICT(user_id, value_1) DO NOTHING
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second WHERE ((raw_events_second.user_id <> 2) AND (raw_events_second.value_1 = 2000)))) AND ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823))) ON CONFLICT(user_id, value_1) DO NOTHING
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE ((raw_events_second.user_id <> 2) AND (raw_events_second.value_1 = 2000)))) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647))) ON CONFLICT(user_id, value_1) DO NOTHING
+DEBUG:  Plan is router executable
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM  raw_events_second WHERE false);
+DEBUG:  Skipping target shard interval 13300004 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300005 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300006 since SELECT query for it pruned away
+DEBUG:  Skipping target shard interval 13300007 since SELECT query for it pruned away
+DEBUG:  Plan is router executable
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT user_id
+                   FROM   raw_events_second
+                   WHERE value_1 = 1000 OR value_1 = 2000 OR value_1 = 3000);
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300004 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300000 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300004 raw_events_second WHERE ((raw_events_second.value_1 = 1000) OR (raw_events_second.value_1 = 2000) OR (raw_events_second.value_1 = 3000)))) AND ((hashint4(user_id) >= '-2147483648'::integer) AND (hashint4(user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300005 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300001 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300005 raw_events_second WHERE ((raw_events_second.value_1 = 1000) OR (raw_events_second.value_1 = 2000) OR (raw_events_second.value_1 = 3000)))) AND ((hashint4(user_id) >= '-1073741824'::integer) AND (hashint4(user_id) <= '-1'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300006 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300002 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300006 raw_events_second WHERE ((raw_events_second.value_1 = 1000) OR (raw_events_second.value_1 = 2000) OR (raw_events_second.value_1 = 3000)))) AND ((hashint4(user_id) >= 0) AND (hashint4(user_id) <= 1073741823)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS citus_table_alias (user_id) SELECT user_id FROM public.raw_events_first_13300003 raw_events_first WHERE ((user_id IN (SELECT raw_events_second.user_id FROM public.raw_events_second_13300007 raw_events_second WHERE ((raw_events_second.value_1 = 1000) OR (raw_events_second.value_1 = 2000) OR (raw_events_second.value_1 = 3000)))) AND ((hashint4(user_id) >= 1073741824) AND (hashint4(user_id) <= 2147483647)))
 DEBUG:  Plan is router executable
 -- some UPSERTS
 INSERT INTO agg_events AS ae 
@@ -1043,6 +1133,7 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1050,7 +1141,8 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)))
+DEBUG:  Skipping target shard interval 13300009 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1058,7 +1150,8 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823)))
+DEBUG:  Skipping target shard interval 13300010 since SELECT query for it pruned away
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
@@ -1066,7 +1159,7 @@ DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
+DEBUG:  Skipping target shard interval 13300011 since SELECT query for it pruned away
 DEBUG:  Plan is router executable
 INSERT INTO agg_events (user_id)
 SELECT
@@ -1213,11 +1306,7 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
 DEBUG:  Plan is router executable
--- the following is a very tricky query for Citus
--- although we do not support pushing down JOINs on non-partition
--- columns here it is safe to push it down given that we're looking for
--- a specific value (i.e., value_1 = 12) on the joining column.
--- Note that the query always hits the same shard on raw_events_second
+-- not supported given that the join is not on the partition column
 INSERT INTO agg_events 
             (user_id) 
 SELECT raw_events_first.user_id 
@@ -1225,35 +1314,7 @@ FROM   raw_events_first,
        raw_events_second 
 WHERE  raw_events_second.user_id = raw_events_first.value_1 
        AND raw_events_first.value_1 = 12; 
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300004
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM public.raw_events_first_13300000 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (((raw_events_second.user_id = raw_events_first.value_1) AND (raw_events_first.value_1 = 12)) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
-DEBUG:  predicate pruning for shardId 13300000
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300004
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM public.raw_events_first_13300001 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (((raw_events_second.user_id = raw_events_first.value_1) AND (raw_events_first.value_1 = 12)) AND ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)))
-DEBUG:  predicate pruning for shardId 13300000
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300004
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM public.raw_events_first_13300002 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (((raw_events_second.user_id = raw_events_first.value_1) AND (raw_events_first.value_1 = 12)) AND ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823)))
-DEBUG:  predicate pruning for shardId 13300000
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300004
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM public.raw_events_first_13300003 raw_events_first, public.raw_events_second_13300007 raw_events_second WHERE (((raw_events_second.user_id = raw_events_first.value_1) AND (raw_events_first.value_1 = 12)) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
-DEBUG:  Plan is router executable
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- some unsupported LEFT/INNER JOINs
 -- JOIN on one table with partition column other is not
 INSERT INTO agg_events (user_id)
@@ -1261,22 +1322,14 @@ SELECT
   raw_events_first.user_id
 FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- same as the above with INNER JOIN
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- a not meaningful query
 INSERT INTO agg_events 
             (user_id) 
@@ -1284,30 +1337,21 @@ SELECT raw_events_second.user_id
 FROM   raw_events_first, 
        raw_events_second 
 WHERE  raw_events_first.user_id = raw_events_first.value_1; 
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- both tables joined on non-partition columns
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first LEFT JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- same as the above with INNER JOIN
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- although we do not support pushing down JOINs on non-partition
 -- columns here it is safe to push it down given that we're looking for
 -- a specific value (i.e., user_id = 10) on the joining column.
@@ -1326,33 +1370,32 @@ DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300006
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300007
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823)))
+DEBUG:  predicate pruning for shardId 13300000
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
 DEBUG:  predicate pruning for shardId 13300004
 DEBUG:  predicate pruning for shardId 13300005
 DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
 DEBUG:  Plan is router executable
 -- same as the above with INNER JOIN
--- however this time query is not pushed down
--- to the worker. This is related to how we process
--- restriction infos, which we're considering to
--- improve
 INSERT INTO agg_events (user_id)
 SELECT
   raw_events_first.user_id
@@ -1362,8 +1405,35 @@ WHERE raw_events_first.user_id = 10;
 DEBUG:  predicate pruning for shardId 13300001
 DEBUG:  predicate pruning for shardId 13300002
 DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-2147483648'::integer) AND (hashint4(raw_events_first.user_id) <= '-1073741825'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= '-1073741824'::integer) AND (hashint4(raw_events_first.user_id) <= '-1'::integer)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300007
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 0) AND (hashint4(raw_events_first.user_id) <= 1073741823)))
+DEBUG:  predicate pruning for shardId 13300000
+DEBUG:  predicate pruning for shardId 13300001
+DEBUG:  predicate pruning for shardId 13300002
+DEBUG:  predicate pruning for shardId 13300003
+DEBUG:  predicate pruning for shardId 13300004
+DEBUG:  predicate pruning for shardId 13300005
+DEBUG:  predicate pruning for shardId 13300006
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.value_1))) WHERE ((raw_events_first.user_id = 10) AND ((hashint4(raw_events_first.user_id) >= 1073741824) AND (hashint4(raw_events_first.user_id) <= 2147483647)))
+DEBUG:  Plan is router executable
 -- make things a bit more complicate with IN clauses
 INSERT INTO agg_events (user_id)
 SELECT
@@ -1371,11 +1441,7 @@ SELECT
 FROM
   raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
   WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- implicit join on non partition column should also not be pushed down
 INSERT INTO agg_events 
             (user_id) 
@@ -1383,11 +1449,7 @@ SELECT raw_events_first.user_id
 FROM   raw_events_first, 
        raw_events_second 
 WHERE  raw_events_second.user_id = raw_events_first.value_1; 
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- the following is again a very tricky query for Citus
 -- if the given filter was on value_1 as shown in the above, Citus could
 -- push it down. But here the query is refused
@@ -1398,11 +1460,7 @@ FROM   raw_events_first,
        raw_events_second 
 WHERE  raw_events_second.user_id = raw_events_first.value_1 
        AND raw_events_first.value_2 = 12;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- foo is not joined on the partition key so the query is not 
 -- pushed down
 INSERT INTO agg_events
@@ -1433,14 +1491,7 @@ FROM
 ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  predicate pruning for shardId 13300007
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- not equals on the partition column cannot be pushed down
 INSERT INTO agg_events
             (value_4_agg,
@@ -1456,8 +1507,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id != raw_events_second.user_id
         GROUP  BY raw_events_second.user_id) AS foo;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- INSERT partition column does not match with SELECT partition column
 INSERT INTO agg_events
             (value_4_agg,
@@ -1600,8 +1650,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- cannot pushdown the query since the JOIN is not equi JOIN
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -1630,14 +1679,59 @@ outer_most.id, max(outer_most.value)
             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id != f2.id)) as outer_most
 GROUP BY outer_most.id;
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-DEBUG:  predicate pruning for shardId 13300005
-DEBUG:  predicate pruning for shardId 13300006
-DEBUG:  predicate pruning for shardId 13300007
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
+-- some unsupported LATERAL JOINs
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first WHERE
+      value_4 = reference_ids.user_id) as averages ON true
+    GROUP BY averages.user_id;
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.value_4 = reference_ids.user_id
+    GROUP BY averages.user_id;
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
+INSERT INTO agg_events (user_id, value_4_agg)
+SELECT
+  averages.user_id, avg(averages.value_4)
+FROM
+    (SELECT
+      raw_events_second.user_id
+    FROM
+      reference_table JOIN raw_events_second on (reference_table.user_id = raw_events_second.user_id)
+    ) reference_ids
+  JOIN LATERAL
+    (SELECT
+      user_id, value_4
+    FROM
+      raw_events_first) as averages ON averages.user_id = reference_ids.user_id
+JOIN LATERAL
+    (SELECT user_id, value_4 FROM agg_events WHERE user_id = 15) as agg_ids ON (agg_ids.value_4 = averages.user_id)
+    GROUP BY averages.user_id;
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- cannot pushdown since subquery returns another column than partition key
 INSERT INTO raw_events_second 
             (user_id) 
@@ -1645,11 +1739,7 @@ SELECT user_id
 FROM   raw_events_first 
 WHERE  user_id IN (SELECT value_2 
                    FROM   raw_events_second);
-DEBUG:  predicate pruning for shardId 13300001
-DEBUG:  predicate pruning for shardId 13300002
-DEBUG:  predicate pruning for shardId 13300003
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  cannot plan distributed query since all join conditions in the query need include two distribution keys using an equality operator
 -- we currently not support grouping sets
 INSERT INTO agg_events
             (user_id,

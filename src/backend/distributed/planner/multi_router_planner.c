@@ -116,6 +116,7 @@ static bool RouterSelectQuery(Query *originalQuery,
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static List * TargetShardIntervalsForSelect(Query *query,
 											RelationRestrictionContext *restrictionContext);
+static List * GetHashedJoinInfoRestrictions(RelOptInfo *relInfo);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 static List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
@@ -127,7 +128,11 @@ static Node * InstantiatePartitionQualWalker(Node *node, void *context);
 static DeferredErrorMessage * InsertSelectQuerySupported(Query *queryTree,
 														 RangeTblEntry *insertRte,
 														 RangeTblEntry *subqueryRte,
-														 bool allReferenceTables);
+														 RelationRestrictionContext *
+														 restrictionContext);
+static bool AllRelationRestrictionsContainUninstantiatedQual(RelationRestrictionContext
+															 *restrictionContext);
+static bool HasUninstantiatedQualWalker(Node *node, void *context);
 static DeferredErrorMessage * MultiTaskRouterSelectQuerySupported(Query *query);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 RangeTblEntry *insertRte,
@@ -270,7 +275,6 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
@@ -278,7 +282,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	 */
 	multiPlan->planningError = InsertSelectQuerySupported(originalQuery, insertRte,
 														  subqueryRte,
-														  allReferenceTables);
+														  restrictionContext);
 	if (multiPlan->planningError)
 	{
 		return multiPlan;
@@ -385,6 +389,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		List *originalJoinInfo = restriction->relOptInfo->joininfo;
 		InstantiateQualContext instantiateQualWalker;
 		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
@@ -402,6 +407,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 		originalBaserestrictInfo =
 			(List *) InstantiatePartitionQualWalker((Node *) originalBaserestrictInfo,
+													&instantiateQualWalker);
+		originalJoinInfo =
+			(List *) InstantiatePartitionQualWalker((Node *) originalJoinInfo,
 													&instantiateQualWalker);
 	}
 
@@ -670,7 +678,8 @@ ExtractInsertRangeTableEntry(Query *query)
  */
 static DeferredErrorMessage *
 InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
-						   RangeTblEntry *subqueryRte, bool allReferenceTables)
+						   RangeTblEntry *subqueryRte,
+						   RelationRestrictionContext *restrictionContext)
 {
 	Query *subquery = NULL;
 	Oid selectPartitionColumnTableId = InvalidOid;
@@ -678,6 +687,7 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 	char targetPartitionMethod = PartitionMethod(targetRelationId);
 	ListCell *rangeTableCell = NULL;
 	DeferredErrorMessage *error = NULL;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
 
 	/* we only do this check for INSERT ... SELECT queries */
 	AssertArg(InsertSelectQuery(queryTree));
@@ -754,7 +764,157 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 	}
 
+
+	if (!AllRelationRestrictionsContainUninstantiatedQual(restrictionContext))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot plan distributed query since all join conditions in the query "
+							 "need include two distribution keys using an equality operator",
+							 NULL, NULL);
+	}
+
 	return NULL;
+}
+
+
+/*
+ * AllRelationRestrictionsContainUninstantiatedQual iterates over the relation
+ * restrictions and returns true if the qual is distributed to all relations.
+ * Otherwise returns false. Reference tables are ignored during the iteration
+ * given that they wouldn't need to have the qual in any case.
+ *
+ * Also, if any relation restriction contains a false clause, the relation is
+ * ignored since its restrictions are removed by postgres.
+ */
+static bool
+AllRelationRestrictionsContainUninstantiatedQual(
+	RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+	bool allRelationsHaveTheQual = true;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *restriction = lfirst(relationRestrictionCell);
+
+		List *baseRestrictInfo = list_copy(restriction->relOptInfo->baserestrictinfo);
+		List *joinInfo = list_copy(restriction->relOptInfo->joininfo);
+		List *allRestrictions = list_concat(baseRestrictInfo, joinInfo);
+		ListCell *restrictionCell = NULL;
+		Var *relationPartitionKey = NULL;
+		bool relationHasRestriction = false;
+
+		if (ContainsFalseClause(extract_actual_clauses(allRestrictions, true)))
+		{
+			continue;
+		}
+
+		/* we don't need to check existince of qual for reference tables */
+		if (PartitionMethod(restriction->relationId) == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
+
+		relationPartitionKey = PartitionKey(restriction->relationId);
+
+		foreach(restrictionCell, allRestrictions)
+		{
+			RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(restrictionCell);
+
+			relationHasRestriction = relationHasRestriction ||
+									 HasUninstantiatedQualWalker(
+				(Node *) restrictInfo->clause,
+				relationPartitionKey);
+
+			if (relationHasRestriction)
+			{
+				break;
+			}
+		}
+
+		allRelationsHaveTheQual = allRelationsHaveTheQual && relationHasRestriction;
+	}
+
+	return allRelationsHaveTheQual;
+}
+
+
+/*
+ * HasUninstantiatedQualWalker returns true if the given expression
+ * constains a parameter with UNINSTANTIATED_PARAMETER_ID.
+ */
+static bool
+HasUninstantiatedQualWalker(Node *node, void *context)
+{
+	Var *relationPartitionColumn = (Var *) context;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, OpExpr) && list_length(((OpExpr *) node)->args) == 2)
+	{
+		OpExpr *op = (OpExpr *) node;
+		Node *leftop = get_leftop((Expr *) op);
+		Node *rightop = get_rightop((Expr *) op);
+		Param *param = NULL;
+		Var *currentColumn = NULL;
+
+		/* look for the Params */
+		if (IsA(leftop, Param))
+		{
+			param = (Param *) leftop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(rightop, Var))
+			{
+				currentColumn = (Var *) rightop;
+			}
+		}
+		else if (IsA(rightop, Param))
+		{
+			param = (Param *) rightop;
+
+			/*
+			 * Before instantiating the qual, ensure that it is equal to
+			 * the partition key.
+			 */
+			if (IsA(leftop, Var))
+			{
+				currentColumn = (Var *) leftop;
+			}
+		}
+		else
+		{
+			return expression_tree_walker(node, HasUninstantiatedQualWalker, context);
+		}
+
+		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return false;
+		}
+
+		/* ensure that it is the relation's partition column */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
+		{
+			return false;
+		}
+
+		/*
+		 * We still return true here given that finding the parameter is the
+		 * actual goal of the walker. We only hit here once the query includes
+		 * (partitionColumn = Const) on the query and we artificially added
+		 * the uninstantiated parameter to the query.
+		 */
+		return true;
+	}
+
+	return expression_tree_walker(node, HasUninstantiatedQualWalker, context);
 }
 
 
@@ -2409,7 +2569,9 @@ TargetShardIntervalsForSelect(Query *query,
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 		int shardCount = cacheEntry->shardIntervalArrayLength;
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
-		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
+		List *baseRestrictClauseList = get_all_actual_clauses(baseRestrictionList);
+		List *joinInfoRestrictionClauseList =
+			GetHashedJoinInfoRestrictions(relationRestriction->relOptInfo);
 		List *prunedShardList = NIL;
 		int shardIndex = 0;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
@@ -2428,6 +2590,7 @@ TargetShardIntervalsForSelect(Query *query,
 		if (!whereFalseQuery && shardCount > 0)
 		{
 			List *shardIntervalList = NIL;
+			List *allRestrictions = NIL;
 
 			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
 			{
@@ -2436,8 +2599,11 @@ TargetShardIntervalsForSelect(Query *query,
 				shardIntervalList = lappend(shardIntervalList, shardInterval);
 			}
 
+			allRestrictions = list_concat(baseRestrictClauseList,
+										  joinInfoRestrictionClauseList);
+
 			prunedShardList = PruneShardList(relationId, tableId,
-											 restrictClauseList,
+											 allRestrictions,
 											 shardIntervalList);
 
 			/*
@@ -2457,6 +2623,71 @@ TargetShardIntervalsForSelect(Query *query,
 	}
 
 	return prunedRelationShardList;
+}
+
+
+/*
+ * GetJoinInfoRestrictions iterates over the joininfo list of the given relInfo
+ * and returns all the restrictions which includes a hashed column generated by
+ * InstantiatePartitionQual() function.
+ */
+static List *
+GetHashedJoinInfoRestrictions(RelOptInfo *relInfo)
+{
+	List *hashedJoinInfoRestrictions = NULL;
+	ListCell *joinInfoCell = NULL;
+	List *joinInfoClauses = NIL;
+
+	/* Scan the rel's join clauses and get the necessary ones */
+	foreach(joinInfoCell, relInfo->joininfo)
+	{
+		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(joinInfoCell);
+		OpExpr *restrictionOpExpression = NULL;
+		Var *hashedColumn = MakeInt4Column();
+		Expr *restrictionExpression = NULL;
+
+		/*
+		 * We're looking for the hashedOperatorList that is returned by
+		 * InstantiatePartitionQual()
+		 */
+		if (!IsA(restrictInfo->clause, List))
+		{
+			continue;
+		}
+
+		/*
+		 * Expected expression is in the form of (hashedCol >= val) or
+		 * (hashedCol =< val). So, the following checks aims to filter
+		 * such operator expressions.
+		 */
+		restrictionExpression = (Expr *) linitial((List *) restrictInfo->clause);
+		if (!SimpleOpExpression(restrictionExpression))
+		{
+			continue;
+		}
+
+		restrictionOpExpression = (OpExpr *) restrictionExpression;
+		if (!(OperatorImplementsStrategy(restrictionOpExpression->opno,
+										 BTGreaterEqualStrategyNumber) ||
+			  OperatorImplementsStrategy(restrictionOpExpression->opno,
+										 BTLessEqualStrategyNumber)))
+		{
+			continue;
+		}
+
+		if (!OpExpressionContainsColumn(restrictionOpExpression, hashedColumn))
+		{
+			continue;
+		}
+
+		hashedJoinInfoRestrictions = lappend(hashedJoinInfoRestrictions,
+											 restrictInfo);
+	}
+
+	/* finally get the actual clauses from the restrict infos */
+	joinInfoClauses = get_all_actual_clauses(hashedJoinInfoRestrictions);
+
+	return joinInfoClauses;
 }
 
 
@@ -3036,6 +3267,13 @@ InstantiatePartitionQualWalker(Node *node, void *context)
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return node;
+		}
+
+		/* if the qual is not on the partition column, do not instantiate */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
 		{
 			return node;
 		}
