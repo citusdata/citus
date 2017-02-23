@@ -389,8 +389,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		List *originalJoinInfo = restriction->relOptInfo->joininfo;
 		InstantiateQualContext instantiateQualWalker;
-		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
 		/*
@@ -409,8 +409,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			(List *) InstantiatePartitionQualWalker((Node *) originalBaserestrictInfo,
 													&instantiateQualWalker);
 		originalJoinInfo =
-			(List *) InstantiatePartitionQual((Node *) originalJoinInfo,
-											  instantiateQualWalker);
+			(List *) InstantiatePartitionQualWalker((Node *) originalJoinInfo,
+													&instantiateQualWalker);
 	}
 
 	/*
