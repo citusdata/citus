@@ -48,6 +48,7 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#include "optimizer/paths.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
@@ -87,6 +88,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   RelationRestrictionContext *
 											   restrictionContext,
 											   uint32 taskIdIndex);
+static List * HashedShardIntervalOpExpressions(ShardInterval *shardInterval);
+static Param * UninstantiatedParameterForColumn(Var *relationPartitionKey);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -116,7 +119,6 @@ static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
-static Node * InstantiatePartitionQual(Node *node, void *context);
 static DeferredErrorMessage * InsertSelectQuerySupported(Query *queryTree,
 														 RangeTblEntry *insertRte,
 														 RangeTblEntry *subqueryRte,
@@ -378,6 +380,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
+	List *hashedOpExpressions = NIL;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -390,19 +393,43 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		Var *relationPartitionKey = PartitionColumn(restriction->relationId,
+													restriction->index);
+		Param *uninstantiatedParameter = NULL;
 
 		/*
-		 * We haven't added the quals if all participating tables are reference
-		 * tables. Thus, now skip instantiating them.
+		 * We don't need to add restriction to reference tables given that they are
+		 * already single sharded and always prune to that single shard.
 		 */
-		if (allReferenceTables)
+		if (PartitionMethod(restriction->relationId) == DISTRIBUTE_BY_NONE)
 		{
-			break;
+			continue;
 		}
 
-		originalBaserestrictInfo =
-			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
-											  shardInterval);
+		hashedOpExpressions = HashedShardIntervalOpExpressions(shardInterval);
+		Assert(list_length(hashedOpExpressions) == 2);
+
+		/*
+		 * Here we check whether the planner knows an equality between the partition column
+		 * and the uninstantiated parameter. If such an equality exists, we simply add the
+		 * shard restrictions.
+		 */
+		uninstantiatedParameter = UninstantiatedParameterForColumn(relationPartitionKey);
+		if (exprs_known_equal(restriction->plannerInfo, (Node *) relationPartitionKey,
+							  (Node *) uninstantiatedParameter))
+		{
+			RestrictInfo *geRestrictInfo = NULL;
+			RestrictInfo *leRestrictInfo = NULL;
+
+			OpExpr *hashedGEOpExpr = (OpExpr *) linitial(hashedOpExpressions);
+			OpExpr *hashedLEOpExpr = (OpExpr *) lsecond(hashedOpExpressions);
+
+			geRestrictInfo = make_simple_restrictinfo((Expr *) hashedGEOpExpr);
+			originalBaserestrictInfo = lappend(originalBaserestrictInfo, geRestrictInfo);
+
+			leRestrictInfo = make_simple_restrictinfo((Expr *) hashedLEOpExpr);
+			originalBaserestrictInfo = lappend(originalBaserestrictInfo, leRestrictInfo);
+		}
 	}
 
 	/*
@@ -498,6 +525,96 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->replicationModel = cacheEntry->replicationModel;
 
 	return modifyTask;
+}
+
+
+/*
+ * HashedShardIntervalOpExpressions returns a list of OpExprs with exactly two
+ * items in it. The list consists of shard interval ranges with hashed columns
+ * such as (hashColumn >= shardMinValue) and (hashedColumn <= shardMaxValue).
+ *
+ * The function errors out if the given shard interval does not belong to a hash
+ * distributed table.
+ */
+static List *
+HashedShardIntervalOpExpressions(ShardInterval *shardInterval)
+{
+	List *operatorExpressions = NIL;
+	Var *hashedGEColumn = NULL;
+	Var *hashedLEColumn = NULL;
+	OpExpr *hashedGEOpExpr = NULL;
+	OpExpr *hashedLEOpExpr = NULL;
+	Oid integer4GEoperatorId = InvalidOid;
+	Oid integer4LEoperatorId = InvalidOid;
+
+	Datum shardMinValue = shardInterval->minValue;
+	Datum shardMaxValue = shardInterval->maxValue;
+	char partitionMethod = PartitionMethod(shardInterval->relationId);
+
+	if (partitionMethod != DISTRIBUTE_BY_HASH)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("cannot create shard interval operator expression for "
+							   "distributed relations other than hash distributed "
+							   "relations")));
+	}
+
+	/* get the integer >=, <= operators from the catalog */
+	integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+											   INT4OID,
+											   BTGreaterEqualStrategyNumber);
+	integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
+											   INT4OID,
+											   BTLessEqualStrategyNumber);
+
+	/* generate hashed columns */
+	hashedGEColumn = MakeInt4Column();
+	hashedLEColumn = MakeInt4Column();
+
+	/* generate the necessary operators */
+	hashedGEOpExpr = (OpExpr *) make_opclause(integer4GEoperatorId, InvalidOid, false,
+											  (Expr *) hashedGEColumn,
+											  (Expr *) MakeInt4Constant(shardMinValue),
+											  InvalidOid, InvalidOid);
+
+	hashedLEOpExpr = (OpExpr *) make_opclause(integer4LEoperatorId, InvalidOid, false,
+											  (Expr *) hashedLEColumn,
+											  (Expr *) MakeInt4Constant(shardMaxValue),
+											  InvalidOid, InvalidOid);
+
+	/* update the operators with correct operator numbers and function ids */
+	hashedGEOpExpr->opfuncid = get_opcode(hashedGEOpExpr->opno);
+	hashedGEOpExpr->opresulttype = get_func_rettype(hashedGEOpExpr->opfuncid);
+	operatorExpressions = lappend(operatorExpressions, hashedGEOpExpr);
+
+	hashedLEOpExpr->opfuncid = get_opcode(hashedLEOpExpr->opno);
+	hashedLEOpExpr->opresulttype = get_func_rettype(hashedLEOpExpr->opfuncid);
+	operatorExpressions = lappend(operatorExpressions, hashedLEOpExpr);
+
+	return operatorExpressions;
+}
+
+
+/*
+ * UninstantiatedParameterForColumn returns a Param that can be used as an uninstantiated
+ * parameter for the given column in the sense that paramtype, paramtypmod and collid
+ * is set to the input Var's corresponding values.
+ *
+ * Note that we're using hard coded UNINSTANTIATED_PARAMETER_ID which is the required parameter
+ * for our purposes. See multi_planner.c@multi_planner for the details.
+ */
+static Param *
+UninstantiatedParameterForColumn(Var *relationPartitionKey)
+{
+	Param *uninstantiatedParameter = makeNode(Param);
+
+	uninstantiatedParameter->paramkind = PARAM_EXTERN;
+	uninstantiatedParameter->paramid = UNINSTANTIATED_PARAMETER_ID;
+	uninstantiatedParameter->paramtype = relationPartitionKey->vartype;
+	uninstantiatedParameter->paramtypmod = relationPartitionKey->vartypmod;
+	uninstantiatedParameter->paramcollid = relationPartitionKey->varcollid;
+
+	return uninstantiatedParameter;
 }
 
 
@@ -1148,7 +1265,7 @@ AddUninstantiatedPartitionRestriction(Query *originalQuery)
 static void
 AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 {
-	Param *equalityParameter = makeNode(Param);
+	Param *equalityParameter = UninstantiatedParameterForColumn(partitionColumn);
 	OpExpr *uninstantiatedEqualityQual = NULL;
 	Oid partitionColumnCollid = InvalidOid;
 	Oid lessThanOperator = InvalidOid;
@@ -1165,13 +1282,6 @@ AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
 
 
 	partitionColumnCollid = partitionColumn->varcollid;
-
-	equalityParameter->paramkind = PARAM_EXTERN;
-	equalityParameter->paramid = UNINSTANTIATED_PARAMETER_ID;
-	equalityParameter->paramtype = partitionColumn->vartype;
-	equalityParameter->paramtypmod = partitionColumn->vartypmod;
-	equalityParameter->paramcollid = partitionColumnCollid;
-	equalityParameter->location = -1;
 
 	/* create an equality on the on the target partition column */
 	uninstantiatedEqualityQual = (OpExpr *) make_opclause(equalsOperator, InvalidOid,
@@ -2939,129 +3049,6 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 	}
 
 	return newContext;
-}
-
-
-/*
- * InstantiatePartitionQual replaces the "uninstantiated" partition
- * restriction clause with the current shard's (passed in context)
- * boundary value.
- *
- * Once we see ($1 = partition column), we replace it with
- * (partCol >= shardMinValue && partCol <= shardMaxValue).
- */
-static Node *
-InstantiatePartitionQual(Node *node, void *context)
-{
-	ShardInterval *shardInterval = (ShardInterval *) context;
-	Assert(shardInterval->minValueExists);
-	Assert(shardInterval->maxValueExists);
-
-	if (node == NULL)
-	{
-		return NULL;
-	}
-
-	/*
-	 * Look for operator expressions with two arguments.
-	 *
-	 * Once Found the  uninstantiate, replace with appropriate boundaries for the
-	 * current shard interval.
-	 *
-	 * The boundaries are replaced in the following manner:
-	 * (partCol >= shardMinValue && partCol <= shardMaxValue)
-	 */
-	if (IsA(node, OpExpr) && list_length(((OpExpr *) node)->args) == 2)
-	{
-		OpExpr *op = (OpExpr *) node;
-		Node *leftop = get_leftop((Expr *) op);
-		Node *rightop = get_rightop((Expr *) op);
-		Param *param = NULL;
-
-		Var *hashedGEColumn = NULL;
-		OpExpr *hashedGEOpExpr = NULL;
-		Datum shardMinValue = shardInterval->minValue;
-
-		Var *hashedLEColumn = NULL;
-		OpExpr *hashedLEOpExpr = NULL;
-		Datum shardMaxValue = shardInterval->maxValue;
-
-		List *hashedOperatorList = NIL;
-
-		Oid integer4GEoperatorId = InvalidOid;
-		Oid integer4LEoperatorId = InvalidOid;
-
-		/* look for the Params */
-		if (IsA(leftop, Param))
-		{
-			param = (Param *) leftop;
-		}
-		else if (IsA(rightop, Param))
-		{
-			param = (Param *) rightop;
-		}
-
-		/* not an interesting param for our purpose, so return */
-		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
-		{
-			return node;
-		}
-
-		/* get the integer >=, <= operators from the catalog */
-		integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-												   INT4OID,
-												   BTGreaterEqualStrategyNumber);
-		integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-												   INT4OID,
-												   BTLessEqualStrategyNumber);
-
-		/* generate hashed columns */
-		hashedGEColumn = MakeInt4Column();
-		hashedLEColumn = MakeInt4Column();
-
-		/* generate the necessary operators */
-		hashedGEOpExpr = (OpExpr *) make_opclause(integer4GEoperatorId,
-												  InvalidOid, false,
-												  (Expr *) hashedGEColumn,
-												  (Expr *) MakeInt4Constant(
-													  shardMinValue),
-												  InvalidOid, InvalidOid);
-
-		hashedLEOpExpr = (OpExpr *) make_opclause(integer4LEoperatorId,
-												  InvalidOid, false,
-												  (Expr *) hashedLEColumn,
-												  (Expr *) MakeInt4Constant(
-													  shardMaxValue),
-												  InvalidOid, InvalidOid);
-
-		/* update the operators with correct operator numbers and function ids */
-		hashedGEOpExpr->opfuncid = get_opcode(hashedGEOpExpr->opno);
-		hashedGEOpExpr->opresulttype = get_func_rettype(hashedGEOpExpr->opfuncid);
-
-		hashedLEOpExpr->opfuncid = get_opcode(hashedLEOpExpr->opno);
-		hashedLEOpExpr->opresulttype = get_func_rettype(hashedLEOpExpr->opfuncid);
-
-		/* finally add the hashed operators to a list and return it */
-		hashedOperatorList = lappend(hashedOperatorList, hashedGEOpExpr);
-		hashedOperatorList = lappend(hashedOperatorList, hashedLEOpExpr);
-
-		return (Node *) hashedOperatorList;
-	}
-
-	/* ensure that it is not a query */
-	Assert(!IsA(node, Query));
-
-	/* recurse into restrict info */
-	if (IsA(node, RestrictInfo))
-	{
-		RestrictInfo *restrictInfo = (RestrictInfo *) node;
-		restrictInfo->clause = (Expr *) InstantiatePartitionQual(
-			(Node *) restrictInfo->clause, context);
-
-		return (Node *) restrictInfo;
-	}
-
-	return expression_tree_mutator(node, InstantiatePartitionQual, context);
 }
 
 
