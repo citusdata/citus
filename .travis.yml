@@ -17,12 +17,16 @@ before_install:
   - setup_apt
   - curl https://install.citusdata.com/community/deb.sh | sudo bash
   - nuke_pg
+  - git clone https://github.com/zeromq/libzmq $TRAVIS_BUILD_DIR/libzmq
+  - mkdir -p $TRAVIS_BUILD_DIR/libzmq/build && cd $TRAVIS_BUILD_DIR/libzmq/build
+  - cmake -DCMAKE_INSTALL_PREFIX:PATH=$TRAVIS_BUILD_DIR/zeromq .. && make -j 4
+  - make install && cd $TRAVIS_BUILD_DIR
 install:
   - install_uncrustify
   - install_pg
   - sudo apt-get install -y "postgresql-${PGVERSION}-hll=2.10.1.citus-1"
-before_script: citus_indent --quiet --check
-script: CFLAGS=-Werror pg_travis_multi_test check
+#before_script: citus_indent --quiet --check
+script: CFLAGS="-lzmq -L$TRAVIS_BUILD_DIR/zeromq/lib -I$TRAVIS_BUILD_DIR/zeromq/include" pg_travis_multi_test check
 after_success:
   - sync_to_enterprise
   - bash <(curl -s https://codecov.io/bash)
