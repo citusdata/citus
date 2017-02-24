@@ -786,7 +786,7 @@ FROM
                                  ->  Seq Scan on events_270009 events  (cost=0.00..11.79 rows=3 width=556)
                                        Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
  Master Query
-   ->  Aggregate  (cost=0.01..0.02 rows=1 width=0)
+   ->  Aggregate  (cost=0.00..0.00 rows=0 width=0)
          ->  Seq Scan on pg_merge_job_270014  (cost=0.00..0.00 rows=0 width=0)
 (22 rows)
 
@@ -892,7 +892,7 @@ GROUP BY
                                                    ->  Seq Scan on events_270009 events_2  (cost=0.00..12.28 rows=1 width=32)
                                                          Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
  Master Query
-   ->  HashAggregate  (cost=0.00..0.18 rows=10 width=0)
+   ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
          Group Key: intermediate_column_270015_2
          ->  Seq Scan on pg_merge_job_270015  (cost=0.00..0.00 rows=0 width=0)
 (40 rows)
@@ -1046,8 +1046,8 @@ LIMIT
                                                    ->  Seq Scan on events_270009 events  (cost=0.00..11.95 rows=1 width=524)
                                                          Filter: (((composite_id).tenant_id = ((users.composite_id).tenant_id)) AND ((composite_id).user_id = ((users.composite_id).user_id)))
  Master Query
-   ->  Limit  (cost=0.01..0.02 rows=0 width=0)
-         ->  Sort  (cost=0.01..0.02 rows=0 width=0)
+   ->  Limit  (cost=0.00..0.00 rows=0 width=0)
+         ->  Sort  (cost=0.00..0.00 rows=0 width=0)
                Sort Key: intermediate_column_270017_2 DESC
                ->  Seq Scan on pg_merge_job_270017  (cost=0.00..0.00 rows=0 width=0)
 (29 rows)
