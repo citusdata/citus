@@ -10,7 +10,7 @@ endif
 
 include Makefile.global
 
-all: extension
+all: extension bload
 
 # build extension
 extension:
@@ -29,6 +29,18 @@ clean-extension:
 # Add to generic targets
 install: install-extension install-headers
 clean: clean-extension
+
+# build bload binary
+bload:
+	$(MAKE) -C src/bin/bload/ all
+install-bload: bload
+	$(MAKE) -C src/bin/bload/ install
+clean-bload:
+	$(MAKE) -C src/bin/bload/ clean
+.PHONY: bload install-bload clean-bload
+# Add to generic targets
+install: install-bload
+clean: clean-bload
 
 # apply or check style
 reindent:

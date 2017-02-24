@@ -43,6 +43,18 @@ typedef struct NodeAddress
 	int32 nodePort;
 } NodeAddress;
 
+/* struct type to keep zeromq related value */
+typedef struct ZeroMQServer
+{
+	char host[NAMEDATALEN];
+	int32 port;
+	char file[NAMEDATALEN];
+	void *context;
+	void *sender;
+	void *controller;
+
+} ZeroMQServer;
+
 
 /* function declarations for copying into a distributed table */
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
@@ -56,5 +68,10 @@ extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 extern bool IsCopyFromWorker(CopyStmt *copyStatement);
 extern NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);
 
+/* functions declarations for bulkload copy */
+extern bool IsBulkloadCopy(CopyStmt *copyStatement);
+extern bool IsBinaryCopy(CopyStmt *copyStatement);
+extern bool IsBulkloadClient(CopyStmt *copyStatement);
+extern void CitusBulkloadCopy(CopyStmt *copyStatement, char *completionTag);
 
 #endif /* MULTI_COPY_H */

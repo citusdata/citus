@@ -75,6 +75,8 @@
 #define UPDATE_SHARD_STATISTICS_QUERY \
 	"SELECT master_update_shard_statistics(%ld)"
 #define PARTITION_METHOD_QUERY "SELECT part_method FROM master_get_table_metadata('%s');"
+#define ACTIVE_WORKER_NODE_QUERY "SELECT * FROM master_get_active_worker_nodes();"
+#define RELATIONID_QUERY "SELECT logical_relid FROM master_get_table_metadata('%s');"
 
 /* Enumeration that defines the shard placement policy to use while staging */
 typedef enum
