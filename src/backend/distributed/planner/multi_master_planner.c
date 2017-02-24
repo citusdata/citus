@@ -196,6 +196,11 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 							 groupColumnOpArray, NIL, rowEstimate, subPlan);
 #endif
 
+	/* just for reproducible costs between different PostgreSQL versions */
+	aggregatePlan->plan.startup_cost = 0;
+	aggregatePlan->plan.total_cost = 0;
+	aggregatePlan->plan.plan_rows = 0;
+
 	return aggregatePlan;
 }
 
@@ -265,6 +270,12 @@ BuildSelectStatement(Query *masterQuery, char *masterTableName,
 #else
 		Sort *sortPlan = make_sort_from_sortclauses(NULL, sortClauseList, topLevelPlan);
 #endif
+
+		/* just for reproducible costs between different PostgreSQL versions */
+		sortPlan->plan.startup_cost = 0;
+		sortPlan->plan.total_cost = 0;
+		sortPlan->plan.plan_rows = 0;
+
 		topLevelPlan = (Plan *) sortPlan;
 	}
 
