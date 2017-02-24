@@ -145,12 +145,14 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	deleteCriteria = eval_const_expressions(NULL, whereClause);
 
 	partitionMethod = PartitionMethod(relationId);
-	if ((partitionMethod == DISTRIBUTE_BY_HASH) && (deleteCriteria != NULL))
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from distributed table"),
+						errmsg("cannot delete from hash distributed table with this "
+							   "command"),
 						errdetail("Delete statements on hash-partitioned tables "
-								  "with where clause is not supported")));
+								  "are not supported with master_apply_delete_command."),
+						errhint("Use master_modify_multiple_shards command instead.")));
 	}
 	else if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
