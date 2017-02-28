@@ -145,6 +145,7 @@ _PG_init(void)
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
+	set_join_pathlist_hook = multi_join_restriction_hook;
 
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();

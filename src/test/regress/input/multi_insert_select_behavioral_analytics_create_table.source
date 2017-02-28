@@ -1,0 +1,43 @@
+--
+-- multi insert select behavioral analytics
+-- this file is intended to create the table requires for the tests
+--
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
+
+SET citus.shard_replication_factor = 1;
+SET citus.shard_count = 4;
+
+CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('users_table', 'user_id');
+
+CREATE TABLE events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('events_table', 'user_id');
+
+CREATE TABLE agg_results (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp);
+SELECT create_distributed_table('agg_results', 'user_id');
+
+-- we need this to improve the concurrency on the regression tests
+CREATE TABLE agg_results_second (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp);
+SELECT create_distributed_table('agg_results_second', 'user_id');
+
+-- same as agg_results_second
+CREATE TABLE agg_results_third (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp);
+SELECT create_distributed_table('agg_results_third', 'user_id');
+
+-- same as agg_results_second
+CREATE TABLE agg_results_fourth (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp);
+SELECT create_distributed_table('agg_results_fourth', 'user_id');
+
+COPY users_table FROM '@abs_srcdir@/data/users_table.data' WITH CSV;
+COPY events_table FROM '@abs_srcdir@/data/events_table.data' WITH CSV;
+
+-- create indexes for 
+CREATE INDEX is_index1 ON users_table(user_id);
+CREATE INDEX is_index2 ON events_table(user_id);
+CREATE INDEX is_index3 ON users_table(value_1);
+CREATE INDEX is_index4 ON events_table(event_type);
+CREATE INDEX is_index5 ON users_table(value_2);
+CREATE INDEX is_index6 ON events_table(value_2);
+
