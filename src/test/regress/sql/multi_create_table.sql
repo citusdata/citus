@@ -191,14 +191,74 @@ DROP TABLE repmodel_test;
 RESET citus.replication_model;
 
 -- Test initial data loading
-CREATE TABLE data_load_test (col1 int, col2 text);
+CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
 INSERT INTO data_load_test VALUES (132, 'hello');
 INSERT INTO data_load_test VALUES (243, 'world');
 
--- create_distributed_table copies data into the distributed table
+-- table must be empty when using append- or range-partitioning
+SELECT create_distributed_table('data_load_test', 'col1', 'append');
+SELECT create_distributed_table('data_load_test', 'col1', 'range');
+
+-- table must be empty when using master_create_distributed_table (no shards created)
+SELECT master_create_distributed_table('data_load_test', 'col1', 'hash');
+
+-- create_distributed_table creates shards and copies data into the distributed table
 SELECT create_distributed_table('data_load_test', 'col1');
-SELECT * FROM data_load_test;
+SELECT * FROM data_load_test ORDER BY col1;
 DROP TABLE data_load_test;
+
+-- ensure writes in the same transaction as create_distributed_table are visible
+BEGIN;
+CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test VALUES (132, 'hello');
+SELECT create_distributed_table('data_load_test', 'col1');
+INSERT INTO data_load_test VALUES (243, 'world');
+END;
+SELECT * FROM data_load_test ORDER BY col1;
+DROP TABLE data_load_test;
+
+-- creating co-located distributed tables in the same transaction works
+BEGIN;
+CREATE TABLE data_load_test1 (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test1 VALUES (132, 'hello');
+SELECT create_distributed_table('data_load_test1', 'col1');
+
+CREATE TABLE data_load_test2 (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test2 VALUES (132, 'world');
+SELECT create_distributed_table('data_load_test2', 'col1');
+
+SELECT a.col2 ||' '|| b.col2
+FROM data_load_test1 a JOIN data_load_test2 b USING (col1)
+WHERE col1 = 132;
+
+DROP TABLE data_load_test1, data_load_test2;
+END;
+
+-- creating an index after loading data works
+BEGIN;
+CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test VALUES (132, 'hello');
+SELECT create_distributed_table('data_load_test', 'col1');
+CREATE INDEX data_load_test_idx ON data_load_test (col2);
+END;
+DROP TABLE data_load_test;
+
+-- popping in and out of existence in the same transaction works
+BEGIN;
+CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test VALUES (132, 'hello');
+SELECT create_distributed_table('data_load_test', 'col1');
+DROP TABLE data_load_test;
+END;
+
+-- but dropping after a write on the distributed table is currently disallowed
+BEGIN;
+CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
+INSERT INTO data_load_test VALUES (132, 'hello');
+SELECT create_distributed_table('data_load_test', 'col1');
+INSERT INTO data_load_test VALUES (243, 'world');
+DROP TABLE data_load_test;
+END;
 
 -- Test data loading after dropping a column
 CREATE TABLE data_load_test (col1 int, col2 text, col3 text);

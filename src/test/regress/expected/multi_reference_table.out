@@ -6,7 +6,6 @@ INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 -- create the reference table
 SELECT create_reference_table('reference_table_test');
 NOTICE:  Copying data from local table...
-NOTICE:  Copied 1 rows
  create_reference_table 
 ------------------------
  
