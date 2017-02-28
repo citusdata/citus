@@ -37,8 +37,22 @@ typedef struct RelationRestriction
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
+	PlannerInfo *parentPlannerInfo;
+	List *parentPlannerParamList;
 	List *prunedShardIntervalList;
 } RelationRestriction;
+
+typedef struct JoinRestrictionContext
+{
+	List *joinRestrictionList;
+} JoinRestrictionContext;
+
+typedef struct JoinRestriction
+{
+	JoinType joinType;
+	List *joinRestrictInfoList;
+	PlannerInfo *plannerInfo;
+} JoinRestriction;
 
 typedef struct RelationShard
 {
@@ -46,6 +60,42 @@ typedef struct RelationShard
 	Oid relationId;
 	uint64 shardId;
 } RelationShard;
+
+/*
+ * AttributeEquivalenceClass
+ *
+ * Whenever we find an equality clause A = B, where both A and B originates from
+ * relation attributes (i.e., not random expressions), we create an
+ * AttributeEquivalenceClass to record this knowledge. If we later find another
+ * equivalence B = C, we create another AttributeEquivalenceClass. Finally, we can
+ * apply transitity rules and generate a new AttributeEquivalenceClass which includes
+ * A, B and C.
+ *
+ * Note that equality among the members are identified by the varattno and rteIdentity.
+ */
+typedef struct AttributeEquivalenceClass
+{
+	uint32 equivalenceId;
+	List *equivalentAttributes;
+} AttributeEquivalenceClass;
+
+/*
+ *  AttributeEquivalenceClassMember - one member expression of an
+ *  AttributeEquivalenceClassMember. The important thing to consider is that
+ *  the class member contains "rteIndentity" field. Note that each RTE_RELATION
+ *  is assigned a unique rteIdentity in AssignRTEIdentities() function.
+ *
+ *  "varno" and "varattrno" is directly used from a Var clause that is being added
+ *  to the attribute equivalence. Since we only use this class for relations, the member
+ *  also includes the relation id field.
+ */
+typedef struct AttributeEquivalenceClassMember
+{
+	Index varno;
+	AttrNumber varattno;
+	Oid relationId;
+	int rteIdendity;
+} AttributeEquivalenceClassMember;
 
 
 extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
@@ -55,9 +105,17 @@ struct MultiPlan;
 extern struct MultiPlan * GetMultiPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
+extern void multi_join_restriction_hook(PlannerInfo *root,
+										RelOptInfo *joinrel,
+										RelOptInfo *outerrel,
+										RelOptInfo *innerrel,
+										JoinType jointype,
+										JoinPathExtraData *extra);
 extern bool IsModifyCommand(Query *query);
 extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 
+
+extern int GetRTEIdentity(RangeTblEntry *rte);
 
 #endif /* MULTI_PLANNER_H */

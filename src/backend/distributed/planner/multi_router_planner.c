@@ -48,6 +48,8 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#include "optimizer/joininfo.h"
+#include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
@@ -74,6 +76,8 @@ typedef struct WalkerState
 } WalkerState;
 
 bool EnableRouterExecution = true;
+static uint32 attributeEquivalenceId = 1;
+
 
 /* planner functions forward declarations */
 static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
@@ -82,14 +86,43 @@ static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 											  restrictionContext);
 static MultiPlan * CreateInsertSelectRouterPlan(Query *originalQuery,
 												RelationRestrictionContext *
-												restrictionContext);
+												restrictionContext,
+												JoinRestrictionContext *
+												joinRestrictionContext);
+static bool AllRelationsJoinedOnPartitionKey(RelationRestrictionContext
+											 *restrictionContext,
+											 JoinRestrictionContext *
+											 joinRestrictionContext);
+static List * PartitionKeyEquivalenceClassList(List *attributeEquivalenceClassList);
+static uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
+static List * GenerateAttributeEquivalencesForRelationRestrictions(
+	RelationRestrictionContext *restrictionContext);
+static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
+	EquivalenceClass *plannerEqClass, RelationRestriction *relationRestriction);
+static void AddToAttributeEquivalenceClass(PlannerInfo *root, Var *varToBeAdded,
+										   AttributeEquivalenceClass **
+										   attributeEquivalanceClass);
+static Var * GetVarFromAssignedParam(List *parentPlannerParamList,
+									 Param *plannerParam);
+static List * GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext
+															   *joinRestrictionContext);
+static bool AttributeClassContainsAttributeClassMember(AttributeEquivalenceClassMember *
+													   inputMember,
+													   AttributeEquivalenceClass *
+													   attributeEquivalenceClass);
+static AttributeEquivalenceClass * GenerateCommonEquivalence(List *
+															 attributeEquivalenceList);
+static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass **
+													  firstClass,
+													  AttributeEquivalenceClass *
+													  secondClass);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
 											   restrictionContext,
-											   uint32 taskIdIndex);
-static List * HashedShardIntervalOpExpressions(ShardInterval *shardInterval);
-static Param * UninstantiatedParameterForColumn(Var *relationPartitionKey);
+											   uint32 taskIdIndex,
+											   bool allRelationsJoinedOnPartitionKey);
+static List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -129,7 +162,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
-static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -165,11 +197,13 @@ CreateRouterPlan(Query *originalQuery, Query *query,
  */
 MultiPlan *
 CreateModifyPlan(Query *originalQuery, Query *query,
-				 RelationRestrictionContext *restrictionContext)
+				 RelationRestrictionContext *restrictionContext,
+				 JoinRestrictionContext *joinRestrictionContext)
 {
 	if (InsertSelectQuery(originalQuery))
 	{
-		return CreateInsertSelectRouterPlan(originalQuery, restrictionContext);
+		return CreateInsertSelectRouterPlan(originalQuery, restrictionContext,
+											joinRestrictionContext);
 	}
 	else
 	{
@@ -258,7 +292,8 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
  */
 static MultiPlan *
 CreateInsertSelectRouterPlan(Query *originalQuery,
-							 RelationRestrictionContext *restrictionContext)
+							 RelationRestrictionContext *restrictionContext,
+							 JoinRestrictionContext *joinRestrictionContext)
 {
 	int shardOffset = 0;
 	List *sqlTaskList = NIL;
@@ -272,6 +307,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
+	bool allRelationsJoinedOnPartitionKey = false;
 
 	multiPlan->operation = originalQuery->commandType;
 
@@ -286,6 +322,9 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	{
 		return multiPlan;
 	}
+
+	allRelationsJoinedOnPartitionKey =
+		AllRelationsJoinedOnPartitionKey(restrictionContext, joinRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -303,7 +342,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		Task *modifyTask = NULL;
 
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
-													  restrictionContext, taskIdIndex);
+													  restrictionContext, taskIdIndex,
+													  allRelationsJoinedOnPartitionKey);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -341,6 +381,706 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 
 
 /*
+ * AllRelationsJoinedOnPartitionKey aims to deduce whether each of the RTE_RELATION
+ * is joined with at least on another RTE_RELATION on their partition keys. If each
+ * RTE_RELATION follows the above rule, we can conclude that all RTE_RELATIONs are
+ * joined on their partition keys.
+ *
+ * In order to do that, we invented a new equivalence class namely:
+ * AttributeEquivalenceClass. In very simple words, a AttributeEquivalenceClass is
+ * identified by an unique id and consists of a list of AttributeEquivalenceMembers.
+ *
+ * Each AttributeEquivalenceMember is designed to identify attributes uniquely within the
+ * whole query. The necessity of this arise since varno attributes are defined within
+ * a single level of a query. Instead, here we want to identify each RTE_RELATION uniquely
+ * and try to find equality among each RTE_RELATION's partition key.
+ *
+ * Each equality among RTE_RELATION is saved using an AttributeEquivalenceClass where
+ * each member attribute is identified by a AttributeEquivalenceMember. In the final
+ * step, we try generate a common attribute equivalence class that holds as much as
+ * AttributeEquivalenceMembers whose attributes are a partition keys.
+ *
+ * AllRelationsJoinedOnPartitionKey uses both relation restrictions and join restrictions
+ * to find as much as information that Postgres planner provides to extensions. For the
+ * details of the usage, please see GenerateAttributeEquivalencesForRelationRestrictions()
+ * and GenerateAttributeEquivalencesForJoinRestrictions()
+ *
+ * Finally, as the name of the function reveals, the function returns true if all relations
+ * are joined on their partition keys. Otherwise, the function returns false.
+ */
+static bool
+AllRelationsJoinedOnPartitionKey(RelationRestrictionContext *restrictionContext,
+								 JoinRestrictionContext *joinRestrictionContext)
+{
+	List *relationRestrictionAttributeEquivalenceList = NIL;
+	List *joinRestrictionAttributeEquivalenceList = NIL;
+	List *allAttributeEquivalenceList = NIL;
+	List *partitionKeyEquivalenceList = NIL;
+	AttributeEquivalenceClass *commonEquivalenceClass = NULL;
+	bool allRelationsJoinedOnPartitionKey = true;
+	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
+	uint32 totalRelationCount = list_length(restrictionContext->relationRestrictionList);
+
+	ListCell *commonEqClassCell = NULL;
+	ListCell *relationRestrictionCell = NULL;
+	Relids commonRteIdentities = NULL;
+
+	/*
+	 * If there are no JOINs between non-reference tables, we shouldn't
+	 * bother about them.
+	 */
+	if (totalRelationCount - referenceRelationCount <= 1)
+	{
+		return true;
+	}
+
+	/* reset the equivalence id counter per call to prevent overflows */
+	attributeEquivalenceId = 1;
+
+	relationRestrictionAttributeEquivalenceList =
+		GenerateAttributeEquivalencesForRelationRestrictions(restrictionContext);
+	joinRestrictionAttributeEquivalenceList =
+		GenerateAttributeEquivalencesForJoinRestrictions(joinRestrictionContext);
+
+	allAttributeEquivalenceList =
+		list_concat(relationRestrictionAttributeEquivalenceList,
+					joinRestrictionAttributeEquivalenceList);
+
+	/* filter out non-partition key equivalences */
+	partitionKeyEquivalenceList =
+		PartitionKeyEquivalenceClassList(allAttributeEquivalenceList);
+
+	/*
+	 * In general we're trying to expand existing the equivalence classes to find a
+	 * common equivalence class. The main goal is to test whether this main class
+	 * contains all partition keys of the existing relations.
+	 */
+	commonEquivalenceClass = GenerateCommonEquivalence(partitionKeyEquivalenceList);
+
+	/* add the rte indexes of relations to a bitmap */
+	foreach(commonEqClassCell, commonEquivalenceClass->equivalentAttributes)
+	{
+		AttributeEquivalenceClassMember *classMember = lfirst(commonEqClassCell);
+		int rteIdentity = classMember->rteIdendity;
+
+		commonRteIdentities = bms_add_member(commonRteIdentities, rteIdentity);
+	}
+
+	/* check whether all relations exists in the main restriction list */
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+
+		if (PartitionKey(relationRestriction->relationId) &&
+			!bms_is_member(rteIdentity, commonRteIdentities))
+		{
+			allRelationsJoinedOnPartitionKey = false;
+			break;
+		}
+	}
+
+	return allRelationsJoinedOnPartitionKey;
+}
+
+
+/*
+ * PartitionKeyEquivalenceClassList gets a list of atrribute equivalences. Then, filters
+ * out the ones whose all members are not partition keys. The function skips reference
+ * tables.
+ */
+static List *
+PartitionKeyEquivalenceClassList(List *attributeEquivalenceClassList)
+{
+	ListCell *attributeEquivalenceClassCell = NULL;
+	List *partitionKeyEquivalencClassList = NIL;
+
+	foreach(attributeEquivalenceClassCell, attributeEquivalenceClassList)
+	{
+		AttributeEquivalenceClass *attributeEquivalenceClass =
+			(AttributeEquivalenceClass *) lfirst(attributeEquivalenceClassCell);
+		ListCell *equivalenceMemberCell = NULL;
+		bool allPartitionKeys = true;
+
+		foreach(equivalenceMemberCell, attributeEquivalenceClass->equivalentAttributes)
+		{
+			AttributeEquivalenceClassMember *classMemeber =
+				(AttributeEquivalenceClassMember *) lfirst(equivalenceMemberCell);
+			Var *relationPartitionKey = PartitionKey(classMemeber->relationId);
+
+			/* we don't care about reference tables here */
+			if (!relationPartitionKey)
+			{
+				continue;
+			}
+
+			if (relationPartitionKey->varattno != classMemeber->varattno)
+			{
+				allPartitionKeys = false;
+				break;
+			}
+		}
+
+		if (!allPartitionKeys)
+		{
+			continue;
+		}
+
+		partitionKeyEquivalencClassList = lappend(partitionKeyEquivalencClassList,
+												  attributeEquivalenceClass);
+	}
+
+	return partitionKeyEquivalencClassList;
+}
+
+
+/*
+ * ReferenceRelationCount iterates over the relations and returns the reference table
+ * relation count.
+ */
+static uint32
+ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+	uint32 referenceRelationCount = 0;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+
+		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		{
+			referenceRelationCount++;
+		}
+	}
+
+	return referenceRelationCount;
+}
+
+
+/*
+ * GenerateAttributeEquivalencesForRelationRestrictions gets a relation restriction
+ * context and returns a list of AttributeEquivalenceClass.
+ *
+ * The algorithm followed can be summarized as below:
+ *
+ * - Per relation restriction
+ *     - Per plannerInfo's eq_class
+ *         - Create an AttributeEquivalenceClass
+ *         - Add all Vars that appear in the plannerInfo's
+ *           eq_class to the AttributeEquivalenceClass
+ *               - While doing that, consider LATERAL vars as well.
+ *                 See GetVarFromAssignedParam() for the details. Note
+ *                 that we're using parentPlannerInfo while adding the
+ *                 LATERAL vars given that we rely on that plannerInfo.
+ *
+ * Note that this function does not deal with whether the member of eq_classes
+ * are partition key or not. That's handled later in the planning.
+ */
+static List *
+GenerateAttributeEquivalencesForRelationRestrictions(RelationRestrictionContext
+													 *restrictionContext)
+{
+	List *attributeEquivalenceList = NIL;
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+		List *equivalenceClasses = relationRestriction->plannerInfo->eq_classes;
+		ListCell *equivilanceClassCell = NULL;
+
+		foreach(equivilanceClassCell, equivalenceClasses)
+		{
+			EquivalenceClass *plannerEqClass = lfirst(equivilanceClassCell);
+
+			AttributeEquivalenceClass *attributeEquivalance =
+				AttributeEquivalenceClassForEquivalenceClass(plannerEqClass,
+															 relationRestriction);
+
+			attributeEquivalenceList = lappend(attributeEquivalenceList,
+											   attributeEquivalance);
+		}
+	}
+
+	return attributeEquivalenceList;
+}
+
+
+/*
+ * AttributeEquivalenceClassForEquivalenceClass is a helper function for
+ * GenerateAttributeEquivalencesForRelationRestrictions. The function takes an
+ * EquivalenceClass and the relation restriction that the equivalence class
+ * belongs to. The function returns an AttributeEquivalenceClass that is composed
+ * of ec_members that are simple Var references.
+ *
+ * The function also takes case of LATERAL joins by simply replacing the PARAM_EXEC
+ * with the corresponding expression.
+ */
+static AttributeEquivalenceClass *
+AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
+											 RelationRestriction *relationRestriction)
+{
+	AttributeEquivalenceClass *attributeEquivalance =
+		palloc0(sizeof(AttributeEquivalenceClass));
+	ListCell *equivilanceMemberCell = NULL;
+	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
+
+	attributeEquivalance->equivalenceId = attributeEquivalenceId++;
+
+	foreach(equivilanceMemberCell, plannerEqClass->ec_members)
+	{
+		EquivalenceMember *equivalenceMember = lfirst(equivilanceMemberCell);
+		Node *equivalenceNode = strip_implicit_coercions(
+			(Node *) equivalenceMember->em_expr);
+		Expr *strippedEquivalenceExpr = (Expr *) equivalenceNode;
+
+		Var *expressionVar = NULL;
+
+		if (IsA(strippedEquivalenceExpr, Param))
+		{
+			List *parentParamList = relationRestriction->parentPlannerParamList;
+			Param *equivalenceParam = (Param *) strippedEquivalenceExpr;
+
+			expressionVar = GetVarFromAssignedParam(parentParamList,
+													equivalenceParam);
+			if (expressionVar)
+			{
+				AddToAttributeEquivalenceClass(
+					relationRestriction->parentPlannerInfo,
+					expressionVar,
+					&attributeEquivalance);
+			}
+		}
+		else if (IsA(strippedEquivalenceExpr, Var))
+		{
+			expressionVar = (Var *) strippedEquivalenceExpr;
+			AddToAttributeEquivalenceClass(plannerInfo, expressionVar,
+										   &attributeEquivalance);
+		}
+	}
+
+	return attributeEquivalance;
+}
+
+
+/*
+ *
+ * GetVarFromAssignedParam returns the Var that is assigned to the given
+ * plannerParam if its kind is PARAM_EXEC.
+ *
+ * If the paramkind is not equal to PARAM_EXEC the function returns NULL. Similarly,
+ * if there is no var that the given param is assigned to, the function returns NULL.
+ *
+ * Rationale behind this function:
+ *
+ *   While iterating through the equivalence classes of RTE_RELATIONs, we
+ *   observe that there are PARAM type of equivalence member expressions for
+ *   the RTE_RELATIONs which actually belong to lateral vars from the other query
+ *   levels.
+ *
+ *   We're also keeping track of the RTE_RELATION's parent_root's
+ *   plan_param list which is expected to hold the parameters that are required
+ *   for its lower level queries as it is documented:
+ *
+ *        plan_params contains the expressions that this query level needs to
+ *        make available to a lower query level that is currently being planned.
+ *
+ *   This function is a helper function to iterate through the parent query's
+ *   plan_params and looks for the param that the equivalence member has. The
+ *   comparison is done via the "paramid" field. Finally, if the found parameter's
+ *   item is a Var, we conclude that Postgres standard_planner replaced the Var
+ *   with the Param on assign_param_for_var() function
+ *   @src/backend/optimizer//plan/subselect.c.
+ *
+ */
+static Var *
+GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
+{
+	Var *assignedVar = NULL;
+	ListCell *plannerParameterCell = NULL;
+
+	Assert(plannerParam != NULL);
+
+	/* we're only interested in parameters that Postgres added for execution */
+	if (plannerParam->paramkind != PARAM_EXEC)
+	{
+		return NULL;
+	}
+
+	foreach(plannerParameterCell, parentPlannerParamList)
+	{
+		PlannerParamItem *plannerParamItem = lfirst(plannerParameterCell);
+
+		if (plannerParamItem->paramId != plannerParam->paramid)
+		{
+			continue;
+		}
+
+		/* TODO: Should we consider PlaceHolderVar?? */
+		if (!IsA(plannerParamItem->item, Var))
+		{
+			continue;
+		}
+
+		assignedVar = (Var *) plannerParamItem->item;
+
+		break;
+	}
+
+	return assignedVar;
+}
+
+
+/*
+ * GenerateCommonEquivalence gets a list of unrelated AttributeEquiavalanceClass
+ * whose all members are partition keys.
+ *
+ * With the equivalence classes, the function follows the algorithm
+ * outlined below:
+ *
+ *     - Add the first equivalence class to the common equivalence class
+ *     - Then, iterate on the remaining equivalence classes
+ *          - If any of the members equal to the common equivalence class
+ *            add all the members of the equivalence class to the common
+ *            class
+ *          - Start the iteration from the beginning. The reason is that
+ *            in case any of the classes we've passed is equivalent to the
+ *            newly added one. To optimize the algorithm, we utilze the
+ *            equivalence class ids and skip the ones that are already added.
+ *      - Finally, return the common equivalence class.
+ */
+static AttributeEquivalenceClass *
+GenerateCommonEquivalence(List *attributeEquivalenceList)
+{
+	AttributeEquivalenceClass *commonEquivalenceClass = NULL;
+	AttributeEquivalenceClass *firstEquivalenceClass = NULL;
+	Bitmapset *addedEquivalenceIds = NULL;
+	uint32 equivalenceListSize = list_length(attributeEquivalenceList);
+	uint32 equivalenceClassIndex = 0;
+
+	commonEquivalenceClass = palloc0(sizeof(AttributeEquivalenceClass));
+	commonEquivalenceClass->equivalenceId = 0;
+
+	/* think more on this. */
+	if (equivalenceListSize < 1)
+	{
+		return commonEquivalenceClass;
+	}
+
+	/* setup the initial state of the main equivalence class */
+	firstEquivalenceClass = linitial(attributeEquivalenceList);
+	commonEquivalenceClass->equivalentAttributes =
+		firstEquivalenceClass->equivalentAttributes;
+	addedEquivalenceIds = bms_add_member(addedEquivalenceIds,
+										 firstEquivalenceClass->equivalenceId);
+
+	for (; equivalenceClassIndex < equivalenceListSize; ++equivalenceClassIndex)
+	{
+		AttributeEquivalenceClass *currentEquivalenceClass =
+			list_nth(attributeEquivalenceList, equivalenceClassIndex);
+		ListCell *equivalenceMemberCell = NULL;
+
+		/*
+		 * This is an optimization. If we already added the same equivalence class,
+		 * we could skip it since we've already added all the relevant equivalence
+		 * members.
+		 */
+		if (bms_overlap(addedEquivalenceIds,
+						bms_make_singleton(currentEquivalenceClass->equivalenceId)))
+		{
+			continue;
+		}
+
+		foreach(equivalenceMemberCell, currentEquivalenceClass->equivalentAttributes)
+		{
+			AttributeEquivalenceClassMember *attributeEquialanceMember =
+				(AttributeEquivalenceClassMember *) lfirst(equivalenceMemberCell);
+
+			if (AttributeClassContainsAttributeClassMember(attributeEquialanceMember,
+														   commonEquivalenceClass))
+			{
+				ListConcatUniqueAttributeClassMemberLists(&commonEquivalenceClass,
+														  currentEquivalenceClass);
+
+				addedEquivalenceIds = bms_add_member(addedEquivalenceIds,
+													 currentEquivalenceClass->
+													 equivalenceId);
+
+				/*
+				 * It seems inefficient to start from the beginning.
+				 * But, we should somehow restart from the beginning to test that
+				 * whether the already skipped ones are equal or not.
+				 */
+				equivalenceClassIndex = 0;
+
+				break;
+			}
+		}
+	}
+
+	return commonEquivalenceClass;
+}
+
+
+/*
+ * ListConcatUniqueAttributeClassMemberLists gets two attribute equivalence classes. It
+ * basically concatenates attribute equivalence member lists uniquely and updates the
+ * firstClass' member list with the list.
+ *
+ * Basically, the function iterates over the secondClass' member list and checks whether
+ * it already exists in the firstClass' member list. If not, the member is added to the
+ * firstClass.
+ */
+static void
+ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass **firstClass,
+										  AttributeEquivalenceClass *secondClass)
+{
+	ListCell *equivalenceClassMemberCell = NULL;
+	List *equivalenceMemberList = secondClass->equivalentAttributes;
+
+	foreach(equivalenceClassMemberCell, equivalenceMemberList)
+	{
+		AttributeEquivalenceClassMember *newEqMember = lfirst(equivalenceClassMemberCell);
+
+		if (AttributeClassContainsAttributeClassMember(newEqMember, *firstClass))
+		{
+			continue;
+		}
+
+		(*firstClass)->equivalentAttributes = lappend((*firstClass)->equivalentAttributes,
+													  newEqMember);
+	}
+}
+
+
+/*
+ * GenerateAttributeEquivalencesForJoinRestrictions gets a join restriction
+ * context and returns a list of AttrributeEquivalenceClass.
+ *
+ * The algorithm followed can be summarized as below:
+ *
+ * - Per join restriction
+ *     - Per RestrictInfo of the join restriction
+ *     - Check whether the join restriction is in the form of (Var1 = Var2)
+ *         - Create an AttributeEquivalenceClass
+ *         - Add both Var1 and Var2 to the AttributeEquivalenceClass
+ *
+ * Note that this function does not deal with whether the member of restriction
+ * are partition key or not. That's handled later in the planning.
+ */
+static List *
+GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
+												 joinRestrictionContext)
+{
+	List *attributeEquivalenceList = NIL;
+	ListCell *joinRestrictionCell = NULL;
+
+	foreach(joinRestrictionCell, joinRestrictionContext->joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = lfirst(joinRestrictionCell);
+		ListCell *restrictionInfoList = NULL;
+
+		foreach(restrictionInfoList, joinRestriction->joinRestrictInfoList)
+		{
+			RestrictInfo *rinfo = (RestrictInfo *) lfirst(restrictionInfoList);
+			OpExpr *restrictionOpExpr = NULL;
+			Node *leftNode = NULL;
+			Node *rightNode = NULL;
+			Expr *strippedLeftExpr = NULL;
+			Expr *strippedRightExpr = NULL;
+			Var *leftVar = NULL;
+			Var *rightVar = NULL;
+			Expr *restrictionClause = rinfo->clause;
+			AttributeEquivalenceClass *attributeEquivalance = NULL;
+
+			if (!IsA(restrictionClause, OpExpr))
+			{
+				continue;
+			}
+
+			restrictionOpExpr = (OpExpr *) restrictionClause;
+			if (list_length(restrictionOpExpr->args) != 2)
+			{
+				continue;
+			}
+			if (!OperatorImplementsEquality(restrictionOpExpr->opno))
+			{
+				continue;
+			}
+
+			leftNode = linitial(restrictionOpExpr->args);
+			rightNode = lsecond(restrictionOpExpr->args);
+
+			/* we also don't want implicit coercions */
+			strippedLeftExpr = (Expr *) strip_implicit_coercions((Node *) leftNode);
+			strippedRightExpr = (Expr *) strip_implicit_coercions((Node *) rightNode);
+
+			if (!(IsA(strippedLeftExpr, Var) && IsA(strippedRightExpr, Var)))
+			{
+				continue;
+			}
+
+			leftVar = (Var *) strippedLeftExpr;
+			rightVar = (Var *) strippedRightExpr;
+
+			attributeEquivalance = palloc0(sizeof(AttributeEquivalenceClass));
+			attributeEquivalance->equivalenceId = attributeEquivalenceId++;
+
+			/* we could (probably) safely do that since we disallowed ANTI JOINs ? */
+			AddToAttributeEquivalenceClass(joinRestriction->plannerInfo, leftVar,
+										   &attributeEquivalance);
+			AddToAttributeEquivalenceClass(joinRestriction->plannerInfo, rightVar,
+										   &attributeEquivalance);
+
+			attributeEquivalenceList = lappend(attributeEquivalenceList,
+											   attributeEquivalance);
+		}
+	}
+
+	return attributeEquivalenceList;
+}
+
+
+/*
+ * AddToAttributeEquivalenceClass is a key function for building the attribute
+ * equivalences. The function gets a plannerInfo, var and attribute equivalence
+ * class. It searches for the RTE_RELATION(s) that the input var belongs to and
+ * adds the found Var(s) to the input attribute equivalence class.
+ *
+ * Note that the input var could come from a subquery (i.e., not directly from an
+ * RTE_RELATION). That's the reason we recursively call the function until the
+ * RTE_RELATION found.
+ *
+ * The algorithm could be summarized as follows:
+ *
+ *    - If the RTE that corresponds to a relation
+ *        - Generate an AttributeEquivalenceMember and add to the input
+ *          AttributeEquivalenceClass
+ *    - If the RTE that corresponds to a subquery
+ *        - Find the corresponding target entry via varno
+ *        - if subquery entry is a set operation (i.e., only UNION/UNION ALL allowed)
+ *             - recursively add both left and right sides of the set operation's
+ *               corresponding target entries
+ *        - if subquery is not a set operation
+ *             - recursively try to add the corresponding target entry to the
+ *               equivalence class
+ */
+static void
+AddToAttributeEquivalenceClass(PlannerInfo *root, Var *varToBeAdded,
+							   AttributeEquivalenceClass **attributeEquivalanceClass)
+{
+	RangeTblEntry *rangeTableEntry = root->simple_rte_array[varToBeAdded->varno];
+
+	if (rangeTableEntry->rtekind == RTE_RELATION)
+	{
+		AttributeEquivalenceClassMember *attributeEqMember =
+			palloc0(sizeof(AttributeEquivalenceClassMember));
+
+		attributeEqMember->varattno = varToBeAdded->varattno;
+		attributeEqMember->varno = varToBeAdded->varno;
+		attributeEqMember->rteIdendity = GetRTEIdentity(rangeTableEntry);
+		attributeEqMember->relationId = rangeTableEntry->relid;
+
+		(*attributeEquivalanceClass)->equivalentAttributes =
+			lappend((*attributeEquivalanceClass)->equivalentAttributes,
+					attributeEqMember);
+	}
+	else if (rangeTableEntry->rtekind == RTE_SUBQUERY && !rangeTableEntry->inh)
+	{
+		Query *subquery = rangeTableEntry->subquery;
+		RelOptInfo *baseRelOptInfo = NULL;
+		TargetEntry *subqueryTargetEntry = NULL;
+
+		/* punt if it's a whole-row var rather than a plain column reference */
+		if (varToBeAdded->varattno == InvalidAttrNumber)
+		{
+			return;
+		}
+
+		baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
+
+		/* If the subquery hasn't been planned yet, we have to punt */
+		if (baseRelOptInfo->subroot == NULL)
+		{
+			return;
+		}
+
+		Assert(IsA(baseRelOptInfo->subroot, PlannerInfo));
+
+		subquery = baseRelOptInfo->subroot->parse;
+		Assert(IsA(subquery, Query));
+
+		/* Get the subquery output expression referenced by the upper Var */
+		subqueryTargetEntry = get_tle_by_resno(subquery->targetList,
+											   varToBeAdded->varattno);
+		if (subqueryTargetEntry == NULL || subqueryTargetEntry->resjunk)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("subquery %s does not have attribute %d",
+								   rangeTableEntry->eref->aliasname,
+								   varToBeAdded->varattno)));
+		}
+
+		if (!IsA(subqueryTargetEntry->expr, Var))
+		{
+			return;
+		}
+
+		varToBeAdded = (Var *) subqueryTargetEntry->expr;
+
+		/* we need to handle set operations separately */
+		if (subquery->setOperations)
+		{
+			SetOperationStmt *unionStatement =
+				(SetOperationStmt *) subquery->setOperations;
+
+			RangeTblRef *leftRangeTableReference = (RangeTblRef *) unionStatement->larg;
+			RangeTblRef *rightRangeTableReference = (RangeTblRef *) unionStatement->rarg;
+
+			varToBeAdded->varno = leftRangeTableReference->rtindex;
+			AddToAttributeEquivalenceClass(baseRelOptInfo->subroot, varToBeAdded,
+										   attributeEquivalanceClass);
+
+			varToBeAdded->varno = rightRangeTableReference->rtindex;
+			AddToAttributeEquivalenceClass(baseRelOptInfo->subroot, varToBeAdded,
+										   attributeEquivalanceClass);
+		}
+		else if (varToBeAdded && IsA(varToBeAdded, Var) && varToBeAdded->varlevelsup == 0)
+		{
+			AddToAttributeEquivalenceClass(baseRelOptInfo->subroot, varToBeAdded,
+										   attributeEquivalanceClass);
+		}
+	}
+}
+
+
+/*
+ * AttributeClassContainsAttributeClassMember returns true if it the input class member
+ * is already exists in the attributeEquivalenceClass. An equality is identified by the
+ * varattno and rteIdentity.
+ */
+static bool
+AttributeClassContainsAttributeClassMember(AttributeEquivalenceClassMember *inputMember,
+										   AttributeEquivalenceClass *
+										   attributeEquivalenceClass)
+{
+	ListCell *classCell = NULL;
+	foreach(classCell, attributeEquivalenceClass->equivalentAttributes)
+	{
+		AttributeEquivalenceClassMember *memberOfClass = lfirst(classCell);
+		if (memberOfClass->rteIdendity == inputMember->rteIdendity &&
+			memberOfClass->varattno == inputMember->varattno)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * RouterModifyTaskForShardInterval creates a modify task by
  * replacing the partitioning qual parameter added in multi_planner()
  * with the shardInterval's boundary value. Then perform the normal
@@ -354,7 +1094,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
 								 RelationRestrictionContext *restrictionContext,
-								 uint32 taskIdIndex)
+								 uint32 taskIdIndex,
+								 bool allRelationsJoinedOnPartitionKey)
 {
 	Query *copiedQuery = copyObject(originalQuery);
 	RangeTblEntry *copiedInsertRte = ExtractInsertRangeTableEntry(copiedQuery);
@@ -382,6 +1123,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	bool replacePrunedQueryWithDummy = false;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
 	List *hashedOpExpressions = NIL;
+	RestrictInfo *hashedRestrictInfo = NULL;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -394,43 +1136,19 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
-		Var *relationPartitionKey = PartitionColumn(restriction->relationId,
-													restriction->index);
-		Param *uninstantiatedParameter = NULL;
+		Index rteIndex = restriction->index;
 
-		/*
-		 * We don't need to add restriction to reference tables given that they are
-		 * already single sharded and always prune to that single shard.
-		 */
-		if (PartitionMethod(restriction->relationId) == DISTRIBUTE_BY_NONE)
+		if (!allRelationsJoinedOnPartitionKey || allReferenceTables)
 		{
 			continue;
 		}
 
-		hashedOpExpressions = HashedShardIntervalOpExpressions(shardInterval);
-		Assert(list_length(hashedOpExpressions) == 2);
+		hashedOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
 
-		/*
-		 * Here we check whether the planner knows an equality between the partition column
-		 * and the uninstantiated parameter. If such an equality exists, we simply add the
-		 * shard restrictions.
-		 */
-		uninstantiatedParameter = UninstantiatedParameterForColumn(relationPartitionKey);
-		if (exprs_known_equal(restriction->plannerInfo, (Node *) relationPartitionKey,
-							  (Node *) uninstantiatedParameter))
-		{
-			RestrictInfo *geRestrictInfo = NULL;
-			RestrictInfo *leRestrictInfo = NULL;
+		hashedRestrictInfo = make_simple_restrictinfo((Expr *) hashedOpExpressions);
+		originalBaserestrictInfo = lappend(originalBaserestrictInfo, hashedRestrictInfo);
 
-			OpExpr *hashedGEOpExpr = (OpExpr *) linitial(hashedOpExpressions);
-			OpExpr *hashedLEOpExpr = (OpExpr *) lsecond(hashedOpExpressions);
-
-			geRestrictInfo = make_simple_restrictinfo((Expr *) hashedGEOpExpr);
-			originalBaserestrictInfo = lappend(originalBaserestrictInfo, geRestrictInfo);
-
-			leRestrictInfo = make_simple_restrictinfo((Expr *) hashedLEOpExpr);
-			originalBaserestrictInfo = lappend(originalBaserestrictInfo, leRestrictInfo);
-		}
+		restriction->relOptInfo->baserestrictinfo = originalBaserestrictInfo;
 	}
 
 	/*
@@ -530,92 +1248,53 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 
 /*
- * HashedShardIntervalOpExpressions returns a list of OpExprs with exactly two
- * items in it. The list consists of shard interval ranges with hashed columns
- * such as (hashColumn >= shardMinValue) and (hashedColumn <= shardMaxValue).
+ * ShardIntervalOpExpressions returns a list of OpExprs with exactly two
+ * items in it. The list consists of shard interval ranges with partition columns
+ * such as (partitionColumn >= shardMinValue) and (partitionColumn <= shardMaxValue).
  *
- * The function errors out if the given shard interval does not belong to a hash
- * distributed table.
+ * The function returns hashed columns generated by MakeInt4Column() for the hash
+ * partitioned tables in place of partition columns.
+ *
+ * The function errors out if the given shard interval does not belong to a hash,
+ * range and append distributed tables.
  */
 static List *
-HashedShardIntervalOpExpressions(ShardInterval *shardInterval)
+ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 {
-	List *operatorExpressions = NIL;
-	Var *hashedGEColumn = NULL;
-	Var *hashedLEColumn = NULL;
-	OpExpr *hashedGEOpExpr = NULL;
-	OpExpr *hashedLEOpExpr = NULL;
-	Oid integer4GEoperatorId = InvalidOid;
-	Oid integer4LEoperatorId = InvalidOid;
-
-	Datum shardMinValue = shardInterval->minValue;
-	Datum shardMaxValue = shardInterval->maxValue;
+	Oid relationId = shardInterval->relationId;
 	char partitionMethod = PartitionMethod(shardInterval->relationId);
+	Var *partitionColumn = NULL;
+	Node *baseConstraint = NULL;
 
-	if (partitionMethod != DISTRIBUTE_BY_HASH)
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		partitionColumn = MakeInt4Column();
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_RANGE || partitionMethod ==
+			 DISTRIBUTE_BY_APPEND)
+	{
+		Assert(rteIndex > 0);
+
+		partitionColumn = PartitionColumn(relationId, rteIndex);
+	}
+	else
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("cannot create shard interval operator expression for "
-							   "distributed relations other than hash distributed "
+							   "distributed relations other than hash, range and append distributed "
 							   "relations")));
 	}
 
-	/* get the integer >=, <= operators from the catalog */
-	integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTGreaterEqualStrategyNumber);
-	integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTLessEqualStrategyNumber);
+	/* build the base expression for constraint */
+	baseConstraint = BuildBaseConstraint(partitionColumn);
 
-	/* generate hashed columns */
-	hashedGEColumn = MakeInt4Column();
-	hashedLEColumn = MakeInt4Column();
+	/* walk over shard list and check if shards can be pruned */
+	if (shardInterval->minValueExists && shardInterval->maxValueExists)
+	{
+		UpdateConstraint(baseConstraint, shardInterval);
+	}
 
-	/* generate the necessary operators */
-	hashedGEOpExpr = (OpExpr *) make_opclause(integer4GEoperatorId, InvalidOid, false,
-											  (Expr *) hashedGEColumn,
-											  (Expr *) MakeInt4Constant(shardMinValue),
-											  InvalidOid, InvalidOid);
-
-	hashedLEOpExpr = (OpExpr *) make_opclause(integer4LEoperatorId, InvalidOid, false,
-											  (Expr *) hashedLEColumn,
-											  (Expr *) MakeInt4Constant(shardMaxValue),
-											  InvalidOid, InvalidOid);
-
-	/* update the operators with correct operator numbers and function ids */
-	hashedGEOpExpr->opfuncid = get_opcode(hashedGEOpExpr->opno);
-	hashedGEOpExpr->opresulttype = get_func_rettype(hashedGEOpExpr->opfuncid);
-	operatorExpressions = lappend(operatorExpressions, hashedGEOpExpr);
-
-	hashedLEOpExpr->opfuncid = get_opcode(hashedLEOpExpr->opno);
-	hashedLEOpExpr->opresulttype = get_func_rettype(hashedLEOpExpr->opfuncid);
-	operatorExpressions = lappend(operatorExpressions, hashedLEOpExpr);
-
-	return operatorExpressions;
-}
-
-
-/*
- * UninstantiatedParameterForColumn returns a Param that can be used as an uninstantiated
- * parameter for the given column in the sense that paramtype, paramtypmod and collid
- * is set to the input Var's corresponding values.
- *
- * Note that we're using hard coded UNINSTANTIATED_PARAMETER_ID which is the required parameter
- * for our purposes. See multi_planner.c@multi_planner for the details.
- */
-static Param *
-UninstantiatedParameterForColumn(Var *relationPartitionKey)
-{
-	Param *uninstantiatedParameter = makeNode(Param);
-
-	uninstantiatedParameter->paramkind = PARAM_EXTERN;
-	uninstantiatedParameter->paramid = UNINSTANTIATED_PARAMETER_ID;
-	uninstantiatedParameter->paramtype = relationPartitionKey->vartype;
-	uninstantiatedParameter->paramtypmod = relationPartitionKey->vartypmod;
-	uninstantiatedParameter->paramcollid = relationPartitionKey->varcollid;
-
-	return uninstantiatedParameter;
+	return list_make1(baseConstraint);
 }
 
 
@@ -924,13 +1603,18 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 								 NULL, NULL);
 		}
 
-		/* see comment on AddUninstantiatedPartitionRestriction() */
 		if (subquery->setOperations != NULL)
 		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "set operations are not allowed in INSERT ... SELECT "
-								 "queries",
-								 NULL, NULL);
+			SetOperationStmt *setOperationStatement =
+				(SetOperationStmt *) subquery->setOperations;
+
+			if (setOperationStatement->op != SETOP_UNION)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "INTERSECT and EXCEPT set operations are not "
+									 "allowed in INSERT ... SELECT queries",
+									 NULL, NULL);
+			}
 		}
 
 		/*
@@ -1187,126 +1871,6 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 	}
 
 	return NULL;
-}
-
-
-/*
- * AddUninstantiatedPartitionRestriction() can only be used with
- * INSERT ... SELECT queries.
- *
- * AddUninstantiatedPartitionRestriction adds an equality qual
- * to the SELECT query of the given originalQuery. The function currently
- * does NOT add the quals if
- *   (i)  Set operations are present on the top level query
- *   (ii) Target list does not include a bare partition column.
- *
- * Note that if the input query is not an INSERT ... SELECT the assertion fails. Lastly,
- * if all the participating tables in the query are reference tables, we implicitly
- * skip adding the quals to the query since IsPartitionColumnRecursive() always returns
- * false for reference tables.
- */
-void
-AddUninstantiatedPartitionRestriction(Query *originalQuery)
-{
-	Query *subquery = NULL;
-	RangeTblEntry *subqueryEntry = NULL;
-	ListCell *targetEntryCell = NULL;
-	Var *targetPartitionColumnVar = NULL;
-	List *targetList = NULL;
-
-	Assert(InsertSelectQuery(originalQuery));
-
-	subqueryEntry = ExtractSelectRangeTableEntry(originalQuery);
-	subquery = subqueryEntry->subquery;
-
-	/*
-	 * We currently not support the subquery with set operations. The main reason is that
-	 * there is an "Assert(parse->jointree->quals == NULL);" on standard planner's execution
-	 * path (i.e., plan_set_operations).
-	 * If we are to add uninstantiated equality qual to the query, we may end up hitting that
-	 * assertion, so it's better not to support for now.
-	 */
-	if (subquery->setOperations != NULL)
-	{
-		return;
-	}
-
-	/* iterate through the target list and find the partition column on the target list */
-	targetList = subquery->targetList;
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-
-		if (IsPartitionColumn(targetEntry->expr, subquery) &&
-			IsA(targetEntry->expr, Var))
-		{
-			targetPartitionColumnVar = (Var *) targetEntry->expr;
-			break;
-		}
-	}
-
-	/*
-	 * If we cannot find the bare partition column, no need to add the qual since
-	 * we're already going to error out on the multi planner.
-	 */
-	if (!targetPartitionColumnVar)
-	{
-		return;
-	}
-
-	/* finally add the equality qual of target column to subquery */
-	AddUninstantiatedEqualityQual(subquery, targetPartitionColumnVar);
-}
-
-
-/*
- * AddUninstantiatedEqualityQual adds a qual in the following form
- * ($1 = partitionColumn) on the input query and partitionColumn.
- */
-static void
-AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
-{
-	Param *equalityParameter = UninstantiatedParameterForColumn(partitionColumn);
-	OpExpr *uninstantiatedEqualityQual = NULL;
-	Oid partitionColumnCollid = InvalidOid;
-	Oid lessThanOperator = InvalidOid;
-	Oid equalsOperator = InvalidOid;
-	Oid greaterOperator = InvalidOid;
-	bool hashable = false;
-
-	AssertArg(query->commandType == CMD_SELECT);
-
-	/* get the necessary equality operator */
-	get_sort_group_operators(partitionColumn->vartype, false, true, false,
-							 &lessThanOperator, &equalsOperator, &greaterOperator,
-							 &hashable);
-
-
-	partitionColumnCollid = partitionColumn->varcollid;
-
-	/* create an equality on the on the target partition column */
-	uninstantiatedEqualityQual = (OpExpr *) make_opclause(equalsOperator, InvalidOid,
-														  false,
-														  (Expr *) partitionColumn,
-														  (Expr *) equalityParameter,
-														  partitionColumnCollid,
-														  partitionColumnCollid);
-
-	/* update the operators with correct operator numbers and function ids */
-	uninstantiatedEqualityQual->opfuncid = get_opcode(uninstantiatedEqualityQual->opno);
-	uninstantiatedEqualityQual->opresulttype =
-		get_func_rettype(uninstantiatedEqualityQual->opfuncid);
-
-	/* add restriction on partition column */
-	if (query->jointree->quals == NULL)
-	{
-		query->jointree->quals = (Node *) uninstantiatedEqualityQual;
-	}
-	else
-	{
-		query->jointree->quals = make_and_qual(query->jointree->quals,
-											   (Node *) uninstantiatedEqualityQual);
-	}
 }
 
 

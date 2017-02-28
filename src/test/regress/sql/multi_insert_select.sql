@@ -22,6 +22,9 @@ SELECT create_distributed_table('agg_events', 'user_id');;
 CREATE TABLE reference_table (user_id int);
 SELECT create_reference_table('reference_table');
 
+CREATE TABLE insert_select_varchar_test (key varchar, value int);
+SELECT create_distributed_table('insert_select_varchar_test', 'key', 'hash');
+
 -- set back to the defaults
 SET citus.shard_count = DEFAULT;
 SET citus.shard_replication_factor = DEFAULT;
@@ -1063,7 +1066,193 @@ ON (f.id = f2.id)
 WHERE f.id IN (SELECT value_1
                FROM   raw_events_second);
 
+-- some more semi-anti join tests
 
+-- join in where
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (SELECT raw_events_second.user_id
+                   FROM   raw_events_second, raw_events_first
+                   WHERE  raw_events_second.user_id = raw_events_first.user_id AND raw_events_first.user_id = 200);
+
+-- we cannot push this down since it is NOT IN
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id NOT IN (SELECT raw_events_second.user_id
+                   FROM   raw_events_second, raw_events_first
+                   WHERE  raw_events_second.user_id = raw_events_first.user_id AND raw_events_first.user_id = 200);
+
+
+-- safe to push down
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  EXISTS (SELECT 1
+                   FROM   raw_events_second
+                   WHERE  raw_events_second.user_id =raw_events_first.user_id);
+
+-- we cannot push down
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  NOT EXISTS (SELECT 1
+                   FROM   raw_events_second
+                   WHERE  raw_events_second.user_id =raw_events_first.user_id);
+
+
+-- more complex LEFT JOINs 
+ INSERT INTO agg_events
+             (user_id, value_4_agg)
+ SELECT
+   outer_most.id, max(outer_most.value)
+ FROM
+ (
+   SELECT f2.id as id, f2.v4 as value FROM
+     (SELECT
+           id
+       FROM   (SELECT raw_events_first.user_id      AS id
+                FROM   raw_events_first LEFT JOIN
+                       reference_table
+             ON (raw_events_first.user_id = reference_table.user_id)) AS foo) as f
+   LEFT JOIN
+     (SELECT v4,
+           v1,
+           id
+     FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+                SUM(raw_events_first.value_1) AS v1,
+                raw_events_second.user_id      AS id
+             FROM   raw_events_first,
+                     raw_events_second
+             WHERE  raw_events_first.user_id = raw_events_second.user_id
+             GROUP  BY raw_events_second.user_id
+             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ ON (f.id = f2.id)) as outer_most
+ GROUP BY
+   outer_most.id;
+
+
+-- cannot push down since the f.id IN is matched with value_1
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (
+SELECT f2.id FROM
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id)
+WHERE f.id IN (SELECT value_1
+               FROM   raw_events_second));
+
+-- same as above, but this time is it safe to push down since
+-- f.id IN is matched with user_id
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (
+SELECT f2.id FROM
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id)
+WHERE f.id IN (SELECT user_id
+               FROM   raw_events_second));
+
+-- cannot push down since top level user_id is matched with NOT IN
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id NOT IN (
+SELECT f2.id FROM
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id = f2.id)
+WHERE f.id IN (SELECT user_id
+               FROM   raw_events_second));
+
+-- cannot push down since join is not equi join (f.id > f2.id)
+INSERT INTO raw_events_second
+            (user_id)
+SELECT user_id
+FROM   raw_events_first
+WHERE  user_id IN (
+SELECT f2.id FROM
+(SELECT
+      id
+FROM   (SELECT reference_table.user_id      AS id
+        FROM   raw_events_first,
+               reference_table
+        WHERE  raw_events_first.user_id = reference_table.user_id ) AS foo) as f
+INNER JOIN
+(SELECT v4,
+       v1,
+       id
+FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+               SUM(raw_events_first.value_1) AS v1,
+               raw_events_second.user_id      AS id
+        FROM   raw_events_first,
+               raw_events_second
+        WHERE  raw_events_first.user_id = raw_events_second.user_id
+        GROUP  BY raw_events_second.user_id
+        HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ON (f.id > f2.id)
+WHERE f.id IN (SELECT user_id
+               FROM   raw_events_second));
 
 -- we currently not support grouping sets
 INSERT INTO agg_events
@@ -1198,8 +1387,30 @@ SET client_min_messages TO DEBUG2;
 -- this should also work
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 5;
 
-
 SET client_min_messages TO INFO;
+
+-- now do some tests with varchars
+INSERT INTO insert_select_varchar_test VALUES ('test_1', 10);
+INSERT INTO insert_select_varchar_test VALUES ('test_2', 30);
+
+INSERT INTO insert_select_varchar_test (key, value)
+SELECT *, 100
+FROM   (SELECT f1.key
+        FROM   (SELECT key
+                FROM   insert_select_varchar_test 
+                GROUP  BY 1
+                HAVING Count(key) < 3) AS f1, 
+               (SELECT key 
+                FROM   insert_select_varchar_test 
+                GROUP  BY 1 
+                HAVING Sum(COALESCE(insert_select_varchar_test.value, 0)) > 
+                       20.0) 
+               AS f2 
+        WHERE  f1.key = f2.key 
+        GROUP  BY 1) AS foo; 
+
+SELECT * FROM insert_select_varchar_test;
+
 -- some tests with DEFAULT columns and constant values
 -- this test is mostly importantly intended for deparsing the query correctly
 -- but still it is preferable to have this test here instead of multi_deparse_shard_query
