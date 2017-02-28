@@ -88,6 +88,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char relationKind = get_rel_relkind(relationId);
 	char *relationOwner = TableOwner(relationId);
 	char replicationModel = REPLICATION_MODEL_INVALID;
+	bool includeSequenceDefaults = false;
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -136,7 +137,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	shardId = GetNextShardId();
 
 	/* get table DDL commands to replay on the worker node */
-	ddlEventList = GetTableDDLEvents(relationId);
+	ddlEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 
 	/* if enough live nodes, add an extra candidate node as backup */
 	attemptableNodeCount = ShardReplicationFactor;

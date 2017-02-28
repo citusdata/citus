@@ -36,6 +36,7 @@
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "storage/lock.h"
@@ -55,6 +56,7 @@
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
 static const char * convert_aclright_to_string(int aclright);
+static bool contain_nextval_expression_walker(Node *node, void *context);
 
 /*
  * pg_get_extensiondef_string finds the foreign data wrapper that corresponds to
@@ -246,9 +248,11 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * definition includes table's schema, default column values, not null and check
  * constraints. The definition does not include constraints that trigger index
  * creations; specifically, unique and primary key constraints are excluded.
+ * When the flag includeSequenceDefaults is set, the function also creates
+ * DEFAULT clauses for columns getting their default values from a sequence.
  */
 char *
-pg_get_tableschemadef_string(Oid tableRelationId)
+pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 {
 	Relation relation = NULL;
 	char *relationName = NULL;
@@ -343,13 +347,23 @@ pg_get_tableschemadef_string(Oid tableRelationId)
 
 				/* convert expression to node tree, and prepare deparse context */
 				defaultNode = (Node *) stringToNode(defaultValue->adbin);
-				defaultContext = deparse_context_for(relationName, tableRelationId);
 
-				/* deparse default value string */
-				defaultString = deparse_expression(defaultNode, defaultContext,
-												   false, false);
+				/*
+				 * if column default value is explicitly requested, or it is
+				 * not set from a sequence then we include DEFAULT clause for
+				 * this column.
+				 */
+				if (includeSequenceDefaults ||
+					!contain_nextval_expression_walker(defaultNode, NULL))
+				{
+					defaultContext = deparse_context_for(relationName, tableRelationId);
 
-				appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+					/* deparse default value string */
+					defaultString = deparse_expression(defaultNode, defaultContext,
+													   false, false);
+
+					appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+				}
 			}
 
 			/* if this column has a not null constraint, append the constraint */
@@ -860,4 +874,29 @@ convert_aclright_to_string(int aclright)
 			return NULL;
 	}
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * contain_nextval_expression_walker walks over expression tree and returns
+ * true if it contains call to 'nextval' function.
+ */
+static bool
+contain_nextval_expression_walker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, FuncExpr))
+	{
+		FuncExpr *funcExpr = (FuncExpr *) node;
+
+		if (funcExpr->funcid == F_NEXTVAL_OID)
+		{
+			return true;
+		}
+	}
+	return expression_tree_walker(node, contain_nextval_expression_walker, context);
 }

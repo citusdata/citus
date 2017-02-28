@@ -385,6 +385,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	List *dropCommandList = NIL;
 	List *recreateCommandList = NIL;
 	char relationKind = get_rel_relkind(relationId);
+	bool includeSequenceDefaults = false;
 
 	/* build appropriate DROP command based on relation kind */
 	if (relationKind == RELKIND_RELATION)
@@ -405,7 +406,7 @@ RecreateTableDDLCommandList(Oid relationId)
 
 	dropCommandList = list_make1(dropCommand->data);
 
-	createCommandList = GetTableDDLEvents(relationId);
+	createCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 
 	recreateCommandList = list_concat(dropCommandList, createCommandList);
 
