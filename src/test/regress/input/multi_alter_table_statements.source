@@ -369,6 +369,18 @@ SELECT  indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alter_%';
 \c - - - :master_port
 
+-- verify alter table and drop sequence in the same transaction does not cause deadlock
+CREATE TABLE sequence_deadlock_test (a serial, b serial);
+SELECT create_distributed_table('sequence_deadlock_test', 'a');
+
+BEGIN;
+ALTER TABLE sequence_deadlock_test ADD COLUMN c int;
+DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
+END;
+
+DROP TABLE sequence_deadlock_test;
+
+
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
 CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';
