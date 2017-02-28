@@ -14,6 +14,7 @@
 
 
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_cache.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
@@ -50,11 +51,23 @@ typedef struct NodeAddress
 /* CopyDestReceiver can be used to stream results into a distributed table */
 typedef struct CitusCopyDestReceiver
 {
+	/* public DestReceiver interface */
 	DestReceiver pub;
 
 	/* relation and columns to which to copy */
 	Oid distributedRelationId;
 	List *columnNameList;
+	int partitionColumnIndex;
+
+	/* distributed table metadata */
+	DistTableCacheEntry *tableMetadata;
+	bool useBinarySearch;
+
+	/* open relation handle */
+	Relation distributedRelation;
+
+	/* descriptor of the tuples that are sent to the worker */
+	TupleDesc tupleDescriptor;
 
 	/* EState for per-tuple memory allocation */
 	EState *executorState;
@@ -62,26 +75,11 @@ typedef struct CitusCopyDestReceiver
 	/* MemoryContext for DestReceiver session */
 	MemoryContext memoryContext;
 
-	/* distributed relation details */
-	Relation distributedRelation;
-	char partitionMethod;
-	int partitionColumnIndex;
-
-	/* descriptor of the tuples that are sent to the worker */
-	TupleDesc tupleDescriptor;
-
 	/* template for COPY statement to send to workers */
 	CopyStmt *copyStatement;
 
 	/* cached shard metadata for pruning */
-	int shardCount;
-	ShardInterval **shardIntervalCache;
-	bool useBinarySearch;
-	FmgrInfo *hashFunction;
-	FmgrInfo *compareFunction;
-
-	/* cached shard metadata for pruning */
-	HTAB *copyConnectionHash;
+	HTAB *shardConnectionHash;
 	bool stopOnFailure;
 
 	/* state on how to copy out data types */
