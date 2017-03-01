@@ -764,6 +764,22 @@ SELECT  indexname, tablename FROM pg_indexes WHERE tablename like 'lineitem_alte
 (0 rows)
 
 \c - - - :master_port
+-- verify alter table and drop sequence in the same transaction does not cause deadlock
+CREATE TABLE sequence_deadlock_test (a serial, b serial);
+SELECT create_distributed_table('sequence_deadlock_test', 'a');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+BEGIN;
+ALTER TABLE sequence_deadlock_test ADD COLUMN c int;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
+NOTICE:  drop cascades to default for table sequence_deadlock_test column b
+END;
+DROP TABLE sequence_deadlock_test;
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
 CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';

@@ -209,6 +209,7 @@ MetadataCreateCommands(void)
 	List *workerNodeList = WorkerNodeList();
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
+	bool includeSequenceDefaults = true;
 
 	/* generate insert command for pg_dist_node table */
 	nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
@@ -234,7 +235,7 @@ MetadataCreateCommands(void)
 		Oid relationId = cacheEntry->relationId;
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		List *ddlCommandList = GetTableDDLEvents(relationId);
+		List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -312,13 +313,14 @@ GetDistributedTableDDLEvents(Oid relationId)
 	char *tableOwnerResetCommand = NULL;
 	char *metadataCommand = NULL;
 	char *truncateTriggerCreateCommand = NULL;
+	bool includeSequenceDefaults = true;
 
 	/* commands to create sequences */
 	sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 	commandList = list_concat(commandList, sequenceDDLCommands);
 
 	/* commands to create the table */
-	tableDDLCommands = GetTableDDLEvents(relationId);
+	tableDDLCommands = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	commandList = list_concat(commandList, tableDDLCommands);
 
 	/* command to reset the table owner */

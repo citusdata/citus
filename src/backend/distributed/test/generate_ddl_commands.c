@@ -43,7 +43,8 @@ table_ddl_command_array(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
 	ArrayType *ddlCommandArrayType = NULL;
-	List *ddlCommandList = GetTableDDLEvents(distributedTableId);
+	bool includeSequenceDefaults = true;
+	List *ddlCommandList = GetTableDDLEvents(distributedTableId, includeSequenceDefaults);
 	int ddlCommandCount = list_length(ddlCommandList);
 	Datum *ddlCommandDatumArray = palloc0(ddlCommandCount * sizeof(Datum));
 
