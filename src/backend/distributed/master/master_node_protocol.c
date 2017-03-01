@@ -206,6 +206,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	{
 		text *relationName = PG_GETARG_TEXT_P(0);
 		Oid relationId = ResolveRelationId(relationName);
+		bool includeSequenceDefaults = true;
 
 		MemoryContext oldContext = NULL;
 		List *tableDDLEventList = NIL;
@@ -217,7 +218,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 
 		/* allocate DDL statements, and then save position in DDL statements */
-		tableDDLEventList = GetTableDDLEvents(relationId);
+		tableDDLEventList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
 
 		functionContext->user_fctx = tableDDLEventCell;
@@ -628,13 +629,16 @@ ResolveRelationId(text *relationName)
 
 
 /*
- * GetTableDDLEvents takes in a relationId, and returns the list of DDL commands
- * needed to reconstruct the relation. These DDL commands are all palloced; and
- * include the table's schema definition, optional column storage and statistics
- * definitions, and index and constraint definitions.
+ * GetTableDDLEvents takes in a relationId, includeSequenceDefaults flag,
+ * and returns the list of DDL commands needed to reconstruct the relation.
+ * When the flag includeSequenceDefaults is set, the function also creates
+ * DEFAULT clauses for columns getting their default values from a sequence.
+ * These DDL commands are all palloced; and include the table's schema
+ * definition, optional column storage and statistics definitions, and index
+ * and constraint definitions.
  */
 List *
-GetTableDDLEvents(Oid relationId)
+GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 	char tableType = 0;
@@ -693,7 +697,7 @@ GetTableDDLEvents(Oid relationId)
 	}
 
 	/* fetch table schema and column option definitions */
-	tableSchemaDef = pg_get_tableschemadef_string(relationId);
+	tableSchemaDef = pg_get_tableschemadef_string(relationId, includeSequenceDefaults);
 	tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
 
 	tableDDLEventList = lappend(tableDDLEventList, tableSchemaDef);

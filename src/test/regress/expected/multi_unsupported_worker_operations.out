@@ -401,11 +401,7 @@ BEGIN;
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
 
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-NOTICE:  drop cascades to 4 other objects
-DETAIL:  drop cascades to default for table mx_table_1270000 column col_3
-drop cascades to default for table mx_table_1270002 column col_3
-drop cascades to default for table mx_table_1270004 column col_3
-drop cascades to default for table mx_table column col_3
+NOTICE:  drop cascades to default for table mx_table column col_3
 \d mx_table
    Table "public.mx_table"
  Column |  Type   | Modifiers 

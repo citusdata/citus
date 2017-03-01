@@ -100,7 +100,7 @@ extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName);
-extern List * GetTableDDLEvents(Oid relationId);
+extern List * GetTableDDLEvents(Oid relationId, bool forShardCreation);
 extern List * GetTableForeignConstraintCommands(Oid relationId);
 extern char ShardStorageType(Oid relationId);
 extern void CheckDistributedTable(Oid relationId);

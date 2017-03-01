@@ -97,6 +97,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	uint64 hashTokenIncrement = 0;
 	List *existingShardList = NIL;
 	int64 shardIndex = 0;
+	bool includeSequenceDefaults = false;
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 
 	/* make sure table is hash partitioned */
@@ -165,7 +166,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	HOLD_INTERRUPTS();
 
 	/* retrieve the DDL commands for the table */
-	ddlCommandList = GetTableDDLEvents(distributedTableId);
+	ddlCommandList = GetTableDDLEvents(distributedTableId, includeSequenceDefaults);
 
 	workerNodeCount = list_length(workerNodeList);
 	if (replicationFactor > workerNodeCount)
@@ -247,6 +248,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	List *targetTableDDLEvents = NIL;
 	List *targetTableForeignConstraintCommands = NIL;
 	ListCell *sourceShardCell = NULL;
+	bool includeSequenceDefaults = false;
 
 	/* make sure that tables are hash partitioned */
 	CheckHashPartitionedTable(targetRelationId);
@@ -281,7 +283,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	}
 
 	targetTableRelationOwner = TableOwner(targetRelationId);
-	targetTableDDLEvents = GetTableDDLEvents(targetRelationId);
+	targetTableDDLEvents = GetTableDDLEvents(targetRelationId, includeSequenceDefaults);
 	targetTableForeignConstraintCommands = GetTableForeignConstraintCommands(
 		targetRelationId);
 	targetShardStorageType = ShardStorageType(targetRelationId);
@@ -355,6 +357,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	int replicationFactor = 0;
 	text *shardMinValue = NULL;
 	text *shardMaxValue = NULL;
+	bool includeSequenceDefaults = false;
 
 	/*
 	 * In contrast to append/range partitioned tables it makes more sense to
@@ -390,7 +393,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	shardId = GetNextShardId();
 
 	/* retrieve the DDL commands for the table */
-	ddlCommandList = GetTableDDLEvents(distributedTableId);
+	ddlCommandList = GetTableDDLEvents(distributedTableId, includeSequenceDefaults);
 
 	/* set the replication factor equal to the number of worker nodes */
 	workerNodeCount = list_length(workerNodeList);
