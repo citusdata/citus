@@ -150,7 +150,7 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_initialize_node_metadata is run once, when upgrading citus. It injests the
+ * master_initialize_node_metadata is run once, when upgrading citus. It ingests the
  * existing pg_worker_list.conf into pg_dist_node, then adds a header to the file stating
  * that it's no longer used.
  */
