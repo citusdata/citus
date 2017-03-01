@@ -46,12 +46,20 @@ Citus Cloud runs on top of AWS as a fully managed database as a service and has 
 
 If you're looking to get started locally, you can follow the following steps to get up and running.
 
-* Install docker-compose: [Mac][mac_install] | [Linux][linux_install]
-* (Mac only) connect to Docker VM
-  ```bash
-  eval $(docker-machine env default)
-  ```
+* Install Docker Engine and docker-compose
+  * Mac:
+    1. Install the [Docker Platform](https://www.docker.com/products/overview#/install_the_platform).
+    2. Start Docker by clicking on the application’s icon.
+  * Linux:
+    ```bash
+    curl -sSL https://get.docker.com/ | sudo bash
+    sudo usermod -aG docker $USER && newgrp docker
+    sudo systemctl start docker
 
+    sudo curl -L https://github.com/docker/compose/releases/download/1.11.1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+    ```
+    (This docker-compose version is fine for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).)
 * Pull and start the docker images
   ```bash
   wget https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
@@ -60,7 +68,7 @@ If you're looking to get started locally, you can follow the following steps to 
 
 * Connect to the master database
   ```bash
-  docker exec -it citus_master psql -U postgres -d postgres
+  docker exec -it citus_master psql -U postgres
   ```
 
 * Follow the [first tutorial][tutorial] instructions
@@ -142,6 +150,4 @@ ___
 Copyright © 2012–2017 Citus Data, Inc.
 
 [faq]: https://www.citusdata.com/frequently-asked-questions
-[linux_install]: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-compose-on-ubuntu-14-04
-[mac_install]: https://www.docker.com/products/docker-toolbox
 [tutorial]: https://docs.citusdata.com/en/v6.1/tutorials/tut-hash-distribution.html
