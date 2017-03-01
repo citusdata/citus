@@ -68,6 +68,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "executor/executor.h"
+#include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -126,6 +127,19 @@ static void CopySendInt32(CopyOutState outputState, int32 val);
 static void CopySendInt16(CopyOutState outputState, int16 val);
 static void CopyAttributeOutText(CopyOutState outputState, char *string);
 static inline void CopyFlushOutput(CopyOutState outputState, char *start, char *pointer);
+
+/* CitusCopyDestReceiver functions */
+static void CitusCopyDestReceiverStartup(DestReceiver *copyDest, int operation,
+										 TupleDesc inputTupleDesc);
+#if PG_VERSION_NUM >= 90600
+static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
+										 DestReceiver *copyDest);
+#else
+static void CitusCopyDestReceiverReceive(TupleTableSlot *slot,
+										 DestReceiver *copyDest);
+#endif
+static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
+static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
 
 
 /*
@@ -273,48 +287,30 @@ static void
 CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 {
 	Oid tableId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
-	char *relationName = get_rel_name(tableId);
+
+	CitusCopyDestReceiver *copyDest = NULL;
+	DestReceiver *dest = NULL;
+
 	Relation distributedRelation = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	uint32 columnCount = 0;
 	Datum *columnValues = NULL;
 	bool *columnNulls = NULL;
-	FmgrInfo *hashFunction = NULL;
-	FmgrInfo *compareFunction = NULL;
-	bool hasUniformHashDistribution = false;
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
-	const char *delimiterCharacter = "\t";
-	const char *nullPrintCharacter = "\\N";
-
-	int shardCount = 0;
-	List *shardIntervalList = NULL;
-	ShardInterval **shardIntervalCache = NULL;
-	bool useBinarySearch = false;
-
-	HTAB *shardConnectionHash = NULL;
-	ShardConnections *shardConnections = NULL;
-	List *shardConnectionsList = NIL;
-	ListCell *shardConnectionsCell = NULL;
+	int columnIndex = 0;
+	List *columnNameList = NIL;
+	TupleTableSlot *tupleTableSlot = NULL;
 
 	EState *executorState = NULL;
 	MemoryContext executorTupleContext = NULL;
 	ExprContext *executorExpressionContext = NULL;
 
+	char partitionMethod = 0;
+	bool stopOnFailure = false;
+
 	CopyState copyState = NULL;
-	CopyOutState copyOutState = NULL;
-	FmgrInfo *columnOutputFunctions = NULL;
 	uint64 processedRowCount = 0;
 
-	Var *partitionColumn = PartitionColumn(tableId, 0);
-	char partitionMethod = PartitionMethod(tableId);
-
 	ErrorContextCallback errorCallback;
-
-	/* get hash function for partition column */
-	hashFunction = cacheEntry->hashFunction;
-
-	/* get compare function for shard intervals */
-	compareFunction = cacheEntry->shardIntervalCompareFunction;
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -323,64 +319,40 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	columnValues = palloc0(columnCount * sizeof(Datum));
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
-	/* we don't support copy to reference tables from workers */
+	/* set up a virtual tuple table slot */
+	tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor);
+	tupleTableSlot->tts_nvalid = columnCount;
+	tupleTableSlot->tts_values = columnValues;
+	tupleTableSlot->tts_isnull = columnNulls;
+
+	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		char *columnName = NameStr(currentColumn->attname);
+
+		if (currentColumn->attisdropped)
+		{
+			continue;
+		}
+
+		columnNameList = lappend(columnNameList, columnName);
+	}
+
+	executorState = CreateExecutorState();
+	executorTupleContext = GetPerTupleMemoryContext(executorState);
+	executorExpressionContext = GetPerTupleExprContext(executorState);
+
+	partitionMethod = PartitionMethod(tableId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		EnsureCoordinator();
+		stopOnFailure = true;
 	}
 
-	/* load the list of shards and verify that we have shards to copy into */
-	shardIntervalList = LoadShardIntervalList(tableId);
-	if (shardIntervalList == NIL)
-	{
-		if (partitionMethod == DISTRIBUTE_BY_HASH)
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("could not find any shards into which to copy"),
-							errdetail("No shards exist for distributed table \"%s\".",
-									  relationName),
-							errhint("Run master_create_worker_shards to create shards "
-									"and try again.")));
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("could not find any shards into which to copy"),
-							errdetail("No shards exist for distributed table \"%s\".",
-									  relationName)));
-		}
-	}
-
-	/* error if any shard missing min/max values for non reference tables */
-	if (partitionMethod != DISTRIBUTE_BY_NONE &&
-		cacheEntry->hasUninitializedShardInterval)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("could not start copy"),
-						errdetail("Distributed relation \"%s\" has shards "
-								  "with missing shardminvalue/shardmaxvalue.",
-								  relationName)));
-	}
-
-	/* prevent concurrent placement changes and non-commutative DML statements */
-	LockShardListMetadata(shardIntervalList, ShareLock);
-	LockShardListResources(shardIntervalList, ShareLock);
-
-	/* initialize the shard interval cache */
-	shardCount = cacheEntry->shardIntervalArrayLength;
-	shardIntervalCache = cacheEntry->sortedShardIntervalArray;
-	hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
-
-	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
-	{
-		useBinarySearch = true;
-	}
-
-	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
-	{
-		CoordinatedTransactionUse2PC();
-	}
+	/* set up the destination for the COPY */
+	copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList, executorState,
+										   stopOnFailure);
+	dest = (DestReceiver *) copyDest;
+	dest->rStartup(dest, 0, tupleDescriptor);
 
 	/* initialize copy state to read from COPY data source */
 	copyState = BeginCopyFrom(distributedRelation,
@@ -388,23 +360,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 							  copyStatement->is_program,
 							  copyStatement->attlist,
 							  copyStatement->options);
-
-	executorState = CreateExecutorState();
-	executorTupleContext = GetPerTupleMemoryContext(executorState);
-	executorExpressionContext = GetPerTupleExprContext(executorState);
-
-	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
-	copyOutState->delim = (char *) delimiterCharacter;
-	copyOutState->null_print = (char *) nullPrintCharacter;
-	copyOutState->null_print_client = (char *) nullPrintCharacter;
-	copyOutState->binary = CanUseBinaryCopyFormat(tupleDescriptor, copyOutState);
-	copyOutState->fe_msgbuf = makeStringInfo();
-	copyOutState->rowcontext = executorTupleContext;
-
-	columnOutputFunctions = ColumnOutputFunctions(tupleDescriptor, copyOutState->binary);
-
-	/* create a mapping of shard id to a connection for each of its placements */
-	shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -415,10 +370,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	while (true)
 	{
 		bool nextRowFound = false;
-		Datum partitionColumnValue = 0;
-		ShardInterval *shardInterval = NULL;
-		int64 shardId = 0;
-		bool shardConnectionsFound = false;
 		MemoryContext oldContext = NULL;
 
 		ResetPerTupleExprContext(executorState);
@@ -437,103 +388,23 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 
 		CHECK_FOR_INTERRUPTS();
 
-		/*
-		 * Find the partition column value and corresponding shard interval
-		 * for non-reference tables.
-		 * Get the existing (and only a single) shard interval for the reference
-		 * tables. Note that, reference tables has NULL partition column values so
-		 * skip the check.
-		 */
-		if (partitionColumn != NULL)
-		{
-			if (columnNulls[partitionColumn->varattno - 1])
-			{
-				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-								errmsg("cannot copy row with NULL value "
-									   "in partition column")));
-			}
-
-			partitionColumnValue = columnValues[partitionColumn->varattno - 1];
-		}
-
-		/*
-		 * Find the shard interval and id for the partition column value for
-		 * non-reference tables.
-		 * For reference table, this function blindly returns the tables single
-		 * shard.
-		 */
-		shardInterval = FindShardInterval(partitionColumnValue,
-										  shardIntervalCache,
-										  shardCount, partitionMethod,
-										  compareFunction, hashFunction,
-										  useBinarySearch);
-
-		if (shardInterval == NULL)
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("could not find shard for partition column "
-								   "value")));
-		}
-
-		shardId = shardInterval->shardId;
-
 		MemoryContextSwitchTo(oldContext);
 
-		/* get existing connections to the shard placements, if any */
-		shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
-												   &shardConnectionsFound);
-		if (!shardConnectionsFound)
-		{
-			bool stopOnFailure = false;
-
-			if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
-			{
-				stopOnFailure = true;
-			}
-
-			/* open connections and initiate COPY on shard placements */
-			OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
-								copyOutState->binary);
-
-			/* send copy binary headers to shard placements */
-			if (copyOutState->binary)
-			{
-				SendCopyBinaryHeaders(copyOutState, shardId,
-									  shardConnections->connectionList);
-			}
-		}
-
-		/* replicate row to shard placements */
-		resetStringInfo(copyOutState->fe_msgbuf);
-		AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
-						  copyOutState, columnOutputFunctions);
-		SendCopyDataToAll(copyOutState->fe_msgbuf, shardId,
-						  shardConnections->connectionList);
+		dest->receiveSlot(tupleTableSlot, dest);
 
 		processedRowCount += 1;
 	}
 
+	EndCopyFrom(copyState);
+
 	/* all lines have been copied, stop showing line number in errors */
 	error_context_stack = errorCallback.previous;
 
-	shardConnectionsList = ShardConnectionList(shardConnectionHash);
-	foreach(shardConnectionsCell, shardConnectionsList)
-	{
-		ShardConnections *shardConnections = (ShardConnections *) lfirst(
-			shardConnectionsCell);
+	/* finish the COPY commands */
+	dest->rShutdown(dest);
 
-		/* send copy binary footers to all shard placements */
-		if (copyOutState->binary)
-		{
-			SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
-								  shardConnections->connectionList);
-		}
-
-		/* close the COPY input on all shard placements */
-		EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList, true);
-	}
-
-	EndCopyFrom(copyState);
+	ExecDropSingleTupleTableSlot(tupleTableSlot);
+	FreeExecutorState(executorState);
 	heap_close(distributedRelation, NoLock);
 
 	/* mark failed placements as inactive */
@@ -603,6 +474,13 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 	errorCallback.callback = CopyFromErrorCallback;
 	errorCallback.arg = (void *) copyState;
 	errorCallback.previous = error_context_stack;
+
+	/*
+	 * From here on we use copyStatement as the template for the command
+	 * that we send to workers. This command does not have an attribute
+	 * list since NextCopyFrom will generate a value for all columns.
+	 */
+	copyStatement->attlist = NIL;
 
 	while (true)
 	{
@@ -1074,22 +952,46 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
 
 	char *shardName = pstrdup(relationName);
 	char *shardQualifiedName = NULL;
-	const char *copyFormat = NULL;
 
 	AppendShardIdToName(&shardName, shardId);
 
 	shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
 
+	appendStringInfo(command, "COPY %s ", shardQualifiedName);
+
+	if (copyStatement->attlist != NIL)
+	{
+		ListCell *columnNameCell = NULL;
+		bool appendedFirstName = false;
+
+		foreach(columnNameCell, copyStatement->attlist)
+		{
+			char *columnName = (char *) lfirst(columnNameCell);
+
+			if (!appendedFirstName)
+			{
+				appendStringInfo(command, "(%s", columnName);
+				appendedFirstName = true;
+			}
+			else
+			{
+				appendStringInfo(command, ", %s", columnName);
+			}
+		}
+
+		appendStringInfoString(command, ") ");
+	}
+
+	appendStringInfo(command, "FROM STDIN WITH ");
+
 	if (useBinaryCopyFormat)
 	{
-		copyFormat = "BINARY";
+		appendStringInfoString(command, "(FORMAT BINARY)");
 	}
 	else
 	{
-		copyFormat = "TEXT";
+		appendStringInfoString(command, "(FORMAT TEXT)");
 	}
-	appendStringInfo(command, "COPY %s FROM STDIN WITH (FORMAT %s)", shardQualifiedName,
-					 copyFormat);
 
 	return command;
 }
@@ -1277,7 +1179,6 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	{
 		CopySendInt16(rowOutputState, availableColumnCount);
 	}
-
 	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
 		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
@@ -1693,4 +1594,380 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
 	{
 		CopySendData(cstate, start, pointer - start);
 	}
+}
+
+
+/*
+ * CreateCitusCopyDestReceiver creates a DestReceiver that copies into
+ * a distributed table.
+ */
+CitusCopyDestReceiver *
+CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, EState *executorState,
+							bool stopOnFailure)
+{
+	CitusCopyDestReceiver *copyDest = NULL;
+
+	copyDest = (CitusCopyDestReceiver *) palloc0(sizeof(CitusCopyDestReceiver));
+
+	/* set up the DestReceiver function pointers */
+	copyDest->pub.receiveSlot = CitusCopyDestReceiverReceive;
+	copyDest->pub.rStartup = CitusCopyDestReceiverStartup;
+	copyDest->pub.rShutdown = CitusCopyDestReceiverShutdown;
+	copyDest->pub.rDestroy = CitusCopyDestReceiverDestroy;
+	copyDest->pub.mydest = DestCopyOut;
+
+	/* set up output parameters */
+	copyDest->distributedRelationId = tableId;
+	copyDest->columnNameList = columnNameList;
+	copyDest->executorState = executorState;
+	copyDest->stopOnFailure = stopOnFailure;
+	copyDest->memoryContext = CurrentMemoryContext;
+
+	return copyDest;
+}
+
+
+/*
+ * CitusCopyDestReceiverStartup implements the rStartup interface of
+ * CitusCopyDestReceiver. It opens the relation
+ */
+static void
+CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
+							 TupleDesc inputTupleDescriptor)
+{
+	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) dest;
+
+	Oid tableId = copyDest->distributedRelationId;
+
+	char *relationName = get_rel_name(tableId);
+	Oid schemaOid = get_rel_namespace(tableId);
+	char *schemaName = get_namespace_name(schemaOid);
+
+	Relation distributedRelation = NULL;
+	int columnIndex = 0;
+	List *columnNameList = copyDest->columnNameList;
+
+	ListCell *columnNameCell = NULL;
+
+	char partitionMethod = '\0';
+	Var *partitionColumn = PartitionColumn(tableId, 0);
+	int partitionColumnIndex = -1;
+	DistTableCacheEntry *cacheEntry = NULL;
+
+	CopyStmt *copyStatement = NULL;
+
+	List *shardIntervalList = NULL;
+
+	CopyOutState copyOutState = NULL;
+	const char *delimiterCharacter = "\t";
+	const char *nullPrintCharacter = "\\N";
+
+	/* look up table properties */
+	distributedRelation = heap_open(tableId, RowExclusiveLock);
+	cacheEntry = DistributedTableCacheEntry(tableId);
+	partitionMethod = cacheEntry->partitionMethod;
+
+	copyDest->distributedRelation = distributedRelation;
+	copyDest->tupleDescriptor = inputTupleDescriptor;
+
+	/* we don't support copy to reference tables from workers */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		EnsureCoordinator();
+	}
+
+	/* load the list of shards and verify that we have shards to copy into */
+	shardIntervalList = LoadShardIntervalList(tableId);
+	if (shardIntervalList == NIL)
+	{
+		if (partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("could not find any shards into which to copy"),
+							errdetail("No shards exist for distributed table \"%s\".",
+									  relationName),
+							errhint("Run master_create_worker_shards to create shards "
+									"and try again.")));
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("could not find any shards into which to copy"),
+							errdetail("No shards exist for distributed table \"%s\".",
+									  relationName)));
+		}
+	}
+
+	/* error if any shard missing min/max values */
+	if (partitionMethod != DISTRIBUTE_BY_NONE &&
+		cacheEntry->hasUninitializedShardInterval)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("could not start copy"),
+						errdetail("Distributed relation \"%s\" has shards "
+								  "with missing shardminvalue/shardmaxvalue.",
+								  relationName)));
+	}
+
+	/* prevent concurrent placement changes and non-commutative DML statements */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+	LockShardListResources(shardIntervalList, ShareLock);
+
+	/* keep the table metadata to avoid looking it up for every tuple */
+	copyDest->tableMetadata = cacheEntry;
+
+	/* determine whether to use binary search */
+	if (partitionMethod != DISTRIBUTE_BY_HASH || !cacheEntry->hasUniformHashDistribution)
+	{
+		copyDest->useBinarySearch = true;
+	}
+
+	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
+
+	/* define how tuples will be serialised */
+	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	copyOutState->delim = (char *) delimiterCharacter;
+	copyOutState->null_print = (char *) nullPrintCharacter;
+	copyOutState->null_print_client = (char *) nullPrintCharacter;
+	copyOutState->binary = CanUseBinaryCopyFormat(inputTupleDescriptor, copyOutState);
+	copyOutState->fe_msgbuf = makeStringInfo();
+	copyOutState->rowcontext = GetPerTupleMemoryContext(copyDest->executorState);
+	copyDest->copyOutState = copyOutState;
+
+	/* prepare output functions */
+	copyDest->columnOutputFunctions =
+		ColumnOutputFunctions(inputTupleDescriptor, copyOutState->binary);
+
+	/* find the partition column index in the column list */
+	foreach(columnNameCell, columnNameList)
+	{
+		char *columnName = (char *) lfirst(columnNameCell);
+
+		/* load the column information from pg_attribute */
+		AttrNumber attrNumber = get_attnum(tableId, columnName);
+
+		/* check whether this is the partition column */
+		if (partitionColumn != NULL && attrNumber == partitionColumn->varattno)
+		{
+			Assert(partitionColumnIndex == -1);
+
+			partitionColumnIndex = columnIndex;
+		}
+
+		columnIndex++;
+	}
+
+	if (partitionMethod != DISTRIBUTE_BY_NONE && partitionColumnIndex == -1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						errmsg("the partition column of table %s should have a value",
+							   quote_qualified_identifier(schemaName, relationName))));
+	}
+
+	copyDest->partitionColumnIndex = partitionColumnIndex;
+
+	/* define the template for the COPY statement that is sent to workers */
+	copyStatement = makeNode(CopyStmt);
+	copyStatement->relation = makeRangeVar(schemaName, relationName, -1);
+	copyStatement->query = NULL;
+	copyStatement->attlist = columnNameList;
+	copyStatement->is_from = true;
+	copyStatement->is_program = false;
+	copyStatement->filename = NULL;
+	copyStatement->options = NIL;
+	copyDest->copyStatement = copyStatement;
+
+	copyDest->shardConnectionHash = CreateShardConnectionHash(TopTransactionContext);
+}
+
+
+/*
+ * CitusCopyDestReceiverReceive implements the receiveSlot function of
+ * CitusCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
+ * the appropriate shard placement(s).
+ */
+#if PG_VERSION_NUM >= 90600
+static bool
+#else
+static void
+#endif
+CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
+{
+	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) dest;
+
+	DistTableCacheEntry *tableMetadata = copyDest->tableMetadata;
+	char partitionMethod = tableMetadata->partitionMethod;
+	int partitionColumnIndex = copyDest->partitionColumnIndex;
+	TupleDesc tupleDescriptor = copyDest->tupleDescriptor;
+	CopyStmt *copyStatement = copyDest->copyStatement;
+
+	int shardCount = tableMetadata->shardIntervalArrayLength;
+	ShardInterval **shardIntervalCache = tableMetadata->sortedShardIntervalArray;
+
+	bool useBinarySearch = copyDest->useBinarySearch;
+	FmgrInfo *hashFunction = tableMetadata->hashFunction;
+	FmgrInfo *compareFunction = tableMetadata->shardIntervalCompareFunction;
+
+	HTAB *shardConnectionHash = copyDest->shardConnectionHash;
+	CopyOutState copyOutState = copyDest->copyOutState;
+	FmgrInfo *columnOutputFunctions = copyDest->columnOutputFunctions;
+
+	bool stopOnFailure = copyDest->stopOnFailure;
+
+	Datum *columnValues = NULL;
+	bool *columnNulls = NULL;
+
+	Datum partitionColumnValue = 0;
+	ShardInterval *shardInterval = NULL;
+	int64 shardId = 0;
+
+	bool shardConnectionsFound = false;
+	ShardConnections *shardConnections = NULL;
+
+	EState *executorState = copyDest->executorState;
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+	slot_getallattrs(slot);
+
+	columnValues = slot->tts_values;
+	columnNulls = slot->tts_isnull;
+
+	/*
+	 * Find the partition column value and corresponding shard interval
+	 * for non-reference tables.
+	 * Get the existing (and only a single) shard interval for the reference
+	 * tables. Note that, reference tables has NULL partition column values so
+	 * skip the check.
+	 */
+	if (partitionColumnIndex >= 0)
+	{
+		if (columnNulls[partitionColumnIndex])
+		{
+			Oid relationId = copyDest->distributedRelationId;
+			char *relationName = get_rel_name(relationId);
+			Oid schemaOid = get_rel_namespace(relationId);
+			char *schemaName = get_namespace_name(schemaOid);
+			char *qualifiedTableName = quote_qualified_identifier(schemaName,
+																  relationName);
+
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+							errmsg("the partition column of table %s should have a value",
+								   qualifiedTableName)));
+		}
+
+		/* find the partition column value */
+		partitionColumnValue = columnValues[partitionColumnIndex];
+	}
+
+	/*
+	 * Find the shard interval and id for the partition column value for
+	 * non-reference tables.
+	 *
+	 * For reference table, this function blindly returns the tables single
+	 * shard.
+	 */
+	shardInterval = FindShardInterval(partitionColumnValue, shardIntervalCache,
+									  shardCount, partitionMethod,
+									  compareFunction, hashFunction,
+									  useBinarySearch);
+	if (shardInterval == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("could not find shard for partition column "
+							   "value")));
+	}
+
+	shardId = shardInterval->shardId;
+
+	/* connections hash is kept in memory context */
+	MemoryContextSwitchTo(copyDest->memoryContext);
+
+	/* get existing connections to the shard placements, if any */
+	shardConnections = GetShardHashConnections(shardConnectionHash, shardId,
+											   &shardConnectionsFound);
+	if (!shardConnectionsFound)
+	{
+		/* open connections and initiate COPY on shard placements */
+		OpenCopyConnections(copyStatement, shardConnections, stopOnFailure,
+							copyOutState->binary);
+
+		/* send copy binary headers to shard placements */
+		if (copyOutState->binary)
+		{
+			SendCopyBinaryHeaders(copyOutState, shardId,
+								  shardConnections->connectionList);
+		}
+	}
+
+	/* replicate row to shard placements */
+	resetStringInfo(copyOutState->fe_msgbuf);
+	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+					  copyOutState, columnOutputFunctions);
+	SendCopyDataToAll(copyOutState->fe_msgbuf, shardId, shardConnections->connectionList);
+
+	MemoryContextSwitchTo(oldContext);
+
+#if PG_VERSION_NUM >= 90600
+	return true;
+#endif
+}
+
+
+/*
+ * CitusCopyDestReceiverShutdown implements the rShutdown interface of
+ * CitusCopyDestReceiver. It ends the COPY on all the open connections and closes
+ * the relation.
+ */
+static void
+CitusCopyDestReceiverShutdown(DestReceiver *destReceiver)
+{
+	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) destReceiver;
+
+	HTAB *shardConnectionHash = copyDest->shardConnectionHash;
+	List *shardConnectionsList = NIL;
+	ListCell *shardConnectionsCell = NULL;
+	CopyOutState copyOutState = copyDest->copyOutState;
+	Relation distributedRelation = copyDest->distributedRelation;
+
+	shardConnectionsList = ShardConnectionList(shardConnectionHash);
+	foreach(shardConnectionsCell, shardConnectionsList)
+	{
+		ShardConnections *shardConnections = (ShardConnections *) lfirst(
+			shardConnectionsCell);
+
+		/* send copy binary footers to all shard placements */
+		if (copyOutState->binary)
+		{
+			SendCopyBinaryFooters(copyOutState, shardConnections->shardId,
+								  shardConnections->connectionList);
+		}
+
+		/* close the COPY input on all shard placements */
+		EndRemoteCopy(shardConnections->shardId, shardConnections->connectionList, true);
+	}
+
+	heap_close(distributedRelation, NoLock);
+}
+
+
+static void
+CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
+{
+	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) destReceiver;
+
+	if (copyDest->copyOutState)
+	{
+		pfree(copyDest->copyOutState);
+	}
+
+	if (copyDest->columnOutputFunctions)
+	{
+		pfree(copyDest->columnOutputFunctions);
+	}
+
+	pfree(copyDest);
 }

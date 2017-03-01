@@ -2,15 +2,10 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1250000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250000;
 CREATE TABLE reference_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 -- insert some data, and make sure that cannot be create_distributed_table
-INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-05');
--- should error out given that there exists data
+INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
+-- create the reference table
 SELECT create_reference_table('reference_table_test');
-ERROR:  cannot distribute relation "reference_table_test"
-DETAIL:  Relation "reference_table_test" contains data.
-HINT:  Empty your table before distributing it.
-TRUNCATE reference_table_test;
--- now should be able to create the reference table
-SELECT create_reference_table('reference_table_test');
+NOTICE:  Copying data from local table...
  create_reference_table 
 ------------------------
  
@@ -52,8 +47,14 @@ WHERE
  1250000 |          1 | localhost |    57638
 (2 rows)
 
+-- check whether data was copied into distributed table
+SELECT * FROM reference_table_test;
+ value_1 | value_2 | value_3 |         value_4          
+---------+---------+---------+--------------------------
+       1 |       1 | 1       | Thu Dec 01 00:00:00 2016
+(1 row)
+
 -- now, execute some modification queries
-INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 INSERT INTO reference_table_test VALUES (3, 3.0, '3', '2016-12-03');
 INSERT INTO reference_table_test VALUES (4, 4.0, '4', '2016-12-04');
