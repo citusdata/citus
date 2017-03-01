@@ -9,6 +9,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include "access/genam.h"
 #include "access/hash.h"
@@ -39,11 +40,14 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "executor/executor.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
 #include "nodes/nodeFuncs.h"
@@ -52,10 +56,14 @@
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
 #include "parser/parser.h"
+#include "tcop/pquery.h"
+#include "tcop/tcopprot.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/inval.h"
 
@@ -65,10 +73,10 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 
 
 /* local function forward declarations */
-static void CreateReferenceTable(Oid relationId);
+static void CreateReferenceTable(Oid distributedRelationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 									  char distributionMethod, char replicationModel,
-									  uint32 colocationId);
+									  uint32 colocationId, bool requireEmpty);
 static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -83,6 +91,8 @@ static void CreateHashDistributedTable(Oid relationId, char *distributionColumnN
 									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
+static void CopyLocalDataIntoShards(Oid relationId);
+static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -106,6 +116,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
+	bool requireEmpty = true;
 
 	EnsureCoordinator();
 
@@ -121,7 +132,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-							  INVALID_COLOCATION_ID);
+							  INVALID_COLOCATION_ID, requireEmpty);
 
 	PG_RETURN_VOID();
 }
@@ -177,6 +188,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
+		bool requireEmpty = true;
+
 		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
 		{
 			ereport(NOTICE, (errmsg("using statement-based replication"),
@@ -186,7 +199,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 		ConvertToDistributedTable(relationId, distributionColumnName,
 								  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-								  INVALID_COLOCATION_ID);
+								  INVALID_COLOCATION_ID, requireEmpty);
 		PG_RETURN_VOID();
 	}
 
@@ -232,6 +245,8 @@ CreateReferenceTable(Oid relationId)
 	List *workerNodeList = WorkerNodeList();
 	int replicationFactor = list_length(workerNodeList);
 	char *distributionColumnName = NULL;
+	bool requireEmpty = true;
+	char relationKind = 0;
 
 	EnsureCoordinator();
 
@@ -245,23 +260,38 @@ CreateReferenceTable(Oid relationId)
 						errdetail("There are no active worker nodes.")));
 	}
 
+	/* relax empty table requirement for regular (non-foreign) tables */
+	relationKind = get_rel_relkind(relationId);
+	if (relationKind == RELKIND_RELATION)
+	{
+		requireEmpty = false;
+	}
+
 	colocationId = CreateReferenceTableColocationId();
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
-							  DISTRIBUTE_BY_NONE, REPLICATION_MODEL_2PC, colocationId);
+							  DISTRIBUTE_BY_NONE, REPLICATION_MODEL_2PC, colocationId,
+							  requireEmpty);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
 
 	CreateTableMetadataOnWorkers(relationId);
+
+	/* copy over data for regular relations */
+	if (relationKind == RELKIND_RELATION)
+	{
+		CopyLocalDataIntoShards(relationId);
+	}
 }
 
 
 /*
  * ConvertToDistributedTable converts the given regular PostgreSQL table into a
  * distributed table. First, it checks if the given table can be distributed,
- * then it creates related tuple in pg_dist_partition.
+ * then it creates related tuple in pg_dist_partition. If requireEmpty is true,
+ * this function errors out when presented with a relation containing rows.
  *
  * XXX: We should perform more checks here to see if this table is fit for
  * partitioning. At a minimum, we should validate the following: (i) this node
@@ -272,7 +302,7 @@ CreateReferenceTable(Oid relationId)
 static void
 ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						  char distributionMethod, char replicationModel,
-						  uint32 colocationId)
+						  uint32 colocationId, bool requireEmpty)
 {
 	Relation relation = NULL;
 	TupleDesc relationDesc = NULL;
@@ -322,8 +352,8 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  "foreign tables.")));
 	}
 
-	/* check that the relation does not contain any rows */
-	if (!LocalTableEmpty(relationId))
+	/* check that table is empty if that is required */
+	if (requireEmpty && !LocalTableEmpty(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("cannot distribute relation \"%s\"",
@@ -915,6 +945,8 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
+	bool requireEmpty = true;
+	char relationKind = 0;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
 	distributedRelation = relation_open(relationId, AccessShareLock);
@@ -957,9 +989,16 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		colocationId = TableColocationId(sourceRelationId);
 	}
 
+	/* relax empty table requirement for regular (non-foreign) tables */
+	relationKind = get_rel_relkind(relationId);
+	if (relationKind == RELKIND_RELATION)
+	{
+		requireEmpty = false;
+	}
+
 	/* create distributed table metadata */
 	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
-							  ReplicationModel, colocationId);
+							  ReplicationModel, colocationId, requireEmpty);
 
 	/* create shards */
 	if (sourceRelationId != InvalidOid)
@@ -974,6 +1013,12 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	else
 	{
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
+	}
+
+	/* copy over data for regular relations */
+	if (relationKind == RELKIND_RELATION)
+	{
+		CopyLocalDataIntoShards(relationId);
 	}
 
 	heap_close(pgDistColocation, NoLock);
@@ -1020,4 +1065,144 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 						errhint("Try again after reducing \"citus.shard_replication_"
 								"factor\" to one%s.", extraHint)));
 	}
+}
+
+
+/*
+ * CopyLocalDataIntoShards copies data from the local table, which is hidden
+ * after converting it to a distributed table, into the shards of the distributed
+ * table.
+ *
+ * This function uses CitusCopyDestReceiver to invoke the distributed COPY logic.
+ * We cannot use a regular COPY here since that cannot read from a table. Instead
+ * we read from the table and pass each tuple to the CitusCopyDestReceiver which
+ * opens a connection and starts a COPY for each shard placement that will have
+ * data.
+ *
+ * We could call the planner and executor here and send the output to the
+ * DestReceiver, but we are in a tricky spot here since Citus is already
+ * intercepting queries on this table in the planner and executor hooks and we
+ * want to read from the local table. To keep it simple, we perform a heap scan
+ * directly on the table.
+ *
+ * Any writes on the table that are started during this operation will be handled
+ * as distributed queries once the current transaction commits. SELECTs will
+ * continue to read from the local table until the current transaction commits,
+ * after which new SELECTs will be handled as distributed queries.
+ *
+ * After copying local data into the distributed table, the local data remains
+ * in place and should be truncated at a later time.
+ */
+static void
+CopyLocalDataIntoShards(Oid distributedRelationId)
+{
+	DestReceiver *copyDest = NULL;
+	List *columnNameList = NIL;
+	Relation distributedRelation = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	bool stopOnFailure = true;
+
+	EState *estate = NULL;
+	HeapScanDesc scan = NULL;
+	HeapTuple tuple = NULL;
+	ExprContext *econtext = NULL;
+	MemoryContext oldContext = NULL;
+	TupleTableSlot *slot = NULL;
+	uint64 rowsCopied = 0;
+
+	/* take an ExclusiveLock to block all operations except SELECT */
+	distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
+
+	/* get the table columns */
+	tupleDescriptor = RelationGetDescr(distributedRelation);
+	slot = MakeSingleTupleTableSlot(tupleDescriptor);
+	columnNameList = TupleDescColumnNameList(tupleDescriptor);
+
+	/* initialise per-tuple memory context */
+	estate = CreateExecutorState();
+	econtext = GetPerTupleExprContext(estate);
+	econtext->ecxt_scantuple = slot;
+
+	copyDest =
+		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
+													 columnNameList, estate,
+													 stopOnFailure);
+
+	/* initialise state for writing to shards, we'll open connections on demand */
+	copyDest->rStartup(copyDest, 0, tupleDescriptor);
+
+	/* begin reading from local table */
+	scan = heap_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
+
+	oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
+
+	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	{
+		/* materialize tuple and send it to a shard */
+		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+		copyDest->receiveSlot(slot, copyDest);
+
+		/* clear tuple memory */
+		ResetPerTupleExprContext(estate);
+
+		/* make sure we roll back on cancellation */
+		CHECK_FOR_INTERRUPTS();
+
+		if (rowsCopied == 0)
+		{
+			ereport(NOTICE, (errmsg("Copying data from local table...")));
+		}
+
+		rowsCopied++;
+
+		if (rowsCopied % 1000000 == 0)
+		{
+			ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
+		}
+	}
+
+	if (rowsCopied % 1000000 != 0)
+	{
+		ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
+	}
+
+	MemoryContextSwitchTo(oldContext);
+
+	/* finish reading from the local table */
+	heap_endscan(scan);
+
+	/* finish writing into the shards */
+	copyDest->rShutdown(copyDest);
+
+	/* free memory and close the relation */
+	ExecDropSingleTupleTableSlot(slot);
+	FreeExecutorState(estate);
+	heap_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * TupleDescColumnNameList returns a list of column names for the given tuple
+ * descriptor as plain strings.
+ */
+static List *
+TupleDescColumnNameList(TupleDesc tupleDescriptor)
+{
+	List *columnNameList = NIL;
+	int columnIndex = 0;
+
+	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		char *columnName = NameStr(currentColumn->attname);
+
+		if (currentColumn->attisdropped)
+		{
+			continue;
+		}
+
+		columnNameList = lappend(columnNameList, columnName);
+	}
+
+	return columnNameList;
 }
