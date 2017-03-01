@@ -76,7 +76,7 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 static void CreateReferenceTable(Oid distributedRelationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 									  char distributionMethod, char replicationModel,
-									  uint32 colocationId, bool allowEmpty);
+									  uint32 colocationId, bool requireEmpty);
 static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -116,7 +116,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
-	bool allowEmpty = false;
+	bool requireEmpty = true;
 
 	EnsureCoordinator();
 
@@ -132,7 +132,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-							  INVALID_COLOCATION_ID, allowEmpty);
+							  INVALID_COLOCATION_ID, requireEmpty);
 
 	PG_RETURN_VOID();
 }
@@ -188,7 +188,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
-		bool allowEmpty = false;
+		bool requireEmpty = true;
 
 		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
 		{
@@ -199,7 +199,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 		ConvertToDistributedTable(relationId, distributionColumnName,
 								  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-								  INVALID_COLOCATION_ID, allowEmpty);
+								  INVALID_COLOCATION_ID, requireEmpty);
 		PG_RETURN_VOID();
 	}
 
@@ -245,7 +245,7 @@ CreateReferenceTable(Oid relationId)
 	List *workerNodeList = WorkerNodeList();
 	int replicationFactor = list_length(workerNodeList);
 	char *distributionColumnName = NULL;
-	bool canLoadData = false;
+	bool requireEmpty = true;
 	char relationKind = 0;
 
 	EnsureCoordinator();
@@ -260,11 +260,11 @@ CreateReferenceTable(Oid relationId)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	/* we only support data loading for regular (non-foreign) relations */
+	/* relax empty table requirement for regular (non-foreign) tables */
 	relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_RELATION)
 	{
-		canLoadData = true;
+		requireEmpty = false;
 	}
 
 	colocationId = CreateReferenceTableColocationId();
@@ -272,15 +272,15 @@ CreateReferenceTable(Oid relationId)
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
 							  DISTRIBUTE_BY_NONE, REPLICATION_MODEL_2PC, colocationId,
-							  canLoadData);
+							  requireEmpty);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
 
 	CreateTableMetadataOnWorkers(relationId);
 
-	/* copy over data from regular relations */
-	if (canLoadData)
+	/* copy over data for regular relations */
+	if (relationKind == RELKIND_RELATION)
 	{
 		CopyLocalDataIntoShards(relationId);
 	}
@@ -290,7 +290,8 @@ CreateReferenceTable(Oid relationId)
 /*
  * ConvertToDistributedTable converts the given regular PostgreSQL table into a
  * distributed table. First, it checks if the given table can be distributed,
- * then it creates related tuple in pg_dist_partition.
+ * then it creates related tuple in pg_dist_partition. If requireEmpty is true,
+ * this function errors out when presented with a relation containing rows.
  *
  * XXX: We should perform more checks here to see if this table is fit for
  * partitioning. At a minimum, we should validate the following: (i) this node
@@ -301,7 +302,7 @@ CreateReferenceTable(Oid relationId)
 static void
 ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						  char distributionMethod, char replicationModel,
-						  uint32 colocationId, bool allowEmpty)
+						  uint32 colocationId, bool requireEmpty)
 {
 	Relation relation = NULL;
 	TupleDesc relationDesc = NULL;
@@ -351,8 +352,8 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  "foreign tables.")));
 	}
 
-	/* check that the relation does not contain any rows */
-	if (!allowEmpty && !LocalTableEmpty(relationId))
+	/* check that table is empty if that is required */
+	if (requireEmpty && !LocalTableEmpty(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("cannot distribute relation \"%s\"",
@@ -944,7 +945,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
-	bool canLoadData = false;
+	bool requireEmpty = true;
 	char relationKind = 0;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
@@ -988,16 +989,16 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		colocationId = TableColocationId(sourceRelationId);
 	}
 
-	/* we only support data loading for regular (non-foreign) relations */
+	/* relax empty table requirement for regular (non-foreign) tables */
 	relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_RELATION)
 	{
-		canLoadData = true;
+		requireEmpty = false;
 	}
 
 	/* create distributed table metadata */
 	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
-							  ReplicationModel, colocationId, canLoadData);
+							  ReplicationModel, colocationId, requireEmpty);
 
 	/* create shards */
 	if (sourceRelationId != InvalidOid)
@@ -1014,8 +1015,8 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
 	}
 
-	/* copy over data from regular relations */
-	if (canLoadData)
+	/* copy over data for regular relations */
+	if (relationKind == RELKIND_RELATION)
 	{
 		CopyLocalDataIntoShards(relationId);
 	}
