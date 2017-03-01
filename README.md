@@ -86,7 +86,7 @@ If you're looking to get started locally, you can follow the following steps to 
 <tr>
   <td>Documentation</td>
   <td>Try the <a
-  href="https://docs.citusdata.com/en/v6.1/tutorials/tut-hash-distribution.html">Citus
+  href="https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html">Citus
   tutorial</a> for a hands-on introduction or <br/>the <a
   href="https://docs.citusdata.com">documentation</a> for
   a more comprehensive reference.</td>
@@ -150,4 +150,4 @@ ___
 Copyright © 2012–2017 Citus Data, Inc.
 
 [faq]: https://www.citusdata.com/frequently-asked-questions
-[tutorial]: https://docs.citusdata.com/en/v6.1/tutorials/tut-hash-distribution.html
+[tutorial]: https://docs.citusdata.com/en/stable/tutorials/multi-tenant-tutorial.html
