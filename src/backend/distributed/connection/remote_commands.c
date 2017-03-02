@@ -277,10 +277,21 @@ SendRemoteCommandParams(MultiConnection *connection, const char *command,
 						const char *const *parameterValues)
 {
 	PGconn *pgConn = connection->pgConn;
-	bool wasNonblocking = PQisnonblocking(pgConn);
+	bool wasNonblocking = false;
 	int rc = 0;
 
 	LogRemoteCommand(connection, command);
+
+	/*
+	 * Don't try to send command if connection is entirely gone
+	 * (PQisnonblocking() would crash).
+	 */
+	if (!pgConn)
+	{
+		return 0;
+	}
+
+	wasNonblocking = PQisnonblocking(pgConn);
 
 	/* make sure not to block anywhere */
 	if (!wasNonblocking)
@@ -340,7 +351,11 @@ GetRemoteCommandResult(MultiConnection *connection, bool raiseInterrupts)
 	PGresult *result = NULL;
 	bool failed = false;
 
-	/* short circuit tests around the more expensive parts of this routine */
+	/*
+	 * Short circuit tests around the more expensive parts of this
+	 * routine. This'd also trigger a return in the, unlikely, case of a
+	 * failed/nonexistant connection.
+	 */
 	if (!PQisBusy(pgConn))
 	{
 		return PQgetResult(connection->pgConn);
