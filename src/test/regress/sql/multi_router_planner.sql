@@ -21,11 +21,20 @@ CREATE TABLE articles_range (
 	word_count integer
 );
 
+CREATE TABLE articles_append (
+	id bigint NOT NULL,
+	author_id bigint NOT NULL,
+	title varchar(20) NOT NULL,
+	word_count integer
+);
+
 -- Check for the existence of line 'DEBUG:  Creating router plan'
 -- to determine if router planner is used.
 
 -- this table is used in a CTE test
-CREATE TABLE authors_hash ( name text, id bigint );
+CREATE TABLE authors_hash ( name varchar(20), id bigint );
+CREATE TABLE authors_range ( name varchar(20), id bigint );
+CREATE TABLE authors_reference ( name varchar(20), id bigint );
 
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard_hash (LIKE articles_hash);
@@ -38,6 +47,8 @@ SELECT count(*) from articles_hash;
 
 SELECT master_create_worker_shards('articles_hash', 2, 1);
 SELECT master_create_worker_shards('articles_single_shard_hash', 1, 1);
+
+SELECT create_reference_table('authors_reference');
 
 -- create a bunch of test data
 INSERT INTO articles_hash VALUES ( 1,  1, 'arsenous', 9572);
@@ -241,7 +252,7 @@ WITH new_article AS (
 )
 SELECT * FROM new_article;
 
--- Modifying statement in a CTE in subquwey is also covered by PostgreSQL
+-- Modifying statement in a CTE in subquery is also covered by PostgreSQL
 SELECT * FROM (
     WITH new_article AS (
         INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
@@ -706,26 +717,107 @@ SELECT author_id FROM articles_hash
 		author_id
 	LIMIT 1;
 
+	
+-- verify range partitioned tables can be used in router plannable queries
+-- just 4 shards to be created for each table to make sure 
+-- they are 'co-located' pairwise
+SET citus.shard_replication_factor TO 1;
+SELECT master_create_distributed_table('authors_range', 'id', 'range');
+SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
+
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
+
+-- single shard select queries are router plannable
+SELECT * FROM articles_range where author_id = 1;
+SELECT * FROM articles_range where author_id = 1 or author_id = 5;
+
+-- zero shard select query is router plannable
+SELECT * FROM articles_range where author_id = 1 and author_id = 2;
+
+-- single shard joins on range partitioned table are router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+	WHERE ar.author_id = 1;
+
+-- zero shard join is router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 and au.id = 2;
+
+-- multi-shard join is not router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 35;
+
+-- this is a bug, it is a single shard join query but not router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+	WHERE ar.author_id = 1 or au.id = 5;
+
+-- bogus query, join on non-partition column, but router plannable due to filters
+SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id) 
+	WHERE ar.author_id = 1 and au.id < 10;
+
+-- join between hash and range partition tables are router plannable
+-- only if both tables pruned down to single shard and co-located on the same
+-- node.
+-- router plannable
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 2;
+
+-- not router plannable
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 3;
+
+-- join between a range partitioned table and reference table is router plannable
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1;
+
+-- still hits a single shard and router plannable
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 or ar.author_id = 5;
+
+-- it is not router plannable if hit multiple shards
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 or ar.author_id = 15;
+	
 -- following is a bug, function should have been
 -- evaluated at master before going to worker
-
--- need to use a range distributed table here
-SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
+-- need to use a append distributed table here
+SELECT master_create_distributed_table('articles_append', 'author_id', 'append');
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_empty_shard('articles_range') AS shard_id \gset
+SELECT master_create_empty_shard('articles_append') AS shard_id \gset
 UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
 
-SELECT author_id FROM articles_range
+SELECT author_id FROM articles_append
 	WHERE 
-		substring('articles_range'::regclass::text, 1, 5) = 'hello'
+		substring('articles_append'::regclass::text, 1, 5) = 'hello'
 	ORDER BY
 		author_id
 	LIMIT 1;
 
 -- same query with where false but evaluation left to worker
-SELECT author_id FROM articles_range
+SELECT author_id FROM articles_append
 	WHERE 
-		substring('articles_range'::regclass::text, 1, 4) = 'hello'
+		substring('articles_append'::regclass::text, 1, 4) = 'hello'
 	ORDER BY
 		author_id
 	LIMIT 1;
@@ -966,5 +1058,8 @@ DROP MATERIALIZED VIEW mv_articles_hash;
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
+DROP TABLE authors_range;
+DROP TABLE authors_reference;
 DROP TABLE company_employees;
 DROP TABLE articles_range;
+DROP TABLE articles_append;

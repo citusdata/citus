@@ -15,10 +15,18 @@ CREATE TABLE articles_range (
 	title varchar(20) NOT NULL,
 	word_count integer
 );
+CREATE TABLE articles_append (
+	id bigint NOT NULL,
+	author_id bigint NOT NULL,
+	title varchar(20) NOT NULL,
+	word_count integer
+);
 -- Check for the existence of line 'DEBUG:  Creating router plan'
 -- to determine if router planner is used.
 -- this table is used in a CTE test
-CREATE TABLE authors_hash ( name text, id bigint );
+CREATE TABLE authors_hash ( name varchar(20), id bigint );
+CREATE TABLE authors_range ( name varchar(20), id bigint );
+CREATE TABLE authors_reference ( name varchar(20), id bigint );
 -- this table is used in router executor tests
 CREATE TABLE articles_single_shard_hash (LIKE articles_hash);
 SELECT master_create_distributed_table('articles_hash', 'author_id', 'hash');
@@ -49,6 +57,12 @@ SELECT master_create_worker_shards('articles_hash', 2, 1);
 SELECT master_create_worker_shards('articles_single_shard_hash', 1, 1);
  master_create_worker_shards 
 -----------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('authors_reference');
+ create_reference_table 
+------------------------
  
 (1 row)
 
@@ -386,12 +400,12 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 1))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
-DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  company_id | employee_id | manager_id | level 
@@ -413,9 +427,9 @@ WITH RECURSIVE hierarchy as (
 			ON (h.employee_id = ce.manager_id AND
 				h.company_id = ce.company_id))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840007
 ERROR:  could not run distributed query with complex table expressions
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- logically wrong query, query involves different shards
@@ -431,12 +445,12 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 2))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  predicate pruning for shardId 840003
-DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840006
-DEBUG:  predicate pruning for shardId 840003
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
+DEBUG:  predicate pruning for shardId 840006
 ERROR:  could not run distributed query with complex table expressions
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- CTE with queries other than SELECT is not supported
@@ -456,7 +470,7 @@ SELECT * FROM new_article;
 ERROR:  WITH clause containing a data-modifying statement must be at the top level
 LINE 2:     WITH nested_cte AS (
                  ^
--- Modifying statement in a CTE in subquwey is also covered by PostgreSQL
+-- Modifying statement in a CTE in subquery is also covered by PostgreSQL
 SELECT * FROM (
     WITH new_article AS (
         INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
@@ -1528,12 +1542,12 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 1))
 SELECT * FROM hierarchy WHERE LEVEL <= 2 and 1=0;
-DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
-DEBUG:  predicate pruning for shardId 840004
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  company_id | employee_id | manager_id | level 
@@ -1551,9 +1565,9 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 1 AND 1=0))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  company_id | employee_id | manager_id | level 
@@ -1572,9 +1586,9 @@ WITH RECURSIVE hierarchy as (
 				h.company_id = ce.company_id AND
 				ce.company_id = 1))
 SELECT * FROM hierarchy WHERE LEVEL <= 2;
-DEBUG:  predicate pruning for shardId 840004
 DEBUG:  predicate pruning for shardId 840005
 DEBUG:  predicate pruning for shardId 840006
+DEBUG:  predicate pruning for shardId 840007
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  company_id | employee_id | manager_id | level 
@@ -1617,48 +1631,265 @@ DEBUG:  Plan is router executable
 -----------
 (0 rows)
 
--- following is a bug, function should have been
--- evaluated at master before going to worker
--- need to use a range distributed table here
+	
+-- verify range partitioned tables can be used in router plannable queries
+-- just 4 shards to be created for each table to make sure 
+-- they are 'co-located' pairwise
+SET citus.shard_replication_factor TO 1;
+SELECT master_create_distributed_table('authors_range', 'id', 'range');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
 SELECT master_create_distributed_table('articles_range', 'author_id', 'range');
  master_create_distributed_table 
 ---------------------------------
  
 (1 row)
 
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('authors_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 1, shardmaxvalue=10 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 11, shardmaxvalue=30 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 21, shardmaxvalue=40 WHERE shardid = :shard_id;
+SELECT master_create_empty_shard('articles_range') as shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = 31, shardmaxvalue=40 WHERE shardid = :shard_id;
+-- single shard select queries are router plannable
+SELECT * FROM articles_range where author_id = 1;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+SELECT * FROM articles_range where author_id = 1 or author_id = 5;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- zero shard select query is router plannable
+SELECT * FROM articles_range where author_id = 1 and author_id = 2;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count 
+----+-----------+-------+------------
+(0 rows)
+
+-- single shard joins on range partitioned table are router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+	WHERE ar.author_id = 1;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  predicate pruning for shardId 840009
+DEBUG:  predicate pruning for shardId 840010
+DEBUG:  predicate pruning for shardId 840011
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- zero shard join is router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 and au.id = 2;
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- multi-shard join is not router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 35;
+DEBUG:  predicate pruning for shardId 840012
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840012
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  join prunable for intervals [21,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [11,30]
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- this is a bug, it is a single shard join query but not router plannable
+SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+	WHERE ar.author_id = 1 or au.id = 5;
+DEBUG:  join prunable for intervals [1,10] and [11,30]
+DEBUG:  join prunable for intervals [1,10] and [21,40]
+DEBUG:  join prunable for intervals [1,10] and [31,40]
+DEBUG:  join prunable for intervals [11,30] and [1,10]
+DEBUG:  join prunable for intervals [11,30] and [31,40]
+DEBUG:  join prunable for intervals [21,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [11,30]
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- bogus query, join on non-partition column, but router plannable due to filters
+SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id) 
+	WHERE ar.author_id = 1 and au.id < 10;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  predicate pruning for shardId 840009
+DEBUG:  predicate pruning for shardId 840010
+DEBUG:  predicate pruning for shardId 840011
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- join between hash and range partition tables are router plannable
+-- only if both tables pruned down to single shard and co-located on the same
+-- node.
+-- router plannable
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 2;
+DEBUG:  predicate pruning for shardId 840000
+DEBUG:  predicate pruning for shardId 840009
+DEBUG:  predicate pruning for shardId 840010
+DEBUG:  predicate pruning for shardId 840011
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- not router plannable
+SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
+	WHERE ar.author_id = 3;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  predicate pruning for shardId 840009
+DEBUG:  predicate pruning for shardId 840010
+DEBUG:  predicate pruning for shardId 840011
+DEBUG:  Found no worker with all shard placements
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  join prunable for intervals [1,10] and [11,30]
+DEBUG:  join prunable for intervals [1,10] and [21,40]
+DEBUG:  join prunable for intervals [1,10] and [31,40]
+DEBUG:  join prunable for intervals [11,30] and [1,10]
+DEBUG:  join prunable for intervals [11,30] and [31,40]
+DEBUG:  join prunable for intervals [21,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [1,10]
+DEBUG:  join prunable for intervals [31,40] and [11,30]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 3
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 13
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 16
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 19
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 22
+DETAIL:  Creating dependency on merge taskId 9
+ERROR:  cannot use real time executor with repartition jobs
+HINT:  Set citus.task_executor_type to "task-tracker".
+-- join between a range partitioned table and reference table is router plannable
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- still hits a single shard and router plannable
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 or ar.author_id = 5;
+DEBUG:  predicate pruning for shardId 840013
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+-- it is not router plannable if hit multiple shards
+SELECT * FROM articles_range ar join authors_reference au on (ar.author_id = au.id)
+	WHERE ar.author_id = 1 or ar.author_id = 15;
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+DEBUG:  predicate pruning for shardId 840014
+DEBUG:  predicate pruning for shardId 840015
+ id | author_id | title | word_count | name | id 
+----+-----------+-------+------------+------+----
+(0 rows)
+
+	
+-- following is a bug, function should have been
+-- evaluated at master before going to worker
+-- need to use a append distributed table here
+SELECT master_create_distributed_table('articles_append', 'author_id', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
 SET citus.shard_replication_factor TO 1;
-SELECT master_create_empty_shard('articles_range') AS shard_id \gset
+SELECT master_create_empty_shard('articles_append') AS shard_id \gset
 UPDATE pg_dist_shard SET shardmaxvalue = 100, shardminvalue=1 WHERE shardid = :shard_id;
-SELECT author_id FROM articles_range
+SELECT author_id FROM articles_append
 	WHERE 
-		substring('articles_range'::regclass::text, 1, 5) = 'hello'
+		substring('articles_append'::regclass::text, 1, 5) = 'hello'
 	ORDER BY
 		author_id
 	LIMIT 1;
 DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  failed to execute job 840021
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+ERROR:  failed to execute job 840026
 DETAIL:  Failure due to failed task 2
 -- same query with where false but evaluation left to worker
-SELECT author_id FROM articles_range
+SELECT author_id FROM articles_append
 	WHERE 
-		substring('articles_range'::regclass::text, 1, 4) = 'hello'
+		substring('articles_append'::regclass::text, 1, 4) = 'hello'
 	ORDER BY
 		author_id
 	LIMIT 1;
 DEBUG:  push down of limit count: 1
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-WARNING:  relation "public.articles_range" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  failed to execute job 840022
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "public.articles_append" does not exist
+CONTEXT:  while executing command on localhost:57638
+ERROR:  failed to execute job 840027
 DETAIL:  Failure due to failed task 2
 -- same query on router planner with where false but evaluation left to worker
 SELECT author_id FROM articles_single_shard_hash
@@ -2081,10 +2312,10 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	ORDER BY placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  840008 |          1 | localhost |    57637
-  840008 |          3 | localhost |    57638
-  840009 |          1 | localhost |    57638
-  840009 |          1 | localhost |    57637
+  840017 |          1 | localhost |    57637
+  840017 |          3 | localhost |    57638
+  840018 |          1 | localhost |    57638
+  840018 |          1 | localhost |    57637
 (4 rows)
 
 ROLLBACK;
@@ -2100,10 +2331,10 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	ORDER BY placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  840008 |          1 | localhost |    57637
-  840008 |          1 | localhost |    57638
-  840009 |          3 | localhost |    57638
-  840009 |          1 | localhost |    57637
+  840017 |          1 | localhost |    57637
+  840017 |          1 | localhost |    57638
+  840018 |          3 | localhost |    57638
+  840018 |          1 | localhost |    57637
 (4 rows)
 
 \c - postgres - :worker_1_port
@@ -2119,5 +2350,8 @@ DROP MATERIALIZED VIEW mv_articles_hash;
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;
 DROP TABLE authors_hash;
+DROP TABLE authors_range;
+DROP TABLE authors_reference;
 DROP TABLE company_employees;
 DROP TABLE articles_range;
+DROP TABLE articles_append;

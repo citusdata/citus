@@ -120,6 +120,7 @@ SET client_min_messages TO 'DEBUG2';
 SET citus.task_executor_type TO 'real-time';
 SELECT * FROM range_partitioned WHERE id = 32743;
 DEBUG:  predicate pruning for shardId 750006
+DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
   id   | symbol | bidder_id |        placed_at         | kind | limit_price 
 -------+--------+-----------+--------------------------+------+-------------
