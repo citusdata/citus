@@ -141,7 +141,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	/* if enough live nodes, add an extra candidate node as backup */
 	attemptableNodeCount = ShardReplicationFactor;
-	liveNodeCount = WorkerGetLiveNodeCount();
+	liveNodeCount = WorkerGetLiveGroupCount();
 	if (liveNodeCount > ShardReplicationFactor)
 	{
 		attemptableNodeCount = ShardReplicationFactor + 1;

@@ -28,11 +28,11 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 -- Show that, with no MX tables, metadata snapshot contains only the delete commands,
 -- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot());
-                                                                                         unnest                                                                                         
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                   unnest                                                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
 (3 rows)
 
 -- Create a test table with constraints and SERIAL
@@ -58,7 +58,7 @@ SELECT unnest(master_metadata_snapshot());
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
  ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
  CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE
@@ -80,7 +80,7 @@ SELECT unnest(master_metadata_snapshot());
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
  ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
  CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE
@@ -104,7 +104,7 @@ SELECT unnest(master_metadata_snapshot());
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
@@ -134,7 +134,7 @@ SELECT unnest(master_metadata_snapshot());
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
@@ -157,7 +157,7 @@ SELECT unnest(master_metadata_snapshot());
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  TRUNCATE pg_dist_node
  SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition
- INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata) VALUES (2, 2, 'localhost', 57638, 'default', FALSE),(1, 1, 'localhost', 57637, 'default', FALSE)
+ INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) VALUES (2, 2, 'localhost', 57638, 'default', FALSE, 'p'),(1, 1, 'localhost', 57637, 'default', FALSE, 'p')
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 NO CYCLE')
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
@@ -203,10 +203,10 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata 
---------+---------+-----------+----------+----------+-------------
-      1 |       1 | localhost |    57637 | default  | t
-      2 |       2 | localhost |    57638 | default  | f
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | noderole 
+--------+---------+-----------+----------+----------+-------------+----------
+      1 |       1 | localhost |    57637 | default  | t           | p
+      2 |       2 | localhost |    57638 | default  | f           | p
 (2 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -333,10 +333,10 @@ SELECT * FROM pg_dist_local_group;
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata 
---------+---------+-----------+----------+----------+-------------
-      1 |       1 | localhost |    57637 | default  | t
-      2 |       2 | localhost |    57638 | default  | f
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | noderole 
+--------+---------+-----------+----------+----------+-------------+----------
+      1 |       1 | localhost |    57637 | default  | t           | p
+      2 |       2 | localhost |    57638 | default  | f           | p
 (2 rows)
 
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
@@ -1133,9 +1133,9 @@ SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-         master_add_node         
----------------------------------
- (4,4,localhost,57638,default,f)
+          master_add_node          
+-----------------------------------
+ (4,4,localhost,57638,default,f,p)
 (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
@@ -1317,9 +1317,9 @@ WHERE logicalrelid='mx_ref'::regclass;
 \c - - - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "mx_ref" to all workers
-         master_add_node         
----------------------------------
- (5,5,localhost,57638,default,f)
+          master_add_node          
+-----------------------------------
+ (5,5,localhost,57638,default,f,p)
 (1 row)
 
 SELECT shardid, nodename, nodeport 

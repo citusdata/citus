@@ -1,0 +1,116 @@
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1420000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1420000;
+-- run master_create_empty_shard with differing placement policies
+CREATE TABLE append_table (a int);
+SELECT master_create_distributed_table('append_table', 'a', 'append');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SET citus.shard_placement_policy TO 'round-robin';
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420000
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420001
+(1 row)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass);
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1420000 |          1 |           0 | localhost |    57638 |         311
+ 1420000 |          1 |           0 | localhost |    57637 |         312
+ 1420001 |          1 |           0 | localhost |    57637 |         313
+ 1420001 |          1 |           0 | localhost |    57638 |         314
+(4 rows)
+
+UPDATE pg_dist_node SET noderole = 's' WHERE nodeport = :worker_2_port;
+-- round robin only considers primary nodes
+SELECT master_create_empty_shard('append_table');
+ERROR:  could only find 1 of 2 possible nodes
+SET citus.shard_replication_factor = 1;
+SET citus.shard_placement_policy TO 'random';
+-- make sure it works when there's only one primary
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420003
+(1 row)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass);
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1420000 |          1 |           0 | localhost |    57638 |         311
+ 1420000 |          1 |           0 | localhost |    57637 |         312
+ 1420001 |          1 |           0 | localhost |    57637 |         313
+ 1420001 |          1 |           0 | localhost |    57638 |         314
+ 1420003 |          1 |           0 | localhost |    57637 |         315
+(5 rows)
+
+SELECT setseed(0.5);
+ setseed 
+---------
+ 
+(1 row)
+
+UPDATE pg_dist_node SET noderole = 'p' WHERE nodeport = :worker_2_port;
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420004
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420005
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420006
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420007
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420008
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+ master_create_empty_shard 
+---------------------------
+                   1420009
+(1 row)
+
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'append_table'::regclass);
+ shardid | shardstate | shardlength | nodename  | nodeport | placementid 
+---------+------------+-------------+-----------+----------+-------------
+ 1420000 |          1 |           0 | localhost |    57638 |         311
+ 1420000 |          1 |           0 | localhost |    57637 |         312
+ 1420001 |          1 |           0 | localhost |    57637 |         313
+ 1420001 |          1 |           0 | localhost |    57638 |         314
+ 1420003 |          1 |           0 | localhost |    57637 |         315
+ 1420004 |          1 |           0 | localhost |    57638 |         316
+ 1420005 |          1 |           0 | localhost |    57638 |         317
+ 1420006 |          1 |           0 | localhost |    57638 |         318
+ 1420007 |          1 |           0 | localhost |    57638 |         319
+ 1420008 |          1 |           0 | localhost |    57637 |         320
+ 1420009 |          1 |           0 | localhost |    57637 |         321
+(11 rows)
+
+-- clean up
+DROP TABLE append_table;

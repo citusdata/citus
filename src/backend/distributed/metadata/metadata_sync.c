@@ -402,7 +402,7 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node "
-					 "(nodeid, groupid, nodename, nodeport, noderack, hasmetadata) "
+					 "(nodeid, groupid, nodename, nodeport, noderack, hasmetadata, noderole) "
 					 "VALUES ");
 
 	/* iterate over the worker nodes, add the values */
@@ -412,13 +412,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *hasMetadaString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s)",
+						 "(%d, %d, %s, %d, %s, %s, '%c')",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
 						 workerNode->workerPort,
 						 quote_literal_cstr(workerNode->workerRack),
-						 hasMetadaString);
+						 hasMetadaString,
+						 workerNode->nodeRole);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
