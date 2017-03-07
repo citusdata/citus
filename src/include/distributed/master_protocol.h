@@ -126,7 +126,6 @@ extern Datum master_get_table_metadata(PG_FUNCTION_ARGS);
 extern Datum master_get_table_ddl_events(PG_FUNCTION_ARGS);
 extern Datum master_get_new_shardid(PG_FUNCTION_ARGS);
 extern Datum master_get_new_placementid(PG_FUNCTION_ARGS);
-extern Datum master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS);
 extern Datum master_get_active_worker_nodes(PG_FUNCTION_ARGS);
 
 /* Function declarations to help with data staging and deletion */

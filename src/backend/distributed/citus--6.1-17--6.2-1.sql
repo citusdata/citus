@@ -3,5 +3,6 @@
 SET search_path = 'pg_catalog';
 
 DROP FUNCTION IF EXISTS master_get_local_first_candidate_nodes();
+DROP FUNCTION IF EXISTS master_get_round_robin_candidate_nodes();
 
 RESET search_path;
