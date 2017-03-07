@@ -166,15 +166,6 @@ CREATE FUNCTION master_get_active_worker_nodes(OUT node_name text, OUT node_port
 COMMENT ON FUNCTION master_get_active_worker_nodes()
     IS 'fetch set of active worker nodes';
 
-CREATE FUNCTION master_get_round_robin_candidate_nodes(shard_id bigint,
-                                                       OUT node_name text,
-                                                       OUT node_port bigint)
-    RETURNS SETOF record
-    LANGUAGE C STRICT ROWS 100
-    AS 'MODULE_PATHNAME', $$master_get_round_robin_candidate_nodes$$;
-COMMENT ON FUNCTION master_get_round_robin_candidate_nodes(shard_id bigint)
-    IS 'fetch set of candidate nodes for shard uploading in round-robin manner';
-
 CREATE FUNCTION master_create_distributed_table(table_name regclass,
                                                 distribution_column text,
                                                 distribution_method citus.distribution_type)

@@ -77,7 +77,6 @@ PG_FUNCTION_INFO_V1(master_get_table_metadata);
 PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
 PG_FUNCTION_INFO_V1(master_get_new_placementid);
-PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
 
 
@@ -362,90 +361,6 @@ GetNextPlacementId(void)
 	placementId = DatumGetInt64(placementIdDatum);
 
 	return placementId;
-}
-
-
-/*
- * master_get_round_robin_candidate_nodes returns a set of candidate host names
- * and port numbers on which to place new shards. The function uses the round
- * robin policy to choose the nodes and tries to ensure that there is an even
- * distribution of shards across the worker nodes. This function errors out if
- * the number of available nodes falls short of the replication factor.
- */
-Datum
-master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
-{
-	uint64 shardId = PG_GETARG_INT64(0);
-	FuncCallContext *functionContext = NULL;
-	uint32 desiredNodeCount = 0;
-	uint32 currentNodeCount = 0;
-
-	if (SRF_IS_FIRSTCALL())
-	{
-		MemoryContext oldContext = NULL;
-		TupleDesc tupleDescriptor = NULL;
-		List *workerNodeList = NIL;
-		TypeFuncClass resultTypeClass = 0;
-		uint32 workerNodeCount = 0;
-
-		/* create a function context for cross-call persistence */
-		functionContext = SRF_FIRSTCALL_INIT();
-
-		/* switch to memory context appropriate for multiple function calls */
-		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
-
-		/* get the worker node list and sort it for determinism */
-		workerNodeList = WorkerNodeList();
-		workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-
-		functionContext->user_fctx = workerNodeList;
-		functionContext->max_calls = ShardReplicationFactor;
-
-		/* if we enough live nodes, return an extra candidate node as backup */
-		workerNodeCount = (uint32) list_length(workerNodeList);
-		if (workerNodeCount > ShardReplicationFactor)
-		{
-			functionContext->max_calls = ShardReplicationFactor + 1;
-		}
-
-		/* create tuple descriptor for return value */
-		resultTypeClass = get_call_result_type(fcinfo, NULL, &tupleDescriptor);
-		if (resultTypeClass != TYPEFUNC_COMPOSITE)
-		{
-			ereport(ERROR, (errmsg("return type must be a row type")));
-		}
-
-		functionContext->tuple_desc = tupleDescriptor;
-
-		MemoryContextSwitchTo(oldContext);
-	}
-
-	functionContext = SRF_PERCALL_SETUP();
-	desiredNodeCount = functionContext->max_calls;
-	currentNodeCount = functionContext->call_cntr;
-
-	if (currentNodeCount < desiredNodeCount)
-	{
-		List *workerNodeList = functionContext->user_fctx;
-		WorkerNode *candidateNode = NULL;
-		Datum candidateDatum = 0;
-
-		candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
-														 currentNodeCount);
-		if (candidateNode == NULL)
-		{
-			ereport(ERROR, (errmsg("could only find %u of %u required nodes",
-								   currentNodeCount, desiredNodeCount)));
-		}
-
-		candidateDatum = WorkerNodeGetDatum(candidateNode, functionContext->tuple_desc);
-
-		SRF_RETURN_NEXT(functionContext, candidateDatum);
-	}
-	else
-	{
-		SRF_RETURN_DONE(functionContext);
-	}
 }
 
 
