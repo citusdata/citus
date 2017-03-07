@@ -59,12 +59,11 @@ static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *origin
 										   Query *query, ParamListInfo boundParams,
 										   RelationRestrictionContext *restrictionContext);
 static Node * SerializeMultiPlan(struct MultiPlan *multiPlan);
-static MultiPlan * DeSerializeMultiPlan(Node *node);
+static MultiPlan * DeserializeMultiPlan(Node *node);
 static PlannedStmt * FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
 										   CustomScan *customScan);
-static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
-										CustomScan *customScan);
+static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static RelationRestrictionContext * CreateAndPushRestrictionContext(void);
 static RelationRestrictionContext * CurrentRestrictionContext(void);
@@ -340,10 +339,9 @@ GetMultiPlan(CustomScan *customScan)
 {
 	MultiPlan *multiPlan = NULL;
 
-	Assert(IsA(customScan, CustomScan));
 	Assert(list_length(customScan->custom_private) == 1);
 
-	multiPlan = DeSerializeMultiPlan(linitial(customScan->custom_private));
+	multiPlan = DeserializeMultiPlan(linitial(customScan->custom_private));
 
 	return multiPlan;
 }
@@ -377,11 +375,11 @@ SerializeMultiPlan(MultiPlan *multiPlan)
 
 
 /*
- * DeSerializeMultiPlan returns the deserialized distributed plan from the string
+ * DeserializeMultiPlan returns the deserialized distributed plan from the string
  * representation in a Const node.
  */
 static MultiPlan *
-DeSerializeMultiPlan(Node *node)
+DeserializeMultiPlan(Node *node)
 {
 	Const *multiPlanData = NULL;
 	char *serializedMultiPlan = NULL;
@@ -454,7 +452,7 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 	}
 	else
 	{
-		finalPlan = FinalizeRouterPlan(localPlan, multiPlan, customScan);
+		finalPlan = FinalizeRouterPlan(localPlan, customScan);
 	}
 
 	return finalPlan;
@@ -481,19 +479,21 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
 
 
 /*
- * FinalizeRouterPlan get the distributed router executor plan and wraps it with
- * a proper target list.
+ * FinalizeRouterPlan gets a CustomScan node which already wrapped distributed
+ * part of a router plan and sets it as the direct child of the router plan
+ * because we don't run any query on master node for router executable queries.
+ * Here, we also rebuild the column list to read from the remote scan.
  */
 static PlannedStmt *
-FinalizeRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan, CustomScan *customScan)
+FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 {
 	PlannedStmt *routerPlan = NULL;
-	RangeTblEntry *customScanRangeTableEntry = NULL;
+	RangeTblEntry *remoteScanRangeTableEntry = NULL;
 	ListCell *targetEntryCell = NULL;
 	List *targetList = NIL;
 	List *columnNameList = NIL;
 
-	/* we have only one range table entry */
+	/* we will have only one range table entry */
 	int customScanRangeTableIndex = 1;
 
 	/* build a targetlist to read from the custom scan output */
@@ -516,7 +516,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan, CustomScan *cus
 			continue;
 		}
 
-		/* build target entry pointing to custom scan range table entry */
+		/* build target entry pointing to remote scan range table entry */
 		newVar = makeVarFromTargetEntry(customScanRangeTableIndex, targetEntry);
 		newTargetEntry = flatCopyTargetEntry(targetEntry);
 		newTargetEntry->expr = (Expr *) newVar;
@@ -531,8 +531,8 @@ FinalizeRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan, CustomScan *cus
 	routerPlan = makeNode(PlannedStmt);
 	routerPlan->planTree = (Plan *) customScan;
 
-	customScanRangeTableEntry = CustomScanRangeTableEntry(columnNameList);
-	routerPlan->rtable = list_make1(customScanRangeTableEntry);
+	remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
+	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
 
 	routerPlan->canSetTag = true;
 	routerPlan->relationOids = NIL;
@@ -547,21 +547,21 @@ FinalizeRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan, CustomScan *cus
 
 
 /*
- * CustomScanRangeTableEntry creates a range table entry from given column name
- * list to represent a custom scan.
+ * RemoteScanRangeTableEntry creates a range table entry from given column name
+ * list to represent a remote scan.
  */
 RangeTblEntry *
-CustomScanRangeTableEntry(List *columnNameList)
+RemoteScanRangeTableEntry(List *columnNameList)
 {
-	RangeTblEntry *customScanRangeTableEntry = makeNode(RangeTblEntry);
+	RangeTblEntry *remoteScanRangeTableEntry = makeNode(RangeTblEntry);
 
 	/* we use RTE_VALUES for custom scan because we can't look up relation */
-	customScanRangeTableEntry->rtekind = RTE_VALUES;
-	customScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
-	customScanRangeTableEntry->inh = false;
-	customScanRangeTableEntry->inFromCl = true;
+	remoteScanRangeTableEntry->rtekind = RTE_VALUES;
+	remoteScanRangeTableEntry->eref = makeAlias("remote_scan", columnNameList);
+	remoteScanRangeTableEntry->inh = false;
+	remoteScanRangeTableEntry->inFromCl = true;
 
-	return customScanRangeTableEntry;
+	return remoteScanRangeTableEntry;
 }
 
 

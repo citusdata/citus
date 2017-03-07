@@ -496,10 +496,10 @@ RouterMultiModifyExecScan(CustomScanState *node)
 	if (!scanState->finishedRemoteScan)
 	{
 		MultiPlan *multiPlan = scanState->multiPlan;
-		bool isModificationQuery = IsModifyMultiPlan(multiPlan);
-		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
+		bool hasReturning = multiPlan->hasReturning;
+		bool isModificationQuery = true;
 
 		ProcessMasterEvaluableFunctions(workerJob);
 
@@ -515,7 +515,7 @@ RouterMultiModifyExecScan(CustomScanState *node)
 
 
 /*
- * RouterSelectExecScan executes a singler select task on the remote node,
+ * RouterSelectExecScan executes a single select task on the remote node,
  * retrieves the results and stores them in custom scan's tuple store. Then, it
  * returns tuples one by one from this tuple store.
  */
@@ -1229,6 +1229,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 	char **columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
 	Tuplestorestate *tupleStore = NULL;
 	bool randomAccess = true;
+	bool interTransactions = false;
 	bool commandFailed = false;
 	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
 													"StoreQueryResult",
@@ -1239,7 +1240,8 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 
 	if (scanState->tuplestorestate == NULL)
 	{
-		scanState->tuplestorestate = tuplestore_begin_heap(randomAccess, false, work_mem);
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 	}
 	else if (!failOnError)
 	{

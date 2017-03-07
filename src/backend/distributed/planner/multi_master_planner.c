@@ -170,7 +170,7 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
  * and limit plans on top of the scan statement if necessary.
  */
 static PlannedStmt *
-BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *dataScan)
+BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *remoteScan)
 {
 	PlannedStmt *selectStatement = NULL;
 	RangeTblEntry *customScanRangeTableEntry = NULL;
@@ -195,7 +195,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *dat
 		columnNameList = lappend(columnNameList, makeString(targetEntry->resname));
 	}
 
-	customScanRangeTableEntry = CustomScanRangeTableEntry(columnNameList);
+	customScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
 
 	/* set the single element range table list */
 	selectStatement->rtable = list_make1(customScanRangeTableEntry);
@@ -203,16 +203,16 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *dat
 	/* (2) add an aggregation plan if needed */
 	if (masterQuery->hasAggs || masterQuery->groupClause)
 	{
-		dataScan->scan.plan.targetlist = masterTargetList;
+		remoteScan->scan.plan.targetlist = masterTargetList;
 
-		aggregationPlan = BuildAggregatePlan(masterQuery, &dataScan->scan.plan);
+		aggregationPlan = BuildAggregatePlan(masterQuery, &remoteScan->scan.plan);
 		topLevelPlan = (Plan *) aggregationPlan;
 	}
 	else
 	{
 		/* otherwise set the final projections on the scan plan directly */
-		dataScan->scan.plan.targetlist = masterQuery->targetList;
-		topLevelPlan = &dataScan->scan.plan;
+		remoteScan->scan.plan.targetlist = masterQuery->targetList;
+		topLevelPlan = &remoteScan->scan.plan;
 	}
 
 	/* (3) add a sorting plan if needed */
@@ -258,14 +258,15 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *dat
 
 
 /*
- * MasterNodeSelectPlan takes in a distributed plan, finds the master node query
- * structure in that plan, and builds the final select plan to execute on the
- * master node. Note that this select plan is executed after result files are
- * retrieved from worker nodes and filled into the tuple store inside provided
- * custom scan.
+ * MasterNodeSelectPlan takes in a distributed plan and a custom scan node which
+ * wraps remote part of the plan. This function finds the master node query
+ * structure in the multi plan, and builds the final select plan to execute on
+ * the tuples returned by remote scan on the master node. Note that this select
+ * plan is executed after result files are retrieved from worker nodes and
+ * filled into the tuple store inside provided custom scan.
  */
 PlannedStmt *
-MasterNodeSelectPlan(MultiPlan *multiPlan, CustomScan *dataScan)
+MasterNodeSelectPlan(MultiPlan *multiPlan, CustomScan *remoteScan)
 {
 	Query *masterQuery = multiPlan->masterQuery;
 	PlannedStmt *masterSelectPlan = NULL;
@@ -274,7 +275,7 @@ MasterNodeSelectPlan(MultiPlan *multiPlan, CustomScan *dataScan)
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
 
-	masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList, dataScan);
+	masterSelectPlan = BuildSelectStatement(masterQuery, masterTargetList, remoteScan);
 
 	return masterSelectPlan;
 }

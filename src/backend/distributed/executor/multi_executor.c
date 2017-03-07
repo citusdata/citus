@@ -83,8 +83,8 @@ static CustomExecMethods RouterSelectCustomExecMethods = {
 
 /* local function forward declarations */
 static void PrepareMasterJobDirectory(Job *workerJob);
-static void LoadTuplesIntoTupleStore(CitusScanState *scanState, Job *workerJob);
-static Relation FauxRelation(TupleDesc tupleDescriptor);
+static void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
+static Relation StubRelation(TupleDesc tupleDescriptor);
 
 
 /*
@@ -277,34 +277,36 @@ PrepareMasterJobDirectory(Job *workerJob)
  * filled the tuplestores, but that's a fair bit of work.
  */
 static void
-LoadTuplesIntoTupleStore(CitusScanState *scanState, Job *workerJob)
+LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
-	CustomScanState customScanState = scanState->customScanState;
+	CustomScanState customScanState = citusScanState->customScanState;
 	List *workerTaskList = workerJob->taskList;
 	EState *executorState = NULL;
 	MemoryContext executorTupleContext = NULL;
 	ExprContext *executorExpressionContext = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	Relation fauxRelation = NULL;
+	Relation stubRelation = NULL;
 	ListCell *workerTaskCell = NULL;
 	uint32 columnCount = 0;
 	Datum *columnValues = NULL;
 	bool *columnNulls = NULL;
 	bool randomAccess = true;
+	bool interTransactions = false;
 
-	executorState = scanState->customScanState.ss.ps.state;
+	executorState = citusScanState->customScanState.ss.ps.state;
 	executorTupleContext = GetPerTupleMemoryContext(executorState);
 	executorExpressionContext = GetPerTupleExprContext(executorState);
 
 	tupleDescriptor = customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
-	fauxRelation = FauxRelation(tupleDescriptor);
+	stubRelation = StubRelation(tupleDescriptor);
 
 	columnCount = tupleDescriptor->natts;
 	columnValues = palloc0(columnCount * sizeof(Datum));
 	columnNulls = palloc0(columnCount * sizeof(bool));
 
-	Assert(scanState->tuplestorestate == NULL);
-	scanState->tuplestorestate = tuplestore_begin_heap(randomAccess, false, work_mem);
+	Assert(citusScanState->tuplestorestate == NULL);
+	citusScanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 
 	foreach(workerTaskCell, workerTaskList)
 	{
@@ -323,7 +325,7 @@ LoadTuplesIntoTupleStore(CitusScanState *scanState, Job *workerJob)
 			copyOptions = lappend(copyOptions, copyOption);
 		}
 
-		copyState = BeginCopyFrom(fauxRelation, taskFilename->data, false, NULL,
+		copyState = BeginCopyFrom(stubRelation, taskFilename->data, false, NULL,
 								  copyOptions);
 
 		while (true)
@@ -342,7 +344,7 @@ LoadTuplesIntoTupleStore(CitusScanState *scanState, Job *workerJob)
 				break;
 			}
 
-			tuplestore_putvalues(scanState->tuplestorestate, tupleDescriptor,
+			tuplestore_putvalues(citusScanState->tuplestorestate, tupleDescriptor,
 								 columnValues, columnNulls);
 			MemoryContextSwitchTo(oldContext);
 		}
@@ -353,20 +355,20 @@ LoadTuplesIntoTupleStore(CitusScanState *scanState, Job *workerJob)
 
 
 /*
- * FauxRelation creates a faux Relation from the given tuple descriptor.
+ * StubRelation creates a stub Relation from the given tuple descriptor.
  * To be able to use copy.c, we need a Relation descriptor. As there is no
  * relation corresponding to the data loaded from workers, we need to fake one.
  * We just need the bare minimal set of fields accessed by BeginCopyFrom().
  */
 static Relation
-FauxRelation(TupleDesc tupleDescriptor)
+StubRelation(TupleDesc tupleDescriptor)
 {
-	Relation fauxRelation = palloc0(sizeof(RelationData));
-	fauxRelation->rd_att = tupleDescriptor;
-	fauxRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
-	fauxRelation->rd_rel->relkind = RELKIND_RELATION;
+	Relation stubRelation = palloc0(sizeof(RelationData));
+	stubRelation->rd_att = tupleDescriptor;
+	stubRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
+	stubRelation->rd_rel->relkind = RELKIND_RELATION;
 
-	return fauxRelation;
+	return stubRelation;
 }
 
 
