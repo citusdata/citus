@@ -55,7 +55,7 @@ struct MultiPlan;
 extern struct MultiPlan * GetMultiPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
-extern bool IsModifyQuery(Query *query);
+extern bool IsModifyCommand(Query *query);
 extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
 extern void VerifyMultiPlanValidity(struct MultiPlan *multiPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);

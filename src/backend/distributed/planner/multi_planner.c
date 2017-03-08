@@ -50,7 +50,7 @@ static CustomScanMethods RouterCustomScanMethods = {
 
 static CustomScanMethods InvalidCustomScanMethods = {
 	"Citus Invalid",
-	InvalidCreateScan
+	DelayedErrorCreateScan
 };
 
 
@@ -143,11 +143,11 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
- * IsModifyQuery returns true if the query performs modifications, false
+ * IsModifyCommand returns true if the query performs modifications, false
  * otherwise.
  */
 bool
-IsModifyQuery(Query *query)
+IsModifyCommand(Query *query)
 {
 	CmdType commandType = query->commandType;
 
@@ -218,7 +218,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		hasUnresolvedParams = true;
 	}
 
-	if (IsModifyQuery(query))
+	if (IsModifyCommand(query))
 	{
 		/* modifications are always routed through the same planner/executor */
 		distributedPlan = CreateModifyPlan(originalQuery, query, restrictionContext);

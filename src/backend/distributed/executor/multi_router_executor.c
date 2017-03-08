@@ -417,8 +417,6 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	Job *workerJob = multiPlan->workerJob;
 	List *taskList = workerJob->taskList;
 
-	ValidateCitusScanState(node);
-
 	/*
 	 * If we are executing a prepared statement, then we may not yet have obtained
 	 * the metadata locks in this transaction. To prevent a concurrent shard copy,
@@ -458,7 +456,7 @@ RouterSingleModifyExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	resultSlot = ReadNextTuple(scanState);
+	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
 }
@@ -508,7 +506,7 @@ RouterMultiModifyExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	resultSlot = ReadNextTuple(scanState);
+	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
 }
@@ -539,7 +537,7 @@ RouterSelectExecScan(CustomScanState *node)
 		scanState->finishedRemoteScan = true;
 	}
 
-	resultSlot = ReadNextTuple(scanState);
+	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
 }
