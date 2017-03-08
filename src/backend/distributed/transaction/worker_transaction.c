@@ -33,29 +33,6 @@
 
 
 /*
- * SendCommandToWorker sends a command to a particular worker as part of the
- * 2PC.
- */
-void
-SendCommandToWorker(char *nodeName, int32 nodePort, char *command)
-{
-	MultiConnection *transactionConnection = NULL;
-	char *nodeUser = CitusExtensionOwnerName();
-	int connectionFlags = 0;
-
-	BeginOrContinueCoordinatedTransaction();
-	CoordinatedTransactionUse2PC();
-
-	transactionConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
-														  nodePort, nodeUser, NULL);
-
-	MarkRemoteTransactionCritical(transactionConnection);
-	RemoteTransactionBeginIfNecessary(transactionConnection);
-	ExecuteCriticalRemoteCommand(transactionConnection, command);
-}
-
-
-/*
  * SendCommandToWorkers sends a command to all workers in
  * parallel. Commands are committed on the workers when the local
  * transaction commits. The connection are made as the extension
