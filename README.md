@@ -52,18 +52,18 @@ If you're looking to get started locally, you can follow the following steps to 
     2. Start Docker by clicking on the application’s icon.
   * Linux:
     ```bash
-    curl -sSL https://get.docker.com/ | sudo bash
-    sudo usermod -aG docker $USER && newgrp docker
+    curl -sSL https://get.docker.com/ | sh
+    sudo usermod -aG docker $USER && exec sg docker newgrp `id -gn`
     sudo systemctl start docker
 
-    sudo curl -L https://github.com/docker/compose/releases/download/1.11.2/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+    sudo curl -sSL https://github.com/docker/compose/releases/download/1.11.2/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
     sudo chmod +x /usr/local/bin/docker-compose
     ```
     The above version of Docker Compose is sufficient for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).
 
 1. Pull and start the Docker images
   ```bash
-  wget https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
+  curl -sSLO https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
   docker-compose -p citus up -d
   ```
 
