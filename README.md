@@ -46,7 +46,7 @@ Citus Cloud runs on top of AWS as a fully managed database as a service and has 
 
 If you're looking to get started locally, you can follow the following steps to get up and running.
 
-1. Install Docker Community Edition and docker-compose
+1. Install Docker Community Edition and Docker Compose
   * Mac:
     1. [Download](https://www.docker.com/community-edition#/download) and install Docker.
     2. Start Docker by clicking on the application’s icon.
@@ -59,8 +59,9 @@ If you're looking to get started locally, you can follow the following steps to 
     sudo curl -L https://github.com/docker/compose/releases/download/1.11.2/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
     sudo chmod +x /usr/local/bin/docker-compose
     ```
-    (This docker-compose version is fine for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).)
-1. Pull and start the docker images
+    The above version of Docker Compose is sufficient for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).
+
+1. Pull and start the Docker images
   ```bash
   wget https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
   docker-compose -p citus up -d
