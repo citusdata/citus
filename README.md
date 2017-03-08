@@ -47,10 +47,6 @@ Citus Cloud runs on top of AWS as a fully managed database as a service and has 
 If you're looking to get started locally, you can follow the following steps to get up and running.
 
 * Install docker-compose: [Mac][mac_install] | [Linux][linux_install]
-* (Mac only) connect to Docker VM
-  ```bash
-  eval $(docker-machine env default)
-  ```
 
 * Pull and start the docker images
   ```bash
