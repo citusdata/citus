@@ -2660,7 +2660,7 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 			char partitionMethod = PartitionMethod(distributedTableId);
 
 			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
-				  DISTRIBUTE_BY_NONE))
+				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
 			{
 				return false;
 			}
