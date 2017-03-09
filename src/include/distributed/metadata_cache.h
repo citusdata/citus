@@ -17,6 +17,7 @@
 #include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
 
+extern char *availableMajorVersion;
 
 /*
  * Representation of a table's metadata that is frequently used for
@@ -68,6 +69,8 @@ extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 
 extern bool CitusHasBeenLoaded(void);
+void ErrorIfNewMajorVersionAvailable(void);
+bool CompareVersions(char *leftVersion, char *rightVersion);
 
 /* access WorkerNodeHash */
 extern HTAB * GetWorkerNodeHash(void);

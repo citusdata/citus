@@ -28,6 +28,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
+#include "citus_version.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/prepare.h"
@@ -120,6 +121,7 @@ static char * DeparseVacuumColumnNames(List *columnNameList);
 
 
 /* Local functions forward declarations for unsupported command checks */
+static void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
@@ -170,6 +172,7 @@ multi_ProcessUtility(Node *parsetree,
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
+	bool extensionStatement = false;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -178,6 +181,53 @@ multi_ProcessUtility(Node *parsetree,
 		 * transactions in which case a lot of checks cannot be done safely in
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
+		standard_ProcessUtility(parsetree, queryString, context,
+								params, dest, completionTag);
+
+		return;
+	}
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = (CreateExtensionStmt *) parsetree;
+		if (strcmp(createExtensionStmt->extname, "citus") == 0)
+		{
+			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+		}
+
+		extensionStatement = true;
+	}
+
+	if (IsA(parsetree, AlterExtensionStmt))
+	{
+		AlterExtensionStmt *alterExtensionStmt = (AlterExtensionStmt *) parsetree;
+		if (strcmp(alterExtensionStmt->extname, "citus") == 0)
+		{
+			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+		}
+
+		extensionStatement = true;
+	}
+
+	if (IsA(parsetree, DropStmt))
+	{
+		DropStmt *dropStatement = (DropStmt *) parsetree;
+
+		if (dropStatement->removeType == OBJECT_EXTENSION)
+		{
+			extensionStatement = true;
+		}
+	}
+
+	if (extensionStatement)
+	{
+		/*
+		 * In CitusHasBeenLoaded check below, we compare binary Citus version,
+		 * extension version and available version. If they are different, we
+		 * force user to execute ALTER EXTENSION citus UPDATE. Therefore, if
+		 * user executes ALTER EXTENSION or DROP EXTENSION query we should drop
+		 * to the standart utility before CitusHasBeenLoaded check.
 		 */
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
@@ -1253,6 +1303,62 @@ DeparseVacuumColumnNames(List *columnNameList)
 	columnNames->data[columnNames->len - 1] = ')';
 
 	return columnNames->data;
+}
+
+
+/*
+ * ErrorIfUnstableCreateOrAlterExtensionStmt compares CITUS_EXTENSIONVERSION
+ * and version given CREATE/ALTER EXTENSION statement will create/update to. If
+ * they are not same in major or minor version numbers, this function errors
+ * out. It ignores the catalog version.
+ */
+static void
+ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
+{
+	List *optionsList = NIL;
+	ListCell *optionsCell = NULL;
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		CreateExtensionStmt *createExtensionStmt = (CreateExtensionStmt *) parsetree;
+		optionsList = createExtensionStmt->options;
+	}
+	else if (IsA(parsetree, AlterExtensionStmt))
+	{
+		AlterExtensionStmt *alterExtensionStmt = (AlterExtensionStmt *) parsetree;
+		optionsList = alterExtensionStmt->options;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unsupported node type, create or alter extension "
+							   "is expected")));
+	}
+
+	foreach(optionsCell, optionsList)
+	{
+		DefElem *defElement = (DefElem *) lfirst(optionsCell);
+
+		if (strcmp(defElement->defname, "new_version") == 0)
+		{
+			char *newVersion = strVal(defElement->arg);
+
+			if (!CompareVersions(newVersion, CITUS_EXTENSIONVERSION))
+			{
+				ereport(ERROR, (errmsg("requested version is not compatible with "
+									   "loaded Citus binaries.")));
+			}
+
+			return;
+		}
+	}
+
+	/*
+	 * new_version is not specified in ALTER EXTENSION statement, PostgreSQL will use
+	 * default_version from citus.control file. We will flush availableMajorVersion to
+	 * re-check the available version from citus.control file.
+	 */
+	availableMajorVersion = NULL;
+	ErrorIfNewMajorVersionAvailable();
 }
 
 

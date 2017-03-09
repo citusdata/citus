@@ -13,14 +13,14 @@ include Makefile.global
 all: extension
 
 # build extension
-extension:
+extension: $(citus_abs_srcdir)/src/include/citus_version.h
 	$(MAKE) -C src/backend/distributed/ all
 install-extension: extension
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
 # generated headers are located in the build directory
-	$(INSTALL_DATA) src/include/citus_config.h '$(DESTDIR)$(includedir_server)/'
+	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/citus_config.h '$(DESTDIR)$(includedir_server)/'
 # the rest in the source tree
 	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(DESTDIR)$(includedir_server)/distributed/'
 clean-extension:

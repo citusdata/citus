@@ -16,6 +16,7 @@
 #include "fmgr.h"
 #include "miscadmin.h"
 
+#include "citus_version.h"
 #include "commands/explain.h"
 #include "executor/executor.h"
 #include "distributed/citus_nodefuncs.h"
@@ -47,6 +48,8 @@
 
 /* marks shared object as one loadable by the postgres version compiled against */
 PG_MODULE_MAGIC;
+
+static char *CitusVersion;
 
 void _PG_init(void);
 
@@ -607,6 +610,16 @@ RegisterCitusConfigVariables(void)
 		&ShardPlacementPolicy,
 		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
 		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.version",
+		gettext_noop("Shows the running Citus version"),
+		NULL,
+		&CitusVersion,
+		CITUS_VERSION,
+		PGC_INTERNAL,
 		0,
 		NULL, NULL, NULL);
 
