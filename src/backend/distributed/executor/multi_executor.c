@@ -173,24 +173,18 @@ RouterCreateScan(CustomScan *scan)
  * CreateDistributedPlan() couldn't find a plan due to unresolved prepared
  * statement parameters, but didn't error out, because we expect custom plans
  * to come to our rescue. But sql (not plpgsql) functions unfortunately don't
- * go through a codepath supporting custom plans. We call VerifyMultiPlanValidity()
- * to do this check and provide a meaningfull error message.
+ * go through a codepath supporting custom plans. Here, we error out with this
+ * delayed error message.
  */
 Node *
 DelayedErrorCreateScan(CustomScan *scan)
 {
-	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+	MultiPlan *multiPlan = GetMultiPlan(scan);
 
-	scanState->executorType = MULTI_EXECUTOR_INVALID_FIRST;
-	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->multiPlan = GetMultiPlan(scan);
+	/* raise the deferred error */
+	RaiseDeferredError(multiPlan->planningError, ERROR);
 
-	Assert(IsA(scanState, CustomScanState));
-
-	/* ensure plan is executable */
-	VerifyMultiPlanValidity(scanState->multiPlan);
-
-	return (Node *) scanState;
+	return NULL;
 }
 
 

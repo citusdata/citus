@@ -181,26 +181,6 @@ IsModifyMultiPlan(MultiPlan *multiPlan)
 
 
 /*
- * VerifyMultiPlanValidity verifies that multiPlan is ready for execution, or
- * errors out if not.
- *
- * A plan may e.g. not be ready for execution because CreateDistributedPlan()
- * couldn't find a plan due to unresolved prepared statement parameters, but
- * didn't error out, because we expect custom plans to come to our rescue.
- * But sql (not plpgsql) functions unfortunately don't go through a codepath
- * supporting custom plans.
- */
-void
-VerifyMultiPlanValidity(MultiPlan *multiPlan)
-{
-	if (multiPlan->planningError)
-	{
-		RaiseDeferredError(multiPlan->planningError, ERROR);
-	}
-}
-
-
-/*
  * CreateDistributedPlan encapsulates the logic needed to transform a particular
  * query into a distributed plan.
  */
