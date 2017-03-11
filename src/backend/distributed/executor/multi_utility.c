@@ -101,15 +101,15 @@ static void VerifyTransmitStmt(CopyStmt *copyStatement);
 /* Local functions forward declarations for processing distributed table commands */
 static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  bool *commandMustRunAsOwner);
-static Node * ProcessIndexStmt(IndexStmt *createIndexStatement,
+static Node * PlanIndexStmt(IndexStmt *createIndexStatement,
 							   const char *createIndexCommand, bool isTopLevel);
-static Node * ProcessDropIndexStmt(DropStmt *dropIndexStatement,
+static Node * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								   const char *dropIndexCommand, bool isTopLevel);
-static Node * ProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
+static Node * PlanAlterTableStmt(AlterTableStmt *alterTableStatement,
 									const char *alterTableCommand, bool isTopLevel);
 static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 										  const char *alterTableCommand);
-static Node * ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
+static Node * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 										   const char *alterObjectSchemaCommand,
 										   bool isTopLevel);
 static void ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
@@ -257,7 +257,7 @@ multi_ProcessUtility(Node *parsetree,
 
 		if (IsA(parsetree, IndexStmt))
 		{
-			parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString,
+			parsetree = PlanIndexStmt((IndexStmt *) parsetree, queryString,
 										 isTopLevel);
 		}
 
@@ -266,7 +266,7 @@ multi_ProcessUtility(Node *parsetree,
 			DropStmt *dropStatement = (DropStmt *) parsetree;
 			if (dropStatement->removeType == OBJECT_INDEX)
 			{
-				parsetree = ProcessDropIndexStmt(dropStatement, queryString, isTopLevel);
+				parsetree = PlanDropIndexStmt(dropStatement, queryString, isTopLevel);
 			}
 		}
 
@@ -275,7 +275,7 @@ multi_ProcessUtility(Node *parsetree,
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 			if (alterTableStmt->relkind == OBJECT_TABLE)
 			{
-				parsetree = ProcessAlterTableStmt(alterTableStmt, queryString,
+				parsetree = PlanAlterTableStmt(alterTableStmt, queryString,
 												  isTopLevel);
 			}
 		}
@@ -300,7 +300,7 @@ multi_ProcessUtility(Node *parsetree,
 		if (IsA(parsetree, AlterObjectSchemaStmt))
 		{
 			AlterObjectSchemaStmt *setSchemaStmt = (AlterObjectSchemaStmt *) parsetree;
-			parsetree = ProcessAlterObjectSchemaStmt(setSchemaStmt, queryString,
+			parsetree = PlanAlterObjectSchemaStmt(setSchemaStmt, queryString,
 													 isTopLevel);
 		}
 
@@ -604,7 +604,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 
 
 /*
- * ProcessIndexStmt processes create index statements for distributed tables.
+ * PlanIndexStmt processes create index statements for distributed tables.
  * The function first checks if the statement belongs to a distributed table
  * or not. If it does, then it executes distributed logic for the command.
  *
@@ -612,7 +612,7 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
  * master node table.
  */
 static Node *
-ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand,
+PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand,
 				 bool isTopLevel)
 {
 	/*
@@ -690,7 +690,7 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
 
 
 /*
- * ProcessDropIndexStmt processes drop index statements for distributed tables.
+ * PlanDropIndexStmt processes drop index statements for distributed tables.
  * The function first checks if the statement belongs to a distributed table
  * or not. If it does, then it executes distributed logic for the command.
  *
@@ -698,7 +698,7 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
  * master node table.
  */
 static Node *
-ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
+PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
 					 bool isTopLevel)
 {
 	ListCell *dropObjectCell = NULL;
@@ -782,7 +782,7 @@ ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
 
 
 /*
- * ProcessAlterTableStmt processes alter table statements for distributed tables.
+ * PlanAlterTableStmt processes alter table statements for distributed tables.
  * The function first checks if the statement belongs to a distributed table
  * or not. If it does, then it executes distributed logic for the command.
  *
@@ -790,7 +790,7 @@ ProcessDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand,
  * master node table.
  */
 static Node *
-ProcessAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand,
+PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCommand,
 					  bool isTopLevel)
 {
 	LOCKMODE lockmode = 0;
@@ -948,13 +948,13 @@ WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 
 
 /*
- * ProcessAlterObjectSchemaStmt processes ALTER ... SET SCHEMA statements for distributed
+ * PlanAlterObjectSchemaStmt processes ALTER ... SET SCHEMA statements for distributed
  * objects. The function first checks if the statement belongs to a distributed objects
  * or not. If it does, then it checks whether given object is a table. If it is, we warn
  * out, since we do not support ALTER ... SET SCHEMA
  */
 static Node *
-ProcessAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
+PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
 							 const char *alterObjectSchemaCommand, bool isTopLevel)
 {
 	Oid relationId = InvalidOid;
