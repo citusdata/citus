@@ -14,6 +14,13 @@
 
 extern bool EnableDDLPropagation;
 
+typedef struct DDLJob
+{
+	Oid targetRelationId;
+	const char *commandString;
+	List *taskList;
+} DDLJob;
+
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
