@@ -610,9 +610,9 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
 
 \c - - - :master_port
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS non_existent_column;
+NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 \d test_schema_support.nation_hash;
@@ -665,9 +665,9 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
 \c - - - :master_port
 SET search_path TO test_schema_support;
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS non_existent_column;
+NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 \d test_schema_support.nation_hash;
