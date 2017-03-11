@@ -163,14 +163,10 @@ ERROR:  creating unique indexes on append-partitioned tables is currently unsupp
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
 ERROR:  relation "lineitem_orderkey_index" already exists
 CREATE INDEX try_index ON lineitem USING gist (l_orderkey);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ERROR:  data type bigint has no default operator class for access method "gist"
 HINT:  You must specify an operator class for the index or define a default operator class for the data type.
-CONTEXT:  while executing command on localhost:57638
 CREATE INDEX try_index ON lineitem (non_existent_column);
 ERROR:  column "non_existent_column" does not exist
-CONTEXT:  while executing command on localhost:57638
 CREATE INDEX ON lineitem (l_orderkey);
 ERROR:  creating index without a name on a distributed table is currently unsupported
 -- Verify that none of failed indexes got created on the master node
@@ -205,6 +201,8 @@ DROP INDEX CONCURRENTLY lineitem_orderkey_index;
 ERROR:  dropping indexes concurrently on distributed tables is currently unsupported
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;

@@ -168,6 +168,7 @@ multi_ProcessUtility(Node *parsetree,
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
+	DDLJob *ddlJob = NULL;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -252,8 +253,6 @@ multi_ProcessUtility(Node *parsetree,
 	 */
 	if (EnableDDLPropagation)
 	{
-		DDLJob *ddlJob = NULL;
-
 		if (IsA(parsetree, IndexStmt))
 		{
 			ddlJob = PlanIndexStmt((IndexStmt *) parsetree, queryString);
@@ -311,11 +310,6 @@ multi_ProcessUtility(Node *parsetree,
 									 "commands to worker nodes"),
 							  errhint("Connect to worker nodes directly to manually "
 									  "move all tables.")));
-		}
-
-		if (ddlJob != NULL)
-		{
-			ExecuteDistributedDDLJob(ddlJob);
 		}
 	}
 	else
@@ -379,6 +373,11 @@ multi_ProcessUtility(Node *parsetree,
 	if (commandMustRunAsOwner)
 	{
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	}
+
+	if (ddlJob != NULL)
+	{
+		ExecuteDistributedDDLJob(ddlJob);
 	}
 
 	/* we run VacuumStmt after standard hook to benefit from its checks and locking */
