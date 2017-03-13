@@ -154,7 +154,7 @@ ABORT;
 -- applies to DDL
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
-ALTER TABLE labs_mx ADD COLUMN text motto;
+ALTER TABLE labs_mx ADD COLUMN motto text;
 COMMIT;
 
 -- doesn't apply to COPY after modifications
