@@ -12,6 +12,7 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 
 #include "access/htup_details.h"
@@ -36,7 +37,10 @@
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_shard_placement.h"
 #include "distributed/relay_utility.h"
+#include "distributed/resource_lock.h"
+#include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "parser/scansup.h"
 #include "storage/lmgr.h"
@@ -57,6 +61,278 @@ static void RecordDistributedRelationDependencies(Oid distributedRelationId,
 												  Node *distributionKey);
 static ShardPlacement * TupleToShardPlacement(TupleDesc tupleDesc,
 											  HeapTuple heapTuple);
+static uint64 DistributedTableSize(Oid relationId, char *sizeQuery);
+static uint64 DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
+										   char *sizeQuery);
+static List * ShardIntervalsOnWorkerNode(WorkerNode *workerNode, Oid relationId);
+static StringInfo GenerateSizeQueryOnMultiplePlacements(Oid distributedRelationId,
+														List *shardIntervalList,
+														char *sizeQuery);
+static void ErrorIfNotSuitableToGetSize(Oid relationId);
+
+
+/* exports for SQL callable functions */
+PG_FUNCTION_INFO_V1(citus_table_size);
+PG_FUNCTION_INFO_V1(citus_total_relation_size);
+PG_FUNCTION_INFO_V1(citus_relation_size);
+
+
+/*
+ * citus_total_relation_size accepts a table name and returns a distributed table
+ * and its indexes' total relation size.
+ */
+Datum
+citus_total_relation_size(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	uint64 totalRelationSize = 0;
+
+	totalRelationSize = DistributedTableSize(relationId,
+											 PG_TOTAL_RELATION_SIZE_FUNCTION);
+
+	PG_RETURN_INT64(totalRelationSize);
+}
+
+
+/*
+ * citus_table_size accepts a table name and returns a distributed table's total
+ * relation size.
+ */
+Datum
+citus_table_size(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	uint64 tableSize = 0;
+
+	tableSize = DistributedTableSize(relationId, PG_TABLE_SIZE_FUNCTION);
+
+	PG_RETURN_INT64(tableSize);
+}
+
+
+/*
+ * citus_relation_size accept a table name and returns a relation's 'main'
+ * fork's size.
+ */
+Datum
+citus_relation_size(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	uint64 relationSize = 0;
+
+	relationSize = DistributedTableSize(relationId, PG_RELATION_SIZE_FUNCTION);
+
+	PG_RETURN_INT64(relationSize);
+}
+
+
+/*
+ * DistributedTableSize is helper function for each kind of citus size functions.
+ * It first checks whether the table is distributed and size query can be run on
+ * it. Connection to each node has to be established to get the size of the table.
+ */
+static uint64
+DistributedTableSize(Oid relationId, char *sizeQuery)
+{
+	Relation pgDistNode = NULL;
+	List *workerNodeList = NULL;
+	ListCell *workerNodeCell = NULL;
+	uint64 totalRelationSize = 0;
+
+	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("citus size functions cannot be called in transaction"
+							   " blocks which contain multi-shard data modifications")));
+	}
+
+	ErrorIfNotSuitableToGetSize(relationId);
+
+	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+
+	workerNodeList = WorkerNodeList();
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		uint64 relationSizeOnNode = DistributedTableSizeOnWorker(workerNode, relationId,
+																 sizeQuery);
+		totalRelationSize += relationSizeOnNode;
+	}
+
+	heap_close(pgDistNode, NoLock);
+
+	return totalRelationSize;
+}
+
+
+/*
+ * DistributedTableSizeOnWorker gets the workerNode and relationId to calculate
+ * size of that relation on the given workerNode by summing up the size of each
+ * shard placement.
+ */
+static uint64
+DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQuery)
+{
+	StringInfo tableSizeQuery = NULL;
+	StringInfo tableSizeStringInfo = NULL;
+	char *workerNodeName = workerNode->workerName;
+	uint32 workerNodePort = workerNode->workerPort;
+	char *tableSizeString;
+	List *sizeList = NIL;
+	uint64 tableSize = 0;
+
+	List *shardIntervalsOnNode = ShardIntervalsOnWorkerNode(workerNode, relationId);
+
+	tableSizeQuery = GenerateSizeQueryOnMultiplePlacements(relationId,
+														   shardIntervalsOnNode,
+														   sizeQuery);
+
+	sizeList = ExecuteRemoteQuery(workerNodeName, workerNodePort, NULL, tableSizeQuery);
+
+	if (sizeList == NIL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("cannot get the size because of a connection error")));
+	}
+
+	tableSizeStringInfo = (StringInfo) linitial(sizeList);
+	tableSizeString = tableSizeStringInfo->data;
+	tableSize = atol(tableSizeString);
+
+	return tableSize;
+}
+
+
+/*
+ * ShardIntervalsOnNode takes a WorkerNode then compares it with each placement
+ * of table. It returns shard intervals of table on that node as a list of shard
+ * intervals. Note that, shard intervals returned as elements of the list are
+ * not the copies but the pointers.
+ *
+ * DO NOT modify the shard intervals returned by this function.
+ */
+static List *
+ShardIntervalsOnWorkerNode(WorkerNode *workerNode, Oid relationId)
+{
+	DistTableCacheEntry *distTableCacheEntry = DistributedTableCacheEntry(relationId);
+	char *workerNodeName = workerNode->workerName;
+	uint32 workerNodePort = workerNode->workerPort;
+	List *shardIntervalList = NIL;
+	int shardIndex = 0;
+	int shardIntervalArrayLength = distTableCacheEntry->shardIntervalArrayLength;
+
+	for (shardIndex = 0; shardIndex < shardIntervalArrayLength; shardIndex++)
+	{
+		ShardPlacement *placementArray =
+			distTableCacheEntry->arrayOfPlacementArrays[shardIndex];
+		int numberOfPlacements =
+			distTableCacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+		int placementIndex = 0;
+
+		for (placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
+		{
+			ShardPlacement *placement = &placementArray[placementIndex];
+			char *shardNodeName = placement->nodeName;
+			uint32 shardNodePort = placement->nodePort;
+			uint64 shardId = placement->shardId;
+			bool metadataLock = false;
+
+			metadataLock = TryLockShardDistributionMetadata(shardId, ShareLock);
+
+			/* if the lock is not acquired warn the user */
+			if (metadataLock == false)
+			{
+				ereport(WARNING, (errcode(ERRCODE_LOCK_NOT_AVAILABLE),
+								  errmsg("lock is not acquired, size of shard %ld "
+										 "will be ignored", shardId)));
+				continue;
+			}
+
+			if (strcmp(shardNodeName, workerNodeName) == 0 &&
+				shardNodePort == workerNodePort)
+			{
+				ShardInterval *shardInterval =
+					distTableCacheEntry->sortedShardIntervalArray[shardIndex];
+				shardIntervalList = lappend(shardIntervalList, shardInterval);
+			}
+		}
+	}
+
+	return shardIntervalList;
+}
+
+
+/*
+ * GenerateSizeQueryOnMultiplePlacements generates a select size query to get
+ * size of multiple tables from the relation with distributedRelationId. Note
+ * that, different size functions supported by PG are also supported by this
+ * function changing the size query given as the last parameter to function.
+ * Format of sizeQuery is pg_*_size(%s). Examples of it can be found in the
+ * master_protocol.h
+ */
+static StringInfo
+GenerateSizeQueryOnMultiplePlacements(Oid distributedRelationId, List *shardIntervalList,
+									  char *sizeQuery)
+{
+	Oid schemaId = get_rel_namespace(distributedRelationId);
+	char *schemaName = get_namespace_name(schemaId);
+
+	StringInfo selectQuery = makeStringInfo();
+	ListCell *shardIntervalCell = NULL;
+
+	appendStringInfo(selectQuery, "SELECT ");
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		char *shardName = get_rel_name(distributedRelationId);
+		char *shardQualifiedName = NULL;
+		char *quotedShardName = NULL;
+		AppendShardIdToName(&shardName, shardId);
+
+		shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
+		quotedShardName = quote_literal_cstr(shardQualifiedName);
+
+		appendStringInfo(selectQuery, sizeQuery, quotedShardName);
+		appendStringInfo(selectQuery, " + ");
+	}
+
+	/*
+	 * Add 0 as a last size, it handles empty list case and makes size control checks
+	 * unnecessary which would have implemented without this line.
+	 */
+	appendStringInfo(selectQuery, "0;");
+
+	return selectQuery;
+}
+
+
+/*
+ * ErrorIfNotSuitableToGetSize determines whether the table is suitable to find
+ * its' size with internal functions.
+ */
+static void
+ErrorIfNotSuitableToGetSize(Oid relationId)
+{
+	if (!IsDistributedTable(relationId))
+	{
+		char *relationName = get_rel_name(relationId);
+		char *escapedQueryString = quote_literal_cstr(relationName);
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("cannot calculate the size because relation %s is not "
+							   "distributed", escapedQueryString)));
+	}
+
+	if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
+		!SingleReplicatedTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot calculate the size because replication factor "
+							   "is greater than 1")));
+	}
+}
 
 
 /*
