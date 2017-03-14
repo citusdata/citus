@@ -21,6 +21,8 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_hash
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+FETCH test_cursor;
+FETCH BACKWARD test_cursor;
 END;
 
 -- test with search_path is set
@@ -31,6 +33,8 @@ DECLARE test_cursor CURSOR FOR
         FROM nation_hash
         WHERE n_nationkey = 1;
 FETCH test_cursor;
+FETCH test_cursor;
+FETCH BACKWARD test_cursor;
 END;
 
 

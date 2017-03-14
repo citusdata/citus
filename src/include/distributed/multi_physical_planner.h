@@ -213,9 +213,11 @@ typedef struct JoinSequenceNode
 typedef struct MultiPlan
 {
 	CitusNode type;
+	CmdType operation;
+
+	bool hasReturning;
 	Job *workerJob;
 	Query *masterQuery;
-	char *masterTableName;
 	bool routerExecutable;
 
 	/*

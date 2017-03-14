@@ -146,5 +146,6 @@ DECLARE noHoldCursor SCROLL CURSOR FOR
         ORDER BY l_orderkey, l_linenumber;
 
 FETCH ABSOLUTE 5 FROM noHoldCursor;
+FETCH BACKWARD noHoldCursor;
 COMMIT;
 FETCH ABSOLUTE 5 FROM noHoldCursor;

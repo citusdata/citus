@@ -12,8 +12,10 @@
 #include "c.h"
 
 #include "access/sdir.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "executor/execdesc.h"
+#include "executor/tuptable.h"
 #include "nodes/pg_list.h"
 
 
@@ -33,12 +35,12 @@ typedef struct XactShardConnSet
 extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
 
-
-extern void RouterExecutorStart(QueryDesc *queryDesc, int eflags, List *taskList);
-extern void RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count);
-extern void RouterExecutorFinish(QueryDesc *queryDesc);
-extern void RouterExecutorEnd(QueryDesc *queryDesc);
+extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
+extern TupleTableSlot * RouterSingleModifyExecScan(CustomScanState *node);
+extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
+extern TupleTableSlot * RouterMultiModifyExecScan(CustomScanState *node);
 
 extern int64 ExecuteModifyTasksWithoutResults(List *taskList);
+
 
 #endif /* MULTI_ROUTER_EXECUTOR_H_ */

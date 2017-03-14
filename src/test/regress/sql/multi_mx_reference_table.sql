@@ -304,6 +304,7 @@ DECLARE test_cursor CURSOR FOR
 FETCH test_cursor;
 FETCH ALL test_cursor;
 FETCH test_cursor; -- fetch one row after the last
+FETCH BACKWARD test_cursor;
 END;
 
 -- table creation queries inside can be router plannable

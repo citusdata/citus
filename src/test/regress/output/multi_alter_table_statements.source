@@ -596,15 +596,16 @@ BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-SELECT l_orderkey FROM lineitem_alter LIMIT 0;
+SELECT count(*) FROM lineitem_alter;
 ERROR:  cannot open new connections after the first modification command within a transaction
 COMMIT;
 -- but are allowed before
 BEGIN;
-SELECT l_orderkey FROM lineitem_alter LIMIT 0;
- l_orderkey 
-------------
-(0 rows)
+SELECT count(*) FROM lineitem_alter;
+ count 
+-------
+ 18000
+(1 row)
 
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 COMMIT;

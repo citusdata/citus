@@ -369,51 +369,6 @@ multi_ProcessUtility(Node *parsetree,
 								 " necessary users and roles.")));
 	}
 
-	/* due to an explain-hook limitation we have to special-case EXPLAIN EXECUTE */
-	if (IsA(parsetree, ExplainStmt) && IsA(((ExplainStmt *) parsetree)->query, Query))
-	{
-		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
-		Query *query = (Query *) explainStmt->query;
-
-		if (query->commandType == CMD_UTILITY &&
-			IsA(query->utilityStmt, ExecuteStmt))
-		{
-			ExecuteStmt *execstmt = (ExecuteStmt *) query->utilityStmt;
-			PreparedStatement *entry = FetchPreparedStatement(execstmt->name, true);
-			CachedPlanSource *plansource = entry->plansource;
-			Node *parseTreeCopy;
-			Query *originalQuery;
-
-			/* copied from ExplainExecuteQuery, will never trigger if you used PREPARE */
-			if (!plansource->fixed_result)
-			{
-				ereport(ERROR, (errmsg("EXPLAIN EXECUTE does not support variable-result"
-									   " cached plans")));
-			}
-
-			parseTreeCopy = copyObject(plansource->raw_parse_tree);
-
-			originalQuery = parse_analyze(parseTreeCopy,
-										  plansource->query_string,
-										  plansource->param_types,
-										  plansource->num_params);
-
-			if (ExtractFirstDistributedTableId(originalQuery) != InvalidOid)
-			{
-				/*
-				 * since pg no longer sees EXECUTE it will use the explain hook we've
-				 * installed
-				 */
-				explainStmt->query = (Node *) originalQuery;
-				standard_ProcessUtility(parsetree, plansource->query_string, context,
-										params, dest, completionTag);
-				return;
-			}
-
-			/* if this is a normal query fall through to the usual executor */
-		}
-	}
-
 	if (commandMustRunAsOwner)
 	{
 		GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);

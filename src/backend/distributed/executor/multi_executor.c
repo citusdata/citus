@@ -24,273 +24,419 @@
 #include "distributed/multi_utility.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
+#include "commands/copy.h"
+#include "nodes/makefuncs.h"
 #include "storage/lmgr.h"
 #include "tcop/utility.h"
 #include "utils/snapmgr.h"
-
-
-static void CopyQueryResults(List *masterCopyStmtList);
+#include "utils/memutils.h"
 
 
 /*
- * multi_ExecutorStart is a hook called at at the beginning of any execution
- * of any query plan.
- *
- * If a distributed relation is the target of the query, perform some validity
- * checks. If a legal statement, start the distributed execution. After that
- * the to-be-executed query is replaced with the portion executing solely on
- * the master.
+ * Define executor methods for the different executor types.
  */
-void
-multi_ExecutorStart(QueryDesc *queryDesc, int eflags)
+static CustomExecMethods RealTimeCustomExecMethods = {
+	.CustomName = "RealTimeScan",
+	.BeginCustomScan = CitusSelectBeginScan,
+	.ExecCustomScan = RealTimeExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods TaskTrackerCustomExecMethods = {
+	.CustomName = "TaskTrackerScan",
+	.BeginCustomScan = CitusSelectBeginScan,
+	.ExecCustomScan = TaskTrackerExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods RouterSingleModifyCustomExecMethods = {
+	.CustomName = "RouterSingleModifyScan",
+	.BeginCustomScan = CitusModifyBeginScan,
+	.ExecCustomScan = RouterSingleModifyExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods RouterMultiModifyCustomExecMethods = {
+	.CustomName = "RouterMultiModifyScan",
+	.BeginCustomScan = CitusModifyBeginScan,
+	.ExecCustomScan = RouterMultiModifyExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods RouterSelectCustomExecMethods = {
+	.CustomName = "RouterSelectScan",
+	.BeginCustomScan = CitusSelectBeginScan,
+	.ExecCustomScan = RouterSelectExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CitusExplainScan
+};
+
+
+/* local function forward declarations */
+static void PrepareMasterJobDirectory(Job *workerJob);
+static void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
+static Relation StubRelation(TupleDesc tupleDescriptor);
+
+
+/*
+ * RealTimeCreateScan creates the scan state for real-time executor queries.
+ */
+Node *
+RealTimeCreateScan(CustomScan *scan)
 {
-	PlannedStmt *planStatement = queryDesc->plannedstmt;
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
 
-	if (HasCitusToplevelNode(planStatement))
+	scanState->executorType = MULTI_EXECUTOR_REAL_TIME;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->multiPlan = GetMultiPlan(scan);
+
+	scanState->customScanState.methods = &RealTimeCustomExecMethods;
+
+	return (Node *) scanState;
+}
+
+
+/*
+ * TaskTrackerCreateScan creates the scan state for task-tracker executor queries.
+ */
+Node *
+TaskTrackerCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	scanState->executorType = MULTI_EXECUTOR_TASK_TRACKER;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->multiPlan = GetMultiPlan(scan);
+
+	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
+
+	return (Node *) scanState;
+}
+
+
+/*
+ * RouterCreateScan creates the scan state for router executor queries.
+ */
+Node *
+RouterCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+	MultiPlan *multiPlan = NULL;
+	Job *workerJob = NULL;
+	List *taskList = NIL;
+	bool isModificationQuery = false;
+
+	scanState->executorType = MULTI_EXECUTOR_ROUTER;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->multiPlan = GetMultiPlan(scan);
+
+	multiPlan = scanState->multiPlan;
+	workerJob = multiPlan->workerJob;
+	taskList = workerJob->taskList;
+
+	isModificationQuery = IsModifyMultiPlan(multiPlan);
+
+	/* check if this is a single shard query */
+	if (list_length(taskList) == 1)
 	{
-		MultiPlan *multiPlan = GetMultiPlan(planStatement);
-		MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
-		Job *workerJob = multiPlan->workerJob;
-
-		/* ensure plan is executable */
-		VerifyMultiPlanValidity(multiPlan);
-
-		ExecCheckRTPerms(planStatement->rtable, true);
-
-		executorType = JobExecutorType(multiPlan);
-		if (executorType == MULTI_EXECUTOR_ROUTER)
+		if (isModificationQuery)
 		{
-			List *taskList = workerJob->taskList;
-			TupleDesc tupleDescriptor = ExecCleanTypeFromTL(
-				planStatement->planTree->targetlist, false);
-			List *dependendJobList PG_USED_FOR_ASSERTS_ONLY = workerJob->dependedJobList;
-
-			/* router executor cannot execute task with depencencies */
-			Assert(dependendJobList == NIL);
-
-			/* we need to set tupleDesc in executorStart */
-			queryDesc->tupDesc = tupleDescriptor;
-
-			/* drop into the router executor */
-			RouterExecutorStart(queryDesc, eflags, taskList);
+			scanState->customScanState.methods = &RouterSingleModifyCustomExecMethods;
 		}
 		else
 		{
-			PlannedStmt *masterSelectPlan = MasterNodeSelectPlan(multiPlan);
-			CreateStmt *masterCreateStmt = MasterNodeCreateStatement(multiPlan);
-			List *masterCopyStmtList = MasterNodeCopyStatementList(multiPlan);
-			RangeTblEntry *masterRangeTableEntry = NULL;
-			StringInfo jobDirectoryName = NULL;
-
-			/*
-			 * We create a directory on the master node to keep task execution results.
-			 * We also register this directory for automatic cleanup on portal delete.
-			 */
-			jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
-			CreateDirectory(jobDirectoryName);
-
-			ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
-			ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
-
-			/* pick distributed executor to use */
-			if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
-			{
-				/* skip distributed query execution for EXPLAIN commands */
-			}
-			else if (executorType == MULTI_EXECUTOR_REAL_TIME)
-			{
-				MultiRealTimeExecute(workerJob);
-			}
-			else if (executorType == MULTI_EXECUTOR_TASK_TRACKER)
-			{
-				MultiTaskTrackerExecute(workerJob);
-			}
-
-			/* then create the result relation */
-			ProcessUtility((Node *) masterCreateStmt,
-						   "(temp table creation)",
-						   PROCESS_UTILITY_QUERY,
-						   NULL,
-						   None_Receiver,
-						   NULL);
-
-			/* make the temporary table visible */
-			CommandCounterIncrement();
-
-			if (!(eflags & EXEC_FLAG_EXPLAIN_ONLY))
-			{
-				CopyQueryResults(masterCopyStmtList);
-			}
-
-			/*
-			 * Update the QueryDesc's snapshot so it sees the table. That's not
-			 * particularly pretty, but we don't have much of a choice.  One might
-			 * think we could unregister the snapshot, push a new active one,
-			 * update it, register it, and be happy. That only works if it's only
-			 * registered once though...
-			 */
-			queryDesc->snapshot->curcid = GetCurrentCommandId(false);
-
-			/*
-			 * Set the OID of the RTE used in the master select statement to point
-			 * to the now created (and filled) temporary table. The target
-			 * relation's oid is only known now.
-			 */
-			masterRangeTableEntry =
-				(RangeTblEntry *) linitial(masterSelectPlan->rtable);
-			masterRangeTableEntry->relid =
-				RelnameGetRelid(masterRangeTableEntry->eref->aliasname);
-
-			/*
-			 * Replace to-be-run query with the master select query. As the
-			 * planned statement is now replaced we can't call GetMultiPlan() in
-			 * the later hooks, so we set a flag marking this as a distributed
-			 * statement running on the master. That e.g. allows us to drop the
-			 * temp table later.
-			 *
-			 * We copy the original statement's queryId, to allow
-			 * pg_stat_statements and similar extension to associate the
-			 * statement with the toplevel statement.
-			 */
-			masterSelectPlan->queryId = queryDesc->plannedstmt->queryId;
-			queryDesc->plannedstmt = masterSelectPlan;
-
-			eflags |= EXEC_FLAG_CITUS_MASTER_SELECT;
+			scanState->customScanState.methods = &RouterSelectCustomExecMethods;
 		}
 	}
-
-	/* if the execution is not done for router executor, drop into standard executor */
-	if (queryDesc->estate == NULL ||
-		!(queryDesc->estate->es_top_eflags & EXEC_FLAG_CITUS_ROUTER_EXECUTOR))
+	else
 	{
-		standard_ExecutorStart(queryDesc, eflags);
+		Assert(isModificationQuery);
+		scanState->customScanState.methods = &RouterMultiModifyCustomExecMethods;
 	}
+
+	return (Node *) scanState;
 }
 
 
 /*
- * CopyQueryResults executes the commands that copy query results into a
- * temporary table.
+ * DelayedErrorCreateScan is only called if we could not plan for the given
+ * query. This is the case when a plan is not ready for execution because
+ * CreateDistributedPlan() couldn't find a plan due to unresolved prepared
+ * statement parameters, but didn't error out, because we expect custom plans
+ * to come to our rescue. But sql (not plpgsql) functions unfortunately don't
+ * go through a codepath supporting custom plans. Here, we error out with this
+ * delayed error message.
+ */
+Node *
+DelayedErrorCreateScan(CustomScan *scan)
+{
+	MultiPlan *multiPlan = GetMultiPlan(scan);
+
+	/* raise the deferred error */
+	RaiseDeferredError(multiPlan->planningError, ERROR);
+
+	return NULL;
+}
+
+
+/*
+ * CitusSelectBeginScan is an empty function for BeginCustomScan callback.
+ */
+void
+CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
+{
+	/* just an empty function */
+}
+
+
+/*
+ * RealTimeExecScan is a callback function which returns next tuple from a real-time
+ * execution. In the first call, it executes distributed real-time plan and loads
+ * results from temporary files into custom scan's tuple store. Then, it returns
+ * tuples one by one from this tuple store.
+ */
+TupleTableSlot *
+RealTimeExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		MultiPlan *multiPlan = scanState->multiPlan;
+		Job *workerJob = multiPlan->workerJob;
+
+		PrepareMasterJobDirectory(workerJob);
+		MultiRealTimeExecute(workerJob);
+
+		LoadTuplesIntoTupleStore(scanState, workerJob);
+
+		scanState->finishedRemoteScan = true;
+	}
+
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * PrepareMasterJobDirectory creates a directory on the master node to keep job
+ * execution results. We also register this directory for automatic cleanup on
+ * portal delete.
  */
 static void
-CopyQueryResults(List *masterCopyStmtList)
+PrepareMasterJobDirectory(Job *workerJob)
 {
-	ListCell *masterCopyStmtCell = NULL;
+	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
+	CreateDirectory(jobDirectoryName);
 
-	/* now copy data from all the remote nodes into temp table */
-	foreach(masterCopyStmtCell, masterCopyStmtList)
-	{
-		Node *masterCopyStmt = (Node *) lfirst(masterCopyStmtCell);
-
-		Assert(IsA(masterCopyStmt, CopyStmt));
-
-		ProcessUtility(masterCopyStmt,
-					   "(copy job)",
-					   PROCESS_UTILITY_QUERY,
-					   NULL,
-					   None_Receiver,
-					   NULL);
-	}
-
-	/* make the copied contents visible */
-	CommandCounterIncrement();
+	ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
+	ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
 }
 
 
-/* Execute query plan. */
-void
-multi_ExecutorRun(QueryDesc *queryDesc, ScanDirection direction, tuplecount_t count)
+/*
+ * Load data collected by real-time or task-tracker executors into the tuplestore
+ * of CitusScanState. For that, we first create a tuple store, and then copy the
+ * files one-by-one into the tuple store.
+ *
+ * Note that in the long term it'd be a lot better if Multi*Execute() directly
+ * filled the tuplestores, but that's a fair bit of work.
+ */
+static void
+LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 {
-	int eflags = queryDesc->estate->es_top_eflags;
+	CustomScanState customScanState = citusScanState->customScanState;
+	List *workerTaskList = workerJob->taskList;
+	List *copyOptions = NIL;
+	EState *executorState = NULL;
+	MemoryContext executorTupleContext = NULL;
+	ExprContext *executorExpressionContext = NULL;
+	TupleDesc tupleDescriptor = NULL;
+	Relation stubRelation = NULL;
+	ListCell *workerTaskCell = NULL;
+	uint32 columnCount = 0;
+	Datum *columnValues = NULL;
+	bool *columnNulls = NULL;
+	bool randomAccess = true;
+	bool interTransactions = false;
 
-	if (eflags & EXEC_FLAG_CITUS_ROUTER_EXECUTOR)
+	executorState = citusScanState->customScanState.ss.ps.state;
+	executorTupleContext = GetPerTupleMemoryContext(executorState);
+	executorExpressionContext = GetPerTupleExprContext(executorState);
+
+	tupleDescriptor = customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
+	stubRelation = StubRelation(tupleDescriptor);
+
+	columnCount = tupleDescriptor->natts;
+	columnValues = palloc0(columnCount * sizeof(Datum));
+	columnNulls = palloc0(columnCount * sizeof(bool));
+
+	Assert(citusScanState->tuplestorestate == NULL);
+	citusScanState->tuplestorestate =
+		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
+
+	if (BinaryMasterCopyFormat)
 	{
-		/* drop into the router executor */
-		RouterExecutorRun(queryDesc, direction, count);
+		DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
+		copyOptions = lappend(copyOptions, copyOption);
 	}
-	else
-	{
-		/* drop into the standard executor */
-		standard_ExecutorRun(queryDesc, direction, count);
-	}
-}
 
-
-/* Perform actions, like e.g. firing triggers, after the query has run. */
-void
-multi_ExecutorFinish(QueryDesc *queryDesc)
-{
-	int eflags = queryDesc->estate->es_top_eflags;
-
-	if (eflags & EXEC_FLAG_CITUS_ROUTER_EXECUTOR)
+	foreach(workerTaskCell, workerTaskList)
 	{
-		/* drop into the router executor */
-		RouterExecutorFinish(queryDesc);
-	}
-	else
-	{
-		/* drop into the standard executor */
-		standard_ExecutorFinish(queryDesc);
+		Task *workerTask = (Task *) lfirst(workerTaskCell);
+		StringInfo jobDirectoryName = NULL;
+		StringInfo taskFilename = NULL;
+		CopyState copyState = NULL;
+
+		jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
+		taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
+
+		copyState = BeginCopyFrom(stubRelation, taskFilename->data, false, NULL,
+								  copyOptions);
+
+		while (true)
+		{
+			MemoryContext oldContext = NULL;
+			bool nextRowFound = false;
+
+			ResetPerTupleExprContext(executorState);
+			oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+			nextRowFound = NextCopyFrom(copyState, executorExpressionContext,
+										columnValues, columnNulls, NULL);
+			if (!nextRowFound)
+			{
+				MemoryContextSwitchTo(oldContext);
+				break;
+			}
+
+			tuplestore_putvalues(citusScanState->tuplestorestate, tupleDescriptor,
+								 columnValues, columnNulls);
+			MemoryContextSwitchTo(oldContext);
+		}
+
+		EndCopyFrom(copyState);
 	}
 }
 
 
 /*
- * multi_ExecutorEnd is a hook called to deallocate resources used during
- * query execution.
- *
- * If the query executed was the portion of a distributed query running on the
- * master, remove the resources that were needed for distributed execution.
+ * StubRelation creates a stub Relation from the given tuple descriptor.
+ * To be able to use copy.c, we need a Relation descriptor. As there is no
+ * relation corresponding to the data loaded from workers, we need to fake one.
+ * We just need the bare minimal set of fields accessed by BeginCopyFrom().
+ */
+static Relation
+StubRelation(TupleDesc tupleDescriptor)
+{
+	Relation stubRelation = palloc0(sizeof(RelationData));
+	stubRelation->rd_att = tupleDescriptor;
+	stubRelation->rd_rel = palloc0(sizeof(FormData_pg_class));
+	stubRelation->rd_rel->relkind = RELKIND_RELATION;
+
+	return stubRelation;
+}
+
+
+/*
+ * ReturnTupleFromTuplestore reads the next tuple from the tuple store of the
+ * given Citus scan node and returns it. It returns null if all tuples are read
+ * from the tuple store.
+ */
+TupleTableSlot *
+ReturnTupleFromTuplestore(CitusScanState *scanState)
+{
+	Tuplestorestate *tupleStore = scanState->tuplestorestate;
+	TupleTableSlot *resultSlot = NULL;
+	ScanDirection scanDirection = NoMovementScanDirection;
+	bool forwardScanDirection = true;
+
+	if (tupleStore == NULL)
+	{
+		return NULL;
+	}
+
+	scanDirection = scanState->customScanState.ss.ps.state->es_direction;
+	Assert(ScanDirectionIsValid(scanDirection));
+
+	if (ScanDirectionIsBackward(scanDirection))
+	{
+		forwardScanDirection = false;
+	}
+
+	resultSlot = scanState->customScanState.ss.ps.ps_ResultTupleSlot;
+	tuplestore_gettupleslot(tupleStore, forwardScanDirection, false, resultSlot);
+
+	return resultSlot;
+}
+
+
+/*
+ * TaskTrackerExecScan is a callback function which returns next tuple from a
+ * task-tracker execution. In the first call, it executes distributed task-tracker
+ * plan and loads results from temporary files into custom scan's tuple store.
+ * Then, it returns tuples one by one from this tuple store.
+ */
+TupleTableSlot *
+TaskTrackerExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		MultiPlan *multiPlan = scanState->multiPlan;
+		Job *workerJob = multiPlan->workerJob;
+
+		PrepareMasterJobDirectory(workerJob);
+		MultiTaskTrackerExecute(workerJob);
+
+		LoadTuplesIntoTupleStore(scanState, workerJob);
+
+		scanState->finishedRemoteScan = true;
+	}
+
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * CitusEndScan is used to clean up tuple store of the given custom scan state.
  */
 void
-multi_ExecutorEnd(QueryDesc *queryDesc)
+CitusEndScan(CustomScanState *node)
 {
-	int eflags = queryDesc->estate->es_top_eflags;
+	CitusScanState *scanState = (CitusScanState *) node;
 
-	if (eflags & EXEC_FLAG_CITUS_ROUTER_EXECUTOR)
+	if (scanState->tuplestorestate)
 	{
-		/* drop into the router executor */
-		RouterExecutorEnd(queryDesc);
+		tuplestore_end(scanState->tuplestorestate);
+		scanState->tuplestorestate = NULL;
 	}
-	else
-	{
-		/* drop into the standard executor */
-		standard_ExecutorEnd(queryDesc);
-	}
+}
 
-	/*
-	 * Final step of a distributed query is executing the master node select
-	 * query. We clean up the temp tables after executing it, if we already created it.
-	 */
-	if (eflags & EXEC_FLAG_CITUS_MASTER_SELECT)
-	{
-		PlannedStmt *planStatement = queryDesc->plannedstmt;
-		int savedLogMinMessages = 0;
-		int savedClientMinMessages = 0;
 
-		RangeTblEntry *rangeTableEntry = linitial(planStatement->rtable);
-		Oid masterTableRelid = rangeTableEntry->relid;
-
-		ObjectAddress masterTableObject = { InvalidOid, InvalidOid, 0 };
-
-		masterTableObject.classId = RelationRelationId;
-		masterTableObject.objectId = masterTableRelid;
-		masterTableObject.objectSubId = 0;
-
-		/*
-		 * Temporarily change logging level to avoid DEBUG2 logging output by
-		 * performDeletion. This avoids breaking the regression tests which
-		 * use DEBUG2 logging.
-		 */
-		savedLogMinMessages = log_min_messages;
-		savedClientMinMessages = client_min_messages;
-
-		log_min_messages = INFO;
-		client_min_messages = INFO;
-
-		performDeletion(&masterTableObject, DROP_RESTRICT, PERFORM_DELETION_INTERNAL);
-
-		log_min_messages = savedLogMinMessages;
-		client_min_messages = savedClientMinMessages;
-	}
+/*
+ * CitusReScan is just a place holder for rescan callback. Currently, we don't
+ * support rescan given that there is not any way to reach this code path.
+ */
+void
+CitusReScan(CustomScanState *node)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("rescan is unsupported"),
+					errdetail("We don't expect this code path to be executed.")));
 }
