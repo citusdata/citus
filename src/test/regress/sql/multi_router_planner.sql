@@ -917,6 +917,7 @@ DECLARE test_cursor CURSOR FOR
 FETCH test_cursor;
 FETCH ALL test_cursor;
 FETCH test_cursor; -- fetch one row after the last
+FETCH BACKWARD test_cursor;
 END;
 
 -- queries inside copy can be router plannable
@@ -988,14 +989,14 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM author_articles_id_word_count();
 
 -- materialized views can be created for router plannable queries
-CREATE MATERIALIZED VIEW mv_articles_hash AS
+CREATE MATERIALIZED VIEW mv_articles_hash_empty AS
 	SELECT * FROM articles_hash WHERE author_id = 1;
+SELECT * FROM mv_articles_hash_empty;
 
-SELECT * FROM mv_articles_hash;
-
-CREATE MATERIALIZED VIEW mv_articles_hash_error AS
+CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
-	
+SELECT * FROM mv_articles_hash_data;
+
 -- router planner/executor is now enabled for task-tracker executor
 SET citus.task_executor_type to 'task-tracker';
 SELECT id
@@ -1053,7 +1054,8 @@ DROP TABLE failure_test;
 DROP FUNCTION author_articles_max_id();
 DROP FUNCTION author_articles_id_word_count();
 
-DROP MATERIALIZED VIEW mv_articles_hash;
+DROP MATERIALIZED VIEW mv_articles_hash_empty;
+DROP MATERIALIZED VIEW mv_articles_hash_data;
 
 DROP TABLE articles_hash;
 DROP TABLE articles_single_shard_hash;

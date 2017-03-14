@@ -60,10 +60,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  StartTransactionCommand
@@ -72,10 +74,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
@@ -89,10 +93,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  StartTransactionCommand
@@ -101,10 +107,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 -- Round-robin task assignment relies on the current jobId. We therefore need to
 -- ensure that jobIds start with an odd number here; this way, task assignment
@@ -132,10 +140,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  StartTransactionCommand
@@ -144,10 +154,12 @@ DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  StartTransactionCommand
@@ -156,10 +168,12 @@ DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  CommitTransactionCommand
-                         QUERY PLAN                         
-------------------------------------------------------------
- explain statements for distributed queries are not enabled
-(1 row)
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
 
 RESET citus.task_assignment_policy;
 DEBUG:  StartTransactionCommand

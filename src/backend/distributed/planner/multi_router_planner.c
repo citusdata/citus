@@ -195,6 +195,8 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	List *placementList = NIL;
 	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
 
+	multiPlan->operation = query->commandType;
+
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
 		commandType == CMD_DELETE)
 	{
@@ -234,8 +236,13 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	multiPlan->workerJob = job;
 	multiPlan->masterQuery = NULL;
-	multiPlan->masterTableName = NULL;
 	multiPlan->routerExecutable = true;
+	multiPlan->hasReturning = false;
+
+	if (list_length(originalQuery->returningList) > 0)
+	{
+		multiPlan->hasReturning = true;
+	}
 
 	return multiPlan;
 }
@@ -263,6 +270,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
+
+	multiPlan->operation = originalQuery->commandType;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
@@ -316,9 +325,14 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 
 	/* and finally the multi plan */
 	multiPlan->workerJob = workerJob;
-	multiPlan->masterTableName = NULL;
 	multiPlan->masterQuery = NULL;
 	multiPlan->routerExecutable = true;
+	multiPlan->hasReturning = false;
+
+	if (list_length(originalQuery->returningList) > 0)
+	{
+		multiPlan->hasReturning = true;
+	}
 
 	return multiPlan;
 }

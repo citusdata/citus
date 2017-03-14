@@ -21,8 +21,9 @@
 
 /* Function declarations for building local plans on the master node */
 struct MultiPlan;
-extern CreateStmt * MasterNodeCreateStatement(struct MultiPlan *multiPlan);
-extern List * MasterNodeCopyStatementList(struct MultiPlan *multiPlan);
-extern PlannedStmt * MasterNodeSelectPlan(struct MultiPlan *multiPlan);
+struct CustomScan;
+extern PlannedStmt * MasterNodeSelectPlan(struct MultiPlan *multiPlan,
+										  struct CustomScan *dataScan);
+
 
 #endif   /* MULTI_MASTER_PLANNER_H */

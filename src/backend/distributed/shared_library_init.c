@@ -24,7 +24,6 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
-#include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -115,13 +114,7 @@ _PG_init(void)
 	 * (thus as the innermost/last running hook) to be able to do our
 	 * duties. For simplicity insist that all hooks are previously unused.
 	 */
-	if (planner_hook != NULL ||
-		ExplainOneQuery_hook != NULL ||
-		ExecutorStart_hook != NULL ||
-		ExecutorRun_hook != NULL ||
-		ExecutorFinish_hook != NULL ||
-		ExecutorEnd_hook != NULL ||
-		ProcessUtility_hook != NULL)
+	if (planner_hook != NULL || ProcessUtility_hook != NULL)
 	{
 		ereport(ERROR, (errmsg("Citus has to be loaded first"),
 						errhint("Place citus at the beginning of "
@@ -146,15 +139,6 @@ _PG_init(void)
 
 	/* intercept planner */
 	planner_hook = multi_planner;
-
-	/* intercept explain */
-	ExplainOneQuery_hook = MultiExplainOneQuery;
-
-	/* intercept executor */
-	ExecutorStart_hook = multi_ExecutorStart;
-	ExecutorRun_hook = multi_ExecutorRun;
-	ExecutorFinish_hook = multi_ExecutorFinish;
-	ExecutorEnd_hook = multi_ExecutorEnd;
 
 	/* register utility hook */
 	ProcessUtility_hook = multi_ProcessUtility;

@@ -74,81 +74,29 @@ bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
 static void ReacquireMetadataLocks(List *taskList);
-static void ExecuteSingleModifyTask(QueryDesc *queryDesc, Task *task,
+static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
-static void ExecuteSingleSelectTask(QueryDesc *queryDesc, Task *task);
-static List * GetModifyConnections(List *taskPlacementList,
-								   bool markCritical,
+static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
+static List * GetModifyConnections(List *taskPlacementList, bool markCritical,
 								   bool startedInTransaction);
-static void ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
+static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
-								ParamListInfo paramListInfo,
-								MaterialState *routerState,
-								TupleDesc tupleDescriptor);
+								ParamListInfo paramListInfo, CitusScanState *scanState);
 static List * TaskShardIntervalList(List *taskList);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
-static uint64 ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
-									   DestReceiver *destination,
-									   Tuplestorestate *tupleStore);
+static void ProcessMasterEvaluableFunctions(Job *workerJob);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
-static bool StoreQueryResult(MaterialState *routerState, MultiConnection *connection,
-							 TupleDesc tupleDescriptor, bool failOnError, int64 *rows);
+static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
+							 bool failOnError, int64 *rows);
 static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 							   int64 *rows);
-
-
-/*
- * RouterExecutorStart sets up the executor state and queryDesc for router
- * execution.
- */
-void
-RouterExecutorStart(QueryDesc *queryDesc, int eflags, List *taskList)
-{
-	EState *executorState = NULL;
-	CmdType commandType = queryDesc->operation;
-
-	/*
-	 * If we are executing a prepared statement, then we may not yet have obtained
-	 * the metadata locks in this transaction. To prevent a concurrent shard copy,
-	 * we re-obtain them here or error out if a shard copy has already started.
-	 *
-	 * If a shard copy finishes in between fetching a plan from cache and
-	 * re-acquiring the locks, then we might still run a stale plan, which could
-	 * cause shard placements to diverge. To minimize this window, we take the
-	 * locks as early as possible.
-	 */
-	ReacquireMetadataLocks(taskList);
-
-	/* disallow triggers during distributed modify commands */
-	if (commandType != CMD_SELECT)
-	{
-		eflags |= EXEC_FLAG_SKIP_TRIGGERS;
-	}
-
-	/* signal that it is a router execution */
-	eflags |= EXEC_FLAG_CITUS_ROUTER_EXECUTOR;
-
-	/* build empty executor state to obtain per-query memory context */
-	executorState = CreateExecutorState();
-	executorState->es_top_eflags = eflags;
-	executorState->es_instrument = queryDesc->instrument_options;
-
-	queryDesc->estate = executorState;
-
-	/*
-	 * As it's similar to what we're doing, use a MaterialState node to store
-	 * our state. This is used to store our tuplestore, so cursors etc. can
-	 * work.
-	 */
-	queryDesc->planstate = (PlanState *) makeNode(MaterialState);
-}
 
 
 /*
@@ -458,140 +406,140 @@ RequiresConsistentSnapshot(Task *task)
 
 
 /*
- * RouterExecutorRun actually executes a single task on a worker.
+ * CitusModifyBeginScan checks the validity of the given custom scan node and
+ * gets locks on the shards involved in the task list of the distributed plan.
  */
 void
-RouterExecutorRun(QueryDesc *queryDesc, ScanDirection direction, long count)
+CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	PlannedStmt *planStatement = queryDesc->plannedstmt;
-	MultiPlan *multiPlan = GetMultiPlan(planStatement);
+	CitusScanState *scanState = (CitusScanState *) node;
+	MultiPlan *multiPlan = scanState->multiPlan;
 	Job *workerJob = multiPlan->workerJob;
 	List *taskList = workerJob->taskList;
-	EState *estate = queryDesc->estate;
-	CmdType operation = queryDesc->operation;
-	MemoryContext oldcontext = NULL;
-	DestReceiver *destination = queryDesc->dest;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-	bool sendTuples = operation == CMD_SELECT || queryDesc->plannedstmt->hasReturning;
-
-	Assert(estate != NULL);
-	Assert(!(estate->es_top_eflags & EXEC_FLAG_EXPLAIN_ONLY));
-
-	oldcontext = MemoryContextSwitchTo(estate->es_query_cxt);
-
-	if (queryDesc->totaltime != NULL)
-	{
-		InstrStartNode(queryDesc->totaltime);
-	}
-
-	estate->es_processed = 0;
-
-	/* startup the tuple receiver */
-	if (sendTuples)
-	{
-		(*destination->rStartup)(destination, operation, queryDesc->tupDesc);
-	}
-
-	/* we only support returning nothing or scanning forward */
-	if (ScanDirectionIsNoMovement(direction))
-	{
-		/* comments in PortalRunSelect() explain the reason for this case */
-		goto out;
-	}
-	else if (!ScanDirectionIsForward(direction))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("scan directions other than forward scans "
-							   "are unsupported")));
-	}
 
 	/*
-	 * If query has not yet been executed, do so now. The main reason why the
-	 * query might already have been executed is cursors.
+	 * If we are executing a prepared statement, then we may not yet have obtained
+	 * the metadata locks in this transaction. To prevent a concurrent shard copy,
+	 * we re-obtain them here or error out if a shard copy has already started.
+	 *
+	 * If a shard copy finishes in between fetching a plan from cache and
+	 * re-acquiring the locks, then we might still run a stale plan, which could
+	 * cause shard placements to diverge. To minimize this window, we take the
+	 * locks as early as possible.
 	 */
-	if (!routerState->eof_underlying)
+	ReacquireMetadataLocks(taskList);
+}
+
+
+/*
+ * RouterSingleModifyExecScan executes a single modification query on a
+ * distributed plan and returns results if there is any.
+ */
+TupleTableSlot *
+RouterSingleModifyExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
 	{
-		bool isModificationQuery = false;
-		bool requiresMasterEvaluation = workerJob->requiresMasterEvaluation;
+		MultiPlan *multiPlan = scanState->multiPlan;
+		bool hasReturning = multiPlan->hasReturning;
+		Job *workerJob = multiPlan->workerJob;
+		List *taskList = workerJob->taskList;
+		Task *task = (Task *) linitial(taskList);
 
-		if (operation == CMD_INSERT || operation == CMD_UPDATE ||
-			operation == CMD_DELETE)
-		{
-			isModificationQuery = true;
-		}
-		else if (operation != CMD_SELECT)
-		{
-			ereport(ERROR, (errmsg("unrecognized operation code: %d",
-								   (int) operation)));
-		}
+		ProcessMasterEvaluableFunctions(workerJob);
 
-		if (requiresMasterEvaluation)
-		{
-			Query *jobQuery = workerJob->jobQuery;
+		ExecuteSingleModifyTask(scanState, task, hasReturning);
 
-			ExecuteMasterEvaluableFunctions(jobQuery);
-			RebuildQueryStrings(jobQuery, taskList);
-		}
-
-		if (list_length(taskList) == 1)
-		{
-			Task *task = (Task *) linitial(taskList);
-
-			if (isModificationQuery)
-			{
-				ExecuteSingleModifyTask(queryDesc, task, sendTuples);
-			}
-			else
-			{
-				ExecuteSingleSelectTask(queryDesc, task);
-			}
-		}
-		else
-		{
-			ExecuteMultipleTasks(queryDesc, taskList, isModificationQuery,
-								 sendTuples);
-		}
-
-		/* mark underlying query as having executed */
-		routerState->eof_underlying = true;
+		scanState->finishedRemoteScan = true;
 	}
 
-	/* if the underlying query produced output, return it */
-	if (routerState->tuplestorestate != NULL)
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * ProcessMasterEvaluableFunctions executes evaluable functions and rebuilds
+ * the query strings in task lists.
+ */
+static void
+ProcessMasterEvaluableFunctions(Job *workerJob)
+{
+	if (workerJob->requiresMasterEvaluation)
 	{
-		TupleDesc resultTupleDescriptor = queryDesc->tupDesc;
-		int64 returnedRows = 0;
+		Query *jobQuery = workerJob->jobQuery;
+		List *taskList = workerJob->taskList;
 
-		/* return rows from the tuplestore */
-		returnedRows = ReturnRowsFromTuplestore(count, resultTupleDescriptor,
-												destination,
-												routerState->tuplestorestate);
+		ExecuteMasterEvaluableFunctions(jobQuery);
+		RebuildQueryStrings(jobQuery, taskList);
+	}
+}
 
-		/*
-		 * Count tuples processed, if this is a SELECT.  (For modifications
-		 * it'll already have been increased, as we want the number of
-		 * modified tuples, not the number of RETURNed tuples.)
-		 */
-		if (operation == CMD_SELECT)
-		{
-			estate->es_processed += returnedRows;
-		}
+
+/*
+ * RouterMultiModifyExecScan executes a list of tasks on remote nodes, retrieves
+ * the results and, if RETURNING is used, stores them in custom scan's tuple store.
+ * Then, it returns tuples one by one from this tuple store.
+ */
+TupleTableSlot *
+RouterMultiModifyExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		MultiPlan *multiPlan = scanState->multiPlan;
+		Job *workerJob = multiPlan->workerJob;
+		List *taskList = workerJob->taskList;
+		bool hasReturning = multiPlan->hasReturning;
+		bool isModificationQuery = true;
+
+		ProcessMasterEvaluableFunctions(workerJob);
+
+		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
+
+		scanState->finishedRemoteScan = true;
 	}
 
-out:
+	resultSlot = ReturnTupleFromTuplestore(scanState);
 
-	/* shutdown tuple receiver, if we started it */
-	if (sendTuples)
+	return resultSlot;
+}
+
+
+/*
+ * RouterSelectExecScan executes a single select task on the remote node,
+ * retrieves the results and stores them in custom scan's tuple store. Then, it
+ * returns tuples one by one from this tuple store.
+ */
+TupleTableSlot *
+RouterSelectExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
 	{
-		(*destination->rShutdown)(destination);
+		MultiPlan *multiPlan = scanState->multiPlan;
+		Job *workerJob = multiPlan->workerJob;
+		List *taskList = workerJob->taskList;
+		Task *task = (Task *) linitial(taskList);
+
+		ProcessMasterEvaluableFunctions(workerJob);
+
+		ExecuteSingleSelectTask(scanState, task);
+
+		scanState->finishedRemoteScan = true;
 	}
 
-	if (queryDesc->totaltime != NULL)
-	{
-		InstrStopNode(queryDesc->totaltime, estate->es_processed);
-	}
+	resultSlot = ReturnTupleFromTuplestore(scanState);
 
-	MemoryContextSwitchTo(oldcontext);
+	return resultSlot;
 }
 
 
@@ -603,11 +551,10 @@ out:
  * other placements or errors out if the query fails on all placements.
  */
 static void
-ExecuteSingleSelectTask(QueryDesc *queryDesc, Task *task)
+ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 {
-	TupleDesc tupleDescriptor = queryDesc->tupDesc;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-	ParamListInfo paramListInfo = queryDesc->params;
+	ParamListInfo paramListInfo =
+		scanState->customScanState.ss.ps.state->es_param_list_info;
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
@@ -639,8 +586,8 @@ ExecuteSingleSelectTask(QueryDesc *queryDesc, Task *task)
 			continue;
 		}
 
-		queryOK = StoreQueryResult(routerState, connection, tupleDescriptor,
-								   dontFailOnError, &currentAffectedTupleCount);
+		queryOK = StoreQueryResult(scanState, connection, dontFailOnError,
+								   &currentAffectedTupleCount);
 		if (queryOK)
 		{
 			return;
@@ -661,21 +608,19 @@ ExecuteSingleSelectTask(QueryDesc *queryDesc, Task *task)
  * framework), or errors out (failed on all placements).
  */
 static void
-ExecuteSingleModifyTask(QueryDesc *queryDesc, Task *task,
-						bool expectResults)
+ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResults)
 {
-	CmdType operation = queryDesc->operation;
-	TupleDesc tupleDescriptor = queryDesc->tupDesc;
-	EState *executorState = queryDesc->estate;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-	ParamListInfo paramListInfo = queryDesc->params;
-	bool resultsOK = false;
+	CmdType operation = scanState->multiPlan->operation;
+	EState *executorState = scanState->customScanState.ss.ps.state;
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	List *taskPlacementList = task->taskPlacementList;
 	List *connectionList = NIL;
 	ListCell *taskPlacementCell = NULL;
 	ListCell *connectionCell = NULL;
 	int64 affectedTupleCount = -1;
+	bool resultsOK = false;
 	bool gotResults = false;
+
 	char *queryString = task->queryString;
 	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
 	bool startedInTransaction =
@@ -761,8 +706,8 @@ ExecuteSingleModifyTask(QueryDesc *queryDesc, Task *task,
 		 */
 		if (!gotResults && expectResults)
 		{
-			queryOK = StoreQueryResult(routerState, connection, tupleDescriptor,
-									   failOnError, &currentAffectedTupleCount);
+			queryOK = StoreQueryResult(scanState, connection, failOnError,
+									   &currentAffectedTupleCount);
 		}
 		else
 		{
@@ -893,20 +838,18 @@ GetModifyConnections(List *taskPlacementList, bool markCritical, bool noNewTrans
  * commits.
  */
 static void
-ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
+ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 					 bool isModificationQuery, bool expectResults)
 {
-	TupleDesc tupleDescriptor = queryDesc->tupDesc;
-	EState *executorState = queryDesc->estate;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-	ParamListInfo paramListInfo = queryDesc->params;
+	EState *executorState = scanState->customScanState.ss.ps.state;
+	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	int64 affectedTupleCount = -1;
 
 	/* can only support modifications right now */
 	Assert(isModificationQuery);
 
 	affectedTupleCount = ExecuteModifyTasks(taskList, expectResults, paramListInfo,
-											routerState, tupleDescriptor);
+											scanState);
 
 	executorState->es_processed = affectedTupleCount;
 }
@@ -922,7 +865,7 @@ ExecuteMultipleTasks(QueryDesc *queryDesc, List *taskList,
 int64
 ExecuteModifyTasksWithoutResults(List *taskList)
 {
-	return ExecuteModifyTasks(taskList, false, NULL, NULL, NULL);
+	return ExecuteModifyTasks(taskList, false, NULL, NULL);
 }
 
 
@@ -936,7 +879,7 @@ ExecuteModifyTasksWithoutResults(List *taskList)
  */
 static int64
 ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListInfo,
-				   MaterialState *routerState, TupleDesc tupleDescriptor)
+				   CitusScanState *scanState)
 {
 	int64 totalAffectedTupleCount = 0;
 	ListCell *taskCell = NULL;
@@ -1020,8 +963,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				continue;
 			}
 
-			connection =
-				(MultiConnection *) list_nth(connectionList, placementIndex);
+			connection = (MultiConnection *) list_nth(connectionList, placementIndex);
 
 			queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 			if (!queryOK)
@@ -1066,10 +1008,10 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 			 */
 			if (placementIndex == 0 && expectResults)
 			{
-				Assert(routerState != NULL && tupleDescriptor != NULL);
+				Assert(scanState != NULL);
 
-				queryOK = StoreQueryResult(routerState, connection, tupleDescriptor,
-										   failOnError, &currentAffectedTupleCount);
+				queryOK = StoreQueryResult(scanState, connection, failOnError,
+										   &currentAffectedTupleCount);
 			}
 			else
 			{
@@ -1146,50 +1088,6 @@ TaskShardIntervalList(List *taskList)
 	}
 
 	return shardIntervalList;
-}
-
-
-/*
- * ReturnRowsFromTuplestore moves rows from a given tuplestore into a
- * receiver. It performs the necessary limiting to support cursors.
- */
-static uint64
-ReturnRowsFromTuplestore(uint64 tupleCount, TupleDesc tupleDescriptor,
-						 DestReceiver *destination, Tuplestorestate *tupleStore)
-{
-	TupleTableSlot *tupleTableSlot = NULL;
-	uint64 currentTupleCount = 0;
-
-	tupleTableSlot = MakeSingleTupleTableSlot(tupleDescriptor);
-
-	/* iterate over tuples in tuple store, and send them to destination */
-	for (;;)
-	{
-		bool nextTuple = tuplestore_gettupleslot(tupleStore, true, false, tupleTableSlot);
-		if (!nextTuple)
-		{
-			break;
-		}
-
-		(*destination->receiveSlot)(tupleTableSlot, destination);
-
-		ExecClearTuple(tupleTableSlot);
-
-		currentTupleCount++;
-
-		/*
-		 * If numberTuples is zero fetch all tuples, otherwise stop after
-		 * count tuples.
-		 */
-		if (tupleCount > 0 && tupleCount == currentTupleCount)
-		{
-			break;
-		}
-	}
-
-	ExecDropSingleTupleTableSlot(tupleTableSlot);
-
-	return currentTupleCount;
 }
 
 
@@ -1318,13 +1216,18 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
  * the connection.
  */
 static bool
-StoreQueryResult(MaterialState *routerState, MultiConnection *connection,
-				 TupleDesc tupleDescriptor, bool failOnError, int64 *rows)
+StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
+				 bool failOnError, int64 *rows)
 {
+	TupleDesc tupleDescriptor =
+		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
 	AttInMetadata *attributeInputMetadata = TupleDescGetAttInMetadata(tupleDescriptor);
-	Tuplestorestate *tupleStore = NULL;
-	uint32 expectedColumnCount = tupleDescriptor->natts;
+	List *targetList = scanState->customScanState.ss.ps.plan->targetlist;
+	uint32 expectedColumnCount = ExecCleanTargetListLength(targetList);
 	char **columnArray = (char **) palloc0(expectedColumnCount * sizeof(char *));
+	Tuplestorestate *tupleStore = NULL;
+	bool randomAccess = true;
+	bool interTransactions = false;
 	bool commandFailed = false;
 	MemoryContext ioContext = AllocSetContextCreate(CurrentMemoryContext,
 													"StoreQueryResult",
@@ -1333,17 +1236,18 @@ StoreQueryResult(MaterialState *routerState, MultiConnection *connection,
 													ALLOCSET_DEFAULT_MAXSIZE);
 	*rows = 0;
 
-	if (routerState->tuplestorestate == NULL)
+	if (scanState->tuplestorestate == NULL)
 	{
-		routerState->tuplestorestate = tuplestore_begin_heap(false, false, work_mem);
+		scanState->tuplestorestate =
+			tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
 	}
 	else if (!failOnError)
 	{
 		/* might have failed query execution on another placement before */
-		tuplestore_clear(routerState->tuplestorestate);
+		tuplestore_clear(scanState->tuplestorestate);
 	}
 
-	tupleStore = routerState->tuplestorestate;
+	tupleStore = scanState->tuplestorestate;
 
 	for (;;)
 	{
@@ -1536,40 +1440,4 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 	}
 
 	return gotResponse && !commandFailed;
-}
-
-
-/*
- * RouterExecutorFinish cleans up after a distributed execution.
- */
-void
-RouterExecutorFinish(QueryDesc *queryDesc)
-{
-	EState *estate = queryDesc->estate;
-	Assert(estate != NULL);
-
-	estate->es_finished = true;
-}
-
-
-/*
- * RouterExecutorEnd cleans up the executor state after a distributed
- * execution.
- */
-void
-RouterExecutorEnd(QueryDesc *queryDesc)
-{
-	EState *estate = queryDesc->estate;
-	MaterialState *routerState = (MaterialState *) queryDesc->planstate;
-
-	if (routerState->tuplestorestate)
-	{
-		tuplestore_end(routerState->tuplestorestate);
-	}
-
-	Assert(estate != NULL);
-
-	FreeExecutorState(estate);
-	queryDesc->estate = NULL;
-	queryDesc->totaltime = NULL;
 }

@@ -183,9 +183,11 @@ ReadMultiPlan(READFUNC_ARGS)
 {
 	READ_LOCALS(MultiPlan);
 
+	READ_INT_FIELD(operation);
+	READ_BOOL_FIELD(hasReturning);
+
 	READ_NODE_FIELD(workerJob);
 	READ_NODE_FIELD(masterQuery);
-	READ_STRING_FIELD(masterTableName);
 	READ_BOOL_FIELD(routerExecutable);
 	READ_NODE_FIELD(planningError);
 
