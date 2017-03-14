@@ -159,6 +159,11 @@ test: multi_router_planner
 test: multi_large_shardid
 
 # ----------
+#  multi_size_queries tests various size commands on distributed tables
+# ----------
+test: multi_size_queries
+
+# ----------
 # multi_drop_extension makes sure we can safely drop and recreate the extension
 # ----------
 test: multi_drop_extension
