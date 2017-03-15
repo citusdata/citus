@@ -16,6 +16,7 @@
 
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
+#include "distributed/relation_restriction_equivalence.h"
 
 
 /* Definitions local to logical plan optimizer */
@@ -106,7 +107,8 @@ extern double CountDistinctErrorRate;
 
 
 /* Function declaration for optimizing logical plans */
-extern void MultiLogicalPlanOptimize(MultiTreeRoot *multiTree);
+extern void MultiLogicalPlanOptimize(MultiTreeRoot *multiTree,
+									 PlannerRestrictionContext *plannerRestrictionContext);
 
 /* Function declaration for getting partition method for the given relation */
 extern char PartitionMethod(Oid relationId);
