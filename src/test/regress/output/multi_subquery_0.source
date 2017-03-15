@@ -154,8 +154,8 @@ FROM
 		orders_subquery
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot push down this subquery
-DETAIL:  Relations need to be joining on partition columns
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 SELECT
 	avg(unit_price)
 FROM
@@ -169,8 +169,8 @@ FROM
 		l_orderkey = o_custkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot push down this subquery
-DETAIL:  Relations need to be joining on partition columns
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- Check that we error out if there is union all.
 SELECT count(*) FROM
 (
@@ -178,25 +178,21 @@ SELECT count(*) FROM
    (SELECT 1::bigint)
 ) b;
 ERROR:  could not run distributed query with complex table expressions
+---
+-- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
+---
 -- Check that we error out if queries in union do not include partition columns.
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION
-   (SELECT l_partkey FROM lineitem_subquery)
-) b;
-ERROR:  cannot push down this subquery
-DETAIL:  Union clauses need to select partition columns
+--SELECT count(*) FROM
+--(
+  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
+  -- (SELECT l_partkey FROM lineitem_subquery)
+--) b;
 -- Check that we run union queries if partition column is selected.
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION
-   (SELECT l_orderkey FROM lineitem_subquery)
-) b;
- count 
--------
-  2985
-(1 row)
-
+--SELECT count(*) FROM
+--(
+  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
+  -- (SELECT l_orderkey FROM lineitem_subquery)
+--) b;
 -- Check that we error out if the outermost query has subquery join.
 SELECT
 	avg(o_totalprice/l_quantity)
@@ -288,32 +284,22 @@ WHERE
 (1 row)
 
 -- Check that if subquery is pulled, we don't error and run query properly.
-SELECT count(*) FROM
-(
-	SELECT l_orderkey FROM (
-		(SELECT l_orderkey FROM lineitem_subquery) UNION
-		(SELECT l_orderkey FROM lineitem_subquery)
-	) a
-	WHERE l_orderkey = 1
-) b;
- count 
--------
-     1
-(1 row)
-
-SELECT count(*) FROM
-(
-	SELECT * FROM (
-		(SELECT * FROM lineitem_subquery) UNION
-		(SELECT * FROM lineitem_subquery)
-	) a
-	WHERE l_orderkey = 1
-) b;
- count 
--------
-     6
-(1 row)
-
+--SELECT count(*) FROM
+--(
+	--SELECT l_orderkey FROM (
+		--(SELECT l_orderkey FROM lineitem_subquery) UNION
+		--(SELECT l_orderkey FROM lineitem_subquery)
+	--) a
+	--WHERE l_orderkey = 1
+--) b;
+--SELECT count(*) FROM
+--(
+	--SELECT * FROM (
+		--(SELECT * FROM lineitem_subquery) UNION
+		--(SELECT * FROM lineitem_subquery)
+	--) a
+	--WHERE l_orderkey = 1
+--) b;
 SELECT max(l_orderkey) FROM
 (
 	SELECT l_orderkey FROM (
@@ -376,6 +362,21 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  Skipping the target shard interval 270006 because SELECT query is pruned away for the interval
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
 (0 rows)
@@ -383,6 +384,21 @@ AS foo;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  predicate pruning for shardId 270007
+DEBUG:  predicate pruning for shardId 270008
+DEBUG:  Skipping the target shard interval 270007 because SELECT query is pruned away for the interval
+DEBUG:  predicate pruning for shardId 270005
+DEBUG:  predicate pruning for shardId 270006
+DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
 (0 rows)
@@ -427,18 +443,390 @@ CREATE TYPE user_composite_type AS
 	tenant_id BIGINT,
 	user_id BIGINT
 );
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
 \c - - - :worker_1_port
 CREATE TYPE user_composite_type AS
 (
 	tenant_id BIGINT,
 	user_id BIGINT
 );
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
 \c - - - :worker_2_port
 CREATE TYPE user_composite_type AS
 (
 	tenant_id BIGINT,
 	user_id BIGINT
 );
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
 \c - - - :master_port
 CREATE TABLE events (
 	composite_id user_composite_type,
@@ -515,8 +903,7 @@ FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type IN ('click', 'submit', 'pay')) AS subquery
@@ -543,14 +930,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -558,14 +945,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -583,20 +970,15 @@ FROM
 		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 		event_type = 'pay') AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-   event_average    |       hasdone       
---------------------+---------------------
- 4.0000000000000000 | Has not done paying
- 2.5000000000000000 | Has done paying
-(2 rows)
-
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- Union, left join and having subquery pushdown
 SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -612,14 +994,14 @@ SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -627,14 +1009,14 @@ SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -643,6 +1025,7 @@ SELECT
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			COUNT(*) AS count_pay
 		FROM
 			events
@@ -651,13 +1034,11 @@ SELECT
 			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'pay'
 		GROUP BY
-			tenant_id,
-			user_id
+			composite_id
 		HAVING
 			COUNT(*) > 2) AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -668,11 +1049,9 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-   event_average    | count_pay 
---------------------+-----------
- 3.0000000000000000 |         0
-(1 row)
-
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+	
 -- Lateral join subquery pushdown
 SELECT
 	tenant_id,
@@ -689,6 +1068,7 @@ FROM
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			lastseen
 		FROM
 			users
@@ -707,8 +1087,7 @@ FROM
 			FROM
 				events
 			WHERE
-				(composite_id).tenant_id = subquery_top.tenant_id AND
-				(composite_id).user_id = subquery_top.user_id
+				(composite_id) = subquery_top.composite_id
 			ORDER BY
 				event_time DESC
 			LIMIT
@@ -750,36 +1129,31 @@ FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type IN ('click', 'submit', 'pay')) AS subquery
 	GROUP BY
 		tenant_id,
 		user_id) AS subquery;
-                                                                                          QUERY PLAN                                                                                          
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Aggregate
    ->  Custom Scan (Citus Real-Time)
-         Task Count: 2
-         Tasks Shown: One of 2
+         Task Count: 4
+         Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=57637 dbname=regression
-               ->  Aggregate
+                ->  Aggregate
                      ->  GroupAggregate
                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                            ->  Merge Join
-                                 Merge Cond: ((((users.composite_id).tenant_id) = ((events.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events.composite_id).user_id)))
                                  ->  Sort
-                                       Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                 Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
                                        ->  Seq Scan on users_270013 users
-                                             Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                       One-Time Filter: false
                                  ->  Sort
-                                       Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
                                        ->  Seq Scan on events_270009 events
-                                             Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
-(19 rows)
 
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -797,14 +1171,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -812,14 +1186,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -837,55 +1211,34 @@ FROM
 		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 		event_type = 'pay') AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-                                                                                                                      QUERY PLAN                                                                                                                       
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
  HashAggregate
-   Group Key: remote_scan.hasdone
    ->  Custom Scan (Citus Real-Time)
-         Task Count: 2
-         Tasks Shown: One of 2
-         ->  Task
-               Node: host=localhost port=57637 dbname=regression
                ->  HashAggregate
-                     Group Key: COALESCE(('Has done paying'::text), 'Has not done paying'::text)
                      ->  GroupAggregate
-                           Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
                            ->  Sort
-                                 Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
                                  ->  Merge Left Join
-                                       Merge Cond: ((((users.composite_id).tenant_id) = ((events_2.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events_2.composite_id).user_id)))
                                        ->  Unique
                                              ->  Sort
-                                                   Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('action=>1'::text), events.event_time
                                                    ->  Append
                                                          ->  Nested Loop
-                                                               Join Filter: (((users.composite_id).tenant_id = (events.composite_id).tenant_id) AND ((users.composite_id).user_id = (events.composite_id).user_id))
                                                                ->  Seq Scan on events_270009 events
-                                                                     Filter: ((event_type)::text = 'click'::text)
                                                                ->  Seq Scan on users_270013 users
-                                                                     Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                                          ->  Nested Loop
-                                                               Join Filter: (((users_1.composite_id).tenant_id = (events_1.composite_id).tenant_id) AND ((users_1.composite_id).user_id = (events_1.composite_id).user_id))
                                                                ->  Seq Scan on events_270009 events_1
-                                                                     Filter: ((event_type)::text = 'submit'::text)
                                                                ->  Seq Scan on users_270013 users_1
-                                                                     Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
                                        ->  Materialize
                                              ->  Unique
                                                    ->  Sort
-                                                         Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
                                                          ->  Seq Scan on events_270009 events_2
-                                                               Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
-(37 rows)
-
 -- Union, left join and having subquery pushdown
 EXPLAIN (COSTS OFF)
   SELECT
@@ -902,14 +1255,14 @@ EXPLAIN (COSTS OFF)
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -917,14 +1270,14 @@ EXPLAIN (COSTS OFF)
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -933,6 +1286,7 @@ EXPLAIN (COSTS OFF)
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			COUNT(*) AS count_pay
 		FROM
 			events
@@ -941,13 +1295,11 @@ EXPLAIN (COSTS OFF)
 			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'pay'
 		GROUP BY
-			tenant_id,
-			user_id
+			composite_id
 		HAVING
 			COUNT(*) > 2) AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -958,7 +1310,8 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  bogus varattno for OUTER_VAR var: 3
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- Lateral join subquery pushdown
 EXPLAIN (COSTS OFF)
 SELECT
@@ -976,6 +1329,7 @@ FROM
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			lastseen
 		FROM
 			users
@@ -994,8 +1348,7 @@ FROM
 			FROM
 				events
 			WHERE
-				(composite_id).tenant_id = subquery_top.tenant_id AND
-				(composite_id).user_id = subquery_top.user_id
+				(composite_id) = subquery_top.composite_id
 			ORDER BY
 				event_time DESC
 			LIMIT
@@ -1010,34 +1363,35 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-                                                                                                      QUERY PLAN                                                                                                      
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_lastseen DESC
          ->  Custom Scan (Citus Real-Time)
-               Task Count: 2
-               Tasks Shown: One of 2
+               Task Count: 4
+               Tasks Shown: One of 4
                ->  Task
                      Node: host=localhost port=57637 dbname=regression
                      ->  Limit
                            ->  Sort
-                                 Sort Key: (max(users.lastseen)) DESC
+                                 Sort Key: (max(lastseen)) DESC
                                  ->  GroupAggregate
-                                       Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                       Group Key: ((composite_id).tenant_id), ((composite_id).user_id)
                                        ->  Sort
-                                             Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                             Sort Key: ((composite_id).tenant_id), ((composite_id).user_id)
                                              ->  Nested Loop Left Join
                                                    ->  Limit
                                                          ->  Sort
-                                                               Sort Key: users.lastseen DESC
+                                                               Sort Key: lastseen DESC
                                                                ->  Seq Scan on users_270013 users
-                                                                     Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                                     One-Time Filter: false
                                                    ->  Limit
                                                          ->  Sort
                                                                Sort Key: events.event_time DESC
                                                                ->  Seq Scan on events_270009 events
-                                                                     Filter: (((composite_id).tenant_id = ((users.composite_id).tenant_id)) AND ((composite_id).user_id = ((users.composite_id).user_id)))
+                                                                     Filter: (composite_id = composite_id)
 (26 rows)
 
+	
 SET citus.enable_router_execution TO 'true';

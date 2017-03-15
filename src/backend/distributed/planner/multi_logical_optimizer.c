@@ -148,16 +148,15 @@ static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 
 /* Local functions forward declarations for subquery pushdown checks */
-static void ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode);
+static void ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
+											   PlannerRestrictionContext *
+											   plannerRestrictionContext);
 static void ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit);
 static void ErrorIfUnsupportedTableCombination(Query *queryTree);
 static void ErrorIfUnsupportedUnionQuery(Query *unionQuery);
 static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
-static Query * LateralQuery(Query *query);
-static bool SupportedLateralQuery(Query *parentQuery, Query *lateralQuery);
-static bool JoinOnPartitionColumn(Query *query);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
 static List * RelationIdList(Query *query);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
@@ -190,9 +189,15 @@ static bool HasOrderByHllType(List *sortClauseList, List *targetList);
  * Third, the function pulls up the collect operators in the tree. Fourth, the
  * function finds the extended operator node, and splits this node into master
  * and worker extended operator nodes.
+ *
+ * We also pass plannerRestrictionContext to the optimizer. The context
+ * is primarily used to decide whether the subquery is safe to pushdown.
+ * If not, it helps to produce meaningful error messages for subquery
+ * pushdown planning.
  */
 void
-MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
+MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan,
+						 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	bool hasOrderByHllType = false;
 	List *selectNodeList = NIL;
@@ -212,7 +217,7 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	ErrorIfContainsUnsupportedAggregate(logicalPlanNode);
 
 	/* check that we can pushdown subquery in the plan */
-	ErrorIfContainsUnsupportedSubquery(logicalPlanNode);
+	ErrorIfContainsUnsupportedSubquery(logicalPlanNode, plannerRestrictionContext);
 
 	/*
 	 * If a select node exists, we use the idempower property to split the node
@@ -2806,13 +2811,15 @@ GroupedByColumn(List *groupClauseList, List *targetList, Var *column)
  * the subquery.
  */
 static void
-ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode)
+ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
+								   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Query *subquery = NULL;
 	List *extendedOpNodeList = NIL;
 	MultiTable *multiTable = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	bool outerQueryHasLimit = false;
+	bool restrictionEquivalenceForPartitionKeys = false;
 
 	/* check if logical plan includes a subquery */
 	List *subqueryMultiTableList = SubqueryMultiTableList(logicalPlanNode);
@@ -2823,6 +2830,18 @@ ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode)
 
 	/* currently in the planner we only allow one subquery in from-clause*/
 	Assert(list_length(subqueryMultiTableList) == 1);
+
+	restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+	if (!restrictionEquivalenceForPartitionKeys)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot pushdown the subquery since all relations are not "
+							   "joined using distribution keys"),
+						errdetail("Each relation should be joined with at least "
+								  "one another relation using distribution keys and "
+								  "equality operator.")));
+	}
 
 	multiTable = (MultiTable *) linitial(subqueryMultiTableList);
 	subquery = multiTable->subquery;
@@ -2896,7 +2915,6 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
-	Query *lateralQuery = NULL;
 	List *subqueryEntryList = NIL;
 	ListCell *rangeTableEntryCell = NULL;
 
@@ -2990,43 +3008,6 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 		preconditionsSatisfied = false;
 		errorDetail = "Having qual without group by on partition column is "
 					  "currently unsupported";
-	}
-
-	/*
-	 * Check if join is supported. We check lateral joins differently, because
-	 * lateral join representation in query tree is a bit different than normal
-	 * join queries.
-	 */
-	lateralQuery = LateralQuery(subqueryTree);
-	if (lateralQuery != NULL)
-	{
-		bool supportedLateralQuery = SupportedLateralQuery(subqueryTree, lateralQuery);
-		if (!supportedLateralQuery)
-		{
-			preconditionsSatisfied = false;
-			errorDetail = "This type of lateral query in subquery is currently "
-						  "unsupported";
-		}
-	}
-	else
-	{
-		List *joinTreeTableIndexList = NIL;
-		uint32 joiningTableCount = 0;
-
-		ExtractRangeTableIndexWalker((Node *) subqueryTree->jointree,
-									 &joinTreeTableIndexList);
-		joiningTableCount = list_length(joinTreeTableIndexList);
-
-		/* if this is a join query, check if join clause is on partition columns */
-		if ((joiningTableCount > 1))
-		{
-			bool joinOnPartitionColumn = JoinOnPartitionColumn(subqueryTree);
-			if (!joinOnPartitionColumn)
-			{
-				preconditionsSatisfied = false;
-				errorDetail = "Relations need to be joining on partition columns";
-			}
-		}
 	}
 
 	/* distinct clause list must include partition column */
@@ -3587,273 +3568,6 @@ FullCompositeFieldList(List *compositeFieldList)
 	}
 
 	return fullCompositeFieldList;
-}
-
-
-/*
- * LateralQuery walks over the given range table list and if there is a subquery
- * columns with other sibling subquery.
- */
-static Query *
-LateralQuery(Query *query)
-{
-	Query *lateralQuery = NULL;
-	List *rangeTableList = query->rtable;
-
-	ListCell *rangeTableCell = NULL;
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		if (rangeTableEntry->rtekind == RTE_SUBQUERY && rangeTableEntry->lateral)
-		{
-			lateralQuery = rangeTableEntry->subquery;
-			break;
-		}
-	}
-
-	return lateralQuery;
-}
-
-
-/*
- * SupportedLateralQuery checks if the given lateral query is joined on partition
- * columns with another siblings subquery.
- */
-static bool
-SupportedLateralQuery(Query *parentQuery, Query *lateralQuery)
-{
-	bool supportedLateralQuery = false;
-	List *outerCompositeFieldList = NIL;
-	List *localCompositeFieldList = NIL;
-	ListCell *qualifierCell = NULL;
-
-	List *qualifierList = QualifierList(lateralQuery->jointree);
-	foreach(qualifierCell, qualifierList)
-	{
-		OpExpr *operatorExpression = NULL;
-		List *argumentList = NIL;
-		bool equalsOperator = false;
-		Expr *leftArgument = NULL;
-		Expr *rightArgument = NULL;
-		Expr *outerQueryExpression = NULL;
-		Expr *localQueryExpression = NULL;
-		Var *leftColumn = NULL;
-		Var *rightColumn = NULL;
-		bool outerColumnIsPartitionColumn = false;
-		bool localColumnIsPartitionColumn = false;
-
-		Node *qualifier = (Node *) lfirst(qualifierCell);
-		if (!IsA(qualifier, OpExpr))
-		{
-			continue;
-		}
-
-		operatorExpression = (OpExpr *) qualifier;
-		argumentList = operatorExpression->args;
-
-		/*
-		 * Join clauses must have two arguments. Note that logic here use to find
-		 * join clauses is very similar to IsJoinClause(). But we are not able to
-		 * reuse it, because it calls pull_var_clause_default() which in return
-		 * deep down calls pull_var_clause_walker(), and this function errors out
-		 * for variable level other than 0 which is the case for lateral joins.
-		 */
-		if (list_length(argumentList) != 2)
-		{
-			continue;
-		}
-
-		equalsOperator = OperatorImplementsEquality(operatorExpression->opno);
-		if (!equalsOperator)
-		{
-			continue;
-		}
-
-		/* get left and right side of the expression */
-		leftArgument = (Expr *) linitial(argumentList);
-		rightArgument = (Expr *) lsecond(argumentList);
-
-		if (IsA(leftArgument, Var))
-		{
-			leftColumn = (Var *) leftArgument;
-		}
-		else if (IsA(leftArgument, FieldSelect))
-		{
-			FieldSelect *fieldSelect = (FieldSelect *) leftArgument;
-			Expr *fieldExpression = fieldSelect->arg;
-
-			if (!IsA(fieldExpression, Var))
-			{
-				continue;
-			}
-
-			leftColumn = (Var *) fieldExpression;
-		}
-		else
-		{
-			continue;
-		}
-
-		if (IsA(rightArgument, Var))
-		{
-			rightColumn = (Var *) rightArgument;
-		}
-		else if (IsA(rightArgument, FieldSelect))
-		{
-			FieldSelect *fieldSelect = (FieldSelect *) rightArgument;
-			Expr *fieldExpression = fieldSelect->arg;
-
-			if (!IsA(fieldExpression, Var))
-			{
-				continue;
-			}
-
-			rightColumn = (Var *) fieldExpression;
-		}
-		else
-		{
-			continue;
-		}
-
-		if (leftColumn->varlevelsup == 1 && rightColumn->varlevelsup == 0)
-		{
-			outerQueryExpression = leftArgument;
-			localQueryExpression = rightArgument;
-		}
-		else if (leftColumn->varlevelsup == 0 && rightColumn->varlevelsup == 1)
-		{
-			outerQueryExpression = rightArgument;
-			localQueryExpression = leftArgument;
-		}
-		else
-		{
-			continue;
-		}
-
-		outerColumnIsPartitionColumn = IsPartitionColumn(outerQueryExpression,
-														 parentQuery);
-		localColumnIsPartitionColumn = IsPartitionColumn(localQueryExpression,
-														 lateralQuery);
-
-		if (outerColumnIsPartitionColumn && localColumnIsPartitionColumn)
-		{
-			FieldSelect *outerCompositeField =
-				CompositeFieldRecursive(outerQueryExpression, parentQuery);
-			FieldSelect *localCompositeField =
-				CompositeFieldRecursive(localQueryExpression, lateralQuery);
-
-			/*
-			 * If partition colums are composite fields, add them to list to
-			 * check later if all composite fields are used.
-			 */
-			if (outerCompositeField && localCompositeField)
-			{
-				outerCompositeFieldList = lappend(outerCompositeFieldList,
-												  outerCompositeField);
-				localCompositeFieldList = lappend(localCompositeFieldList,
-												  localCompositeField);
-			}
-
-			/* if both sides are not composite fields, they are normal columns */
-			if (!(outerCompositeField || localCompositeField))
-			{
-				supportedLateralQuery = true;
-				break;
-			}
-		}
-	}
-
-	/* check composite fields */
-	if (!supportedLateralQuery)
-	{
-		bool outerFullCompositeFieldList =
-			FullCompositeFieldList(outerCompositeFieldList);
-		bool localFullCompositeFieldList =
-			FullCompositeFieldList(localCompositeFieldList);
-
-		if (outerFullCompositeFieldList && localFullCompositeFieldList)
-		{
-			supportedLateralQuery = true;
-		}
-	}
-
-	return supportedLateralQuery;
-}
-
-
-/*
- * JoinOnPartitionColumn checks if both sides of at least one join clause are on
- * partition columns.
- */
-static bool
-JoinOnPartitionColumn(Query *query)
-{
-	bool joinOnPartitionColumn = false;
-	List *leftCompositeFieldList = NIL;
-	List *rightCompositeFieldList = NIL;
-	List *qualifierList = QualifierList(query->jointree);
-	List *joinClauseList = JoinClauseList(qualifierList);
-
-	ListCell *joinClauseCell = NULL;
-	foreach(joinClauseCell, joinClauseList)
-	{
-		OpExpr *joinClause = (OpExpr *) lfirst(joinClauseCell);
-		List *joinArgumentList = joinClause->args;
-		Expr *leftArgument = NULL;
-		Expr *rightArgument = NULL;
-		bool isLeftColumnPartitionColumn = false;
-		bool isRightColumnPartitionColumn = false;
-
-		/* get left and right side of the expression */
-		leftArgument = (Expr *) linitial(joinArgumentList);
-		rightArgument = (Expr *) lsecond(joinArgumentList);
-
-		isLeftColumnPartitionColumn = IsPartitionColumn(leftArgument, query);
-		isRightColumnPartitionColumn = IsPartitionColumn(rightArgument, query);
-
-		if (isLeftColumnPartitionColumn && isRightColumnPartitionColumn)
-		{
-			FieldSelect *leftCompositeField =
-				CompositeFieldRecursive(leftArgument, query);
-			FieldSelect *rightCompositeField =
-				CompositeFieldRecursive(rightArgument, query);
-
-			/*
-			 * If partition colums are composite fields, add them to list to
-			 * check later if all composite fields are used.
-			 */
-			if (leftCompositeField && rightCompositeField)
-			{
-				leftCompositeFieldList = lappend(leftCompositeFieldList,
-												 leftCompositeField);
-				rightCompositeFieldList = lappend(rightCompositeFieldList,
-												  rightCompositeField);
-			}
-
-			/* if both sides are not composite fields, they are normal columns */
-			if (!(leftCompositeField && rightCompositeField))
-			{
-				joinOnPartitionColumn = true;
-				break;
-			}
-		}
-	}
-
-	/* check composite fields */
-	if (!joinOnPartitionColumn)
-	{
-		bool leftFullCompositeFieldList =
-			FullCompositeFieldList(leftCompositeFieldList);
-		bool rightFullCompositeFieldList =
-			FullCompositeFieldList(rightCompositeFieldList);
-
-		if (leftFullCompositeFieldList && rightFullCompositeFieldList)
-		{
-			joinOnPartitionColumn = true;
-		}
-	}
-
-	return joinOnPartitionColumn;
 }
 
 
