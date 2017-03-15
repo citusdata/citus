@@ -312,7 +312,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		{
 			/* Create and optimize logical plan */
 			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
-			MultiLogicalPlanOptimize(logicalPlan);
+			MultiLogicalPlanOptimize(logicalPlan, plannerRestrictionContext);
 
 			/*
 			 * This check is here to make it likely that all node types used in
@@ -324,7 +324,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			CheckNodeIsDumpable((Node *) logicalPlan);
 
 			/* Create the physical plan */
-			distributedPlan = MultiPhysicalPlanCreate(logicalPlan);
+			distributedPlan = MultiPhysicalPlanCreate(logicalPlan,
+													  plannerRestrictionContext);
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);
