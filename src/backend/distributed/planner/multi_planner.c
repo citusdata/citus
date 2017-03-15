@@ -293,7 +293,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			CheckNodeIsDumpable((Node *) logicalPlan);
 
 			/* Create the physical plan */
-			distributedPlan = MultiPhysicalPlanCreate(logicalPlan);
+			distributedPlan = MultiPhysicalPlanCreate(logicalPlan, restrictionContext,
+													  joinRestrictionContext);
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);

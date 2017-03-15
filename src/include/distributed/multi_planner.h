@@ -100,8 +100,6 @@ typedef struct AttributeEquivalenceClassMember
 
 extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
 								   ParamListInfo boundParams);
-
-struct MultiPlan;
 extern struct MultiPlan * GetMultiPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);

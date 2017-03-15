@@ -37,6 +37,8 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_planner.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/shardinterval_utils.h"
@@ -118,8 +120,16 @@ static ArrayType * SplitPointObject(ShardInterval **shardIntervalArray,
 
 /* Local functions forward declarations for task list creation and helper functions */
 static bool MultiPlanRouterExecutable(MultiPlan *multiPlan);
-static Job * BuildJobTreeTaskList(Job *jobTree);
-static List * SubquerySqlTaskList(Job *job);
+static Job * BuildJobTreeTaskList(Job *jobTree,
+								  RelationRestrictionContext *restrictionContext,
+								  JoinRestrictionContext *joinRestrictionContext);
+static List * SubquerySqlTaskList(Job *job,
+								  RelationRestrictionContext *restrictionContext,
+								  JoinRestrictionContext *joinRestrictionContext);
+static Task * SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
+								 bool allRelationsJoinedOnPartitionKey,
+								 RelationRestrictionContext *restrictionContext,
+								 uint32 taskIdIndex);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
@@ -145,7 +155,6 @@ static bool JoinPrunable(RangeTableFragment *leftFragment,
 						 RangeTableFragment *rightFragment);
 static ShardInterval * FragmentInterval(RangeTableFragment *fragment);
 static StringInfo FragmentIntervalString(ShardInterval *fragmentInterval);
-static List * UniqueFragmentList(List *fragmentList);
 static List * DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList);
 static StringInfo NodeNameArrayString(List *workerNodeList);
 static StringInfo NodePortArrayString(List *workerNodeList);
@@ -193,7 +202,9 @@ static uint32 FinalTargetEntryCount(List *targetEntryList);
  * executed on worker nodes, and the final query to run on the master node.
  */
 MultiPlan *
-MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
+MultiPhysicalPlanCreate(MultiTreeRoot *multiTree,
+						RelationRestrictionContext *restrictionContext,
+						JoinRestrictionContext *joinRestrictionContext)
 {
 	MultiPlan *multiPlan = NULL;
 	Job *workerJob = NULL;
@@ -204,7 +215,8 @@ MultiPhysicalPlanCreate(MultiTreeRoot *multiTree)
 	workerJob = BuildJobTree(multiTree);
 
 	/* create the tree of executable tasks for the worker job */
-	workerJob = BuildJobTreeTaskList(workerJob);
+	workerJob = BuildJobTreeTaskList(workerJob, restrictionContext,
+									 joinRestrictionContext);
 
 	/* build the final merge query to execute on the master */
 	masterDependedJobList = list_make1(workerJob);
@@ -1889,7 +1901,8 @@ SplitPointObject(ShardInterval **shardIntervalArray, uint32 shardIntervalCount)
  * tasks to worker nodes.
  */
 static Job *
-BuildJobTreeTaskList(Job *jobTree)
+BuildJobTreeTaskList(Job *jobTree, RelationRestrictionContext *restrictionContext,
+					 JoinRestrictionContext *joinRestrictionContext)
 {
 	List *flattenedJobList = NIL;
 	uint32 flattenedJobCount = 0;
@@ -1927,7 +1940,8 @@ BuildJobTreeTaskList(Job *jobTree)
 		/* create sql tasks for the job, and prune redundant data fetch tasks */
 		if (job->subqueryPushdown)
 		{
-			sqlTaskList = SubquerySqlTaskList(job);
+			sqlTaskList = SubquerySqlTaskList(job, restrictionContext,
+											  joinRestrictionContext);
 		}
 		else
 		{
@@ -1978,135 +1992,181 @@ BuildJobTreeTaskList(Job *jobTree)
 
 
 /*
+ * TODO: update comment
  * SubquerySqlTaskList creates a list of SQL tasks to execute the given subquery
- * pushdown job. For this, it gets all range tables in the subquery tree, then
- * walks over each range table in the list, gets shards for each range table,
- * and prunes unneeded shards. Then for remaining shards, fragments are created
- * and merged to create fragment combinations. For each created combination, the
- * function builds a SQL task, and appends this task to a task list.
+ * pushdown job. For this, it first checks whether the query is safe to push-down.
+ * In other words, the function first checks whether all the relations that appear
+ * in the query are JOINed on their partition column. Note that the behaviour is
+ * slightly different for reference tables and queries that involve UNIONs. For the
+ * details please see AllRelationsJoinedOnPartitionKey().
+ *
+ * After the above decision is taken, the query is being checked whether the query
+ * is router plannable per target shard interval. For those router plannable worker
+ * queries, we create a SQL task and append the task to the task list that is going
+ * to be executed.
  */
 static List *
-SubquerySqlTaskList(Job *job)
+SubquerySqlTaskList(Job *job, RelationRestrictionContext *restrictionContext,
+					JoinRestrictionContext *joinRestrictionContext)
 {
 	Query *subquery = job->jobQuery;
 	uint64 jobId = job->jobId;
+	List *targetShardIntervalList = NIL;
+
 	List *sqlTaskList = NIL;
-	List *fragmentCombinationList = NIL;
-	List *opExpressionList = NIL;
-	List *queryList = NIL;
 	List *rangeTableList = NIL;
-	ListCell *fragmentCombinationCell = NULL;
 	ListCell *rangeTableCell = NULL;
-	ListCell *queryCell = NULL;
-	Node *whereClauseTree = NULL;
 	uint32 taskIdIndex = 1; /* 0 is reserved for invalid taskId */
-	uint32 anchorRangeTableId = 0;
-	uint32 rangeTableIndex = 0;
-	const uint32 fragmentSize = sizeof(RangeTableFragment);
-	uint64 largestTableSize = 0;
-
-	/* find filters on partition columns */
-	ExtractQueryWalker((Node *) subquery, &queryList);
-	foreach(queryCell, queryList)
-	{
-		Query *query = (Query *) lfirst(queryCell);
-		bool leafQuery = LeafQuery(query);
-
-		if (!leafQuery)
-		{
-			continue;
-		}
-
-		/* we have some filters on partition column */
-		opExpressionList = PartitionColumnOpExpressionList(query);
-		if (opExpressionList != NIL)
-		{
-			break;
-		}
-	}
+	Oid relationId = 0;
+	int shardCount = 0;
+	int shardOffset = 0;
+	DistTableCacheEntry *targetCacheEntry = NULL;
+	bool allRelationsJoinedOnPartitionKey =
+		AllRelationsJoinedOnPartitionKey(restrictionContext, joinRestrictionContext);
 
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
 
 	/*
-	 * For each range table entry, first we prune shards for the relation
-	 * referenced in the range table. Then we sort remaining shards and create
-	 * fragments in this order and add these fragments to fragment combination
-	 * list.
+	 * Find the first relation that is not a reference table. We'll use the shards
+	 * of that relation as the target shards.
 	 */
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		Oid relationId = rangeTableEntry->relid;
-		List *shardIntervalList = LoadShardIntervalList(relationId);
-		List *finalShardIntervalList = NIL;
-		ListCell *fragmentCombinationCell = NULL;
-		ListCell *shardIntervalCell = NULL;
-		uint32 tableId = rangeTableIndex + 1; /* tableId starts from 1 */
-		uint32 finalShardCount = 0;
-		uint64 tableSize = 0;
+		DistTableCacheEntry *cacheEntry = NULL;
 
-		if (opExpressionList != NIL)
+		relationId = rangeTableEntry->relid;
+		cacheEntry = DistributedTableCacheEntry(relationId);
+
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 		{
-			Var *partitionColumn = PartitionColumn(relationId, tableId);
-			List *whereClauseList = ReplaceColumnsInOpExpressionList(opExpressionList,
-																	 partitionColumn);
-			finalShardIntervalList = PruneShardList(relationId, tableId, whereClauseList,
-													shardIntervalList);
-		}
-		else
-		{
-			finalShardIntervalList = shardIntervalList;
+			continue;
 		}
 
-		/* if all shards are pruned away, we return an empty task list */
-		finalShardCount = list_length(finalShardIntervalList);
-		if (finalShardCount == 0)
+		if (targetShardIntervalList == NIL)
 		{
-			return NIL;
+			targetCacheEntry = DistributedTableCacheEntry(relationId);
+			shardCount = targetCacheEntry->shardIntervalArrayLength;
+			break;
 		}
-
-		fragmentCombinationCell = list_head(fragmentCombinationList);
-
-		foreach(shardIntervalCell, finalShardIntervalList)
-		{
-			ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-
-			RangeTableFragment *shardFragment = palloc0(fragmentSize);
-			shardFragment->fragmentReference = shardInterval;
-			shardFragment->fragmentType = CITUS_RTE_RELATION;
-			shardFragment->rangeTableId = tableId;
-
-			tableSize += ShardLength(shardInterval->shardId);
-
-			if (tableId == 1)
-			{
-				List *fragmentCombination = list_make1(shardFragment);
-				fragmentCombinationList = lappend(fragmentCombinationList,
-												  fragmentCombination);
-			}
-			else
-			{
-				List *fragmentCombination = (List *) lfirst(fragmentCombinationCell);
-				fragmentCombination = lappend(fragmentCombination, shardFragment);
-
-				/* get next fragment for the first relation list */
-				fragmentCombinationCell = lnext(fragmentCombinationCell);
-			}
-		}
-
-		/*
-		 * Determine anchor table using shards which survive pruning instead of calling
-		 * AnchorRangeTableId
-		 */
-		if (anchorRangeTableId == 0 || tableSize > largestTableSize)
-		{
-			largestTableSize = tableSize;
-			anchorRangeTableId = tableId;
-		}
-
-		rangeTableIndex++;
 	}
+
+	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
+	{
+		ShardInterval *targetShardInterval =
+			targetCacheEntry->sortedShardIntervalArray[shardOffset];
+		Task *subqueryTask = NULL;
+
+		subqueryTask = SubqueryTaskCreate(subquery, targetShardInterval,
+										  allRelationsJoinedOnPartitionKey,
+										  restrictionContext, taskIdIndex);
+
+
+		/* add the task if it could be created */
+		if (subqueryTask != NULL)
+		{
+			subqueryTask->jobId = jobId;
+			sqlTaskList = lappend(sqlTaskList, subqueryTask);
+		}
+
+		++taskIdIndex;
+	}
+
+	return sqlTaskList;
+}
+
+
+/*
+ * SubqueryTaskCreate creates a modify task by replacing the target
+ * shardInterval's boundary value when allRelationsJoinedOnPartitionKey
+ * is true. Then performs the normal shard pruning on the subquery.
+ *
+ * The function errors out if the subquery is not router select query (i.e.,
+ * subqueries with non equi-joins.).
+ */
+static Task *
+SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
+				   bool allRelationsJoinedOnPartitionKey,
+				   RelationRestrictionContext *restrictionContext,
+				   uint32 taskIdIndex)
+{
+	Query *copiedQuery = copyObject(originalQuery);
+
+	uint64 shardId = shardInterval->shardId;
+	Oid distributedTableId = shardInterval->relationId;
+	StringInfo queryString = makeStringInfo();
+	ListCell *restrictionCell = NULL;
+	Task *subqueryTask = NULL;
+	List *selectPlacementList = NIL;
+	uint64 selectAnchorShardId = INVALID_SHARD_ID;
+	List *relationShardList = NIL;
+	uint64 jobId = INVALID_JOB_ID;
+	bool routerPlannable = false;
+	bool upsertQuery = false;
+	bool replacePrunedQueryWithDummy = false;
+	bool allReferenceTables = restrictionContext->allReferenceTables;
+	RelationRestrictionContext *copiedRestrictionContext =
+		CopyRelationRestrictionContext(restrictionContext);
+	List *shardOpExpressions = NIL;
+	RestrictInfo *shardRestrictionList = NULL;
+
+	/*
+	 * Add the restriction qual parameter value in all baserestrictinfos.
+	 * Note that this has to be done on a copy, as the originals are needed
+	 * per target shard interval.
+	 */
+	foreach(restrictionCell, copiedRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *restriction = lfirst(restrictionCell);
+		Index rteIndex = restriction->index;
+		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+
+		if (!allRelationsJoinedOnPartitionKey || allReferenceTables)
+		{
+			continue;
+		}
+
+		shardOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
+
+		shardRestrictionList = make_simple_restrictinfo((Expr *) shardOpExpressions);
+		originalBaserestrictInfo = lappend(originalBaserestrictInfo,
+										   shardRestrictionList);
+
+		restriction->relOptInfo->baserestrictinfo = originalBaserestrictInfo;
+	}
+
+
+	/* mark that we don't want the router planner to generate dummy hosts/queries */
+	replacePrunedQueryWithDummy = false;
+
+	/*
+	 * Use router select planner to decide on whether we can push down the query
+	 * or not. If we can, we also rely on the side-effects that all RTEs have been
+	 * updated to point to the relevant nodes and selectPlacementList is determined.
+	 */
+	routerPlannable = RouterSelectQuery(copiedQuery, copiedRestrictionContext,
+										&selectPlacementList, &selectAnchorShardId,
+										&relationShardList, replacePrunedQueryWithDummy);
+
+	if (!routerPlannable)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning for the given "
+							   "query"),
+						errdetail("Select query cannot be pushed down to the worker.")));
+	}
+
+
+	/* ensure that we do not send queries where select is pruned away completely */
+	if (list_length(selectPlacementList) == 0)
+	{
+		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
+								"SELECT query for it pruned away", shardId)));
+
+		return NULL;
+	}
+
 
 	/*
 	 * Ands are made implicit during shard pruning, as predicate comparison and
@@ -2114,47 +2174,22 @@ SubquerySqlTaskList(Job *job)
 	 * that the query string is generated as (...) AND (...) as opposed to
 	 * (...), (...).
 	 */
-	whereClauseTree = (Node *) make_ands_explicit((List *) subquery->jointree->quals);
-	subquery->jointree->quals = whereClauseTree;
+	copiedQuery->jointree->quals =
+		(Node *) make_ands_explicit((List *) copiedQuery->jointree->quals);
 
-	/* create tasks from every fragment combination */
-	foreach(fragmentCombinationCell, fragmentCombinationList)
-	{
-		List *fragmentCombination = (List *) lfirst(fragmentCombinationCell);
-		List *taskRangeTableList = NIL;
-		Query *taskQuery = copyObject(subquery);
-		Task *sqlTask = NULL;
-		StringInfo sqlQueryString = NULL;
+	/* and generate the full query string */
+	deparse_shard_query(copiedQuery, distributedTableId, shardInterval->shardId,
+						queryString);
+	ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
 
-		/* create tasks to fetch fragments required for the sql task */
-		List *uniqueFragmentList = UniqueFragmentList(fragmentCombination);
-		List *dataFetchTaskList = DataFetchTaskList(jobId, taskIdIndex,
-													uniqueFragmentList);
-		int32 dataFetchTaskCount = list_length(dataFetchTaskList);
-		taskIdIndex += dataFetchTaskCount;
+	subqueryTask = CreateBasicTask(jobId, taskIdIndex, SQL_TASK, queryString->data);
+	subqueryTask->dependedTaskList = NULL;
+	subqueryTask->anchorShardId = selectAnchorShardId;
+	subqueryTask->taskPlacementList = selectPlacementList;
+	subqueryTask->upsertQuery = upsertQuery;
+	subqueryTask->relationShardList = relationShardList;
 
-		ExtractRangeTableRelationWalker((Node *) taskQuery, &taskRangeTableList);
-		UpdateRangeTableAlias(taskRangeTableList, fragmentCombination);
-
-		/* transform the updated task query to a SQL query string */
-		sqlQueryString = makeStringInfo();
-		pg_get_query_def(taskQuery, sqlQueryString);
-
-		sqlTask = CreateBasicTask(jobId, taskIdIndex, SQL_TASK, sqlQueryString->data);
-		sqlTask->dependedTaskList = dataFetchTaskList;
-
-		/* log the query string we generated */
-		ereport(DEBUG4, (errmsg("generated sql query for job " UINT64_FORMAT
-								" and task %d", sqlTask->jobId, sqlTask->taskId),
-						 errdetail("query string: \"%s\"", sqlQueryString->data)));
-
-		sqlTask->anchorShardId = AnchorShardId(fragmentCombination, anchorRangeTableId);
-
-		taskIdIndex++;
-		sqlTaskList = lappend(sqlTaskList, sqlTask);
-	}
-
-	return sqlTaskList;
+	return subqueryTask;
 }
 
 
@@ -3756,54 +3791,6 @@ FragmentIntervalString(ShardInterval *fragmentInterval)
 	appendStringInfo(fragmentIntervalString, "[%s,%s]", minValueString, maxValueString);
 
 	return fragmentIntervalString;
-}
-
-
-/*
- * UniqueFragmentList walks over the given relation fragment list, compares
- * shard ids, eliminate duplicates and returns a new fragment list of unique
- * shard ids. Note that this is a helper function for subquery pushdown, and it
- * is used to prevent creating multiple data fetch tasks for same shards.
- */
-static List *
-UniqueFragmentList(List *fragmentList)
-{
-	List *uniqueFragmentList = NIL;
-	ListCell *fragmentCell = NULL;
-
-	foreach(fragmentCell, fragmentList)
-	{
-		ShardInterval *shardInterval = NULL;
-		bool shardIdAlreadyAdded = false;
-		ListCell *uniqueFragmentCell = NULL;
-
-		RangeTableFragment *fragment = (RangeTableFragment *) lfirst(fragmentCell);
-		Assert(fragment->fragmentType == CITUS_RTE_RELATION);
-
-		Assert(CitusIsA(fragment->fragmentReference, ShardInterval));
-		shardInterval = (ShardInterval *) fragment->fragmentReference;
-
-		foreach(uniqueFragmentCell, uniqueFragmentList)
-		{
-			RangeTableFragment *uniqueFragment =
-				(RangeTableFragment *) lfirst(uniqueFragmentCell);
-			ShardInterval *uniqueShardInterval =
-				(ShardInterval *) uniqueFragment->fragmentReference;
-
-			if (shardInterval->shardId == uniqueShardInterval->shardId)
-			{
-				shardIdAlreadyAdded = true;
-				break;
-			}
-		}
-
-		if (!shardIdAlreadyAdded)
-		{
-			uniqueFragmentList = lappend(uniqueFragmentList, fragment);
-		}
-	}
-
-	return uniqueFragmentList;
 }
 
 
