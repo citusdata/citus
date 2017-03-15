@@ -180,21 +180,24 @@ SELECT count(*) FROM
    (SELECT 1::bigint)
 ) b;
 
+---
+-- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
+---
 -- Check that we error out if queries in union do not include partition columns.
 
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION
-   (SELECT l_partkey FROM lineitem_subquery)
-) b;
+--SELECT count(*) FROM
+--(
+  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
+  -- (SELECT l_partkey FROM lineitem_subquery)
+--) b;
 
 -- Check that we run union queries if partition column is selected.
 
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION
-   (SELECT l_orderkey FROM lineitem_subquery)
-) b;
+--SELECT count(*) FROM
+--(
+  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
+  -- (SELECT l_orderkey FROM lineitem_subquery)
+--) b;
 
 -- Check that we error out if the outermost query has subquery join.
 
@@ -272,23 +275,23 @@ WHERE
 
 -- Check that if subquery is pulled, we don't error and run query properly.
 
-SELECT count(*) FROM
-(
-	SELECT l_orderkey FROM (
-		(SELECT l_orderkey FROM lineitem_subquery) UNION
-		(SELECT l_orderkey FROM lineitem_subquery)
-	) a
-	WHERE l_orderkey = 1
-) b;
+--SELECT count(*) FROM
+--(
+	--SELECT l_orderkey FROM (
+		--(SELECT l_orderkey FROM lineitem_subquery) UNION
+		--(SELECT l_orderkey FROM lineitem_subquery)
+	--) a
+	--WHERE l_orderkey = 1
+--) b;
 
-SELECT count(*) FROM
-(
-	SELECT * FROM (
-		(SELECT * FROM lineitem_subquery) UNION
-		(SELECT * FROM lineitem_subquery)
-	) a
-	WHERE l_orderkey = 1
-) b;
+--SELECT count(*) FROM
+--(
+	--SELECT * FROM (
+		--(SELECT * FROM lineitem_subquery) UNION
+		--(SELECT * FROM lineitem_subquery)
+	--) a
+	--WHERE l_orderkey = 1
+--) b;
 
 SELECT max(l_orderkey) FROM
 (
@@ -389,6 +392,154 @@ CREATE TYPE user_composite_type AS
 	user_id BIGINT
 );
 
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+
+
+
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+
+
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
+
+
+
 \c - - - :worker_1_port
 
 CREATE TYPE user_composite_type AS
@@ -397,6 +548,153 @@ CREATE TYPE user_composite_type AS
 	user_id BIGINT
 );
 
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+
+
+
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+
+
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
+
+
 \c - - - :worker_2_port
 
 CREATE TYPE user_composite_type AS
@@ -404,6 +702,153 @@ CREATE TYPE user_composite_type AS
 	tenant_id BIGINT,
 	user_id BIGINT
 );
+
+CREATE FUNCTION user_composite_type_equal(user_composite_type, 
+user_composite_type) 
+returns boolean AS 'select $1.tenant_id = $2.tenant_id AND $1.user_id = $2.user_id;' language sql immutable
+returns NULL ON NULL input; 
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_lt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id < v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_le(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id < v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id <= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_gt(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id > v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION user_composite_type_ge(v1 user_composite_type, v2 user_composite_type) returns boolean AS 
+$$ 
+BEGIN 
+  if v1.tenant_id > v2.tenant_id THEN 
+    return true; 
+  end if;
+
+    if  v1.tenant_id = v2.tenant_id AND v1.user_id >= v2.user_id THEN 
+        RETURN true;
+    end if;
+
+    RETURN false;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+
+CREATE OR REPLACE FUNCTION btree_comparison(v1 user_composite_type, v2 user_composite_type) returns integer AS 
+$$ 
+BEGIN 
+  if v1.tenant_id = v2.tenant_id AND v1.user_id = v2.user_id THEN 
+    return 0; 
+  end if;
+
+    if  v1.tenant_id > v2.tenant_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    RETURN 0;
+END;
+$$ language 'plpgsql' immutable 
+returns NULL ON NULL input;
+
+CREATE operator = 
+( leftarg = user_composite_type, rightarg = user_composite_type, 
+PROCEDURE = user_composite_type_equal, 
+commutator = =, 
+RESTRICT = eqsel, 
+JOIN = eqjoinsel, 
+merges, 
+hashes);
+
+CREATE operator < 
+(  
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_lt
+);
+
+CREATE operator > 
+( 
+  leftarg = user_composite_type, rightarg = user_composite_type, 
+  PROCEDURE = user_composite_type_gt
+);
+
+CREATE operator <= 
+( 
+   leftarg = user_composite_type, rightarg = user_composite_type, 
+   PROCEDURE = user_composite_type_le
+);
+
+CREATE operator >= 
+( 
+    leftarg = user_composite_type, rightarg = user_composite_type, 
+    PROCEDURE = user_composite_type_ge
+);
+
+CREATE FUNCTION user_composite_type_hash(user_composite_type)
+returns int AS 'SELECT hashtext( ($1.tenant_id + $1.user_id)::text);' language sql immutable 
+returns NULL ON NULL input;
+
+
+
+CREATE OPERATOR CLASS btree_user_composite_ops
+DEFAULT FOR TYPE user_composite_type USING btree
+AS
+        OPERATOR        1       <  ,
+        OPERATOR        2       <= ,
+        OPERATOR        3       =  ,
+        OPERATOR        4       >= ,
+        OPERATOR        5       >  ,
+        FUNCTION        1       btree_comparison(user_composite_type, user_composite_type);
+
+
+create operator class user_composite_type_hash_op_class DEFAULT FOR type user_composite_type using hash AS operator 1 = (user_composite_type, user_composite_type), FUNCTION 1 user_composite_type_hash(user_composite_type);
+
 
 \c - - - :master_port
 
@@ -503,8 +948,7 @@ FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type IN ('click', 'submit', 'pay')) AS subquery
@@ -527,14 +971,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -542,14 +986,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -567,8 +1011,7 @@ FROM
 		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 		event_type = 'pay') AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -591,14 +1034,14 @@ SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -606,14 +1049,14 @@ SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -622,6 +1065,7 @@ SELECT
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			COUNT(*) AS count_pay
 		FROM
 			events
@@ -630,13 +1074,11 @@ SELECT
 			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'pay'
 		GROUP BY
-			tenant_id,
-			user_id
+			composite_id
 		HAVING
 			COUNT(*) > 2) AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -647,7 +1089,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-
+	
 -- Lateral join subquery pushdown
 SELECT
 	tenant_id,
@@ -664,6 +1106,7 @@ FROM
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			lastseen
 		FROM
 			users
@@ -682,8 +1125,7 @@ FROM
 			FROM
 				events
 			WHERE
-				(composite_id).tenant_id = subquery_top.tenant_id AND
-				(composite_id).user_id = subquery_top.user_id
+				(composite_id) = subquery_top.composite_id
 			ORDER BY
 				event_time DESC
 			LIMIT
@@ -719,8 +1161,7 @@ FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type IN ('click', 'submit', 'pay')) AS subquery
@@ -743,14 +1184,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -758,14 +1199,14 @@ FROM
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -783,8 +1224,7 @@ FROM
 		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 		event_type = 'pay') AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -807,14 +1247,14 @@ EXPLAIN SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>1'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'click')
@@ -822,14 +1262,14 @@ EXPLAIN SELECT
 		(SELECT
 			(users.composite_id).tenant_id,
 			(users.composite_id).user_id,
+			(users.composite_id),
 			'action=>2'AS event,
 			events.event_time
 		FROM
 			users,
 			events
 		WHERE
-			(users.composite_id).tenant_id = (events.composite_id).tenant_id AND
-			(users.composite_id).user_id = (events.composite_id).user_id AND
+			(users.composite_id) = (events.composite_id) AND
 			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
 			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'submit')
@@ -838,6 +1278,7 @@ EXPLAIN SELECT
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			COUNT(*) AS count_pay
 		FROM
 			events
@@ -846,13 +1287,11 @@ EXPLAIN SELECT
 			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
 			event_type = 'pay'
 		GROUP BY
-			tenant_id,
-			user_id
+			composite_id
 		HAVING
 			COUNT(*) > 2) AS subquery_2
 	ON
-		subquery_1.tenant_id = subquery_2.tenant_id AND
-		subquery_1.user_id = subquery_2.user_id
+		subquery_1.composite_id = subquery_2.composite_id
 	GROUP BY
 		subquery_1.tenant_id,
 		subquery_1.user_id,
@@ -880,6 +1319,7 @@ FROM
 		(SELECT
 			(composite_id).tenant_id,
 			(composite_id).user_id,
+			composite_id,
 			lastseen
 		FROM
 			users
@@ -898,8 +1338,7 @@ FROM
 			FROM
 				events
 			WHERE
-				(composite_id).tenant_id = subquery_top.tenant_id AND
-				(composite_id).user_id = subquery_top.user_id
+				(composite_id) = subquery_top.composite_id
 			ORDER BY
 				event_time DESC
 			LIMIT
@@ -914,5 +1353,5 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-
+	
 SET citus.enable_router_execution TO 'true';
