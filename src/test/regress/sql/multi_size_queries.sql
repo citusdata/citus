@@ -1,0 +1,52 @@
+--
+-- MULTI_SIZE_QUERIES
+--
+-- Test checks whether size of distributed tables can be obtained with citus_table_size.
+-- To find the relation size and total relation size citus_relation_size and 
+-- citus_total_relation_size are also tested.
+
+ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1390000;
+ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1390000;
+
+-- Tests on distributed table with replication factor > 1
+SELECT citus_table_size('lineitem_hash_part');
+SELECT citus_relation_size('lineitem_hash_part');
+SELECT citus_total_relation_size('lineitem_hash_part');
+
+VACUUM (FULL) customer_copy_hash;
+
+-- Tests on distributed tables with streaming replication.
+SELECT citus_table_size('customer_copy_hash');
+SELECT citus_relation_size('customer_copy_hash');
+SELECT citus_total_relation_size('customer_copy_hash');
+
+CREATE INDEX index_1 on customer_copy_hash(c_custkey);
+VACUUM (FULL) customer_copy_hash;
+
+-- Tests on distributed table with index.
+SELECT citus_table_size('customer_copy_hash');
+SELECT citus_relation_size('customer_copy_hash');
+SELECT citus_total_relation_size('customer_copy_hash');
+
+-- Tests on reference table
+VACUUM (FULL) supplier;
+
+SELECT citus_table_size('supplier');
+SELECT citus_relation_size('supplier');
+SELECT citus_total_relation_size('supplier');
+
+CREATE INDEX index_2 on supplier(s_suppkey);
+VACUUM (FULL) supplier;
+
+SELECT citus_table_size('supplier');
+SELECT citus_relation_size('supplier');
+SELECT citus_total_relation_size('supplier');
+
+-- Test inside the transaction
+BEGIN;
+ALTER TABLE supplier ALTER COLUMN s_suppkey SET NOT NULL;
+select citus_table_size('supplier');
+END;
+
+DROP INDEX index_1;
+DROP INDEX index_2;
