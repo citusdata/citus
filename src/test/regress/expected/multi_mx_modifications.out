@@ -165,9 +165,8 @@ SELECT COUNT(*) FROM limit_orders_mx WHERE id = 246;
 
 -- commands with no constraints on the partition key are not supported
 DELETE FROM limit_orders_mx WHERE bidder_id = 162;
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
+ERROR:  cannot run DELETE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 -- commands with a USING clause are unsupported
 CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders_mx USING bidders WHERE limit_orders_mx.id = 246 AND
@@ -180,9 +179,8 @@ DELETE FROM limit_orders_mx;
 ERROR:  common table expressions are not supported in distributed modifications
 -- cursors are not supported
 DELETE FROM limit_orders_mx WHERE CURRENT OF cursor_name;
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
+ERROR:  cannot run DELETE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 INSERT INTO limit_orders_mx VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 -- simple UPDATE
 UPDATE limit_orders_mx SET symbol = 'GM' WHERE id = 246;
@@ -237,9 +235,8 @@ DETAIL:  Key (id)=(275) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- commands with no constraints on the partition key are not supported
 UPDATE limit_orders_mx SET limit_price = 0.00;
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
+ERROR:  cannot run UPDATE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders_mx SET id = 0 WHERE id = 246;
 ERROR:  modifying the partition value of rows is not allowed
@@ -332,9 +329,8 @@ UPDATE limit_orders_mx SET placed_at = placed_at WHERE id = 246 RETURNING NOW();
 ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause
 -- cursors are not supported
 UPDATE limit_orders_mx SET symbol = 'GM' WHERE CURRENT OF cursor_name;
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "id". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
+ERROR:  cannot run UPDATE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 -- check that multi-row UPDATE/DELETEs with RETURNING work
 INSERT INTO multiple_hash_mx VALUES ('0', '1');
 INSERT INTO multiple_hash_mx VALUES ('0', '2');
