@@ -48,6 +48,8 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#include "optimizer/paths.h"
+#include "optimizer/pathnode.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/var.h"
@@ -72,6 +74,13 @@ typedef struct WalkerState
 	bool badCoalesce;
 } WalkerState;
 
+typedef struct InstantiateQualWalker
+{
+	ShardInterval *targetShardInterval;
+	Var *relationPartitionColumn;
+}InstantiateQualWalker;
+
+
 bool EnableRouterExecution = true;
 
 /* planner functions forward declarations */
@@ -87,6 +96,8 @@ static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   RelationRestrictionContext *
 											   restrictionContext,
 											   uint32 taskIdIndex);
+static List * GetAllActualClausesForRelation(RelOptInfo *relInfo,
+											 PlannerInfo *plannerInfo);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -391,6 +402,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
+		List *originalJoinInfo = restriction->relOptInfo->joininfo;
+		InstantiateQualWalker *instantiateQualWalker = palloc0(
+			sizeof(InstantiateQualWalker));
+		Var *relationPartitionKey = PartitionKey(restriction->relationId);
 
 		/*
 		 * We haven't added the quals if all participating tables are reference
@@ -401,9 +416,15 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 			break;
 		}
 
+		instantiateQualWalker->relationPartitionColumn = relationPartitionKey;
+		instantiateQualWalker->targetShardInterval = shardInterval;
+
 		originalBaserestrictInfo =
 			(List *) InstantiatePartitionQual((Node *) originalBaserestrictInfo,
-											  shardInterval);
+											  instantiateQualWalker);
+		originalJoinInfo =
+			(List *) InstantiatePartitionQual((Node *) originalJoinInfo,
+											  instantiateQualWalker);
 	}
 
 	/*
@@ -468,7 +489,6 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 								  "for shard %ld", shardId)));
 	}
 
-
 	/* this is required for correct deparsing of the query */
 	ReorderInsertSelectTargetLists(copiedQuery, copiedInsertRte, copiedSubqueryRte);
 
@@ -499,6 +519,88 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	modifyTask->replicationModel = cacheEntry->replicationModel;
 
 	return modifyTask;
+}
+
+
+/*
+ * GetAllActualClausesForRelation returns all the restrictions that a relation
+ * has including the baserestrictinfo and the related parts of joininfo.
+ *
+ * This function is heavily inspired by check_index_predicates() from the PostgreSQL's
+ * source file src/backend/optimizer/path/indexpath.c.
+ */
+static List *
+GetAllActualClausesForRelation(RelOptInfo *relInfo, PlannerInfo *plannerInfo)
+{
+	List *allRestrictInfos = NULL;
+	ListCell *joinInfoCell = NULL;
+	Relids otherRelIds = NULL;
+	List *allActualClauses = NIL;
+
+	/* we should definitely add all the entries in baserestrictinfo */
+	allRestrictInfos = relInfo->baserestrictinfo;
+
+	/* Scan the rel's join clauses and get the necessary ones */
+	foreach(joinInfoCell, relInfo->joininfo)
+	{
+		RestrictInfo *restrictInfo = (RestrictInfo *) lfirst(joinInfoCell);
+		List *columnList = pull_var_clause_default((Node *) restrictInfo->clause);
+
+		/* check if the restrict info already contains a hashed restrict info */
+		if (list_length(columnList) > 0)
+		{
+			Var *firstColumn = linitial(columnList);
+			Var *hashedColumn = MakeInt4Column();
+
+			if (equal(firstColumn, hashedColumn))
+			{
+				/*
+				 * This means that we've already instantiated the restrict info
+				 * so this should be included in the final restrict info list.
+				 */
+				allRestrictInfos = lappend(allRestrictInfos, restrictInfo);
+				continue;
+			}
+		}
+
+		/* check if clause can be moved to this rel */
+		if (join_clause_is_movable_to(restrictInfo, relInfo))
+		{
+			allRestrictInfos = lappend(allRestrictInfos, restrictInfo);
+		}
+	}
+
+	/*
+	 * Add on any equivalence-derivable join clauses.  Computing the correct
+	 * relid sets for generate_join_implied_equalities is slightly tricky
+	 * because the rel could be a child rel rather than a true baserel, and in
+	 * that case we must remove its parents' relid(s) from all_baserels.
+	 */
+	if (relInfo->reloptkind == RELOPT_OTHER_MEMBER_REL)
+	{
+		otherRelIds = bms_difference(plannerInfo->all_baserels,
+									 find_childrel_parents(plannerInfo, relInfo));
+	}
+	else
+	{
+		otherRelIds = bms_difference(plannerInfo->all_baserels, relInfo->relids);
+	}
+
+	if (!bms_is_empty(otherRelIds))
+	{
+		List *impliedJoinEqualities = generate_join_implied_equalities(plannerInfo,
+																	   bms_union(
+																		   relInfo->relids,
+																		   otherRelIds),
+																	   otherRelIds,
+																	   relInfo);
+		allRestrictInfos = list_concat(allRestrictInfos, impliedJoinEqualities);
+	}
+
+	/* finally get the actual clauses from the restrict infos */
+	allActualClauses = get_all_actual_clauses(allRestrictInfos);
+
+	return allActualClauses;
 }
 
 
@@ -2420,8 +2522,6 @@ TargetShardIntervalsForSelect(Query *query,
 		Index tableId = relationRestriction->index;
 		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 		int shardCount = cacheEntry->shardIntervalArrayLength;
-		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
-		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardList = NIL;
 		int shardIndex = 0;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
@@ -2440,6 +2540,7 @@ TargetShardIntervalsForSelect(Query *query,
 		if (!whereFalseQuery && shardCount > 0)
 		{
 			List *shardIntervalList = NIL;
+			List *allActualClauses = NIL;
 
 			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
 			{
@@ -2448,8 +2549,12 @@ TargetShardIntervalsForSelect(Query *query,
 				shardIntervalList = lappend(shardIntervalList, shardInterval);
 			}
 
+			allActualClauses =
+				GetAllActualClausesForRelation(relationRestriction->relOptInfo,
+											   relationRestriction->plannerInfo);
+
 			prunedShardList = PruneShardList(relationId, tableId,
-											 restrictClauseList,
+											 allActualClauses,
 											 shardIntervalList);
 
 			/*
@@ -2975,7 +3080,10 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 static Node *
 InstantiatePartitionQual(Node *node, void *context)
 {
-	ShardInterval *shardInterval = (ShardInterval *) context;
+	InstantiateQualWalker *instantiateContext = ((InstantiateQualWalker *) context);
+	ShardInterval *shardInterval = instantiateContext->targetShardInterval;
+	Var *relationPartitionColumn = instantiateContext->relationPartitionColumn;
+
 	Assert(shardInterval->minValueExists);
 	Assert(shardInterval->maxValueExists);
 
@@ -2999,6 +3107,7 @@ InstantiatePartitionQual(Node *node, void *context)
 		Node *leftop = get_leftop((Expr *) op);
 		Node *rightop = get_rightop((Expr *) op);
 		Param *param = NULL;
+		Var *currentColumn = NULL;
 
 		Var *hashedGEColumn = NULL;
 		OpExpr *hashedGEOpExpr = NULL;
@@ -3017,14 +3126,31 @@ InstantiatePartitionQual(Node *node, void *context)
 		if (IsA(leftop, Param))
 		{
 			param = (Param *) leftop;
+
+			if (IsA(rightop, Var))
+			{
+				currentColumn = (Var *) rightop;
+			}
 		}
 		else if (IsA(rightop, Param))
 		{
 			param = (Param *) rightop;
+
+			if (IsA(leftop, Var))
+			{
+				currentColumn = (Var *) leftop;
+			}
 		}
 
 		/* not an interesting param for our purpose, so return */
 		if (!(param && param->paramid == UNINSTANTIATED_PARAMETER_ID))
+		{
+			return node;
+		}
+
+		/* if the qual is not on the partition column, do not instantiate */
+		if (relationPartitionColumn && currentColumn &&
+			currentColumn->varattno != relationPartitionColumn->varattno)
 		{
 			return node;
 		}

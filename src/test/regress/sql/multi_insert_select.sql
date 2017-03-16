@@ -496,6 +496,146 @@ FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
 
+
+-- some supported LEFT JOINs
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first  LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_second.user_id = 10;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id = 20;
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_first.user_id IN (19, 20, 21);
+
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
+  WHERE raw_events_first.user_id = 10 AND raw_events_second.user_id IN (19, 20, 21);
+
+-- the following is a very tricky query for Citus
+-- although we do not support pushing down JOINs on non-partition
+-- columns here it is safe to push it down given that we're looking for
+-- a specific value (i.e., value_1 = 12) on the joining column.
+-- Note that the query always hits the same shard on raw_events_second.
+-- Since that shard is on both nodes the query can be pushed down
+-- but for instance if there were 3 worker nodes the query would fail
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1 
+       AND raw_events_first.value_1 = 12; 
+
+-- some unsupported LEFT/INNER JOINs
+-- JOIN on one table with partition column other is not
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+-- same as the above with INNER JOIN
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+-- a not meaningful query
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_second.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_first.user_id = raw_events_first.value_1; 
+
+-- both tables joined on non-partition columns
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.value_1 = raw_events_second.value_1;
+
+-- same as the above with INNER JOIN
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1;
+
+-- JOIN on one table with partition column other is not
+-- also an equality qual is added on the partition key 
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+WHERE 
+  raw_events_first.user_id = 10;
+
+-- same as the above with INNER JOIN
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+WHERE raw_events_first.user_id = 10;
+
+-- make things a bit more complicate with IN clauses
+INSERT INTO agg_events (user_id)
+SELECT
+  raw_events_first.user_id
+FROM
+  raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.value_1
+  WHERE raw_events_first.value_1 IN (10, 11,12) OR raw_events_second.user_id IN (1,2,3,4);
+
+-- implicit join on non partition column should also not be pushed down
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1; 
+
+-- the following is again a very tricky query for Citus
+-- if the given filter was on value_1 as shown in the above, Citus could
+-- push it down. But here the query is refused
+INSERT INTO agg_events 
+            (user_id) 
+SELECT raw_events_first.user_id 
+FROM   raw_events_first, 
+       raw_events_second 
+WHERE  raw_events_second.user_id = raw_events_first.value_1 
+       AND raw_events_first.value_2 = 12; 
+
 -- unsupported JOIN
 INSERT INTO agg_events
             (value_4_agg,
@@ -979,3 +1119,6 @@ DROP TABLE table_with_serial;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;
+
+-- clean any 2PC transactions we've used
+SELECT recover_prepared_transactions();
