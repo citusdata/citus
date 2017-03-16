@@ -382,6 +382,7 @@ multi_ProcessUtility(Node *parsetree,
 		foreach(ddlJobCell, ddlJobs)
 		{
 			DDLJob *ddlJob = (DDLJob *) lfirst(ddlJobCell);
+
 			ExecuteDistributedDDLJob(ddlJob);
 		}
 	}
@@ -2362,15 +2363,14 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 
 /*
- * ReplicateGrantStmt replicates GRANT/REVOKE command to worker nodes if the
+ * PlanGrantStmt replicates GRANT/REVOKE command to worker nodes if the
  * the statement affects distributed tables.
  *
  * NB: So far column level privileges are not supported.
  */
-void
-ReplicateGrantStmt(Node *parsetree)
+List *
+PlanGrantStmt(GrantStmt *grantStmt)
 {
-	GrantStmt *grantStmt = (GrantStmt *) parsetree;
 	StringInfoData privsString;
 	StringInfoData granteesString;
 	StringInfoData targetString;
@@ -2378,7 +2378,7 @@ ReplicateGrantStmt(Node *parsetree)
 	ListCell *granteeCell = NULL;
 	ListCell *objectCell = NULL;
 	bool isFirst = true;
-	DDLJob *ddlJob = palloc(sizeof(DDLJob));
+	List *ddlJobs = NIL;
 
 	initStringInfo(&privsString);
 	initStringInfo(&granteesString);
@@ -2392,7 +2392,7 @@ ReplicateGrantStmt(Node *parsetree)
 	if (grantStmt->targtype != ACL_TARGET_OBJECT ||
 		grantStmt->objtype != ACL_OBJECT_RELATION)
 	{
-		return;
+		return NIL;
 	}
 
 	/* deparse the privileges */
@@ -2463,6 +2463,7 @@ ReplicateGrantStmt(Node *parsetree)
 		RangeVar *relvar = (RangeVar *) lfirst(objectCell);
 		Oid relOid = RangeVarGetRelid(relvar, NoLock, false);
 		const char *grantOption = "";
+		DDLJob *ddlJob = NULL;
 
 		if (!IsDistributedTable(relOid))
 		{
@@ -2495,12 +2496,15 @@ ReplicateGrantStmt(Node *parsetree)
 							 granteesString.data);
 		}
 
+		ddlJob = palloc0(sizeof(DDLJob));
 		ddlJob->targetRelationId = relOid;
-		ddlJob->commandString = ddlString.data;
+		ddlJob->commandString = pstrdup(ddlString.data);
 		ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
 
-		ExecuteDistributedDDLJob(ddlJob);
+		ddlJobs = lappend(ddlJobs, ddlJob);
 
 		resetStringInfo(&ddlString);
 	}
+
+	return ddlJobs;
 }

@@ -24,7 +24,7 @@ typedef struct DDLJob
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
-extern void ReplicateGrantStmt(Node *parsetree);
+extern List * PlanGrantStmt(GrantStmt *grantStmt);
 
 
 #endif /* MULTI_UTILITY_H */
