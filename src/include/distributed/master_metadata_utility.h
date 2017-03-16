@@ -25,6 +25,9 @@
 /* total number of hash tokens (2^32) */
 #define HASH_TOKEN_COUNT INT64CONST(4294967296)
 #define SELECT_EXIST_QUERY "SELECT EXISTS (SELECT 1 FROM %s)"
+#define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
+#define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
+#define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
