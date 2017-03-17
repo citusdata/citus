@@ -35,6 +35,7 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/create_distributed_table.h"
 #include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -81,8 +82,6 @@ static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
-static void ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
-										  Var *distributionColumn, uint32 colocationId);
 static void ErrorIfNotSupportedForeignConstraint(Relation relation,
 												 char distributionMethod,
 												 Var *distributionColumn,
@@ -438,7 +437,7 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
  * ii. Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed
  * with no further check for constraints.
  */
-static void
+void
 ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
 							  Var *distributionColumn, uint32 colocationId)
 {

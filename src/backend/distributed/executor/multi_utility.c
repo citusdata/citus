@@ -32,6 +32,7 @@
 #include "commands/prepare.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/create_distributed_table.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -369,6 +370,15 @@ multi_ProcessUtility(Node *parsetree,
 	/* now drop into standard process utility */
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+
+	/* we control alter table statement here to use same checks with creating table */
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
+
+		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+	}
+
 
 	if (commandMustRunAsOwner)
 	{
@@ -816,11 +826,9 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 		return NULL;
 	}
 
-	ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
-
 	/*
 	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
-	 * If there is we assign referenced releation id to rightRelationId and we also
+	 * If there is we assign referenced relation id to rightRelationId and we also
 	 * set skip_validation to true to prevent PostgreSQL to verify validity of the
 	 * foreign constraint in master. Validity will be checked in workers anyway.
 	 */
@@ -1454,190 +1462,55 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_AddConstraint:
 			{
+				Relation relation = NULL;
+				char distributionMethod;
+				Var *distributionColumn = NULL;
+				uint32 colocationId = 0;
+
+				LOCKMODE lockmode = 0;
+				Oid leftRelationId = InvalidOid;
+
+				lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+				leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+				relation = relation_open(leftRelationId, ExclusiveLock);
+
+				distributionMethod = PartitionMethod(leftRelationId);
+				distributionColumn = PartitionKey(leftRelationId);
+
+				colocationId = TableColocationId(leftRelationId);
+
 				Constraint *constraint = (Constraint *) command->def;
-				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-				Oid referencingTableId = InvalidOid;
-				Oid referencedTableId = InvalidOid;
-				Var *referencingTablePartitionColumn = NULL;
-				Var *referencedTablePartitionColumn = NULL;
-				ListCell *referencingTableAttr = NULL;
-				ListCell *referencedTableAttr = NULL;
-				bool foreignConstraintOnPartitionColumn = false;
 
-				/* we only allow adding foreign constraints with ALTER TABLE */
-				if (constraint->contype != CONSTR_FOREIGN)
+				/* extra checks for alter table */
+				if (constraint->contype == CONSTR_FOREIGN)
 				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create constraint"),
-									errdetail("Citus cannot execute ADD CONSTRAINT "
-											  "command other than ADD CONSTRAINT FOREIGN "
-											  "KEY.")));
-				}
-
-				/* we only allow foreign constraints if they are only subcommand */
-				if (commandList->length > 1)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Citus cannot execute ADD CONSTRAINT "
-											  "FOREIGN KEY command together with other "
-											  "subcommands."),
-									errhint("You can issue each subcommand separately")));
-				}
-
-				referencingTableId = RangeVarGetRelid(alterTableStatement->relation,
-													  lockmode,
-													  alterTableStatement->missing_ok);
-				referencedTableId = RangeVarGetRelid(constraint->pktable, lockmode,
-													 alterTableStatement->missing_ok);
-
-				/* we do not support foreign keys for reference tables */
-				if (PartitionMethod(referencingTableId) == DISTRIBUTE_BY_NONE ||
-					PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail(
-										"Foreign key constraints are not allowed from or "
-										"to reference tables.")));
-				}
-
-				/*
-				 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because
-				 * we do not want to set partition column to NULL or default value.
-				 */
-				if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL ||
-					constraint->fk_del_action == FKCONSTR_ACTION_SETDEFAULT)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("SET NULL or SET DEFAULT is not supported"
-											  " in ON DELETE operation.")));
-				}
-
-				/*
-				 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not
-				 * supported. Because we do not want to set partition column to NULL or
-				 * default value. Also cascading update operation would require
-				 * re-partitioning. Updating partition column value is not allowed anyway
-				 * even outside of foreign key concept.
-				 */
-				if (constraint->fk_upd_action == FKCONSTR_ACTION_SETNULL ||
-					constraint->fk_upd_action == FKCONSTR_ACTION_SETDEFAULT ||
-					constraint->fk_upd_action == FKCONSTR_ACTION_CASCADE)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("SET NULL, SET DEFAULT or CASCADE is not"
-											  " supported in ON UPDATE operation.")));
-				}
-
-				/*
-				 * We will use constraint name in each placement by extending it at
-				 * workers. Therefore we require it to be exist.
-				 */
-				if (constraint->conname == NULL)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Creating foreign constraint without a "
-											  "name on a distributed table is currently "
-											  "not supported.")));
-				}
-
-				/* to enforce foreign constraints, tables must be co-located */
-				if (!TablesColocated(referencingTableId, referencedTableId))
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Foreign key constraint can only be created"
-											  " on co-located tables.")));
-				}
-
-				/*
-				 * The following logic requires the referenced columns to exists in
-				 * the statement. Otherwise, we cannot apply some of the checks.
-				 */
-				if (constraint->pk_attrs == NULL)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint "
-										   "because referenced column list is empty"),
-									errhint("Add column names to \"REFERENCES\" part of "
-											"the statement.")));
-				}
-
-				/*
-				 * Referencing column's list length should be equal to referenced columns
-				 * list length.
-				 */
-				if (constraint->fk_attrs->length != constraint->pk_attrs->length)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Referencing column list and referenced "
-											  "column list must be in same size.")));
-				}
-
-				/*
-				 * Partition column must exist in both referencing and referenced side
-				 * of the foreign key constraint. They also must be in same ordinal.
-				 */
-				referencingTablePartitionColumn = PartitionKey(referencingTableId);
-				referencedTablePartitionColumn = PartitionKey(referencedTableId);
-
-				/*
-				 * We iterate over fk_attrs and pk_attrs together because partition
-				 * column must be at the same place in both referencing and referenced
-				 * side of the foreign key constraint
-				 */
-				forboth(referencingTableAttr, constraint->fk_attrs,
-						referencedTableAttr, constraint->pk_attrs)
-				{
-					char *referencingAttrName = strVal(lfirst(referencingTableAttr));
-					char *referencedAttrName = strVal(lfirst(referencedTableAttr));
-					AttrNumber referencingAttrNo = get_attnum(referencingTableId,
-															  referencingAttrName);
-					AttrNumber referencedAttrNo = get_attnum(referencedTableId,
-															 referencedAttrName);
-
-					if (referencingTablePartitionColumn->varattno == referencingAttrNo &&
-						referencedTablePartitionColumn->varattno == referencedAttrNo)
+					/* we only allow foreign constraints if they are only subcommand */
+					if (commandList->length > 1)
 					{
-						foreignConstraintOnPartitionColumn = true;
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg("cannot create foreign key constraint"),
+										errdetail("Citus cannot execute ADD CONSTRAINT "
+												  "FOREIGN KEY command together with other "
+												  "subcommands."),
+										errhint("You can issue each subcommand separately")));
+					}
+					/*
+					 * We will use constraint name in each placement by extending it at
+					 * workers. Therefore we require it to be exist.
+					 */
+					if (constraint->conname == NULL)
+					{
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg("cannot create foreign key constraint"),
+										errdetail("Creating foreign constraint without a "
+												  "name on a distributed table is currently "
+												  "not supported.")));
 					}
 				}
 
-				if (!foreignConstraintOnPartitionColumn)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Partition column must exist both "
-											  "referencing and referenced side of the "
-											  "foreign constraint statement and it must "
-											  "be in the same ordinal in both sides.")));
-				}
-
-				/*
-				 * We do not allow to create foreign constraints if shard replication
-				 * factor is greater than 1. Because in our current design, multiple
-				 * replicas may cause locking problems and inconsistent shard contents.
-				 */
-				if (!SingleReplicatedTable(referencingTableId) ||
-					!SingleReplicatedTable(referencedTableId))
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Citus Community Edition currently "
-											  "supports foreign key constraints only for "
-											  "\"citus.shard_replication_factor = 1\"."),
-									errhint("Please change "
-											"\"citus.shard_replication_factor to 1\". To "
-											"learn more about using foreign keys with "
-											"other replication factors, please contact"
-											" us at "
-											"https://citusdata.com/about/contact_us.")));
-				}
+				ErrorIfNotSupportedConstraint(relation, distributionMethod,
+											  distributionColumn, colocationId);
 
 				break;
 			}
