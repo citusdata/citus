@@ -150,7 +150,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 
 	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
-	workerNodeList = WorkerNodeList();
+	workerNodeList = ActiveWorkerNodeList();
 
 	foreach(workerNodeCell, workerNodeList)
 	{

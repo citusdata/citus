@@ -36,6 +36,8 @@
 /* local function forward declarations */
 static void ReplicateSingleShardTableToAllWorkers(Oid relationId);
 static void ReplicateShardToAllWorkers(ShardInterval *shardInterval);
+static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
+								 int nodePort);
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
 static int CompareOids(const void *leftElement, const void *rightElement);
 
@@ -114,22 +116,19 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 
 /*
- * ReplicateAllReferenceTablesToAllNodes function finds all reference tables and
- * replicates them to all worker nodes. It also modifies pg_dist_colocation table to
- * update the replication factor column. This function skips a worker node if that node
- * already has healthy placement of a particular reference table to prevent unnecessary
- * data transfer.
+ * ReplicateAllReferenceTablesToNode function finds all reference tables and
+ * replicates them to the given worker node. It also modifies pg_dist_colocation
+ * table to update the replication factor column when necessary. This function
+ * skips reference tables if that node already has healthy placement of that
+ * reference table to prevent unnecessary data transfer.
  */
 void
-ReplicateAllReferenceTablesToAllNodes()
+ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 {
 	List *referenceTableList = ReferenceTableOidList();
 	ListCell *referenceTableCell = NULL;
-
-	Relation pgDistNode = NULL;
-	List *workerNodeList = NIL;
-	int workerCount = 0;
-
+	List *workerNodeList = ActiveWorkerNodeList();
+	uint32 workerCount = 0;
 	Oid firstReferenceTableId = InvalidOid;
 	uint32 referenceTableColocationId = INVALID_COLOCATION_ID;
 
@@ -138,12 +137,6 @@ ReplicateAllReferenceTablesToAllNodes()
 	{
 		return;
 	}
-
-	/* we do not use pgDistNode, we only obtain a lock on it to prevent modifications */
-	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
-	workerNodeList = WorkerNodeList();
-	workerCount = list_length(workerNodeList);
-
 
 	/*
 	 * We sort the reference table list to prevent deadlocks in concurrent
@@ -156,14 +149,10 @@ ReplicateAllReferenceTablesToAllNodes()
 		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 		uint64 shardId = shardInterval->shardId;
-		char *relationName = get_rel_name(referenceTableId);
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to all workers",
-								relationName)));
-
-		ReplicateShardToAllWorkers(shardInterval);
+		ReplicateShardToNode(shardInterval, nodeName, nodePort);
 	}
 
 	/*
@@ -171,10 +160,10 @@ ReplicateAllReferenceTablesToAllNodes()
 	 * colocation group of reference tables so that worker count will be equal to
 	 * replication factor again.
 	 */
+	workerCount = list_length(workerNodeList);
 	firstReferenceTableId = linitial_oid(referenceTableList);
 	referenceTableColocationId = TableColocationId(firstReferenceTableId);
 	UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
-	heap_close(pgDistNode, NoLock);
 }
 
 
@@ -228,28 +217,18 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 
 
 /*
- * ReplicateShardToAllWorkers function replicates given shard to the given worker nodes
- * in a separate transactions. While replicating, it only replicates the shard to the
- * workers which does not have a healthy replica of the shard. This function also modifies
- * metadata by inserting/updating related rows in pg_dist_shard_placement. However, this
- * function does not obtain any lock on shard resource and shard metadata. It is caller's
+ * ReplicateShardToAllWorkers function replicates given shard to the all worker nodes
+ * in separate transactions. While replicating, it only replicates the shard to the
+ * workers which does not have a healthy replica of the shard. However, this function
+ * does not obtain any lock on shard resource and shard metadata. It is caller's
  * responsibility to take those locks.
  */
 static void
 ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 {
-	uint64 shardId = shardInterval->shardId;
-	List *shardPlacementList = ShardPlacementList(shardId);
-	bool missingOk = false;
-	ShardPlacement *sourceShardPlacement = FinalizedShardPlacement(shardId, missingOk);
-	char *srcNodeName = sourceShardPlacement->nodeName;
-	uint32 srcNodePort = sourceShardPlacement->nodePort;
-	char *tableOwner = TableOwner(shardInterval->relationId);
-	List *ddlCommandList = CopyShardCommandList(shardInterval, srcNodeName, srcNodePort);
-
 	/* we do not use pgDistNode, we only obtain a lock on it to prevent modifications */
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	ListCell *workerNodeCell = NULL;
 
 	/*
@@ -263,56 +242,83 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
 		char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
-		bool missingWorkerOk = true;
 
-		ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																	 nodeName, nodePort,
-																	 missingWorkerOk);
-
-		/*
-		 * Although this function is used for reference tables and reference table shard
-		 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
-		 * a non-reference table to reference table, unhealty placements may exist. In
-		 * this case, we repair the shard placement and update its state in
-		 * pg_dist_shard_placement table.
-		 */
-		if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
-		{
-			uint64 placementId = 0;
-
-			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-													   ddlCommandList);
-			if (targetPlacement == NULL)
-			{
-				placementId = GetNextPlacementId();
-				InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0,
-										nodeName, nodePort);
-			}
-			else
-			{
-				placementId = targetPlacement->placementId;
-				UpdateShardPlacementState(placementId, FILE_FINALIZED);
-			}
-
-			/*
-			 * Although ReplicateShardToAllWorkers is used only for reference tables,
-			 * during the upgrade phase, the placements are created before the table is
-			 * marked as a reference table. All metadata (including the placement
-			 * metadata) will be copied to workers after all reference table changed
-			 * are finished.
-			 */
-			if (ShouldSyncTableMetadata(shardInterval->relationId))
-			{
-				char *placementCommand = PlacementUpsertCommand(shardId, placementId,
-																FILE_FINALIZED, 0,
-																nodeName, nodePort);
-
-				SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
-			}
-		}
+		ReplicateShardToNode(shardInterval, nodeName, nodePort);
 	}
 
 	heap_close(pgDistNode, NoLock);
+}
+
+
+/*
+ * ReplicateShardToNode function replicates given shard to the given worker node
+ * in a separate transaction. While replicating, it only replicates the shard to the
+ * workers which does not have a healthy replica of the shard. This function also modifies
+ * metadata by inserting/updating related rows in pg_dist_shard_placement.
+ */
+static void
+ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
+{
+	uint64 shardId = shardInterval->shardId;
+
+	bool missingOk = false;
+	ShardPlacement *sourceShardPlacement = FinalizedShardPlacement(shardId, missingOk);
+	char *srcNodeName = sourceShardPlacement->nodeName;
+	uint32 srcNodePort = sourceShardPlacement->nodePort;
+	List *ddlCommandList = CopyShardCommandList(shardInterval, srcNodeName, srcNodePort);
+
+	List *shardPlacementList = ShardPlacementList(shardId);
+	bool missingWorkerOk = true;
+	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
+																 nodeName, nodePort,
+																 missingWorkerOk);
+	char *tableOwner = TableOwner(shardInterval->relationId);
+
+	/*
+	 * Although this function is used for reference tables and reference table shard
+	 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
+	 * a non-reference table to reference table, unhealty placements may exist. In
+	 * this case, we repair the shard placement and update its state in
+	 * pg_dist_shard_placement table.
+	 */
+	if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
+	{
+		uint64 placementId = 0;
+
+		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
+								get_rel_name(shardInterval->relationId), nodeName,
+								nodePort)));
+
+		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
+												   ddlCommandList);
+		if (targetPlacement == NULL)
+		{
+			placementId = GetNextPlacementId();
+			InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0,
+									nodeName, nodePort);
+		}
+		else
+		{
+			placementId = targetPlacement->placementId;
+			UpdateShardPlacementState(placementId, FILE_FINALIZED);
+		}
+
+		/*
+		 * Although ReplicateShardToAllWorkers is used only for reference tables,
+		 * during the upgrade phase, the placements are created before the table is
+		 * marked as a reference table. All metadata (including the placement
+		 * metadata) will be copied to workers after all reference table changed
+		 * are finished.
+		 */
+		if (ShouldSyncTableMetadata(shardInterval->relationId))
+		{
+			char *placementCommand = PlacementUpsertCommand(shardId, placementId,
+															FILE_FINALIZED, 0,
+															nodeName, nodePort);
+
+			SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
+		}
+	}
 }
 
 
@@ -355,7 +361,7 @@ uint32
 CreateReferenceTableColocationId()
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	int shardCount = 1;
 	int replicationFactor = list_length(workerNodeList);
 	Oid distributionColumnType = InvalidOid;

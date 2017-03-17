@@ -205,6 +205,19 @@ SELECT create_distributed_table('mx_sequence', 'key');
 SELECT groupid FROM pg_dist_local_group;
  groupid 
 ---------
+      12
+(1 row)
+
+SELECT * FROM mx_sequence_value_seq;
+     sequence_name     |    last_value    |   start_value    | increment_by |    max_value     |    min_value     | cache_value | log_cnt | is_cycled | is_called 
+-----------------------+------------------+------------------+--------------+------------------+------------------+-------------+---------+-----------+-----------
+ mx_sequence_value_seq | 3377699720527873 | 3377699720527873 |            1 | 3659174697238529 | 3377699720527873 |           1 |       0 | f         | f
+(1 row)
+
+\c - - - :worker_2_port
+SELECT groupid FROM pg_dist_local_group;
+ groupid 
+---------
       14
 (1 row)
 
@@ -212,19 +225,6 @@ SELECT * FROM mx_sequence_value_seq;
      sequence_name     |    last_value    |   start_value    | increment_by |    max_value     |    min_value     | cache_value | log_cnt | is_cycled | is_called 
 -----------------------+------------------+------------------+--------------+------------------+------------------+-------------+---------+-----------+-----------
  mx_sequence_value_seq | 3940649673949185 | 3940649673949185 |            1 | 4222124650659841 | 3940649673949185 |           1 |       0 | f         | f
-(1 row)
-
-\c - - - :worker_2_port
-SELECT groupid FROM pg_dist_local_group;
- groupid 
----------
-      16
-(1 row)
-
-SELECT * FROM mx_sequence_value_seq;
-     sequence_name     |    last_value    |   start_value    | increment_by |    max_value     |    min_value     | cache_value | log_cnt | is_cycled | is_called 
------------------------+------------------+------------------+--------------+------------------+------------------+-------------+---------+-----------+-----------
- mx_sequence_value_seq | 4503599627370497 | 4503599627370497 |            1 | 4785074604081153 | 4503599627370497 |           1 |       0 | f         | f
 (1 row)
 
 \c - - - :master_port

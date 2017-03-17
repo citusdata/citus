@@ -30,7 +30,6 @@
 #define WORKER_RACK_TRIES 5
 #define WORKER_DEFAULT_RACK "default"
 
-
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
  * WorkerNodeHash table.
@@ -43,6 +42,7 @@ typedef struct WorkerNode
 	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */
 	char workerRack[WORKER_LENGTH];     /* node's network location */
 	bool hasMetadata;                   /* node gets metadata changes */
+	bool isActive;                      /* node's state */
 } WorkerNode;
 
 
@@ -59,7 +59,7 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetNodeWithName(const char *hostname);
 extern uint32 WorkerGetLiveNodeCount(void);
-extern List * WorkerNodeList(void);
+extern List * ActiveWorkerNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
 extern void EnsureCoordinator(void);
