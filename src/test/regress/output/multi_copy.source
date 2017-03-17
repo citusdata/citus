@@ -740,7 +740,7 @@ SELECT shardid, nodename, nodeport
 
 -- disable the first node
 SELECT master_disable_node('localhost', :worker_1_port);
-NOTICE:  Node localhost:57637 has active shard placements. Some queries may fail after this operation. Use select master_add_node('localhost', 57637) to add this node back.
+NOTICE:  Node localhost:57637 has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57637) to activate this node back.
  master_disable_node 
 ---------------------
  
@@ -766,12 +766,12 @@ SELECT shardid, nodename, nodeport
 (6 rows)
 
 -- add the node back
-SELECT master_add_node('localhost', :worker_1_port);
-NOTICE:  Replicating reference table "nation" to all workers
-NOTICE:  Replicating reference table "supplier" to all workers
-         master_add_node         
----------------------------------
- (3,3,localhost,57637,default,f)
+SELECT master_activate_node('localhost', :worker_1_port);
+NOTICE:  Replicating reference table "nation" to the node localhost:57637
+NOTICE:  Replicating reference table "supplier" to the node localhost:57637
+       master_activate_node        
+-----------------------------------
+ (1,1,localhost,57637,default,f,t)
 (1 row)
 
 RESET citus.shard_replication_factor;

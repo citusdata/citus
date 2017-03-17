@@ -575,7 +575,7 @@ WHERE
 \c - - - :master_port
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT master_activate_node('localhost', :worker_2_port);
 
 
 -- DROP tables to clean workspace

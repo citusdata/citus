@@ -242,7 +242,7 @@ static void
 CreateReferenceTable(Oid relationId)
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	int replicationFactor = list_length(workerNodeList);
 	char *distributionColumnName = NULL;
 	bool requireEmpty = true;
