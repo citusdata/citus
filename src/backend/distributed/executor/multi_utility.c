@@ -379,7 +379,6 @@ multi_ProcessUtility(Node *parsetree,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-
 	if (commandMustRunAsOwner)
 	{
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
@@ -1379,6 +1378,19 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
+	Oid leftRelationId = InvalidOid;
+	bool isDistributedRelation = false;
+	LOCKMODE lockmode = 0;
+
+	/* error out if table is not distributed */
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+	isDistributedRelation = IsDistributedTable(leftRelationId);
+	if(!isDistributedRelation)
+	{
+		return;
+	}
 
 	/* error out if any of the subcommands are unsupported */
 	foreach(commandCell, commandList)
@@ -1482,31 +1494,28 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 				Constraint *constraint = (Constraint *) command->def;
 
-				/* extra checks for alter table */
-				if (constraint->contype == CONSTR_FOREIGN)
+
+				/* we only allow foreign constraints if they are only subcommand */
+				if (commandList->length > 1)
 				{
-					/* we only allow foreign constraints if they are only subcommand */
-					if (commandList->length > 1)
-					{
-						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										errmsg("cannot create foreign key constraint"),
-										errdetail("Citus cannot execute ADD CONSTRAINT "
-												  "FOREIGN KEY command together with other "
-												  "subcommands."),
-										errhint("You can issue each subcommand separately")));
-					}
-					/*
-					 * We will use constraint name in each placement by extending it at
-					 * workers. Therefore we require it to be exist.
-					 */
-					if (constraint->conname == NULL)
-					{
-						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										errmsg("cannot create foreign key constraint"),
-										errdetail("Creating foreign constraint without a "
-												  "name on a distributed table is currently "
-												  "not supported.")));
-					}
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create constraint"),
+									errdetail("Citus cannot execute ADD CONSTRAINT "
+											  "command together with other subcommands."),
+									errhint("You can issue each subcommand separately")));
+				}
+
+				/*
+				 * We will use constraint name in each placement by extending it at
+				 * workers. Therefore we require it to be exist.
+				 */
+				if (constraint->conname == NULL)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot create constraint"),
+									errdetail("Creating constraint without a name on a "
+											  "distributed table is currently not "
+											  "supported.")));
 				}
 
 				ErrorIfNotSupportedConstraint(relation, distributionMethod,
