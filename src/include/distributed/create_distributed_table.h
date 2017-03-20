@@ -9,8 +9,8 @@
 #define SRC_INCLUDE_DISTRIBUTED_CREATE_DISTRIBUTED_TABLE_H_
 
 extern void ErrorIfNotSupportedConstraint(Relation relation,
-												 char distributionMethod,
-												 Var *distributionColumn,
-												 uint32 colocationId);
+										  char distributionMethod,
+										  Var *distributionColumn,
+										  uint32 colocationId);
 
 #endif /* SRC_INCLUDE_DISTRIBUTED_CREATE_DISTRIBUTED_TABLE_H_ */

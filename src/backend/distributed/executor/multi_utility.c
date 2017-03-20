@@ -1378,16 +1378,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
-	Oid leftRelationId = InvalidOid;
+	Oid relationId = InvalidOid;
 	bool isDistributedRelation = false;
 	LOCKMODE lockmode = 0;
 
 	/* error out if table is not distributed */
 	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-	leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 
-	isDistributedRelation = IsDistributedTable(leftRelationId);
-	if(!isDistributedRelation)
+	isDistributedRelation = IsDistributedTable(relationId);
+	if (!isDistributedRelation)
 	{
 		return;
 	}
@@ -1444,8 +1444,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				HeapTuple tuple = NULL;
 				char *alterColumnName = command->name;
 
-				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-				Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 				if (!OidIsValid(relationId))
 				{
 					continue;
@@ -1461,7 +1459,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					/* reference tables do not have partition column, so allow them */
 					if (partitionColumn != NULL &&
 						targetAttr->attnum == partitionColumn->varattno)
-					{
+					{ /* TODO : CHANGE IT ! */
 						ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
 											   "involving partition column")));
 					}
@@ -1474,28 +1472,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_AddConstraint:
 			{
+				Constraint *constraint = (Constraint *) command->def;
+
 				Relation relation = NULL;
 				char distributionMethod;
 				Var *distributionColumn = NULL;
 				uint32 colocationId = 0;
 
-				LOCKMODE lockmode = 0;
-				Oid leftRelationId = InvalidOid;
-
-				lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-				leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
-
-				relation = relation_open(leftRelationId, ExclusiveLock);
-
-				distributionMethod = PartitionMethod(leftRelationId);
-				distributionColumn = PartitionKey(leftRelationId);
-
-				colocationId = TableColocationId(leftRelationId);
-
-				Constraint *constraint = (Constraint *) command->def;
-
-
-				/* we only allow foreign constraints if they are only subcommand */
+				/* we only allow constraints if they are only subcommand */
 				if (commandList->length > 1)
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1518,8 +1502,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 											  "supported.")));
 				}
 
+				distributionMethod = PartitionMethod(relationId);
+				distributionColumn = PartitionKey(relationId);
+				colocationId = TableColocationId(relationId);
+
+				relation = relation_open(relationId, ExclusiveLock);
 				ErrorIfNotSupportedConstraint(relation, distributionMethod,
 											  distributionColumn, colocationId);
+				relation_close(relation, NoLock);
 
 				break;
 			}
@@ -1535,8 +1525,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("alter table command is currently unsupported"),
 								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL,"
-										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT FOREIGN"
-										  " KEY and TYPE subcommands are supported.")));
+										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT "
+										  "subcommands are supported.")));
 			}
 		}
 	}
