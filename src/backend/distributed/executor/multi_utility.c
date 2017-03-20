@@ -117,7 +117,7 @@ static bool IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumS
 static List * VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt);
 static StringInfo DeparseVacuumStmtPrefix(VacuumStmt *vacuumStmt);
 static char * DeparseVacuumColumnNames(List *columnNameList);
-
+static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
@@ -376,7 +376,7 @@ multi_ProcessUtility(Node *parsetree,
 	{
 		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
 
-		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+		ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
 	}
 
 	if (commandMustRunAsOwner)
@@ -824,6 +824,8 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	{
 		return NULL;
 	}
+
+	ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 
 	/*
 	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
@@ -1362,6 +1364,40 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
 }
 
 
+static void
+ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
+{
+	Oid relationId = InvalidOid;
+	bool isDistributedRelation = false;
+	LOCKMODE lockmode = 0;
+
+	Relation relation = NULL;
+	char distributionMethod;
+	Var *distributionColumn = NULL;
+	uint32 colocationId = 0;
+
+	/* continue if it is not distributed table */
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+
+	isDistributedRelation = IsDistributedTable(relationId);
+	if (!isDistributedRelation)
+	{
+		return;
+	}
+
+
+	distributionMethod = PartitionMethod(relationId);
+	distributionColumn = PartitionKey(relationId);
+	colocationId = TableColocationId(relationId);
+
+	relation = relation_open(relationId, ExclusiveLock);
+	ErrorIfNotSupportedConstraint(relation, distributionMethod,
+								  distributionColumn, colocationId);
+	relation_close(relation, NoLock);
+}
+
+
 /*
  * ErrorIfUnsupportedAlterTableStmt checks if the corresponding alter table statement
  * is supported for distributed tables and errors out if it is not. Currently,
@@ -1378,19 +1414,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 {
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
-	Oid relationId = InvalidOid;
-	bool isDistributedRelation = false;
-	LOCKMODE lockmode = 0;
-
-	/* error out if table is not distributed */
-	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-	relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
-
-	isDistributedRelation = IsDistributedTable(relationId);
-	if (!isDistributedRelation)
-	{
-		return;
-	}
 
 	/* error out if any of the subcommands are unsupported */
 	foreach(commandCell, commandList)
@@ -1443,6 +1466,11 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				Var *partitionColumn = NULL;
 				HeapTuple tuple = NULL;
 				char *alterColumnName = command->name;
+				Oid relationId = InvalidOid;
+				LOCKMODE lockmode = 0;
+
+				lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+				relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 
 				if (!OidIsValid(relationId))
 				{
@@ -1474,11 +1502,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				Constraint *constraint = (Constraint *) command->def;
 
-				Relation relation = NULL;
-				char distributionMethod;
-				Var *distributionColumn = NULL;
-				uint32 colocationId = 0;
-
 				/* we only allow constraints if they are only subcommand */
 				if (commandList->length > 1)
 				{
@@ -1501,15 +1524,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 											  "distributed table is currently not "
 											  "supported.")));
 				}
-
-				distributionMethod = PartitionMethod(relationId);
-				distributionColumn = PartitionKey(relationId);
-				colocationId = TableColocationId(relationId);
-
-				relation = relation_open(relationId, ExclusiveLock);
-				ErrorIfNotSupportedConstraint(relation, distributionMethod,
-											  distributionColumn, colocationId);
-				relation_close(relation, NoLock);
 
 				break;
 			}
