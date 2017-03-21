@@ -32,6 +32,8 @@ extern char * pg_get_sequencedef_string(Oid sequenceRelid);
 extern Form_pg_sequence pg_get_sequencedef(Oid sequenceRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId, bool forShardCreation);
 extern char * pg_get_tablecolumnoptionsdef_string(Oid tableRelationId);
+extern char * deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64
+											shardid, StringInfo buffer);
 extern char * pg_get_indexclusterdef_string(Oid indexRelationId);
 extern List * pg_get_table_grants(Oid relationId);
 
