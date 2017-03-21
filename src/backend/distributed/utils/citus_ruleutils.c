@@ -24,6 +24,7 @@
 #include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
@@ -33,12 +34,14 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/relay_utility.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "parser/parse_utilcmd.h"
 #include "storage/lock.h"
 #include "utils/acl.h"
 #include "utils/array.h"
@@ -584,6 +587,101 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	relation_close(relation, AccessShareLock);
 
 	return (buffer.data);
+}
+
+
+char *
+deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
+							  StringInfo buffer)
+{
+	IndexStmt *indexStmt = copyObject(origStmt); /* copy to avoid modifications */
+	char *relationName = indexStmt->relation->relname;
+	char *indexName = indexStmt->idxname;
+	ListCell *indexParameterCell = NULL;
+	List *deparseContext = NULL;
+
+	/* extend relation and index name using shard identifier */
+	AppendShardIdToName(&relationName, shardid);
+	AppendShardIdToName(&indexName, shardid);
+
+	/* use extended shard name and transformed stmt for deparsing */
+	deparseContext = deparse_context_for(relationName, distrelid);
+	indexStmt = transformIndexStmt(distrelid, indexStmt, NULL);
+
+	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s USING %s ",
+					 (indexStmt->unique ? "UNIQUE" : ""),
+					 (indexStmt->concurrent ? "CONCURRENTLY" : ""),
+					 (indexStmt->if_not_exists ? "IF NOT EXISTS" : ""),
+					 quote_identifier(indexName),
+					 quote_qualified_identifier(indexStmt->relation->schemaname,
+												relationName),
+					 indexStmt->accessMethod);
+
+	/* index column or expression list begins here */
+	appendStringInfoChar(buffer, '(');
+
+	foreach(indexParameterCell, indexStmt->indexParams)
+	{
+		IndexElem *indexElement = (IndexElem *) lfirst(indexParameterCell);
+
+		/* use commas to separate subsequent elements */
+		if (indexParameterCell != list_head(indexStmt->indexParams))
+		{
+			appendStringInfoChar(buffer, ',');
+		}
+
+		if (indexElement->name)
+		{
+			appendStringInfo(buffer, "%s ", quote_identifier(indexElement->name));
+		}
+		else if (indexElement->expr)
+		{
+			appendStringInfo(buffer, "(%s)", deparse_expression(indexElement->expr,
+																deparseContext, false,
+																false));
+		}
+
+		if (indexElement->collation != NIL)
+		{
+			appendStringInfo(buffer, "COLLATE %s ",
+							 NameListToQuotedString(indexElement->collation));
+		}
+
+		if (indexElement->opclass != NIL)
+		{
+			appendStringInfo(buffer, "%s ",
+							 NameListToQuotedString(indexElement->opclass));
+		}
+
+		if (indexElement->ordering != SORTBY_DEFAULT)
+		{
+			bool sortAsc = (indexElement->ordering == SORTBY_ASC);
+			appendStringInfo(buffer, "%s ", (sortAsc ? "ASC" : "DESC"));
+		}
+
+		if (indexElement->nulls_ordering != SORTBY_NULLS_DEFAULT)
+		{
+			bool nullsFirst = (indexElement->nulls_ordering == SORTBY_NULLS_FIRST);
+			appendStringInfo(buffer, "NULLS %s ", (nullsFirst ? "FIRST" : "LAST"));
+		}
+	}
+
+	appendStringInfoString(buffer, ") ");
+
+	if (indexStmt->options != NIL)
+	{
+		appendStringInfoString(buffer, "WITH ");
+		AppendOptionListToString(buffer, indexStmt->options);
+	}
+
+	if (indexStmt->whereClause != NULL)
+	{
+		appendStringInfo(buffer, "WHERE %s", deparse_expression(indexStmt->whereClause,
+																deparseContext, false,
+																false));
+	}
+
+	return buffer->data;
 }
 
 

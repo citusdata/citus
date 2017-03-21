@@ -134,6 +134,7 @@ static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
+static List * IndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 								 const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
@@ -678,7 +679,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
 				ddlJob->commandString = createIndexCommand;
-				ddlJob->taskList = DDLTaskList(relationId, createIndexCommand);
+				ddlJob->taskList = IndexTaskList(relationId, createIndexStatement);
 
 				ddlJobs = list_make1(ddlJob);
 			}
@@ -2065,6 +2066,60 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * DDLTaskList builds a list of tasks to execute a DDL command on a
+ * given list of shards.
+ */
+static List *
+IndexTaskList(Oid relationId, IndexStmt *indexStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	StringInfoData ddlString;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	initStringInfo(&ddlString);
+
+	/* set statement's schema name if it is not set already */
+	if (indexStmt->relation->schemaname == NULL)
+	{
+		indexStmt->relation->schemaname = schemaName;
+	}
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		Task *task = NULL;
+
+		deparse_shard_index_statement(indexStmt, relationId, shardId, &ddlString);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(ddlString.data);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+
+		resetStringInfo(&ddlString);
 	}
 
 	return taskList;
