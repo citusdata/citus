@@ -853,7 +853,7 @@ GROUP BY
                                                                                                                       QUERY PLAN                                                                                                                       
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-   Group Key: hasdone
+   Group Key: remote_scan.hasdone
    ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
          Task Count: 2
          Tasks Shown: One of 2
@@ -1017,7 +1017,7 @@ LIMIT
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit  (cost=0.00..0.00 rows=0 width=0)
    ->  Sort  (cost=0.00..0.00 rows=0 width=0)
-         Sort Key: user_lastseen DESC
+         Sort Key: remote_scan.user_lastseen DESC
          ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
                Task Count: 2
                Tasks Shown: One of 2
