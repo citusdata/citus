@@ -135,6 +135,7 @@ static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
 static List * IndexTaskList(Oid relationId, IndexStmt *indexStmt);
+static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 								 const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
@@ -772,7 +773,8 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 
 		ddlJob->targetRelationId = distributedRelationId;
 		ddlJob->commandString = dropIndexCommand;
-		ddlJob->taskList = DDLTaskList(distributedRelationId, dropIndexCommand);
+		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
+											 dropIndexStatement);
 
 		ddlJobs = list_make1(ddlJob);
 	}
@@ -2106,6 +2108,62 @@ IndexTaskList(Oid relationId, IndexStmt *indexStmt)
 		Task *task = NULL;
 
 		deparse_shard_index_statement(indexStmt, relationId, shardId, &ddlString);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(ddlString.data);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+
+		resetStringInfo(&ddlString);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * DDLTaskList builds a list of tasks to execute a DDL command on a
+ * given list of shards.
+ */
+static List *
+DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	char *indexName = get_rel_name(indexId);
+	Oid schemaId = get_rel_namespace(indexId);
+	char *schemaName = get_namespace_name(schemaId);
+	StringInfoData ddlString;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	initStringInfo(&ddlString);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		char *shardIndexName = pstrdup(indexName);
+		Task *task = NULL;
+
+		AppendShardIdToName(&shardIndexName, shardId);
+
+		appendStringInfo(&ddlString, "DROP INDEX %s %s %s %s",
+						 (dropStmt->concurrent ? "CONCURRENTLY" : ""),
+						 (dropStmt->missing_ok ? "IF EXISTS" : ""),
+						 quote_qualified_identifier(schemaName, shardIndexName),
+						 (dropStmt->behavior == DROP_RESTRICT ? "RESTRICT" : "CASCADE"));
 
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
