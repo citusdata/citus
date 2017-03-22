@@ -172,13 +172,12 @@ FROM
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- Check that we error out if there is union all.
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
-   (SELECT 1::bigint)
-) b;
-ERROR:  cannot push down this subquery
-DETAIL:  Union All clauses are currently unsupported
+-- TEMPORARLY DISABLE UNION ALL
+-- SELECT count(*) FROM
+-- (
+--   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
+--   (SELECT 1::bigint)
+--) b;
 ---
 -- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
 ---
@@ -978,8 +977,12 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+   event_average    |       hasdone       
+--------------------+---------------------
+ 4.0000000000000000 | Has not done paying
+ 2.5000000000000000 | Has done paying
+(2 rows)
+
 -- Union, left join and having subquery pushdown
 SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -1050,8 +1053,11 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+   event_average    | count_pay 
+--------------------+-----------
+ 3.0000000000000000 |         0
+(1 row)
+
 	
 -- Lateral join subquery pushdown
 SELECT
@@ -1219,8 +1225,8 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+                                                                                                                   QUERY PLAN                                                                                                                    
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  HashAggregate
    ->  Custom Scan (Citus Real-Time)
                ->  HashAggregate
@@ -1240,6 +1246,19 @@ DETAIL:  Each relation should be joined with at least one another relation using
                                              ->  Unique
                                                    ->  Sort
                                                          ->  Seq Scan on events_270009 events_2
+                                                         Filter: (((event_type)::text = 'pay'::text) AND (composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                       ->  Hash  (cost=0.10..0.10 rows=2 width=88)
+                                             ->  Subquery Scan on subquery_1  (cost=0.05..0.10 rows=2 width=88)
+                                                   ->  Unique  (cost=0.05..0.08 rows=2 width=0)
+                                                         ->  Sort  (cost=0.05..0.06 rows=2 width=0)
+                                                               Sort Key: ((composite_id).tenant_id), ((composite_id).user_id), composite_id, ('action=>1'::text), event_time
+                                                               ->  Append  (cost=0.00..0.04 rows=2 width=0)
+                                                                     ->  Result  (cost=0.00..0.01 rows=1 width=0)
+                                                                           One-Time Filter: false
+                                                                     ->  Result  (cost=0.00..0.01 rows=1 width=0)
+                                                                           One-Time Filter: false
+(30 rows)
+
 -- Union, left join and having subquery pushdown
 EXPLAIN (COSTS OFF)
   SELECT
@@ -1311,8 +1330,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
 EXPLAIN (COSTS OFF)
 SELECT
