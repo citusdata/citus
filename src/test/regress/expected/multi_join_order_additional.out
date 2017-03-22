@@ -43,9 +43,9 @@ SELECT master_create_worker_shards('lineitem_hash', 2, 1);
 (1 row)
 
 CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
+DEBUG:  building index "lineitem_hash_time_index" on table "lineitem_hash"
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-DEBUG:  building index "lineitem_hash_time_index" on table "lineitem_hash"
 CREATE TABLE orders_hash (
 	o_orderkey bigint not null,
 	o_custkey integer not null,

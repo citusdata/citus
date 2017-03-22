@@ -261,8 +261,7 @@ ALTER TABLE IF EXISTS non_existent_table ADD COLUMN new_column INTEGER;
 NOTICE:  relation "non_existent_table" does not exist, skipping
 ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTEGER;
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
-ERROR:  column "non_existent_column" of relation "lineitem_alter_220000" does not exist
-CONTEXT:  while executing command on localhost:57638
+ERROR:  column "non_existent_column" of relation "lineitem_alter" does not exist
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
@@ -360,13 +359,13 @@ DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CON
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 ERROR:  type "non_existent_type" does not exist
-CONTEXT:  while executing command on localhost:57638
+LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
+                                                         ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ERROR:  column "null_column" contains null values
 CONTEXT:  while executing command on localhost:57638
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
-CONTEXT:  while executing command on localhost:57638
 -- Verify that we error out on statements involving RENAME
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 ERROR:  renaming distributed tables or their objects is currently unsupported

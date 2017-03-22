@@ -91,11 +91,12 @@ SELECT * FROM mx_ref_table ORDER BY col_1;
 
 \c - - - :master_port
 DROP TABLE mx_ref_table;
+CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
 
 -- DDL commands
 \d mx_table
-CREATE INDEX mx_test_index ON mx_table(col_1);
+CREATE INDEX mx_test_index ON mx_table(col_2);
 ALTER TABLE mx_table ADD COLUMN col_4 int;
 ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERENCES mx_table(col_1);
 \d mx_table
@@ -122,6 +123,7 @@ SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port
+DROP INDEX mx_test_uniq_index;
 SELECT master_add_node('localhost', 5432);
 
 \c - - - :worker_1_port
