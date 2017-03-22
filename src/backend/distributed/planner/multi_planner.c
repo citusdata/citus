@@ -454,6 +454,9 @@ FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
 	finalPlan->queryId = localPlan->queryId;
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 
+	/* add original range table list for access permission checks */
+	finalPlan->rtable = list_concat(finalPlan->rtable, localPlan->rtable);
+
 	return finalPlan;
 }
 
@@ -473,7 +476,7 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 	List *targetList = NIL;
 	List *columnNameList = NIL;
 
-	/* we will have only one range table entry */
+	/* we will have custom scan range table entry as the first one in the list */
 	int customScanRangeTableIndex = 1;
 
 	/* build a targetlist to read from the custom scan output */
@@ -513,6 +516,9 @@ FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan)
 
 	remoteScanRangeTableEntry = RemoteScanRangeTableEntry(columnNameList);
 	routerPlan->rtable = list_make1(remoteScanRangeTableEntry);
+
+	/* add original range table list for access permission checks */
+	routerPlan->rtable = list_concat(routerPlan->rtable, localPlan->rtable);
 
 	routerPlan->canSetTag = true;
 	routerPlan->relationOids = NIL;

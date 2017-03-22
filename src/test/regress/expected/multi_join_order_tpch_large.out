@@ -55,12 +55,12 @@ ORDER BY
 	revenue DESC,
 	o_orderdate;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ]
-                                   QUERY PLAN                                   
---------------------------------------------------------------------------------
+                                           QUERY PLAN                                           
+------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(revenue))) DESC, o_orderdate
+   Sort Key: sum((sum(remote_scan.revenue))) DESC, remote_scan.o_orderdate
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-         Group Key: l_orderkey, o_orderdate, o_shippriority
+         Group Key: remote_scan.l_orderkey, remote_scan.o_orderdate, remote_scan.o_shippriority
          ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
@@ -98,12 +98,12 @@ GROUP BY
 ORDER BY
 	revenue DESC;
 LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single partition join "customer" ][ broadcast join "nation" ]
-                                       QUERY PLAN                                       
-----------------------------------------------------------------------------------------
+                                                                                 QUERY PLAN                                                                                 
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Sort  (cost=0.00..0.00 rows=0 width=0)
-   Sort Key: sum((sum(revenue))) DESC
+   Sort Key: sum((sum(remote_scan.revenue))) DESC
    ->  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-         Group Key: c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment
+         Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
          ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
                explain statements for distributed queries are not enabled
 (6 rows)
@@ -161,7 +161,7 @@ LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single partit
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  HashAggregate  (cost=0.00..0.00 rows=0 width=0)
-   Group Key: l_partkey
+   Group Key: remote_scan.l_partkey
    ->  Custom Scan (Citus Task-Tracker)  (cost=0.00..0.00 rows=0 width=0)
          explain statements for distributed queries are not enabled
 (4 rows)

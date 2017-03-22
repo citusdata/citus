@@ -62,9 +62,9 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), l_quantity
+  Sort Key: COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
-        Group Key: l_quantity
+        Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Real-Time)
               Task Count: 16
               Tasks Shown: One of 16
@@ -81,13 +81,13 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
   {
     "Plan": {
       "Node Type": "Sort",
-      "Sort Key": ["COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "l_quantity"],
+      "Sort Key": ["COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)", "remote_scan.l_quantity"],
       "Plans": [
         {
           "Node Type": "Aggregate",
           "Strategy": "Hashed",
           "Parent Relationship": "Outer",
-          "Group Key": ["l_quantity"],
+          "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
               "Node Type": "Custom Scan",
@@ -146,8 +146,8 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
     <Plan>
       <Node-Type>Sort</Node-Type>
       <Sort-Key>
-        <Item>COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
-        <Item>l_quantity</Item>
+        <Item>COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)</Item>
+        <Item>remote_scan.l_quantity</Item>
       </Sort-Key>
       <Plans>
         <Plan>
@@ -155,7 +155,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Strategy>Hashed</Strategy>
           <Parent-Relationship>Outer</Parent-Relationship>
           <Group-Key>
-            <Item>l_quantity</Item>
+            <Item>remote_scan.l_quantity</Item>
           </Group-Key>
           <Plans>
             <Plan>
@@ -213,14 +213,14 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
 - Plan: 
     Node Type: "Sort"
     Sort Key: 
-      - "COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
-      - "l_quantity"
+      - "COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint)"
+      - "remote_scan.l_quantity"
     Plans: 
       - Node Type: "Aggregate"
         Strategy: "Hashed"
         Parent Relationship: "Outer"
         Group Key: 
-          - "l_quantity"
+          - "remote_scan.l_quantity"
         Plans: 
           - Node Type: "Custom Scan"
             Parent Relationship: "Outer"
@@ -248,9 +248,9 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 Sort
-  Sort Key: COALESCE((sum((COALESCE((sum(count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), l_quantity
+  Sort Key: COALESCE((sum((COALESCE((sum(remote_scan.count_quantity))::bigint, '0'::bigint))))::bigint, '0'::bigint), remote_scan.l_quantity
   ->  HashAggregate
-        Group Key: l_quantity
+        Group Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Real-Time)
               Task Count: 16
               Tasks Shown: One of 16
@@ -264,9 +264,9 @@ Sort
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem_mx;
 Aggregate
-  Output: (sum("?column?") / (sum("?column?_1") / sum("?column?_2")))
+  Output: (sum(remote_scan."?column?") / (sum(remote_scan."?column?_1") / sum(remote_scan."?column?_2")))
   ->  Custom Scan (Citus Real-Time)
-        Output: "?column?", "?column?_1", "?column?_2"
+        Output: remote_scan."?column?", remote_scan."?column?_1", remote_scan."?column?_2"
         Task Count: 16
         Tasks Shown: One of 16
         ->  Task
@@ -282,7 +282,7 @@ EXPLAIN (COSTS FALSE)
 	ORDER BY l_quantity LIMIT 10;
 Limit
   ->  Sort
-        Sort Key: l_quantity
+        Sort Key: remote_scan.l_quantity
         ->  Custom Scan (Citus Real-Time)
               Task Count: 16
               Tasks Shown: One of 16
