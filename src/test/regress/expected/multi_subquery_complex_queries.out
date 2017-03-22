@@ -10,165 +10,1053 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 SET citus.subquery_pushdown TO TRUE;
 SET citus.enable_router_execution TO FALSE;
  -- 
- -- NOT SUPPORTED YET BUT SHOULD BE ADDED
+ -- UNIONs and JOINs mixed
  --
---SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
---FROM
---  ( SELECT *, random()
---   FROM
---     ( SELECT "t"."user_id",
---              "t"."time",
---              unnest("t"."collected_events") AS "event_types"
---      FROM
---        ( SELECT "t1"."user_id",
---                 min("t1"."time") AS "time",
---                 array_agg(("t1"."event")
---                           ORDER BY time ASC, event DESC) AS collected_events
---         FROM (
---                 (SELECT *
---                  FROM
---                   (SELECT "events"."user_id",
---                          "events"."time",
---                         0 AS event
---                 FROM events_table as  "events"
---                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
---         UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 1 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 2 AS event
---                     FROM events_table as  "events"
---                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 3 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
---         GROUP BY "t1"."user_id") AS t) "q" 
---INNER JOIN
---     (SELECT "users"."user_id"
---      FROM users_table as "users"
---      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
---GROUP BY types
---ORDER BY types;
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+(4 rows)
+
+-- same query with target entries shuffled inside UNIONs
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+(4 rows)
+
+-- not supported since events_subquery_2 doesn't have partition key on the target list
+-- within the shuffled target list
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."user_id" * 2
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- not supported since events_subquery_2 doesn't have partition key on the target list
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."value_2" as user_id
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- not supported since events_subquery_2 doesn't have partition key on the target list
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+(4 rows)
+
+-- we can support arbitrary subqueries within UNIONs
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (
+                          SELECT * FROM
+                          (
+                              SELECT 
+                                max("events"."time"),
+                                0 AS event,
+                                "events"."user_id"
+                              FROM 
+                                events_table as  "events", users_table as "users"
+                              WHERE 
+                                events.user_id = users.user_id AND
+                                event_type IN (10, 11, 12, 13, 14, 15)
+                                GROUP BY   "events"."user_id"
+                          ) as events_subquery_5
+                     ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     2 |            160
+     3 |            158
+(3 rows)
+
+-- not supported since events_subquery_5 is not joined on partition key
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (
+                          SELECT * FROM
+                          (
+                              SELECT 
+                                max("events"."time"),
+                                0 AS event,
+                                "events"."user_id"
+                              FROM 
+                                events_table as  "events", users_table as "users"
+                              WHERE 
+                                events.user_id = users.value_2 AND
+                                event_type IN (10, 11, 12, 13, 14, 15)
+                                GROUP BY   "events"."user_id"
+                          ) as events_subquery_5
+                     ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- not supported since the join is not equi join
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id != q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- not supported since subquery 3 includes a JOIN with non-equi join
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."value_2" as user_id
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events", users_table as "users"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) AND users.user_id != events.user_id) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- similar query with more union statements (to enable UNION tree become larger)
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)
+                  UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 4 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (31, 32, 33, 34, 35, 36)) events_subquery_5)
+                  UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 5 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (37, 38, 39, 40, 41, 42)) events_subquery_6)
+                  UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 6 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (50, 51, 52, 53, 54, 55)) events_subquery_6)
+                 ) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+     4 |            117
+     5 |             98
+     6 |            167
+(7 rows)
+
+-- 
+-- UNION ALL Queries
+--
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION  ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+(4 rows)
+
+-- same query target list entries shuffled
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ types | sumofeventtype 
+-------+----------------
+     0 |            115
+     1 |             82
+     2 |            160
+     3 |            158
+(4 rows)
+
+-- not supported since subquery 3 does not have partition key
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION  ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."value_2", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- not supported since events_subquery_4 does not have partition key on the 
+-- target list
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                          "events"."time",
+                         0 AS event,
+                         "events"."user_id"
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 1 AS event, "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 2 AS event, "events"."user_id"
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT  "events"."time", 3 AS event, 2 * "events"."user_id"
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- union all with inner and left joins
+SELECT user_id, count(*) as cnt
+FROM
+  (SELECT first_query.user_id,
+          Random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                          ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id",
+                            "events"."time",
+                            0 AS event
+                     FROM events_table as  "events"
+                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "first_query" 
+INNER JOIN
+     (SELECT "t"."user_id"
+      FROM
+        (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t
+        LEFT  OUTER JOIN
+        (
+          SELECT DISTINCT "events"."user_id" as user_id
+         FROM events_table as "events"
+          WHERE event_type IN (35, 36, 37, 38)
+          GROUP BY user_id
+         ) as t2 
+        on (t2.user_id = t.user_id) WHERE t2.user_id is NULL) as second_query
+        ON ("first_query".user_id = "second_query".user_id)) as final_query 
+GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+ user_id | cnt 
+---------+-----
+      27 |  35
+      87 |  27
+      74 |  20
+      72 |  16
+      12 |  16
+      66 |  15
+      56 |  15
+      40 |  15
+      23 |  12
+      59 |  10
+(10 rows)
+
+-- not supported since the join between t and t2 is not equi join
+-- union all with inner and left joins
+SELECT user_id, count(*) as cnt
+FROM
+  (SELECT first_query.user_id,
+          Random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                          ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id",
+                            "events"."time",
+                            0 AS event
+                     FROM events_table as  "events"
+                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "first_query" 
+INNER JOIN
+     (SELECT "t"."user_id"
+      FROM
+        (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t
+        LEFT  OUTER JOIN
+        (
+          SELECT DISTINCT "events"."user_id" as user_id
+         FROM events_table as "events"
+          WHERE event_type IN (35, 36, 37, 38)
+          GROUP BY user_id
+         ) as t2 
+        on (t2.user_id > t.user_id) WHERE t2.user_id is NULL) as second_query
+        ON ("first_query".user_id = "second_query".user_id)) as final_query 
+GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
  -- 
- -- NOT SUPPORTED YET BUT SHOULD BE ADDED
+ -- Union, inner join and left join
  --
---SELECT user_id, count(*) as cnt
---FROM
---  (SELECT first_query.user_id,
---          Random()
---   FROM
---     ( SELECT "t"."user_id",
---              "t"."time",
---              unnest("t"."collected_events") AS "event_types"
---      FROM
---        ( SELECT "t1"."user_id",
---                 min("t1"."time") AS "time",
---                 array_agg(("t1"."event")
---                          ORDER BY time ASC, event DESC) AS collected_events
---         FROM (
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id",
---                            "events"."time",
---                            0 AS event
---                     FROM events_table as  "events"
---                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 1 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 2 AS event
---                     FROM events_table as  "events"
---                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 3 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
---         GROUP BY "t1"."user_id") AS t) "first_query" 
---INNER JOIN
---     (SELECT "t"."user_id"
---      FROM
---        (SELECT "users"."user_id"
---      FROM users_table as "users"
---      WHERE value_1 > 50 and value_1 < 70) AS t
---        left  OUTER JOIN
---        (SELECT DISTINCT("events"."user_id")
---         FROM events_table as "events"
---          WHERE event_type IN (26, 27, 28, 29, 30, 13)
---         GROUP BY "events"."user_id") as t2 on t2.user_id = t.user_id ) as second_query
---        ON ("first_query".user_id = "second_query".user_id)) as final_query 
---GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+SELECT user_id, count(*) as cnt
+FROM
+  (SELECT first_query.user_id,
+          Random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                          ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id",
+                            "events"."time",
+                            0 AS event
+                     FROM events_table as  "events"
+                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "first_query" 
+INNER JOIN
+     (SELECT "t"."user_id"
+      FROM
+        (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t
+        LEFT  OUTER JOIN
+        (
+          SELECT DISTINCT "events"."user_id" as user_id
+         FROM events_table as "events"
+          WHERE event_type IN (35, 36, 37, 38)
+          GROUP BY user_id
+         ) as t2 
+        on (t2.user_id = t.user_id) WHERE t2.user_id is NULL) as second_query
+        ON ("first_query".user_id = "second_query".user_id)) as final_query 
+GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+ user_id | cnt 
+---------+-----
+      27 |  35
+      87 |  27
+      74 |  20
+      72 |  16
+      12 |  16
+      66 |  15
+      56 |  15
+      40 |  15
+      23 |  12
+      59 |  10
+(10 rows)
+
  -- 
- -- NOT SUPPORTED YET BUT SHOULD BE ADDED
+ -- Unions, left / inner joins
  --
---SELECT user_id, count(*) as cnt
---FROM
---  (SELECT first_query.user_id,
---          Random()
---   FROM
---     ( SELECT "t"."user_id",
---              "t"."time",
---              unnest("t"."collected_events") AS "event_types"
---      FROM
---        ( SELECT "t1"."user_id",
---                 min("t1"."time") AS "time",
---                 array_agg(("t1"."event")
---                           ORDER BY time ASC, event DESC) AS collected_events
---         FROM (
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id",
---                            "events"."time",
---                            0 AS event
---                     FROM events_table as  "events"
---                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
---              UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 1 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 2 AS event
---                     FROM events_table as  "events"
---                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
---               UNION 
---                 (SELECT *
---                  FROM
---                    (SELECT "events"."user_id", "events"."time", 3 AS event
---                     FROM events_table as "events"
---                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
---         GROUP BY "t1"."user_id") AS t) "first_query" 
---INNER JOIN
---     (SELECT "t"."user_id"
---      FROM
---        (SELECT "users"."user_id"
---      FROM users_table as "users"
---      WHERE value_1 > 50 and value_1 < 70) AS t
---        left  OUTER JOIN
---        (SELECT DISTINCT("events"."user_id")
---         FROM events_table as "events"
---          WHERE event_type IN (26, 27, 28, 29, 30, 13)
---         GROUP BY "events"."user_id") as t2 on t2.user_id = t.user_id ) as second_query
---        ON ("first_query".user_id = "second_query".user_id)) as final_query 
---GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+SELECT user_id, count(*) as cnt
+FROM
+  (SELECT first_query.user_id,
+          Random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id",
+                            "events"."time",
+                            0 AS event
+                     FROM events_table as  "events"
+                     WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+              UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "first_query" 
+INNER JOIN
+     (SELECT "t"."user_id"
+      FROM
+        (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t
+        left  OUTER JOIN
+        (SELECT DISTINCT("events"."user_id")
+         FROM events_table as "events"
+          WHERE event_type IN (26, 27, 28, 29, 30, 13)
+          GROUP BY user_id
+        ) as t2 on t2.user_id = t.user_id where t2.user_id is NULL) as second_query
+        ON ("first_query".user_id = "second_query".user_id)) as final_query 
+GROUP BY user_id ORDER BY cnt DESC, user_id DESC LIMIT 10;
+ user_id | cnt 
+---------+-----
+      66 |  15
+      23 |  12
+      98 |   9
+      22 |   9
+      83 |   8
+      78 |   8
+      32 |   8
+      89 |   6
+      80 |   6
+      75 |   6
+(10 rows)
+
 -- Simple LATERAL JOINs with GROUP BYs in each side
 SELECT *
 FROM
@@ -1029,5 +1917,115 @@ FROM
   limit 10;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- lets test some unsupported set operations
+-- not supported since we use INTERSECT
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               INTERSECT 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot push down this subquery
+DETAIL:  Intersect and Except are currently unsupported
+-- not supported due to offset
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event")
+                           ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT "events"."user_id",
+                          "events"."time",
+                         0 AS event
+                 FROM events_table as  "events"
+                WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT "events"."user_id", "events"."time", 3 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (26, 27, 28, 29, 30, 13) ) events_subquery_4) OFFSET 3 ) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot push down this subquery
+DETAIL:  Offset clause is currently unsupported
+-- not supported due to window functions
+SELECT   user_id, 
+         some_vals 
+FROM     ( 
+                  SELECT   * , 
+                           Row_number() over (PARTITION BY "user_id" ORDER BY "user_id") AS "some_vals",
+                           Random() 
+                  FROM     users_table 
+                 ) user_id 
+ORDER BY 1, 
+         2 limit 10;
+ERROR:  cannot push down this subquery
+DETAIL:  Window functions are currently unsupported
 SET citus.subquery_pushdown TO FALSE;
 SET citus.enable_router_execution TO TRUE;
