@@ -140,6 +140,9 @@ SELECT * FROM mx_ref_table ORDER BY col_1;
 
 \c - - - :master_port
 DROP TABLE mx_ref_table;
+CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
 -- DDL commands
 \d mx_table
@@ -149,8 +152,10 @@ DROP TABLE mx_ref_table;
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
+Indexes:
+    "mx_test_uniq_index" UNIQUE, btree (col_1)
 
-CREATE INDEX mx_test_index ON mx_table(col_1);
+CREATE INDEX mx_test_index ON mx_table(col_2);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 ALTER TABLE mx_table ADD COLUMN col_4 int;
@@ -166,6 +171,8 @@ HINT:  Connect to the coordinator and run it again.
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
+Indexes:
+    "mx_test_uniq_index" UNIQUE, btree (col_1)
 
 -- master_modify_multiple_shards
 SELECT master_modify_multiple_shards('UPDATE mx_table SET col_2=''none''');
@@ -223,6 +230,9 @@ SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port
+DROP INDEX mx_test_uniq_index;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT master_add_node('localhost', 5432);
               master_add_node               
 --------------------------------------------

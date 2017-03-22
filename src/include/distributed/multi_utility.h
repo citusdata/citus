@@ -14,10 +14,23 @@
 
 extern bool EnableDDLPropagation;
 
+/*
+ * A DDLJob encapsulates the remote tasks and commands needed to process all or
+ * part of a distributed DDL command. It hold the distributed relation's oid,
+ * the original DDL command string (for MX DDL propagation), and a task list of
+ * DDL_TASK-type Tasks to be executed.
+ */
+typedef struct DDLJob
+{
+	Oid targetRelationId;      /* oid of the target distributed relation */
+	const char *commandString; /* initial (coordinator) DDL command string */
+	List *taskList;            /* worker DDL tasks to execute */
+} DDLJob;
+
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
-extern void ReplicateGrantStmt(Node *parsetree);
+extern List * PlanGrantStmt(GrantStmt *grantStmt);
 
 
 #endif /* MULTI_UTILITY_H */
