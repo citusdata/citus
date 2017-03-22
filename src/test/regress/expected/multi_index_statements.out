@@ -91,6 +91,8 @@ CREATE INDEX lineitem_orderkey_index on index_test_hash(a);
 ERROR:  relation "lineitem_orderkey_index" already exists
 CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
 NOTICE:  relation "lineitem_orderkey_index" already exists, skipping
+-- Verify that we can create indexes concurrently
+CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
  schemaname |    tablename     |             indexname              | tablespace |                                                      indexdef                                                       
@@ -102,6 +104,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public     | index_test_range | index_test_range_index_a_b         |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
  public     | index_test_range | index_test_range_index_a_b_partial |            | CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range USING btree (a, b) WHERE (c IS NOT NULL)
  public     | lineitem         | lineitem_colref_index              |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
+ public     | lineitem         | lineitem_concurrently_index        |            | CREATE INDEX lineitem_concurrently_index ON lineitem USING btree (l_orderkey)
  public     | lineitem         | lineitem_orderkey_hash_index       |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
  public     | lineitem         | lineitem_orderkey_index            |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
  public     | lineitem         | lineitem_orderkey_index_new        |            | CREATE INDEX lineitem_orderkey_index_new ON lineitem USING btree (l_orderkey)
@@ -109,13 +112,13 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public     | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
  public     | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
  public     | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
-(14 rows)
+(15 rows)
 
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
  count 
 -------
-     8
+     9
 (1 row)
 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
@@ -138,8 +141,6 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 
 \c - - - :master_port
 -- Verify that we error out on unsupported statement types
-CREATE INDEX CONCURRENTLY try_index ON lineitem (l_orderkey);
-ERROR:  creating indexes concurrently on distributed tables is currently unsupported
 CREATE UNIQUE INDEX try_index ON lineitem (l_orderkey);
 ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
@@ -180,6 +181,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public     | index_test_range | index_test_range_index_a_b         |            | CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range USING btree (a, b)
  public     | index_test_range | index_test_range_index_a_b_partial |            | CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range USING btree (a, b) WHERE (c IS NOT NULL)
  public     | lineitem         | lineitem_colref_index              |            | CREATE INDEX lineitem_colref_index ON lineitem USING btree (record_ne(lineitem.*, NULL::record))
+ public     | lineitem         | lineitem_concurrently_index        |            | CREATE INDEX lineitem_concurrently_index ON lineitem USING btree (l_orderkey)
  public     | lineitem         | lineitem_orderkey_hash_index       |            | CREATE INDEX lineitem_orderkey_hash_index ON lineitem USING hash (l_partkey)
  public     | lineitem         | lineitem_orderkey_index            |            | CREATE INDEX lineitem_orderkey_index ON lineitem USING btree (l_orderkey)
  public     | lineitem         | lineitem_orderkey_index_new        |            | CREATE INDEX lineitem_orderkey_index_new ON lineitem USING btree (l_orderkey)
@@ -187,7 +189,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public     | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON lineitem USING btree (l_partkey DESC)
  public     | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON lineitem USING btree (l_orderkey, l_linenumber)
  public     | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON lineitem USING btree (l_shipdate)
-(14 rows)
+(15 rows)
 
 --
 -- DROP INDEX
@@ -196,9 +198,6 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 ERROR:  cannot drop multiple distributed objects in a single command
 HINT:  Try dropping each object in a separate DROP command.
--- Verify that we error out on the CONCURRENTLY clause
-DROP INDEX CONCURRENTLY lineitem_orderkey_index;
-ERROR:  dropping indexes concurrently on distributed tables is currently unsupported
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
 NOTICE:  using one-phase commit for distributed DDL commands
@@ -221,6 +220,8 @@ DROP INDEX index_test_range_index_a_b_partial;
 DROP INDEX index_test_hash_index_a;
 DROP INDEX index_test_hash_index_a_b;
 DROP INDEX index_test_hash_index_a_b_partial;
+-- Verify that we can drop indexes concurrently
+DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
