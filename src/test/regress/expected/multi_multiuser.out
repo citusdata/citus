@@ -14,6 +14,8 @@ SELECT create_distributed_table('test', 'id');
  
 (1 row)
 
+-- turn off propagation to avoid Enterprise processing the following section
+SET citus.enable_ddl_propagation TO off;
 CREATE USER full_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
@@ -25,6 +27,7 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT ALL ON TABLE test TO full_access;
 GRANT SELECT ON TABLE test TO read_access;
+SET citus.enable_ddl_propagation TO DEFAULT;
 \c - - - :worker_1_port
 CREATE USER full_access;
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
