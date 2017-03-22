@@ -42,6 +42,7 @@
 #include "parser/parse_agg.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_oper.h"
+#include "parser/parsetree.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -151,8 +152,9 @@ static void ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
 											   PlannerRestrictionContext *
 											   plannerRestrictionContext);
 static void ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit);
+static void ErrorIfUnsupportedSetOperation(Query *subqueryTree, bool outerQueryHasLimit);
+static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static void ErrorIfUnsupportedTableCombination(Query *queryTree);
-static void ErrorIfUnsupportedUnionQuery(Query *unionQuery);
 static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
@@ -2945,18 +2947,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 
 	if (subqueryTree->setOperations)
 	{
-		SetOperationStmt *setOperationStatement =
-			(SetOperationStmt *) subqueryTree->setOperations;
-
-		if (setOperationStatement->op == SETOP_UNION)
-		{
-			ErrorIfUnsupportedUnionQuery(subqueryTree);
-		}
-		else
-		{
-			preconditionsSatisfied = false;
-			errorDetail = "Intersect and Except are currently unsupported";
-		}
+		ErrorIfUnsupportedSetOperation(subqueryTree, outerQueryHasLimit);
 	}
 
 	if (subqueryTree->hasRecursive)
@@ -3048,6 +3039,77 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 
 
 /*
+ * ErrorIfUnsupportedSetOperation is a helper function for ErrorIfCannotPushdownSubquery().
+ * It basically iterates over the subqueries that reside under the given set operations.
+ *
+ * The function also errors out for set operations INTERSECT and EXCEPT.
+ */
+static void
+ErrorIfUnsupportedSetOperation(Query *subqueryTree, bool outerQueryHasLimit)
+{
+	List *rangeTableList = subqueryTree->rtable;
+	List *rangeTableIndexList = NIL;
+	ListCell *rangeTableIndexCell = NULL;
+	List *setOperationStatementList = NIL;
+	ListCell *setOperationStatmentCell = NULL;
+
+	ExtractSetOperationStatmentWalker((Node *) subqueryTree->setOperations,
+									  &setOperationStatementList);
+	foreach(setOperationStatmentCell, setOperationStatementList)
+	{
+		SetOperationStmt *setOperation =
+			(SetOperationStmt *) lfirst(setOperationStatmentCell);
+
+		if (setOperation->op != SETOP_UNION)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot push down this subquery"),
+							errdetail("Intersect and Except are currently unsupported")));
+		}
+	}
+
+	ExtractRangeTableIndexWalker((Node *) subqueryTree->setOperations,
+								 &rangeTableIndexList);
+	foreach(rangeTableIndexCell, rangeTableIndexList)
+	{
+		int rangeTableIndex = lfirst_int(rangeTableIndexCell);
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
+
+		Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
+
+		ErrorIfCannotPushdownSubquery(rangeTableEntry->subquery, outerQueryHasLimit);
+	}
+}
+
+
+/*
+ * ExtractSetOperationStatementWalker walks over a set operations statment,
+ * and finds all set operations in the tree.
+ */
+static bool
+ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, SetOperationStmt))
+	{
+		SetOperationStmt *setOperation = (SetOperationStmt *) node;
+
+		(*setOperationList) = lappend(*setOperationList, setOperation);
+	}
+
+	walkerResult = expression_tree_walker(node, ExtractSetOperationStatmentWalker,
+										  setOperationList);
+
+	return walkerResult;
+}
+
+
+/*
  * ErrorIfUnsupportedTableCombination checks if the given query tree contains any
  * unsupported range table combinations. For this, the function walks over all
  * range tables in the join tree, and checks if they correspond to simple relations
@@ -3095,103 +3157,6 @@ ErrorIfUnsupportedTableCombination(Query *queryTree)
 
 	/* finally check and error out if not satisfied */
 	if (unsupporteTableCombination)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot push down this subquery"),
-						errdetail("%s", errorDetail)));
-	}
-}
-
-
-/*
- * ErrorIfUnsupportedUnionQuery checks if the given union query is a supported
- * one., otherwise it errors out. For these purpose it checks tree conditions;
- * a. Are count of partition column filters same for union subqueries.
- * b. Are target lists of union subquries include partition column.
- * c. Is it a union clause without All option.
- *
- * Note that we check equality of filters in ErrorIfUnsupportedFilters(). We
- * allow leaf queries not having a filter clause on the partition column. We
- * check if a leaf query has a filter on the partition column, it must be same
- * with other queries or if leaf query must not have any filter on the partition
- * column, both are ok. Because joins and nested queries are transitive, it is
- * enough one leaf query to have a filter on the partition column. But unions
- * are not transitive, so here we check if they have same count of filters on
- * the partition column. If count is more than 0, we already checked that they
- * are same, of if count is 0 then both don't have any filter on the partition
- * column.
- */
-static void
-ErrorIfUnsupportedUnionQuery(Query *unionQuery)
-{
-	bool supportedUnionQuery = true;
-	bool leftQueryOnPartitionColumn = false;
-	bool rightQueryOnPartitionColumn = false;
-	List *rangeTableList = unionQuery->rtable;
-	SetOperationStmt *unionStatement = (SetOperationStmt *) unionQuery->setOperations;
-	Query *leftQuery = NULL;
-	Query *rightQuery = NULL;
-	List *leftOpExpressionList = NIL;
-	List *rightOpExpressionList = NIL;
-	uint32 leftOpExpressionCount = 0;
-	uint32 rightOpExpressionCount = 0;
-	char *errorDetail = NULL;
-
-	RangeTblRef *leftRangeTableReference = (RangeTblRef *) unionStatement->larg;
-	RangeTblRef *rightRangeTableReference = (RangeTblRef *) unionStatement->rarg;
-
-	int leftTableIndex = leftRangeTableReference->rtindex - 1;
-	int rightTableIndex = rightRangeTableReference->rtindex - 1;
-
-	RangeTblEntry *leftRangeTableEntry = (RangeTblEntry *) list_nth(rangeTableList,
-																	leftTableIndex);
-	RangeTblEntry *rightRangeTableEntry = (RangeTblEntry *) list_nth(rangeTableList,
-																	 rightTableIndex);
-
-	Assert(leftRangeTableEntry->rtekind == RTE_SUBQUERY);
-	Assert(rightRangeTableEntry->rtekind == RTE_SUBQUERY);
-
-	leftQuery = leftRangeTableEntry->subquery;
-	rightQuery = rightRangeTableEntry->subquery;
-
-	/*
-	 * Check if subqueries of union have same count of filters on partition
-	 * column.
-	 */
-	leftOpExpressionList = PartitionColumnOpExpressionList(leftQuery);
-	rightOpExpressionList = PartitionColumnOpExpressionList(rightQuery);
-
-	leftOpExpressionCount = list_length(leftOpExpressionList);
-	rightOpExpressionCount = list_length(rightOpExpressionList);
-
-	if (leftOpExpressionCount != rightOpExpressionCount)
-	{
-		supportedUnionQuery = false;
-		errorDetail = "Union clauses need to have same count of filters on "
-					  "partition column";
-	}
-
-	/* check if union subqueries have partition column in their target lists */
-	leftQueryOnPartitionColumn = TargetListOnPartitionColumn(leftQuery,
-															 leftQuery->targetList);
-	rightQueryOnPartitionColumn = TargetListOnPartitionColumn(rightQuery,
-															  rightQuery->targetList);
-
-	if (!(leftQueryOnPartitionColumn && rightQueryOnPartitionColumn))
-	{
-		supportedUnionQuery = false;
-		errorDetail = "Union clauses need to select partition columns";
-	}
-
-	/* check if it is a union all operation */
-	if (unionStatement->all)
-	{
-		supportedUnionQuery = false;
-		errorDetail = "Union All clauses are currently unsupported";
-	}
-
-	/* finally check and error out if not satisfied */
-	if (!supportedUnionQuery)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot push down this subquery"),

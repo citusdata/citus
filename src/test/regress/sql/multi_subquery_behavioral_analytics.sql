@@ -33,7 +33,6 @@ ORDER BY 2 DESC, 1;
 ------------------------------------
 --  Funnel grouped by whether or not a user has done an event
 --  This has multiple subqueries joinin at the top level
---  Query will be supported when we enable unions
 ------------------------------------
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event), hasdone_event
 FROM (
@@ -180,7 +179,6 @@ FROM (
 
 ------------------------------------
 -- Funnel, grouped by the number of times a user has done an event
--- These will be supported when we add unions
 ------------------------------------
 SELECT
   user_id,
