@@ -38,7 +38,6 @@ ORDER BY 2 DESC, 1;
 ------------------------------------
 --  Funnel grouped by whether or not a user has done an event
 --  This has multiple subqueries joinin at the top level
---  Query will be supported when we enable unions
 ------------------------------------
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event), hasdone_event
 FROM (
@@ -77,8 +76,18 @@ FROM (
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ user_id | sum | length |   hasdone_event    
+---------+-----+--------+--------------------
+      10 |   1 |     18 | Has not done event
+      12 |   1 |     14 | Has done event
+      13 |   2 |     18 | Has not done event
+      15 |   1 |     18 | Has not done event
+      17 |   1 |     18 | Has not done event
+      19 |   1 |     14 | Has done event
+      20 |   2 |     18 | Has not done event
+      23 |   1 |     18 | Has not done event
+(8 rows)
+
 -- same query but multiple joins are one level below, returns count of row instead of actual rows
 SELECT count(*)
 FROM (
@@ -119,8 +128,11 @@ FROM (
 	  GROUP BY  t1.user_id, hasdone_event
 	) t GROUP BY user_id, hasdone_event
 	ORDER BY user_id) u;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ count 
+-------
+     8
+(1 row)
+
 -- Same queries written without unions
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event), hasdone_event
 FROM (
@@ -202,7 +214,6 @@ FROM (
 
 ------------------------------------
 -- Funnel, grouped by the number of times a user has done an event
--- These will be supported when we add unions
 ------------------------------------
 SELECT
   user_id,
@@ -268,8 +279,18 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ user_id |     event_average      | count_pay 
+---------+------------------------+-----------
+      69 | 1.00000000000000000000 |         0
+      65 | 1.00000000000000000000 |         0
+      58 | 1.00000000000000000000 |         0
+      49 | 1.00000000000000000000 |         0
+      40 | 1.00000000000000000000 |         0
+      32 | 1.00000000000000000000 |         0
+      29 | 1.00000000000000000000 |         0
+      18 | 1.00000000000000000000 |         0
+(8 rows)
+
 SELECT
   user_id,
   avg(array_length(events_table, 1)) AS event_average,
@@ -336,8 +357,18 @@ HAVING
   avg(array_length(events_table, 1)) > 0
 ORDER BY
   event_average DESC, count_pay DESC, user_id DESC;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ user_id |     event_average      | count_pay 
+---------+------------------------+-----------
+      69 | 1.00000000000000000000 |         0
+      65 | 1.00000000000000000000 |         0
+      58 | 1.00000000000000000000 |         0
+      49 | 1.00000000000000000000 |         0
+      40 | 1.00000000000000000000 |         0
+      32 | 1.00000000000000000000 |         0
+      29 | 1.00000000000000000000 |         0
+      18 | 1.00000000000000000000 |         0
+(8 rows)
+
 -- Same queries rewritten without using unions
  SELECT
   user_id,

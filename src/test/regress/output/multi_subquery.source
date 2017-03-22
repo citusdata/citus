@@ -172,13 +172,12 @@ FROM
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- Check that we error out if there is union all.
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
-   (SELECT 1::bigint)
-) b;
-ERROR:  cannot push down this subquery
-DETAIL:  Union All clauses are currently unsupported
+-- TEMPORARLY DISABLE UNION ALL
+-- SELECT count(*) FROM
+-- (
+--   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
+--   (SELECT 1::bigint)
+--) b;
 ---
 -- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
 ---
@@ -984,8 +983,12 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+   event_average    |       hasdone       
+--------------------+---------------------
+ 4.0000000000000000 | Has not done paying
+ 2.5000000000000000 | Has done paying
+(2 rows)
+
 -- Union, left join and having subquery pushdown
 SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -1056,8 +1059,11 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+   event_average    | count_pay 
+--------------------+-----------
+ 3.0000000000000000 |         0
+(1 row)
+
 	
 -- Lateral join subquery pushdown
 SELECT
@@ -1226,8 +1232,51 @@ FROM
 		hasdone) AS subquery_top
 GROUP BY
 	hasdone;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+                                                                                                                         QUERY PLAN                                                                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+   Group Key: remote_scan.hasdone
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
+               ->  GroupAggregate  (cost=100.80..100.85 rows=2 width=48)
+                     Group Key: subquery_top.hasdone
+                     ->  Sort  (cost=100.80..100.80 rows=2 width=64)
+                           Sort Key: subquery_top.hasdone
+                           ->  Subquery Scan on subquery_top  (cost=100.72..100.79 rows=2 width=64)
+                                 ->  GroupAggregate  (cost=100.72..100.77 rows=2 width=112)
+                                       Group Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
+                                       ->  Sort  (cost=100.72..100.72 rows=2 width=88)
+                                             Sort Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
+                                             ->  Hash Right Join  (cost=100.55..100.71 rows=2 width=88)
+                                                   Hash Cond: (events.composite_id = subquery_1.composite_id)
+                                                   ->  Unique  (cost=76.64..76.64 rows=1 width=80)
+                                                         ->  Sort  (cost=76.64..76.64 rows=1 width=80)
+                                                               Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
+                                                               ->  Seq Scan on events_270011 events  (cost=0.00..76.62 rows=1 width=80)
+                                                                     Filter: (((event_type)::text = 'pay'::text) AND (composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
+                                                   ->  Hash  (cost=23.89..23.89 rows=2 width=88)
+                                                         ->  Subquery Scan on subquery_1  (cost=23.84..23.89 rows=2 width=88)
+                                                               ->  Unique  (cost=23.84..23.87 rows=2 width=88)
+                                                                     ->  Sort  (cost=23.84..23.84 rows=2 width=88)
+                                                                           Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id), (NULL::user_composite_type), ('action=>1'::text), events_1.event_time
+                                                                           ->  Append  (cost=0.00..23.83 rows=2 width=88)
+                                                                                 ->  Nested Loop  (cost=0.00..11.90 rows=1 width=88)
+                                                                                       Join Filter: ((NULL::user_composite_type) = events_1.composite_id)
+                                                                                       ->  Result  (cost=0.00..0.01 rows=1 width=40)
+                                                                                             One-Time Filter: false
+                                                                                       ->  Seq Scan on events_270011 events_1  (cost=0.00..11.62 rows=1 width=40)
+                                                                                             Filter: ((event_type)::text = 'click'::text)
+                                                                                 ->  Nested Loop  (cost=0.00..11.90 rows=1 width=88)
+                                                                                       Join Filter: ((NULL::user_composite_type) = events_2.composite_id)
+                                                                                       ->  Result  (cost=0.00..0.01 rows=1 width=40)
+                                                                                             One-Time Filter: false
+                                                                                       ->  Seq Scan on events_270011 events_2  (cost=0.00..11.62 rows=1 width=40)
+                                                                                             Filter: ((event_type)::text = 'submit'::text)
+(41 rows)
+
 -- Union, left join and having subquery pushdown
 EXPLAIN SELECT
 	avg(array_length(events, 1)) AS event_average,
@@ -1298,8 +1347,7 @@ GROUP BY
 	count_pay
 ORDER BY
 	count_pay;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
 EXPLAIN SELECT
 	tenant_id,
