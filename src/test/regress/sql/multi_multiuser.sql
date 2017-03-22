@@ -13,12 +13,17 @@ SET citus.shard_count TO 2;
 CREATE TABLE test (id integer);
 SELECT create_distributed_table('test', 'id');
 
+-- turn off propagation to avoid Enterprise processing the following section
+SET citus.enable_ddl_propagation TO off;
+
 CREATE USER full_access;
 CREATE USER read_access;
 CREATE USER no_access;
 
 GRANT ALL ON TABLE test TO full_access;
 GRANT SELECT ON TABLE test TO read_access;
+
+SET citus.enable_ddl_propagation TO DEFAULT;
 
 \c - - - :worker_1_port
 CREATE USER full_access;
