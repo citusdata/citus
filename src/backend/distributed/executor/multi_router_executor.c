@@ -869,6 +869,23 @@ ExecuteModifyTasksWithoutResults(List *taskList)
 }
 
 
+int64
+ExecuteSequentialTasksWithoutResults(List *taskList)
+{
+	ListCell *taskCell = NULL;
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		List *singleTask = list_make1(task);
+
+		ExecuteModifyTasks(singleTask, false, NULL, NULL);
+	}
+
+	return 0;
+}
+
+
 /*
  * ExecuteModifyTasks executes a list of tasks on remote nodes, and
  * optionally retrieves the results and stores them in a tuple store.

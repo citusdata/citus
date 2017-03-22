@@ -679,6 +679,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 			{
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
+				ddlJob->preventTransaction = createIndexStatement->concurrent;
 				ddlJob->commandString = createIndexCommand;
 				ddlJob->taskList = IndexTaskList(relationId, createIndexStatement);
 
@@ -772,6 +773,7 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		ddlJob->targetRelationId = distributedRelationId;
+		ddlJob->preventTransaction = dropIndexStatement->concurrent;
 		ddlJob->commandString = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
@@ -866,6 +868,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
+	ddlJob->preventTransaction = false;
 	ddlJob->commandString = alterTableCommand;
 
 	if (rightRelationId)
@@ -1271,13 +1274,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 							   "currently unsupported")));
 	}
 
-	if (createIndexStatement->concurrent)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("creating indexes concurrently on distributed tables is "
-							   "currently unsupported")));
-	}
-
 	if (createIndexStatement->unique)
 	{
 		RangeVar *relation = createIndexStatement->relation;
@@ -1354,13 +1350,6 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
 							   "single command"),
 						errhint("Try dropping each object in a separate DROP "
 								"command.")));
-	}
-
-	if (dropIndexStatement->concurrent)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("dropping indexes concurrently on distributed tables is "
-							   "currently unsupported")));
 	}
 }
 
@@ -1994,13 +1983,28 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	EnsureCoordinator();
 	ShowNoticeIfNotUsing2PC();
 
+	if (ddlJob->preventTransaction)
+	{
+		/* save old commit protocol to restore at xact end */
+		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	}
+
 	if (shouldSyncMetadata)
 	{
 		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
 		SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
 	}
 
-	ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+	if (ddlJob->preventTransaction)
+	{
+		ExecuteSequentialTasksWithoutResults(ddlJob->taskList);
+	}
+	else
+	{
+		ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+	}
 }
 
 
@@ -2608,6 +2612,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 
 		ddlJob = palloc0(sizeof(DDLJob));
 		ddlJob->targetRelationId = relOid;
+		ddlJob->preventTransaction = false;
 		ddlJob->commandString = pstrdup(ddlString.data);
 		ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
 

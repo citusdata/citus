@@ -64,6 +64,9 @@ CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on lineitem(l_orderkey);
 CREATE INDEX lineitem_orderkey_index on index_test_hash(a);
 CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
 
+-- Verify that we can create indexes concurrently
+CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
+
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
@@ -75,7 +78,6 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 
 -- Verify that we error out on unsupported statement types
 
-CREATE INDEX CONCURRENTLY try_index ON lineitem (l_orderkey);
 CREATE UNIQUE INDEX try_index ON lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 
@@ -105,9 +107,6 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 -- Verify that we can't drop multiple indexes in a single command
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 
--- Verify that we error out on the CONCURRENTLY clause
-DROP INDEX CONCURRENTLY lineitem_orderkey_index;
-
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
 DROP INDEX lineitem_orderkey_index_new;
@@ -129,6 +128,9 @@ DROP INDEX index_test_range_index_a_b_partial;
 DROP INDEX index_test_hash_index_a;
 DROP INDEX index_test_hash_index_a_b;
 DROP INDEX index_test_hash_index_a_b_partial;
+
+-- Verify that we can drop indexes concurrently
+DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
