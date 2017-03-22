@@ -69,6 +69,29 @@ static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
 static void AddToAttributeEquivalenceClass(AttributeEquivalenceClass **
 										   attributeEquivalanceClass,
 										   PlannerInfo *root, Var *varToBeAdded);
+static void AddRteSubqueryToAttributeEquivalenceClass(AttributeEquivalenceClass *
+													  *attributeEquivalanceClass,
+													  RangeTblEntry *
+													  rangeTableEntry,
+													  PlannerInfo *root,
+													  Var *varToBeAdded);
+static Query * GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry,
+								 Var *varToBeAdded);
+static void AddUnionAllSetOperationsToAttributeEquivalenceClass(
+	AttributeEquivalenceClass **
+	attributeEquivalanceClass,
+	PlannerInfo *root,
+	Var *varToBeAdded);
+static void AddUnionSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
+															 attributeEquivalenceClass,
+															 PlannerInfo *root,
+															 SetOperationStmt *
+															 setOperation,
+															 Var *varToBeAdded);
+static void AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
+													  attrEquivalenceClass,
+													  RangeTblEntry *rangeTableEntry,
+													  Var *varToBeAdded);
 static Var * GetVarFromAssignedParam(List *parentPlannerParamList,
 									 Param *plannerParam);
 static List * GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext
@@ -632,106 +655,271 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
  *        - Generate an AttributeEquivalenceMember and add to the input
  *          AttributeEquivalenceClass
  *    - If the RTE that corresponds to a subquery
- *        - Find the corresponding target entry via varno
- *        - if subquery entry is a set operation (i.e., only UNION/UNION ALL allowed)
- *             - recursively add both left and right sides of the set operation's
+ *        - If the RTE that corresponds to a UNION ALL subquery
+ *            - Iterate on each of the appendRels (i.e., each of the UNION ALL query)
+ *            - Recursively add all children of the set operation's
+ *              corresponding target entries
+ *        - If the corresponding subquery entry is a UNION set operation
+ *             - Recursively add all children of the set operation's
  *               corresponding target entries
- *        - if subquery is not a set operation
- *             - recursively try to add the corresponding target entry to the
+ *        - If the corresponding subquery is a regular subquery (i.e., No set operations)
+ *             - Recursively try to add the corresponding target entry to the
  *               equivalence class
- *
- * Note that this function only adds partition keys to the attributeEquivalanceClass.
- * This implies that there wouldn't be any columns for reference tables.
  */
 static void
 AddToAttributeEquivalenceClass(AttributeEquivalenceClass **attributeEquivalanceClass,
 							   PlannerInfo *root, Var *varToBeAdded)
 {
-	RangeTblEntry *rangeTableEntry = root->simple_rte_array[varToBeAdded->varno];
+	RangeTblEntry *rangeTableEntry = NULL;
 
+	/* punt if it's a whole-row var rather than a plain column reference */
+	if (varToBeAdded->varattno == InvalidAttrNumber)
+	{
+		return;
+	}
+
+	/* we also don't want to process ctid, tableoid etc */
+	if (varToBeAdded->varattno < InvalidAttrNumber)
+	{
+		return;
+	}
+
+	rangeTableEntry = root->simple_rte_array[varToBeAdded->varno];
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
-		AttributeEquivalenceClassMember *attributeEqMember = NULL;
-		Oid relationId = rangeTableEntry->relid;
-		Var *relationPartitionKey = NULL;
-
-		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
-		{
-			return;
-		}
-
-		relationPartitionKey = PartitionKey(relationId);
-		if (relationPartitionKey->varattno != varToBeAdded->varattno)
-		{
-			return;
-		}
-
-		attributeEqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
-
-		attributeEqMember->varattno = varToBeAdded->varattno;
-		attributeEqMember->varno = varToBeAdded->varno;
-		attributeEqMember->rteIdentity = GetRTEIdentity(rangeTableEntry);
-		attributeEqMember->relationId = rangeTableEntry->relid;
-
-		(*attributeEquivalanceClass)->equivalentAttributes =
-			lappend((*attributeEquivalanceClass)->equivalentAttributes,
-					attributeEqMember);
+		AddRteRelationToAttributeEquivalenceClass(attributeEquivalanceClass,
+												  rangeTableEntry,
+												  varToBeAdded);
 	}
-	else if (rangeTableEntry->rtekind == RTE_SUBQUERY && !rangeTableEntry->inh)
+	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 	{
-		Query *subquery = rangeTableEntry->subquery;
-		RelOptInfo *baseRelOptInfo = NULL;
-		TargetEntry *subqueryTargetEntry = NULL;
+		AddRteSubqueryToAttributeEquivalenceClass(attributeEquivalanceClass,
+												  rangeTableEntry, root,
+												  varToBeAdded);
+	}
+}
 
-		/* punt if it's a whole-row var rather than a plain column reference */
-		if (varToBeAdded->varattno == InvalidAttrNumber)
-		{
-			return;
-		}
 
-		/* we also don't want to process ctid, tableoid etc */
-		if (varToBeAdded->varattno < InvalidAttrNumber)
-		{
-			return;
-		}
+/*
+ * AddRteSubqueryToAttributeEquivalenceClass adds the given var to the given
+ * attribute equivalence class.
+ *
+ * The main algorithm is outlined in AddToAttributeEquivalenceClass().
+ */
+static void
+AddRteSubqueryToAttributeEquivalenceClass(AttributeEquivalenceClass
+										  **attributeEquivalanceClass,
+										  RangeTblEntry *rangeTableEntry,
+										  PlannerInfo *root, Var *varToBeAdded)
+{
+	RelOptInfo *baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
+	TargetEntry *subqueryTargetEntry = NULL;
+	Query *targetSubquery = GetTargetSubquery(root, rangeTableEntry, varToBeAdded);
 
-		baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
+	subqueryTargetEntry = get_tle_by_resno(targetSubquery->targetList,
+										   varToBeAdded->varattno);
 
-		/* If the subquery hasn't been planned yet, we have to punt */
+	/* if we fail to find corresponding target entry, do not proceed */
+	if (subqueryTargetEntry == NULL || subqueryTargetEntry->resjunk)
+	{
+		return;
+	}
+
+	/* we're only interested in Vars */
+	if (!IsA(subqueryTargetEntry->expr, Var))
+	{
+		return;
+	}
+
+	varToBeAdded = (Var *) subqueryTargetEntry->expr;
+
+	/*
+	 *  "inh" flag is set either when inheritance or "UNION ALL" exists in the
+	 *  subquery. Here we're only interested in the "UNION ALL" case.
+	 *
+	 *  Else, we check one more thing: Does the subquery contain a "UNION" query.
+	 *  If so, we recursively traverse all "UNION" tree and add the corresponding
+	 *  target list elements to the attribute equivalence.
+	 *
+	 *  Finally, if it is a regular subquery (i.e., does not contain UNION or UNION ALL),
+	 *  we simply recurse to find the corresponding RTE_RELATION to add to the
+	 *  equivalence class.
+	 *
+	 *  Note that we're treating "UNION" and "UNION ALL" clauses differently given
+	 *  that postgres planner process/plans them separately.
+	 */
+	if (rangeTableEntry->inh)
+	{
+		AddUnionAllSetOperationsToAttributeEquivalenceClass(attributeEquivalanceClass,
+															root, varToBeAdded);
+	}
+	else if (targetSubquery->setOperations)
+	{
+		AddUnionSetOperationsToAttributeEquivalenceClass(attributeEquivalanceClass,
+														 baseRelOptInfo->subroot,
+														 (SetOperationStmt *)
+														 targetSubquery->setOperations,
+														 varToBeAdded);
+	}
+	else if (varToBeAdded && IsA(varToBeAdded, Var) && varToBeAdded->varlevelsup == 0)
+	{
+		AddToAttributeEquivalenceClass(attributeEquivalanceClass,
+									   baseRelOptInfo->subroot, varToBeAdded);
+	}
+}
+
+
+/*
+ * GetTargetSubquery returns the corresponding subquery for the given planner root,
+ * range table entry and the var.
+ *
+ * The aim of this function is to simplify extracting the subquery in case of "UNION ALL"
+ * queries.
+ */
+static Query *
+GetTargetSubquery(PlannerInfo *root, RangeTblEntry *rangeTableEntry, Var *varToBeAdded)
+{
+	Query *targetSubquery = NULL;
+
+	/*
+	 * For subqueries other than "UNION ALL", find the corresponding targetSubquery. See
+	 * the details of how we process subqueries in the below comments.
+	 */
+	if (!rangeTableEntry->inh)
+	{
+		RelOptInfo *baseRelOptInfo = find_base_rel(root, varToBeAdded->varno);
+
+		/* If the targetSubquery hasn't been planned yet, we have to punt */
 		if (baseRelOptInfo->subroot == NULL)
 		{
-			return;
+			return NULL;
 		}
 
 		Assert(IsA(baseRelOptInfo->subroot, PlannerInfo));
 
-		subquery = baseRelOptInfo->subroot->parse;
-		Assert(IsA(subquery, Query));
-
-		/* Get the subquery output expression referenced by the upper Var */
-		subqueryTargetEntry = get_tle_by_resno(subquery->targetList,
-											   varToBeAdded->varattno);
-		if (subqueryTargetEntry == NULL || subqueryTargetEntry->resjunk)
-		{
-			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-							errmsg("subquery %s does not have attribute %d",
-								   rangeTableEntry->eref->aliasname,
-								   varToBeAdded->varattno)));
-		}
-
-		if (!IsA(subqueryTargetEntry->expr, Var))
-		{
-			return;
-		}
-
-		varToBeAdded = (Var *) subqueryTargetEntry->expr;
-
-		if (varToBeAdded && IsA(varToBeAdded, Var) && varToBeAdded->varlevelsup == 0)
-		{
-			AddToAttributeEquivalenceClass(attributeEquivalanceClass,
-										   baseRelOptInfo->subroot, varToBeAdded);
-		}
+		targetSubquery = baseRelOptInfo->subroot->parse;
+		Assert(IsA(targetSubquery, Query));
 	}
+	else
+	{
+		targetSubquery = rangeTableEntry->subquery;
+	}
+
+	return targetSubquery;
+}
+
+
+/*
+ * AddUnionAllSetOperationsToAttributeEquivalenceClass recursively iterates on all the
+ * append rels, sets the varno's accordingly and adds the
+ * var the given equivalence class.
+ */
+static void
+AddUnionAllSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
+													attributeEquivalanceClass,
+													PlannerInfo *root,
+													Var *varToBeAdded)
+{
+	List *appendRelList = root->append_rel_list;
+	ListCell *appendRelCell = NULL;
+
+	/* iterate on the queries that are part of UNION ALL subselects */
+	foreach(appendRelCell, appendRelList)
+	{
+		AppendRelInfo *appendRelInfo = (AppendRelInfo *) lfirst(appendRelCell);
+
+		/*
+		 * We're only interested in UNION ALL clauses and parent_reloid is invalid
+		 * only for UNION ALL (i.e., equals to a legitimate Oid for inheritance)
+		 */
+		if (appendRelInfo->parent_reloid != InvalidOid)
+		{
+			continue;
+		}
+
+		/* set the varno accordingly for this specific child */
+		varToBeAdded->varno = appendRelInfo->child_relid;
+
+		AddToAttributeEquivalenceClass(attributeEquivalanceClass, root,
+									   varToBeAdded);
+	}
+}
+
+
+/*
+ * AddUnionSetOperationsToAttributeEquivalenceClass recursively iterates on all the
+ * setOperations and adds each corresponding target entry to the given equivalence
+ * class.
+ *
+ * Although the function silently accepts INTERSECT and EXPECT set operations, they are
+ * rejected later in the planning. We prefer this behavior to provide better error
+ * messages.
+ */
+static void
+AddUnionSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
+												 attributeEquivalenceClass,
+												 PlannerInfo *root,
+												 SetOperationStmt *setOperation,
+												 Var *varToBeAdded)
+{
+	List *rangeTableIndexList = NIL;
+	ListCell *rangeTableIndexCell = NULL;
+
+	ExtractRangeTableIndexWalker((Node *) setOperation, &rangeTableIndexList);
+
+	foreach(rangeTableIndexCell, rangeTableIndexList)
+	{
+		int rangeTableIndex = lfirst_int(rangeTableIndexCell);
+
+		varToBeAdded->varno = rangeTableIndex;
+		AddToAttributeEquivalenceClass(attributeEquivalenceClass, root, varToBeAdded);
+	}
+}
+
+
+/*
+ * AddRteRelationToAttributeEquivalenceClass adds the given var to the given equivalence
+ * class using the rteIdentity provided by the rangeTableEntry. Note that
+ * rteIdentities are only assigned to RTE_RELATIONs and this function asserts
+ * the input rte to be an RTE_RELATION.
+ *
+ * Note that this function only adds partition keys to the attributeEquivalanceClass.
+ * This implies that there wouldn't be any columns for reference tables.
+ */
+static void
+AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
+										  attrEquivalenceClass,
+										  RangeTblEntry *rangeTableEntry,
+										  Var *varToBeAdded)
+{
+	AttributeEquivalenceClassMember *attributeEqMember = NULL;
+	Oid relationId = InvalidOid;
+	Var *relationPartitionKey = NULL;
+
+	Assert(rangeTableEntry->rtekind == RTE_RELATION);
+
+	relationId = rangeTableEntry->relid;
+	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	{
+		return;
+	}
+
+	relationPartitionKey = PartitionKey(relationId);
+	if (relationPartitionKey->varattno != varToBeAdded->varattno)
+	{
+		return;
+	}
+
+	attributeEqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
+
+	attributeEqMember->varattno = varToBeAdded->varattno;
+	attributeEqMember->varno = varToBeAdded->varno;
+	attributeEqMember->rteIdentity = GetRTEIdentity(rangeTableEntry);
+	attributeEqMember->relationId = rangeTableEntry->relid;
+
+	(*attrEquivalenceClass)->equivalentAttributes =
+		lappend((*attrEquivalenceClass)->equivalentAttributes,
+				attributeEqMember);
 }
 
 
@@ -821,8 +1009,10 @@ static bool
 AttributeEquivalancesAreEqual(AttributeEquivalenceClass *firstAttributeEquivalance,
 							  AttributeEquivalenceClass *secondAttributeEquivalance)
 {
-	List *firstEquivalenceMemberList = firstAttributeEquivalance->equivalentAttributes;
-	List *secondEquivalenceMemberList = secondAttributeEquivalance->equivalentAttributes;
+	List *firstEquivalenceMemberList =
+		firstAttributeEquivalance->equivalentAttributes;
+	List *secondEquivalenceMemberList =
+		secondAttributeEquivalance->equivalentAttributes;
 	ListCell *firstAttributeEquivalanceCell = NULL;
 	ListCell *secondAttributeEquivalanceCell = NULL;
 
