@@ -25,6 +25,11 @@ extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
 extern void ReplicateGrantStmt(Node *parsetree);
-
+extern void ErrorIfNotSupportedConstraint(Relation relation, char distributionMethod,
+										  Var *distributionColumn, uint32 colocationId);
+extern void ErrorIfNotSupportedForeignConstraint(Relation relation,
+												 char distributionMethod,
+												 Var *distributionColumn,
+												 uint32 colocationId);
 
 #endif /* MULTI_UTILITY_H */
