@@ -61,19 +61,19 @@ If you're looking to get started locally, you can follow the following steps to 
     ```
     The above version of Docker Compose is sufficient for running Citus, or you can install the [latest version](https://github.com/docker/compose/releases/latest).
 
-1. Pull and start the Docker images
+2. Pull and start the Docker images
   ```bash
   curl -sSLO https://raw.githubusercontent.com/citusdata/docker/master/docker-compose.yml
   docker-compose -p citus up -d
   ```
 
-1. Connect to the master database
+3. Connect to the master database
   ```bash
   docker exec -it citus_master psql -U postgres
   ```
 
-1. Follow the [first tutorial][tutorial] instructions
-1. To shut the cluster down, run
+4. Follow the [first tutorial][tutorial] instructions
+5. To shut the cluster down, run
 
   ```bash
   docker-compose -p citus down
