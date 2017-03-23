@@ -29,6 +29,8 @@
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
 #include "citus_version.h"
+#include "catalog/pg_constraint.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/prepare.h"
@@ -70,6 +72,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/errcodes.h"
+#include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/inval.h"
@@ -134,6 +137,11 @@ static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
+static void ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement);
+static void ErrorIfUnsupportedForeignConstraint(Relation relation,
+												char distributionMethod,
+												Var *distributionColumn,
+												uint32 colocationId);
 
 /* Local functions forward declarations for helper functions */
 static char * ExtractNewExtensionVersion(Node *parsetree);
@@ -387,6 +395,33 @@ multi_ProcessUtility(Node *parsetree,
 	if (ddlJobs != NIL)
 	{
 		ListCell *ddlJobCell = NULL;
+
+		/*
+		 * At this point, ALTER TABLE command has already run on the master, so we
+		 * are checking constraints over the table with constraints already defined
+		 * (to make the constraint check process same for ALTER TABLE and CREATE
+		 * TABLE). If constraints do not fulfill the rules we defined, they will
+		 * be removed and the table will return back to the state before the ALTER
+		 * TABLE command.
+		 */
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
+			List *commandList = alterTableStatement->cmds;
+			ListCell *commandCell = NULL;
+
+			foreach(commandCell, commandList)
+			{
+				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+				AlterTableType alterTableType = command->subtype;
+
+				if (alterTableType == AT_AddConstraint)
+				{
+					Assert(list_length(commandList) == 1);
+					ErrorIfUnsupportedAlterAddConstraintStmt(alterTableStatement);
+				}
+			}
+		}
 
 		foreach(ddlJobCell, ddlJobs)
 		{
@@ -938,7 +973,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 				 * only subcommand of ALTER TABLE. It was already checked in
 				 * ErrorIfUnsupportedAlterTableStmt.
 				 */
-				Assert(commandList->length <= 1);
+				Assert(list_length(commandList) <= 1);
 
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
@@ -1584,7 +1619,7 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
  * ALTER TABLE ALTER COLUMN SET DATA TYPE
  * ALTER TABLE SET|DROP NOT NULL
  * ALTER TABLE SET|DROP DEFAULT
- * ALTER TABLE ADD|DROP CONSTRAINT FOREIGN
+ * ALTER TABLE ADD|DROP CONSTRAINT
  */
 static void
 ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
@@ -1635,7 +1670,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_DropColumn:
 			case AT_ColumnDefault:
 			case AT_AlterColumnType:
-			case AT_SetNotNull:
 			case AT_DropNotNull:
 			{
 				/* error out if the alter table command is on the partition column */
@@ -1675,81 +1709,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_AddConstraint:
 			{
 				Constraint *constraint = (Constraint *) command->def;
-				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-				Oid referencingTableId = InvalidOid;
-				Oid referencedTableId = InvalidOid;
-				Var *referencingTablePartitionColumn = NULL;
-				Var *referencedTablePartitionColumn = NULL;
-				ListCell *referencingTableAttr = NULL;
-				ListCell *referencedTableAttr = NULL;
-				bool foreignConstraintOnPartitionColumn = false;
 
-				/* we only allow adding foreign constraints with ALTER TABLE */
-				if (constraint->contype != CONSTR_FOREIGN)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create constraint"),
-									errdetail("Citus cannot execute ADD CONSTRAINT "
-											  "command other than ADD CONSTRAINT FOREIGN "
-											  "KEY.")));
-				}
-
-				/* we only allow foreign constraints if they are only subcommand */
+				/* we only allow constraints if they are only subcommand */
 				if (commandList->length > 1)
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Citus cannot execute ADD CONSTRAINT "
-											  "FOREIGN KEY command together with other "
-											  "subcommands."),
+									errmsg("cannot execute ADD CONSTRAINT command with "
+										   "other subcommands"),
 									errhint("You can issue each subcommand separately")));
-				}
-
-				referencingTableId = RangeVarGetRelid(alterTableStatement->relation,
-													  lockmode,
-													  alterTableStatement->missing_ok);
-				referencedTableId = RangeVarGetRelid(constraint->pktable, lockmode,
-													 alterTableStatement->missing_ok);
-
-				/* we do not support foreign keys for reference tables */
-				if (PartitionMethod(referencingTableId) == DISTRIBUTE_BY_NONE ||
-					PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail(
-										"Foreign key constraints are not allowed from or "
-										"to reference tables.")));
-				}
-
-				/*
-				 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because
-				 * we do not want to set partition column to NULL or default value.
-				 */
-				if (constraint->fk_del_action == FKCONSTR_ACTION_SETNULL ||
-					constraint->fk_del_action == FKCONSTR_ACTION_SETDEFAULT)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("SET NULL or SET DEFAULT is not supported"
-											  " in ON DELETE operation.")));
-				}
-
-				/*
-				 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not
-				 * supported. Because we do not want to set partition column to NULL or
-				 * default value. Also cascading update operation would require
-				 * re-partitioning. Updating partition column value is not allowed anyway
-				 * even outside of foreign key concept.
-				 */
-				if (constraint->fk_upd_action == FKCONSTR_ACTION_SETNULL ||
-					constraint->fk_upd_action == FKCONSTR_ACTION_SETDEFAULT ||
-					constraint->fk_upd_action == FKCONSTR_ACTION_CASCADE)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("SET NULL, SET DEFAULT or CASCADE is not"
-											  " supported in ON UPDATE operation.")));
 				}
 
 				/*
@@ -1759,114 +1726,23 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				if (constraint->conname == NULL)
 				{
 					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Creating foreign constraint without a "
-											  "name on a distributed table is currently "
-											  "not supported.")));
-				}
-
-				/* to enforce foreign constraints, tables must be co-located */
-				if (!TablesColocated(referencingTableId, referencedTableId))
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Foreign key constraint can only be created"
-											  " on co-located tables.")));
-				}
-
-				/*
-				 * The following logic requires the referenced columns to exists in
-				 * the statement. Otherwise, we cannot apply some of the checks.
-				 */
-				if (constraint->pk_attrs == NULL)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint "
-										   "because referenced column list is empty"),
-									errhint("Add column names to \"REFERENCES\" part of "
-											"the statement.")));
-				}
-
-				/*
-				 * Referencing column's list length should be equal to referenced columns
-				 * list length.
-				 */
-				if (constraint->fk_attrs->length != constraint->pk_attrs->length)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Referencing column list and referenced "
-											  "column list must be in same size.")));
-				}
-
-				/*
-				 * Partition column must exist in both referencing and referenced side
-				 * of the foreign key constraint. They also must be in same ordinal.
-				 */
-				referencingTablePartitionColumn = PartitionKey(referencingTableId);
-				referencedTablePartitionColumn = PartitionKey(referencedTableId);
-
-				/*
-				 * We iterate over fk_attrs and pk_attrs together because partition
-				 * column must be at the same place in both referencing and referenced
-				 * side of the foreign key constraint
-				 */
-				forboth(referencingTableAttr, constraint->fk_attrs,
-						referencedTableAttr, constraint->pk_attrs)
-				{
-					char *referencingAttrName = strVal(lfirst(referencingTableAttr));
-					char *referencedAttrName = strVal(lfirst(referencedTableAttr));
-					AttrNumber referencingAttrNo = get_attnum(referencingTableId,
-															  referencingAttrName);
-					AttrNumber referencedAttrNo = get_attnum(referencedTableId,
-															 referencedAttrName);
-
-					if (referencingTablePartitionColumn->varattno == referencingAttrNo &&
-						referencedTablePartitionColumn->varattno == referencedAttrNo)
-					{
-						foreignConstraintOnPartitionColumn = true;
-					}
-				}
-
-				if (!foreignConstraintOnPartitionColumn)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Partition column must exist both "
-											  "referencing and referenced side of the "
-											  "foreign constraint statement and it must "
-											  "be in the same ordinal in both sides.")));
-				}
-
-				/*
-				 * We do not allow to create foreign constraints if shard replication
-				 * factor is greater than 1. Because in our current design, multiple
-				 * replicas may cause locking problems and inconsistent shard contents.
-				 */
-				if (!SingleReplicatedTable(referencingTableId) ||
-					!SingleReplicatedTable(referencedTableId))
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot create foreign key constraint"),
-									errdetail("Citus Community Edition currently "
-											  "supports foreign key constraints only for "
-											  "\"citus.shard_replication_factor = 1\"."),
-									errhint("Please change "
-											"\"citus.shard_replication_factor to 1\". To "
-											"learn more about using foreign keys with "
-											"other replication factors, please contact"
-											" us at "
-											"https://citusdata.com/about/contact_us.")));
+									errmsg("cannot create constraint without a name on a "
+										   "distributed table")));
 				}
 
 				break;
 			}
 
+			case AT_SetNotNull:
 			case AT_DropConstraint:
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
 			{
-				/* we will not perform any special checks for these ALTER TABLE types */
+				/*
+				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
+				 * , ALTER TABLE .. ALTER COLUMN .. SET NOT NULL and ALTER TABLE ENABLE/
+				 * DISABLE TRIGGER ALL
+				 */
 				break;
 			}
 
@@ -1875,11 +1751,391 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("alter table command is currently unsupported"),
 								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL,"
-										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT FOREIGN"
-										  " KEY and TYPE subcommands are supported.")));
+										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT and "
+										  "TYPE subcommands are supported.")));
 			}
 		}
 	}
+}
+
+
+/*
+ * ErrorIfUnsopprtedAlterAddConstraintStmt runs the constraint checks on distributed
+ * table using the same logic with create_distributed_table.
+ */
+static void
+ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
+{
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	char distributionMethod = PartitionMethod(relationId);
+	Var *distributionColumn = PartitionKey(relationId);
+	uint32 colocationId = TableColocationId(relationId);
+	Relation relation = relation_open(relationId, ExclusiveLock);
+
+	ErrorIfUnsupportedConstraint(relation, distributionMethod, distributionColumn,
+								 colocationId);
+	relation_close(relation, NoLock);
+}
+
+
+/*
+ * ErrorIfUnsupportedConstraint run checks related to unique index / exclude
+ * constraints.
+ *
+ * The function skips the uniqeness checks for reference tables (i.e., distribution
+ * method is 'none').
+ *
+ * Forbid UNIQUE, PRIMARY KEY, or EXCLUDE constraints on append partitioned
+ * tables, since currently there is no way of enforcing uniqueness for
+ * overlapping shards.
+ *
+ * Similarly, do not allow such constraints if they do not include partition
+ * column. This check is important for two reasons:
+ * i. First, currently Citus does not enforce uniqueness constraint on multiple
+ * shards.
+ * ii. Second, INSERT INTO .. ON CONFLICT (i.e., UPSERT) queries can be executed
+ * with no further check for constraints.
+ */
+void
+ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
+							 Var *distributionColumn, uint32 colocationId)
+{
+	char *relationName = NULL;
+	List *indexOidList = NULL;
+	ListCell *indexOidCell = NULL;
+
+	/*
+	 * We first perform check for foreign constraints. It is important to do this check
+	 * before next check, because other types of constraints are allowed on reference
+	 * tables and we return early for those constraints thanks to next check. Therefore,
+	 * for reference tables, we first check for foreing constraints and if they are OK,
+	 * we do not error out for other types of constraints.
+	 */
+	ErrorIfUnsupportedForeignConstraint(relation, distributionMethod, distributionColumn,
+										colocationId);
+
+	/*
+	 * Citus supports any kind of uniqueness constraints for reference tables
+	 * given that they only consist of a single shard and we can simply rely on
+	 * Postgres.
+	 */
+	if (distributionMethod == DISTRIBUTE_BY_NONE)
+	{
+		return;
+	}
+
+	relationName = RelationGetRelationName(relation);
+	indexOidList = RelationGetIndexList(relation);
+
+	foreach(indexOidCell, indexOidList)
+	{
+		Oid indexOid = lfirst_oid(indexOidCell);
+		Relation indexDesc = index_open(indexOid, RowExclusiveLock);
+		IndexInfo *indexInfo = NULL;
+		AttrNumber *attributeNumberArray = NULL;
+		bool hasDistributionColumn = false;
+		int attributeCount = 0;
+		int attributeIndex = 0;
+
+		/* extract index key information from the index's pg_index info */
+		indexInfo = BuildIndexInfo(indexDesc);
+
+		/* only check unique indexes and exclusion constraints. */
+		if (indexInfo->ii_Unique == false && indexInfo->ii_ExclusionOps == NULL)
+		{
+			index_close(indexDesc, NoLock);
+			continue;
+		}
+
+		/*
+		 * Citus cannot enforce uniqueness/exclusion constraints with overlapping shards.
+		 * Thus, emit a warning for unique indexes and exclusion constraints on
+		 * append partitioned tables.
+		 */
+		if (distributionMethod == DISTRIBUTE_BY_APPEND)
+		{
+			ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							  errmsg("table \"%s\" has a UNIQUE or EXCLUDE constraint",
+									 relationName),
+							  errdetail("UNIQUE constraints, EXCLUDE constraints, "
+										"and PRIMARY KEYs on "
+										"append-partitioned tables cannot be enforced."),
+							  errhint("Consider using hash partitioning.")));
+		}
+
+		attributeCount = indexInfo->ii_NumIndexAttrs;
+		attributeNumberArray = indexInfo->ii_KeyAttrNumbers;
+
+		for (attributeIndex = 0; attributeIndex < attributeCount; attributeIndex++)
+		{
+			AttrNumber attributeNumber = attributeNumberArray[attributeIndex];
+			bool uniqueConstraint = false;
+			bool exclusionConstraintWithEquality = false;
+
+			if (distributionColumn->varattno != attributeNumber)
+			{
+				continue;
+			}
+
+			uniqueConstraint = indexInfo->ii_Unique;
+			exclusionConstraintWithEquality = (indexInfo->ii_ExclusionOps != NULL &&
+											   OperatorImplementsEquality(
+												   indexInfo->ii_ExclusionOps[
+													   attributeIndex]));
+
+			if (uniqueConstraint || exclusionConstraintWithEquality)
+			{
+				hasDistributionColumn = true;
+				break;
+			}
+		}
+
+		if (!hasDistributionColumn)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create constraint on \"%s\"",
+								   relationName),
+							errdetail("Distributed relations cannot have UNIQUE, "
+									  "EXCLUDE, or PRIMARY KEY constraints that do not "
+									  "include the partition column (with an equality "
+									  "operator if EXCLUDE).")));
+		}
+
+		index_close(indexDesc, NoLock);
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedForeignConstraint runs checks related to foreign constraints and
+ * errors out if it is not possible to create one of the foreign constraint in distributed
+ * environment.
+ *
+ * To support foreign constraints, we require that;
+ * - Referencing and referenced tables are hash distributed.
+ * - Referencing and referenced tables are co-located.
+ * - Foreign constraint is defined over distribution column.
+ * - ON DELETE/UPDATE SET NULL, ON DELETE/UPDATE SET DEFAULT and ON UPDATE CASCADE options
+ *   are not used.
+ * - Replication factors of referencing and referenced table are 1.
+ */
+static void
+ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
+									Var *distributionColumn, uint32 colocationId)
+{
+	Relation pgConstraint = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	HeapTuple heapTuple = NULL;
+
+	Oid referencingTableId = relation->rd_id;
+	Oid referencedTableId = InvalidOid;
+	uint32 referencedTableColocationId = INVALID_COLOCATION_ID;
+	Var *referencedTablePartitionColumn = NULL;
+
+	Datum referencingColumnsDatum;
+	Datum *referencingColumnArray;
+	int referencingColumnCount = 0;
+	Datum referencedColumnsDatum;
+	Datum *referencedColumnArray;
+	int referencedColumnCount = 0;
+	bool isNull = false;
+	int attrIdx = 0;
+	bool foreignConstraintOnPartitionColumn = false;
+	bool selfReferencingTable = false;
+
+	pgConstraint = heap_open(ConstraintRelationId, AccessShareLock);
+	ScanKeyInit(&scanKey[0], Anum_pg_constraint_conrelid, BTEqualStrategyNumber, F_OIDEQ,
+				relation->rd_id);
+	scanDescriptor = systable_beginscan(pgConstraint, ConstraintRelidIndexId, true, NULL,
+										scanKeyCount, scanKey);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+		bool singleReplicatedTable = true;
+
+		if (constraintForm->contype != CONSTRAINT_FOREIGN)
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		referencedTableId = constraintForm->confrelid;
+		selfReferencingTable = referencingTableId == referencedTableId;
+
+		/*
+		 * We do not support foreign keys for reference tables. Here we skip the second
+		 * part of check if the table is a self referencing table because;
+		 * - PartitionMethod only works for distributed tables and this table may not be
+		 * distributed yet.
+		 * - Since referencing and referenced tables are same, it is OK to not checking
+		 * distribution method twice.
+		 */
+		if (distributionMethod == DISTRIBUTE_BY_NONE ||
+			(!selfReferencingTable &&
+			 PartitionMethod(referencedTableId) == DISTRIBUTE_BY_NONE))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint from or to "
+								   "reference tables")));
+		}
+
+		/*
+		 * ON DELETE SET NULL and ON DELETE SET DEFAULT is not supported. Because we do
+		 * not want to set partition column to NULL or default value.
+		 */
+		if (constraintForm->confdeltype == FKCONSTR_ACTION_SETNULL ||
+			constraintForm->confdeltype == FKCONSTR_ACTION_SETDEFAULT)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("SET NULL or SET DEFAULT is not supported"
+									  " in ON DELETE operation.")));
+		}
+
+		/*
+		 * ON UPDATE SET NULL, ON UPDATE SET DEFAULT and UPDATE CASCADE is not supported.
+		 * Because we do not want to set partition column to NULL or default value. Also
+		 * cascading update operation would require re-partitioning. Updating partition
+		 * column value is not allowed anyway even outside of foreign key concept.
+		 */
+		if (constraintForm->confupdtype == FKCONSTR_ACTION_SETNULL ||
+			constraintForm->confupdtype == FKCONSTR_ACTION_SETDEFAULT ||
+			constraintForm->confupdtype == FKCONSTR_ACTION_CASCADE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("SET NULL, SET DEFAULT or CASCADE is not"
+									  " supported in ON UPDATE operation.")));
+		}
+
+		/*
+		 * Some checks are not meaningful if foreign key references the table itself.
+		 * Therefore we will skip those checks.
+		 */
+		if (!selfReferencingTable)
+		{
+			if (!IsDistributedTable(referencedTableId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("Referenced table must be a distributed "
+										  "table.")));
+			}
+
+			/* to enforce foreign constraints, tables must be co-located */
+			referencedTableColocationId = TableColocationId(referencedTableId);
+			if (colocationId == INVALID_COLOCATION_ID ||
+				colocationId != referencedTableColocationId)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot create foreign key constraint"),
+								errdetail("Foreign key constraint can only be created"
+										  " on co-located tables.")));
+			}
+
+			/*
+			 * Partition column must exist in both referencing and referenced side of the
+			 * foreign key constraint. They also must be in same ordinal.
+			 */
+			referencedTablePartitionColumn = PartitionKey(referencedTableId);
+		}
+		else
+		{
+			/*
+			 * Partition column must exist in both referencing and referenced side of the
+			 * foreign key constraint. They also must be in same ordinal.
+			 */
+			referencedTablePartitionColumn = distributionColumn;
+		}
+
+		/*
+		 * Column attributes are not available in Form_pg_constraint, therefore we need
+		 * to find them in the system catalog. After finding them, we iterate over column
+		 * attributes together because partition column must be at the same place in both
+		 * referencing and referenced side of the foreign key constraint
+		 */
+		referencingColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
+												  Anum_pg_constraint_conkey, &isNull);
+		referencedColumnsDatum = SysCacheGetAttr(CONSTROID, heapTuple,
+												 Anum_pg_constraint_confkey, &isNull);
+
+		deconstruct_array(DatumGetArrayTypeP(referencingColumnsDatum), INT2OID, 2, true,
+						  's', &referencingColumnArray, NULL, &referencingColumnCount);
+		deconstruct_array(DatumGetArrayTypeP(referencedColumnsDatum), INT2OID, 2, true,
+						  's', &referencedColumnArray, NULL, &referencedColumnCount);
+
+		Assert(referencingColumnCount == referencedColumnCount);
+
+		for (attrIdx = 0; attrIdx < referencingColumnCount; ++attrIdx)
+		{
+			AttrNumber referencingAttrNo = DatumGetInt16(referencingColumnArray[attrIdx]);
+			AttrNumber referencedAttrNo = DatumGetInt16(referencedColumnArray[attrIdx]);
+
+			if (distributionColumn->varattno == referencingAttrNo &&
+				referencedTablePartitionColumn->varattno == referencedAttrNo)
+			{
+				foreignConstraintOnPartitionColumn = true;
+			}
+		}
+
+		if (!foreignConstraintOnPartitionColumn)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Partition column must exist both "
+									  "referencing and referenced side of the "
+									  "foreign constraint statement and it must "
+									  "be in the same ordinal in both sides.")));
+		}
+
+		/*
+		 * We do not allow to create foreign constraints if shard replication factor is
+		 * greater than 1. Because in our current design, multiple replicas may cause
+		 * locking problems and inconsistent shard contents. We don't check the referenced
+		 * table, since referenced and referencing tables should be co-located and
+		 * colocation check has been done above.
+		 */
+		if (IsDistributedTable(referencingTableId))
+		{
+			/* check whether ALTER TABLE command is applied over single replicated table */
+			if (!SingleReplicatedTable(referencingTableId))
+			{
+				singleReplicatedTable = false;
+			}
+		}
+		else
+		{
+			/* check whether creating single replicated table with foreign constraint */
+			if (ShardReplicationFactor > 1)
+			{
+				singleReplicatedTable = false;
+			}
+		}
+
+		if (!singleReplicatedTable)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot create foreign key constraint"),
+							errdetail("Citus Community Edition currently supports "
+									  "foreign key constraints only for "
+									  "\"citus.shard_replication_factor = 1\"."),
+							errhint("Please change \"citus.shard_replication_factor to "
+									"1\". To learn more about using foreign keys with "
+									"other replication factors, please contact us at "
+									"https://citusdata.com/about/contact_us.")));
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	/* clean up scan and close system catalog */
+	systable_endscan(scanDescriptor);
+	heap_close(pgConstraint, AccessShareLock);
 }
 
 
