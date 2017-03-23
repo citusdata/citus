@@ -1226,11 +1226,13 @@ FROM
 	NATURAL JOIN pg_dist_shard
 	NATURAL JOIN pg_dist_shard_placement
 WHERE
-	logicalrelid = 'mx_ref'::regclass;
+	logicalrelid = 'mx_ref'::regclass
+ORDER BY
+ 	nodeport;
  logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
 --------------+------------+----------+---------+-------------+-----------+----------
- mx_ref       | n          | t        | 1310183 |      100184 | localhost |    57638
  mx_ref       | n          | t        | 1310183 |      100183 | localhost |    57637
+ mx_ref       | n          | t        | 1310183 |      100184 | localhost |    57638
 (2 rows)
 
 	

@@ -40,7 +40,7 @@ CREATE TABLE pk_on_non_part_col
 	other_col integer PRIMARY KEY
 );
 SELECT master_create_distributed_table('pk_on_non_part_col', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "pk_on_non_part_col"
+ERROR:  cannot create constraint on "pk_on_non_part_col"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 CREATE TABLE uq_on_non_part_col
 (
@@ -48,7 +48,7 @@ CREATE TABLE uq_on_non_part_col
 	other_col integer UNIQUE
 );
 SELECT master_create_distributed_table('uq_on_non_part_col', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "uq_on_non_part_col"
+ERROR:  cannot create constraint on "uq_on_non_part_col"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 CREATE TABLE ex_on_non_part_col
 (
@@ -57,7 +57,7 @@ CREATE TABLE ex_on_non_part_col
 	EXCLUDE (other_col WITH =)
 );
 SELECT master_create_distributed_table('ex_on_non_part_col', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "ex_on_non_part_col"
+ERROR:  cannot create constraint on "ex_on_non_part_col"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 -- now show that Citus can distribute unique and EXCLUDE constraints that 
 -- include the partition column for hash-partitioned tables.
@@ -187,7 +187,7 @@ CREATE TABLE ex_wrong_operator
 	EXCLUDE USING gist (other_col WITH =, partition_col WITH &&)
 );
 SELECT master_create_distributed_table('ex_wrong_operator', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "ex_wrong_operator"
+ERROR:  cannot create constraint on "ex_wrong_operator"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 CREATE TABLE ex_overlaps
 (
@@ -344,7 +344,7 @@ CREATE TABLE ex_wrong_operator_named
 	CONSTRAINT ex_wrong_operator_named_exclude EXCLUDE USING gist (other_col WITH =, partition_col WITH &&)
 );
 SELECT master_create_distributed_table('ex_wrong_operator_named', 'partition_col', 'hash');
-ERROR:  cannot distribute relation: "ex_wrong_operator_named"
+ERROR:  cannot create constraint on "ex_wrong_operator_named"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 CREATE TABLE ex_overlaps_named
 (
