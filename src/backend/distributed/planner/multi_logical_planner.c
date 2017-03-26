@@ -18,6 +18,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_class.h"
 #include "commands/defrem.h"
+#include "distributed/citus_nodefuncs.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -57,7 +58,7 @@ static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join
 
 /* Local functions forward declarations */
 static MultiNode * MultiPlanTree(Query *queryTree);
-static void ErrorIfQueryNotSupported(Query *queryTree);
+static void ErrorIfQueryNotSupported(Query *queryTree, bool subquery);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static void ErrorIfSubqueryNotSupported(Query *subqueryTree);
@@ -104,6 +105,7 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * Local functions forward declarations for subquery pushdown. Note that these
  * functions will be removed with upcoming subqery changes.
  */
+static FromExpr * CollapseJoinTree(FromExpr *fromExpr);
 static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree,
 												 List *subqueryEntryList);
 static void ErrorIfSubqueryJoin(Query *queryTree);
@@ -167,6 +169,8 @@ SubqueryEntryList(Query *queryTree)
 	 * subqueries.
 	 */
 	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
+	ExtractSetOperationRangeTableIndexWalker(queryTree->setOperations,
+											 &joinTreeTableIndexList);
 	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
 	{
 		/*
@@ -225,7 +229,7 @@ MultiPlanTree(Query *queryTree)
 	MultiNode *currentTopNode = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
+	ErrorIfQueryNotSupported(queryTree, false);
 
 	/* extract where clause qualifiers and verify we can plan for them */
 	whereClauseList = WhereClauseList(queryTree->jointree);
@@ -363,7 +367,7 @@ MultiPlanTree(Query *queryTree)
  * more functionality in our distributed planning.
  */
 static void
-ErrorIfQueryNotSupported(Query *queryTree)
+ErrorIfQueryNotSupported(Query *queryTree, bool subquery)
 {
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
@@ -392,12 +396,30 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (queryTree->setOperations)
+	if (queryTree->setOperations && !subquery)
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with UNION, INTERSECT, or "
 					   "EXCEPT";
 		errorHint = filterHint;
+	}
+	else if (queryTree->setOperations && subquery)
+	{
+		List *setOperationList = NIL;
+		ListCell *setOperationCell = NULL;
+
+		ExtractSetOperationWalker(queryTree->setOperations, &setOperationList);
+		foreach(setOperationCell, setOperationList)
+		{
+			SetOperationStmt *setOperationStatement = (SetOperationStmt *) lfirst(
+				setOperationCell);
+			if (setOperationStatement->op != SETOP_UNION)
+			{
+				preconditionsSatisfied = false;
+				errorMessage =
+					"Intersect and Except are currently unsupported in subqueries";
+			}
+		};
 	}
 
 	if (queryTree->hasRecursive)
@@ -791,6 +813,52 @@ ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
 		walkerResult = expression_tree_walker(node, ExtractRangeTableIndexWalker,
 											  rangeTableIndexList);
 	}
+
+	return walkerResult;
+}
+
+
+bool
+ExtractSetOperationRangeTableIndexWalker(Node *node, List **rangeTableIndexList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblRef))
+	{
+		int rangeTableIndex = ((RangeTblRef *) node)->rtindex;
+		(*rangeTableIndexList) = lappend_int(*rangeTableIndexList, rangeTableIndex);
+	}
+	else
+	{
+		walkerResult = expression_tree_walker(node,
+											  ExtractSetOperationRangeTableIndexWalker,
+											  rangeTableIndexList);
+	}
+
+	return walkerResult;
+}
+
+
+bool
+ExtractSetOperationWalker(Node *node, List **setOperationList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, SetOperationStmt))
+	{
+		(*setOperationList) = lappend(*setOperationList, node);
+	}
+
+	walkerResult = expression_tree_walker(node, ExtractSetOperationWalker,
+										  setOperationList);
 
 	return walkerResult;
 }
@@ -1976,6 +2044,32 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 }
 
 
+static FromExpr *
+CollapseJoinTree(FromExpr *fromExpr)
+{
+	FromExpr *result = fromExpr;
+
+	if (list_length(fromExpr->fromlist) == 1)
+	{
+		Node *firstItem = linitial(fromExpr->fromlist);
+		if (IsA(firstItem, FromExpr))
+		{
+			result = CollapseJoinTree((FromExpr *) firstItem);
+		}
+	}
+
+	if (result->quals != NULL)
+	{
+		if (IsA(result->quals, List))
+		{
+			List *qualsList = (List *) result->quals;
+			result->quals = (Node *) make_ands_explicit(qualsList);
+		}
+	}
+	return result;
+}
+
+
 /*
  * SubqueryPushdownMultiTree creates logical plan for subquery pushdown logic.
  * Note that this logic will be changed in next iterations, so we decoupled it
@@ -1986,7 +2080,6 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 {
 	List *targetEntryList = queryTree->targetList;
 	List *qualifierList = NIL;
-	List *qualifierColumnList = NIL;
 	List *targetListColumnList = NIL;
 	List *columnList = NIL;
 	ListCell *columnCell = NULL;
@@ -1997,14 +2090,18 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
 	RangeTblEntry *subqueryRangeTableEntry = NULL;
+	Query *queryCopy = (Query *) copyObject(queryTree);
+	AttrNumber targetNo = 1;
+	List *subqueryTargetEntryList = NIL;
+	List *columnNamesList = NIL;
+	StringInfo rteName = makeStringInfo();
+	List *knownColumnList = NIL;
+
+	appendStringInfo(rteName, "citus_subquery_name");
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
-	ErrorIfSubqueryJoin(queryTree);
+	ErrorIfQueryNotSupported(queryTree, true);
 
-	/* extract qualifiers and verify we can plan for them */
-	qualifierList = QualifierList(queryTree->jointree);
-	ValidateClauseList(qualifierList);
 
 	/*
 	 * We disregard pulled subqueries. This changes order of range table list.
@@ -2013,20 +2110,79 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	 * here we are updating columns in the most outer query for where clause
 	 * list and target list accordingly.
 	 */
-	Assert(list_length(subqueryEntryList) == 1);
 
-	qualifierColumnList = pull_var_clause_default((Node *) qualifierList);
 	targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
 
-	columnList = list_concat(qualifierColumnList, targetListColumnList);
+	columnList = targetListColumnList;
+
+	subqueryTargetEntryList = NIL;
+
 	foreach(columnCell, columnList)
 	{
+		TargetEntry *newTargetEntry = makeNode(TargetEntry);
+		ListCell *knownColumnCell = NULL;
+		StringInfo columnNameString = makeStringInfo();
 		Var *column = (Var *) lfirst(columnCell);
+		Var *foundColumn = NULL;
+		targetNo = 1;
+		foreach(knownColumnCell, knownColumnList)
+		{
+			Var *knownColumn = (Var *) knownColumnCell;
+			if (knownColumn->varno == column->varno && knownColumn->varattno ==
+				column->varattno)
+			{
+				foundColumn = knownColumn;
+				break;
+			}
+			targetNo++;
+		}
+
+		if (foundColumn == NULL)
+		{
+			knownColumnList = lappend(knownColumnList, copyObject(column));
+			newTargetEntry->expr = (Expr *) copyObject(column);
+
+			appendStringInfo(columnNameString, WORKER_COLUMN_FORMAT,
+							 targetNo);
+			newTargetEntry->resname = columnNameString->data;
+
+			/* force resjunk to false as we may need this on the master */
+			newTargetEntry->resjunk = false;
+			newTargetEntry->resno = targetNo;
+
+			subqueryTargetEntryList = lappend(subqueryTargetEntryList, newTargetEntry);
+			columnNamesList = lappend(columnNamesList, makeString(
+										  columnNameString->data));
+		}
+
 		column->varno = 1;
+		column->varattno = targetNo;
 	}
 
+	queryCopy->jointree = CollapseJoinTree(queryCopy->jointree);
+
+
+	queryCopy->targetList = subqueryTargetEntryList;
+	queryCopy->sortClause = NIL;
+	queryCopy->groupClause = NIL;
+	queryCopy->groupingSets = NIL;
+	queryCopy->hasAggs = false;
+	queryCopy->distinctClause = NIL;
+	queryCopy->hasDistinctOn = false;
+	queryCopy->limitCount = NULL;
+	queryCopy->limitOffset = NULL;
+
+
 	/* create multi node for the subquery */
-	subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
+	subqueryRangeTableEntry = makeNode(RangeTblEntry);
+	subqueryRangeTableEntry->subquery = queryCopy;
+	subqueryRangeTableEntry->alias = makeNode(Alias);
+	subqueryRangeTableEntry->alias->aliasname = rteName->data;
+
+	subqueryRangeTableEntry->eref = makeNode(Alias);
+	subqueryRangeTableEntry->eref->aliasname = rteName->data;
+	subqueryRangeTableEntry->eref->colnames = columnNamesList;
+
 	subqueryNode = MultiSubqueryPushdownTable(subqueryRangeTableEntry);
 
 	SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);

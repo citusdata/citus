@@ -214,8 +214,8 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join in subqueries is not supported yet
+ERROR:  cannot push down this subquery
+DETAIL:  Joins between regular tables and subqueries are unsupported
 -- Check that we error out if the outermost query is a distinct clause.
 SELECT
 	count(DISTINCT a)
