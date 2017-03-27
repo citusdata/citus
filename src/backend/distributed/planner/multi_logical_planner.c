@@ -104,28 +104,35 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * Local functions forward declarations for subquery pushdown. Note that these
  * functions will be removed with upcoming subqery changes.
  */
-static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree,
-												 List *subqueryEntryList);
+static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree);
 static void ErrorIfSubqueryJoin(Query *queryTree);
 static MultiTable * MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry);
 
 
 /*
- * MultiLogicalPlanCreate takes in a parsed query tree, uses helper functions to
- * create logical plan and adds a root node to top of it.
+ * MultiLogicalPlanCreate takes in both the original query and its corresponding modified
+ * query tree yield by the standard planner. It uses helper functions to create logical
+ * plan and adds a root node to top of it. The  original query is only used for subquery
+ * pushdown planning.
  */
 MultiTreeRoot *
-MultiLogicalPlanCreate(Query *queryTree)
+MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree)
 {
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
+	List *subqueryEntryList = NULL;
 
-	List *subqueryEntryList = SubqueryEntryList(queryTree);
+	/*
+	 * We check the existence of subqueries in the modified query given that
+	 * if postgres already flattened the subqueries, MultiPlanTree() can plan
+	 * corresponding distributed plan.
+	 */
+	subqueryEntryList = SubqueryEntryList(queryTree);
 	if (subqueryEntryList != NIL)
 	{
 		if (SubqueryPushdown)
 		{
-			multiQueryNode = SubqueryPushdownMultiPlanTree(queryTree, subqueryEntryList);
+			multiQueryNode = SubqueryPushdownMultiPlanTree(originalQuery);
 		}
 		else
 		{
@@ -1982,7 +1989,7 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
  * from other parts of code although it causes some code duplication.
  */
 static MultiNode *
-SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
+SubqueryPushdownMultiPlanTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
 	List *qualifierList = NIL;
@@ -1997,6 +2004,7 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
 	RangeTblEntry *subqueryRangeTableEntry = NULL;
+	List *subqueryEntryList = SubqueryEntryList(queryTree);
 
 	/* verify we can perform distributed planning on this query */
 	ErrorIfQueryNotSupported(queryTree);
