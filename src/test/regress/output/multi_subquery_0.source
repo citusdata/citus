@@ -178,7 +178,8 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
-ERROR:  could not run distributed query with complex table expressions
+ERROR:  cannot push down this subquery
+DETAIL:  Union All clauses are currently unsupported
 ---
 -- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
 ---
