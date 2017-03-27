@@ -105,7 +105,7 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * Local functions forward declarations for subquery pushdown. Note that these
  * functions will be removed with upcoming subqery changes.
  */
-static FromExpr * CollapseJoinTree(FromExpr *fromExpr);
+static Node * SubqueryJoinTreeFixup(Node *fromExpr);
 static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree,
 												 List *subqueryEntryList);
 static void ErrorIfSubqueryJoin(Query *queryTree);
@@ -2044,29 +2044,67 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 }
 
 
-static FromExpr *
-CollapseJoinTree(FromExpr *fromExpr)
+static Node *
+SubqueryJoinTreeFixup(Node *expr)
 {
-	FromExpr *result = fromExpr;
-
-	if (list_length(fromExpr->fromlist) == 1)
+	Node *currentExpr = expr;
+	if (IsA(currentExpr, FromExpr))
 	{
-		Node *firstItem = linitial(fromExpr->fromlist);
-		if (IsA(firstItem, FromExpr))
+		FromExpr *fromExpr = (FromExpr *) expr;
+
+		if (list_length(fromExpr->fromlist) == 1)
 		{
-			result = CollapseJoinTree((FromExpr *) firstItem);
+			Node *firstItem = linitial(fromExpr->fromlist);
+			if (IsA(firstItem, FromExpr))
+			{
+				currentExpr = SubqueryJoinTreeFixup((Node *) firstItem);
+			}
+		}
+
+		if (currentExpr != NULL && IsA(currentExpr, FromExpr))
+		{
+			fromExpr = (FromExpr *) currentExpr;
+		}
+
+		if (fromExpr != NULL && IsA(fromExpr->fromlist, List))
+		{
+			List *fromList = (List *) fromExpr->fromlist;
+			List *newFromList = NIL;
+			ListCell *fromListCell = NULL;
+
+			foreach(fromListCell, fromList)
+			{
+				Node *fromItem = (Node *) lfirst(fromListCell);
+				Node *nextItem = fromItem;
+				nextItem = SubqueryJoinTreeFixup(fromItem);
+				newFromList = lappend(newFromList, nextItem);
+			}
+			fromExpr->fromlist = newFromList;
+			if (fromExpr->quals != NULL && IsA(fromExpr->quals, List))
+			{
+				fromExpr->quals = (Node *) make_ands_explicit((List *) fromExpr->quals);
+			}
+		}
+
+		currentExpr = (Node *) fromExpr;
+	}
+
+	if (IsA(currentExpr, JoinExpr))
+	{
+		JoinExpr *joinExpr = (JoinExpr *) currentExpr;
+		joinExpr->larg = SubqueryJoinTreeFixup(joinExpr->larg);
+		joinExpr->rarg = SubqueryJoinTreeFixup(joinExpr->rarg);
+		if (joinExpr->quals == NULL)
+		{
+			joinExpr->quals = makeBoolConst(true, false);
+		}
+		else if (IsA(joinExpr->quals, List))
+		{
+			joinExpr->quals = (Node *) make_ands_explicit((List *) joinExpr->quals);
 		}
 	}
 
-	if (result->quals != NULL)
-	{
-		if (IsA(result->quals, List))
-		{
-			List *qualsList = (List *) result->quals;
-			result->quals = (Node *) make_ands_explicit(qualsList);
-		}
-	}
-	return result;
+	return currentExpr;
 }
 
 
@@ -2159,7 +2197,8 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 		column->varattno = targetNo;
 	}
 
-	queryCopy->jointree = CollapseJoinTree(queryCopy->jointree);
+	queryCopy->jointree = (FromExpr *) SubqueryJoinTreeFixup(
+		(Node *) queryCopy->jointree);
 
 
 	queryCopy->targetList = subqueryTargetEntryList;
