@@ -61,42 +61,6 @@ typedef struct RelationShard
 	uint64 shardId;
 } RelationShard;
 
-/*
- * AttributeEquivalenceClass
- *
- * Whenever we find an equality clause A = B, where both A and B originates from
- * relation attributes (i.e., not random expressions), we create an
- * AttributeEquivalenceClass to record this knowledge. If we later find another
- * equivalence B = C, we create another AttributeEquivalenceClass. Finally, we can
- * apply transitity rules and generate a new AttributeEquivalenceClass which includes
- * A, B and C.
- *
- * Note that equality among the members are identified by the varattno and rteIdentity.
- */
-typedef struct AttributeEquivalenceClass
-{
-	uint32 equivalenceId;
-	List *equivalentAttributes;
-} AttributeEquivalenceClass;
-
-/*
- *  AttributeEquivalenceClassMember - one member expression of an
- *  AttributeEquivalenceClassMember. The important thing to consider is that
- *  the class member contains "rteIndentity" field. Note that each RTE_RELATION
- *  is assigned a unique rteIdentity in AssignRTEIdentities() function.
- *
- *  "varno" and "varattrno" is directly used from a Var clause that is being added
- *  to the attribute equivalence. Since we only use this class for relations, the member
- *  also includes the relation id field.
- */
-typedef struct AttributeEquivalenceClassMember
-{
-	Index varno;
-	AttrNumber varattno;
-	Oid relationId;
-	int rteIdendity;
-} AttributeEquivalenceClassMember;
-
 
 extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
 								   ParamListInfo boundParams);
