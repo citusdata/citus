@@ -206,6 +206,32 @@ FROM
      order BY user_id
      limit 50;
 
+-- same query with subuqery joins in topmost select
+SELECT "some_users_data".user_id, lastseen
+FROM
+     (SELECT user_id,
+             Max(TIME) AS lastseen
+      FROM
+        (SELECT user_id,
+                TIME
+         FROM
+           (SELECT user_id,
+                   TIME
+            FROM events_table as "events"
+            WHERE user_id > 10 and user_id < 40) "events_1"
+         ORDER BY TIME DESC
+         LIMIT 1000) "recent_events_1"
+      GROUP BY user_id
+      ORDER BY max(TIME) DESC) "some_recent_users"
+   JOIN LATERAL
+     (SELECT "users".user_id
+      FROM users_table as "users"
+      WHERE "users"."user_id" = "some_recent_users"."user_id"
+        AND users.value_2 > 50 and users.value_2 < 55
+      LIMIT 1) "some_users_data" ON TRUE
+ORDER BY user_id
+limit 50;
+
 -- not supported since JOIN is not on the partition key
 SELECT *
 FROM
@@ -302,6 +328,44 @@ FROM
    ORDER BY lastseen DESC
    LIMIT 10) "some_users"
 order BY user_id DESC
+limit 10;
+
+--
+-- A similar query with topmost select is dropped
+-- and replaced by aggregation. Notice the heavy use of limit
+--
+SELECT "some_users_data".user_id, MAX(lastseen), count(*)
+   FROM
+     (SELECT filter_users_1.user_id,
+             TIME AS lastseen
+      FROM
+        (SELECT user_where_1_1.user_id
+         FROM
+           (SELECT "users"."user_id"
+            FROM users_table as "users"
+            WHERE user_id > 12 and user_id < 16 and value_1 > 20) user_where_1_1
+         INNER JOIN
+           (SELECT "users"."user_id"
+            FROM users_table as "users"
+            WHERE   user_id > 12 and user_id < 16 and value_2 > 60) user_where_1_join_1 
+           ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id)) filter_users_1 
+      JOIN LATERAL
+        (SELECT user_id,
+                TIME
+         FROM events_table as "events"
+         WHERE  user_id > 12 and user_id < 16 and user_id = filter_users_1.user_id
+         ORDER BY TIME DESC
+         LIMIT 1) "last_events_1" ON TRUE
+      ORDER BY TIME DESC
+      LIMIT 10) "some_recent_users"
+   JOIN LATERAL
+     (SELECT "users".user_id
+      FROM users_table  as "users"
+      WHERE "users"."user_id" = "some_recent_users"."user_id"
+             AND "users"."value_2" > 70
+      LIMIT 1) "some_users_data" ON TRUE
+GROUP BY 1
+ORDER BY 2, 1 DESC
 limit 10;
 
 -- not supported since the inner JOIN is not equi join
@@ -545,24 +609,29 @@ SELECT
 SELECT 
   "value_3", count(*) AS cnt 
 FROM
-(SELECT "value_3", "user_id",  random()
-  FROM
-    (SELECT users_in_segment_1.user_id, value_3 
-        FROM
-      (SELECT user_id, value_3 * 2 as value_3
-        FROM
-         (SELECT user_id, value_3 
-          FROM
-           (SELECT "users"."user_id", value_3
-                FROM users_table as "users"
-                  WHERE user_id > 10 and user_id < 40 and value_2 > 30) simple_user_where_1) all_buckets_1) users_in_segment_1
-      JOIN
-                          (SELECT "users"."user_id"
-                            FROM users_table as "users"
-                            WHERE user_id > 10 and user_id < 40 and value_2 > 60) some_users_data
-
-                          ON ("users_in_segment_1".user_id = "some_users_data".user_id)) segmentalias_1) "tempQuery" 
-                        GROUP BY "value_3" ORDER BY cnt, value_3 DESC LIMIT 10;
+	(SELECT "value_3", "user_id",  random()
+  	 FROM
+    	(SELECT users_in_segment_1.user_id, value_3 
+         FROM
+      		(SELECT user_id, value_3 * 2 as value_3
+        	 FROM
+         		(SELECT user_id, value_3 
+          		 FROM
+           			(SELECT "users"."user_id", value_3
+                	 FROM users_table as "users"
+                  	 WHERE user_id > 10 and user_id < 40 and value_2 > 30
+                ) simple_user_where_1
+            ) all_buckets_1
+        ) users_in_segment_1
+        JOIN
+        (SELECT "users"."user_id"
+         FROM users_table as "users"
+         WHERE user_id > 10 and user_id < 40 and value_2 > 60
+        ) some_users_data
+        ON ("users_in_segment_1".user_id = "some_users_data".user_id)
+    ) segmentalias_1) "tempQuery" 
+GROUP BY "value_3"
+ORDER BY cnt, value_3 DESC LIMIT 10;
 
 
 -- not supported since there is no partition column equality at all
@@ -622,6 +691,36 @@ FROM
   value_3 DESC 
   limit 10;
 
+-- nested lateral join at top most level
+SELECT "some_users_data".user_id, "some_recent_users".value_3
+FROM
+	(SELECT filter_users_1.user_id, value_3
+     FROM
+     	(SELECT "users"."user_id"
+         FROM users_table as "users"
+         WHERE user_id > 20 and user_id < 70 and users.value_2 = 200
+        ) filter_users_1
+        JOIN LATERAL
+        (SELECT user_id, value_3
+         FROM events_table as "events"
+         WHERE  user_id > 20 and user_id < 70
+           AND ("events".user_id = "filter_users_1".user_id)
+         ORDER BY value_3 DESC
+         LIMIT 1
+        ) "last_events_1" ON TRUE
+     ORDER BY value_3 DESC
+     LIMIT 10
+   ) "some_recent_users"
+   JOIN LATERAL
+   (SELECT "users".user_id
+    FROM users_table as "users"
+    WHERE "users"."user_id" = "some_recent_users"."user_id"
+        AND users.value_2 > 200
+    LIMIT 1
+   ) "some_users_data" ON TRUE
+ORDER BY value_3 DESC, user_id ASC
+LIMIT 10;
+
 -- longer nested lateral joins
 SELECT *
 FROM
@@ -656,7 +755,35 @@ FROM
   value_3 DESC 
   limit 10;
 
-
+-- longer nested lateral join wth top level join
+SELECT "some_users_data".user_id, "some_recent_users".value_3
+FROM
+	(SELECT filter_users_1.user_id, value_3
+     FROM
+     	(SELECT "users"."user_id"
+         FROM users_table as "users"
+         WHERE user_id > 20 and user_id < 70 and users.value_2 = 200
+        ) filter_users_1
+        JOIN LATERAL
+        (SELECT user_id, value_3
+         FROM events_table as "events"
+         WHERE  user_id > 20 and user_id < 70
+           AND ("events".user_id = "filter_users_1".user_id)
+         ORDER BY value_3 DESC
+         LIMIT 1
+        ) "last_events_1" ON TRUE
+     ORDER BY value_3 DESC
+     LIMIT 10
+    ) "some_recent_users"
+    JOIN LATERAL
+    (SELECT "users".user_id
+     FROM users_table as "users"
+     WHERE "users"."user_id" = "some_recent_users"."user_id"
+        AND users.value_2 > 200
+     LIMIT 1
+    ) "some_users_data" ON TRUE
+ORDER BY value_3 DESC
+LIMIT 10;
 
 -- LEFT JOINs used with INNER JOINs
 SELECT
