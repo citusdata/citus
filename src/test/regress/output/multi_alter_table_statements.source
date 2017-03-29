@@ -780,6 +780,59 @@ DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
 NOTICE:  drop cascades to default for table sequence_deadlock_test column b
 END;
 DROP TABLE sequence_deadlock_test;
+-- verify enable/disable trigger all works
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 1;
+CREATE TABLE trigger_table (
+	id int,
+	value text
+);
+SELECT create_distributed_table('trigger_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- first set a trigger on a shard
+\c - - - :worker_1_port
+CREATE FUNCTION update_value() RETURNS trigger AS $up$
+    BEGIN
+		NEW.value := 'trigger enabled';
+		RETURN NEW;
+    END;
+$up$ LANGUAGE plpgsql;
+CREATE TRIGGER update_value
+BEFORE INSERT ON trigger_table_220056
+FOR EACH ROW EXECUTE PROCEDURE update_value();
+\c - - - :master_port
+INSERT INTO trigger_table VALUES (1, 'trigger disabled');
+SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
+      value      | count 
+-----------------+-------
+ trigger enabled |     1
+(1 row)
+
+ALTER TABLE trigger_table DISABLE TRIGGER ALL;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+INSERT INTO trigger_table VALUES (1, 'trigger disabled');
+SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
+      value       | count 
+------------------+-------
+ trigger disabled |     1
+ trigger enabled  |     1
+(2 rows)
+
+ALTER TABLE trigger_table ENABLE TRIGGER ALL;
+INSERT INTO trigger_table VALUES (1, 'trigger disabled');
+SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
+      value       | count 
+------------------+-------
+ trigger disabled |     1
+ trigger enabled  |     2
+(2 rows)
+
+DROP TABLE trigger_table;
 -- test ALTER TABLE ALL IN TABLESPACE
 -- we expect that it will warn out
 CREATE TABLESPACE super_fast_ssd LOCATION '@abs_srcdir@/data';
