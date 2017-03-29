@@ -311,7 +311,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		{
 			/* Create and optimize logical plan */
 			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query);
-			MultiLogicalPlanOptimize(logicalPlan, plannerRestrictionContext);
+			MultiLogicalPlanOptimize(logicalPlan, plannerRestrictionContext,
+									 originalQuery);
 
 			/*
 			 * This check is here to make it likely that all node types used in
@@ -797,11 +798,10 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new planner restriction context.
- * Later, it creates a relation restriction context and a join restriction
- * context, and sets those contexts in the planner restriction context. Finally,
- * the planner restriction context is inserted to the beginning of the
- * plannerRestrictionContextList and it is returned.
+ * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
+ * and a new join context, inserts it to the beginning of the
+ * plannerRestrictionContextList. Finally, the planner restriction context is
+ * inserted to the beginning of the plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
 CreateAndPushPlannerRestrictionContext(void)

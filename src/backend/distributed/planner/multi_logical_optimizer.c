@@ -151,7 +151,8 @@ static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column
 /* Local functions forward declarations for subquery pushdown checks */
 static void ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
 											   PlannerRestrictionContext *
-											   plannerRestrictionContext);
+											   plannerRestrictionContext,
+											   Query *originalQuery);
 static void ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit);
 static void ErrorIfUnsupportedSetOperation(Query *subqueryTree, bool outerQueryHasLimit);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
@@ -192,14 +193,15 @@ static bool HasOrderByHllType(List *sortClauseList, List *targetList);
  * function finds the extended operator node, and splits this node into master
  * and worker extended operator nodes.
  *
- * We also pass plannerRestrictionContext to the optimizer. The context
- * is primarily used to decide whether the subquery is safe to pushdown.
+ * We also pass plannerRestrictionContext and originalQuery to the optimizer.
+ * These are primarily used to decide whether the subquery is safe to pushdown.
  * If not, it helps to produce meaningful error messages for subquery
  * pushdown planning.
  */
 void
 MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan,
-						 PlannerRestrictionContext *plannerRestrictionContext)
+						 PlannerRestrictionContext *plannerRestrictionContext,
+						 Query *originalQuery)
 {
 	bool hasOrderByHllType = false;
 	List *selectNodeList = NIL;
@@ -219,7 +221,8 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan,
 	ErrorIfContainsUnsupportedAggregate(logicalPlanNode);
 
 	/* check that we can pushdown subquery in the plan */
-	ErrorIfContainsUnsupportedSubquery(logicalPlanNode, plannerRestrictionContext);
+	ErrorIfContainsUnsupportedSubquery(logicalPlanNode, plannerRestrictionContext,
+									   originalQuery);
 
 	/*
 	 * If a select node exists, we use the idempower property to split the node
@@ -2808,20 +2811,22 @@ GroupedByColumn(List *groupClauseList, List *targetList, Var *column)
 
 /*
  * ErrorIfContainsUnsupportedSubquery extracts subquery multi table from the
- * logical plan and uses helper functions to check if we can push down subquery
- * to worker nodes. These helper functions error out if we cannot push down the
- * the subquery.
+ * logical plan using plannerRestrictionContext and the original query. It uses
+ * some helper functions to check if we can push down subquery to worker nodes.
+ * These helper functions error out if we cannot push down the subquery.
  */
 static void
 ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
-								   PlannerRestrictionContext *plannerRestrictionContext)
+								   PlannerRestrictionContext *plannerRestrictionContext,
+								   Query *originalQuery)
 {
 	Query *subquery = NULL;
 	List *extendedOpNodeList = NIL;
 	MultiTable *multiTable = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	bool outerQueryHasLimit = false;
-	bool restrictionEquivalenceForPartitionKeys = false;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
 
 	/* check if logical plan includes a subquery */
 	List *subqueryMultiTableList = SubqueryMultiTableList(logicalPlanNode);
@@ -2833,9 +2838,26 @@ ErrorIfContainsUnsupportedSubquery(MultiNode *logicalPlanNode,
 	/* currently in the planner we only allow one subquery in from-clause*/
 	Assert(list_length(subqueryMultiTableList) == 1);
 
-	restrictionEquivalenceForPartitionKeys =
-		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
-	if (!restrictionEquivalenceForPartitionKeys)
+	/*
+	 * We're checking two things here:
+	 *    (i)   If the query contains a top level union, ensure that all leaves
+	 *          return the partition key at the same position
+	 *    (ii)  Else, check whether all relations joined on the partition key or not
+	 */
+	if (ContainsUnionSubquery(originalQuery))
+	{
+		if (!SafeToPushdownUnionSubquery(relationRestrictionContext))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot pushdown the subquery since all leaves of "
+								   "the UNION does not include partition key at the "
+								   "same position"),
+							errdetail("Each leaf query of the UNION should return "
+									  "partition key at the same position on its "
+									  "target list.")));
+		}
+	}
+	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot pushdown the subquery since all relations are not "
