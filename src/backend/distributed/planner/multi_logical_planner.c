@@ -105,8 +105,12 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * functions will be removed with upcoming subqery changes.
  */
 static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree);
+
 static void ErrorIfSubqueryJoin(Query *queryTree);
-static MultiTable * MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry);
+static List * CreateSubqueryTargetEntryList(List *columnList);
+static void UpdateVarMappingsForExtendedOpNode(List *columnList,
+											   List *subqueryTargetEntryList);
+static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 
 
 /*
@@ -1987,66 +1991,108 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
  * SubqueryPushdownMultiTree creates logical plan for subquery pushdown logic.
  * Note that this logic will be changed in next iterations, so we decoupled it
  * from other parts of code although it causes some code duplication.
+ *
+ * Current subquery pushdown support in MultiTree logic requires a single range
+ * table entry in the top most from clause. Therefore we inject an synthetic
+ * query derived from the top level query and make it the only range table
+ * entry for the top level query. This way we can push down any subquery joins
+ * down to workers without invoking join order planner.
  */
 static MultiNode *
 SubqueryPushdownMultiPlanTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
 	List *qualifierList = NIL;
-	List *qualifierColumnList = NIL;
-	List *targetListColumnList = NIL;
 	List *columnList = NIL;
-	ListCell *columnCell = NULL;
+	List *targetColumnList = NIL;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 	MultiTable *subqueryNode = NULL;
-	MultiSelect *selectNode = NULL;
 	MultiProject *projectNode = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
-	RangeTblEntry *subqueryRangeTableEntry = NULL;
-	List *subqueryEntryList = SubqueryEntryList(queryTree);
+	Query *pushedDownQuery = NULL;
+	List *subqueryTargetEntryList = NIL;
+	List *havingClauseColumnList = NIL;
 
 	/* verify we can perform distributed planning on this query */
 	ErrorIfQueryNotSupported(queryTree);
-	ErrorIfSubqueryJoin(queryTree);
 
 	/* extract qualifiers and verify we can plan for them */
 	qualifierList = QualifierList(queryTree->jointree);
 	ValidateClauseList(qualifierList);
 
 	/*
-	 * We disregard pulled subqueries. This changes order of range table list.
-	 * We do not allow subquery joins, so we will have only one range table
-	 * entry in range table list after dropping pulled subquery. For this reason,
-	 * here we are updating columns in the most outer query for where clause
-	 * list and target list accordingly.
+	 * We would be creating a new Query and pushing down top level query's
+	 * contents down to it. Join and filter clauses in higher level query would
+	 * be transferred to lower query. Therefore after this function we would
+	 * only have a single range table entry in the top level query. We need to
+	 * create a target list entry in lower query for each column reference in
+	 * upper level query's target list and having clauses. Any column reference
+	 * in the upper query will be updated to have varno=1, and varattno=<resno>
+	 * of matching target entry in pushed down query.
+	 * Consider query
+	 *      SELECT s1.a, sum(s2.c)
+	 *      FROM (some subquery) s1, (some subquery) s2
+	 *      WHERE s1.a = s2.a
+	 *      GROUP BY s1.a
+	 *      HAVING avg(s2.b);
+	 *
+	 * We want to prepare a multi tree to avoid subquery joins at top level,
+	 * therefore above query is converted to an equivalent
+	 *      SELECT worker_column_0, sum(worker_column_1)
+	 *      FROM (
+	 *              SELECT
+	 *                  s1.a AS worker_column_0,
+	 *                  s2.c AS worker_column_1,
+	 *                  s2.b AS as worker_column_2
+	 *              FROM (some subquery) s1, (some subquery) s2
+	 *              WHERE s1.a = s2.a) worker_subquery
+	 *      GROUP BY worker_column_0
+	 *      HAVING avg(worker_column_2);
+	 *  After this conversion MultiTree is created as follows
+	 *
+	 *  MultiExtendedOpNode(
+	 *      targetList : worker_column_0, sum(worker_column_1)
+	 *      groupBy : worker_column_0
+	 *      having :  avg(worker_column_2))
+	 * --->MultiProject (worker_column_0, worker_column_1, worker_column_2)
+	 * --->--->	MultiTable (subquery : worker_subquery)
+	 *
+	 * Master and worker queries will be created out of this MultiTree at later stages.
 	 */
-	Assert(list_length(subqueryEntryList) == 1);
 
-	qualifierColumnList = pull_var_clause_default((Node *) qualifierList);
-	targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
+	/*
+	 * uniqueColumnList contains all columns returned by subquery. Subquery target
+	 * entry list, subquery range table entry's column name list are derived from
+	 * uniqueColumnList. Columns mentioned in multiProject node and multiExtendedOp
+	 * node are indexed with their respective position in uniqueColumnList.
+	 */
+	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
+	columnList = list_concat(targetColumnList, havingClauseColumnList);
 
-	columnList = list_concat(qualifierColumnList, targetListColumnList);
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		column->varno = 1;
-	}
+	/* create a target entry for each unique column */
+	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
 
-	/* create multi node for the subquery */
-	subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
-	subqueryNode = MultiSubqueryPushdownTable(subqueryRangeTableEntry);
+	/*
+	 * Update varno/varattno fields of columns in columnList to
+	 * point to corresponding target entry in subquery target entry list.
+	 */
+	UpdateVarMappingsForExtendedOpNode(columnList, subqueryTargetEntryList);
+
+	/* new query only has target entries, join tree, and rtable*/
+	pushedDownQuery = makeNode(Query);
+	pushedDownQuery->commandType = queryTree->commandType;
+	pushedDownQuery->targetList = subqueryTargetEntryList;
+	pushedDownQuery->jointree = copyObject(queryTree->jointree);
+	pushedDownQuery->rtable = copyObject(queryTree->rtable);
+	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
+	pushedDownQuery->querySource = queryTree->querySource;
+
+	subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
 
 	SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 	currentTopNode = (MultiNode *) subqueryCollectNode;
-
-	/* build select node if the query has selection criteria */
-	selectNode = MultiSelectNode(qualifierList);
-	if (selectNode != NULL)
-	{
-		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
-		currentTopNode = (MultiNode *) selectNode;
-	}
 
 	/* build project node for the columns to project */
 	projectNode = MultiProjectNode(targetEntryList);
@@ -2060,6 +2106,20 @@ SubqueryPushdownMultiPlanTree(Query *queryTree)
 	 * in the logical optimizer.
 	 */
 	extendedOpNode = MultiExtendedOpNode(queryTree);
+
+	/*
+	 * Postgres standard planner converts having qual node to a list of and
+	 * clauses and expects havingQual to be of type List when executing the
+	 * query later. This function is called on an original query, therefore
+	 * havingQual has not been converted yet. Perform conversion here.
+	 */
+	if (extendedOpNode->havingQual != NULL &&
+		!IsA(extendedOpNode->havingQual, List))
+	{
+		extendedOpNode->havingQual =
+			(Node *) make_ands_implicit((Expr *) extendedOpNode->havingQual);
+	}
+
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;
 
@@ -2094,22 +2154,105 @@ ErrorIfSubqueryJoin(Query *queryTree)
 
 
 /*
- * MultiSubqueryPushdownTable creates a MultiTable from the given subquery range
- * table entry and returns it. Note that this sets subquery field of MultiTable
- * to subquery of the given range table entry.
+ * CreateSubqueryTargetEntryList creates a target entry for each unique column
+ * in the column list and returns the target entry list.
+ */
+static List *
+CreateSubqueryTargetEntryList(List *columnList)
+{
+	AttrNumber resNo = 1;
+	ListCell *columnCell = NULL;
+	List *uniqueColumnList = NIL;
+	List *subqueryTargetEntryList = NIL;
+
+	foreach(columnCell, columnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		uniqueColumnList = list_append_unique(uniqueColumnList, copyObject(column));
+	}
+
+	foreach(columnCell, uniqueColumnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		TargetEntry *newTargetEntry = makeNode(TargetEntry);
+		StringInfo columnNameString = makeStringInfo();
+
+		newTargetEntry->expr = (Expr *) copyObject(column);
+		appendStringInfo(columnNameString, WORKER_COLUMN_FORMAT, resNo);
+		newTargetEntry->resname = columnNameString->data;
+		newTargetEntry->resjunk = false;
+		newTargetEntry->resno = resNo;
+
+		subqueryTargetEntryList = lappend(subqueryTargetEntryList, newTargetEntry);
+		resNo++;
+	}
+
+	return subqueryTargetEntryList;
+}
+
+
+/*
+ * UpdateVarMappingsForExtendedOpNode updates varno/varattno fields of columns
+ * in columnList to point to corresponding target in subquery target entry
+ * list.
+ */
+static void
+UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryList)
+{
+	ListCell *columnCell = NULL;
+	foreach(columnCell, columnList)
+	{
+		Var *columnOnTheExtendedNode = (Var *) lfirst(columnCell);
+		ListCell *targetEntryCell = NULL;
+		foreach(targetEntryCell, subqueryTargetEntryList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			Var *targetColumn = NULL;
+
+			Assert(IsA(targetEntry->expr, Var));
+			targetColumn = (Var *) targetEntry->expr;
+			if (columnOnTheExtendedNode->varno == targetColumn->varno &&
+				columnOnTheExtendedNode->varattno == targetColumn->varattno)
+			{
+				columnOnTheExtendedNode->varno = 1;
+				columnOnTheExtendedNode->varattno = targetEntry->resno;
+				break;
+			}
+		}
+	}
+}
+
+
+/*
+ * MultiSubqueryPushdownTable creates a MultiTable from the given subquery,
+ * populates column list and returns the multitable.
  */
 static MultiTable *
-MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry)
+MultiSubqueryPushdownTable(Query *subquery)
 {
-	Query *subquery = subqueryRangeTableEntry->subquery;
+	MultiTable *subqueryTableNode = NULL;
+	StringInfo rteName = makeStringInfo();
+	List *columnNamesList = NIL;
+	ListCell *targetEntryCell = NULL;
 
-	MultiTable *subqueryTableNode = CitusMakeNode(MultiTable);
+	appendStringInfo(rteName, "worker_subquery");
+
+	foreach(targetEntryCell, subquery->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		columnNamesList = lappend(columnNamesList, makeString(targetEntry->resname));
+	}
+
+	subqueryTableNode = CitusMakeNode(MultiTable);
 	subqueryTableNode->subquery = subquery;
-	subqueryTableNode->relationId = HEAP_ANALYTICS_SUBQUERY_RELATION_ID;
+	subqueryTableNode->relationId = SUBQUERY_PUSHDOWN_RELATION_ID;
 	subqueryTableNode->rangeTableId = SUBQUERY_RANGE_TABLE_ID;
 	subqueryTableNode->partitionColumn = NULL;
-	subqueryTableNode->alias = subqueryRangeTableEntry->alias;
-	subqueryTableNode->referenceNames = subqueryRangeTableEntry->eref;
+	subqueryTableNode->alias = makeNode(Alias);
+	subqueryTableNode->alias->aliasname = rteName->data;
+	subqueryTableNode->referenceNames = makeNode(Alias);
+	subqueryTableNode->referenceNames->aliasname = rteName->data;
+	subqueryTableNode->referenceNames->colnames = columnNamesList;
 
 	return subqueryTableNode;
 }
