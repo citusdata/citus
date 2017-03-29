@@ -2030,14 +2030,6 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	DistTableCacheEntry *targetCacheEntry = NULL;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
-	bool restrictionEquivalenceForPartitionKeys PG_USED_FOR_ASSERTS_ONLY =
-		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
-
-	/*
-	 * If we're going to create tasks for subquery pushdown, all
-	 * relations needs to be joined on the partition key.
-	 */
-	Assert(restrictionEquivalenceForPartitionKeys);
 
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
@@ -2074,6 +2066,7 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 
 		subqueryTask = SubqueryTaskCreate(subquery, targetShardInterval,
 										  relationRestrictionContext, taskIdIndex);
+
 
 		/* add the task if it could be created */
 		if (subqueryTask != NULL)

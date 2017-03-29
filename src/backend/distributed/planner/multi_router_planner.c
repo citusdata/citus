@@ -87,6 +87,8 @@ static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 static MultiPlan * CreateInsertSelectRouterPlan(Query *originalQuery,
 												PlannerRestrictionContext *
 												plannerRestrictionContext);
+static bool SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
+								   Query *originalQuery);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
@@ -286,7 +288,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
-	bool restrictionEquivalenceForPartitionKeys = false;
+	bool safeToPushDownSubquery = false;
 
 	multiPlan->operation = originalQuery->commandType;
 
@@ -302,8 +304,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		return multiPlan;
 	}
 
-	restrictionEquivalenceForPartitionKeys =
-		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+	safeToPushDownSubquery = SafeToPushDownSubquery(plannerRestrictionContext,
+													originalQuery);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -323,7 +325,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
 													  relationRestrictionContext,
 													  taskIdIndex,
-													  restrictionEquivalenceForPartitionKeys);
+													  safeToPushDownSubquery);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -361,6 +363,36 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 
 
 /*
+ * SafeToPushDownSubquery returns true if either
+ *    (i)  there exists join in the query and all relations joined on their
+ *         partition keys
+ *    (ii) there exists only union set operations and all relations has
+ *         partition keys in the same ordinal position in the query
+ */
+static bool
+SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
+					   Query *originalQuery)
+{
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	bool restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
+
+	if (restrictionEquivalenceForPartitionKeys)
+	{
+		return true;
+	}
+
+	if (ContainsUnionSubquery(originalQuery))
+	{
+		return SafeToPushdownUnionSubquery(relationRestrictionContext);
+	}
+
+	return false;
+}
+
+
+/*
  * RouterModifyTaskForShardInterval creates a modify task by
  * replacing the partitioning qual parameter added in multi_planner()
  * with the shardInterval's boundary value. Then perform the normal
@@ -375,7 +407,7 @@ static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
 								 RelationRestrictionContext *restrictionContext,
 								 uint32 taskIdIndex,
-								 bool allRelationsJoinedOnPartitionKey)
+								 bool safeToPushdownSubquery)
 {
 	Query *copiedQuery = copyObject(originalQuery);
 	RangeTblEntry *copiedInsertRte = ExtractInsertRangeTableEntry(copiedQuery);
@@ -419,7 +451,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 		List *extendedBaseRestrictInfo = originalBaseRestrictInfo;
 		Index rteIndex = restriction->index;
 
-		if (!allRelationsJoinedOnPartitionKey || allReferenceTables)
+		if (!safeToPushdownSubquery || allReferenceTables)
 		{
 			continue;
 		}
