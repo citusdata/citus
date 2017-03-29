@@ -198,9 +198,7 @@ SELECT count(*) FROM
   -- (SELECT l_orderkey FROM lineitem_subquery) UNION
   -- (SELECT l_orderkey FROM lineitem_subquery)
 --) b;
-
--- Check that we error out if the outermost query has subquery join.
-
+-- Check that we error out if inner query has limit but outer quers has not.
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
