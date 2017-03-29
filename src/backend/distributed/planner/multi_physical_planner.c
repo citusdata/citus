@@ -815,7 +815,7 @@ BaseRangeTableList(MultiNode *multiNode)
 			 */
 			MultiTable *multiTable = (MultiTable *) multiNode;
 			if (multiTable->relationId != SUBQUERY_RELATION_ID &&
-				multiTable->relationId != HEAP_ANALYTICS_SUBQUERY_RELATION_ID)
+				multiTable->relationId != SUBQUERY_PUSHDOWN_RELATION_ID)
 			{
 				RangeTblEntry *rangeTableEntry = makeNode(RangeTblEntry);
 				rangeTableEntry->inFromCl = true;
@@ -1395,6 +1395,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	List *sortClauseList = NIL;
 	List *groupClauseList = NIL;
 	List *whereClauseList = NIL;
+	Node *havingQual = NULL;
 	Node *limitCount = NULL;
 	Node *limitOffset = NULL;
 	FromExpr *joinTree = NULL;
@@ -1434,7 +1435,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		targetList = QueryTargetList(multiNode);
 	}
 
-	/* extract limit count/offset and sort clauses */
+	/* extract limit count/offset, sort and having clauses */
 	if (extendedOpNodeList != NIL)
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
@@ -1442,6 +1443,7 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		limitCount = extendedOp->limitCount;
 		limitOffset = extendedOp->limitOffset;
 		sortClauseList = extendedOp->sortClauseList;
+		havingQual = extendedOp->havingQual;
 	}
 
 	/* build group clauses */
@@ -1471,7 +1473,9 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->groupClause = groupClauseList;
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
-	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	jobQuery->havingQual = havingQual;
+	jobQuery->hasAggs = contain_agg_clause((Node *) targetList) ||
+						contain_agg_clause((Node *) havingQual);
 
 	return jobQuery;
 }

@@ -3052,8 +3052,7 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
  * ErrorIfUnsupportedTableCombination checks if the given query tree contains any
  * unsupported range table combinations. For this, the function walks over all
  * range tables in the join tree, and checks if they correspond to simple relations
- * or subqueries. It also checks if there is a join between a regular table and
- * a subquery and if join is on more than two range table entries.
+ * or subqueries.
  */
 static void
 ErrorIfUnsupportedTableCombination(Query *queryTree)
@@ -3063,8 +3062,6 @@ ErrorIfUnsupportedTableCombination(Query *queryTree)
 	ListCell *joinTreeTableIndexCell = NULL;
 	bool unsupporteTableCombination = false;
 	char *errorDetail = NULL;
-	uint32 relationRangeTableCount = 0;
-	uint32 subqueryRangeTableCount = 0;
 
 	/*
 	 * Extract all range table indexes from the join tree. Note that sub-queries
@@ -3087,34 +3084,14 @@ ErrorIfUnsupportedTableCombination(Query *queryTree)
 		 * Check if the range table in the join tree is a simple relation or a
 		 * subquery.
 		 */
-		if (rangeTableEntry->rtekind == RTE_RELATION)
-		{
-			relationRangeTableCount++;
-		}
-		else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
-		{
-			subqueryRangeTableCount++;
-		}
-		else
+		if (rangeTableEntry->rtekind != RTE_RELATION &&
+			rangeTableEntry->rtekind != RTE_SUBQUERY)
 		{
 			unsupporteTableCombination = true;
 			errorDetail = "Table expressions other than simple relations and "
 						  "subqueries are currently unsupported";
 			break;
 		}
-	}
-
-	if ((subqueryRangeTableCount > 0) && (relationRangeTableCount > 0))
-	{
-		unsupporteTableCombination = true;
-		errorDetail = "Joins between regular tables and subqueries are unsupported";
-	}
-
-	if ((relationRangeTableCount > 2) || (subqueryRangeTableCount > 2))
-	{
-		unsupporteTableCombination = true;
-		errorDetail = "Joins between more than two relations and subqueries are "
-					  "unsupported";
 	}
 
 	/* finally check and error out if not satisfied */

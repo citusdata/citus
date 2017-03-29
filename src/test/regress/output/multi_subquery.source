@@ -194,7 +194,7 @@ DETAIL:  Union All clauses are currently unsupported
   -- (SELECT l_orderkey FROM lineitem_subquery) UNION
   -- (SELECT l_orderkey FROM lineitem_subquery)
 --) b;
--- Check that we error out if the outermost query has subquery join.
+-- Check that we error out if inner query has limit but outer quers has not.
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
@@ -214,8 +214,8 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Join in subqueries is not supported yet
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery without limit in the outer query is unsupported
 -- Check that we error out if the outermost query is a distinct clause.
 SELECT
 	count(DISTINCT a)
