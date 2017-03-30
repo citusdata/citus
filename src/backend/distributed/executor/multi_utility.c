@@ -2090,8 +2090,8 @@ DDLTaskList(Oid relationId, const char *commandString)
 
 
 /*
- * DDLTaskList builds a list of tasks to execute a DDL command on a
- * given list of shards.
+ * IndexTaskList builds a list of tasks to execute a CREATE INDEX command
+ * against a specified distributed table.
  */
 static List *
 IndexTaskList(Oid relationId, IndexStmt *indexStmt)
@@ -2144,8 +2144,8 @@ IndexTaskList(Oid relationId, IndexStmt *indexStmt)
 
 
 /*
- * DDLTaskList builds a list of tasks to execute a DDL command on a
- * given list of shards.
+ * DropIndexTaskList builds a list of tasks to execute a DROP INDEX command
+ * against a specified distributed table.
  */
 static List *
 DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
@@ -2174,6 +2174,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 
 		AppendShardIdToName(&shardIndexName, shardId);
 
+		/* deparse shard-specific DROP INDEX command */
 		appendStringInfo(&ddlString, "DROP INDEX %s %s %s %s",
 						 (dropStmt->concurrent ? "CONCURRENTLY" : ""),
 						 (dropStmt->missing_ok ? "IF EXISTS" : ""),
