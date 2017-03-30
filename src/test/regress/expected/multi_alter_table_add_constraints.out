@@ -361,7 +361,7 @@ ERROR:  null value in column "name" violates not-null constraint
 DETAIL:  Failing row contains (1, null, 5).
 CONTEXT:  while executing command on localhost:57638
 INSERT INTO products VALUES(NULL,'product_1', 5);
-ERROR:  cannot plan INSERT using row with NULL value in partition column
+ERROR:  cannot perform an INSERT with NULL in the partition column
 DROP TABLE products;
 -- Check "NOT NULL" with reference table
 CREATE TABLE products_ref (

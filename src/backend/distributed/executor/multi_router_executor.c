@@ -74,6 +74,7 @@ bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
 static void ReacquireMetadataLocks(List *taskList);
+static void AssignInsertTaskShardId(Query *jobQuery, List *taskList);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
@@ -87,7 +88,6 @@ static List * TaskShardIntervalList(List *taskList);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
-static void ProcessMasterEvaluableFunctions(Job *workerJob, PlanState *planState);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -406,7 +406,11 @@ RequiresConsistentSnapshot(Task *task)
 
 
 /*
- * CitusModifyBeginScan checks the validity of the given custom scan node and
+ * CitusModifyBeginScan first evaluates expressions in the query and then
+ * performs shard pruning in case the partition column in an insert was
+ * defined as a function call.
+ *
+ * The function also checks the validity of the given custom scan node and
  * gets locks on the shards involved in the task list of the distributed plan.
  */
 void
@@ -415,7 +419,23 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	CitusScanState *scanState = (CitusScanState *) node;
 	MultiPlan *multiPlan = scanState->multiPlan;
 	Job *workerJob = multiPlan->workerJob;
+	Query *jobQuery = workerJob->jobQuery;
 	List *taskList = workerJob->taskList;
+	bool deferredPruning = workerJob->deferredPruning;
+
+	if (workerJob->requiresMasterEvaluation)
+	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
+
+		ExecuteMasterEvaluableFunctions(jobQuery, planState);
+
+		if (deferredPruning)
+		{
+			AssignInsertTaskShardId(jobQuery, taskList);
+		}
+
+		RebuildQueryStrings(jobQuery, taskList);
+	}
 
 	/*
 	 * If we are executing a prepared statement, then we may not yet have obtained
@@ -428,6 +448,53 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	 * locks as early as possible.
 	 */
 	ReacquireMetadataLocks(taskList);
+
+	/*
+	 * If we deferred shard pruning to the executor, then we still need to assign
+	 * shard placements. We do this after acquiring the metadata locks to ensure
+	 * we can't get stale metadata. At some point, we may want to load all
+	 * placement metadata here.
+	 */
+	if (deferredPruning)
+	{
+		/* modify tasks are always assigned using first-replica policy */
+		workerJob->taskList = FirstReplicaAssignTaskList(taskList);
+	}
+}
+
+
+/*
+ * AssignInsertTaskShardId performs shard pruning for an insert and sets
+ * anchorShardId accordingly.
+ */
+static void
+AssignInsertTaskShardId(Query *jobQuery, List *taskList)
+{
+	ShardInterval *shardInterval = NULL;
+	Task *insertTask = NULL;
+	DeferredErrorMessage *planningError = NULL;
+
+	Assert(jobQuery->commandType == CMD_INSERT);
+
+	/*
+	 * We skipped shard pruning in the planner because the partition
+	 * column contained an expression. Perform shard pruning now.
+	 */
+	shardInterval = FindShardForInsert(jobQuery, &planningError);
+	if (planningError != NULL)
+	{
+		RaiseDeferredError(planningError, ERROR);
+	}
+	else if (shardInterval == NULL)
+	{
+		/* expression could not be evaluated */
+		ereport(ERROR, (errmsg("parameters in the partition column are not "
+							   "allowed")));
+	}
+
+	/* assign a shard ID to the task */
+	insertTask = (Task *) linitial(taskList);
+	insertTask->anchorShardId = shardInterval->shardId;
 }
 
 
@@ -443,14 +510,11 @@ RouterSingleModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		Task *task = (Task *) linitial(taskList);
-
-		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteSingleModifyTask(scanState, task, hasReturning);
 
@@ -460,24 +524,6 @@ RouterSingleModifyExecScan(CustomScanState *node)
 	resultSlot = ReturnTupleFromTuplestore(scanState);
 
 	return resultSlot;
-}
-
-
-/*
- * ProcessMasterEvaluableFunctions executes evaluable functions and rebuilds
- * the query strings in task lists.
- */
-static void
-ProcessMasterEvaluableFunctions(Job *workerJob, PlanState *planState)
-{
-	if (workerJob->requiresMasterEvaluation)
-	{
-		Query *jobQuery = workerJob->jobQuery;
-		List *taskList = workerJob->taskList;
-
-		ExecuteMasterEvaluableFunctions(jobQuery, planState);
-		RebuildQueryStrings(jobQuery, taskList);
-	}
 }
 
 
@@ -494,14 +540,11 @@ RouterMultiModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		bool hasReturning = multiPlan->hasReturning;
 		bool isModificationQuery = true;
-
-		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
 
@@ -527,13 +570,10 @@ RouterSelectExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		Task *task = (Task *) linitial(taskList);
-
-		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteSingleSelectTask(scanState, task);
 

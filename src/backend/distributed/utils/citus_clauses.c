@@ -298,6 +298,17 @@ EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 											planState);
 	}
 
+	if (IsA(expression, Param))
+	{
+		Param *param = (Param *) expression;
+
+		return (Node *) citus_evaluate_expr((Expr *) param,
+											param->paramtype,
+											param->paramtypmod,
+											param->paramcollid,
+											planState);
+	}
+
 	return expression;
 }
 
