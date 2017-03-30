@@ -68,6 +68,51 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
 }
 
 
+void
+SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
+{
+	List *workerNodeList = WorkerNodeList();
+	ListCell *workerNodeCell = NULL;
+	char *nodeUser = CitusExtensionOwnerName();
+	ListCell *commandCell = NULL;
+
+	if (XactModificationLevel > XACT_MODIFICATION_NONE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
+						errmsg("cannot open new connections after the first modification "
+							   "command within a transaction")));
+	}
+
+	/* run commands serially */
+	foreach(workerNodeCell, workerNodeList)
+	{
+		MultiConnection *workerConnection = NULL;
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		int connectionFlags = FORCE_NEW_CONNECTION;
+
+		if (targetWorkerSet == WORKERS_WITH_METADATA && !workerNode->hasMetadata)
+		{
+			continue;
+		}
+
+		workerConnection = GetNodeUserDatabaseConnection(connectionFlags, nodeName,
+														 nodePort, nodeUser, NULL);
+
+		/* iterate over the commands and execute them in the same connection */
+		foreach(commandCell, commandList)
+		{
+			char *commandString = lfirst(commandCell);
+
+			ExecuteCriticalRemoteCommand(workerConnection, commandString);
+		}
+
+		CloseConnection(workerConnection);
+	}
+}
+
+
 /*
  * SendCommandToWorkersParams sends a command to all workers in parallel.
  * Commands are committed on the workers when the local transaction commits. The

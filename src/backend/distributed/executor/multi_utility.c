@@ -1993,24 +1993,27 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-	}
-	else
-	{
-		ShowNoticeIfNotUsing2PC();
-	}
 
-	if (shouldSyncMetadata)
-	{
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
-	}
+		if (shouldSyncMetadata)
+		{
+			List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
+										   (char *) ddlJob->commandString);
 
-	if (ddlJob->preventTransaction)
-	{
+			SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
+		}
+
 		ExecuteSequentialTasksWithoutResults(ddlJob->taskList);
 	}
 	else
 	{
+		ShowNoticeIfNotUsing2PC();
+
+		if (shouldSyncMetadata)
+		{
+			SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
+		}
+
 		ExecuteModifyTasksWithoutResults(ddlJob->taskList);
 	}
 }

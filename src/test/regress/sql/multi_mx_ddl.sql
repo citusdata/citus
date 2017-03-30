@@ -8,6 +8,8 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 -- CREATE INDEX
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
 
+CREATE INDEX CONCURRENTLY ddl_test_concurrent_index ON mx_ddl_table(value);
+
 -- ADD COLUMN
 ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
 
@@ -27,13 +29,13 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
 
 \d mx_ddl_table
 
-\d mx_ddl_table_1600000
+\d mx_ddl_table_1220088
 
 \c - - - :worker_2_port
 
 \d mx_ddl_table
 
-\d mx_ddl_table_1600001
+\d mx_ddl_table_1220089
 
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
@@ -56,6 +58,8 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 -- DROP INDEX
 DROP INDEX ddl_test_index;
 
+DROP INDEX CONCURRENTLY ddl_test_concurrent_index;
+
 -- DROP DEFAULT
 ALTER TABLE mx_ddl_table ALTER COLUMN version DROP DEFAULT;
 
@@ -73,13 +77,13 @@ ALTER TABLE mx_ddl_table DROP COLUMN version;
 
 \d mx_ddl_table
 
-\d mx_ddl_table_1600000
+\d mx_ddl_table_1220088
 
 \c - - - :worker_2_port
 
 \d mx_ddl_table
 
-\d mx_ddl_table_1600001
+\d mx_ddl_table_1220089
 
 -- Show that DDL commands are done within a two-phase commit transaction
 \c - - - :master_port
