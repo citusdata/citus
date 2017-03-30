@@ -590,7 +590,12 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 }
 
 
-char *
+/*
+ * deparse_shard_index_statement uses the provided CREATE INDEX node, dist.
+ * relation, and shard identifier to populate a provided buffer with a string
+ * representation of a shard-extended version of that command.
+ */
+void
 deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 							  StringInfo buffer)
 {
@@ -680,8 +685,6 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 																deparseContext, false,
 																false));
 	}
-
-	return buffer->data;
 }
 
 

@@ -869,6 +869,12 @@ ExecuteModifyTasksWithoutResults(List *taskList)
 }
 
 
+/*
+ * ExecuteSequentialTasksWithoutResults basically calls ExecuteModifyTasks in a
+ * loop in order to simulate sequential execution of a list of tasks. Useful in
+ * cases where issuing commands in parallel before waiting for results could
+ * result in deadlocks (such as CREATE INDEX CONCURRENTLY).
+ */
 int64
 ExecuteSequentialTasksWithoutResults(List *taskList)
 {

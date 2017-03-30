@@ -68,6 +68,13 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
 }
 
 
+/*
+ * SendBareCommandListToWorkers sends a list of commands to a set of target
+ * workers in serial. Commands are committed immediately: new connections are
+ * always used and no transaction block is used (hence "bare"). The connections
+ * are made as the extension owner to ensure write access to the Citus metadata
+ * tables. Primarly useful for INDEX commands using CONCURRENTLY.
+ */
 void
 SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 {

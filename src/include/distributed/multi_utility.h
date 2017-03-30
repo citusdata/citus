@@ -23,7 +23,7 @@ extern bool EnableDDLPropagation;
 typedef struct DDLJob
 {
 	Oid targetRelationId;      /* oid of the target distributed relation */
-	bool preventTransaction;
+	bool preventTransaction;   /* prevent use of worker transactions? */
 	const char *commandString; /* initial (coordinator) DDL command string */
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
