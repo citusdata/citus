@@ -1650,8 +1650,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 
 			case AT_DropConstraint:
+			case AT_EnableTrigAll:
+			case AT_DisableTrigAll:
 			{
-				/* we will no perform any special check for ALTER TABLE DROP CONSTRAINT */
+				/* we will not perform any special checks for these ALTER TABLE types */
 				break;
 			}
 
