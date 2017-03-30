@@ -139,7 +139,36 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+
+-- create index that will conflict with master operations
+CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON index_test_hash_102089(b);
+
 \c - - - :master_port
+
+-- should fail because worker index already exists
+CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
+
+-- the failure results in an INVALID index
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+-- we can clean it up and recreate with an DROP IF EXISTS
+DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
+CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+\c - - - :worker_1_port
+
+-- now drop shard index to test partial master DROP failure
+DROP INDEX CONCURRENTLY ith_b_idx_102089;
+
+\c - - - :master_port
+DROP INDEX CONCURRENTLY ith_b_idx;
+
+-- the failure results in an INVALID index
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+-- final clean up
+DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 
 -- Drop created tables
 DROP TABLE index_test_range;
