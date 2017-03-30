@@ -684,7 +684,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 			{
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
-				ddlJob->preventTransaction = createIndexStatement->concurrent;
+				ddlJob->concurrent = createIndexStatement->concurrent;
 				ddlJob->commandString = createIndexCommand;
 				ddlJob->taskList = IndexTaskList(relationId, createIndexStatement);
 
@@ -778,7 +778,7 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		ddlJob->targetRelationId = distributedRelationId;
-		ddlJob->preventTransaction = dropIndexStatement->concurrent;
+		ddlJob->concurrent = dropIndexStatement->concurrent;
 		ddlJob->commandString = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
@@ -873,7 +873,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
-	ddlJob->preventTransaction = false;
+	ddlJob->concurrent = false;
 	ddlJob->commandString = alterTableCommand;
 
 	if (rightRelationId)
@@ -1987,24 +1987,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	EnsureCoordinator();
 
-	if (ddlJob->preventTransaction)
-	{
-		/* save old commit protocol to restore at xact end */
-		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
-		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
-		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-
-		if (shouldSyncMetadata)
-		{
-			List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
-										   (char *) ddlJob->commandString);
-
-			SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
-		}
-
-		ExecuteSequentialTasksWithoutResults(ddlJob->taskList);
-	}
-	else
+	if (!ddlJob->concurrent)
 	{
 		ShowNoticeIfNotUsing2PC();
 
@@ -2015,6 +1998,36 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		}
 
 		ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+	}
+	else
+	{
+		/* save old commit protocol to restore at xact end */
+		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
+		PG_TRY();
+		{
+			if (shouldSyncMetadata)
+			{
+				List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
+											   (char *) ddlJob->commandString);
+
+				SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
+			}
+
+			ExecuteSequentialTasksWithoutResults(ddlJob->taskList);
+		}
+		PG_CATCH();
+		{
+			ereport(ERROR,
+					(errmsg("CONCURRENTLY-enabled index command failed"),
+					 errdetail("CONCURRENTLY-enabled index commands can fail partially, "
+							   "leaving behind an INVALID index."),
+					 errhint("Use DROP INDEX IF EXISTS to remove the invalid index, then "
+							 "retry the original command.")));
+		}
+		PG_END_TRY();
 	}
 }
 
@@ -2701,7 +2714,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 
 		ddlJob = palloc0(sizeof(DDLJob));
 		ddlJob->targetRelationId = relOid;
-		ddlJob->preventTransaction = false;
+		ddlJob->concurrent = false;
 		ddlJob->commandString = pstrdup(ddlString.data);
 		ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
 
