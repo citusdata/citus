@@ -24,6 +24,7 @@
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/index.h"
+#include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
@@ -76,6 +77,7 @@
 #include "utils/palloc.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 
@@ -142,6 +144,7 @@ static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid ol
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+static void PostProcessUtility(Node *parsetree);
 
 
 static bool warnedUserAbout2PC = false;
@@ -368,6 +371,8 @@ multi_ProcessUtility(Node *parsetree,
 
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+
+	PostProcessUtility(parsetree);
 
 	if (commandMustRunAsOwner)
 	{
@@ -1981,7 +1986,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	}
 
 	EnsureCoordinator();
-	ShowNoticeIfNotUsing2PC();
 
 	if (ddlJob->preventTransaction)
 	{
@@ -1989,6 +1993,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
 		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
 		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	}
+	else
+	{
+		ShowNoticeIfNotUsing2PC();
 	}
 
 	if (shouldSyncMetadata)
@@ -2471,6 +2479,83 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 	return attnums;
 	/* *INDENT-ON* */
+}
+
+
+/*
+ * PostProcessUtility performs additional tasks after a utility's local portion
+ * has been completed. Right now, the sole use is marking new indexes invalid
+ * if they were created using the CONCURRENTLY flag. This (non-transactional)
+ * change provides the fallback state if an error is raised, otherwise a sub-
+ * sequent change to valid will be committed.
+ */
+static void
+PostProcessUtility(Node *parsetree)
+{
+	IndexStmt *indexStmt = NULL;
+	Relation relation = NULL;
+	Oid indexRelationId = InvalidOid;
+	Relation indexRelation = NULL;
+	Relation pg_index = NULL;
+	HeapTuple indexTuple = NULL;
+	Form_pg_index indexForm = NULL;
+
+	/* only IndexStmts are processed */
+	if (!IsA(parsetree, IndexStmt))
+	{
+		return;
+	}
+
+	/* and even then only if they're CONCURRENT */
+	indexStmt = (IndexStmt *) parsetree;
+	if (!indexStmt->concurrent)
+	{
+		return;
+	}
+
+	/* finally, this logic only applies to the coordinator */
+	if (!IsCoordinator())
+	{
+		return;
+	}
+
+	/* commit the current transaction and start anew */
+	CommitTransactionCommand();
+	StartTransactionCommand();
+
+	/* get the affected relation and index */
+	relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
+	indexRelationId = get_relname_relid(indexStmt->idxname,
+										RelationGetNamespace(relation));
+	indexRelation = index_open(indexRelationId, RowExclusiveLock);
+
+	/* close relations but retain locks */
+	heap_close(relation, NoLock);
+	index_close(indexRelation, NoLock);
+
+	/* mark index as invalid, in-place (cannot be rolled back) */
+	index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+
+	/* re-open a transaction command from here on out */
+	CommitTransactionCommand();
+	StartTransactionCommand();
+
+	/* now, update index's validity in a way that can roll back */
+	pg_index = heap_open(IndexRelationId, RowExclusiveLock);
+
+	indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(indexRelationId));
+	Assert(HeapTupleIsValid(indexTuple)); /* better be present, we have lock! */
+
+	/* mark as valid, save, and update pg_index indexes */
+	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+	indexForm->indisvalid = true;
+
+	simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
+	CatalogUpdateIndexes(pg_index, indexTuple);
+
+	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
+	heap_freetuple(indexTuple);
+	heap_close(pg_index, RowExclusiveLock);
 }
 
 
