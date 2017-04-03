@@ -24,6 +24,7 @@
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/index.h"
+#include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
@@ -134,12 +135,15 @@ static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
+static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
+static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 								 const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+static void PostProcessUtility(Node *parsetree);
 
 
 static bool warnedUserAbout2PC = false;
@@ -366,6 +370,8 @@ multi_ProcessUtility(Node *parsetree,
 
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+
+	PostProcessUtility(parsetree);
 
 	if (commandMustRunAsOwner)
 	{
@@ -677,8 +683,9 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 			{
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
+				ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
 				ddlJob->commandString = createIndexCommand;
-				ddlJob->taskList = DDLTaskList(relationId, createIndexCommand);
+				ddlJob->taskList = CreateIndexTaskList(relationId, createIndexStatement);
 
 				ddlJobs = list_make1(ddlJob);
 			}
@@ -770,8 +777,10 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		ddlJob->targetRelationId = distributedRelationId;
+		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 		ddlJob->commandString = dropIndexCommand;
-		ddlJob->taskList = DDLTaskList(distributedRelationId, dropIndexCommand);
+		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
+											 dropIndexStatement);
 
 		ddlJobs = list_make1(ddlJob);
 	}
@@ -863,6 +872,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
+	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
 
 	if (rightRelationId)
@@ -1268,13 +1278,6 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 							   "currently unsupported")));
 	}
 
-	if (createIndexStatement->concurrent)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("creating indexes concurrently on distributed tables is "
-							   "currently unsupported")));
-	}
-
 	if (createIndexStatement->unique)
 	{
 		RangeVar *relation = createIndexStatement->relation;
@@ -1351,13 +1354,6 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
 							   "single command"),
 						errhint("Try dropping each object in a separate DROP "
 								"command.")));
-	}
-
-	if (dropIndexStatement->concurrent)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("dropping indexes concurrently on distributed tables is "
-							   "currently unsupported")));
 	}
 }
 
@@ -1989,15 +1985,49 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 	}
 
 	EnsureCoordinator();
-	ShowNoticeIfNotUsing2PC();
 
-	if (shouldSyncMetadata)
+	if (!ddlJob->concurrentIndexCmd)
 	{
-		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
-		SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
-	}
+		ShowNoticeIfNotUsing2PC();
 
-	ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+		if (shouldSyncMetadata)
+		{
+			SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+			SendCommandToWorkers(WORKERS_WITH_METADATA, (char *) ddlJob->commandString);
+		}
+
+		ExecuteModifyTasksWithoutResults(ddlJob->taskList);
+	}
+	else
+	{
+		/* save old commit protocol to restore at xact end */
+		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+
+		PG_TRY();
+		{
+			ExecuteTasksSequentiallyWithoutResults(ddlJob->taskList);
+
+			if (shouldSyncMetadata)
+			{
+				List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
+											   (char *) ddlJob->commandString);
+
+				SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
+			}
+		}
+		PG_CATCH();
+		{
+			ereport(ERROR,
+					(errmsg("CONCURRENTLY-enabled index command failed"),
+					 errdetail("CONCURRENTLY-enabled index commands can fail partially, "
+							   "leaving behind an INVALID index."),
+					 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
+							 "invalid index, then retry the original command.")));
+		}
+		PG_END_TRY();
+	}
 }
 
 
@@ -2065,6 +2095,117 @@ DDLTaskList(Oid relationId, const char *commandString)
 		task->taskPlacementList = FinalizedShardPlacementList(shardId);
 
 		taskList = lappend(taskList, task);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * CreateIndexTaskList builds a list of tasks to execute a CREATE INDEX command
+ * against a specified distributed table.
+ */
+static List *
+CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	Oid schemaId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	StringInfoData ddlString;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	initStringInfo(&ddlString);
+
+	/* set statement's schema name if it is not set already */
+	if (indexStmt->relation->schemaname == NULL)
+	{
+		indexStmt->relation->schemaname = schemaName;
+	}
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		Task *task = NULL;
+
+		deparse_shard_index_statement(indexStmt, relationId, shardId, &ddlString);
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(ddlString.data);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+
+		resetStringInfo(&ddlString);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * DropIndexTaskList builds a list of tasks to execute a DROP INDEX command
+ * against a specified distributed table.
+ */
+static List *
+DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
+{
+	List *taskList = NIL;
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ListCell *shardIntervalCell = NULL;
+	char *indexName = get_rel_name(indexId);
+	Oid schemaId = get_rel_namespace(indexId);
+	char *schemaName = get_namespace_name(schemaId);
+	StringInfoData ddlString;
+	uint64 jobId = INVALID_JOB_ID;
+	int taskId = 1;
+
+	initStringInfo(&ddlString);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	foreach(shardIntervalCell, shardIntervalList)
+	{
+		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
+		uint64 shardId = shardInterval->shardId;
+		char *shardIndexName = pstrdup(indexName);
+		Task *task = NULL;
+
+		AppendShardIdToName(&shardIndexName, shardId);
+
+		/* deparse shard-specific DROP INDEX command */
+		appendStringInfo(&ddlString, "DROP INDEX %s %s %s %s",
+						 (dropStmt->concurrent ? "CONCURRENTLY" : ""),
+						 (dropStmt->missing_ok ? "IF EXISTS" : ""),
+						 quote_qualified_identifier(schemaName, shardIndexName),
+						 (dropStmt->behavior == DROP_RESTRICT ? "RESTRICT" : "CASCADE"));
+
+		task = CitusMakeNode(Task);
+		task->jobId = jobId;
+		task->taskId = taskId++;
+		task->taskType = DDL_TASK;
+		task->queryString = pstrdup(ddlString.data);
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->dependedTaskList = NULL;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = FinalizedShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+
+		resetStringInfo(&ddlString);
 	}
 
 	return taskList;
@@ -2358,6 +2499,83 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 
 
 /*
+ * PostProcessUtility performs additional tasks after a utility's local portion
+ * has been completed. Right now, the sole use is marking new indexes invalid
+ * if they were created using the CONCURRENTLY flag. This (non-transactional)
+ * change provides the fallback state if an error is raised, otherwise a sub-
+ * sequent change to valid will be committed.
+ */
+static void
+PostProcessUtility(Node *parsetree)
+{
+	IndexStmt *indexStmt = NULL;
+	Relation relation = NULL;
+	Oid indexRelationId = InvalidOid;
+	Relation indexRelation = NULL;
+	Relation pg_index = NULL;
+	HeapTuple indexTuple = NULL;
+	Form_pg_index indexForm = NULL;
+
+	/* only IndexStmts are processed */
+	if (!IsA(parsetree, IndexStmt))
+	{
+		return;
+	}
+
+	/* and even then only if they're CONCURRENT */
+	indexStmt = (IndexStmt *) parsetree;
+	if (!indexStmt->concurrent)
+	{
+		return;
+	}
+
+	/* finally, this logic only applies to the coordinator */
+	if (!IsCoordinator())
+	{
+		return;
+	}
+
+	/* commit the current transaction and start anew */
+	CommitTransactionCommand();
+	StartTransactionCommand();
+
+	/* get the affected relation and index */
+	relation = heap_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
+	indexRelationId = get_relname_relid(indexStmt->idxname,
+										RelationGetNamespace(relation));
+	indexRelation = index_open(indexRelationId, RowExclusiveLock);
+
+	/* close relations but retain locks */
+	heap_close(relation, NoLock);
+	index_close(indexRelation, NoLock);
+
+	/* mark index as invalid, in-place (cannot be rolled back) */
+	index_set_state_flags(indexRelationId, INDEX_DROP_CLEAR_VALID);
+
+	/* re-open a transaction command from here on out */
+	CommitTransactionCommand();
+	StartTransactionCommand();
+
+	/* now, update index's validity in a way that can roll back */
+	pg_index = heap_open(IndexRelationId, RowExclusiveLock);
+
+	indexTuple = SearchSysCacheCopy1(INDEXRELID, ObjectIdGetDatum(indexRelationId));
+	Assert(HeapTupleIsValid(indexTuple)); /* better be present, we have lock! */
+
+	/* mark as valid, save, and update pg_index indexes */
+	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+	indexForm->indisvalid = true;
+
+	simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
+	CatalogUpdateIndexes(pg_index, indexTuple);
+
+	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
+	heap_freetuple(indexTuple);
+	heap_close(pg_index, RowExclusiveLock);
+}
+
+
+/*
  * PlanGrantStmt determines whether a given GRANT/REVOKE statement involves
  * a distributed table. If so, it creates DDLJobs to encapsulate information
  * needed during the worker node portion of DDL execution before returning the
@@ -2495,6 +2713,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 
 		ddlJob = palloc0(sizeof(DDLJob));
 		ddlJob->targetRelationId = relOid;
+		ddlJob->concurrentIndexCmd = false;
 		ddlJob->commandString = pstrdup(ddlString.data);
 		ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
 

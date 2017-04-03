@@ -64,6 +64,9 @@ CREATE INDEX IF NOT EXISTS lineitem_orderkey_index_new on lineitem(l_orderkey);
 CREATE INDEX lineitem_orderkey_index on index_test_hash(a);
 CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
 
+-- Verify that we can create indexes concurrently
+CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
+
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
@@ -75,7 +78,6 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 
 -- Verify that we error out on unsupported statement types
 
-CREATE INDEX CONCURRENTLY try_index ON lineitem (l_orderkey);
 CREATE UNIQUE INDEX try_index ON lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 
@@ -105,9 +107,6 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 -- Verify that we can't drop multiple indexes in a single command
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 
--- Verify that we error out on the CONCURRENTLY clause
-DROP INDEX CONCURRENTLY lineitem_orderkey_index;
-
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
 DROP INDEX lineitem_orderkey_index_new;
@@ -130,6 +129,9 @@ DROP INDEX index_test_hash_index_a;
 DROP INDEX index_test_hash_index_a_b;
 DROP INDEX index_test_hash_index_a_b_partial;
 
+-- Verify that we can drop indexes concurrently
+DROP INDEX CONCURRENTLY lineitem_concurrently_index;
+
 -- Verify that all the indexes are dropped from the master and one worker node.
 -- As there's a primary key, so exclude those from this check.
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
@@ -137,7 +139,36 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%';
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+
+-- create index that will conflict with master operations
+CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON index_test_hash_102089(b);
+
 \c - - - :master_port
+
+-- should fail because worker index already exists
+CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
+
+-- the failure results in an INVALID index
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+-- we can clean it up and recreate with an DROP IF EXISTS
+DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
+CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+\c - - - :worker_1_port
+
+-- now drop shard index to test partial master DROP failure
+DROP INDEX CONCURRENTLY ith_b_idx_102089;
+
+\c - - - :master_port
+DROP INDEX CONCURRENTLY ith_b_idx;
+
+-- the failure results in an INVALID index
+SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
+
+-- final clean up
+DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 
 -- Drop created tables
 DROP TABLE index_test_range;

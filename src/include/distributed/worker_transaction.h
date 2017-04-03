@@ -30,6 +30,8 @@ typedef enum TargetWorkerSet
 extern List * GetWorkerTransactions(void);
 extern void SendCommandToWorker(char *nodeName, int32 nodePort, char *command);
 extern void SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command);
+extern void SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet,
+										 List *commandList);
 extern void SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 									   int parameterCount, const Oid *parameterTypes,
 									   const char *const *parameterValues);
