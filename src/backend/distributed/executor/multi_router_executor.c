@@ -870,13 +870,13 @@ ExecuteModifyTasksWithoutResults(List *taskList)
 
 
 /*
- * ExecuteSequentialTasksWithoutResults basically calls ExecuteModifyTasks in a
- * loop in order to simulate sequential execution of a list of tasks. Useful in
- * cases where issuing commands in parallel before waiting for results could
+ * ExecuteTasksSequentiallyWithoutResults basically calls ExecuteModifyTasks in
+ * a loop in order to simulate sequential execution of a list of tasks. Useful
+ * in cases where issuing commands in parallel before waiting for results could
  * result in deadlocks (such as CREATE INDEX CONCURRENTLY).
  */
-int64
-ExecuteSequentialTasksWithoutResults(List *taskList)
+void
+ExecuteTasksSequentiallyWithoutResults(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
@@ -885,10 +885,8 @@ ExecuteSequentialTasksWithoutResults(List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		List *singleTask = list_make1(task);
 
-		ExecuteModifyTasks(singleTask, false, NULL, NULL);
+		ExecuteModifyTasksWithoutResults(singleTask);
 	}
-
-	return 0;
 }
 
 
