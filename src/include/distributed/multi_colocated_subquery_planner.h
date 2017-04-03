@@ -15,10 +15,8 @@
 #include "distributed/multi_planner.h"
 
 
-extern bool AllRelationsJoinedOnPartitionKey(RelationRestrictionContext *
-											 restrictionContext,
-											 JoinRestrictionContext *
-											 joinRestrictionContext);
+extern bool AllRelationsJoinedOnPartitionKey(PlannerRestrictionContext *
+											 plannerRestrictionContext);
 
 
 #endif /* MULTI_COLOCATED_SUBQUERY_PLANNER_H */

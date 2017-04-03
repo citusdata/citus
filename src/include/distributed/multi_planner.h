@@ -54,6 +54,12 @@ typedef struct JoinRestriction
 	PlannerInfo *plannerInfo;
 } JoinRestriction;
 
+typedef struct PlannerRestrictionContext
+{
+	RelationRestrictionContext *relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext;
+} PlannerRestrictionContext;
+
 typedef struct RelationShard
 {
 	CitusNode type;

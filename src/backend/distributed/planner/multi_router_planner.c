@@ -85,11 +85,8 @@ static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 											  RelationRestrictionContext *
 											  restrictionContext);
 static MultiPlan * CreateInsertSelectRouterPlan(Query *originalQuery,
-												RelationRestrictionContext *
-												restrictionContext,
-												JoinRestrictionContext *
-												joinRestrictionContext);
-
+												PlannerRestrictionContext *
+												plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
@@ -171,18 +168,19 @@ CreateRouterPlan(Query *originalQuery, Query *query,
  */
 MultiPlan *
 CreateModifyPlan(Query *originalQuery, Query *query,
-				 RelationRestrictionContext *restrictionContext,
-				 JoinRestrictionContext *joinRestrictionContext)
+				 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	if (InsertSelectQuery(originalQuery))
 	{
-		return CreateInsertSelectRouterPlan(originalQuery, restrictionContext,
-											joinRestrictionContext);
+		return CreateInsertSelectRouterPlan(originalQuery, plannerRestrictionContext);
 	}
 	else
 	{
+		RelationRestrictionContext *relationRestrictionContext =
+			plannerRestrictionContext->relationRestrictionContext;
+
 		return CreateSingleTaskRouterPlan(originalQuery, query,
-										  restrictionContext);
+										  relationRestrictionContext);
 	}
 }
 
@@ -266,8 +264,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
  */
 static MultiPlan *
 CreateInsertSelectRouterPlan(Query *originalQuery,
-							 RelationRestrictionContext *restrictionContext,
-							 JoinRestrictionContext *joinRestrictionContext)
+							 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	int shardOffset = 0;
 	List *sqlTaskList = NIL;
@@ -280,7 +277,9 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
 	bool allRelationsJoinedOnPartitionKey = false;
 
 	multiPlan->operation = originalQuery->commandType;
@@ -298,7 +297,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	}
 
 	allRelationsJoinedOnPartitionKey =
-		AllRelationsJoinedOnPartitionKey(restrictionContext, joinRestrictionContext);
+		AllRelationsJoinedOnPartitionKey(plannerRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -316,7 +315,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		Task *modifyTask = NULL;
 
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
-													  restrictionContext, taskIdIndex,
+													  relationRestrictionContext,
+													  taskIdIndex,
 													  allRelationsJoinedOnPartitionKey);
 
 		/* add the task if it could be created */

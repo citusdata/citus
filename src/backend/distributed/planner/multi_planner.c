@@ -32,8 +32,7 @@
 #include "utils/memutils.h"
 
 
-static List *relationRestrictionContextList = NIL;
-static List *joinRestrictionContextList = NIL;
+static List *plannerRestrictionContextList = NIL;
 
 /* create custom scan methods for separate executors */
 static CustomScanMethods RealTimeCustomScanMethods = {
@@ -60,8 +59,8 @@ static CustomScanMethods DelayedErrorCustomScanMethods = {
 /* local function forward declarations */
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
 										   Query *query, ParamListInfo boundParams,
-										   RelationRestrictionContext *restrictionContext,
-										   JoinRestrictionContext *joinRestrictionContext);
+										   PlannerRestrictionContext *
+										   plannerRestrictionContext);
 static void AssignRTEIdentities(Query *queryTree);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static Node * SerializeMultiPlan(struct MultiPlan *multiPlan);
@@ -72,10 +71,10 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *mu
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static void CreateAndPushPlannerContexts(void);
-static RelationRestrictionContext * CurrentRestrictionContext(void);
+static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+static RelationRestrictionContext * CurrentRelationRestrictionContext(void);
 static JoinRestrictionContext * CurrentJoinRestrictionContext(void);
-static void PopRestrictionContexts(void);
+static void PopPlannerRestrictionContext(void);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 
 
@@ -86,8 +85,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
 	Query *originalQuery = NULL;
-	RelationRestrictionContext *relationRestrictionContext = NULL;
-	JoinRestrictionContext *joinRestrictionContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the
@@ -101,10 +99,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 
 	/* create a restriction context and put it at the end if context list */
-	CreateAndPushPlannerContexts();
-
-	relationRestrictionContext = CurrentRestrictionContext();
-	joinRestrictionContext = CurrentJoinRestrictionContext();
+	plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
 
 	PG_TRY();
 	{
@@ -118,19 +113,18 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		if (needsDistributedPlanning)
 		{
 			result = CreateDistributedPlan(result, originalQuery, parse,
-										   boundParams, relationRestrictionContext,
-										   joinRestrictionContext);
+										   boundParams, plannerRestrictionContext);
 		}
 	}
 	PG_CATCH();
 	{
-		PopRestrictionContexts();
+		PopPlannerRestrictionContext();
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	/* remove the context from the context list */
-	PopRestrictionContexts();
+	PopPlannerRestrictionContext();
 
 	return result;
 }
@@ -187,6 +181,18 @@ AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 }
 
 
+/* GetRTEIdentity returns the identity assigned with AssignRTEIdentity. */
+int
+GetRTEIdentity(RangeTblEntry *rte)
+{
+	Assert(rte->rtekind == RTE_RELATION);
+	Assert(IsA(rte->values_lists, IntList));
+	Assert(list_length(rte->values_lists) == 1);
+
+	return linitial_int(rte->values_lists);
+}
+
+
 /*
  * IsModifyCommand returns true if the query performs modifications, false
  * otherwise.
@@ -232,8 +238,7 @@ IsModifyMultiPlan(MultiPlan *multiPlan)
 static PlannedStmt *
 CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
 					  ParamListInfo boundParams,
-					  RelationRestrictionContext *restrictionContext,
-					  JoinRestrictionContext *joinRestrictionContext)
+					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiPlan *distributedPlan = NULL;
 	PlannedStmt *resultPlan = NULL;
@@ -247,8 +252,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	if (IsModifyCommand(query))
 	{
 		/* modifications are always routed through the same planner/executor */
-		distributedPlan = CreateModifyPlan(originalQuery, query, restrictionContext,
-										   joinRestrictionContext);
+		distributedPlan =
+			CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
 
 		Assert(distributedPlan);
 	}
@@ -262,7 +267,11 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		 */
 		if (EnableRouterExecution)
 		{
-			distributedPlan = CreateRouterPlan(originalQuery, query, restrictionContext);
+			RelationRestrictionContext *relationRestrictionContext =
+				plannerRestrictionContext->relationRestrictionContext;
+
+			distributedPlan = CreateRouterPlan(originalQuery, query,
+											   relationRestrictionContext);
 
 			/* for debugging it's useful to display why query was not router plannable */
 			if (distributedPlan && distributedPlan->planningError)
@@ -639,7 +648,6 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
 
-
 	joinContext->joinRestrictionList =
 		lappend(joinContext->joinRestrictionList, joinRestriction);
 }
@@ -668,7 +676,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	distributedTable = IsDistributedTable(rte->relid);
 	localTable = !distributedTable;
 
-	restrictionContext = CurrentRestrictionContext();
+	restrictionContext = CurrentRelationRestrictionContext();
 	Assert(restrictionContext != NULL);
 
 	relationRestriction = palloc0(sizeof(RelationRestriction));
@@ -708,18 +716,6 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 }
 
 
-/* GetRTEIdentity returns the identity assigned with AssignRTEIdentity. */
-int
-GetRTEIdentity(RangeTblEntry *rte)
-{
-	Assert(rte->rtekind == RTE_RELATION);
-	Assert(IsA(rte->values_lists, IntList));
-	Assert(list_length(rte->values_lists) == 1);
-
-	return linitial_int(rte->values_lists);
-}
-
-
 /*
  * CopyPlanParamList deep copies the input PlannerParamItem list and returns the newly
  * allocated list.
@@ -748,43 +744,50 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerContextes creates a new restriction context and a new join context,
- * inserts it to the beginning of the respective context lists.
+ * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
+ * and a new join context, inserts it to the beginning of the
+ * plannerRestrictionContextList.
  */
-static void
-CreateAndPushPlannerContexts(void)
+static PlannerRestrictionContext *
+CreateAndPushPlannerRestrictionContext(void)
 {
-	RelationRestrictionContext *restrictionContext =
+	PlannerRestrictionContext *plannerRestrictionContext =
+		palloc0(sizeof(PlannerRestrictionContext));
+
+	plannerRestrictionContext->relationRestrictionContext =
 		palloc0(sizeof(RelationRestrictionContext));
 
-	JoinRestrictionContext *joinContext =
+	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
 
 	/* we'll apply logical AND as we add tables */
-	restrictionContext->allReferenceTables = true;
+	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
 
-	relationRestrictionContextList = lcons(restrictionContext,
-										   relationRestrictionContextList);
-	joinRestrictionContextList = lcons(joinContext,
-									   joinRestrictionContextList);
+	plannerRestrictionContextList = lcons(plannerRestrictionContext,
+										  plannerRestrictionContextList);
+
+	return plannerRestrictionContext;
 }
 
 
 /*
  * CurrentRestrictionContext returns the the last restriction context from the
- * list.
+ * relationRestrictionContext list.
  */
 static RelationRestrictionContext *
-CurrentRestrictionContext(void)
+CurrentRelationRestrictionContext(void)
 {
-	RelationRestrictionContext *restrictionContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	RelationRestrictionContext *relationRestrictionContext = NULL;
 
-	Assert(relationRestrictionContextList != NIL);
+	Assert(plannerRestrictionContextList != NIL);
 
-	restrictionContext =
-		(RelationRestrictionContext *) linitial(relationRestrictionContextList);
+	plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
 
-	return restrictionContext;
+	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
+
+	return relationRestrictionContext;
 }
 
 
@@ -795,25 +798,28 @@ CurrentRestrictionContext(void)
 static JoinRestrictionContext *
 CurrentJoinRestrictionContext(void)
 {
-	JoinRestrictionContext *joinContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	JoinRestrictionContext *joinRestrictionContext = NULL;
 
-	Assert(joinRestrictionContextList != NIL);
+	Assert(plannerRestrictionContextList != NIL);
 
-	joinContext = (JoinRestrictionContext *) linitial(joinRestrictionContextList);
+	plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
 
-	return joinContext;
+	joinRestrictionContext = plannerRestrictionContext->joinRestrictionContext;
+
+	return joinRestrictionContext;
 }
 
 
 /*
- * PopRestrictionContexts removes the most recently added restriction contexts from
- * the restriction and join context lists. The function assumes the lists are not empty.
+ * PopPlannerRestrictionContext removes the most recently added restriction contexts from
+ * the planner restriction context list. The function assumes the list is not empty.
  */
 static void
-PopRestrictionContexts(void)
+PopPlannerRestrictionContext(void)
 {
-	relationRestrictionContextList = list_delete_first(relationRestrictionContextList);
-	joinRestrictionContextList = list_delete_first(joinRestrictionContextList);
+	plannerRestrictionContextList = list_delete_first(plannerRestrictionContextList);
 }
 
 

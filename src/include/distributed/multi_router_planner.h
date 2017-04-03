@@ -29,8 +29,8 @@ extern bool EnableRouterExecution;
 extern MultiPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 									RelationRestrictionContext *restrictionContext);
 extern MultiPlan * CreateModifyPlan(Query *originalQuery, Query *query,
-									RelationRestrictionContext *restrictionContext,
-									JoinRestrictionContext *joinRestrictionContext);
+									PlannerRestrictionContext *
+									plannerRestrictionContext);
 
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
