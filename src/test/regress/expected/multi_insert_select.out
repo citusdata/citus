@@ -1132,14 +1132,13 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first) UNION
    (SELECT user_id FROM raw_events_second)) as foo;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ERROR:  Set operations are not allowed in INSERT ... SELECT queries
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-ERROR:  INTERSECT and EXCEPT set operations are not allowed in INSERT ... SELECT queries
+ERROR:  Set operations are not allowed in INSERT ... SELECT queries
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1148,7 +1147,7 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
-ERROR:  INTERSECT and EXCEPT set operations are not allowed in INSERT ... SELECT queries
+ERROR:  Set operations are not allowed in INSERT ... SELECT queries
 -- some supported LEFT joins
  INSERT INTO agg_events (user_id)
  SELECT

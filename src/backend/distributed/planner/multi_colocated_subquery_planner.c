@@ -721,24 +721,7 @@ AddToAttributeEquivalenceClass(AttributeEquivalenceClass **attributeEquivalanceC
 
 		varToBeAdded = (Var *) subqueryTargetEntry->expr;
 
-		/* we need to handle set operations separately */
-		if (subquery->setOperations)
-		{
-			SetOperationStmt *unionStatement =
-				(SetOperationStmt *) subquery->setOperations;
-
-			RangeTblRef *leftRangeTableReference = (RangeTblRef *) unionStatement->larg;
-			RangeTblRef *rightRangeTableReference = (RangeTblRef *) unionStatement->rarg;
-
-			varToBeAdded->varno = leftRangeTableReference->rtindex;
-			AddToAttributeEquivalenceClass(attributeEquivalanceClass,
-										   baseRelOptInfo->subroot, varToBeAdded);
-
-			varToBeAdded->varno = rightRangeTableReference->rtindex;
-			AddToAttributeEquivalenceClass(attributeEquivalanceClass,
-										   baseRelOptInfo->subroot, varToBeAdded);
-		}
-		else if (varToBeAdded && IsA(varToBeAdded, Var) && varToBeAdded->varlevelsup == 0)
+		if (varToBeAdded && IsA(varToBeAdded, Var) && varToBeAdded->varlevelsup == 0)
 		{
 			AddToAttributeEquivalenceClass(attributeEquivalanceClass,
 										   baseRelOptInfo->subroot, varToBeAdded);

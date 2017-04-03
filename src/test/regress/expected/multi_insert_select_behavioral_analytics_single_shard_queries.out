@@ -101,6 +101,7 @@ FROM (
   WHERE t1.user_id = 20
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
+ERROR:  Set operations are not allowed in INSERT ... SELECT queries
 ------------------------------------
 ------------------------------------
 --  Funnel grouped by whether or not a user has done an event -- two shards query
@@ -144,13 +145,9 @@ FROM (
   WHERE (t1.user_id = 20 OR t1.user_id = 17)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
+ERROR:  Set operations are not allowed in INSERT ... SELECT queries
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
- count | count |         avg         
--------+-------+---------------------
-     2 |     2 | 18.5000000000000000
-(1 row)
-
+-- SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
 ------------------------------------
 ------------------------------------
 -- Most recently seen users_table events_table -- single shard query
