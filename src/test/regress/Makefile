@@ -46,11 +46,11 @@ check-worker: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/worker_schedule $(EXTRA_TESTS)
 
 check-multi: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --load-extension=ltree \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-multi-vg: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	$(pg_regress_multi_check) --load-extension=citus --valgrind --load-extension=ltree \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-isolation: all tempinstall-main
@@ -65,14 +65,14 @@ check-multi-mx: all tempinstall-main
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
 check-multi-task-tracker-extra: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --load-extension=ltree \
 	--server-option=citus.task_executor_type=task-tracker \
 	--server-option=citus.large_table_shard_count=1 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
 
 
 check-multi-binary: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus \
+	$(pg_regress_multi_check) --load-extension=citus --load-extension=ltree \
 	--server-option=citus.binary_worker_copy_format=on \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_binary_schedule $(EXTRA_TESTS)
 
