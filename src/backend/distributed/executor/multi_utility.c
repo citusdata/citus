@@ -77,7 +77,6 @@
 #include "utils/palloc.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
-#include "utils/snapmgr.h"
 #include "utils/syscache.h"
 
 
@@ -136,7 +135,7 @@ static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
-static List * IndexTaskList(Oid relationId, IndexStmt *indexStmt);
+static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
 								 const char *commandString);
@@ -684,9 +683,9 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 			{
 				DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 				ddlJob->targetRelationId = relationId;
-				ddlJob->concurrent = createIndexStatement->concurrent;
+				ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
 				ddlJob->commandString = createIndexCommand;
-				ddlJob->taskList = IndexTaskList(relationId, createIndexStatement);
+				ddlJob->taskList = CreateIndexTaskList(relationId, createIndexStatement);
 
 				ddlJobs = list_make1(ddlJob);
 			}
@@ -778,7 +777,7 @@ PlanDropIndexStmt(DropStmt *dropIndexStatement, const char *dropIndexCommand)
 		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
 
 		ddlJob->targetRelationId = distributedRelationId;
-		ddlJob->concurrent = dropIndexStatement->concurrent;
+		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 		ddlJob->commandString = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
@@ -873,7 +872,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 
 	ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
-	ddlJob->concurrent = false;
+	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = alterTableCommand;
 
 	if (rightRelationId)
@@ -1987,7 +1986,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	EnsureCoordinator();
 
-	if (!ddlJob->concurrent)
+	if (!ddlJob->concurrentIndexCmd)
 	{
 		ShowNoticeIfNotUsing2PC();
 
@@ -2008,6 +2007,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 		PG_TRY();
 		{
+			ExecuteTasksSequentiallyWithoutResults(ddlJob->taskList);
+
 			if (shouldSyncMetadata)
 			{
 				List *commandList = list_make2(DISABLE_DDL_PROPAGATION,
@@ -2015,8 +2016,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 				SendBareCommandListToWorkers(WORKERS_WITH_METADATA, commandList);
 			}
-
-			ExecuteSequentialTasksWithoutResults(ddlJob->taskList);
 		}
 		PG_CATCH();
 		{
@@ -2024,8 +2023,8 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 					(errmsg("CONCURRENTLY-enabled index command failed"),
 					 errdetail("CONCURRENTLY-enabled index commands can fail partially, "
 							   "leaving behind an INVALID index."),
-					 errhint("Use DROP INDEX IF EXISTS to remove the invalid index, then "
-							 "retry the original command.")));
+					 errhint("Use DROP INDEX CONCURRENTLY IF EXISTS to remove the "
+							 "invalid index, then retry the original command.")));
 		}
 		PG_END_TRY();
 	}
@@ -2103,11 +2102,11 @@ DDLTaskList(Oid relationId, const char *commandString)
 
 
 /*
- * IndexTaskList builds a list of tasks to execute a CREATE INDEX command
+ * CreateIndexTaskList builds a list of tasks to execute a CREATE INDEX command
  * against a specified distributed table.
  */
 static List *
-IndexTaskList(Oid relationId, IndexStmt *indexStmt)
+CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt)
 {
 	List *taskList = NIL;
 	List *shardIntervalList = LoadShardIntervalList(relationId);
@@ -2714,7 +2713,7 @@ PlanGrantStmt(GrantStmt *grantStmt)
 
 		ddlJob = palloc0(sizeof(DDLJob));
 		ddlJob->targetRelationId = relOid;
-		ddlJob->concurrent = false;
+		ddlJob->concurrentIndexCmd = false;
 		ddlJob->commandString = pstrdup(ddlString.data);
 		ddlJob->taskList = DDLTaskList(relOid, ddlString.data);
 

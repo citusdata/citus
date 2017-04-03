@@ -252,7 +252,7 @@ CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON index_test_hash_102089(b);
 CREATE INDEX CONCURRENTLY ith_b_idx ON index_test_hash(b);
 ERROR:  CONCURRENTLY-enabled index command failed
 DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX IF EXISTS to remove the invalid index, then retry the original command.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 -- the failure results in an INVALID index
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid? 
@@ -276,7 +276,7 @@ DROP INDEX CONCURRENTLY ith_b_idx_102089;
 DROP INDEX CONCURRENTLY ith_b_idx;
 ERROR:  CONCURRENTLY-enabled index command failed
 DETAIL:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
-HINT:  Use DROP INDEX IF EXISTS to remove the invalid index, then retry the original command.
+HINT:  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index, then retry the original command.
 -- the failure results in an INVALID index
 SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::regclass;
  Index Valid? 
