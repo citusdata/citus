@@ -31,8 +31,8 @@
 
 /* Task tracker executor related defines */
 #define TASK_ASSIGNMENT_QUERY "SELECT task_tracker_assign_task \
- ("UINT64_FORMAT ", %u, %s)"
-#define TASK_STATUS_QUERY "SELECT task_tracker_task_status("UINT64_FORMAT ", %u)"
+ ("UINT64_FORMAT ", %u, %s);"
+#define TASK_STATUS_QUERY "SELECT task_tracker_task_status("UINT64_FORMAT ", %u);"
 #define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT ")"
 #define JOB_CLEANUP_TASK_ID INT_MAX
 
@@ -163,6 +163,7 @@ typedef struct TaskTracker
 	int32 currentTaskIndex;
 	bool connectionBusy;
 	TrackerTaskState *connectionBusyOnTask;
+	List *connectionBusyOnTaskList;
 } TaskTracker;
 
 
