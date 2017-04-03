@@ -749,3 +749,17 @@ SELECT shardid, shardstate, nodename, nodeport
 DROP TABLE numbers_hash;
 SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
+
+-- Test with ltree column
+CREATE TABLE test_ltree (path ltree);
+SELECT create_reference_table('test_ltree');
+
+COPY test_ltree FROM STDIN DELIMITER AS ',';
+Top
+Top.Science
+Top.Science.Astronomy
+\.
+
+SELECT path, nlevel(path) AS depth FROM test_ltree ORDER BY depth;
+
+DROP TABLE test_ltree;
