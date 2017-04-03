@@ -870,6 +870,27 @@ ExecuteModifyTasksWithoutResults(List *taskList)
 
 
 /*
+ * ExecuteTasksSequentiallyWithoutResults basically calls ExecuteModifyTasks in
+ * a loop in order to simulate sequential execution of a list of tasks. Useful
+ * in cases where issuing commands in parallel before waiting for results could
+ * result in deadlocks (such as CREATE INDEX CONCURRENTLY).
+ */
+void
+ExecuteTasksSequentiallyWithoutResults(List *taskList)
+{
+	ListCell *taskCell = NULL;
+
+	foreach(taskCell, taskList)
+	{
+		Task *task = (Task *) lfirst(taskCell);
+		List *singleTask = list_make1(task);
+
+		ExecuteModifyTasksWithoutResults(singleTask);
+	}
+}
+
+
+/*
  * ExecuteModifyTasks executes a list of tasks on remote nodes, and
  * optionally retrieves the results and stores them in a tuple store.
  *

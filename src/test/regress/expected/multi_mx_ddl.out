@@ -18,6 +18,7 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+CREATE INDEX CONCURRENTLY ddl_test_concurrent_index ON mx_ddl_table(value);
 -- ADD COLUMN
 ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
 -- SET DEFAULT
@@ -40,6 +41,7 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
  version | integer | not null default 1
 Indexes:
     "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+    "ddl_test_concurrent_index" btree (value)
     "ddl_test_index" btree (value)
 
 \c - - - :worker_1_port
@@ -52,9 +54,21 @@ Indexes:
  version | integer | not null default 1
 Indexes:
     "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+    "ddl_test_concurrent_index" btree (value)
     "ddl_test_index" btree (value)
 
-\d mx_ddl_table_1600000
+\d mx_ddl_table_1220088
+  Table "public.mx_ddl_table_1220088"
+ Column  |  Type   |     Modifiers      
+---------+---------+--------------------
+ key     | integer | not null
+ value   | integer | 
+ version | integer | not null default 1
+Indexes:
+    "mx_ddl_table_pkey_1220088" PRIMARY KEY, btree (key)
+    "ddl_test_concurrent_index_1220088" btree (value)
+    "ddl_test_index_1220088" btree (value)
+
 \c - - - :worker_2_port
 \d mx_ddl_table
       Table "public.mx_ddl_table"
@@ -65,9 +79,21 @@ Indexes:
  version | integer | not null default 1
 Indexes:
     "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+    "ddl_test_concurrent_index" btree (value)
     "ddl_test_index" btree (value)
 
-\d mx_ddl_table_1600001
+\d mx_ddl_table_1220089
+  Table "public.mx_ddl_table_1220089"
+ Column  |  Type   |     Modifiers      
+---------+---------+--------------------
+ key     | integer | not null
+ value   | integer | 
+ version | integer | not null default 1
+Indexes:
+    "mx_ddl_table_pkey_1220089" PRIMARY KEY, btree (key)
+    "ddl_test_concurrent_index_1220089" btree (value)
+    "ddl_test_index_1220089" btree (value)
+
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
 -- Switch to the coordinator
@@ -100,6 +126,7 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 DROP INDEX ddl_test_index;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+DROP INDEX CONCURRENTLY ddl_test_concurrent_index;
 -- DROP DEFAULT
 ALTER TABLE mx_ddl_table ALTER COLUMN version DROP DEFAULT;
 -- DROP NOT NULL
@@ -126,7 +153,15 @@ Indexes:
 Indexes:
     "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
 
-\d mx_ddl_table_1600000
+\d mx_ddl_table_1220088
+Table "public.mx_ddl_table_1220088"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ key    | integer | not null
+ value  | integer | 
+Indexes:
+    "mx_ddl_table_pkey_1220088" PRIMARY KEY, btree (key)
+
 \c - - - :worker_2_port
 \d mx_ddl_table
  Table "public.mx_ddl_table"
@@ -137,7 +172,15 @@ Indexes:
 Indexes:
     "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
 
-\d mx_ddl_table_1600001
+\d mx_ddl_table_1220089
+Table "public.mx_ddl_table_1220089"
+ Column |  Type   | Modifiers 
+--------+---------+-----------
+ key    | integer | not null
+ value  | integer | 
+Indexes:
+    "mx_ddl_table_pkey_1220089" PRIMARY KEY, btree (key)
+
 -- Show that DDL commands are done within a two-phase commit transaction
 \c - - - :master_port
 SET client_min_messages TO debug2;

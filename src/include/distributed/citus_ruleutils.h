@@ -32,13 +32,15 @@ extern char * pg_get_sequencedef_string(Oid sequenceRelid);
 extern Form_pg_sequence pg_get_sequencedef(Oid sequenceRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId, bool forShardCreation);
 extern char * pg_get_tablecolumnoptionsdef_string(Oid tableRelationId);
+extern void deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid,
+										  int64 shardid, StringInfo buffer);
 extern char * pg_get_indexclusterdef_string(Oid indexRelationId);
 extern List * pg_get_table_grants(Oid relationId);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
 extern void pg_get_query_def(Query *query, StringInfo buffer);
-extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid, StringInfo
-								buffer);
+extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
+								StringInfo buffer);
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 
