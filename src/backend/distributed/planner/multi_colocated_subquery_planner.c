@@ -81,6 +81,10 @@ static bool AttributeClassContainsAttributeClassMember(AttributeEquivalenceClass
 static List * AddAttributeClassToAttributeClassList(List *attributeEquivalenceList,
 													AttributeEquivalenceClass *
 													attributeEquivalance);
+static bool AttributeEquivalancesAreEqual(AttributeEquivalenceClass *
+										  firstAttributeEquivalance,
+										  AttributeEquivalenceClass *
+										  secondAttributeEquivalance);
 static AttributeEquivalenceClass * GenerateCommonEquivalence(List *
 															 attributeEquivalenceList);
 static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass **
@@ -763,26 +767,97 @@ AttributeClassContainsAttributeClassMember(AttributeEquivalenceClassMember *inpu
  * Firstly, the function skips adding NULL attributeEquivalance to the list.
  * Secondly, since an attribute equivalence class with a single member does
  * not contribute to our purposes, we skip such classed adding to the list.
+ * Finally, we don't want to add an equivalence class whose exact equivalent
+ * already exists in the list.
  */
 static List *
 AddAttributeClassToAttributeClassList(List *attributeEquivalenceList,
 									  AttributeEquivalenceClass *attributeEquivalance)
 {
 	List *equivalentAttributes = NULL;
+	ListCell *attributeEquivalanceCell = NULL;
 
 	if (attributeEquivalance == NULL)
 	{
 		return attributeEquivalenceList;
 	}
 
+	/*
+	 * Note that in some cases we allow having equivalentAttributes with zero or
+	 * one elements. For the details, see AddToAttributeEquivalenceClass().
+	 */
 	equivalentAttributes = attributeEquivalance->equivalentAttributes;
 	if (list_length(equivalentAttributes) < 2)
 	{
 		return attributeEquivalenceList;
 	}
 
+	/* we don't want to add an attributeEquivalance which already exists */
+	foreach(attributeEquivalanceCell, attributeEquivalenceList)
+	{
+		AttributeEquivalenceClass *currentAttributeEquivalance =
+			(AttributeEquivalenceClass *) lfirst(attributeEquivalanceCell);
+
+		if (AttributeEquivalancesAreEqual(currentAttributeEquivalance,
+										  attributeEquivalance))
+		{
+			return attributeEquivalenceList;
+		}
+	}
+
 	attributeEquivalenceList = lappend(attributeEquivalenceList,
 									   attributeEquivalance);
 
 	return attributeEquivalenceList;
+}
+
+
+/*
+ *  AttributeEquivalancesAreEqual returns true if both input attribute equivalence
+ *  classes contains exactly the same members.
+ */
+static bool
+AttributeEquivalancesAreEqual(AttributeEquivalenceClass *firstAttributeEquivalance,
+							  AttributeEquivalenceClass *secondAttributeEquivalance)
+{
+	List *firstEquivalenceMemberList = firstAttributeEquivalance->equivalentAttributes;
+	List *secondEquivalenceMemberList = secondAttributeEquivalance->equivalentAttributes;
+	ListCell *firstAttributeEquivalanceCell = NULL;
+	ListCell *secondAttributeEquivalanceCell = NULL;
+
+	if (list_length(firstEquivalenceMemberList) != list_length(
+			secondEquivalenceMemberList))
+	{
+		return false;
+	}
+
+
+	foreach(firstAttributeEquivalanceCell, firstEquivalenceMemberList)
+	{
+		AttributeEquivalenceClassMember *firstEqMember =
+			(AttributeEquivalenceClassMember *) lfirst(firstAttributeEquivalanceCell);
+		bool foundAnEquivalentMember = false;
+
+		foreach(secondAttributeEquivalanceCell, secondEquivalenceMemberList)
+		{
+			AttributeEquivalenceClassMember *secondEqMember =
+				(AttributeEquivalenceClassMember *) lfirst(
+					secondAttributeEquivalanceCell);
+
+			if (firstEqMember->rteIdentity == secondEqMember->rteIdentity &&
+				firstEqMember->varattno == secondEqMember->varattno)
+			{
+				foundAnEquivalentMember = true;
+				break;
+			}
+		}
+
+		/* we couldn't find an equivalent member */
+		if (!foundAnEquivalentMember)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
