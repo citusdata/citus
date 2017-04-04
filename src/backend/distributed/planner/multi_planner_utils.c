@@ -1,5 +1,5 @@
 /*
- * multi_colocated_subquery_planner.c
+ * multi_planner_utils.c
  *
  * This file contains functions helper functions for planning
  * queries with colocated tables and subqueries.
@@ -11,7 +11,7 @@
 #include "postgres.h"
 #include "c.h"
 
-#include "distributed/multi_colocated_subquery_planner.h"
+#include "distributed/multi_planner_utils.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_partition.h"

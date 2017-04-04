@@ -34,7 +34,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
-#include "distributed/multi_colocated_subquery_planner.h"
+#include "distributed/multi_planner_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/relay_utility.h"
