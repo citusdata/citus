@@ -773,5 +773,77 @@ FROM
 ) b;
 ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
 DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+-- we don't support subqueries without relations
+SELECT 
+  count(*)
+FROM 
+(
+  (SELECT user_id FROM users_table)
+    UNION ALL
+  (SELECT 1)
+) b;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
+-- we don't support subqueries without relations
+SELECT 
+  *
+FROM 
+(
+  (SELECT user_id FROM users_table)
+    UNION ALL
+  (SELECT (random() * 100)::int)
+) b;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
+-- we don't support subqueries without relations
+SELECT 
+  user_id, value_3
+FROM 
+(
+  (SELECT value_3, user_id FROM events_table where event_type IN (1, 2, 3, 4, 5))
+    UNION ALL
+  (SELECT value_3, user_id FROM events_table where event_type IN (6, 7, 8, 9, 10))
+  UNION ALL
+  (SELECT value_3, user_id FROM events_table where event_type IN (11, 12, 13, 14, 15))
+  UNION ALL
+  (SELECT value_3, user_id FROM events_table where event_type IN (16, 17, 18, 19, 20))
+  UNION ALL
+  (SELECT value_3, user_id FROM events_table where event_type IN (21, 22, 23, 24, 25))
+  UNION ALL
+  (SELECT 1, 2)
+) b
+ORDER BY 1 DESC, 2 DESC
+LIMIT 5;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
+SELECT ("q"."event_types") as types, count(*) AS sumOfEventType
+FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event") ORDER BY time ASC, event DESC) AS collected_events
+         FROM (
+                    (SELECT "events"."user_id", "events"."time", 0 AS event
+                     FROM events_table as  "events"
+                     WHERE event_type IN (10, 11, 12, 13, 14, 15) 
+                     ) 
+               UNION
+                    (SELECT "events"."user_id", "events"."time", 1 AS event
+                     FROM events_table as "events"
+                     WHERE event_type IN (15, 16, 17, 18, 19) )
+               UNION
+                    (SELECT "events"."user_id", "events"."time", 2 AS event
+                     FROM events_table as  "events"
+                      WHERE event_type IN (20, 21, 22, 23, 24, 25) )
+               UNION
+                    (SELECT 1, now(), 3 AS event)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+GROUP BY types
+ORDER BY types;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
 SET citus.subquery_pushdown TO false;
 SET citus.enable_router_execution TO true;
