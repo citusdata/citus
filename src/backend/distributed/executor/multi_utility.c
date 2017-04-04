@@ -28,6 +28,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_class.h"
+#include "citus_version.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/prepare.h"
@@ -82,7 +83,6 @@
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 
-
 /*
  * This struct defines the state for the callback for drop statements.
  * It is copied as it is from commands/tablecmds.c in Postgres source.
@@ -94,6 +94,10 @@ struct DropRelationCallbackState
 	bool concurrent;
 };
 
+
+/* Local functions forward declarations for deciding when to perform processing/checks */
+static bool SkipCitusProcessingForUtility(Node *parsetree);
+static bool IsCitusExtensionStmt(Node *parsetree);
 
 /* Local functions forward declarations for Transmit statement */
 static bool IsTransmitStmt(Node *parsetree);
@@ -120,6 +124,7 @@ static char * DeparseVacuumColumnNames(List *columnNameList);
 
 
 /* Local functions forward declarations for unsupported command checks */
+static void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
@@ -130,6 +135,7 @@ static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
 /* Local functions forward declarations for helper functions */
+static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
@@ -170,17 +176,19 @@ multi_ProcessUtility(Node *parsetree,
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
+	bool skipCitusProcessing = SkipCitusProcessingForUtility(parsetree);
 
-	if (IsA(parsetree, TransactionStmt))
+	if (skipCitusProcessing)
 	{
-		/*
-		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
-		 * transactions in which case a lot of checks cannot be done safely in
-		 * that state. Since we never need to intercept transaction statements,
-		 * skip our checks and immediately fall into standard_ProcessUtility.
-		 */
+		bool checkExtensionVersion = IsCitusExtensionStmt(parsetree);
+
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+
+		if (EnableVersionChecks && checkExtensionVersion)
+		{
+			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+		}
 
 		return;
 	}
@@ -398,6 +406,86 @@ multi_ProcessUtility(Node *parsetree,
 
 		ProcessVacuumStmt(vacuumStmt, queryString);
 	}
+}
+
+
+/*
+ * SkipCitusProcessingForUtility simply returns whether a given utility should
+ * bypass Citus processing and checks and be handled exclusively by standard
+ * PostgreSQL utility processing. At present, CREATE/ALTER/DROP EXTENSION,
+ * ABORT, COMMIT, ROLLBACK, and SET (GUC) statements are exempt from Citus.
+ */
+static bool
+SkipCitusProcessingForUtility(Node *parsetree)
+{
+	switch (parsetree->type)
+	{
+		/*
+		 * In the CitusHasBeenLoaded check, we compare versions of loaded code,
+		 * the installed extension, and available extension. If they differ, we
+		 * force user to execute ALTER EXTENSION citus UPDATE. To allow this,
+		 * CREATE/DROP/ALTER extension must be omitted from Citus processing.
+		 */
+		case T_DropStmt:
+		{
+			DropStmt *dropStatement = (DropStmt *) parsetree;
+
+			if (dropStatement->removeType != OBJECT_EXTENSION)
+			{
+				return false;
+			}
+		}
+
+		/* no break, fall through */
+
+		case T_CreateExtensionStmt:
+		case T_AlterExtensionStmt:
+
+		/*
+		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
+		 * transactions in which case a lot of checks cannot be done safely in
+		 * that state. Since we never need to intercept transaction statements,
+		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
+		case T_TransactionStmt:
+
+		/*
+		 * Skip processing of variable set statements, to allow changing the
+		 * enable_version_checks GUC during testing.
+		 */
+		case T_VariableSetStmt:
+		{
+			return true;
+		}
+
+		default:
+		{
+			return false;
+		}
+	}
+}
+
+
+/*
+ * IsCitusExtensionStmt returns whether a given utility is a CREATE or ALTER
+ * EXTENSION statement which references the citus extension. This function
+ * returns false for all other inputs.
+ */
+static bool
+IsCitusExtensionStmt(Node *parsetree)
+{
+	char *extensionName = "";
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		extensionName = ((CreateExtensionStmt *) parsetree)->extname;
+	}
+	else if (IsA(parsetree, AlterExtensionStmt))
+	{
+		extensionName = ((AlterExtensionStmt *) parsetree)->extname;
+	}
+
+	return (strcmp(extensionName, "citus") == 0);
 }
 
 
@@ -1253,6 +1341,83 @@ DeparseVacuumColumnNames(List *columnNameList)
 	columnNames->data[columnNames->len - 1] = ')';
 
 	return columnNames->data;
+}
+
+
+/*
+ * ErrorIfUnstableCreateOrAlterExtensionStmt compares CITUS_EXTENSIONVERSION
+ * and version given CREATE/ALTER EXTENSION statement will create/update to. If
+ * they are not same in major or minor version numbers, this function errors
+ * out. It ignores the schema version.
+ */
+static void
+ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
+{
+	char *newExtensionVersion = ExtractNewExtensionVersion(parsetree);
+
+	if (newExtensionVersion != NULL)
+	{
+		/*  explicit version provided in CREATE or ALTER EXTENSION UPDATE; verify */
+		if (!MajorVersionsCompatible(newExtensionVersion, CITUS_EXTENSIONVERSION))
+		{
+			ereport(ERROR, (errmsg("specified version incompatible with loaded "
+								   "Citus library"),
+							errdetail("Loaded library requires %s, but %s was specified.",
+									  CITUS_MAJORVERSION, newExtensionVersion),
+							errhint("If a newer library is present, restart the database "
+									"and try the command again.")));
+		}
+	}
+	else
+	{
+		/*
+		 * No version was specified, so PostgreSQL will use the default_version
+		 * from the citus.control file. In case a new default is available, we
+		 * will force a compatibility check of the latest available version.
+		 */
+		availableExtensionVersion = NULL;
+		ErrorIfAvailableVersionMismatch();
+	}
+}
+
+
+/*
+ * ExtractNewExtensionVersion returns the new extension version specified by
+ * a CREATE or ALTER EXTENSION statement. Other inputs are not permitted. This
+ * function returns NULL for statements with no explicit version specified.
+ */
+static char *
+ExtractNewExtensionVersion(Node *parsetree)
+{
+	char *newVersion = NULL;
+	List *optionsList = NIL;
+	ListCell *optionsCell = NULL;
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		optionsList = ((CreateExtensionStmt *) parsetree)->options;
+	}
+	else if (IsA(parsetree, AlterExtensionStmt))
+	{
+		optionsList = ((AlterExtensionStmt *) parsetree)->options;
+	}
+	else
+	{
+		/* input must be one of the two above types */
+		Assert(false);
+	}
+
+	foreach(optionsCell, optionsList)
+	{
+		DefElem *defElement = (DefElem *) lfirst(optionsCell);
+		if (strncmp(defElement->defname, "new_version", NAMEDATALEN) == 0)
+		{
+			newVersion = strVal(defElement->arg);
+			break;
+		}
+	}
+
+	return newVersion;
 }
 
 

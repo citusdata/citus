@@ -13,6 +13,7 @@
 #include "tcop/utility.h"
 
 extern bool EnableDDLPropagation;
+extern bool EnableVersionChecks;
 
 /*
  * A DDLJob encapsulates the remote tasks and commands needed to process all or
