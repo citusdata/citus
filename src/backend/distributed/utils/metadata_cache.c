@@ -1013,8 +1013,13 @@ ErrorIfAvailableVersionMismatch(void)
 	availableVersion = AvailableExtensionVersion();
 	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
 	{
-		ereport(ERROR, (errmsg("server restart is needed because, loaded Citus binaries "
-							   "does not match the available extension version")));
+		ereport(ERROR, (errmsg("loaded Citus library version differs from latest "
+							   "available extension version"),
+						errdetail("Loaded library requires %s, but the latest control "
+								  "file specifies %s.", CITUS_MAJORVERSION,
+								  availableVersion),
+						errhint("Restart the database to load the latest Citus "
+								"library.")));
 	}
 }
 
@@ -1038,9 +1043,12 @@ ErrorIfInstalledVersionMismatch(void)
 	installedVersion = InstalledExtensionVersion();
 	if (!MajorVersionsCompatible(installedVersion, CITUS_EXTENSIONVERSION))
 	{
-		ereport(ERROR, (errmsg("\"ALTER EXTENSION citus UPDATE;\" is needed, because "
-							   "loaded Citus binaries does not match the installed "
-							   "extension version")));
+		ereport(ERROR, (errmsg("loaded Citus library version differs from installed "
+							   "extension version"),
+						errdetail("Loaded library requires %s, but the installed "
+								  "extension version is %s.", CITUS_MAJORVERSION,
+								  installedVersion),
+						errhint("Run ALTER EXTENSION citus UPDATE and try again.")));
 	}
 }
 
