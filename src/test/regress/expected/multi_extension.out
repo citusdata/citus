@@ -103,7 +103,9 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 DROP EXTENSION citus;
 \c
 CREATE EXTENSION citus VERSION '5.0';
-ERROR:  requested version is not compatible with loaded Citus binaries.
+ERROR:  specified version incompatible with loaded Citus library
+DETAIL:  Loaded library requires 6.2, but 5.0 was specified.
+HINT:  If a newer library is present, restart the database and try the command again.
 -- re-create in newest version
 \c
 CREATE EXTENSION citus;
