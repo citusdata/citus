@@ -100,8 +100,10 @@ static Oid distTransactionRelationId = InvalidOid;
 static Oid distTransactionGroupIndexId = InvalidOid;
 static Oid extraDataContainerFuncId = InvalidOid;
 
-/* Citus installed extension version */
-char *availableMajorVersion = NULL;
+/* Citus extension version variables */
+bool EnableVersionChecks = true; /* version checks are enabled */
+
+char *availableExtensionVersion = NULL;
 static char *installedExtensionVersion = NULL;
 
 /* Hash table for informations about each partition */
@@ -139,8 +141,8 @@ static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
-static void ErrorIfExtensionUpdateNeeded(void);
-static char * AvailableMajorVersion(void);
+static void ErrorIfInstalledVersionMismatch(void);
+static char * AvailableExtensionVersion(void);
 static char * InstalledExtensionVersion(void);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
@@ -984,8 +986,8 @@ CitusHasBeenLoaded(void)
 
 	if (extensionLoaded)
 	{
-		ErrorIfNewMajorVersionAvailable();
-		ErrorIfExtensionUpdateNeeded();
+		ErrorIfAvailableVersionMismatch();
+		ErrorIfInstalledVersionMismatch();
 	}
 
 	return extensionLoaded;
@@ -993,16 +995,23 @@ CitusHasBeenLoaded(void)
 
 
 /*
- * ErrorIfNewMajorVersionAvailable compares CITUS_EXTENSIONVERSION and currently
- * available version from citus.control file. If they are not same in major or
- * minor version numbers, this function errors out. It ignores the schema version.
+ * ErrorIfAvailableExtensionVersionMismatch compares CITUS_EXTENSIONVERSION and
+ * currently available version from citus.control file. If they are not same in
+ * major or minor version numbers, this function errors out. It ignores the schema
+ * version.
  */
 void
-ErrorIfNewMajorVersionAvailable(void)
+ErrorIfAvailableVersionMismatch(void)
 {
-	char *availableVersion = AvailableMajorVersion();
+	char *availableVersion = NULL;
 
-	if (!CompareVersions(availableVersion, CITUS_EXTENSIONVERSION))
+	if (!EnableVersionChecks)
+	{
+		return;
+	}
+
+	availableVersion = AvailableExtensionVersion();
+	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(ERROR, (errmsg("server restart is needed because, loaded Citus binaries "
 							   "does not match the available extension version")));
@@ -1011,16 +1020,23 @@ ErrorIfNewMajorVersionAvailable(void)
 
 
 /*
- * ErrorIfExtensionUpdateNeeded compares CITUS_EXTENSIONVERSION and currently and
- * catalog version from pg_extemsion catalog table. If they are not same in major or
- * minor version numbers, this function errors out. It ignores the schema version.
+ * ErrorIfInstalledVersionMismatch compares CITUS_EXTENSIONVERSION and currently
+ * and catalog version from pg_extemsion catalog table. If they are not same in
+ * major or minor version numbers, this function errors out. It ignores the schema
+ * version.
  */
 static void
-ErrorIfExtensionUpdateNeeded(void)
+ErrorIfInstalledVersionMismatch(void)
 {
-	char *installedVersion = InstalledExtensionVersion();
+	char *installedVersion = NULL;
 
-	if (!CompareVersions(installedVersion, CITUS_EXTENSIONVERSION))
+	if (!EnableVersionChecks)
+	{
+		return;
+	}
+
+	installedVersion = InstalledExtensionVersion();
+	if (!MajorVersionsCompatible(installedVersion, CITUS_EXTENSIONVERSION))
 	{
 		ereport(ERROR, (errmsg("\"ALTER EXTENSION citus UPDATE;\" is needed, because "
 							   "loaded Citus binaries does not match the installed "
@@ -1030,36 +1046,55 @@ ErrorIfExtensionUpdateNeeded(void)
 
 
 /*
- * CompareVersions compares given two versions. If they are same in major and
- * minor version numbers, this function returns true. It ignores the schema version.
+ * MajorVersionsCompatible compares given two versions. If they are same in major
+ * and minor version numbers, this function returns true. It ignores the schema
+ * version.
  */
 bool
-CompareVersions(char *leftVersion, char *rightVersion)
+MajorVersionsCompatible(char *leftVersion, char *rightVersion)
 {
 	const char schemaVersionSeparator = '-';
-	char *seperatorPosition = strchr(leftVersion, schemaVersionSeparator);
-	int comparisionLimit = 0;
 
-	if (seperatorPosition != NULL)
+	char *leftSeperatorPosition = strchr(leftVersion, schemaVersionSeparator);
+	char *rightSeperatorPosition = strchr(rightVersion, schemaVersionSeparator);
+	int leftComparisionLimit = 0;
+	int rightComparisionLimit = 0;
+
+	if (leftSeperatorPosition != NULL)
 	{
-		comparisionLimit = seperatorPosition - leftVersion;
+		leftComparisionLimit = leftSeperatorPosition - leftVersion;
 	}
 	else
 	{
-		comparisionLimit = strlen(leftVersion);
+		leftComparisionLimit = strlen(leftVersion);
 	}
 
-	return strncmp(leftVersion, rightVersion, comparisionLimit) == 0;
+	if (rightSeperatorPosition != NULL)
+	{
+		rightComparisionLimit = rightSeperatorPosition - rightVersion;
+	}
+	else
+	{
+		rightComparisionLimit = strlen(leftVersion);
+	}
+
+	/* we can error out early if hypens are not in the same position */
+	if (leftComparisionLimit != rightComparisionLimit)
+	{
+		return false;
+	}
+
+	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
 }
 
 
 /*
- * AvailableMajorVersion returns the Citus version from citus.control file. It also
+ * AvailableExtensionVersion returns the Citus version from citus.control file. It also
  * saves the result, thus consecutive calls to CitusExtensionAvailableVersion will
  * not read the citus.control file again.
  */
 static char *
-AvailableMajorVersion(void)
+AvailableExtensionVersion(void)
 {
 	ReturnSetInfo *extensionsResultSet = NULL;
 	TupleTableSlot *tupleTableSlot = NULL;
@@ -1073,9 +1108,9 @@ AvailableMajorVersion(void)
 	bool doCopy = false;
 
 	/* if we cached the result before, return it*/
-	if (availableMajorVersion != NULL)
+	if (availableExtensionVersion != NULL)
 	{
-		return availableMajorVersion;
+		return availableExtensionVersion;
 	}
 
 	estate = CreateExecutorState();
@@ -1107,7 +1142,7 @@ AvailableMajorVersion(void)
 		if (strcmp(extensionName, "citus") == 0)
 		{
 			MemoryContext oldMemoryContext = NULL;
-			Datum citusVersionDatum = slot_getattr(tupleTableSlot, 2, &isNull);
+			Datum availableVersion = slot_getattr(tupleTableSlot, 2, &isNull);
 
 			/* we will cache the result of citus version to prevent catalog access */
 			if (CacheMemoryContext == NULL)
@@ -1116,14 +1151,14 @@ AvailableMajorVersion(void)
 			}
 			oldMemoryContext = MemoryContextSwitchTo(CacheMemoryContext);
 
-			availableMajorVersion = text_to_cstring(DatumGetTextPP(citusVersionDatum));
+			availableExtensionVersion = text_to_cstring(DatumGetTextPP(availableVersion));
 
 			MemoryContextSwitchTo(oldMemoryContext);
 
 			ExecClearTuple(tupleTableSlot);
 			ExecDropSingleTupleTableSlot(tupleTableSlot);
 
-			return availableMajorVersion;
+			return availableExtensionVersion;
 		}
 
 		ExecClearTuple(tupleTableSlot);
@@ -1177,8 +1212,8 @@ InstalledExtensionVersion(void)
 		TupleDesc tupleDescriptor = RelationGetDescr(relation);
 		bool isNull = false;
 
-		Datum extensionVersionDatum = heap_getattr(extensionTuple, extensionIndex,
-												   tupleDescriptor, &isNull);
+		Datum installedVersion = heap_getattr(extensionTuple, extensionIndex,
+											  tupleDescriptor, &isNull);
 
 		if (isNull)
 		{
@@ -1194,8 +1229,7 @@ InstalledExtensionVersion(void)
 
 		oldMemoryContext = MemoryContextSwitchTo(CacheMemoryContext);
 
-		installedExtensionVersion = text_to_cstring(DatumGetTextPP(
-														extensionVersionDatum));
+		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
 
 		MemoryContextSwitchTo(oldMemoryContext);
 	}
