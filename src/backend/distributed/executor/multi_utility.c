@@ -409,6 +409,12 @@ multi_ProcessUtility(Node *parsetree,
 }
 
 
+/*
+ * SkipCitusProcessingForUtility simply returns whether a given utility should
+ * bypass Citus processing and checks and be handled exclusively by standard
+ * PostgreSQL utility processing. At present, CREATE/ALTER/DROP EXTENSION,
+ * ABORT, COMMIT, ROLLBACK, and SET (GUC) statements are exempt from Citus.
+ */
 static bool
 SkipCitusProcessingForUtility(Node *parsetree)
 {
@@ -460,6 +466,11 @@ SkipCitusProcessingForUtility(Node *parsetree)
 }
 
 
+/*
+ * IsCitusExtensionStmt returns whether a given utility is a CREATE or ALTER
+ * EXTENSION statement which references the citus extension. This function
+ * returns false for all other inputs.
+ */
 static bool
 IsCitusExtensionStmt(Node *parsetree)
 {
@@ -1370,6 +1381,11 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 }
 
 
+/*
+ * ExtractNewExtensionVersion returns the new extension version specified by
+ * a CREATE or ALTER EXTENSION statement. Other inputs are not permitted. This
+ * function returns NULL for statements with no explicit version specified.
+ */
 static char *
 ExtractNewExtensionVersion(Node *parsetree)
 {
@@ -1394,8 +1410,7 @@ ExtractNewExtensionVersion(Node *parsetree)
 	foreach(optionsCell, optionsList)
 	{
 		DefElem *defElement = (DefElem *) lfirst(optionsCell);
-
-		if (strcmp(defElement->defname, "new_version") == 0)
+		if (strncmp(defElement->defname, "new_version", NAMEDATALEN) == 0)
 		{
 			newVersion = strVal(defElement->arg);
 			break;
