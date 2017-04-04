@@ -100,8 +100,8 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 (1 row)
 
 -- see incompatible version errors out
+RESET citus.enable_version_checks;
 DROP EXTENSION citus;
-\c
 CREATE EXTENSION citus VERSION '5.0';
 ERROR:  specified version incompatible with loaded Citus library
 DETAIL:  Loaded library requires 6.2, but 5.0 was specified.
