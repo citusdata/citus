@@ -1,6 +1,6 @@
 /* This file is created manually */
 
-/* so the shared-library knows its own version */
+/* Extension version expected by this Citus build */
 #undef CITUS_EXTENSIONVERSION
 
 /* Citus major version as a string */

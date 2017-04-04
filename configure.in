@@ -8,24 +8,27 @@
 AC_INIT([Citus], [6.2devel])
 AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
 
-# CITUS_MAJORVERSION definition
-[CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`]
-AC_DEFINE_UNQUOTED(CITUS_MAJORVERSION, "$CITUS_MAJORVERSION", [Citus major version as a string])
+# we'll need sed and awk for some of the version commands
+AC_PROG_SED
+AC_PROG_AWK
 
 # CITUS_VERSION definition
 AC_DEFINE_UNQUOTED(CITUS_VERSION, "$PACKAGE_VERSION", [Citus version as a string])
 
+# CITUS_MAJORVERSION definition
+[CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`]
+AC_DEFINE_UNQUOTED(CITUS_MAJORVERSION, "$CITUS_MAJORVERSION", [Citus major version as a string])
+
 # CITUS_VERSION_NUM definition
+# awk -F is a regex on some platforms, and not on others, so make "." a tab
 [CITUS_VERSION_NUM="`echo "$PACKAGE_VERSION" | sed 's/[A-Za-z].*$//' |
 tr '.' '	' |
 $AWK '{printf "%d%02d%02d", $1, $2, (NF >= 3) ? $3 : 0}'`"]
 AC_DEFINE_UNQUOTED(CITUS_VERSION_NUM, $CITUS_VERSION_NUM, [Citus version as a number])
 
 # CITUS_EXTENSIONVERSION definition
-citus_extensionversion=$(grep "^default_version" src/backend/distributed/citus.control | cut -d\' -f2)
-AC_DEFINE_UNQUOTED([CITUS_EXTENSIONVERSION], "$citus_extensionversion", [so the shared-library knows its own version])
-
-AC_PROG_SED
+[CITUS_EXTENSIONVERSION="`grep '^default_version' $srcdir/src/backend/distributed/citus.control | cut -d\' -f2`"]
+AC_DEFINE_UNQUOTED([CITUS_EXTENSIONVERSION], "$CITUS_EXTENSIONVERSION", [Extension version expected by this Citus build])
 
 # Re-check for flex. That allows to compile citus against a postgres
 # which was built without flex available (possible because generated
