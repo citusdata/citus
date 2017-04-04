@@ -135,6 +135,7 @@ static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
 static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
 
 /* Local functions forward declarations for helper functions */
+static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
@@ -1341,23 +1342,53 @@ DeparseVacuumColumnNames(List *columnNameList)
 static void
 ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 {
+	char *newExtensionVersion = ExtractNewExtensionVersion(parsetree);
+
+	if (newExtensionVersion != NULL)
+	{
+		/*  explicit version provided in CREATE or ALTER EXTENSION UPDATE; verify */
+		if (!MajorVersionsCompatible(newExtensionVersion, CITUS_EXTENSIONVERSION))
+		{
+			ereport(ERROR, (errmsg("specified version incompatible with loaded "
+								   "Citus library"),
+							errdetail("Loaded library requires %s, but %s was specified.",
+									  CITUS_MAJORVERSION, newExtensionVersion),
+							errhint("If a newer library is present, restart the database "
+									"and try the command again.")));
+		}
+	}
+	else
+	{
+		/*
+		 * No version was specified, so PostgreSQL will use the default_version
+		 * from the citus.control file. In case a new default is available, we
+		 * will force a compatibility check of the latest available version.
+		 */
+		availableExtensionVersion = NULL;
+		ErrorIfAvailableVersionMismatch();
+	}
+}
+
+
+static char *
+ExtractNewExtensionVersion(Node *parsetree)
+{
+	char *newVersion = NULL;
 	List *optionsList = NIL;
 	ListCell *optionsCell = NULL;
 
 	if (IsA(parsetree, CreateExtensionStmt))
 	{
-		CreateExtensionStmt *createExtensionStmt = (CreateExtensionStmt *) parsetree;
-		optionsList = createExtensionStmt->options;
+		optionsList = ((CreateExtensionStmt *) parsetree)->options;
 	}
 	else if (IsA(parsetree, AlterExtensionStmt))
 	{
-		AlterExtensionStmt *alterExtensionStmt = (AlterExtensionStmt *) parsetree;
-		optionsList = alterExtensionStmt->options;
+		optionsList = ((AlterExtensionStmt *) parsetree)->options;
 	}
 	else
 	{
-		ereport(ERROR, (errmsg("unsupported node type, create or alter extension "
-							   "is expected")));
+		/* input must be one of the two above types */
+		Assert(false);
 	}
 
 	foreach(optionsCell, optionsList)
@@ -1366,25 +1397,12 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 
 		if (strcmp(defElement->defname, "new_version") == 0)
 		{
-			char *newVersion = strVal(defElement->arg);
-
-			if (!MajorVersionsCompatible(newVersion, CITUS_EXTENSIONVERSION))
-			{
-				ereport(ERROR, (errmsg("requested version is not compatible with "
-									   "loaded Citus binaries.")));
-			}
-
-			return;
+			newVersion = strVal(defElement->arg);
+			break;
 		}
 	}
 
-	/*
-	 * new_version is not specified in ALTER EXTENSION statement, PostgreSQL will use
-	 * default_version from citus.control file. We will flush availableExtensionVersion
-	 * to re-check the available version from citus.control file.
-	 */
-	availableExtensionVersion = NULL;
-	ErrorIfAvailableVersionMismatch();
+	return newVersion;
 }
 
 
