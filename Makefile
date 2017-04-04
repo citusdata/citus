@@ -20,7 +20,7 @@ install-extension: extension
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
 # generated headers are located in the build directory
-	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/citus_config.h '$(DESTDIR)$(includedir_server)/'
+	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/citus_version.h '$(DESTDIR)$(includedir_server)/'
 # the rest in the source tree
 	$(INSTALL_DATA) $(citus_abs_srcdir)/src/include/distributed/*.h '$(DESTDIR)$(includedir_server)/distributed/'
 clean-extension:

@@ -83,7 +83,6 @@
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
 
-
 /*
  * This struct defines the state for the callback for drop statements.
  * It is copied as it is from commands/tablecmds.c in Postgres source.
@@ -173,6 +172,7 @@ multi_ProcessUtility(Node *parsetree,
 	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
 	bool extensionStatement = false;
+	bool checkExtensionVersion = false;
 
 	if (IsA(parsetree, TransactionStmt))
 	{
@@ -193,7 +193,7 @@ multi_ProcessUtility(Node *parsetree,
 		CreateExtensionStmt *createExtensionStmt = (CreateExtensionStmt *) parsetree;
 		if (strcmp(createExtensionStmt->extname, "citus") == 0)
 		{
-			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+			checkExtensionVersion = true;
 		}
 
 		extensionStatement = true;
@@ -204,7 +204,7 @@ multi_ProcessUtility(Node *parsetree,
 		AlterExtensionStmt *alterExtensionStmt = (AlterExtensionStmt *) parsetree;
 		if (strcmp(alterExtensionStmt->extname, "citus") == 0)
 		{
-			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+			checkExtensionVersion = true;
 		}
 
 		extensionStatement = true;
@@ -220,17 +220,22 @@ multi_ProcessUtility(Node *parsetree,
 		}
 	}
 
-	if (extensionStatement)
+	if (extensionStatement || IsA(parsetree, VariableSetStmt))
 	{
 		/*
 		 * In CitusHasBeenLoaded check below, we compare binary Citus version,
 		 * extension version and available version. If they are different, we
-		 * force user to execute ALTER EXTENSION citus UPDATE. Therefore, if
-		 * user executes ALTER EXTENSION or DROP EXTENSION query we should drop
-		 * to the standart utility before CitusHasBeenLoaded check.
+		 * force user to execute ALTER EXTENSION citus UPDATE. Therefore, we
+		 * drop to standard_ProcessUtility earlier for some commands which are
+		 * safe and necessary to user even in version mismatch situation.
 		 */
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+
+		if (EnableVersionChecks && checkExtensionVersion)
+		{
+			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+		}
 
 		return;
 	}
@@ -1310,7 +1315,7 @@ DeparseVacuumColumnNames(List *columnNameList)
  * ErrorIfUnstableCreateOrAlterExtensionStmt compares CITUS_EXTENSIONVERSION
  * and version given CREATE/ALTER EXTENSION statement will create/update to. If
  * they are not same in major or minor version numbers, this function errors
- * out. It ignores the catalog version.
+ * out. It ignores the schema version.
  */
 static void
 ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
@@ -1342,7 +1347,7 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 		{
 			char *newVersion = strVal(defElement->arg);
 
-			if (!CompareVersions(newVersion, CITUS_EXTENSIONVERSION))
+			if (!MajorVersionsCompatible(newVersion, CITUS_EXTENSIONVERSION))
 			{
 				ereport(ERROR, (errmsg("requested version is not compatible with "
 									   "loaded Citus binaries.")));
@@ -1354,11 +1359,11 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 
 	/*
 	 * new_version is not specified in ALTER EXTENSION statement, PostgreSQL will use
-	 * default_version from citus.control file. We will flush availableMajorVersion to
-	 * re-check the available version from citus.control file.
+	 * default_version from citus.control file. We will flush availableExtensionVersion
+	 * to re-check the available version from citus.control file.
 	 */
-	availableMajorVersion = NULL;
-	ErrorIfNewMajorVersionAvailable();
+	availableExtensionVersion = NULL;
+	ErrorIfAvailableVersionMismatch();
 }
 
 
