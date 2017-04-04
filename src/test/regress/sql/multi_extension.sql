@@ -94,8 +94,8 @@ WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgio.schema    NOT IN ('pg_catalog', 'citus');
 
 -- see incompatible version errors out
+RESET citus.enable_version_checks;
 DROP EXTENSION citus;
-\c
 CREATE EXTENSION citus VERSION '5.0';
 
 -- re-create in newest version
