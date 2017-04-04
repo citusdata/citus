@@ -1,0 +1,13 @@
+/* This file is created manually */
+
+/* Extension version expected by this Citus build */
+#undef CITUS_EXTENSIONVERSION
+
+/* Citus major version as a string */
+#undef CITUS_MAJORVERSION
+
+/* Citus version as a string */
+#undef CITUS_VERSION
+
+/* Citus version as a number */
+#undef CITUS_VERSION_NUM
