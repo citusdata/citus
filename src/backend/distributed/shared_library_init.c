@@ -615,7 +615,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomStringVariable(
 		"citus.version",
-		gettext_noop("Shows the running Citus version"),
+		gettext_noop("Shows the Citus library version"),
 		NULL,
 		&CitusVersion,
 		CITUS_VERSION,
@@ -625,7 +625,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.enable_version_checks",
-		gettext_noop("Enables version checks in CREATE/ALTER extension queries"),
+		gettext_noop("Enables version checks during CREATE/ALTER EXTENSION commands"),
 		NULL,
 		&EnableVersionChecks,
 		true,
