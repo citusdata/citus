@@ -1786,5 +1786,89 @@ FROM     (
 ORDER BY 1, 
          2 limit 10;
 
+-- not supported due to non relation rte
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event") ORDER BY time ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 0 AS event
+                       FROM events_table as  "events"
+                       WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 1 AS event
+                       FROM events_table as "events"
+                       WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 2 AS event
+                       FROM events_table as  "events"
+                       WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                      (SELECT 1, now(), 3 AS event) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+
+-- similar to the above, but constant rte is on the right side of the query
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id",
+              "t"."time",
+              unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id",
+                 min("t1"."time") AS "time",
+                 array_agg(("t1"."event") ORDER BY time ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                       (SELECT "events"."user_id", "events"."time", 0 AS event
+                        FROM events_table as  "events"
+                        WHERE event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 1 AS event
+                       FROM events_table as "events"
+                       WHERE event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION  ALL
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 2 AS event
+                       FROM events_table as  "events"
+                       WHERE event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                      (SELECT "events"."user_id", "events"."time", 3 AS event
+                       FROM events_table as "events"
+                       WHERE event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT random()::int as user_id) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+
 SET citus.subquery_pushdown TO FALSE;
 SET citus.enable_router_execution TO TRUE;
