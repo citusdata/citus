@@ -95,6 +95,10 @@ struct DropRelationCallbackState
 };
 
 
+/* Local functions forward declarations for deciding when to perform processing/checks */
+static bool SkipCitusProcessingForUtility(Node *parsetree);
+static bool IsCitusExtensionStmt(Node *parsetree);
+
 /* Local functions forward declarations for Transmit statement */
 static bool IsTransmitStmt(Node *parsetree);
 static void VerifyTransmitStmt(CopyStmt *copyStatement);
@@ -171,64 +175,12 @@ multi_ProcessUtility(Node *parsetree,
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
-	bool extensionStatement = false;
-	bool checkExtensionVersion = false;
+	bool skipCitusProcessing = SkipCitusProcessingForUtility(parsetree);
 
-	if (IsA(parsetree, TransactionStmt))
+	if (skipCitusProcessing)
 	{
-		/*
-		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
-		 * transactions in which case a lot of checks cannot be done safely in
-		 * that state. Since we never need to intercept transaction statements,
-		 * skip our checks and immediately fall into standard_ProcessUtility.
-		 */
-		standard_ProcessUtility(parsetree, queryString, context,
-								params, dest, completionTag);
+		bool checkExtensionVersion = IsCitusExtensionStmt(parsetree);
 
-		return;
-	}
-
-	if (IsA(parsetree, CreateExtensionStmt))
-	{
-		CreateExtensionStmt *createExtensionStmt = (CreateExtensionStmt *) parsetree;
-		if (strcmp(createExtensionStmt->extname, "citus") == 0)
-		{
-			checkExtensionVersion = true;
-		}
-
-		extensionStatement = true;
-	}
-
-	if (IsA(parsetree, AlterExtensionStmt))
-	{
-		AlterExtensionStmt *alterExtensionStmt = (AlterExtensionStmt *) parsetree;
-		if (strcmp(alterExtensionStmt->extname, "citus") == 0)
-		{
-			checkExtensionVersion = true;
-		}
-
-		extensionStatement = true;
-	}
-
-	if (IsA(parsetree, DropStmt))
-	{
-		DropStmt *dropStatement = (DropStmt *) parsetree;
-
-		if (dropStatement->removeType == OBJECT_EXTENSION)
-		{
-			extensionStatement = true;
-		}
-	}
-
-	if (extensionStatement || IsA(parsetree, VariableSetStmt))
-	{
-		/*
-		 * In CitusHasBeenLoaded check below, we compare binary Citus version,
-		 * extension version and available version. If they are different, we
-		 * force user to execute ALTER EXTENSION citus UPDATE. Therefore, we
-		 * drop to standard_ProcessUtility earlier for some commands which are
-		 * safe and necessary to user even in version mismatch situation.
-		 */
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
 
@@ -453,6 +405,75 @@ multi_ProcessUtility(Node *parsetree,
 
 		ProcessVacuumStmt(vacuumStmt, queryString);
 	}
+}
+
+
+static bool
+SkipCitusProcessingForUtility(Node *parsetree)
+{
+	switch (parsetree->type)
+	{
+		/*
+		 * In the CitusHasBeenLoaded check, we compare versions of loaded code,
+		 * the installed extension, and available extension. If they differ, we
+		 * force user to execute ALTER EXTENSION citus UPDATE. To allow this,
+		 * CREATE/DROP/ALTER extension must be omitted from Citus processing.
+		 */
+		case T_DropStmt:
+		{
+			DropStmt *dropStatement = (DropStmt *) parsetree;
+
+			if (dropStatement->removeType != OBJECT_EXTENSION)
+			{
+				return false;
+			}
+		}
+
+		/* no break, fall through */
+
+		case T_CreateExtensionStmt:
+		case T_AlterExtensionStmt:
+
+		/*
+		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
+		 * transactions in which case a lot of checks cannot be done safely in
+		 * that state. Since we never need to intercept transaction statements,
+		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
+		case T_TransactionStmt:
+
+		/*
+		 * Skip processing of variable set statements, to allow changing the
+		 * enable_version_checks GUC during testing.
+		 */
+		case T_VariableSetStmt:
+		{
+			return true;
+		}
+
+		default:
+		{
+			return false;
+		}
+	}
+}
+
+
+static bool
+IsCitusExtensionStmt(Node *parsetree)
+{
+	char *extensionName = "";
+
+	if (IsA(parsetree, CreateExtensionStmt))
+	{
+		extensionName = ((CreateExtensionStmt *) parsetree)->extname;
+	}
+	else if (IsA(parsetree, AlterExtensionStmt))
+	{
+		extensionName = ((AlterExtensionStmt *) parsetree)->extname;
+	}
+
+	return (strcmp(extensionName, "citus") == 0);
 }
 
 
