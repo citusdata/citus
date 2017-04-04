@@ -2949,6 +2949,12 @@ ErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 		errorDetail = "Subqueries other than from-clause subqueries are unsupported";
 	}
 
+	if (subqueryTree->rtable == NIL)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Subqueries without relations are unsupported";
+	}
+
 	if (subqueryTree->hasWindowFuncs)
 	{
 		preconditionsSatisfied = false;
