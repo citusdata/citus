@@ -242,9 +242,9 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT 1)
+			l_linenumber, count(DISTINCT 1)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
@@ -254,9 +254,9 @@ HINT:  You can load the hll extension from contrib packages and enable distinct 
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT (random() * 5)::int)
+			l_linenumber, count(DISTINCT (random() * 5)::int)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
@@ -465,9 +465,9 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, sum(DISTINCT l_partkey)
+			l_linenumber, sum(DISTINCT l_partkey)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
@@ -475,9 +475,9 @@ DETAIL:  Only count(distinct) aggregate is supported in subqueries
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, avg(DISTINCT l_partkey)
+			l_linenumber, avg(DISTINCT l_partkey)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute aggregate (distinct)
@@ -487,9 +487,9 @@ DETAIL:  Only count(distinct) aggregate is supported in subqueries
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT lineitem_hash)
+			l_linenumber, count(DISTINCT lineitem_hash)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute count (distinct)
@@ -497,9 +497,9 @@ DETAIL:  Non-column references are not supported yet
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT lineitem_hash.*)
+			l_linenumber, count(DISTINCT lineitem_hash.*)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute count (distinct)

@@ -131,9 +131,9 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT 1)
+			l_linenumber, count(DISTINCT 1)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
@@ -141,9 +141,9 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT (random() * 5)::int)
+			l_linenumber, count(DISTINCT (random() * 5)::int)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
@@ -278,18 +278,18 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, sum(DISTINCT l_partkey)
+			l_linenumber, sum(DISTINCT l_partkey)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, avg(DISTINCT l_partkey)
+			l_linenumber, avg(DISTINCT l_partkey)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
@@ -298,18 +298,18 @@ SELECT *
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT lineitem_hash)
+			l_linenumber, count(DISTINCT lineitem_hash)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
 SELECT *
 	FROM (
 		SELECT
-			l_orderkey, count(DISTINCT lineitem_hash.*)
+			l_linenumber, count(DISTINCT lineitem_hash.*)
 			FROM lineitem_hash
-			GROUP BY l_orderkey) sub
+			GROUP BY l_linenumber) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 

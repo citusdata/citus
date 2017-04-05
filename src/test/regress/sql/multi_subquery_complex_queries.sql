@@ -8,7 +8,6 @@
 -- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
-SET citus.subquery_pushdown TO TRUE;
 SET citus.enable_router_execution TO FALSE;
 
  -- 
@@ -1870,5 +1869,4 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
 
-SET citus.subquery_pushdown TO FALSE;
 SET citus.enable_router_execution TO TRUE;
