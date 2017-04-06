@@ -126,6 +126,22 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
 
+	/*
+	 * In some cases, for example; parameterized SQL functions, we may miss that
+	 * there is a need for distributed planning. Such cases only become clear after
+	 * standart_planner performs some modifications on parse tree. In such cases
+	 * we will simply error out.
+	 */
+	if (!needsDistributedPlanning && NeedsDistributedPlanning(parse))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning on this "
+							   "query because parameterized queries for SQL "
+							   "functions referencing distributed tables are "
+							   "not supported"),
+						errhint("Consider using PL/pgSQL functions instead.")));
+	}
+
 	return result;
 }
 
@@ -334,7 +350,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 						  "could not create distributed plan",
 						  "Possibly this is caused by the use of parameters in SQL "
 						  "functions, which is not supported in Citus.",
-						  "Consider using PLPGSQL functions instead.");
+						  "Consider using PL/pgSQL functions instead.");
 	}
 
 	/*
