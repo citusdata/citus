@@ -131,6 +131,9 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
+ * AssignRTEIdentities assigns unique identities to the
+ * RTE_RELATIONs in the given query.
+ *
  * To be able to track individual RTEs through postgres' query
  * planning, we need to be able to figure out whether an RTE is
  * actually a copy of another, rather than a different one. We
@@ -139,7 +142,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
  * Note that we're only interested in RTE_RELATIONs and thus assigning
  * identifiers to those RTEs only.
  */
-void
+static void
 AssignRTEIdentities(Query *queryTree)
 {
 	List *rangeTableList = NIL;
@@ -164,6 +167,9 @@ AssignRTEIdentities(Query *queryTree)
 
 
 /*
+ * AssignRTEIdentity assigns the given rteIdentifier to the given range table
+ * entry.
+ *
  * To be able to track RTEs through postgres' query planning, which copies and
  * duplicate, and modifies them, we sometimes need to figure out whether two
  * RTEs are copies of the same original RTE. For that we, hackishly, use a
@@ -744,9 +750,11 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
- * and a new join context, inserts it to the beginning of the
- * plannerRestrictionContextList.
+ * CreateAndPushPlannerRestrictionContext creates a new planner restriction context.
+ * Later, it creates a relation restriction context and a join restriction
+ * context, and sets those contexts in the planner restriction context. Finally,
+ * the planner restriction context is inserted to the beginning of the
+ * plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
 CreateAndPushPlannerRestrictionContext(void)
@@ -771,7 +779,7 @@ CreateAndPushPlannerRestrictionContext(void)
 
 
 /*
- * CurrentRestrictionContext returns the the last restriction context from the
+ * CurrentRelationRestrictionContext returns the the last restriction context from the
  * relationRestrictionContext list.
  */
 static RelationRestrictionContext *
@@ -792,7 +800,7 @@ CurrentRelationRestrictionContext(void)
 
 
 /*
- * CurrentRestrictionContext returns the the last restriction context from the
+ * CurrentJoinRestrictionContext returns the the last restriction context from the
  * list.
  */
 static JoinRestrictionContext *
