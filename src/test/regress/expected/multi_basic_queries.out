@@ -22,6 +22,16 @@ SELECT avg(l_extendedprice) FROM lineitem;
  38141.835375000000
 (1 row)
 
+-- Verify that we can do queries in read-only mode
+BEGIN;
+SET TRANSACTION READ ONLY;
+SELECT count(*) FROM lineitem;
+ count 
+-------
+ 12000
+(1 row)
+
+COMMIT;
 -- Verify temp tables which are used for final result aggregation don't persist.
 SELECT count(*) FROM pg_class WHERE relname LIKE 'pg_merge_job_%' AND relkind = 'r';
  count 
