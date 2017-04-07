@@ -906,6 +906,15 @@ SELECT *
 	ORDER BY id;
 END;
 
+-- queries inside read-only transactions can be router plannable
+BEGIN;
+SET TRANSACTION READ ONLY;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+END;
+
 -- cursor queries are router plannable
 BEGIN;
 DECLARE test_cursor CURSOR FOR 

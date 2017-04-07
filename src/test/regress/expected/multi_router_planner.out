@@ -2024,6 +2024,26 @@ DEBUG:  Plan is router executable
 (5 rows)
 
 END;
+-- queries inside read-only transactions can be router plannable
+BEGIN;
+SET TRANSACTION READ ONLY;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+END;
 -- cursor queries are router plannable
 BEGIN;
 DECLARE test_cursor CURSOR FOR 
