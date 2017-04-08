@@ -420,6 +420,8 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 		}
 	}
 
+	multiPlan->queryId = localPlan->queryId;
+
 	multiPlanData = SerializeMultiPlan(multiPlan);
 
 	customScan->custom_private = list_make1(multiPlanData);

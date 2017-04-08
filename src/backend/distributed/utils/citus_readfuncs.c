@@ -189,6 +189,7 @@ ReadMultiPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(workerJob);
 	READ_NODE_FIELD(masterQuery);
 	READ_BOOL_FIELD(routerExecutable);
+	READ_UINT_FIELD(queryId);
 	READ_NODE_FIELD(planningError);
 
 	READ_DONE();

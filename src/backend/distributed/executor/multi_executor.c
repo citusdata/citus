@@ -22,6 +22,7 @@
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
+#include "distributed/stats_statement_executors.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
@@ -420,6 +421,9 @@ void
 CitusEndScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
+
+	StoreStatsStatementExecutorsEntry(scanState->multiPlan->queryId,
+									  scanState->executorType);
 
 	if (scanState->tuplestorestate)
 	{

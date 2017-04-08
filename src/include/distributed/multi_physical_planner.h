@@ -220,6 +220,8 @@ typedef struct MultiPlan
 	Query *masterQuery;
 	bool routerExecutable;
 
+	uint32 queryId;             /* query identifier (copied from the top-level PlannedStmt) */
+
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
