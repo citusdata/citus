@@ -9,7 +9,6 @@
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
-#include "c.h"
 
 #include "distributed/multi_planner_utils.h"
 #include "distributed/multi_planner.h"
@@ -147,8 +146,8 @@ AllRelationsJoinedOnPartitionKey(PlannerRestrictionContext *plannerRestrictionCo
 	 * we should not check the partition column equality.
 	 * Consider two example cases:
 	 *   (i)   The query includes only a single colocated relation
-	 *   (ii)  A colocated relation is joined with a reference
-	 *         table where colocated relation is not joined on the partition key
+	 *   (ii)  A colocated relation is joined with a (or multiple) reference
+	 *         table(s) where colocated relation is not joined on the partition key
 	 *
 	 * For the above two cases, we should not execute the partition column equality
 	 * algorithm.
@@ -338,7 +337,6 @@ AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
 
 
 /*
- *
  * GetVarFromAssignedParam returns the Var that is assigned to the given
  * plannerParam if its kind is PARAM_EXEC.
  *
