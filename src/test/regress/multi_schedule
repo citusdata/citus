@@ -52,7 +52,7 @@ test: multi_partition_pruning
 test: multi_join_pruning multi_hash_pruning
 test: multi_null_minmax_value_pruning
 test: multi_query_directory_cleanup
-test: multi_task_assignment_policy
+test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements
 test: multi_dropped_column_aliases
 test: multi_binary_master_copy_format
