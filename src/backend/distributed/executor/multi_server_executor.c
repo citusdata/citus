@@ -29,6 +29,7 @@
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
+int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 
 
 /*
@@ -56,6 +57,15 @@ JobExecutorType(MultiPlan *multiPlan)
 	{
 		ereport(DEBUG2, (errmsg("Plan is router executable")));
 		return MULTI_EXECUTOR_ROUTER;
+	}
+
+	/* if it is not a router executable plan, inform user according to the log level */
+	if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF)
+	{
+		ereport(MultiTaskQueryLogLevel, (errmsg("multi-task query about to be executed"),
+										 errhint("Queries are split to multiple tasks "
+												 "if they have to be split into several"
+												 " queries on the workers.")));
 	}
 
 	if (executorType == MULTI_EXECUTOR_REAL_TIME)

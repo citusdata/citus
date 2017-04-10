@@ -92,6 +92,16 @@ static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry multi_task_query_log_level_options[] = {
+	{ "off", MULTI_TASK_QUERY_INFO_OFF, false },
+	{ "debug", DEBUG2, false },
+	{ "log", LOG, false },
+	{ "notice", NOTICE, false },
+	{ "warning", WARNING, false },
+	{ "error", ERROR, false },
+	{ NULL, 0, false }
+};
+
 /* *INDENT-ON* */
 
 
@@ -610,6 +620,16 @@ RegisterCitusConfigVariables(void)
 					 "The random policy picks all workers randomly."),
 		&ShardPlacementPolicy,
 		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.multi_task_query_log_level",
+		gettext_noop("Sets the level of multi task query execution log messages"),
+		NULL,
+		&MultiTaskQueryLogLevel,
+		MULTI_TASK_QUERY_INFO_OFF, multi_task_query_log_level_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
