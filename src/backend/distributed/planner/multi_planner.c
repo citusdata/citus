@@ -295,7 +295,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
 			/* Create and optimize logical plan */
-			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
+			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query);
 			MultiLogicalPlanOptimize(logicalPlan, plannerRestrictionContext);
 
 			/*
