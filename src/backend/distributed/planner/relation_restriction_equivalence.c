@@ -1,5 +1,5 @@
 /*
- * multi_planner_utils.c
+ * relation_restriction_equivalence.c
  *
  * This file contains functions helper functions for planning
  * queries with colocated tables and subqueries.
@@ -10,10 +10,10 @@
  */
 #include "postgres.h"
 
-#include "distributed/multi_planner_utils.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/pg_dist_partition.h"
+#include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
@@ -92,7 +92,7 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  secondClass);
 
 /*
- * AllRelationsJoinedOnPartitionKey aims to deduce whether each of the RTE_RELATION
+ * RestrictionEquivalenceForPartitionKeys aims to deduce whether each of the RTE_RELATION
  * is joined with at least one another RTE_RELATION on their partition keys. If each
  * RTE_RELATION follows the above rule, we can conclude that all RTE_RELATIONs are
  * joined on their partition keys.
@@ -123,7 +123,8 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
  * and GenerateAttributeEquivalencesForJoinRestrictions()
  */
 bool
-AllRelationsJoinedOnPartitionKey(PlannerRestrictionContext *plannerRestrictionContext)
+RestrictionEquivalenceForPartitionKeys(
+	PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;

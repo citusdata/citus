@@ -34,9 +34,9 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
-#include "distributed/multi_planner_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -280,7 +280,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
-	bool allRelationsJoinedOnPartitionKey = false;
+	bool restrictionEquivalenceForPartitionKeys = false;
 
 	multiPlan->operation = originalQuery->commandType;
 
@@ -296,8 +296,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		return multiPlan;
 	}
 
-	allRelationsJoinedOnPartitionKey =
-		AllRelationsJoinedOnPartitionKey(plannerRestrictionContext);
+	restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -317,7 +317,7 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
 													  relationRestrictionContext,
 													  taskIdIndex,
-													  allRelationsJoinedOnPartitionKey);
+													  restrictionEquivalenceForPartitionKeys);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
