@@ -750,16 +750,18 @@ DROP TABLE numbers_hash;
 SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
 
--- Test with ltree column
-CREATE TABLE test_ltree (path ltree);
-SELECT create_reference_table('test_ltree');
+-- Test copy with built-in type without binary output function
+CREATE TABLE test_smgr (
+col1 smgr NOT NULL,
+col2 character varying(255) NOT NULL
+);
 
-COPY test_ltree FROM STDIN DELIMITER AS ',';
-Top
-Top.Science
-Top.Science.Astronomy
+SELECT create_reference_table('test_smgr');
+
+\COPY test_smgr FROM STDIN WITH (format CSV)
+magnetic disk, test
 \.
 
-SELECT path, nlevel(path) AS depth FROM test_ltree ORDER BY depth;
+SELECT * FROM test_smgr;
 
-DROP TABLE test_ltree;
+DROP TABLE test_smgr;
