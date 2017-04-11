@@ -776,8 +776,6 @@ EXECUTE prepared_partition_parameter_update(3, 31);
 EXECUTE prepared_partition_parameter_update(4, 41);
 EXECUTE prepared_partition_parameter_update(5, 51);
 EXECUTE prepared_partition_parameter_update(6, 61);
-ERROR:  cannot run UPDATE command which targets multiple shards
-HINT:  Consider using an equality filter on partition column "key" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 PREPARE prepared_non_partition_parameter_update(int, int) AS
 	UPDATE prepare_table SET value = $2 WHERE key = 0 AND value = $1;
 -- execute 6 times to trigger prepared statement usage
@@ -813,8 +811,8 @@ SELECT * FROM prepare_table ORDER BY key, value;
    4 |    41
    5 |    51
    5 |    51
-   6 |    60
-   6 |      
+   6 |    61
+   6 |    61
 (24 rows)
 
 -- check deletes
@@ -826,8 +824,6 @@ EXECUTE prepared_partition_parameter_delete(3, 31);
 EXECUTE prepared_partition_parameter_delete(4, 41);
 EXECUTE prepared_partition_parameter_delete(5, 51);
 EXECUTE prepared_partition_parameter_delete(6, 61);
-ERROR:  cannot run DELETE command which targets multiple shards
-HINT:  Consider using an equality filter on partition column "key" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 PREPARE prepared_non_partition_parameter_delete(int) AS
 	DELETE FROM prepare_table WHERE key = 0 AND value = $1;
 -- execute 6 times to trigger prepared statement usage
@@ -847,9 +843,7 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-   6 |    60
-   6 |      
-(8 rows)
+(6 rows)
 
 -- Testing parameters + function evaluation
 CREATE TABLE prepare_func_table (

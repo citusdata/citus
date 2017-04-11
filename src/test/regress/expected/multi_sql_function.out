@@ -302,9 +302,7 @@ SELECT * FROM prepare_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-   6 |    60
-   6 |      
-(8 rows)
+(6 rows)
 
 -- test running parameterized SQL function
 CREATE TABLE test_parameterized_sql(id integer, org_id integer);
