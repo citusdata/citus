@@ -917,11 +917,11 @@ SELECT partition_parameter_update(5, 51);
 (1 row)
 
 SELECT partition_parameter_update(6, 61);
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
-CONTEXT:  SQL statement "UPDATE plpgsql_table SET value = $2 WHERE key = $1"
-PL/pgSQL function partition_parameter_update(integer,integer) line 3 at SQL statement
+ partition_parameter_update 
+----------------------------
+ 
+(1 row)
+
 CREATE FUNCTION non_partition_parameter_update(int, int) RETURNS void as $$
 BEGIN
 	UPDATE plpgsql_table SET value = $2 WHERE key = 0 AND value = $1;
@@ -990,8 +990,8 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
    4 |    41
    5 |    51
    5 |    51
-   6 |    60
-   6 |      
+   6 |    61
+   6 |    61
 (24 rows)
 
 -- check deletes
@@ -1032,11 +1032,11 @@ SELECT partition_parameter_delete(5, 51);
 (1 row)
 
 SELECT partition_parameter_delete(6, 61);
-ERROR:  distributed modifications must target exactly one shard
-DETAIL:  This command modifies all shards.
-HINT:  Consider using an equality filter on partition column "key". You can use master_modify_multiple_shards() to perform multi-shard delete or update operations.
-CONTEXT:  SQL statement "DELETE FROM plpgsql_table WHERE key = $1 AND value = $2"
-PL/pgSQL function partition_parameter_delete(integer,integer) line 3 at SQL statement
+ partition_parameter_delete 
+----------------------------
+ 
+(1 row)
+
 CREATE FUNCTION  non_partition_parameter_delete(int) RETURNS void as $$
 BEGIN
 	DELETE FROM plpgsql_table WHERE key = 0 AND value = $1;
@@ -1089,9 +1089,7 @@ SELECT * FROM plpgsql_table ORDER BY key, value;
    0 |      
    0 |      
    0 |      
-   6 |    60
-   6 |      
-(8 rows)
+(6 rows)
 
 -- check whether we can handle execute parameters
 CREATE TABLE execute_parameter_test (key int, val date);

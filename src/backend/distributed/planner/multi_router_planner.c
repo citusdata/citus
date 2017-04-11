@@ -93,8 +93,9 @@ static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *sta
 static char MostPermissiveVolatileFlag(char left, char right);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 									FromExpr *joinTree);
-static Task * RouterModifyTask(Query *originalQuery, Query *query);
-static ShardInterval * TargetShardIntervalForModify(Query *query);
+static Task * RouterModifyTask(Query *originalQuery, ShardInterval *shardInterval);
+static ShardInterval * TargetShardIntervalForModify(Query *query,
+													DeferredErrorMessage **planningError);
 static List * QueryRestrictList(Query *query);
 static bool FastShardPruningPossible(CmdType commandType, char partitionMethod);
 static Const * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
@@ -203,13 +204,25 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	if (modifyTask)
 	{
+		ShardInterval *targetShardInterval = NULL;
+		DeferredErrorMessage *planningError = NULL;
+
 		/* FIXME: this should probably rather be inlined into CreateModifyPlan */
-		multiPlan->planningError = ModifyQuerySupported(query);
-		if (multiPlan->planningError)
+		planningError = ModifyQuerySupported(query);
+		if (planningError != NULL)
 		{
+			multiPlan->planningError = planningError;
 			return multiPlan;
 		}
-		task = RouterModifyTask(originalQuery, query);
+
+		targetShardInterval = TargetShardIntervalForModify(query, &planningError);
+		if (planningError != NULL)
+		{
+			multiPlan->planningError = planningError;
+			return multiPlan;
+		}
+
+		task = RouterModifyTask(originalQuery, targetShardInterval);
 		Assert(task);
 	}
 	else
@@ -1847,9 +1860,8 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
  * shard-extended deparsed SQL to be run during execution.
  */
 static Task *
-RouterModifyTask(Query *originalQuery, Query *query)
+RouterModifyTask(Query *originalQuery, ShardInterval *shardInterval)
 {
-	ShardInterval *shardInterval = TargetShardIntervalForModify(query);
 	uint64 shardId = shardInterval->shardId;
 	Oid distributedTableId = shardInterval->relationId;
 	StringInfo queryString = makeStringInfo();
@@ -1895,11 +1907,12 @@ RouterModifyTask(Query *originalQuery, Query *query)
 
 /*
  * TargetShardIntervalForModify determines the single shard targeted by a provided
- * modify command. If no matching shards exist, or if the modification targets more
- * than one shard, this function raises an error depending on the command type.
+ * modify command. If no matching shards exist, it throws an error. If the modification
+ * targets more than one shard, this function sets the deferred error and returns NULL,
+ * to handle cases in which we cannot prune down to one shard due to a parameter.
  */
 static ShardInterval *
-TargetShardIntervalForModify(Query *query)
+TargetShardIntervalForModify(Query *query, DeferredErrorMessage **planningError)
 {
 	List *prunedShardList = NIL;
 	int prunedShardCount = 0;
@@ -1994,22 +2007,12 @@ TargetShardIntervalForModify(Query *query)
 							 "all shards satisfying delete criteria.");
 		}
 
+		(*planningError) = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+										 "distributed modifications must target "
+										 "exactly one shard",
+										 errorDetail, errorHint->data);
 
-		if (errorDetail == NULL)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributed modifications must target exactly one "
-								   "shard"),
-							errhint("%s", errorHint->data)));
-		}
-		else
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributed modifications must target exactly one "
-								   "shard"),
-							errdetail("%s", errorDetail),
-							errhint("%s", errorHint->data)));
-		}
+		return NULL;
 	}
 
 	return (ShardInterval *) linitial(prunedShardList);
