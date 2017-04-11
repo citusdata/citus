@@ -1017,3 +1017,21 @@ SELECT * FROM run_command_on_workers('DROP USER test_user');
 (2 rows)
 
 DROP USER test_user;
+-- Test with ltree column
+CREATE TABLE test_ltree (path ltree);
+SELECT create_reference_table('test_ltree');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+COPY test_ltree FROM STDIN DELIMITER AS ',';
+SELECT path, nlevel(path) AS depth FROM test_ltree ORDER BY depth;
+         path          | depth 
+-----------------------+-------
+ Top                   |     1
+ Top.Science           |     2
+ Top.Science.Astronomy |     3
+(3 rows)
+
+DROP TABLE test_ltree;
