@@ -438,6 +438,44 @@ EXECUTE prepared_non_partition_parameter_delete(62);
 -- check after deletes
 SELECT * FROM prepare_table ORDER BY key, value;
 
+-- Testing parameters + function evaluation
+CREATE TABLE prepare_func_table (
+    key text,
+    value1 int,
+    value2 text,
+    value3 timestamptz DEFAULT now()
+);
+SELECT create_distributed_table('prepare_func_table', 'key');
+
+-- test function evaluation with parameters in an expression
+PREPARE prepared_function_evaluation_insert(int) AS
+	INSERT INTO prepare_func_table (key, value1) VALUES ($1+1, 0*random());
+
+-- execute 6 times to trigger prepared statement usage
+EXECUTE prepared_function_evaluation_insert(1);
+EXECUTE prepared_function_evaluation_insert(2);
+EXECUTE prepared_function_evaluation_insert(3);
+EXECUTE prepared_function_evaluation_insert(4);
+EXECUTE prepared_function_evaluation_insert(5);
+EXECUTE prepared_function_evaluation_insert(6);
+
+SELECT key, value1 FROM prepare_func_table ORDER BY key;
+TRUNCATE prepare_func_table;
+
+-- make it a bit harder: parameter wrapped in a function call
+PREPARE wrapped_parameter_evaluation(text,text[]) AS
+	INSERT INTO prepare_func_table (key,value2) VALUES ($1,array_to_string($2,''));
+
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
+
+SELECT key, value2 FROM prepare_func_table;
+
+DROP TABLE prepare_func_table;
 
 -- verify placement state updates invalidate shard state
 --
