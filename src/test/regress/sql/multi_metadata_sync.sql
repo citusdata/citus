@@ -78,7 +78,9 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
-\d mx_testing_schema.mx_test_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
+\d mx_testing_schema.mx_test_table_col_1_key
+\d mx_testing_schema.mx_index
 
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
@@ -107,7 +109,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
 \c - - - :worker_1_port
-\d mx_testing_schema_2.fk_test_2
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
 
 \c - - - :master_port
 DROP TABLE mx_testing_schema_2.fk_test_2;
@@ -126,7 +128,9 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
 SELECT * FROM pg_dist_shard ORDER BY shardid;
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
-\d mx_testing_schema.mx_test_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
+\d mx_testing_schema.mx_test_table_col_1_key
+\d mx_testing_schema.mx_index
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
@@ -190,8 +194,13 @@ CREATE TABLE mx_test_schema_2.mx_table_2 (col1 int, col2 text);
 CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 (col2);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col1) REFERENCES mx_test_schema_1.mx_table_1(col1);
 
-\d mx_test_schema_1.mx_table_1
-\d mx_test_schema_2.mx_table_2
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+\d mx_test_schema_1.mx_table_1_col1_key
+\d mx_test_schema_1.mx_index_1
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
+\d mx_test_schema_2.mx_index_2
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
 
 SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
 SELECT create_distributed_table('mx_test_schema_2.mx_table_2', 'col1');
@@ -222,8 +231,7 @@ ORDER BY
 \c - - - :worker_1_port
 
 -- Check that tables are created
-\d mx_test_schema_1.mx_table_1
-\d mx_test_schema_2.mx_table_2
+\dt mx_test_schema_?.mx_table_?
 
 -- Check that table metadata are created
 SELECT 
@@ -260,16 +268,17 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
-CREATE UNIQUE INDEX mx_index_4 ON mx_test_schema_2.mx_table_2(col1);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_table_2
+\d mx_test_schema_2.mx_index_3
+\d mx_test_schema_2.mx_table_2_col1_key
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_table_2
+\d mx_test_schema_2.mx_index_3
 
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
@@ -285,7 +294,8 @@ FOREIGN KEY
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1);
 \c - - - :worker_1_port
-\d mx_test_schema_1.mx_table_1
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
 -- Check that foreign key constraint with NOT VALID works as well
 \c - - - :master_port
@@ -301,7 +311,7 @@ REFERENCES
 	mx_test_schema_2.mx_table_2(col1)
 NOT VALID;
 \c - - - :worker_1_port
-\d mx_test_schema_1.mx_table_1
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
 
 -- Check that mark_tables_colocated call propagates the changes to the workers 
 \c - - - :master_port
@@ -417,13 +427,13 @@ DROP TABLE mx_table_with_small_sequence;
 -- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
 SELECT create_distributed_table('mx_table_with_sequence', 'a');
-\d mx_table_with_sequence
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
 -- Check that the sequences created on the metadata worker as well
 \c - - - :worker_1_port
-\d mx_table_with_sequence
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 
@@ -437,7 +447,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - - - :worker_2_port
 SELECT groupid FROM pg_dist_local_group;
-\d mx_table_with_sequence
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
 SELECT nextval('mx_table_with_sequence_b_seq');
@@ -525,10 +535,10 @@ DROP USER mx_user;
 \c - - - :master_port
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
-\d mx_ref
+\dt mx_ref
 
 \c - - - :worker_1_port
-\d mx_ref
+\dt mx_ref
 SELECT
 	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
 FROM
@@ -546,10 +556,12 @@ SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_re
 \c - - - :master_port
 ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
 CREATE INDEX mx_ref_index ON mx_ref(col_1);
-\d mx_ref
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
+\d mx_ref_index
 
 \c - - - :worker_1_port
-\d mx_ref
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
+\d mx_ref_index
 	
 -- Check that metada is cleaned successfully upon drop table
 \c - - - :master_port

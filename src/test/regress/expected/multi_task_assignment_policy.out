@@ -2,6 +2,14 @@
 -- MULTI_TASK_ASSIGNMENT
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 880000;
+-- print major version to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+') AS major_version;
+ major_version 
+---------------
+ 10
+(1 row)
+
 SET citus.explain_distributed_queries TO off;
 -- Check that our policies for assigning tasks to worker nodes run as expected.
 -- To test this, we first create a shell table, and then manually insert shard
@@ -46,19 +54,12 @@ BEGIN;
 -- the following log messages print node name and port numbers; and node numbers
 -- in regression tests depend upon PG_VERSION_NUM.
 SET client_min_messages TO DEBUG3;
-DEBUG:  CommitTransactionCommand
 -- First test the default greedy task assignment policy
 SET citus.task_assignment_policy TO 'greedy';
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -67,12 +68,9 @@ DEBUG:  CommitTransactionCommand
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -82,16 +80,10 @@ DEBUG:  CommitTransactionCommand
 
 -- Next test the first-replica task assignment policy
 SET citus.task_assignment_policy TO 'first-replica';
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -100,12 +92,9 @@ DEBUG:  CommitTransactionCommand
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -115,16 +104,10 @@ DEBUG:  CommitTransactionCommand
 
 -- Finally test the round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -133,12 +116,9 @@ DEBUG:  CommitTransactionCommand
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -147,12 +127,9 @@ DEBUG:  CommitTransactionCommand
 (3 rows)
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57638
 DEBUG:  assigned task 4 to node localhost:57638
 DEBUG:  assigned task 2 to node localhost:57637
-DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -161,10 +138,5 @@ DEBUG:  CommitTransactionCommand
 (3 rows)
 
 RESET citus.task_assignment_policy;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  CommitTransactionCommand
 RESET client_min_messages;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
 COMMIT;

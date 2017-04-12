@@ -151,7 +151,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 COMMIT;
 
 -- but the DDL should correctly roll back
-\d labs
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
 SELECT * FROM labs WHERE id = 6;
 
 -- COPY can happen after single row INSERT

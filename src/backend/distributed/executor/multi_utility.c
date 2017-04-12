@@ -164,6 +164,49 @@ static bool warnedUserAbout2PC = false;
 
 
 /*
+ * multi_ProcessUtility9x is the 9.x-compatible wrapper for Citus' main utility
+ * hook. It simply adapts the old-style hook to call into the new-style (10+)
+ * hook, which is what now houses all actual logic.
+ */
+void
+multi_ProcessUtility9x(Node *parsetree,
+					   const char *queryString,
+					   ProcessUtilityContext context,
+					   ParamListInfo params,
+					   DestReceiver *dest,
+					   char *completionTag)
+{
+	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
+	plannedStmt->commandType = CMD_UTILITY;
+	plannedStmt->utilityStmt = parsetree;
+
+	multi_ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
+						 completionTag);
+}
+
+
+/*
+ * CitusProcessUtility is a version-aware wrapper of ProcessUtility to account
+ * for argument differences between the 9.x and 10+ PostgreSQL versions.
+ */
+void
+CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,
+					ParamListInfo params, DestReceiver *dest, char *completionTag)
+{
+#if (PG_VERSION_NUM >= 100000)
+	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
+	plannedStmt->commandType = CMD_UTILITY;
+	plannedStmt->utilityStmt = node;
+
+	ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
+				   completionTag);
+#else
+	ProcessUtility(node, queryString, context, params, dest, completionTag);
+#endif
+}
+
+
+/*
  * multi_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
  * commands and augmenting the coordinator's command with corresponding tasks
@@ -173,13 +216,15 @@ static bool warnedUserAbout2PC = false;
  * TRUNCATE and VACUUM are also supported.
  */
 void
-multi_ProcessUtility(Node *parsetree,
+multi_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
 					 ProcessUtilityContext context,
 					 ParamListInfo params,
+					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
 					 char *completionTag)
 {
+	Node *parsetree = pstmt->utilityStmt;
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -194,8 +239,13 @@ multi_ProcessUtility(Node *parsetree,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
+#if (PG_VERSION_NUM >= 100000)
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
+#else
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+#endif
 
 		return;
 	}
@@ -213,8 +263,13 @@ multi_ProcessUtility(Node *parsetree,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
+#if (PG_VERSION_NUM >= 100000)
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
+#else
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+#endif
 
 		return;
 	}
@@ -280,8 +335,13 @@ multi_ProcessUtility(Node *parsetree,
 	{
 		if (IsA(parsetree, IndexStmt))
 		{
+			MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(
+																 parsetree));
+
 			/* copy parse tree since we might scribble on it to fix the schema name */
 			parsetree = copyObject(parsetree);
+
+			MemoryContextSwitchTo(oldContext);
 
 			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
 		}
@@ -392,8 +452,14 @@ multi_ProcessUtility(Node *parsetree,
 		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 	}
 
+#if (PG_VERSION_NUM >= 100000)
+	pstmt->utilityStmt = parsetree;
+	standard_ProcessUtility(pstmt, queryString, context,
+							params, queryEnv, dest, completionTag);
+#else
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+#endif
 
 	/* don't run post-process code for local commands */
 	if (ddlJobs != NIL)
@@ -593,6 +659,8 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 		{
 			bool isFrom = copyStatement->is_from;
 			Relation copiedRelation = NULL;
+			char *schemaName = NULL;
+			MemoryContext relationContext = NULL;
 
 			/* consider using RangeVarGetRelidExtended to check perms before locking */
 			copiedRelation = heap_openrv(copyStatement->relation,
@@ -601,8 +669,12 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 			isDistributedRelation = IsDistributedTable(RelationGetRelid(copiedRelation));
 
 			/* ensure future lookups hit the same relation */
-			copyStatement->relation->schemaname = get_namespace_name(
-				RelationGetNamespace(copiedRelation));
+			schemaName = get_namespace_name(RelationGetNamespace(copiedRelation));
+
+			/* ensure we copy string into proper context */
+			relationContext = GetMemoryChunkContext(copyStatement->relation);
+			schemaName = MemoryContextStrdup(relationContext, schemaName);
+			copyStatement->relation->schemaname = schemaName;
 
 			heap_close(copiedRelation, NoLock);
 		}
@@ -723,6 +795,7 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 		bool isDistributedRelation = false;
 		char *namespaceName = NULL;
 		LOCKMODE lockmode = ShareLock;
+		MemoryContext relationContext = NULL;
 
 		/*
 		 * We don't support concurrently creating indexes for distributed
@@ -753,6 +826,10 @@ PlanIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand)
 		 * search path by the time postgres starts processing this statement.
 		 */
 		namespaceName = get_namespace_name(RelationGetNamespace(relation));
+
+		/* ensure we copy string into proper context */
+		relationContext = GetMemoryChunkContext(createIndexStatement->relation);
+		namespaceName = MemoryContextStrdup(relationContext, namespaceName);
 		createIndexStatement->relation->schemaname = namespaceName;
 
 		heap_close(relation, NoLock);
@@ -1506,7 +1583,7 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 		/* caller uses ShareLock for non-concurrent indexes, use the same lock here */
 		LOCKMODE lockMode = ShareLock;
 		Oid relationId = RangeVarGetRelid(relation, lockMode, missingOk);
-		Var *partitionKey = PartitionKey(relationId);
+		Var *partitionKey = DistPartitionKey(relationId);
 		char partitionMethod = PartitionMethod(relationId);
 		List *indexParameterList = NIL;
 		ListCell *indexParameterCell = NULL;
@@ -1653,7 +1730,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 					continue;
 				}
 
-				partitionColumn = PartitionKey(relationId);
+				partitionColumn = DistPartitionKey(relationId);
 
 				tuple = SearchSysCacheAttName(relationId, alterColumnName);
 				if (HeapTupleIsValid(tuple))
@@ -1737,7 +1814,7 @@ ErrorIfUnsupportedAlterAddConstraintStmt(AlterTableStmt *alterTableStatement)
 	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
 	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 	char distributionMethod = PartitionMethod(relationId);
-	Var *distributionColumn = PartitionKey(relationId);
+	Var *distributionColumn = DistPartitionKey(relationId);
 	uint32 colocationId = TableColocationId(relationId);
 	Relation relation = relation_open(relationId, ExclusiveLock);
 
@@ -2010,7 +2087,7 @@ ErrorIfUnsupportedForeignConstraint(Relation relation, char distributionMethod,
 			 * Partition column must exist in both referencing and referenced side of the
 			 * foreign key constraint. They also must be in same ordinal.
 			 */
-			referencedTablePartitionColumn = PartitionKey(referencedTableId);
+			referencedTablePartitionColumn = DistPartitionKey(referencedTableId);
 		}
 		else
 		{
@@ -2141,6 +2218,7 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 {
 	Oid sequenceId = RangeVarGetRelid(alterSeqStmt->sequence, AccessShareLock,
 									  alterSeqStmt->missing_ok);
+	bool sequenceOwned = false;
 	Oid ownedByTableId = InvalidOid;
 	Oid newOwnedByTableId = InvalidOid;
 	int32 ownedByColumnId = 0;
@@ -2152,8 +2230,20 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 		return;
 	}
 
-	/* see whether the sequences is already owned by a distributed table */
-	if (sequenceIsOwned(sequenceId, &ownedByTableId, &ownedByColumnId))
+#if (PG_VERSION_NUM >= 100000)
+	sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_AUTO, &ownedByTableId,
+									&ownedByColumnId);
+	if (!sequenceOwned)
+	{
+		sequenceOwned = sequenceIsOwned(sequenceId, DEPENDENCY_INTERNAL, &ownedByTableId,
+										&ownedByColumnId);
+	}
+#else
+	sequenceOwned = sequenceIsOwned(sequenceId, &ownedByTableId, &ownedByColumnId);
+#endif
+
+	/* see whether the sequence is already owned by a distributed table */
+	if (sequenceOwned)
 	{
 		hasDistributedOwner = IsDistributedTable(ownedByTableId);
 	}
@@ -2350,8 +2440,9 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 		/* run only a selected set of DDL commands */
 		if (applyDDLCommand)
 		{
-			ProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
-						   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+			CitusProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+
 			CommandCounterIncrement();
 		}
 	}
@@ -2984,8 +3075,7 @@ PostProcessUtility(Node *parsetree)
 	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
 	indexForm->indisvalid = true;
 
-	simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
-	CatalogUpdateIndexes(pg_index, indexTuple);
+	CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
 
 	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
 	heap_freetuple(indexTuple);

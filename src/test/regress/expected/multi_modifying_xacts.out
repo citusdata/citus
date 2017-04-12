@@ -185,12 +185,12 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 COMMIT;
 -- but the DDL should correctly roll back
-\d labs
-     Table "public.labs"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
  Column |  Type  | Modifiers 
 --------+--------+-----------
  id     | bigint | not null
  name   | text   | not null
+(2 rows)
 
 SELECT * FROM labs WHERE id = 6;
  id | name 

@@ -47,6 +47,9 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/regproc.h"
+#endif
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
@@ -1718,7 +1721,12 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	 * will convert the types of the aggregates if necessary.
 	 */
 	operatorNameList = list_make1(makeString(DIVISION_OPER_NAME));
+#if (PG_VERSION_NUM >= 100000)
+	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, NULL,
+					 -1);
+#else
 	opExpr = make_op(NULL, operatorNameList, (Node *) firstSum, (Node *) secondSum, -1);
+#endif
 
 	return opExpr;
 }
@@ -2845,7 +2853,7 @@ IsPartitionColumn(Expr *columnExpression, Query *query)
 
 	if (relationId != InvalidOid && column != NULL)
 	{
-		Var *partitionColumn = PartitionKey(relationId);
+		Var *partitionColumn = DistPartitionKey(relationId);
 
 		/* not all distributed tables have partition column */
 		if (partitionColumn != NULL && column->varattno == partitionColumn->varattno)
@@ -3119,7 +3127,7 @@ PartitionColumnOpExpressionList(Query *query)
 		Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
 		relationId = rangeTableEntry->relid;
-		partitionColumn = PartitionKey(relationId);
+		partitionColumn = DistPartitionKey(relationId);
 
 		if (partitionColumn != NULL &&
 			candidatePartitionColumn->varattno == partitionColumn->varattno)

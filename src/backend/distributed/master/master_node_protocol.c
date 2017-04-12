@@ -60,6 +60,9 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/tqual.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/varlena.h"
+#endif
 
 
 /* Shard related configuration */
@@ -495,7 +498,11 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 	char tableType = 0;
+#if (PG_VERSION_NUM >= 100000)
+	List *sequenceIdlist = getOwnedSequences(relationId, InvalidAttrNumber);
+#else
 	List *sequenceIdlist = getOwnedSequences(relationId);
+#endif
 	ListCell *sequenceIdCell;
 	char *tableSchemaDef = NULL;
 	char *tableColumnOptionsDef = NULL;

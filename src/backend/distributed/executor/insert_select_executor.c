@@ -152,6 +152,10 @@ ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 					  NULL);
 
 	PortalStart(portal, params, eflags, GetActiveSnapshot());
+#if (PG_VERSION_NUM >= 100000)
+	PortalRun(portal, count, false, true, dest, dest, NULL);
+#else
 	PortalRun(portal, count, false, dest, dest, NULL);
+#endif
 	PortalDrop(portal, false);
 }

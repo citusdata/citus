@@ -439,7 +439,7 @@ my @arguments = (
     '--user', $user
 );
 
-if ($majorversion eq '9.5' || $majorversion eq '9.6')
+if ($majorversion eq '9.5' || $majorversion eq '9.6' || $majorversion eq '10')
 {
     push(@arguments, '--bindir', "tmp_check/tmp-bin");
 }

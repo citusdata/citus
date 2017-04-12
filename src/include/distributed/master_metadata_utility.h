@@ -14,8 +14,10 @@
 #ifndef MASTER_METADATA_UTILITY_H
 #define MASTER_METADATA_UTILITY_H
 
+#include "access/heapam.h"
 #include "access/htup.h"
 #include "access/tupdesc.h"
+#include "catalog/indexing.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/relay_utility.h"
 #include "utils/acl.h"
@@ -28,6 +30,27 @@
 #define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
+
+#if (PG_VERSION_NUM < 100000)
+static inline void
+CatalogTupleUpdate(Relation heapRel, ItemPointer otid, HeapTuple tup)
+{
+	simple_heap_update(heapRel, otid, tup);
+	CatalogUpdateIndexes(heapRel, tup);
+}
+
+
+static inline Oid
+CatalogTupleInsert(Relation heapRel, HeapTuple tup)
+{
+	Oid oid = simple_heap_insert(heapRel, tup);
+	CatalogUpdateIndexes(heapRel, tup);
+
+	return oid;
+}
+
+
+#endif
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval

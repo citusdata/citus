@@ -320,7 +320,15 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 
 	if (BinaryMasterCopyFormat)
 	{
-		DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
+		DefElem *copyOption = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+		int location = -1; /* "unknown" token location */
+		copyOption = makeDefElem("format", (Node *) makeString("binary"), location);
+#else
+		copyOption = makeDefElem("format", (Node *) makeString("binary"));
+#endif
+
 		copyOptions = lappend(copyOptions, copyOption);
 	}
 
@@ -334,8 +342,13 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 		jobDirectoryName = MasterJobDirectoryName(workerTask->jobId);
 		taskFilename = TaskFilename(jobDirectoryName, workerTask->taskId);
 
+#if (PG_VERSION_NUM >= 100000)
+		copyState = BeginCopyFrom(NULL, stubRelation, taskFilename->data, false, NULL,
+								  NULL, copyOptions);
+#else
 		copyState = BeginCopyFrom(stubRelation, taskFilename->data, false, NULL,
 								  copyOptions);
+#endif
 
 		while (true)
 		{
