@@ -51,7 +51,7 @@ check-multi: all tempinstall-main
 
 check-multi-vg: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
-	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-isolation: all tempinstall-main
