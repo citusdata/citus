@@ -126,7 +126,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 		uint32 shardCount = ShardIntervalCount(sourceRelationId);
 		uint32 shardReplicationFactor = TableShardReplicationFactor(sourceRelationId);
 
-		Var *sourceDistributionColumn = PartitionKey(sourceRelationId);
+		Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
 		Oid sourceDistributionColumnType = InvalidOid;
 
 		/* reference tables has NULL distribution column */
@@ -567,7 +567,7 @@ CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 	Oid targetDistributionColumnType = InvalidOid;
 
 	/* reference tables have NULL distribution column */
-	sourceDistributionColumn = PartitionKey(sourceRelationId);
+	sourceDistributionColumn = DistPartitionKey(sourceRelationId);
 	if (sourceDistributionColumn == NULL)
 	{
 		sourceDistributionColumnType = InvalidOid;
@@ -578,7 +578,7 @@ CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 	}
 
 	/* reference tables have NULL distribution column */
-	targetDistributionColumn = PartitionKey(targetRelationId);
+	targetDistributionColumn = DistPartitionKey(targetRelationId);
 	if (targetDistributionColumn == NULL)
 	{
 		targetDistributionColumnType = InvalidOid;

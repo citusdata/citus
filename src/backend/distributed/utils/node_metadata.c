@@ -361,7 +361,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
 		distributionValueString = DatumToString(inputDatum, inputDataType);
 
-		distributionColumn = PartitionKey(relationId);
+		distributionColumn = DistPartitionKey(relationId);
 		distributionDataType = distributionColumn->vartype;
 
 		distributionValueDatum = StringToDatum(distributionValueString,
