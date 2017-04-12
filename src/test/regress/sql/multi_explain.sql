@@ -36,6 +36,10 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
+-- VACUMM related tables to ensure test outputs are stable
+VACUUM ANALYZE lineitem;
+VACUUM ANALYZE orders;
+
 -- Test Text format
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
