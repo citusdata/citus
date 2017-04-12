@@ -87,7 +87,7 @@ static List * TaskShardIntervalList(List *taskList);
 static void AcquireExecutorShardLock(Task *task, CmdType commandType);
 static void AcquireExecutorMultiShardLocks(List *taskList);
 static bool RequiresConsistentSnapshot(Task *task);
-static void ProcessMasterEvaluableFunctions(Job *workerJob);
+static void ProcessMasterEvaluableFunctions(Job *workerJob, PlanState *planState);
 static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 											   Oid **parameterTypes,
 											   const char ***parameterValues);
@@ -443,13 +443,14 @@ RouterSingleModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		Task *task = (Task *) linitial(taskList);
 
-		ProcessMasterEvaluableFunctions(workerJob);
+		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteSingleModifyTask(scanState, task, hasReturning);
 
@@ -467,14 +468,14 @@ RouterSingleModifyExecScan(CustomScanState *node)
  * the query strings in task lists.
  */
 static void
-ProcessMasterEvaluableFunctions(Job *workerJob)
+ProcessMasterEvaluableFunctions(Job *workerJob, PlanState *planState)
 {
 	if (workerJob->requiresMasterEvaluation)
 	{
 		Query *jobQuery = workerJob->jobQuery;
 		List *taskList = workerJob->taskList;
 
-		ExecuteMasterEvaluableFunctions(jobQuery);
+		ExecuteMasterEvaluableFunctions(jobQuery, planState);
 		RebuildQueryStrings(jobQuery, taskList);
 	}
 }
@@ -493,13 +494,14 @@ RouterMultiModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		bool hasReturning = multiPlan->hasReturning;
 		bool isModificationQuery = true;
 
-		ProcessMasterEvaluableFunctions(workerJob);
+		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
 
@@ -525,12 +527,13 @@ RouterSelectExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
+		PlanState *planState = &(scanState->customScanState.ss.ps);
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		Task *task = (Task *) linitial(taskList);
 
-		ProcessMasterEvaluableFunctions(workerJob);
+		ProcessMasterEvaluableFunctions(workerJob, planState);
 
 		ExecuteSingleSelectTask(scanState, task);
 

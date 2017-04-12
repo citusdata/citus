@@ -11,10 +11,11 @@
 #ifndef CITUS_CLAUSES_H
 #define CITUS_CLAUSES_H
 
+#include "nodes/execnodes.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 
 extern bool RequiresMasterEvaluation(Query *query);
-extern void ExecuteMasterEvaluableFunctions(Query *query);
+extern void ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState);
 
 #endif /* CITUS_CLAUSES_H */

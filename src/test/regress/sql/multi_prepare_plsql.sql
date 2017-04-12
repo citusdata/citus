@@ -497,6 +497,47 @@ END;
 $$;
 DROP TABLE execute_parameter_test;
 
+-- check whether we can handle parameters + default
+CREATE TABLE func_parameter_test (
+    key text NOT NULL,
+    seq int4 NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (key, seq)
+
+);
+SELECT create_distributed_table('func_parameter_test', 'key');
+
+CREATE OR REPLACE FUNCTION insert_with_max(pkey text) RETURNS VOID AS
+$BODY$
+    DECLARE
+        max_seq int4;
+    BEGIN
+        SELECT MAX(seq) INTO max_seq
+        FROM func_parameter_test
+        WHERE func_parameter_test.key = pkey;
+
+        IF max_seq IS NULL THEN
+            max_seq := 0;
+        END IF;
+
+        INSERT INTO func_parameter_test(key, seq) VALUES (pkey, max_seq + 1);
+    END;
+$BODY$
+LANGUAGE plpgsql;
+
+SELECT insert_with_max('key');
+SELECT insert_with_max('key');
+SELECT insert_with_max('key');
+SELECT insert_with_max('key');
+SELECT insert_with_max('key');
+SELECT insert_with_max('key');
+
+SELECT key, seq FROM func_parameter_test ORDER BY seq;
+
+DROP FUNCTION insert_with_max(text);
+DROP TABLE func_parameter_test;
+
 -- clean-up functions
 DROP FUNCTION plpgsql_test_1();
 DROP FUNCTION plpgsql_test_2();

@@ -22,11 +22,21 @@
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 
-static Node * PartiallyEvaluateExpression(Node *expression);
-static Node * EvaluateNodeIfReferencesFunction(Node *expression);
-static Node * PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar);
+
+typedef struct FunctionEvaluationContext
+{
+	PlanState *planState;
+	bool containsVar;
+} FunctionEvaluationContext;
+
+
+/* private function declarations */
+static Node * PartiallyEvaluateExpression(Node *expression, PlanState *planState);
+static Node * EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState);
+static Node * PartiallyEvaluateExpressionMutator(Node *expression,
+												 FunctionEvaluationContext *context);
 static Expr * citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
-								  Oid result_collation);
+								  Oid result_collation, PlanState *planState);
 
 
 /*
@@ -88,7 +98,7 @@ RequiresMasterEvaluation(Query *query)
  * any sub-expressions which don't include Vars.
  */
 void
-ExecuteMasterEvaluableFunctions(Query *query)
+ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 {
 	CmdType commandType = query->commandType;
 	ListCell *targetEntryCell = NULL;
@@ -99,7 +109,8 @@ ExecuteMasterEvaluableFunctions(Query *query)
 
 	if (query->jointree && query->jointree->quals)
 	{
-		query->jointree->quals = PartiallyEvaluateExpression(query->jointree->quals);
+		query->jointree->quals = PartiallyEvaluateExpression(query->jointree->quals,
+															 planState);
 	}
 
 	foreach(targetEntryCell, query->targetList)
@@ -114,11 +125,13 @@ ExecuteMasterEvaluableFunctions(Query *query)
 
 		if (commandType == CMD_INSERT && !insertSelectQuery)
 		{
-			modifiedNode = EvaluateNodeIfReferencesFunction((Node *) targetEntry->expr);
+			modifiedNode = EvaluateNodeIfReferencesFunction((Node *) targetEntry->expr,
+															planState);
 		}
 		else
 		{
-			modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr);
+			modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
+													   planState);
 		}
 
 		targetEntry->expr = (Expr *) modifiedNode;
@@ -133,14 +146,14 @@ ExecuteMasterEvaluableFunctions(Query *query)
 			continue;
 		}
 
-		ExecuteMasterEvaluableFunctions(rte->subquery);
+		ExecuteMasterEvaluableFunctions(rte->subquery, planState);
 	}
 
 	foreach(cteCell, query->cteList)
 	{
 		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
 
-		ExecuteMasterEvaluableFunctions((Query *) expr->ctequery);
+		ExecuteMasterEvaluableFunctions((Query *) expr->ctequery, planState);
 	}
 }
 
@@ -150,10 +163,11 @@ ExecuteMasterEvaluableFunctions(Query *query)
  * doesn't show up in the parameter list.
  */
 static Node *
-PartiallyEvaluateExpression(Node *expression)
+PartiallyEvaluateExpression(Node *expression, PlanState *planState)
 {
-	bool unused;
-	return PartiallyEvaluateExpressionMutator(expression, &unused);
+	FunctionEvaluationContext globalContext = { planState, false };
+
+	return PartiallyEvaluateExpressionMutator(expression, &globalContext);
 }
 
 
@@ -167,10 +181,10 @@ PartiallyEvaluateExpression(Node *expression)
  * only call EvaluateExpression on the top-most level and get the same result.
  */
 static Node *
-PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar)
+PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *context)
 {
-	bool childContainsVar = false;
 	Node *copy = NULL;
+	FunctionEvaluationContext localContext = { context->planState, false };
 
 	if (expression == NULL)
 	{
@@ -182,30 +196,30 @@ PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar)
 	{
 		return expression_tree_mutator(expression,
 									   PartiallyEvaluateExpressionMutator,
-									   containsVar);
+									   context);
 	}
 
 	if (IsA(expression, Var))
 	{
-		*containsVar = true;
+		context->containsVar = true;
 
 		/* makes a copy for us */
 		return expression_tree_mutator(expression,
 									   PartiallyEvaluateExpressionMutator,
-									   containsVar);
+									   context);
 	}
 
 	copy = expression_tree_mutator(expression,
 								   PartiallyEvaluateExpressionMutator,
-								   &childContainsVar);
+								   &localContext);
 
-	if (childContainsVar)
+	if (localContext.containsVar)
 	{
-		*containsVar = true;
+		context->containsVar = true;
 	}
 	else
 	{
-		copy = EvaluateNodeIfReferencesFunction(copy);
+		copy = EvaluateNodeIfReferencesFunction(copy, context->planState);
 	}
 
 	return copy;
@@ -221,7 +235,7 @@ PartiallyEvaluateExpressionMutator(Node *expression, bool *containsVar)
  * all nodes which invoke functions which might not be IMMUTABLE.
  */
 static Node *
-EvaluateNodeIfReferencesFunction(Node *expression)
+EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 {
 	if (IsA(expression, FuncExpr))
 	{
@@ -230,7 +244,8 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 		return (Node *) citus_evaluate_expr((Expr *) expr,
 											expr->funcresulttype,
 											exprTypmod((Node *) expr),
-											expr->funccollid);
+											expr->funccollid,
+											planState);
 	}
 
 	if (IsA(expression, OpExpr) ||
@@ -242,7 +257,8 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 
 		return (Node *) citus_evaluate_expr((Expr *) expr,
 											expr->opresulttype, -1,
-											expr->opcollid);
+											expr->opcollid,
+											planState);
 	}
 
 	if (IsA(expression, CoerceViaIO))
@@ -251,7 +267,8 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 
 		return (Node *) citus_evaluate_expr((Expr *) expr,
 											expr->resulttype, -1,
-											expr->resultcollid);
+											expr->resultcollid,
+											planState);
 	}
 
 	if (IsA(expression, ArrayCoerceExpr))
@@ -261,21 +278,24 @@ EvaluateNodeIfReferencesFunction(Node *expression)
 		return (Node *) citus_evaluate_expr((Expr *) expr,
 											expr->resulttype,
 											expr->resulttypmod,
-											expr->resultcollid);
+											expr->resultcollid,
+											planState);
 	}
 
 	if (IsA(expression, ScalarArrayOpExpr))
 	{
 		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) expression;
 
-		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid);
+		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid,
+											planState);
 	}
 
 	if (IsA(expression, RowCompareExpr))
 	{
 		RowCompareExpr *expr = (RowCompareExpr *) expression;
 
-		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid);
+		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid,
+											planState);
 	}
 
 	return expression;
@@ -292,10 +312,11 @@ EvaluateNodeIfReferencesFunction(Node *expression)
  */
 static Expr *
 citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
-					Oid result_collation)
+					Oid result_collation, PlanState *planState)
 {
-	EState	   *estate;
+	EState     *estate;
 	ExprState  *exprstate;
+	ExprContext *econtext;
 	MemoryContext oldcontext;
 	Datum		const_val;
 	bool		const_is_null;
@@ -317,19 +338,23 @@ citus_evaluate_expr(Expr *expr, Oid result_type, int32 result_typmod,
 	 * Prepare expr for execution.  (Note: we can't use ExecPrepareExpr
 	 * because it'd result in recursively invoking eval_const_expressions.)
 	 */
-	exprstate = ExecInitExpr(expr, NULL);
+	exprstate = ExecInitExpr(expr, planState);
+
+	if (planState != NULL)
+	{
+		/* use executor's context to pass down parameters */
+		econtext = planState->ps_ExprContext;
+	}
+	else
+	{
+		/* when called from a function, use a default context */
+		econtext = GetPerTupleExprContext(estate);
+	}
 
 	/*
 	 * And evaluate it.
-	 *
-	 * It is OK to use a default econtext because none of the ExecEvalExpr()
-	 * code used in this situation will use econtext.  That might seem
-	 * fortuitous, but it's not so unreasonable --- a constant expression does
-	 * not depend on context, by definition, n'est ce pas?
 	 */
-	const_val = ExecEvalExprSwitchContext(exprstate,
-										  GetPerTupleExprContext(estate),
-										  &const_is_null, NULL);
+	const_val = ExecEvalExprSwitchContext(exprstate, econtext, &const_is_null, NULL);
 
 	/* Get info needed about result datatype */
 	get_typlenbyval(result_type, &resultTypLen, &resultTypByVal);
