@@ -447,7 +447,8 @@ SELECT
 	t_custkey, r_custkey 
 FROM 
 	multi_outer_join_right_reference FULL JOIN 
-	multi_outer_join_third_reference ON (t_custkey = r_custkey);
+	multi_outer_join_third_reference ON (t_custkey = r_custkey)
+ORDER BY 1;
 
 -- DROP unused tables to clean up workspace
 DROP TABLE multi_outer_join_left_hash;
