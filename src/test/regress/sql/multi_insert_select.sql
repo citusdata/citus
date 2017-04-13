@@ -1573,6 +1573,29 @@ INSERT INTO text_table (part_col) SELECT val FROM text_table;
 INSERT INTO text_table (part_col) SELECT val::text FROM text_table;
 insert into table_with_starts_with_defaults (b,c) select b,c FROM table_with_starts_with_defaults;
 
+-- Test on partition column without native hash function 
+CREATE TABLE raw_table
+(
+    id BIGINT,
+    time DATE
+);
+
+CREATE TABLE summary_table
+(
+    time DATE,
+    count BIGINT
+);
+
+SELECT create_distributed_table('raw_table', 'time');
+SELECT create_distributed_table('summary_table', 'time');
+
+INSERT INTO raw_table VALUES(1, '11-11-1980');
+INSERT INTO summary_table SELECT time, COUNT(*) FROM raw_table GROUP BY time;
+
+SELECT * FROM summary_table;
+
+DROP TABLE raw_table;
+DROP TABLE summary_table;
 DROP TABLE raw_events_first CASCADE;
 DROP TABLE raw_events_second;
 DROP TABLE reference_table;

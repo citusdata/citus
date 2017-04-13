@@ -99,6 +99,7 @@ extern Oid DistShardPlacementNodeidIndexId(void);
 
 /* function oids */
 extern Oid CitusExtraDataContainerFuncId(void);
+extern Oid CitusWorkerHashFunctionId(void);
 
 /* user related functions */
 extern Oid CitusExtensionOwner(void);
