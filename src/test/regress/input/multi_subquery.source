@@ -173,12 +173,12 @@ FROM
 		l_orderkey) AS unit_prices;
 
 -- Check that we error out if there is union all.
-
-SELECT count(*) FROM
-(
-   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
-   (SELECT 1::bigint)
-) b;
+-- TEMPORARLY DISABLE UNION ALL
+-- SELECT count(*) FROM
+-- (
+--   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
+--   (SELECT 1::bigint)
+--) b;
 
 ---
 -- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
