@@ -26,6 +26,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_explain.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_planner.h"
@@ -36,6 +37,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
+#include "distributed/stats_statement_executors.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
@@ -164,6 +166,8 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+
+	InitializeStatsStatementExecutors();
 }
 
 

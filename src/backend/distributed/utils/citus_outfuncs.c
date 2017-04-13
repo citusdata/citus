@@ -282,6 +282,7 @@ OutMultiPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(workerJob);
 	WRITE_NODE_FIELD(masterQuery);
 	WRITE_BOOL_FIELD(routerExecutable);
+	WRITE_UINT_FIELD(queryId);
 	WRITE_NODE_FIELD(planningError);
 }
 
