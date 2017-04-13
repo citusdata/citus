@@ -36,6 +36,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/relation_restriction_equivalence.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -48,6 +49,8 @@
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "optimizer/clauses.h"
+#include "optimizer/joininfo.h"
+#include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
@@ -75,21 +78,22 @@ typedef struct WalkerState
 
 bool EnableRouterExecution = true;
 
+
 /* planner functions forward declarations */
 static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 											  Query *query,
 											  RelationRestrictionContext *
 											  restrictionContext);
 static MultiPlan * CreateInsertSelectRouterPlan(Query *originalQuery,
-												RelationRestrictionContext *
-												restrictionContext);
+												PlannerRestrictionContext *
+												plannerRestrictionContext);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
 											   ShardInterval *shardInterval,
 											   RelationRestrictionContext *
 											   restrictionContext,
-											   uint32 taskIdIndex);
-static List * HashedShardIntervalOpExpressions(ShardInterval *shardInterval);
-static Param * UninstantiatedParameterForColumn(Var *relationPartitionKey);
+											   uint32 taskIdIndex,
+											   bool allRelationsJoinedOnPartitionKey);
+static List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -129,7 +133,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
-static void AddUninstantiatedEqualityQual(Query *query, Var *targetPartitionColumnVar);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
 
 
@@ -165,16 +168,19 @@ CreateRouterPlan(Query *originalQuery, Query *query,
  */
 MultiPlan *
 CreateModifyPlan(Query *originalQuery, Query *query,
-				 RelationRestrictionContext *restrictionContext)
+				 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	if (InsertSelectQuery(originalQuery))
 	{
-		return CreateInsertSelectRouterPlan(originalQuery, restrictionContext);
+		return CreateInsertSelectRouterPlan(originalQuery, plannerRestrictionContext);
 	}
 	else
 	{
+		RelationRestrictionContext *relationRestrictionContext =
+			plannerRestrictionContext->relationRestrictionContext;
+
 		return CreateSingleTaskRouterPlan(originalQuery, query,
-										  restrictionContext);
+										  relationRestrictionContext);
 	}
 }
 
@@ -258,7 +264,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
  */
 static MultiPlan *
 CreateInsertSelectRouterPlan(Query *originalQuery,
-							 RelationRestrictionContext *restrictionContext)
+							 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	int shardOffset = 0;
 	List *sqlTaskList = NIL;
@@ -271,7 +277,10 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	Oid targetRelationId = insertRte->relid;
 	DistTableCacheEntry *targetCacheEntry = DistributedTableCacheEntry(targetRelationId);
 	int shardCount = targetCacheEntry->shardIntervalArrayLength;
-	bool allReferenceTables = restrictionContext->allReferenceTables;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
+	bool restrictionEquivalenceForPartitionKeys = false;
 
 	multiPlan->operation = originalQuery->commandType;
 
@@ -286,6 +295,9 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 	{
 		return multiPlan;
 	}
+
+	restrictionEquivalenceForPartitionKeys =
+		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
@@ -303,7 +315,9 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		Task *modifyTask = NULL;
 
 		modifyTask = RouterModifyTaskForShardInterval(originalQuery, targetShardInterval,
-													  restrictionContext, taskIdIndex);
+													  relationRestrictionContext,
+													  taskIdIndex,
+													  restrictionEquivalenceForPartitionKeys);
 
 		/* add the task if it could be created */
 		if (modifyTask != NULL)
@@ -354,7 +368,8 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 static Task *
 RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInterval,
 								 RelationRestrictionContext *restrictionContext,
-								 uint32 taskIdIndex)
+								 uint32 taskIdIndex,
+								 bool allRelationsJoinedOnPartitionKey)
 {
 	Query *copiedQuery = copyObject(originalQuery);
 	RangeTblEntry *copiedInsertRte = ExtractInsertRangeTableEntry(copiedQuery);
@@ -382,6 +397,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	bool replacePrunedQueryWithDummy = false;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
 	List *hashedOpExpressions = NIL;
+	RestrictInfo *hashedRestrictInfo = NULL;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -394,43 +410,19 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	{
 		RelationRestriction *restriction = lfirst(restrictionCell);
 		List *originalBaserestrictInfo = restriction->relOptInfo->baserestrictinfo;
-		Var *relationPartitionKey = PartitionColumn(restriction->relationId,
-													restriction->index);
-		Param *uninstantiatedParameter = NULL;
+		Index rteIndex = restriction->index;
 
-		/*
-		 * We don't need to add restriction to reference tables given that they are
-		 * already single sharded and always prune to that single shard.
-		 */
-		if (PartitionMethod(restriction->relationId) == DISTRIBUTE_BY_NONE)
+		if (!allRelationsJoinedOnPartitionKey || allReferenceTables)
 		{
 			continue;
 		}
 
-		hashedOpExpressions = HashedShardIntervalOpExpressions(shardInterval);
-		Assert(list_length(hashedOpExpressions) == 2);
+		hashedOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
 
-		/*
-		 * Here we check whether the planner knows an equality between the partition column
-		 * and the uninstantiated parameter. If such an equality exists, we simply add the
-		 * shard restrictions.
-		 */
-		uninstantiatedParameter = UninstantiatedParameterForColumn(relationPartitionKey);
-		if (exprs_known_equal(restriction->plannerInfo, (Node *) relationPartitionKey,
-							  (Node *) uninstantiatedParameter))
-		{
-			RestrictInfo *geRestrictInfo = NULL;
-			RestrictInfo *leRestrictInfo = NULL;
+		hashedRestrictInfo = make_simple_restrictinfo((Expr *) hashedOpExpressions);
+		originalBaserestrictInfo = lappend(originalBaserestrictInfo, hashedRestrictInfo);
 
-			OpExpr *hashedGEOpExpr = (OpExpr *) linitial(hashedOpExpressions);
-			OpExpr *hashedLEOpExpr = (OpExpr *) lsecond(hashedOpExpressions);
-
-			geRestrictInfo = make_simple_restrictinfo((Expr *) hashedGEOpExpr);
-			originalBaserestrictInfo = lappend(originalBaserestrictInfo, geRestrictInfo);
-
-			leRestrictInfo = make_simple_restrictinfo((Expr *) hashedLEOpExpr);
-			originalBaserestrictInfo = lappend(originalBaserestrictInfo, leRestrictInfo);
-		}
+		restriction->relOptInfo->baserestrictinfo = originalBaserestrictInfo;
 	}
 
 	/*
@@ -530,92 +522,53 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 
 
 /*
- * HashedShardIntervalOpExpressions returns a list of OpExprs with exactly two
- * items in it. The list consists of shard interval ranges with hashed columns
- * such as (hashColumn >= shardMinValue) and (hashedColumn <= shardMaxValue).
+ * ShardIntervalOpExpressions returns a list of OpExprs with exactly two
+ * items in it. The list consists of shard interval ranges with partition columns
+ * such as (partitionColumn >= shardMinValue) and (partitionColumn <= shardMaxValue).
  *
- * The function errors out if the given shard interval does not belong to a hash
- * distributed table.
+ * The function returns hashed columns generated by MakeInt4Column() for the hash
+ * partitioned tables in place of partition columns.
+ *
+ * The function errors out if the given shard interval does not belong to a hash,
+ * range and append distributed tables.
  */
 static List *
-HashedShardIntervalOpExpressions(ShardInterval *shardInterval)
+ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 {
-	List *operatorExpressions = NIL;
-	Var *hashedGEColumn = NULL;
-	Var *hashedLEColumn = NULL;
-	OpExpr *hashedGEOpExpr = NULL;
-	OpExpr *hashedLEOpExpr = NULL;
-	Oid integer4GEoperatorId = InvalidOid;
-	Oid integer4LEoperatorId = InvalidOid;
-
-	Datum shardMinValue = shardInterval->minValue;
-	Datum shardMaxValue = shardInterval->maxValue;
+	Oid relationId = shardInterval->relationId;
 	char partitionMethod = PartitionMethod(shardInterval->relationId);
+	Var *partitionColumn = NULL;
+	Node *baseConstraint = NULL;
 
-	if (partitionMethod != DISTRIBUTE_BY_HASH)
+	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		partitionColumn = MakeInt4Column();
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_RANGE || partitionMethod ==
+			 DISTRIBUTE_BY_APPEND)
+	{
+		Assert(rteIndex > 0);
+
+		partitionColumn = PartitionColumn(relationId, rteIndex);
+	}
+	else
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("cannot create shard interval operator expression for "
-							   "distributed relations other than hash distributed "
+							   "distributed relations other than hash, range and append distributed "
 							   "relations")));
 	}
 
-	/* get the integer >=, <= operators from the catalog */
-	integer4GEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTGreaterEqualStrategyNumber);
-	integer4LEoperatorId = get_opfamily_member(INTEGER_BTREE_FAM_OID, INT4OID,
-											   INT4OID,
-											   BTLessEqualStrategyNumber);
+	/* build the base expression for constraint */
+	baseConstraint = BuildBaseConstraint(partitionColumn);
 
-	/* generate hashed columns */
-	hashedGEColumn = MakeInt4Column();
-	hashedLEColumn = MakeInt4Column();
+	/* walk over shard list and check if shards can be pruned */
+	if (shardInterval->minValueExists && shardInterval->maxValueExists)
+	{
+		UpdateConstraint(baseConstraint, shardInterval);
+	}
 
-	/* generate the necessary operators */
-	hashedGEOpExpr = (OpExpr *) make_opclause(integer4GEoperatorId, InvalidOid, false,
-											  (Expr *) hashedGEColumn,
-											  (Expr *) MakeInt4Constant(shardMinValue),
-											  InvalidOid, InvalidOid);
-
-	hashedLEOpExpr = (OpExpr *) make_opclause(integer4LEoperatorId, InvalidOid, false,
-											  (Expr *) hashedLEColumn,
-											  (Expr *) MakeInt4Constant(shardMaxValue),
-											  InvalidOid, InvalidOid);
-
-	/* update the operators with correct operator numbers and function ids */
-	hashedGEOpExpr->opfuncid = get_opcode(hashedGEOpExpr->opno);
-	hashedGEOpExpr->opresulttype = get_func_rettype(hashedGEOpExpr->opfuncid);
-	operatorExpressions = lappend(operatorExpressions, hashedGEOpExpr);
-
-	hashedLEOpExpr->opfuncid = get_opcode(hashedLEOpExpr->opno);
-	hashedLEOpExpr->opresulttype = get_func_rettype(hashedLEOpExpr->opfuncid);
-	operatorExpressions = lappend(operatorExpressions, hashedLEOpExpr);
-
-	return operatorExpressions;
-}
-
-
-/*
- * UninstantiatedParameterForColumn returns a Param that can be used as an uninstantiated
- * parameter for the given column in the sense that paramtype, paramtypmod and collid
- * is set to the input Var's corresponding values.
- *
- * Note that we're using hard coded UNINSTANTIATED_PARAMETER_ID which is the required parameter
- * for our purposes. See multi_planner.c@multi_planner for the details.
- */
-static Param *
-UninstantiatedParameterForColumn(Var *relationPartitionKey)
-{
-	Param *uninstantiatedParameter = makeNode(Param);
-
-	uninstantiatedParameter->paramkind = PARAM_EXTERN;
-	uninstantiatedParameter->paramid = UNINSTANTIATED_PARAMETER_ID;
-	uninstantiatedParameter->paramtype = relationPartitionKey->vartype;
-	uninstantiatedParameter->paramtypmod = relationPartitionKey->vartypmod;
-	uninstantiatedParameter->paramcollid = relationPartitionKey->varcollid;
-
-	return uninstantiatedParameter;
+	return list_make1(baseConstraint);
 }
 
 
@@ -924,11 +877,10 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 								 NULL, NULL);
 		}
 
-		/* see comment on AddUninstantiatedPartitionRestriction() */
 		if (subquery->setOperations != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "set operations are not allowed in INSERT ... SELECT "
+								 "Set operations are not allowed in INSERT ... SELECT "
 								 "queries",
 								 NULL, NULL);
 		}
@@ -1187,126 +1139,6 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 	}
 
 	return NULL;
-}
-
-
-/*
- * AddUninstantiatedPartitionRestriction() can only be used with
- * INSERT ... SELECT queries.
- *
- * AddUninstantiatedPartitionRestriction adds an equality qual
- * to the SELECT query of the given originalQuery. The function currently
- * does NOT add the quals if
- *   (i)  Set operations are present on the top level query
- *   (ii) Target list does not include a bare partition column.
- *
- * Note that if the input query is not an INSERT ... SELECT the assertion fails. Lastly,
- * if all the participating tables in the query are reference tables, we implicitly
- * skip adding the quals to the query since IsPartitionColumnRecursive() always returns
- * false for reference tables.
- */
-void
-AddUninstantiatedPartitionRestriction(Query *originalQuery)
-{
-	Query *subquery = NULL;
-	RangeTblEntry *subqueryEntry = NULL;
-	ListCell *targetEntryCell = NULL;
-	Var *targetPartitionColumnVar = NULL;
-	List *targetList = NULL;
-
-	Assert(InsertSelectQuery(originalQuery));
-
-	subqueryEntry = ExtractSelectRangeTableEntry(originalQuery);
-	subquery = subqueryEntry->subquery;
-
-	/*
-	 * We currently not support the subquery with set operations. The main reason is that
-	 * there is an "Assert(parse->jointree->quals == NULL);" on standard planner's execution
-	 * path (i.e., plan_set_operations).
-	 * If we are to add uninstantiated equality qual to the query, we may end up hitting that
-	 * assertion, so it's better not to support for now.
-	 */
-	if (subquery->setOperations != NULL)
-	{
-		return;
-	}
-
-	/* iterate through the target list and find the partition column on the target list */
-	targetList = subquery->targetList;
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *targetEntry = lfirst(targetEntryCell);
-
-		if (IsPartitionColumn(targetEntry->expr, subquery) &&
-			IsA(targetEntry->expr, Var))
-		{
-			targetPartitionColumnVar = (Var *) targetEntry->expr;
-			break;
-		}
-	}
-
-	/*
-	 * If we cannot find the bare partition column, no need to add the qual since
-	 * we're already going to error out on the multi planner.
-	 */
-	if (!targetPartitionColumnVar)
-	{
-		return;
-	}
-
-	/* finally add the equality qual of target column to subquery */
-	AddUninstantiatedEqualityQual(subquery, targetPartitionColumnVar);
-}
-
-
-/*
- * AddUninstantiatedEqualityQual adds a qual in the following form
- * ($1 = partitionColumn) on the input query and partitionColumn.
- */
-static void
-AddUninstantiatedEqualityQual(Query *query, Var *partitionColumn)
-{
-	Param *equalityParameter = UninstantiatedParameterForColumn(partitionColumn);
-	OpExpr *uninstantiatedEqualityQual = NULL;
-	Oid partitionColumnCollid = InvalidOid;
-	Oid lessThanOperator = InvalidOid;
-	Oid equalsOperator = InvalidOid;
-	Oid greaterOperator = InvalidOid;
-	bool hashable = false;
-
-	AssertArg(query->commandType == CMD_SELECT);
-
-	/* get the necessary equality operator */
-	get_sort_group_operators(partitionColumn->vartype, false, true, false,
-							 &lessThanOperator, &equalsOperator, &greaterOperator,
-							 &hashable);
-
-
-	partitionColumnCollid = partitionColumn->varcollid;
-
-	/* create an equality on the on the target partition column */
-	uninstantiatedEqualityQual = (OpExpr *) make_opclause(equalsOperator, InvalidOid,
-														  false,
-														  (Expr *) partitionColumn,
-														  (Expr *) equalityParameter,
-														  partitionColumnCollid,
-														  partitionColumnCollid);
-
-	/* update the operators with correct operator numbers and function ids */
-	uninstantiatedEqualityQual->opfuncid = get_opcode(uninstantiatedEqualityQual->opno);
-	uninstantiatedEqualityQual->opresulttype =
-		get_func_rettype(uninstantiatedEqualityQual->opfuncid);
-
-	/* add restriction on partition column */
-	if (query->jointree->quals == NULL)
-	{
-		query->jointree->quals = (Node *) uninstantiatedEqualityQual;
-	}
-	else
-	{
-		query->jointree->quals = make_and_qual(query->jointree->quals,
-											   (Node *) uninstantiatedEqualityQual);
-	}
 }
 
 

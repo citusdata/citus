@@ -37,8 +37,28 @@ typedef struct RelationRestriction
 	RangeTblEntry *rte;
 	RelOptInfo *relOptInfo;
 	PlannerInfo *plannerInfo;
+	PlannerInfo *parentPlannerInfo;
+	List *parentPlannerParamList;
 	List *prunedShardIntervalList;
 } RelationRestriction;
+
+typedef struct JoinRestrictionContext
+{
+	List *joinRestrictionList;
+} JoinRestrictionContext;
+
+typedef struct JoinRestriction
+{
+	JoinType joinType;
+	List *joinRestrictInfoList;
+	PlannerInfo *plannerInfo;
+} JoinRestriction;
+
+typedef struct PlannerRestrictionContext
+{
+	RelationRestrictionContext *relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext;
+} PlannerRestrictionContext;
 
 typedef struct RelationShard
 {
@@ -55,9 +75,17 @@ struct MultiPlan;
 extern struct MultiPlan * GetMultiPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
+extern void multi_join_restriction_hook(PlannerInfo *root,
+										RelOptInfo *joinrel,
+										RelOptInfo *outerrel,
+										RelOptInfo *innerrel,
+										JoinType jointype,
+										JoinPathExtraData *extra);
 extern bool IsModifyCommand(Query *query);
 extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 
+
+extern int GetRTEIdentity(RangeTblEntry *rte);
 
 #endif /* MULTI_PLANNER_H */

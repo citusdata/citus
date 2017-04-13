@@ -30,6 +30,8 @@ test: multi_create_table_constraints
 test: multi_master_protocol
 test: multi_load_data
 
+test: multi_insert_select_behavioral_analytics_create_table
+test: multi_insert_select_behavioral_analytics_basics multi_insert_select_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries
 test: multi_insert_select
 
 # ----------

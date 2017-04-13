@@ -26,11 +26,13 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "parser/parsetree.h"
+#include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
 #include "utils/memutils.h"
 
 
-static List *relationRestrictionContextList = NIL;
+static List *plannerRestrictionContextList = NIL;
 
 /* create custom scan methods for separate executors */
 static CustomScanMethods RealTimeCustomScanMethods = {
@@ -57,7 +59,10 @@ static CustomScanMethods DelayedErrorCustomScanMethods = {
 /* local function forward declarations */
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
 										   Query *query, ParamListInfo boundParams,
-										   RelationRestrictionContext *restrictionContext);
+										   PlannerRestrictionContext *
+										   plannerRestrictionContext);
+static void AssignRTEIdentities(Query *queryTree);
+static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static Node * SerializeMultiPlan(struct MultiPlan *multiPlan);
 static MultiPlan * DeserializeMultiPlan(Node *node);
 static PlannedStmt * FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan);
@@ -65,9 +70,11 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *mu
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
-static RelationRestrictionContext * CreateAndPushRestrictionContext(void);
-static RelationRestrictionContext * CurrentRestrictionContext(void);
-static void PopRestrictionContext(void);
+static List * CopyPlanParamList(List *originalPlanParamList);
+static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+static RelationRestrictionContext * CurrentRelationRestrictionContext(void);
+static JoinRestrictionContext * CurrentJoinRestrictionContext(void);
+static void PopPlannerRestrictionContext(void);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 
 
@@ -78,7 +85,7 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
 	Query *originalQuery = NULL;
-	RelationRestrictionContext *restrictionContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the
@@ -88,30 +95,11 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	{
 		originalQuery = copyObject(parse);
 
-		/*
-		 * We implement INSERT INTO .. SELECT by pushing down the SELECT to
-		 * each shard. To compute that we use the router planner, by adding
-		 * an "uninstantiated" constraint that the partition column be equal to a
-		 * certain value. standard_planner() distributes that constraint to
-		 * the baserestrictinfos to all the tables where it knows how to push
-		 * the restriction safely. An example is that the tables that are
-		 * connected via equi joins.
-		 *
-		 * The router planner then iterates over the target table's shards,
-		 * for each we replace the "uninstantiated" restriction, with one that
-		 * PruneShardList() handles, and then generate a query for that
-		 * individual shard. If any of the involved tables don't prune down
-		 * to a single shard, or if the pruned shards aren't colocated,
-		 * we error out.
-		 */
-		if (InsertSelectQuery(parse))
-		{
-			AddUninstantiatedPartitionRestriction(parse);
-		}
+		AssignRTEIdentities(parse);
 	}
 
 	/* create a restriction context and put it at the end if context list */
-	restrictionContext = CreateAndPushRestrictionContext();
+	plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
 
 	PG_TRY();
 	{
@@ -125,20 +113,89 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 		if (needsDistributedPlanning)
 		{
 			result = CreateDistributedPlan(result, originalQuery, parse,
-										   boundParams, restrictionContext);
+										   boundParams, plannerRestrictionContext);
 		}
 	}
 	PG_CATCH();
 	{
-		PopRestrictionContext();
+		PopPlannerRestrictionContext();
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
 	/* remove the context from the context list */
-	PopRestrictionContext();
+	PopPlannerRestrictionContext();
 
 	return result;
+}
+
+
+/*
+ * AssignRTEIdentities assigns unique identities to the
+ * RTE_RELATIONs in the given query.
+ *
+ * To be able to track individual RTEs through postgres' query
+ * planning, we need to be able to figure out whether an RTE is
+ * actually a copy of another, rather than a different one. We
+ * simply number the RTEs starting from 1.
+ *
+ * Note that we're only interested in RTE_RELATIONs and thus assigning
+ * identifiers to those RTEs only.
+ */
+static void
+AssignRTEIdentities(Query *queryTree)
+{
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+	int rteIdentifier = 1;
+
+	/* extract range table entries for simple relations only */
+	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+		AssignRTEIdentity(rangeTableEntry, rteIdentifier++);
+	}
+}
+
+
+/*
+ * AssignRTEIdentity assigns the given rteIdentifier to the given range table
+ * entry.
+ *
+ * To be able to track RTEs through postgres' query planning, which copies and
+ * duplicate, and modifies them, we sometimes need to figure out whether two
+ * RTEs are copies of the same original RTE. For that we, hackishly, use a
+ * field normally unused in RTE_RELATION RTEs.
+ *
+ * The assigned identifier better be unique within a plantree.
+ */
+static void
+AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
+{
+	Assert(rangeTableEntry->rtekind == RTE_RELATION);
+	Assert(rangeTableEntry->values_lists == NIL);
+
+	rangeTableEntry->values_lists = list_make1_int(rteIdentifier);
+}
+
+
+/* GetRTEIdentity returns the identity assigned with AssignRTEIdentity. */
+int
+GetRTEIdentity(RangeTblEntry *rte)
+{
+	Assert(rte->rtekind == RTE_RELATION);
+	Assert(IsA(rte->values_lists, IntList));
+	Assert(list_length(rte->values_lists) == 1);
+
+	return linitial_int(rte->values_lists);
 }
 
 
@@ -187,7 +244,7 @@ IsModifyMultiPlan(MultiPlan *multiPlan)
 static PlannedStmt *
 CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
 					  ParamListInfo boundParams,
-					  RelationRestrictionContext *restrictionContext)
+					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiPlan *distributedPlan = NULL;
 	PlannedStmt *resultPlan = NULL;
@@ -201,7 +258,9 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	if (IsModifyCommand(query))
 	{
 		/* modifications are always routed through the same planner/executor */
-		distributedPlan = CreateModifyPlan(originalQuery, query, restrictionContext);
+		distributedPlan =
+			CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+
 		Assert(distributedPlan);
 	}
 	else
@@ -214,7 +273,11 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		 */
 		if (EnableRouterExecution)
 		{
-			distributedPlan = CreateRouterPlan(originalQuery, query, restrictionContext);
+			RelationRestrictionContext *relationRestrictionContext =
+				plannerRestrictionContext->relationRestrictionContext;
+
+			distributedPlan = CreateRouterPlan(originalQuery, query,
+											   relationRestrictionContext);
 
 			/* for debugging it's useful to display why query was not router plannable */
 			if (distributedPlan && distributedPlan->planningError)
@@ -567,6 +630,36 @@ CheckNodeIsDumpable(Node *node)
 
 
 /*
+ * multi_join_restriction_hook is a hook called by postgresql standard planner
+ * to notify us about various planning information regarding joins. We use
+ * it to learn about the joining column.
+ */
+void
+multi_join_restriction_hook(PlannerInfo *root,
+							RelOptInfo *joinrel,
+							RelOptInfo *outerrel,
+							RelOptInfo *innerrel,
+							JoinType jointype,
+							JoinPathExtraData *extra)
+{
+	JoinRestrictionContext *joinContext = NULL;
+	JoinRestriction *joinRestriction = palloc0(sizeof(JoinRestriction));
+	List *restrictInfoList = NIL;
+
+	restrictInfoList = extra->restrictlist;
+	joinContext = CurrentJoinRestrictionContext();
+	Assert(joinContext != NULL);
+
+	joinRestriction->joinType = jointype;
+	joinRestriction->joinRestrictInfoList = restrictInfoList;
+	joinRestriction->plannerInfo = root;
+
+	joinContext->joinRestrictionList =
+		lappend(joinContext->joinRestrictionList, joinRestriction);
+}
+
+
+/*
  * multi_relation_restriction_hook is a hook called by postgresql standard planner
  * to notify us about various planning information regarding a relation. We use
  * it to retrieve restrictions on relations.
@@ -589,7 +682,7 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	distributedTable = IsDistributedTable(rte->relid);
 	localTable = !distributedTable;
 
-	restrictionContext = CurrentRestrictionContext();
+	restrictionContext = CurrentRelationRestrictionContext();
 	Assert(restrictionContext != NULL);
 
 	relationRestriction = palloc0(sizeof(RelationRestriction));
@@ -599,7 +692,15 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	relationRestriction->relOptInfo = relOptInfo;
 	relationRestriction->distributedRelation = distributedTable;
 	relationRestriction->plannerInfo = root;
+	relationRestriction->parentPlannerInfo = root->parent_root;
 	relationRestriction->prunedShardIntervalList = NIL;
+
+	/* see comments on GetVarFromAssignedParam() */
+	if (relationRestriction->parentPlannerInfo)
+	{
+		relationRestriction->parentPlannerParamList =
+			CopyPlanParamList(root->parent_root->plan_params);
+	}
 
 	restrictionContext->hasDistributedRelation |= distributedTable;
 	restrictionContext->hasLocalRelation |= localTable;
@@ -622,51 +723,111 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 
 
 /*
- * CreateAndPushRestrictionContext creates a new restriction context, inserts it to the
- * beginning of the context list, and returns the newly created context.
+ * CopyPlanParamList deep copies the input PlannerParamItem list and returns the newly
+ * allocated list.
+ * Note that we cannot use copyObject() function directly since there is no support for
+ * copying PlannerParamItem structs.
  */
-static RelationRestrictionContext *
-CreateAndPushRestrictionContext(void)
+static List *
+CopyPlanParamList(List *originalPlanParamList)
 {
-	RelationRestrictionContext *restrictionContext =
+	ListCell *planParamCell = NULL;
+	List *copiedPlanParamList = NIL;
+
+	foreach(planParamCell, originalPlanParamList)
+	{
+		PlannerParamItem *originalParamItem = lfirst(planParamCell);
+		PlannerParamItem *copiedParamItem = makeNode(PlannerParamItem);
+
+		copiedParamItem->paramId = originalParamItem->paramId;
+		copiedParamItem->item = copyObject(originalParamItem->item);
+
+		copiedPlanParamList = lappend(copiedPlanParamList, copiedParamItem);
+	}
+
+	return copiedPlanParamList;
+}
+
+
+/*
+ * CreateAndPushPlannerRestrictionContext creates a new planner restriction context.
+ * Later, it creates a relation restriction context and a join restriction
+ * context, and sets those contexts in the planner restriction context. Finally,
+ * the planner restriction context is inserted to the beginning of the
+ * plannerRestrictionContextList and it is returned.
+ */
+static PlannerRestrictionContext *
+CreateAndPushPlannerRestrictionContext(void)
+{
+	PlannerRestrictionContext *plannerRestrictionContext =
+		palloc0(sizeof(PlannerRestrictionContext));
+
+	plannerRestrictionContext->relationRestrictionContext =
 		palloc0(sizeof(RelationRestrictionContext));
 
+	plannerRestrictionContext->joinRestrictionContext =
+		palloc0(sizeof(JoinRestrictionContext));
+
 	/* we'll apply logical AND as we add tables */
-	restrictionContext->allReferenceTables = true;
+	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
 
-	relationRestrictionContextList = lcons(restrictionContext,
-										   relationRestrictionContextList);
+	plannerRestrictionContextList = lcons(plannerRestrictionContext,
+										  plannerRestrictionContextList);
 
-	return restrictionContext;
+	return plannerRestrictionContext;
 }
 
 
 /*
- * CurrentRestrictionContext returns the the last restriction context from the
- * list.
+ * CurrentRelationRestrictionContext returns the the last restriction context from the
+ * relationRestrictionContext list.
  */
 static RelationRestrictionContext *
-CurrentRestrictionContext(void)
+CurrentRelationRestrictionContext(void)
 {
-	RelationRestrictionContext *restrictionContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	RelationRestrictionContext *relationRestrictionContext = NULL;
 
-	Assert(relationRestrictionContextList != NIL);
+	Assert(plannerRestrictionContextList != NIL);
 
-	restrictionContext =
-		(RelationRestrictionContext *) linitial(relationRestrictionContextList);
+	plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
 
-	return restrictionContext;
+	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
+
+	return relationRestrictionContext;
 }
 
 
 /*
- * PopRestrictionContext removes the most recently added restriction context from
- * context list. The function assumes the list is not empty.
+ * CurrentJoinRestrictionContext returns the the last restriction context from the
+ * list.
+ */
+static JoinRestrictionContext *
+CurrentJoinRestrictionContext(void)
+{
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	JoinRestrictionContext *joinRestrictionContext = NULL;
+
+	Assert(plannerRestrictionContextList != NIL);
+
+	plannerRestrictionContext =
+		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
+
+	joinRestrictionContext = plannerRestrictionContext->joinRestrictionContext;
+
+	return joinRestrictionContext;
+}
+
+
+/*
+ * PopPlannerRestrictionContext removes the most recently added restriction contexts from
+ * the planner restriction context list. The function assumes the list is not empty.
  */
 static void
-PopRestrictionContext(void)
+PopPlannerRestrictionContext(void)
 {
-	relationRestrictionContextList = list_delete_first(relationRestrictionContextList);
+	plannerRestrictionContextList = list_delete_first(plannerRestrictionContextList);
 }
 
 
@@ -690,12 +851,6 @@ HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams)
 
 		/* only care about user supplied parameters */
 		if (param->paramkind != PARAM_EXTERN)
-		{
-			return false;
-		}
-
-		/* don't care about our special parameter, it'll be removed during planning */
-		if (paramId == UNINSTANTIATED_PARAMETER_ID)
 		{
 			return false;
 		}
