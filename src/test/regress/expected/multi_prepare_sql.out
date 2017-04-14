@@ -993,3 +993,4 @@ EXECUTE countsome; -- no replanning
 \set VERBOSITY default
 -- clean-up prepared statements
 DEALLOCATE ALL;
+DROP TABLE prepare_table;
