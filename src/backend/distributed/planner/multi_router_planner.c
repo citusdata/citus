@@ -898,6 +898,15 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 
 		Assert(subquery->commandType == CMD_SELECT);
 
+		/* pushing down rtes without relations yields (shardCount * expectedRows) */
+		if (subquery->rtable == NIL)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "Subqueries without relations are not allowed in "
+								 "INSERT ... SELECT queries",
+								 NULL, NULL);
+		}
+
 		/* pushing down limit per shard would yield wrong results */
 		if (subquery->limitCount != NULL)
 		{
