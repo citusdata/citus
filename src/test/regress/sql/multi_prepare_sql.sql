@@ -529,3 +529,5 @@ EXECUTE countsome; -- no replanning
 
 -- clean-up prepared statements
 DEALLOCATE ALL;
+
+DROP TABLE prepare_table;
