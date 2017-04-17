@@ -639,6 +639,7 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 	ScanKeyData scanKey[scanKeyCount];
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
+	HeapTuple nodeTuple = NULL;
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
 				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
@@ -654,10 +655,12 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 							   nodeName, nodePort)));
 	}
 
+	nodeTuple = heap_copytuple(heapTuple);
+
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistNode, AccessShareLock);
 
-	return heapTuple;
+	return nodeTuple;
 }
 
 
