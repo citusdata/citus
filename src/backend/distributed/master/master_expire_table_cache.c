@@ -47,7 +47,7 @@ master_expire_table_cache(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	ListCell *workerNodeCell = NULL;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;

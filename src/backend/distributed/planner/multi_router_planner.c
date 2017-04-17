@@ -2295,7 +2295,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 	}
 	else if (replacePrunedQueryWithDummy)
 	{
-		List *workerNodeList = WorkerNodeList();
+		List *workerNodeList = ActiveWorkerNodeList();
 		if (workerNodeList != NIL)
 		{
 			WorkerNode *workerNode = (WorkerNode *) linitial(workerNodeList);

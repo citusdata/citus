@@ -71,7 +71,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 {
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	uint64 shardId = INVALID_SHARD_ID;
 	List *ddlEventList = NULL;
 	uint32 attemptableNodeCount = 0;

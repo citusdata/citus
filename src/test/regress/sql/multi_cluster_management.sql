@@ -33,7 +33,7 @@ SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT master_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT master_create_distributed_table('cluster_management_test', 'col_1', 'hash');
 SELECT master_create_worker_shards('cluster_management_test', 16, 1);
