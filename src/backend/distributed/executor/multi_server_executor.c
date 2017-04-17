@@ -43,7 +43,7 @@ JobExecutorType(MultiPlan *multiPlan)
 {
 	Job *job = multiPlan->workerJob;
 	List *workerTaskList = job->taskList;
-	List *workerNodeList = WorkerNodeList();
+	List *workerNodeList = ActiveWorkerNodeList();
 	int taskCount = list_length(workerTaskList);
 	int workerNodeCount = list_length(workerNodeList);
 	double tasksPerNode = taskCount / ((double) workerNodeCount);

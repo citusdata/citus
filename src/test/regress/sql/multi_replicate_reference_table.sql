@@ -417,6 +417,49 @@ WHERE colocationid IN
 DROP TABLE replicate_reference_table_schema.table1;
 DROP SCHEMA replicate_reference_table_schema CASCADE;
 
+-- do some tests with inactive node
+SELECT master_remove_node('localhost', :worker_2_port);
+
+CREATE TABLE initially_not_replicated_reference_table (key int);
+SELECT create_reference_table('initially_not_replicated_reference_table');
+
+SELECT master_add_inactive_node('localhost', :worker_2_port);
+
+-- we should see only one shard placements
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid = 'initially_not_replicated_reference_table'::regclass)
+ORDER BY 1,4,5;
+
+-- we should see the two shard placements after activation
+SELECT master_activate_node('localhost', :worker_2_port);
+
+SELECT
+    shardid, shardstate, shardlength, nodename, nodeport
+FROM
+    pg_dist_shard_placement
+WHERE
+    shardid IN (SELECT 
+                    shardid 
+                FROM 
+                    pg_dist_shard 
+                WHERE 
+                    logicalrelid = 'initially_not_replicated_reference_table'::regclass)
+ORDER BY 1,4,5;
+
+-- this should have no effect
+SELECT master_add_node('localhost', :worker_2_port);
+
+-- drop unnecassary tables
+DROP TABLE initially_not_replicated_reference_table;
 
 -- reload pg_dist_shard_placement table
 INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);

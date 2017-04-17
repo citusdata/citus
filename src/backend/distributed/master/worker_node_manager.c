@@ -302,19 +302,19 @@ WorkerGetNodeWithName(const char *hostname)
 uint32
 WorkerGetLiveNodeCount(void)
 {
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	uint32 liveWorkerCount = hash_get_num_entries(workerNodeHash);
+	List *workerNodeList = ActiveWorkerNodeList();
+	uint32 liveWorkerCount = workerNodeList->length;
 
 	return liveWorkerCount;
 }
 
 
 /*
- * WorkerNodeList iterates over the hash table that includes the worker nodes, and adds
- * them to a list which is returned.
+ * ActiveWorkerNodeList iterates over the hash table that includes the worker
+ * nodes and adds active nodes to a list, which is returned.
  */
 List *
-WorkerNodeList(void)
+ActiveWorkerNodeList(void)
 {
 	List *workerNodeList = NIL;
 	WorkerNode *workerNode = NULL;
@@ -325,9 +325,12 @@ WorkerNodeList(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
-		memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
-		workerNodeList = lappend(workerNodeList, workerNodeCopy);
+		if (workerNode->isActive)
+		{
+			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+			workerNodeList = lappend(workerNodeList, workerNodeCopy);
+		}
 	}
 
 	return workerNodeList;

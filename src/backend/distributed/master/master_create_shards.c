@@ -33,6 +33,7 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/reference_table_utils.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
@@ -159,7 +160,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
 
 	/* load and sort the worker node list for deterministic placement */
-	workerNodeList = WorkerNodeList();
+	workerNodeList = ActiveWorkerNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* make sure we don't process cancel signals until all shards are created */
@@ -386,7 +387,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	}
 
 	/* load and sort the worker node list for deterministic placement */
-	workerNodeList = WorkerNodeList();
+	workerNodeList = ActiveWorkerNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* get the next shard id */

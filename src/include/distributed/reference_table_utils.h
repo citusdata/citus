@@ -13,7 +13,7 @@
 #define REFERENCE_TABLE_UTILS_H_
 
 extern uint32 CreateReferenceTableColocationId(void);
-extern void ReplicateAllReferenceTablesToAllNodes(void);
+extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);
 extern void DeleteAllReferenceTablePlacementsFromNode(char *workerName,
 													  uint32 workerPort);
 extern List * ReferenceTableOidList(void);
