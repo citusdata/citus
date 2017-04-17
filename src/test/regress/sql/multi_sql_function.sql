@@ -111,7 +111,7 @@ SELECT * FROM temp_table ORDER BY key, value;
 
 -- check deletes
 CREATE FUNCTION non_partition_parameter_delete_sql(int) RETURNS void AS $$
-	DELETE FROM prepare_table WHERE key = 0 AND value = $1;
+	DELETE FROM temp_table WHERE key = 0 AND value = $1;
 $$ LANGUAGE SQL;
 
 -- execute 6 times to trigger prepared statement usage
@@ -123,7 +123,7 @@ SELECT non_partition_parameter_delete_sql(52);
 SELECT non_partition_parameter_delete_sql(62);
 
 -- check after deletes
-SELECT * FROM prepare_table ORDER BY key, value;
+SELECT * FROM temp_table ORDER BY key, value;
 
 -- test running parameterized SQL function
 CREATE TABLE test_parameterized_sql(id integer, org_id integer);
