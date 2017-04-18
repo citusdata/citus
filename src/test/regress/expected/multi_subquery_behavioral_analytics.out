@@ -6,7 +6,6 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1430000;
 -- ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1430000;
-SET citus.subquery_pushdown TO TRUE;
 SET citus.enable_router_execution TO FALSE;
 ------------------------------------
 -- Vanilla funnel query
@@ -1673,5 +1672,4 @@ WHERE b.user_id IS NULL
 GROUP BY a.user_id;  
 ERROR:  cannot push down this subquery
 DETAIL:  Table expressions other than simple relations and subqueries are currently unsupported
-SET citus.subquery_pushdown TO FALSE;
 SET citus.enable_router_execution TO TRUE;

@@ -124,6 +124,11 @@ static Job * BuildJobTreeTaskList(Job *jobTree,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static List * SubquerySqlTaskList(Job *job,
 								  PlannerRestrictionContext *plannerRestrictionContext);
+static void ErrorIfUnsupportedShardDistribution(Query *query);
+static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
+static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								ShardInterval *firstInterval,
+								ShardInterval *secondInterval);
 static Task * SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 								 RelationRestrictionContext *restrictionContext,
 								 uint32 taskId);
@@ -2031,6 +2036,9 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 
+	/* error if shards are not co-partitioned */
+	ErrorIfUnsupportedShardDistribution(subquery);
+
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
 
@@ -2079,6 +2087,171 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	}
 
 	return sqlTaskList;
+}
+
+
+/*
+ * ErrorIfUnsupportedShardDistribution gets list of relations in the given query
+ * and checks if two conditions below hold for them, otherwise it errors out.
+ * a. Every relation is distributed by range or hash. This means shards are
+ * disjoint based on the partition column.
+ * b. All relations have 1-to-1 shard partitioning between them. This means
+ * shard count for every relation is same and for every shard in a relation
+ * there is exactly one shard in other relations with same min/max values.
+ */
+static void
+ErrorIfUnsupportedShardDistribution(Query *query)
+{
+	Oid firstTableRelationId = InvalidOid;
+	List *relationIdList = RelationIdList(query);
+	ListCell *relationIdCell = NULL;
+	uint32 relationIndex = 0;
+	uint32 rangeDistributedRelationCount = 0;
+	uint32 hashDistributedRelationCount = 0;
+
+	foreach(relationIdCell, relationIdList)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+		char partitionMethod = PartitionMethod(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_RANGE)
+		{
+			rangeDistributedRelationCount++;
+		}
+		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			hashDistributedRelationCount++;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot push down this subquery"),
+							errdetail("Currently range and hash partitioned "
+									  "relations are supported")));
+		}
+	}
+
+	if ((rangeDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot push down this subquery"),
+						errdetail("A query including both range and hash "
+								  "partitioned relations are unsupported")));
+	}
+
+	foreach(relationIdCell, relationIdList)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+		bool coPartitionedTables = false;
+		Oid currentRelationId = relationId;
+
+		/* get shard list of first relation and continue for the next relation */
+		if (relationIndex == 0)
+		{
+			firstTableRelationId = relationId;
+			relationIndex++;
+
+			continue;
+		}
+
+		/* check if this table has 1-1 shard partitioning with first table */
+		coPartitionedTables = CoPartitionedTables(firstTableRelationId,
+												  currentRelationId);
+		if (!coPartitionedTables)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot push down this subquery"),
+							errdetail("Shards of relations in subquery need to "
+									  "have 1-to-1 shard partitioning")));
+		}
+	}
+}
+
+
+/*
+ * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
+ * partitioning. It uses shard interval array that are sorted on interval minimum
+ * values. Then it compares every shard interval in order and if any pair of
+ * shard intervals are not equal it returns false.
+ */
+static bool
+CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
+{
+	bool coPartitionedTables = true;
+	uint32 intervalIndex = 0;
+	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
+	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
+	ShardInterval **sortedSecondIntervalArray =
+		secondTableCache->sortedShardIntervalArray;
+	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
+	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
+	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
+
+	if (firstListShardCount != secondListShardCount)
+	{
+		return false;
+	}
+
+	/* if there are not any shards just return true */
+	if (firstListShardCount == 0)
+	{
+		return true;
+	}
+
+	Assert(comparisonFunction != NULL);
+
+	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
+	{
+		ShardInterval *firstInterval = sortedFirstIntervalArray[intervalIndex];
+		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
+
+		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													   firstInterval,
+													   secondInterval);
+		if (!shardIntervalsEqual)
+		{
+			coPartitionedTables = false;
+			break;
+		}
+	}
+
+	return coPartitionedTables;
+}
+
+
+/*
+ * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
+ */
+static bool
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
+					ShardInterval *secondInterval)
+{
+	bool shardIntervalsEqual = false;
+	Datum firstMin = 0;
+	Datum firstMax = 0;
+	Datum secondMin = 0;
+	Datum secondMax = 0;
+
+	firstMin = firstInterval->minValue;
+	firstMax = firstInterval->maxValue;
+	secondMin = secondInterval->minValue;
+	secondMax = secondInterval->maxValue;
+
+	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
+		secondInterval->minValueExists && secondInterval->maxValueExists)
+	{
+		Datum minDatum = CompareCall2(comparisonFunction, firstMin, secondMin);
+		Datum maxDatum = CompareCall2(comparisonFunction, firstMax, secondMax);
+		int firstComparison = DatumGetInt32(minDatum);
+		int secondComparison = DatumGetInt32(maxDatum);
+
+		if (firstComparison == 0 && secondComparison == 0)
+		{
+			shardIntervalsEqual = true;
+		}
+	}
+
+	return shardIntervalsEqual;
 }
 
 
