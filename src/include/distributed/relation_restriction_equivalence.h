@@ -19,6 +19,7 @@ extern bool ContainsUnionSubquery(Query *queryTree);
 extern bool RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 												   plannerRestrictionContext);
 extern bool SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext);
+extern List * RelationIdList(Query *query);
 
 
 #endif /* RELATION_RESTRICTION_EQUIVALENCE_H */

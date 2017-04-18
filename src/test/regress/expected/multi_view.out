@@ -234,16 +234,33 @@ SET citus.task_executor_type to DEFAULT;
 -- create a view with aggregate
 CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
--- following will fail due to non-flattening of subquery due to GROUP BY
+-- following will fail due to non GROUP BY of partition key
 SELECT * FROM  lineitems_by_shipping_method;
 ERROR:  Unrecognized range table id 1
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
-	SELECT l_orderkey, count(*) FROM lineitem_hash_part GROUP BY 1;
--- this will also fail due to same reason
-SELECT * FROM  lineitems_by_orderkey;
-ERROR:  Unrecognized range table id 1
--- however it would work if it is made router plannable
+	SELECT 
+		l_orderkey, count(*) 
+	FROM 
+		lineitem_hash_part 
+	GROUP BY 1;
+-- this should work since we're able to push down this query
+SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
+ l_orderkey | count 
+------------+-------
+          7 |     7
+         68 |     7
+        129 |     7
+        164 |     7
+        194 |     7
+        225 |     7
+        226 |     7
+        322 |     7
+        326 |     7
+        354 |     7
+(10 rows)
+
+-- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
  l_orderkey | count 
 ------------+-------

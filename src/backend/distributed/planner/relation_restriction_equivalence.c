@@ -1366,3 +1366,29 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
 
 	return InvalidAttrNumber;
 }
+
+
+/*
+ * RelationIdList returns list of unique relation ids in query tree.
+ */
+List *
+RelationIdList(Query *query)
+{
+	List *rangeTableList = NIL;
+	List *tableEntryList = NIL;
+	List *relationIdList = NIL;
+	ListCell *tableEntryCell = NULL;
+
+	ExtractRangeTableRelationWalker((Node *) query, &rangeTableList);
+	tableEntryList = TableEntryList(rangeTableList);
+
+	foreach(tableEntryCell, tableEntryList)
+	{
+		TableEntry *tableEntry = (TableEntry *) lfirst(tableEntryCell);
+		Oid relationId = tableEntry->relationId;
+
+		relationIdList = list_append_unique_oid(relationIdList, relationId);
+	}
+
+	return relationIdList;
+}
