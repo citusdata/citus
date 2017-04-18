@@ -107,9 +107,7 @@ extern double CountDistinctErrorRate;
 
 
 /* Function declaration for optimizing logical plans */
-extern void MultiLogicalPlanOptimize(MultiTreeRoot *multiTree,
-									 PlannerRestrictionContext *plannerRestrictionContext,
-									 Query *originalQuery);
+extern void MultiLogicalPlanOptimize(MultiTreeRoot *multiTree);
 
 /* Function declaration for getting partition method for the given relation */
 extern char PartitionMethod(Oid relationId);

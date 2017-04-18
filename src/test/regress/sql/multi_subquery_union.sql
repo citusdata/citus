@@ -6,7 +6,6 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
 
-SET citus.subquery_pushdown TO true;
 SET citus.enable_router_execution TO false;
 -- a very simple union query
 SELECT user_id, counter
@@ -673,5 +672,4 @@ FROM
 GROUP BY types
 ORDER BY types;
 
-SET citus.subquery_pushdown TO false;
 SET citus.enable_router_execution TO true;
