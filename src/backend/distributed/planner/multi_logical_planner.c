@@ -19,6 +19,7 @@
 #include "catalog/pg_am.h"
 #include "catalog/pg_class.h"
 #include "commands/defrem.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
@@ -2991,6 +2992,17 @@ SubqueryPushdownMultiPlanTree(Query *queryTree)
 		extendedOpNode->havingQual =
 			(Node *) make_ands_implicit((Expr *) extendedOpNode->havingQual);
 	}
+
+	/*
+	 * Postgres standard planner evaluates expressions in the LIMIT/OFFSET clauses.
+	 * Since we're using original query here, we should manually evaluate the
+	 * expression on the LIMIT and OFFSET clauses. Note that logical optimizer
+	 * expects those clauses to be already evaluated.
+	 */
+	extendedOpNode->limitCount =
+		PartiallyEvaluateExpression(extendedOpNode->limitCount, NULL);
+	extendedOpNode->limitOffset =
+		PartiallyEvaluateExpression(extendedOpNode->limitOffset, NULL);
 
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;

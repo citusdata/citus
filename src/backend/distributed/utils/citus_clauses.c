@@ -31,7 +31,6 @@ typedef struct FunctionEvaluationContext
 
 
 /* private function declarations */
-static Node * PartiallyEvaluateExpression(Node *expression, PlanState *planState);
 static Node * EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState);
 static Node * PartiallyEvaluateExpressionMutator(Node *expression,
 												 FunctionEvaluationContext *context);
@@ -162,7 +161,7 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
  * Walks the expression evaluating any node which invokes a function as long as a Var
  * doesn't show up in the parameter list.
  */
-static Node *
+Node *
 PartiallyEvaluateExpression(Node *expression, PlanState *planState)
 {
 	FunctionEvaluationContext globalContext = { planState, false };
