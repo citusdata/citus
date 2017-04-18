@@ -1,6 +1,5 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 840000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 840000;
 
 
 -- ===================================================================
@@ -901,6 +900,15 @@ SELECT
 
 -- queries inside transactions can be router plannable
 BEGIN;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+END;
+
+-- queries inside read-only transactions can be router plannable
+BEGIN;
+SET TRANSACTION READ ONLY;
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1

@@ -2,7 +2,6 @@
 -- MULTI_NAME_LENGTHS
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 225000;
 SET citus.multi_shard_commit_protocol = '2pc';
 -- Verify that a table name > 56 characters gets hashed properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (

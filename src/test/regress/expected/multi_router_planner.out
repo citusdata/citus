@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 840000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 840000;
 -- ===================================================================
 -- test router planner functionality for single shard select queries
 -- ===================================================================
@@ -1873,8 +1872,7 @@ WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute job 840026
-DETAIL:  Failure due to failed task 2
+ERROR:  failed to execute task 2
 -- same query with where false but evaluation left to worker
 SELECT author_id FROM articles_append
 	WHERE 
@@ -1889,8 +1887,7 @@ WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
-ERROR:  failed to execute job 840027
-DETAIL:  Failure due to failed task 2
+ERROR:  failed to execute task 2
 -- same query on router planner with where false but evaluation left to worker
 SELECT author_id FROM articles_single_shard_hash
 	WHERE 
@@ -2010,6 +2007,26 @@ SELECT
 
 -- queries inside transactions can be router plannable
 BEGIN;
+SELECT *
+	FROM articles_hash
+	WHERE author_id = 1
+	ORDER BY id;
+DEBUG:  predicate pruning for shardId 840001
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+ 11 |         1 | alamo        |       1347
+ 21 |         1 | arcading     |       5890
+ 31 |         1 | athwartships |       7271
+ 41 |         1 | aznavour     |      11814
+(5 rows)
+
+END;
+-- queries inside read-only transactions can be router plannable
+BEGIN;
+SET TRANSACTION READ ONLY;
 SELECT *
 	FROM articles_hash
 	WHERE author_id = 1

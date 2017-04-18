@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1130000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1130000;
 
 
 \set JobId 201010

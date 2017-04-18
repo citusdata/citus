@@ -5,7 +5,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1240000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1240000;
 
 -- test with invalid port, prevent OS dependent warning from being displayed
 SET client_min_messages to ERROR;

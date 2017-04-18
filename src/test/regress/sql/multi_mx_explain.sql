@@ -3,11 +3,8 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :master_port
 
 \a\t
@@ -65,6 +62,7 @@ BEGIN
 END;
 $BODY$ LANGUAGE plpgsql;
 
+
 -- Test Text format
 EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
@@ -81,6 +79,7 @@ SELECT true AS valid FROM explain_json($$
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity$$);
 
 \c - - - :worker_1_port
+
 -- Test XML format
 EXPLAIN (COSTS FALSE, FORMAT XML)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem_mx
@@ -102,6 +101,7 @@ EXPLAIN (COSTS FALSE, FORMAT TEXT)
 	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
 
 \c - - - :worker_2_port
+
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem_mx;

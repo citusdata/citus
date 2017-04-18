@@ -3,7 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 680000;
 
 
 -- Check that join-pruning works for joins between two large relations. For now

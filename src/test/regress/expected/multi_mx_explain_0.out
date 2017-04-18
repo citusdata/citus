@@ -2,11 +2,8 @@
 -- MULTI_MX_EXPLAIN
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1320000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1320000;
 \c - - - :master_port
 \a\t
 SET citus.task_executor_type TO 'real-time';

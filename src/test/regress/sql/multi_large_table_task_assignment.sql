@@ -8,7 +8,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 710000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 710000;
 
 
 BEGIN;
@@ -42,14 +41,6 @@ WHERE
 	o_orderkey = l_orderkey;
 
 SET citus.large_table_shard_count TO 2;
-
--- The next test, dual hash repartition join, uses the current jobId to assign
--- tasks in a round-robin fashion. We therefore need to ensure that jobIds start
--- with an odd number here to get consistent test output.
-
-SELECT case when (currval('pg_dist_jobid_seq') % 2) = 0
-       	    then nextval('pg_dist_jobid_seq') % 2
-	    else 1 end;
 
 -- Dual hash repartition join which tests the separate hash repartition join
 -- task assignment algorithm.

@@ -150,7 +150,6 @@ MultiTaskTrackerExecute(Job *job)
 	ListCell *taskAndExecutionCell = NULL;
 	uint32 taskTrackerCount = 0;
 	uint32 topLevelTaskCount = 0;
-	uint64 failedJobId = 0;
 	uint32 failedTaskId = 0;
 	bool allTasksCompleted = false;
 	bool taskFailed = false;
@@ -279,7 +278,6 @@ MultiTaskTrackerExecute(Job *job)
 			taskFailed = TaskExecutionFailed(taskExecution);
 			if (taskFailed)
 			{
-				failedJobId = taskExecution->jobId;
 				failedTaskId = taskExecution->taskId;
 				break;
 			}
@@ -336,7 +334,6 @@ MultiTaskTrackerExecute(Job *job)
 			taskTransmitFailed = TaskExecutionFailed(taskExecution);
 			if (taskTransmitFailed)
 			{
-				failedJobId = taskExecution->jobId;
 				failedTaskId = taskExecution->taskId;
 				break;
 			}
@@ -415,13 +412,11 @@ MultiTaskTrackerExecute(Job *job)
 	 */
 	if (taskFailed)
 	{
-		ereport(ERROR, (errmsg("failed to execute job " UINT64_FORMAT, failedJobId),
-						errdetail("Failure due to failed task %u", failedTaskId)));
+		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
 	else if (clusterFailed)
 	{
-		ereport(ERROR, (errmsg("failed to execute job " UINT64_FORMAT, job->jobId),
-						errdetail("Too many task tracker failures")));
+		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
 	else if (QueryCancelPending)
 	{

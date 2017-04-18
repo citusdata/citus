@@ -7,7 +7,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 700000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 700000;
 
 
 SET citus.large_table_shard_count TO 2;

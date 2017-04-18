@@ -3,7 +3,6 @@
 --
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 535000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 
 -- START type creation
 
@@ -213,6 +212,4 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 	ORDER BY repartition_udt.pk;
 	
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 535000;

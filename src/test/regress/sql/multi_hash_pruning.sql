@@ -6,7 +6,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 630000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 630000;
 
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with

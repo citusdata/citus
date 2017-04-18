@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 830000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 830000;
 
 
 -- Create UDF in master and workers

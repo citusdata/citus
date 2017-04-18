@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 540000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 540000;
 
 
 CREATE FUNCTION load_shard_id_array(regclass)
