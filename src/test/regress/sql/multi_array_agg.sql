@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 520000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 520000;
 
 CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL

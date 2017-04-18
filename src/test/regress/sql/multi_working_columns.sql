@@ -9,7 +9,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1040000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1040000;
 
 
 SELECT l_quantity FROM lineitem ORDER BY l_shipdate, l_quantity LIMIT 20;

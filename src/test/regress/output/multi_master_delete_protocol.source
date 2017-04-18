@@ -2,7 +2,6 @@
 -- MULTI_MASTER_DELETE_PROTOCOL
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 320000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 320000;
 -- Create a new range partitioned customer_delete_protocol table and load data into it.
 CREATE TABLE customer_delete_protocol (
         c_custkey integer not null,

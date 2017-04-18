@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 880000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 880000;
 
 SET citus.explain_distributed_queries TO off;
 
@@ -75,15 +74,6 @@ SET citus.task_assignment_policy TO 'first-replica';
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-
--- Round-robin task assignment relies on the current jobId. We therefore need to
--- ensure that jobIds start with an odd number here; this way, task assignment
--- debug messages always produce the same output. Also, we make sure that the
--- following case statement always prints out "1" as the query's result.
-
-SELECT case when (currval('pg_dist_jobid_seq') % 2) = 0
-       	    then nextval('pg_dist_jobid_seq') % 2
-	    else 1 end;
 
 -- Finally test the round-robin task assignment policy
 

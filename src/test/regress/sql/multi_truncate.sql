@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1210000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1210000;
 
 --
 -- truncate for append distribution

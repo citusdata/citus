@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 270000;
 
 -- print major version to make version-specific tests clear
 SHOW server_version \gset
@@ -702,6 +701,7 @@ LIMIT
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
+
 EXPLAIN SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM

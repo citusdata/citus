@@ -2,7 +2,6 @@
 -- MULTI_TASK_ASSIGNMENT
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 880000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 880000;
 SET citus.explain_distributed_queries TO off;
 -- Check that our policies for assigning tasks to worker nodes run as expected.
 -- To test this, we first create a shell table, and then manually insert shard
@@ -114,39 +113,11 @@ DEBUG:  CommitTransactionCommand
          explain statements for distributed queries are not enabled
 (3 rows)
 
--- Round-robin task assignment relies on the current jobId. We therefore need to
--- ensure that jobIds start with an odd number here; this way, task assignment
--- debug messages always produce the same output. Also, we make sure that the
--- following case statement always prints out "1" as the query's result.
-SELECT case when (currval('pg_dist_jobid_seq') % 2) = 0
-       	    then nextval('pg_dist_jobid_seq') % 2
-	    else 1 end;
-DEBUG:  StartTransactionCommand
-DEBUG:  CommitTransactionCommand
- case 
-------
-    1
-(1 row)
-
 -- Finally test the round-robin task assignment policy
 SET citus.task_assignment_policy TO 'round-robin';
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
 DEBUG:  CommitTransactionCommand
-EXPLAIN SELECT count(*) FROM task_assignment_test_table;
-DEBUG:  StartTransactionCommand
-DEBUG:  ProcessUtility
-DEBUG:  assigned task 6 to node localhost:57637
-DEBUG:  assigned task 4 to node localhost:57637
-DEBUG:  assigned task 2 to node localhost:57638
-DEBUG:  CommitTransactionCommand
-                              QUERY PLAN                               
------------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
-         explain statements for distributed queries are not enabled
-(3 rows)
-
 EXPLAIN SELECT count(*) FROM task_assignment_test_table;
 DEBUG:  StartTransactionCommand
 DEBUG:  ProcessUtility
@@ -167,6 +138,20 @@ DEBUG:  ProcessUtility
 DEBUG:  assigned task 6 to node localhost:57637
 DEBUG:  assigned task 4 to node localhost:57637
 DEBUG:  assigned task 2 to node localhost:57638
+DEBUG:  CommitTransactionCommand
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Aggregate  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         explain statements for distributed queries are not enabled
+(3 rows)
+
+EXPLAIN SELECT count(*) FROM task_assignment_test_table;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  assigned task 6 to node localhost:57638
+DEBUG:  assigned task 4 to node localhost:57638
+DEBUG:  assigned task 2 to node localhost:57637
 DEBUG:  CommitTransactionCommand
                               QUERY PLAN                               
 -----------------------------------------------------------------------

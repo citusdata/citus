@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1250000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1250000;
 
 CREATE TABLE reference_table_test (value_1 int, value_2 float, value_3 text, value_4 timestamp);
 

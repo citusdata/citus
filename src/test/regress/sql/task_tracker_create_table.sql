@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1070000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1070000;
 
 
 -- New table definitions to test the task tracker process and protocol

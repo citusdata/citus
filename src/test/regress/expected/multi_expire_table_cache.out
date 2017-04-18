@@ -2,7 +2,6 @@
 --- MULTI_EXPIRE_TABLE_CACHE
 ---
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1220000;
 -- create test table
 CREATE TABLE large_table(a int, b int);
 SELECT master_create_distributed_table('large_table', 'a', 'hash');

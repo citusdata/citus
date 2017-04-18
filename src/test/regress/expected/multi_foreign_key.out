@@ -2,7 +2,6 @@
 -- MULTI_FOREIGN_KEY
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1350000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1350000;
 -- set shard_count to 4 for faster tests, because we create/drop lots of shards in this test.
 SET citus.shard_count TO 4;
 -- create tables

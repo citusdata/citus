@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13100000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 13100000;
 
 CREATE FUNCTION deparse_shard_query_test(text)
 	RETURNS VOID

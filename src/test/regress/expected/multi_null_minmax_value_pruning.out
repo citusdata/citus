@@ -4,7 +4,6 @@
 -- This test checks that we can handle null min/max values in shard statistics
 -- and that we don't partition or join prune shards that have null values.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 760000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 760000;
 SET client_min_messages TO DEBUG2;
 -- Change configuration to treat lineitem and orders tables as large
 SET citus.large_table_shard_count TO 2;

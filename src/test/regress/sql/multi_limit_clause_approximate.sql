@@ -4,7 +4,6 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 720000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 720000;
 
 
 -- Display debug messages on limit clause push down.
