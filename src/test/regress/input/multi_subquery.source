@@ -46,7 +46,7 @@ SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range')
 
 SET citus.enable_router_execution TO 'false';
 
--- Check that we don't allow subquery pushdown in default settings.
+-- Check that we allow subquery pushdown in default settings.
 
 SELECT
 	avg(unit_price)
@@ -61,8 +61,6 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-
-SET citus.subquery_pushdown to TRUE;
 
 -- Check that we don't crash if there are not any shards.
 
@@ -130,7 +128,8 @@ FROM
 
 UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 270003;
 
--- If group by is not on partition column then we error out.
+-- If group by is not on partition column then we error out from single table
+-- repartition code path
 
 SELECT
 	avg(order_count)
@@ -227,6 +226,8 @@ FROM (
 		count(*) a
 	FROM
 		lineitem_subquery
+	GROUP BY
+	   l_orderkey
 ) z;
 
 -- Check supported subquery types.
@@ -337,7 +338,6 @@ CREATE TABLE subquery_pruning_varchar_test_table
 SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
 SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
 
-SET citus.subquery_pushdown TO TRUE;
 SET client_min_messages TO DEBUG2;
 
 SELECT * FROM
@@ -924,8 +924,6 @@ WHERE shardid = :new_shard_id;
 "(1,1003)",1472807315
 \.
 
-
-SET citus.subquery_pushdown TO TRUE;
 
 -- Simple join subquery pushdown
 SELECT

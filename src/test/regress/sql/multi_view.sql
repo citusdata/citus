@@ -123,17 +123,21 @@ SET citus.task_executor_type to DEFAULT;
 CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
 
--- following will fail due to non-flattening of subquery due to GROUP BY
+-- following will fail due to non GROUP BY of partition key
 SELECT * FROM  lineitems_by_shipping_method;
 
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
-	SELECT l_orderkey, count(*) FROM lineitem_hash_part GROUP BY 1;
+	SELECT 
+		l_orderkey, count(*) 
+	FROM 
+		lineitem_hash_part 
+	GROUP BY 1;
 
--- this will also fail due to same reason
-SELECT * FROM  lineitems_by_orderkey;
+-- this should work since we're able to push down this query
+SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
 
--- however it would work if it is made router plannable
+-- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
 
 DROP TABLE temp_lineitem CASCADE;

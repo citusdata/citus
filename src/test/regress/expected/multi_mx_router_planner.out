@@ -802,8 +802,8 @@ SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
 	UNION
 	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without group by clause are not supported yet
+ERROR:  cannot push down this subquery
+DETAIL:  Currently all leaf queries need to have same filters on partition column
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles_hash_mx a, articles_hash_mx b

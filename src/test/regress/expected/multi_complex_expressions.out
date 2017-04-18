@@ -348,16 +348,14 @@ ERROR:  cannot perform local joins that involve expressions
 DETAIL:  local joins can be performed between columns only
 -- Check that we can issue limit/offset queries
 -- OFFSET in subqueries are not supported
--- Error in the planner when subquery pushdown is off
+-- Error in the planner when single repartition subquery
+SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries with offset are not supported yet
+-- Error in the optimizer when subquery pushdown is on
 SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries with offset are not supported yet
-SET citus.subquery_pushdown TO true;
--- Error in the optimizer when subquery pushdown is on
-SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
-ERROR:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported
-SET citus.subquery_pushdown TO false;
 -- Simple LIMIT/OFFSET with ORDER BY
 SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
  o_orderkey 
