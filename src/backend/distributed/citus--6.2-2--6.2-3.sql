@@ -2,7 +2,7 @@
 
 SET search_path = 'pg_catalog';
 
-ALTER TABLE pg_dist_node ADD isactive bool;
+ALTER TABLE pg_dist_node ADD isactive bool NOT NULL DEFAULT true;
 
 DROP FUNCTION IF EXISTS master_add_node(text, integer);
 
