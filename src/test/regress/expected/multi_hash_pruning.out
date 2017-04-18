@@ -39,9 +39,6 @@ SELECT count(*) FROM orders_hash_partitioned;
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -50,9 +47,6 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -61,9 +55,6 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -72,9 +63,6 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -84,9 +72,6 @@ DEBUG:  Plan is router executable
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -95,9 +80,6 @@ DEBUG:  Plan is router executable
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -114,36 +96,24 @@ SELECT count(*) FROM orders_hash_partitioned;
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
-DEBUG:  predicate pruning for shardId 630000
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -151,18 +121,12 @@ DEBUG:  predicate pruning for shardId 630003
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -189,10 +153,6 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
  count 
 -------
      0
@@ -207,10 +167,6 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
  count 
 -------
      0
@@ -225,9 +181,6 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -282,9 +235,6 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = random() AND o_orderkey = 1;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
@@ -318,12 +268,6 @@ SELECT count(*)
 	WHERE orders1.o_orderkey = orders2.o_orderkey
 	AND orders1.o_orderkey = 1
 	AND orders2.o_orderkey is NULL;
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
-DEBUG:  predicate pruning for shardId 630001
-DEBUG:  predicate pruning for shardId 630002
-DEBUG:  predicate pruning for shardId 630003
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  count 
