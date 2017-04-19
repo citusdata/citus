@@ -154,7 +154,11 @@ _PG_init(void)
 	planner_hook = multi_planner;
 
 	/* register utility hook */
+#if (PG_VERSION_NUM >= 100000)
+	ProcessUtility_hook = multi_ProcessUtility10;
+#else
 	ProcessUtility_hook = multi_ProcessUtility;
+#endif
 
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;

@@ -31,6 +31,7 @@
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/multi_utility.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
@@ -425,8 +426,8 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
-	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
-				   NULL, None_Receiver, NULL);
+	CitusProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
+						None_Receiver, NULL);
 
 	PG_RETURN_VOID();
 }
@@ -457,8 +458,8 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
 											   leftShardSchemaName, rightShardId,
 											   rightShardSchemaName);
-	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
-				   None_Receiver, NULL);
+	CitusProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL, NULL,
+						None_Receiver, NULL);
 
 	PG_RETURN_VOID();
 }
@@ -493,8 +494,8 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	}
 
 	/* run the CREATE SEQUENCE command */
-	ProcessUtility(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL,
-				   NULL, None_Receiver, NULL);
+	CitusProcessUtility(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL, NULL,
+						None_Receiver, NULL);
 	CommandCounterIncrement();
 
 	createSequenceStatement = (CreateSeqStmt *) commandNode;
@@ -848,8 +849,8 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
 		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
 
-		ProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
-					   NULL, None_Receiver, NULL);
+		CitusProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
 		CommandCounterIncrement();
 	}
 
@@ -867,8 +868,8 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, COPY_IN_COMMAND, tableName, localFilePath->data);
 
-	ProcessUtility((Node *) localCopyCommand, queryString->data,
-				   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
+						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	/* finally delete the temporary file we created */
 	DeleteFile(localFilePath->data);
@@ -942,8 +943,8 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, const char *tableName)
 		StringInfo ddlCommand = (StringInfo) lfirst(ddlCommandCell);
 		Node *ddlCommandNode = ParseTreeNode(ddlCommand->data);
 
-		ProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
-					   NULL, None_Receiver, NULL);
+		CitusProcessUtility(ddlCommandNode, ddlCommand->data, PROCESS_UTILITY_TOPLEVEL,
+							NULL, None_Receiver, NULL);
 		CommandCounterIncrement();
 	}
 
@@ -1272,8 +1273,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	appendStringInfo(queryString, COPY_IN_COMMAND, shardQualifiedName,
 					 localFilePath->data);
 
-	ProcessUtility((Node *) localCopyCommand, queryString->data,
-				   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
+						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	/* finally delete the temporary file we created */
 	DeleteFile(localFilePath->data);
@@ -1372,8 +1373,8 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 		SetDefElemArg(alterSequenceStatement, "restart", startFloatArg);
 
 		/* since the command is an AlterSeqStmt, a dummy command string works fine */
-		ProcessUtility((Node *) alterSequenceStatement, dummyString,
-					   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+		CitusProcessUtility((Node *) alterSequenceStatement, dummyString,
+							PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 	}
 }
 

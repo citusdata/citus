@@ -163,6 +163,40 @@ static void PostProcessUtility(Node *parsetree);
 static bool warnedUserAbout2PC = false;
 
 
+void
+multi_ProcessUtility(Node *parsetree,
+					 const char *queryString,
+					 ProcessUtilityContext context,
+					 ParamListInfo params,
+					 DestReceiver *dest,
+					 char *completionTag)
+{
+	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
+	plannedStmt->commandType = CMD_UTILITY;
+	plannedStmt->utilityStmt = parsetree;
+
+	multi_ProcessUtility10(plannedStmt, queryString, context, params, NULL, dest,
+						   completionTag);
+}
+
+
+void
+CitusProcessUtility(Node *node, const char *queryString, ProcessUtilityContext context,
+					ParamListInfo params, DestReceiver *dest, char *completionTag)
+{
+#if (PG_VERSION_NUM >= 100000)
+	PlannedStmt *plannedStmt = makeNode(PlannedStmt);
+	plannedStmt->commandType = CMD_UTILITY;
+	plannedStmt->utilityStmt = node;
+
+	ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
+				   completionTag);
+#else
+	ProcessUtility(node, queryString, context, params, dest, completionTag);
+#endif
+}
+
+
 /*
  * multi_ProcessUtility is the main entry hook for implementing Citus-specific
  * utility behavior. Its primary responsibilities are intercepting COPY and DDL
@@ -173,13 +207,15 @@ static bool warnedUserAbout2PC = false;
  * TRUNCATE and VACUUM are also supported.
  */
 void
-multi_ProcessUtility(Node *parsetree,
-					 const char *queryString,
-					 ProcessUtilityContext context,
-					 ParamListInfo params,
-					 DestReceiver *dest,
-					 char *completionTag)
+multi_ProcessUtility10(PlannedStmt *pstmt,
+					   const char *queryString,
+					   ProcessUtilityContext context,
+					   ParamListInfo params,
+					   struct QueryEnvironment *queryEnv,
+					   DestReceiver *dest,
+					   char *completionTag)
 {
+	Node *parsetree = pstmt->utilityStmt;
 	bool commandMustRunAsOwner = false;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
@@ -194,8 +230,13 @@ multi_ProcessUtility(Node *parsetree,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
+#if (PG_VERSION_NUM >= 100000)
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
+#else
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+#endif
 
 		return;
 	}
@@ -213,8 +254,13 @@ multi_ProcessUtility(Node *parsetree,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
+#if (PG_VERSION_NUM >= 100000)
+		standard_ProcessUtility(pstmt, queryString, context,
+								params, queryEnv, dest, completionTag);
+#else
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
+#endif
 
 		return;
 	}
@@ -392,8 +438,14 @@ multi_ProcessUtility(Node *parsetree,
 		SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
 	}
 
+#if (PG_VERSION_NUM >= 100000)
+	pstmt->utilityStmt = parsetree;
+	standard_ProcessUtility(pstmt, queryString, context,
+							params, queryEnv, dest, completionTag);
+#else
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
+#endif
 
 	PostProcessUtility(parsetree);
 
@@ -2340,8 +2392,9 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 		/* run only a selected set of DDL commands */
 		if (applyDDLCommand)
 		{
-			ProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
-						   PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+			CitusProcessUtility(ddlCommandNode, CreateCommandTag(ddlCommandNode),
+								PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
+
 			CommandCounterIncrement();
 		}
 	}

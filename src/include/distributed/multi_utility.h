@@ -29,9 +29,20 @@ typedef struct DDLJob
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
 
+#if (PG_VERSION_NUM < 100000)
+struct QueryEnvironment; /* forward-declare to appease compiler */
+#endif
+
+extern void multi_ProcessUtility10(PlannedStmt *pstmt, const char *queryString,
+								   ProcessUtilityContext context, ParamListInfo params,
+								   struct QueryEnvironment *queryEnv, DestReceiver *dest,
+								   char *completionTag);
 extern void multi_ProcessUtility(Node *parsetree, const char *queryString,
 								 ProcessUtilityContext context, ParamListInfo params,
 								 DestReceiver *dest, char *completionTag);
+extern void CitusProcessUtility(Node *node, const char *queryString,
+								ProcessUtilityContext context, ParamListInfo params,
+								DestReceiver *dest, char *completionTag);
 extern List * PlanGrantStmt(GrantStmt *grantStmt);
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
 										 Var *distributionColumn, uint32 colocationId);
