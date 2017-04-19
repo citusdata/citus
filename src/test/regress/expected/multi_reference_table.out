@@ -1359,7 +1359,7 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
 \c - - - :master_port
 -- as we expect, renaming and setting WITH OIDS does not work for reference tables
 ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
-ERROR:  renaming distributed tables or their objects is currently unsupported
+ERROR:  renaming distributed tables is currently unsupported
 ALTER TABLE reference_table_ddl SET WITH OIDS;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT FOREIGN KEY and TYPE subcommands are supported.
