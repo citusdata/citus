@@ -1115,6 +1115,8 @@ LIMIT 10;
 (10 rows)
 
 -- Simple LATERAL JOINs with GROUP BYs in each side
+-- need to set subquery_pushdown due to limit for next 2 queries
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, lastseen
@@ -1205,6 +1207,8 @@ limit 50;
       34 | Tue Jan 21 04:15:03.874341 2014
 (6 rows)
 
+-- reset subquery_pushdown
+SET citus.subquery_pushdown to OFF;
 -- not supported since JOIN is not on the partition key
 SELECT "some_users_data".user_id, lastseen
 FROM
@@ -1277,6 +1281,7 @@ limit 50;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- LATERAL JOINs used with INNER JOINs
+SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1405,6 +1410,7 @@ LIMIT 10;
       14 | Tue Jan 21 05:46:51.286381 2014 |    10
 (3 rows)
 
+SET citus.subquery_pushdown to OFF;
 -- not supported since the inner JOIN is not equi join
 SELECT user_id, lastseen
 FROM
@@ -1866,6 +1872,7 @@ ORDER BY cnt, value_3 DESC LIMIT 10;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- nested LATERAL JOINs
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, "some_recent_users".value_3
@@ -2070,6 +2077,7 @@ LIMIT 10;
       21 |     985
 (6 rows)
 
+SET citus.subquery_pushdown to OFF;
 -- LEFT JOINs used with INNER JOINs
 SELECT
 count(*) AS cnt, "generated_group_field"
@@ -2154,6 +2162,7 @@ LIMIT 10;
 (10 rows)
 
 -- lateral joins in the nested manner
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT 
@@ -2204,6 +2213,7 @@ LIMIT 10;
       19 |     966
 (9 rows)
 
+SET citus.subquery_pushdown to OFF;
 -- not supported since join is not on the partition key
 SELECT *
 FROM
