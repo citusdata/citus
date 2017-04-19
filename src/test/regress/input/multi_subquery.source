@@ -193,7 +193,7 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
--- Check that we error out if inner query has limit but outer quers has not.
+-- Check that we error out if inner query has Limit but subquery_pushdown is not set
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
@@ -213,6 +213,32 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
+
+-- Limit is only supported when subquery_pushdown is set
+-- Check that we error out if inner query has limit but outer query has not.
+SET citus.subquery_pushdown to ON;
+SELECT
+	avg(o_totalprice/l_quantity)
+FROM
+		(SELECT
+			l_orderkey,
+			l_quantity
+		FROM
+			lineitem_subquery
+		ORDER BY
+			l_quantity
+		LIMIT 10
+		) lineitem_quantities
+	JOIN LATERAL
+		(SELECT
+			o_totalprice
+		FROM
+			orders_subquery
+		WHERE
+			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
+
+-- reset the flag for next query
+SET citus.subquery_pushdown to OFF;
 
 -- Check that we error out if the outermost query is a distinct clause.
 
@@ -1083,6 +1109,8 @@ ORDER BY
 	count_pay;
 	
 -- Lateral join subquery pushdown
+-- set subquery_pushdown since there is limit in the query
+SET citus.subquery_pushdown to ON;
 SELECT
 	tenant_id,
 	user_id,
@@ -1132,7 +1160,8 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-
+-- reset the flag for next query
+SET citus.subquery_pushdown to OFF;
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
@@ -1297,6 +1326,8 @@ ORDER BY
 	count_pay;
 
 -- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
 EXPLAIN SELECT
 	tenant_id,
 	user_id,
@@ -1346,5 +1377,5 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-	
+SET citus.subquery_pushdown to OFF;
 SET citus.enable_router_execution TO 'true';

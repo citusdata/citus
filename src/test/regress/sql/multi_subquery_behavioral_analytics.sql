@@ -697,6 +697,10 @@ WHERE
 GROUP BY 
   a.user_id;
 
+-- most queries below has limit clause
+-- therefore setting subquery_pushdown flag for all
+SET citus.subquery_pushdown to ON;
+
 -- multi-subquery-join
 -- The first query has filters on partion column to make it router plannable
 -- but it is processed by logical planner since we disabled router execution
@@ -1596,4 +1600,5 @@ FROM (
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
 
+SET citus.subquery_pushdown to OFF;
 SET citus.enable_router_execution TO TRUE;

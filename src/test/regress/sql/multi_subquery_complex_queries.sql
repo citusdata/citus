@@ -1043,6 +1043,8 @@ GROUP BY
 LIMIT 10;
 
 -- Simple LATERAL JOINs with GROUP BYs in each side
+-- need to set subquery_pushdown due to limit for next 2 queries
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, lastseen
@@ -1115,6 +1117,9 @@ ORDER BY
   user_id
 limit 50;
 
+-- reset subquery_pushdown
+SET citus.subquery_pushdown to OFF;
+
 -- not supported since JOIN is not on the partition key
 SELECT "some_users_data".user_id, lastseen
 FROM
@@ -1185,6 +1190,7 @@ ORDER BY
 limit 50;
 
 -- LATERAL JOINs used with INNER JOINs
+SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1293,6 +1299,8 @@ SELECT "some_users_data".user_id, MAX(lastseen), count(*)
 GROUP BY 1
 ORDER BY 2, 1 DESC
 LIMIT 10;
+
+SET citus.subquery_pushdown to OFF;
 
 -- not supported since the inner JOIN is not equi join
 SELECT user_id, lastseen
@@ -1718,6 +1726,7 @@ GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
 
 -- nested LATERAL JOINs
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT "some_users_data".user_id, "some_recent_users".value_3
@@ -1886,6 +1895,8 @@ FROM
 ORDER BY value_3 DESC
 LIMIT 10;
 
+SET citus.subquery_pushdown to OFF;
+
 -- LEFT JOINs used with INNER JOINs
 SELECT
 count(*) AS cnt, "generated_group_field"
@@ -1944,6 +1955,7 @@ ORDER BY
 LIMIT 10;
 
 -- lateral joins in the nested manner
+SET citus.subquery_pushdown to ON;
 SELECT *
 FROM
   (SELECT 
@@ -1981,6 +1993,7 @@ FROM
 ORDER BY 
     value_2 DESC, user_id DESC
 LIMIT 10;
+SET citus.subquery_pushdown to OFF;
 
 -- not supported since join is not on the partition key
 SELECT *
