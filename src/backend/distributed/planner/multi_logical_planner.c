@@ -71,9 +71,11 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
 								   List *secondOpExpressionList);
 static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
-																 bool outerQueryHasLimit);
+																 bool
+																 outerMostQueryHasLimit);
 static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree,
-																bool outerQueryHasLimit);
+																bool
+																outerMostQueryHasLimit);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
@@ -335,14 +337,14 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 {
 	ListCell *rangeTableEntryCell = NULL;
 	List *subqueryEntryList = NIL;
-	bool outerQueryHasLimit = false;
+	bool outerMostQueryHasLimit = false;
 	DeferredErrorMessage *error = NULL;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
 
 	if (originalQuery->limitCount != NULL)
 	{
-		outerQueryHasLimit = true;
+		outerMostQueryHasLimit = true;
 	}
 
 	/*
@@ -380,7 +382,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		RangeTblEntry *rangeTableEntry = lfirst(rangeTableEntryCell);
 		Query *subquery = rangeTableEntry->subquery;
 
-		error = DeferErrorIfCannotPushdownSubquery(subquery, outerQueryHasLimit);
+		error = DeferErrorIfCannotPushdownSubquery(subquery, outerMostQueryHasLimit);
 		if (error)
 		{
 			return error;
@@ -533,7 +535,7 @@ EqualOpExpressionLists(List *firstOpExpressionList, List *secondOpExpressionList
  * features of underlying tables.
  */
 static DeferredErrorMessage *
-DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
+DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
@@ -571,16 +573,28 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 		errorDetail = "Offset clause is currently unsupported";
 	}
 
-	if (subqueryTree->limitCount && !outerQueryHasLimit)
+	/* limit is not supported when SubqueryPushdown is not set */
+	if (subqueryTree->limitCount && !SubqueryPushdown)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Limit in subquery without limit in the outer query is unsupported";
+		errorDetail = "Limit in subquery is currently unsupported";
+	}
+
+	/*
+	 * Limit is partially supported when SubqueryPushdown is set.
+	 * The outermost query must have a limit clause.
+	 */
+	if (subqueryTree->limitCount && SubqueryPushdown && !outerMostQueryHasLimit)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Limit in subquery without limit in the outermost query is "
+					  "unsupported";
 	}
 
 	if (subqueryTree->setOperations)
 	{
 		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree,
-														  outerQueryHasLimit);
+														  outerMostQueryHasLimit);
 		if (deferredError)
 		{
 			return deferredError;
@@ -671,7 +685,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
 
 		Query *innerSubquery = rangeTableEntry->subquery;
 		deferredError = DeferErrorIfCannotPushdownSubquery(innerSubquery,
-														   outerQueryHasLimit);
+														   outerMostQueryHasLimit);
 		if (deferredError)
 		{
 			return deferredError;
@@ -690,7 +704,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerQueryHasLimit)
  */
 static DeferredErrorMessage *
 DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
-								  bool outerQueryHasLimit)
+								  bool outerMostQueryHasLimit)
 {
 	List *rangeTableIndexList = NIL;
 	ListCell *rangeTableIndexCell = NULL;
@@ -724,7 +738,7 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 		Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
 
 		deferredError = DeferErrorIfCannotPushdownSubquery(rangeTableEntry->subquery,
-														   outerQueryHasLimit);
+														   outerMostQueryHasLimit);
 		if (deferredError)
 		{
 			return deferredError;

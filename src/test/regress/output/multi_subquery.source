@@ -201,7 +201,7 @@ SELECT count(*) FROM
   2985
 (1 row)
 
--- Check that we error out if inner query has limit but outer quers has not.
+-- Check that we error out if inner query has Limit but subquery_pushdown is not set
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
@@ -222,7 +222,33 @@ FROM
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery without limit in the outer query is unsupported
+DETAIL:  Limit in subquery is currently unsupported
+-- Limit is only supported when subquery_pushdown is set
+-- Check that we error out if inner query has limit but outer query has not.
+SET citus.subquery_pushdown to ON;
+SELECT
+	avg(o_totalprice/l_quantity)
+FROM
+		(SELECT
+			l_orderkey,
+			l_quantity
+		FROM
+			lineitem_subquery
+		ORDER BY
+			l_quantity
+		LIMIT 10
+		) lineitem_quantities
+	JOIN LATERAL
+		(SELECT
+			o_totalprice
+		FROM
+			orders_subquery
+		WHERE
+			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery without limit in the outermost query is unsupported
+-- reset the flag for next query
+SET citus.subquery_pushdown to OFF;
 -- Check that we error out if the outermost query is a distinct clause.
 SELECT
 	count(DISTINCT a)
@@ -1078,6 +1104,8 @@ ORDER BY
 
 	
 -- Lateral join subquery pushdown
+-- set subquery_pushdown since there is limit in the query
+SET citus.subquery_pushdown to ON;
 SELECT
 	tenant_id,
 	user_id,
@@ -1134,6 +1162,8 @@ LIMIT
          1 |    1001 |    1472807115 | {click,submit,pay}
 (3 rows)
 
+-- reset the flag for next query
+SET citus.subquery_pushdown to OFF;
 -- Same queries above with explain
 -- Simple join subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -1446,5 +1476,5 @@ LIMIT
                                                                      Filter: (composite_id = users.composite_id)
 (27 rows)
 
-	
+SET citus.subquery_pushdown to OFF;
 SET citus.enable_router_execution TO 'true';
