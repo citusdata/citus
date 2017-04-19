@@ -219,14 +219,6 @@ SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 o
 -- they are not supported if multiple workers are involved
 SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
 
--- subqueries are not supported in WHERE clause in Citus
-SELECT * FROM articles_hash_mx WHERE author_id IN (SELECT id FROM authors_hash_mx WHERE name LIKE '%a');
-
-SELECT * FROM articles_hash_mx WHERE author_id IN (SELECT author_id FROM articles_hash_mx WHERE author_id = 1 or author_id = 3);
-
-SELECT * FROM articles_hash_mx WHERE author_id = (SELECT 1);
-
-
 -- subqueries are supported in FROM clause but they are not router plannable
 SELECT articles_hash_mx.id,test.word_count
 FROM articles_hash_mx, (SELECT id, word_count FROM articles_hash_mx) AS test WHERE test.id = articles_hash_mx.id

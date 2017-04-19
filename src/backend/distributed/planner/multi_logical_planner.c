@@ -93,6 +93,7 @@ static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
 static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
 static void ValidateClauseList(List *clauseList);
+static void ValidateSubqueryPushdownClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
@@ -102,6 +103,8 @@ static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
 static MultiSelect * MultiSelectNode(List *whereClauseList);
 static bool IsSelectClause(Node *clause);
+static void ErrorIfSublink(Node *clause);
+static bool IsSublinkClause(Node *clause);
 static MultiProject * MultiProjectNode(List *targetEntryList);
 static MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);
 
@@ -134,6 +137,8 @@ static MultiNode * MultiSubqueryPlanTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
+static List * SublinkList(Query *originalQuery);
+static bool ExtractSublinkWalker(Node *node, List **sublinkList);
 static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree);
 
 static List * CreateSubqueryTargetEntryList(List *columnList);
@@ -159,15 +164,18 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 {
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
-	List *subqueryEntryList = NULL;
 
 	/*
-	 * We check the existence of subqueries in the modified query given that
-	 * if postgres already flattened the subqueries, MultiPlanTree() can plan
-	 * corresponding distributed plan.
+	 * We check the existence of subqueries in FROM clause on the modified query
+	 * given that if postgres already flattened the subqueries, MultiPlanTree()
+	 * can plan corresponding distributed plan.
+	 *
+	 * We also check the existence of subqueries in WHERE clause. Note that
+	 * this check needs to be done on the original query given that
+	 * standard_planner() may replace the sublinks with anti/semi joins and
+	 * MultiPlanTree() cannot plan such queries.
 	 */
-	subqueryEntryList = SubqueryEntryList(queryTree);
-	if (subqueryEntryList != NIL)
+	if (SubqueryEntryList(queryTree) != NIL || SublinkList(originalQuery) != NIL)
 	{
 		multiQueryNode = MultiSubqueryPlanTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
@@ -182,6 +190,57 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	SetChild((MultiUnaryNode *) rootNode, multiQueryNode);
 
 	return rootNode;
+}
+
+
+/*
+ * SublinkList finds the subquery nodes in the where clause of the given query. Note
+ * that the function should be called on the orignal query given that postgres
+ * standard_planner() may convert the subqueries in WHERE clause to joins.
+ */
+static List *
+SublinkList(Query *originalQuery)
+{
+	FromExpr *joinTree = originalQuery->jointree;
+	Node *queryQuals = NULL;
+	List *sublinkList = NIL;
+
+	if (!joinTree)
+	{
+		return NIL;
+	}
+
+	queryQuals = joinTree->quals;
+	ExtractSublinkWalker(queryQuals, &sublinkList);
+
+	return sublinkList;
+}
+
+
+/*
+ * ExtractSublinkWalker walks over a quals node, and finds all sublinks
+ * in that node.
+ */
+static bool
+ExtractSublinkWalker(Node *node, List **sublinkList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, SubLink))
+	{
+		(*sublinkList) = lappend(*sublinkList, node);
+	}
+	else
+	{
+		walkerResult = expression_tree_walker(node, ExtractSublinkWalker,
+											  sublinkList);
+	}
+
+	return walkerResult;
 }
 
 
@@ -336,8 +395,10 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										plannerRestrictionContext)
 {
 	ListCell *rangeTableEntryCell = NULL;
+	ListCell *sublinkCell = NULL;
 	List *subqueryEntryList = NIL;
 	bool outerMostQueryHasLimit = false;
+	List *sublinkList = NIL;
 	DeferredErrorMessage *error = NULL;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -392,6 +453,23 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		if (error)
 		{
 			return error;
+		}
+	}
+
+	sublinkList = SublinkList(originalQuery);
+	foreach(sublinkCell, sublinkList)
+	{
+		SubLink *sublink = (SubLink *) lfirst(sublinkCell);
+		Node *subselect = sublink->subselect;
+
+		if (subselect && IsA(subselect, Query))
+		{
+			error = DeferErrorIfCannotPushdownSubquery((Query *) subselect,
+													   outerMostQueryHasLimit);
+			if (error)
+			{
+				return error;
+			}
 		}
 	}
 
@@ -547,12 +625,6 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	if (deferredError)
 	{
 		return deferredError;
-	}
-
-	if (subqueryTree->hasSubLinks)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Subqueries other than from-clause subqueries are unsupported";
 	}
 
 	if (subqueryTree->rtable == NIL)
@@ -1248,11 +1320,11 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	const char *filterHint = "Consider using an equality filter on the distributed "
 							 "table's partition column.";
 
-	if (queryTree->hasSubLinks)
+	if (queryTree->hasSubLinks && SublinkList(queryTree) == NIL)
 	{
 		preconditionsSatisfied = false;
 		errorMessage = "could not run distributed query with subquery outside the "
-					   "FROM clause";
+					   "FROM and WHERE clauses";
 		errorHint = filterHint;
 	}
 
@@ -1506,6 +1578,12 @@ DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 		errorDetail = "Subqueries with offset are not supported yet";
 	}
 
+	if (subqueryTree->hasSubLinks)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Subqueries other than from-clause subqueries are unsupported";
+	}
+
 	/* finally check and return error if conditions are not satisfied */
 	if (!preconditionsSatisfied)
 	{
@@ -1752,11 +1830,37 @@ ValidateClauseList(List *clauseList)
 	{
 		Node *clause = (Node *) lfirst(clauseCell);
 
-		bool selectClause = IsSelectClause(clause);
-		bool joinClause = IsJoinClause(clause);
-		bool orClause = or_clause(clause);
+		/* produce a better error message for sublinks */
+		ErrorIfSublink(clause);
 
-		if (!(selectClause || joinClause || orClause))
+		if (!(IsSelectClause(clause) || IsJoinClause(clause) || or_clause(clause)))
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("unsupported clause type")));
+		}
+	}
+}
+
+
+/*
+ * ValidateSubqueryPushdownClauseList walks over the given list of clauses,
+ * and checks that we can recognize all the clauses. This function ensures
+ * that we do not drop an unsupported clause type on the floor, and thus
+ * prevents erroneous results.
+ *
+ * Note that this function is slightly different than ValidateClauseList(),
+ * additionally allowing subkinks.
+ */
+static void
+ValidateSubqueryPushdownClauseList(List *clauseList)
+{
+	ListCell *clauseCell = NULL;
+	foreach(clauseCell, clauseList)
+	{
+		Node *clause = (Node *) lfirst(clauseCell);
+
+		if (!(IsSublinkClause(clause) || IsSelectClause(clause) ||
+			  IsJoinClause(clause) || or_clause(clause)))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("unsupported clause type")));
@@ -1810,6 +1914,10 @@ JoinClauseList(List *whereClauseList)
  * subqueries but differently from the outermost query, they are run on a copy
  * of parse tree and changes do not get persisted as modifications to the original
  * query tree.
+ *
+ * Also this function adds SubLinks to the baseQualifierList when they appear on
+ * the query's WHERE clause. The callers of the function should consider processing
+ * Sublinks as well.
  */
 static bool
 ExtractFromExpressionWalker(Node *node, QualifierWalkerContext *walkerContext)
@@ -2203,7 +2311,8 @@ MultiSelectNode(List *whereClauseList)
 /*
  * IsSelectClause determines if the given node is a select clause according to
  * our criteria. Our criteria defines a select clause as an expression that has
- * zero or more columns belonging to only one table.
+ * zero or more columns belonging to only one table. The function assumes that
+ * no sublinks exists in the clause.
  */
 static bool
 IsSelectClause(Node *clause)
@@ -2213,16 +2322,6 @@ IsSelectClause(Node *clause)
 	Var *firstColumn = NULL;
 	Index firstColumnTableId = 0;
 	bool isSelectClause = true;
-	NodeTag nodeTag = nodeTag(clause);
-
-	/* error out for subqueries in WHERE clause */
-	if (nodeTag == T_SubLink || nodeTag == T_SubPlan)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning on this query"),
-						errdetail("Subqueries other than in from-clause are currently "
-								  "unsupported")));
-	}
 
 	/* extract columns from the clause */
 	columnList = pull_var_clause_default(clause);
@@ -2246,6 +2345,42 @@ IsSelectClause(Node *clause)
 	}
 
 	return isSelectClause;
+}
+
+
+/*
+ * ErrorIfSublink errors out if the input claise is either sublink or subplan.
+ */
+static void
+ErrorIfSublink(Node *clause)
+{
+	NodeTag nodeTag = nodeTag(clause);
+
+	/* error out for subqueries in WHERE clause */
+	if (nodeTag == T_SubLink || nodeTag == T_SubPlan)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot perform distributed planning on this query"),
+						errdetail("Subqueries other than in from-clause are currently "
+								  "unsupported")));
+	}
+}
+
+
+/*
+ * IsSublinkClause determines if the given node is a sublink or subplan.
+ */
+static bool
+IsSublinkClause(Node *clause)
+{
+	NodeTag nodeTag = nodeTag(clause);
+
+	if (nodeTag == T_SubLink || nodeTag == T_SubPlan)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -2904,9 +3039,13 @@ SubqueryPushdownMultiPlanTree(Query *queryTree)
 	/* verify we can perform distributed planning on this query */
 	ErrorIfQueryNotSupported(queryTree);
 
-	/* extract qualifiers and verify we can plan for them */
+	/*
+	 * Extract qualifiers and verify we can plan for them. Note that since
+	 * subquery pushdown join planning is based on restriction equivalence,
+	 * checking for these qualifiers may not be necessary.
+	 */
 	qualifierList = QualifierList(queryTree->jointree);
-	ValidateClauseList(qualifierList);
+	ValidateSubqueryPushdownClauseList(qualifierList);
 
 	/*
 	 * We would be creating a new Query and pushing down top level query's
