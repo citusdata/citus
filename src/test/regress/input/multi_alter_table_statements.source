@@ -98,6 +98,10 @@ ALTER TABLE lineitem_alter DROP COLUMN int_column1;
 ALTER TABLE lineitem_alter DROP COLUMN float_column;
 ALTER TABLE lineitem_alter DROP COLUMN date_column;
 
+-- Verify that RENAME COLUMN works
+ALTER TABLE lineitem_alter RENAME COLUMN l_orderkey TO l_orderkey_renamed;
+SELECT SUM(l_orderkey_renamed) FROM lineitem_alter;
+
 -- Verify that IF EXISTS works as expected
 
 ALTER TABLE non_existent_table ADD COLUMN new_column INTEGER;
@@ -107,6 +111,11 @@ ALTER TABLE IF EXISTS lineitem_alter ALTER COLUMN int_column2 SET DATA TYPE INTE
 ALTER TABLE lineitem_alter DROP COLUMN non_existent_column;
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS non_existent_column;
 ALTER TABLE lineitem_alter DROP COLUMN IF EXISTS int_column2;
+
+-- Verify with IF EXISTS for extant table
+ALTER TABLE IF EXISTS lineitem_alter RENAME COLUMN l_orderkey_renamed TO l_orderkey;
+SELECT SUM(l_orderkey) FROM lineitem_alter;
+
 \d lineitem_alter
 
 -- Verify that we can execute commands with multiple subcommands
@@ -139,10 +148,9 @@ ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 
--- Verify that we error out on statements involving RENAME
+-- Verify that we error out on non-column RENAME statements
 
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
-ALTER TABLE lineitem_alter RENAME COLUMN l_orderkey TO l_orderkey_renamed;
 ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 
 -- Verify that IF EXISTS works as expected with RENAME statements
@@ -150,7 +158,6 @@ ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 ALTER TABLE non_existent_table RENAME TO non_existent_table_renamed;
 ALTER TABLE IF EXISTS non_existent_table RENAME TO non_existent_table_renamed;
 ALTER TABLE IF EXISTS non_existent_table RENAME COLUMN column1 TO column2;
-ALTER TABLE IF EXISTS lineitem_alter RENAME l_orderkey TO l_orderkey_renamed;
 
 -- Verify that none of the failed alter table commands took effect on the master
 -- node

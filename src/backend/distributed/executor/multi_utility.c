@@ -112,6 +112,7 @@ static List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 								const char *dropIndexCommand);
 static List * PlanAlterTableStmt(AlterTableStmt *alterTableStatement,
 								 const char *alterTableCommand);
+static List * PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand);
 static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 										  const char *alterTableCommand);
 static List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
@@ -132,12 +133,12 @@ static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static void ErrorIfDistributedRenameStmt(RenameStmt *renameStatement);
+static void ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt);
 
 /* Local functions forward declarations for helper functions */
 static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
-static bool IsAlterTableRenameStmt(RenameStmt *renameStatement);
+static bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
@@ -290,11 +291,7 @@ multi_ProcessUtility(Node *parsetree,
 		 */
 		if (IsA(parsetree, RenameStmt))
 		{
-			RenameStmt *renameStmt = (RenameStmt *) parsetree;
-			if (IsAlterTableRenameStmt(renameStmt))
-			{
-				ErrorIfDistributedRenameStmt(renameStmt);
-			}
+			ddlJobs = PlanRenameStmt((RenameStmt *) parsetree, queryString);
 		}
 
 		/*
@@ -978,6 +975,61 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	ddlJobs = list_make1(ddlJob);
 
 	return ddlJobs;
+}
+
+
+/*
+ * PlanRenameStmt first determines whether a given rename statement involves
+ * a distributed table. If so (and if it is supported, i.e. renames a column),
+ * it creates a DDLJob to encapsulate information needed during the worker node
+ * portion of DDL execution before returning that DDLJob in a List. If no dis-
+ * tributed table is involved, this function returns NIL.
+ */
+static List *
+PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
+{
+	Oid relationId = InvalidOid;
+	bool isDistributedRelation = false;
+	DDLJob *ddlJob = NULL;
+
+	if (!IsAlterTableRenameStmt(renameStmt))
+	{
+		return NIL;
+	}
+
+	/*
+	 * The lock levels here should be same as the ones taken in
+	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
+	 * three statements have identical lock levels, we just use a single statement.
+	 */
+	relationId = RangeVarGetRelid(renameStmt->relation, AccessExclusiveLock,
+								  renameStmt->missing_ok);
+
+	/*
+	 * If the table does not exist, don't do anything here to allow PostgreSQL
+	 * to throw the appropriate error or notice message later.
+	 */
+	if (!OidIsValid(relationId))
+	{
+		return NIL;
+	}
+
+	/* we have no planning to do unless the table is distributed */
+	isDistributedRelation = IsDistributedTable(relationId);
+	if (!isDistributedRelation)
+	{
+		return NIL;
+	}
+
+	ErrorIfUnsupportedRenameStmt(renameStmt);
+
+	ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->commandString = renameCommand;
+	ddlJob->taskList = DDLTaskList(relationId, renameCommand);
+
+	return list_make1(ddlJob);
 }
 
 
@@ -1980,40 +2032,24 @@ OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
 
 /*
  * ErrorIfDistributedRenameStmt errors out if the corresponding rename statement
- * operates on a distributed table or its objects.
+ * operates on any part of a distributed table other than a column.
  *
  * Note: This function handles only those rename statements which operate on tables.
  */
 static void
-ErrorIfDistributedRenameStmt(RenameStmt *renameStatement)
+ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
 {
-	Oid relationId = InvalidOid;
-	bool isDistributedRelation = false;
+	Assert(IsAlterTableRenameStmt(renameStmt));
 
-	Assert(IsAlterTableRenameStmt(renameStatement));
-
-	/*
-	 * The lock levels here should be same as the ones taken in
-	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
-	 * three statements have identical lock levels, we just use a single statement.
-	 */
-	relationId = RangeVarGetRelid(renameStatement->relation, AccessExclusiveLock,
-								  renameStatement->missing_ok);
-
-	/*
-	 * If the table does not exist, we don't do anything here, and allow postgres to
-	 * throw the appropriate error or notice message later.
-	 */
-	if (!OidIsValid(relationId))
-	{
-		return;
-	}
-
-	isDistributedRelation = IsDistributedTable(relationId);
-	if (isDistributedRelation)
+	if (renameStmt->renameType == OBJECT_TABLE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("renaming distributed tables or their objects is "
+						errmsg("renaming distributed tables is currently unsupported")));
+	}
+	else if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("renaming constraints belonging to distributed tables is "
 							   "currently unsupported")));
 	}
 }
@@ -2099,11 +2135,12 @@ CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort)
 
 
 /*
- * IsAlterTableRenameStmt returns true if the passed in RenameStmt operates on a
- * distributed table or its objects. This includes:
- * ALTER TABLE RENAME
- * ALTER TABLE RENAME COLUMN
- * ALTER TABLE RENAME CONSTRAINT
+ * IsAlterTableRenameStmt returns whether the passed-in RenameStmt is one of
+ * the following forms:
+ *
+ *   - ALTER TABLE RENAME
+ *   - ALTER TABLE RENAME COLUMN
+ *   - ALTER TABLE RENAME CONSTRAINT
  */
 static bool
 IsAlterTableRenameStmt(RenameStmt *renameStmt)
