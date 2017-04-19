@@ -26,8 +26,10 @@
 #include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_local_group.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
@@ -99,6 +101,7 @@ static Oid distShardPlacementNodeidIndexId = InvalidOid;
 static Oid distTransactionRelationId = InvalidOid;
 static Oid distTransactionGroupIndexId = InvalidOid;
 static Oid extraDataContainerFuncId = InvalidOid;
+static Oid workerHashFunctionId = InvalidOid;
 
 /* Citus extension version variables */
 bool EnableVersionChecks = true; /* version checks are enabled */
@@ -1452,6 +1455,24 @@ CitusExtraDataContainerFuncId(void)
 }
 
 
+/* return oid of the worker_hash function */
+Oid
+CitusWorkerHashFunctionId(void)
+{
+	if (workerHashFunctionId == InvalidOid)
+	{
+		Oid citusExtensionOid = get_extension_oid("citus", false);
+		Oid citusSchemaOid = get_extension_schema(citusExtensionOid);
+		char *citusSchemaName = get_namespace_name(citusSchemaOid);
+		const int argCount = 1;
+
+		workerHashFunctionId = FunctionOid(citusSchemaName, "worker_hash", argCount);
+	}
+
+	return workerHashFunctionId;
+}
+
+
 /*
  * CitusExtensionOwner() returns the owner of the 'citus' extension. That user
  * is, amongst others, used to perform actions a normal user might not be
@@ -2193,6 +2214,7 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 		distTransactionRelationId = InvalidOid;
 		distTransactionGroupIndexId = InvalidOid;
 		extraDataContainerFuncId = InvalidOid;
+		workerHashFunctionId = InvalidOid;
 	}
 }
 

@@ -651,7 +651,7 @@ AddShardIntervalRestrictionToSelect(Query *subqery, ShardInterval *shardInterval
 
 	/* generate hashfunc(partCol) expression */
 	hashFunctionExpr = makeNode(FuncExpr);
-	hashFunctionExpr->funcid = typeEntry->hash_proc_finfo.fn_oid;
+	hashFunctionExpr->funcid = CitusWorkerHashFunctionId();
 	hashFunctionExpr->args = list_make1(targetPartitionColumnVar);
 
 	/* hash functions always return INT4 */
