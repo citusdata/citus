@@ -34,6 +34,7 @@
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/listutils.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/relation_restriction_equivalence.h"
@@ -341,6 +342,15 @@ CreateInsertSelectRouterPlan(Query *originalQuery,
 		}
 
 		++taskIdIndex;
+	}
+
+	if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF &&
+		list_length(sqlTaskList) > 1)
+	{
+		ereport(MultiTaskQueryLogLevel, (errmsg("multi-task query about to be executed"),
+										 errhint("Queries are split to multiple tasks "
+												 "if they have to be split into several"
+												 " queries on the workers.")));
 	}
 
 	/* Create the worker job */
