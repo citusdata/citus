@@ -356,11 +356,21 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	dest->rStartup(dest, 0, tupleDescriptor);
 
 	/* initialize copy state to read from COPY data source */
+#if (PG_VERSION_NUM >= 100000)
+	copyState = BeginCopyFrom(NULL,
+							  distributedRelation,
+							  copyStatement->filename,
+							  copyStatement->is_program,
+							  NULL,
+							  copyStatement->attlist,
+							  copyStatement->options);
+#else
 	copyState = BeginCopyFrom(distributedRelation,
 							  copyStatement->filename,
 							  copyStatement->is_program,
 							  copyStatement->attlist,
 							  copyStatement->options);
+#endif
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -455,11 +465,21 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
 	/* initialize copy state to read from COPY data source */
+#if (PG_VERSION_NUM >= 100000)
+	CopyState copyState = BeginCopyFrom(NULL,
+										distributedRelation,
+										copyStatement->filename,
+										copyStatement->is_program,
+										NULL,
+										copyStatement->attlist,
+										copyStatement->options);
+#else
 	CopyState copyState = BeginCopyFrom(distributedRelation,
 										copyStatement->filename,
 										copyStatement->is_program,
 										copyStatement->attlist,
 										copyStatement->options);
+#endif
 
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
