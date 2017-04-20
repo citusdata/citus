@@ -134,6 +134,9 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
+#if (PG_VERSION_NUM >= 100000)
+static List * get_all_actual_clauses(List *restrictinfo_list);
+#endif
 
 
 /*
@@ -3026,3 +3029,34 @@ ErrorIfQueryHasModifyingCTE(Query *queryTree)
 	/* everything OK */
 	return NULL;
 }
+
+
+#if (PG_VERSION_NUM >= 100000)
+
+/*
+ * get_all_actual_clauses
+ *
+ * Returns a list containing the bare clauses from 'restrictinfo_list'.
+ *
+ * This loses the distinction between regular and pseudoconstant clauses,
+ * so be careful what you use it for.
+ */
+static List *
+get_all_actual_clauses(List *restrictinfo_list)
+{
+	List *result = NIL;
+	ListCell *l;
+
+	foreach(l, restrictinfo_list)
+	{
+		RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+
+		Assert(IsA(rinfo, RestrictInfo));
+
+		result = lappend(result, rinfo->clause);
+	}
+	return result;
+}
+
+
+#endif
