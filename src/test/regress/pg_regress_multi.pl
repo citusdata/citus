@@ -467,7 +467,8 @@ if ($vanillatest)
     $ENV{PGPORT} = $masterPort;
     $ENV{PGUSER} = $user;
 
-    system("make -C $postgresBuilddir/src/test/regress installcheck-parallel")
+    system("make -C $postgresBuilddir/src/test/regress installcheck-parallel") == 0
+    or die "Could not run vanilla tests";
 }
 elsif ($isolationtester)
 {
