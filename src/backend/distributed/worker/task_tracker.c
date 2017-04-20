@@ -578,6 +578,13 @@ TaskTrackerShmemInit(void)
 
 	if (!alreadyInitialized)
 	{
+#if (PG_VERSION_NUM >= 100000)
+		WorkerTasksSharedState->taskHashTrancheId = LWLockNewTrancheId();
+		WorkerTasksSharedState->taskHashTrancheName = "Worker Task Hash Tranche";
+		LWLockRegisterTranche(WorkerTasksSharedState->taskHashTrancheId,
+							  WorkerTasksSharedState->taskHashTrancheName);
+#else
+
 		/* initialize lwlock protecting the task tracker hash table */
 		LWLockTranche *tranche = &WorkerTasksSharedState->taskHashLockTranche;
 
@@ -586,6 +593,8 @@ TaskTrackerShmemInit(void)
 		tranche->array_stride = sizeof(LWLock);
 		tranche->name = "Worker Task Hash Tranche";
 		LWLockRegisterTranche(WorkerTasksSharedState->taskHashTrancheId, tranche);
+#endif
+
 		LWLockInitialize(&WorkerTasksSharedState->taskHashLock,
 						 WorkerTasksSharedState->taskHashTrancheId);
 	}
