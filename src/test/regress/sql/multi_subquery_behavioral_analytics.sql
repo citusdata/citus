@@ -1345,4 +1345,123 @@ FROM (SELECT
 WHERE b.user_id IS NULL 
 GROUP BY a.user_id;  
 
+
+-- same query without LIMIT/OFFSET returns 30 rows
+
+SET client_min_messages TO DEBUG1;
+-- now, lets use a simple expression on the LIMIT and explicit coercion on the OFFSET
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE u.user_id = e.user_id
+      AND e.event_type IN (100, 101, 102)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1
+LIMIT 3+3 OFFSET 5::smallint;
+
+-- now, lets use implicit coersion in LIMIT and a simple expressions on OFFSET
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE u.user_id = e.user_id
+      AND e.event_type IN (100, 101, 102)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1
+LIMIT '3' OFFSET 27+2;
+
+-- create a test function which is marked as volatile
+CREATE OR REPLACE FUNCTION volatile_func_test()
+      RETURNS INT AS $$
+        SELECT 5;
+    $$ LANGUAGE sql VOLATILE;
+
+-- Citus should be able to evalute functions/row comparisons on the LIMIT/OFFSET
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE u.user_id = e.user_id
+      AND e.event_type IN (100, 101, 102)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1
+LIMIT volatile_func_test() + (ROW(1,2,NULL) < ROW(1,3,0))::int OFFSET volatile_func_test() + volatile_func_test();
+
+-- now, lets use expressions on both the LIMIT and OFFSET
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE u.user_id = e.user_id
+      AND e.event_type IN (100, 101, 102)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1
+LIMIT (5 > 4)::int OFFSET
+                    CASE
+                      WHEN 5 != 5 THEN 27
+                      WHEN 1 > 5 THEN 28
+                      ELSE 29
+                  END;
+
+-- we don't allow parameters on the LIMIT/OFFSET clauses
+PREPARE parametrized_limit AS
+SELECT user_id, array_length(events_table, 1)
+FROM (
+   SELECT user_id, array_agg(event ORDER BY time) AS events_table
+   FROM (
+     SELECT u.user_id, e.event_type::text AS event, e.time
+     FROM users_table AS u,
+          events_table AS e
+     WHERE u.user_id = e.user_id
+       AND e.event_type IN (100, 101, 102)
+   ) t
+   GROUP BY user_id
+ ) q
+ ORDER BY 2 DESC, 1
+ LIMIT $1 OFFSET $2;
+
+ EXECUTE parametrized_limit(3,3);
+
+PREPARE parametrized_offset AS
+SELECT user_id, array_length(events_table, 1)
+FROM (
+   SELECT user_id, array_agg(event ORDER BY time) AS events_table
+   FROM (
+     SELECT u.user_id, e.event_type::text AS event, e.time
+     FROM users_table AS u,
+          events_table AS e
+     WHERE u.user_id = e.user_id
+       AND e.event_type IN (100, 101, 102)
+   ) t
+   GROUP BY user_id
+ ) q
+ ORDER BY 2 DESC, 1
+ LIMIT 3 OFFSET $1;
+
+ EXECUTE parametrized_offset(3);
+
+SET client_min_messages TO DEFAULT;
+DROP FUNCTION volatile_func_test();
+
 SET citus.enable_router_execution TO TRUE;

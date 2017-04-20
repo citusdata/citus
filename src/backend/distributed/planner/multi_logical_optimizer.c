@@ -3233,6 +3233,24 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 	}
 
 	/*
+	 * During subquery pushdown planning original query is used. In that case,
+	 * certain expressions such as parameters are not evaluated and converted
+	 * into Consts on the op node.
+	 */
+	if (!IsA(originalOpNode->limitCount, Const))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("unsupported limit clause")));
+	}
+
+	/* same as the above but this time for OFFSET clause */
+	if (originalOpNode->limitOffset && !IsA(originalOpNode->limitOffset, Const))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("unsupported offset clause")));
+	}
+
+	/*
 	 * If we don't have group by clauses, or if we have order by clauses without
 	 * aggregates, we can push down the original limit. Else if we have order by
 	 * clauses with commutative aggregates, we can push down approximate limits.
