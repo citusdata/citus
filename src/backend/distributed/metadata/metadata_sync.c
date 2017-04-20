@@ -812,9 +812,13 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 	replace[Anum_pg_dist_node_hasmetadata - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-	simple_heap_update(pgDistNode, &heapTuple->t_self, heapTuple);
 
+#if (PG_VERSION_NUM >= 100000)
+	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
+#else
+	simple_heap_update(pgDistNode, &heapTuple->t_self, heapTuple);
 	CatalogUpdateIndexes(pgDistNode, heapTuple);
+#endif
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 

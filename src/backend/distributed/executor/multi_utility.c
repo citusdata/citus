@@ -3027,8 +3027,12 @@ PostProcessUtility(Node *parsetree)
 	indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
 	indexForm->indisvalid = true;
 
+#if (PG_VERSION_NUM >= 100000)
+	CatalogTupleUpdate(pg_index, &indexTuple->t_self, indexTuple);
+#else
 	simple_heap_update(pg_index, &indexTuple->t_self, indexTuple);
 	CatalogUpdateIndexes(pg_index, indexTuple);
+#endif
 
 	/* clean up; index now marked valid, but ROLLBACK will mark invalid */
 	heap_freetuple(indexTuple);

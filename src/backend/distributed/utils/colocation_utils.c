@@ -477,8 +477,12 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 	tupleDescriptor = RelationGetDescr(pgDistColocation);
 	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
+#if (PG_VERSION_NUM >= 100000)
+	CatalogTupleInsert(pgDistColocation, heapTuple);
+#else
 	simple_heap_insert(pgDistColocation, heapTuple);
 	CatalogUpdateIndexes(pgDistColocation, heapTuple);
+#endif
 
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
@@ -648,9 +652,15 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	replace[Anum_pg_dist_partition_colocationid - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isNull, replace);
-	simple_heap_update(pgDistPartition, &heapTuple->t_self, heapTuple);
 
+
+#if (PG_VERSION_NUM >= 100000)
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+#else
+	simple_heap_update(pgDistPartition, &heapTuple->t_self, heapTuple);
 	CatalogUpdateIndexes(pgDistPartition, heapTuple);
+#endif
+
 	CitusInvalidateRelcacheByRelid(distributedRelationId);
 
 	CommandCounterIncrement();
