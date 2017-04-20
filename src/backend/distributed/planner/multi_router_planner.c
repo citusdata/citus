@@ -1638,13 +1638,14 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 * should be checked in this function.
 	 *
 	 * Look through contain_mutable_functions_walker or future PG's equivalent for new
-	 * node types before bumping this version number to fix compilation.
+	 * node types before bumping this version number to fix compilation; e.g. for any
+	 * PostgreSQL after 9.5, see check_functions_in_node.
 	 *
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM < 90700, "When porting to a newer PG this section"
-											 " needs to be reviewed.");
+	StaticAssertStmt(PG_VERSION_NUM < 100100, "When porting to a newer PG this section"
+											  " needs to be reviewed.");
 	if (IsA(expression, Aggref))
 	{
 		Aggref *expr = (Aggref *) expression;
