@@ -193,10 +193,18 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 
 	/* build our DDL command */
 	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
+
+#if (PG_VERSION_NUM >= 100000)
+	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
+						   pgSequenceForm->seqmax, pgSequenceForm->seqstart,
+						   pgSequenceForm->seqcycle ? "" : "NO ");
+#else
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
 						   pgSequenceForm->max_value, pgSequenceForm->start_value,
 						   pgSequenceForm->is_cycled ? "" : "NO ");
+#endif
 
 	return sequenceDef;
 }

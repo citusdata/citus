@@ -1355,6 +1355,14 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceId);
 	int64 startValue = 0;
 	int64 maxValue = 0;
+#if (PG_VERSION_NUM >= 100000)
+	int64 sequenceMaxValue = sequenceData->seqmax;
+	int64 sequenceMinValue = sequenceData->seqmin;
+#else
+	int64 sequenceMaxValue = sequenceData->max_value;
+	int64 sequenceMinValue = sequenceData->min_value;
+#endif
+
 
 	/* calculate min/max values that the sequence can generate in this worker */
 	startValue = (((int64) GetLocalGroupId()) << 48) + 1;
@@ -1365,7 +1373,7 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 	 * their correct values. This happens when the sequence has been created
 	 * during shard, before the current worker having the metadata.
 	 */
-	if (sequenceData->min_value != startValue || sequenceData->max_value != maxValue)
+	if (sequenceMinValue != startValue || sequenceMaxValue != maxValue)
 	{
 		StringInfo startNumericString = makeStringInfo();
 		StringInfo maxNumericString = makeStringInfo();
