@@ -841,7 +841,11 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
+#if (PG_VERSION_NUM >= 100000)
+	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
+#else
 	List *ownedSequences = getOwnedSequences(relationId);
+#endif
 	ListCell *listCell;
 	char *ownerName = TableOwner(relationId);
 
