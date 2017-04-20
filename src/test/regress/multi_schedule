@@ -96,6 +96,7 @@ test: multi_shard_modify
 # ----------
 test: multi_index_statements
 test: multi_alter_table_statements
+test: multi_alter_table_add_constraints
 
 # ----------
 # multi_create_schema tests creation, loading, and querying of a table in a new
