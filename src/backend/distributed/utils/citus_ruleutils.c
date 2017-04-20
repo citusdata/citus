@@ -190,7 +190,7 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
-						   pgSequenceForm->max_value, pgSequenceForm->cache_value,
+						   pgSequenceForm->max_value, pgSequenceForm->start_value,
 						   pgSequenceForm->is_cycled ? "" : "NO ");
 
 	return sequenceDef;
