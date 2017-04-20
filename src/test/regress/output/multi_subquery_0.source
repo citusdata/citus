@@ -174,28 +174,33 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- Check that we error out if there is union all.
--- TEMPORARLY DISABLE UNION ALL
--- SELECT count(*) FROM
--- (
---   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
---   (SELECT 1::bigint)
---) b;
----
--- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
----
+-- Check that we error out if there is non relation subqueries
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
+   (SELECT 1::bigint)
+) b;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
 -- Check that we error out if queries in union do not include partition columns.
---SELECT count(*) FROM
---(
-  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
-  -- (SELECT l_partkey FROM lineitem_subquery)
---) b;
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION
+   (SELECT l_partkey FROM lineitem_subquery)
+) b;
+ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
+DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
 -- Check that we run union queries if partition column is selected.
---SELECT count(*) FROM
---(
-  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
-  -- (SELECT l_orderkey FROM lineitem_subquery)
---) b;
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION
+   (SELECT l_orderkey FROM lineitem_subquery)
+) b;
+ count 
+-------
+  2985
+(1 row)
+
 -- Check that we error out if inner query has limit but outer quers has not.
 SELECT
 	avg(o_totalprice/l_quantity)
@@ -289,22 +294,32 @@ WHERE
 (1 row)
 
 -- Check that if subquery is pulled, we don't error and run query properly.
---SELECT count(*) FROM
---(
-	--SELECT l_orderkey FROM (
-		--(SELECT l_orderkey FROM lineitem_subquery) UNION
-		--(SELECT l_orderkey FROM lineitem_subquery)
-	--) a
-	--WHERE l_orderkey = 1
---) b;
---SELECT count(*) FROM
---(
-	--SELECT * FROM (
-		--(SELECT * FROM lineitem_subquery) UNION
-		--(SELECT * FROM lineitem_subquery)
-	--) a
-	--WHERE l_orderkey = 1
---) b;
+SELECT count(*) FROM
+(
+	SELECT l_orderkey FROM (
+		(SELECT l_orderkey FROM lineitem_subquery) UNION
+		(SELECT l_orderkey FROM lineitem_subquery)
+	) a
+	WHERE l_orderkey = 1
+) b;
+ count 
+-------
+     1
+(1 row)
+
+SELECT count(*) FROM
+(
+	SELECT * FROM (
+		(SELECT * FROM lineitem_subquery) UNION
+		(SELECT * FROM lineitem_subquery)
+	) a
+	WHERE l_orderkey = 1
+) b;
+ count 
+-------
+     6
+(1 row)
+
 SELECT max(l_orderkey) FROM
 (
 	SELECT l_orderkey FROM (
