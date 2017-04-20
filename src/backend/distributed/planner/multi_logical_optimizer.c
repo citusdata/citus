@@ -1320,7 +1320,7 @@ MasterAggregateMutator(Node *originalNode, MasterAggregateWalkerContext *walkerC
 	else if (IsA(originalNode, Var))
 	{
 		uint32 masterTableId = 1; /* one table on the master node */
-		Var *newColumn = copyObject(originalNode);
+		Var *newColumn = copyObject((Var *) originalNode);
 		newColumn->varno = masterTableId;
 		newColumn->varattno = walkerContext->columnId;
 		walkerContext->columnId++;
