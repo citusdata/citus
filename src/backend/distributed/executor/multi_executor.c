@@ -288,7 +288,15 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 
 	if (BinaryMasterCopyFormat)
 	{
-		DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
+		DefElem *copyOption = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+		int location = -1; /* "unknown" token location */
+		copyOption = makeDefElem("format", (Node *) makeString("binary"), location);
+#else
+		copyOption = makeDefElem("format", (Node *) makeString("binary"));
+#endif
+
 		copyOptions = lappend(copyOptions, copyOption);
 	}
 

@@ -510,7 +510,12 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 		copyStatement = CopyStatement(relation, fullFilename->data);
 		if (BinaryWorkerCopyFormat)
 		{
+#if (PG_VERSION_NUM >= 100000)
+			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"),
+											  -1);
+#else
 			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"));
+#endif
 			copyStatement->options = list_make1(copyOption);
 		}
 

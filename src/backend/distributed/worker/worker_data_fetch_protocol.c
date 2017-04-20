@@ -1404,6 +1404,11 @@ SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 		}
 	}
 
+#if (PG_VERSION_NUM >= 100000)
+	defElem = makeDefElem((char *) name, arg, -1);
+#else
 	defElem = makeDefElem((char *) name, arg);
+#endif
+
 	statement->options = lappend(statement->options, defElem);
 }
