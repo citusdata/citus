@@ -36,6 +36,8 @@
 #define JOB_CLEANUP_QUERY "SELECT task_tracker_cleanup_job("UINT64_FORMAT ")"
 #define JOB_CLEANUP_TASK_ID INT_MAX
 
+#define MULTI_TASK_QUERY_INFO_OFF 0  /* do not log multi-task queries */
+
 
 /* Enumeration to track one task's execution status */
 typedef enum
@@ -184,6 +186,7 @@ extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;
 extern int TaskExecutorType;
 extern bool BinaryMasterCopyFormat;
+extern int MultiTaskQueryLogLevel;
 
 
 /* Function declarations for distributed execution */
