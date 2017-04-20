@@ -137,6 +137,7 @@ extern Datum CompareCall2(FmgrInfo *funcInfo, Datum leftArgument, Datum rightArg
 
 /* Function declaration for parsing tree node */
 extern Node * ParseTreeNode(const char *ddlCommand);
+extern Node * ParseTreeRawStmt(const char *ddlCommand);
 
 /* Function declarations for applying distributed execution primitives */
 extern Datum worker_fetch_partition_file(PG_FUNCTION_ARGS);

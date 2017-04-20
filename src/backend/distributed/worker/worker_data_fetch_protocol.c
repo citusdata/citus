@@ -1171,6 +1171,22 @@ ExecuteRemoteCommand(const char *nodeName, uint32 nodePort, StringInfo queryStri
 Node *
 ParseTreeNode(const char *ddlCommand)
 {
+	Node *parseTreeNode = ParseTreeRawStmt(ddlCommand);
+
+#if (PG_VERSION_NUM >= 100000)
+	parseTreeNode = ((RawStmt *) parseTreeNode)->stmt;
+#endif
+
+	return parseTreeNode;
+}
+
+
+/*
+ * Parses the given DDL command, and returns the tree node for parsed command.
+ */
+Node *
+ParseTreeRawStmt(const char *ddlCommand)
+{
 	Node *parseTreeNode = NULL;
 	List *parseTreeList = NULL;
 	uint32 parseTreeCount = 0;
