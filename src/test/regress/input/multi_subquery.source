@@ -170,32 +170,29 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
--- Check that we error out if there is union all.
--- TEMPORARLY DISABLE UNION ALL
--- SELECT count(*) FROM
--- (
---   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
---   (SELECT 1::bigint)
---) b;
+-- Check that we error out if there is non relation subqueries
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
+   (SELECT 1::bigint)
+) b;
 
----
--- TEMPORARLY DISABLE UNIONS WITHOUT JOINS
----
+
 -- Check that we error out if queries in union do not include partition columns.
 
---SELECT count(*) FROM
---(
-  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
-  -- (SELECT l_partkey FROM lineitem_subquery)
---) b;
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION
+   (SELECT l_partkey FROM lineitem_subquery)
+) b;
 
 -- Check that we run union queries if partition column is selected.
 
---SELECT count(*) FROM
---(
-  -- (SELECT l_orderkey FROM lineitem_subquery) UNION
-  -- (SELECT l_orderkey FROM lineitem_subquery)
---) b;
+SELECT count(*) FROM
+(
+   (SELECT l_orderkey FROM lineitem_subquery) UNION
+   (SELECT l_orderkey FROM lineitem_subquery)
+) b;
 -- Check that we error out if inner query has limit but outer quers has not.
 SELECT
 	avg(o_totalprice/l_quantity)
@@ -273,23 +270,23 @@ WHERE
 
 -- Check that if subquery is pulled, we don't error and run query properly.
 
---SELECT count(*) FROM
---(
-	--SELECT l_orderkey FROM (
-		--(SELECT l_orderkey FROM lineitem_subquery) UNION
-		--(SELECT l_orderkey FROM lineitem_subquery)
-	--) a
-	--WHERE l_orderkey = 1
---) b;
+SELECT count(*) FROM
+(
+	SELECT l_orderkey FROM (
+		(SELECT l_orderkey FROM lineitem_subquery) UNION
+		(SELECT l_orderkey FROM lineitem_subquery)
+	) a
+	WHERE l_orderkey = 1
+) b;
 
---SELECT count(*) FROM
---(
-	--SELECT * FROM (
-		--(SELECT * FROM lineitem_subquery) UNION
-		--(SELECT * FROM lineitem_subquery)
-	--) a
-	--WHERE l_orderkey = 1
---) b;
+SELECT count(*) FROM
+(
+	SELECT * FROM (
+		(SELECT * FROM lineitem_subquery) UNION
+		(SELECT * FROM lineitem_subquery)
+	) a
+	WHERE l_orderkey = 1
+) b;
 
 SELECT max(l_orderkey) FROM
 (
