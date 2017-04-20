@@ -77,14 +77,11 @@ ALTER TABLE name_lengths ADD COLUMN date_col_12345678901234567890123456789012345
 ALTER TABLE name_lengths ADD COLUMN int_col_12345678901234567890123456789012345678901234567890 INTEGER DEFAULT 1;
 -- Placeholders for unsupported ALTER TABLE to add constraints with implicit names that are likely too long
 ALTER TABLE name_lengths ADD UNIQUE (float_col_12345678901234567890123456789012345678901234567890);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE name_lengths ADD EXCLUDE (int_col_12345678901234567890123456789012345678901234567890 WITH =);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+ERROR:  cannot create constraint without a name on a distributed table
 ALTER TABLE name_lengths ADD CHECK (date_col_12345678901234567890123456789012345678901234567890 > '2014-01-01'::date);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+ERROR:  cannot create constraint without a name on a distributed table
 \c - - - :worker_1_port
 \d name_lengths_*
                              Table "public.name_lengths_225002"
@@ -112,14 +109,14 @@ Indexes:
 \c - - - :master_port
 -- Placeholders for unsupported add constraints with EXPLICIT names that are too long
 ALTER TABLE name_lengths ADD CONSTRAINT nl_unique_12345678901234567890123456789012345678901234567890 UNIQUE (float_col_12345678901234567890123456789012345678901234567890);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+ERROR:  cannot create constraint on "name_lengths"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE name_lengths ADD CONSTRAINT nl_exclude_12345678901234567890123456789012345678901234567890 EXCLUDE (int_col_12345678901234567890123456789012345678901234567890 WITH =);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+ERROR:  cannot create constraint on "name_lengths"
+DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE name_lengths ADD CONSTRAINT nl_checky_12345678901234567890123456789012345678901234567890 CHECK (date_col_12345678901234567890123456789012345678901234567890 >= '2014-01-01'::date);
-ERROR:  cannot create constraint
-DETAIL:  Citus cannot execute ADD CONSTRAINT command other than ADD CONSTRAINT FOREIGN KEY.
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
 \d nl_*
 \c - - - :master_port

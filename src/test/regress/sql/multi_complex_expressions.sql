@@ -220,7 +220,7 @@ FROM
 WHERE 
 	li.l_quantity > 25
 ORDER BY
-	li.l_quantity
+	li.l_quantity, li.l_partkey, o.o_custkey
 LIMIT 10 OFFSET 20;
 
 RESET client_min_messages;
