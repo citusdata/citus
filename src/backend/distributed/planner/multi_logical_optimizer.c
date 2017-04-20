@@ -47,6 +47,9 @@
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/regproc.h"
+#endif
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"

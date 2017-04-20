@@ -42,6 +42,10 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "utils/regproc.h"
+#include "utils/varlena.h"
+#endif
 
 
 /* Config variable managed via guc.c */
