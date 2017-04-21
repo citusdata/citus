@@ -394,7 +394,12 @@ CreateTaskTable(StringInfo schemaName, StringInfo relationName,
 
 	createStatement = CreateStatement(relation, columnDefinitionList);
 
+#if (PG_VERSION_NUM >= 100000)
+	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL,
+									NULL);
+#else
 	relationObject = DefineRelation(createStatement, RELKIND_RELATION, InvalidOid, NULL);
+#endif
 	relationId = relationObject.objectId;
 
 	Assert(relationId != InvalidOid);
