@@ -202,14 +202,16 @@ SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)
 	FROM articles_hash_mx
 	WHERE author_id = 1 or author_id = 3
-	GROUP BY GROUPING SETS ((id),(subtitle));
+	GROUP BY GROUPING SETS ((id),(subtitle))
+	ORDER BY id, subtitle;
 
 -- grouping sets are not supported on multiple shards
 SELECT
 	id, substring(title, 2, 1) AS subtitle, count(*)
 	FROM articles_hash_mx
 	WHERE author_id = 1 or author_id = 2
-	GROUP BY GROUPING SETS ((id),(subtitle));
+	GROUP BY GROUPING SETS ((id),(subtitle))
+	ORDER BY id, subtitle;
 
 -- queries which involve functions in FROM clause are supported if it goes to a single worker.
 SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1;
@@ -331,14 +333,12 @@ SELECT max(word_count)
 
 	
 -- router plannable union queries are supported
-(SELECT * FROM articles_hash_mx WHERE author_id = 1)
-UNION
-(SELECT * FROM articles_hash_mx WHERE author_id = 3);
-
 SELECT * FROM (
-	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
+	SELECT * FROM articles_hash_mx WHERE author_id = 1
 	UNION
-	(SELECT * FROM articles_hash_mx WHERE author_id = 3)) uu;
+	SELECT * FROM articles_hash_mx WHERE author_id = 3
+) AS combination
+ORDER BY id;
 
 (SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 1)
 UNION
@@ -348,9 +348,12 @@ UNION
 INTERSECT
 (SELECT LEFT(title, 1) FROM articles_hash_mx WHERE author_id = 3);
 
-(SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 1)
-EXCEPT
-(SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 3);
+SELECT * FROM (
+	SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 1
+	EXCEPT
+	SELECT LEFT(title, 2) FROM articles_hash_mx WHERE author_id = 3
+) AS combination
+ORDER BY 1;
 
 -- union queries are not supported if not router plannable
 -- there is an inconsistency on shard pruning between

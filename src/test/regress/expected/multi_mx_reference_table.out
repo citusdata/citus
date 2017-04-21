@@ -312,26 +312,35 @@ WHERE
 (2 rows)
 
 -- set operations are supported
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-UNION
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	UNION
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
  value_1 | value_2 | value_3 |         value_4          
 ---------+---------+---------+--------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
        3 |       3 | 3       | Sat Dec 03 00:00:00 2016
 (2 rows)
 
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-EXCEPT
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	EXCEPT
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
  value_1 | value_2 | value_3 |         value_4          
 ---------+---------+---------+--------------------------
        1 |       1 | 1       | Thu Dec 01 00:00:00 2016
 (1 row)
 
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-INTERSECT
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	INTERSECT
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
  value_1 | value_2 | value_3 | value_4 
 ---------+---------+---------+---------
 (0 rows)
