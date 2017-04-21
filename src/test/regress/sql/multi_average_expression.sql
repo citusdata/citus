@@ -6,9 +6,6 @@
 -- to a bug we had due to the average expression introducing new columns.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 450000;
-
-
 SELECT
 	sum(l_quantity) as sum_qty,
 	sum(l_extendedprice) as sum_base_price,

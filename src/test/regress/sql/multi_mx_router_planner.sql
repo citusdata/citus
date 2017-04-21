@@ -1,6 +1,4 @@
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 840000;
-
 
 -- ===================================================================
 -- test router planner functionality for single shard select queries

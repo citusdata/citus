@@ -2,11 +2,8 @@
 -- MULTI_COMPLEX_EXPRESSIONS
 --
 
-
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 420000;
-
-
 -- Check that we can correctly handle complex expressions and aggregates.
+
 
 SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
 

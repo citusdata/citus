@@ -3,8 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 340000;
-
 -- Create HLL extension if present, print false result otherwise
 SELECT CASE WHEN COUNT(*) > 0 THEN
 	'CREATE EXTENSION HLL'
