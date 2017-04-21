@@ -798,9 +798,20 @@ SELECT
 	t_custkey, r_custkey 
 FROM 
 	multi_outer_join_right_reference FULL JOIN 
-	multi_outer_join_third_reference ON (t_custkey = r_custkey);
+	multi_outer_join_third_reference ON (t_custkey = r_custkey)
+ORDER BY 1;
  t_custkey | r_custkey 
 -----------+-----------
+         1 |          
+         2 |          
+         3 |          
+         4 |          
+         5 |          
+         6 |          
+         7 |          
+         8 |          
+         9 |          
+        10 |          
         11 |        11
         12 |        12
         13 |        13
@@ -821,16 +832,6 @@ FROM
         28 |        28
         29 |        29
         30 |        30
-        10 |          
-         2 |          
-         5 |          
-         8 |          
-         6 |          
-         4 |          
-         1 |          
-         3 |          
-         9 |          
-         7 |          
 (30 rows)
 
 -- DROP unused tables to clean up workspace

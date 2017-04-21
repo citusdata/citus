@@ -26,16 +26,20 @@ sub Usage()
     print "  pg_regress_multi [MULTI OPTIONS] -- [PG REGRESS OPTS]\n";
     print "\n";
     print "Multi Options:\n";
-    print "  --isolationtester   Run isolationtester tests instead of plain tests\n";
-    print "  --vanillatest       Run postgres tests with citus loaded as shared preload library\n";
-    print "  --bindir            Path to postgres binary directory\n";
-    print "  --libdir            Path to postgres library directory\n";
-    print "  --postgres-builddir Path to postgres build directory\n";
-    print "  --postgres-srcdir Path to postgres build directory\n";
-    print "  --pgxsdir           Path to the PGXS directory\n";
-    print "  --load-extension    Extensions to install in all nodes\n";
-    print "  --server-option     Config option to pass to the server\n";
-    print "  --valgrind          Run server via valgrind\n";
+    print "  --isolationtester   	Run isolationtester tests instead of plain tests\n";
+    print "  --vanillatest       	Run postgres tests with citus loaded as shared preload library\n";
+    print "  --bindir            	Path to postgres binary directory\n";
+    print "  --libdir            	Path to postgres library directory\n";
+    print "  --postgres-builddir 	Path to postgres build directory\n";
+    print "  --postgres-srcdir   	Path to postgres build directory\n";
+    print "  --pgxsdir           	Path to the PGXS directory\n";
+    print "  --load-extension    	Extensions to install in all nodes\n";
+    print "  --server-option     	Config option to pass to the server\n";
+    print "  --valgrind          	Run server via valgrind\n";
+    print "  --valgrind-path     	Path to the valgrind executable\n";
+    print "  --valgrind-log-file	Path to the write valgrind logs\n";
+    print "  --pg_ctl-timeout    	Timeout for pg_ctl\n";
+    print "  --connection-timeout	Timeout for connecting to worker nodes\n";
     exit 1;
 }
 
@@ -56,6 +60,10 @@ my %fdwServers = ();
 my %functions = ();
 my %operators = ();
 my $valgrind = 0;
+my $valgrindPath = "valgrind";
+my $valgrindLogFile = "valgrind_test_log.txt";
+my $pgCtlTimeout = undef;
+my $connectionTimeout = 5000;
 
 my $serversAreShutdown = "TRUE";
 
@@ -71,6 +79,10 @@ GetOptions(
     'load-extension=s' => \@extensions,
     'server-option=s' => \@userPgOptions,
     'valgrind' => \$valgrind,
+    'valgrind-path=s' => \$valgrindPath,
+    'valgrind-log-file=s' => \$valgrindLogFile,
+    'pg_ctl-timeout=s' => \$pgCtlTimeout,
+    'connection-timeout=s' => \$connectionTimeout,
     'help' => sub { Usage() });
 
 # Update environment to include [DY]LD_LIBRARY_PATH/LIBDIR/etc -
@@ -135,10 +147,12 @@ are present.
 MESSAGE
 }
 
-# valgrind starts slow, need to increase timeout
-if ($valgrind)
+# If pgCtlTimeout is defined, we will set related environment variable.
+# This is generally used with valgrind because valgrind starts slow and we
+# need to increase timeout.
+if (defined $pgCtlTimeout)
 {
-    $ENV{PGCTLTIMEOUT} = '360';
+    $ENV{PGCTLTIMEOUT} = "$pgCtlTimeout";
 }
 
 # We don't want valgrind to run pg_ctl itself, as that'd trigger a lot
@@ -163,13 +177,13 @@ sub replace_postgres
 	or die "Could not create postgres wrapper at $bindir/postgres";
     print $fh <<"END";
 #!/bin/bash
-exec valgrind \\
+exec $valgrindPath \\
     --quiet \\
     --suppressions=${postgresSrcdir}/src/tools/valgrind.supp \\
-    --trace-children=yes --track-origins=yes --read-var-info=yes \\
+    --trace-children=yes --track-origins=yes --read-var-info=no \\
     --leak-check=no \\
-    --error-exitcode=128 \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
+    --log-file=$valgrindLogFile \\
     $bindir/postgres.orig \\
     "\$@"
 END
@@ -220,6 +234,7 @@ push(@pgOptions, '-c', "citus.expire_cached_shards=on");
 push(@pgOptions, '-c', "citus.task_tracker_delay=10ms");
 push(@pgOptions, '-c', "citus.remote_task_check_interval=1ms");
 push(@pgOptions, '-c', "citus.shard_replication_factor=2");
+push(@pgOptions, '-c', "citus.node_connection_timeout=${connectionTimeout}");
 
 # Add externally added options last, so they overwrite the default ones above
 for my $option (@userPgOptions)
