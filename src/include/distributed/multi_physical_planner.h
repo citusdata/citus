@@ -122,6 +122,7 @@ typedef struct Job
 	List *dependedJobList;
 	bool subqueryPushdown;
 	bool requiresMasterEvaluation; /* only applies to modify jobs */
+	bool deferredPruning;
 } Job;
 
 

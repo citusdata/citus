@@ -417,3 +417,15 @@ SELECT master_create_worker_shards('app_analytics_events', 4, 1);
 INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
 INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;
 INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *;
+
+DROP TABLE app_analytics_events;
+
+-- again with serial in the partition column
+CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
+SELECT create_distributed_table('app_analytics_events', 'id');
+
+INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
+INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;
+INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *;
+
+DROP TABLE app_analytics_events;

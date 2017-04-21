@@ -396,6 +396,7 @@ OutJobFields(StringInfo str, const Job *node)
 	WRITE_NODE_FIELD(dependedJobList);
 	WRITE_BOOL_FIELD(subqueryPushdown);
 	WRITE_BOOL_FIELD(requiresMasterEvaluation);
+	WRITE_BOOL_FIELD(deferredPruning);
 }
 
 

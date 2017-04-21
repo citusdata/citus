@@ -166,12 +166,12 @@ SELECT COUNT(*) FROM limit_orders WHERE id = 430;
 
 -- INSERT without partition key
 INSERT INTO limit_orders DEFAULT VALUES;
-ERROR:  cannot plan INSERT using row with NULL value in partition column
+ERROR:  cannot perform an INSERT without a partition column value
 -- squelch WARNINGs that contain worker_port
 SET client_min_messages TO ERROR;
 -- INSERT violating NOT NULL constraint
 INSERT INTO limit_orders VALUES (NULL, 'T', 975234, DEFAULT);
-ERROR:  cannot plan INSERT using row with NULL value in partition column
+ERROR:  cannot perform an INSERT with NULL in the partition column
 -- INSERT violating column constraint
 INSERT INTO limit_orders VALUES (18811, 'BUD', 14962, '2014-04-05 08:32:16', 'sell',
 								 -5.00);
@@ -195,7 +195,6 @@ SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
-ERROR:  values given for the partition column must be constants or constant expressions
 -- values for other columns are totally fine
 INSERT INTO limit_orders VALUES (2036, 'GOOG', 5634, now(), 'buy', random());
 -- commands with mutable functions in their quals
@@ -632,3 +631,31 @@ INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *
   3 |    103 | Mynt
 (1 row)
 
+DROP TABLE app_analytics_events;
+-- again with serial in the partition column
+CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
+SELECT create_distributed_table('app_analytics_events', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
+ id 
+----
+  1
+(1 row)
+
+INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;
+ id 
+----
+  2
+(1 row)
+
+INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *;
+ id | app_id | name 
+----+--------+------
+  3 |    103 | Mynt
+(1 row)
+
+DROP TABLE app_analytics_events;
