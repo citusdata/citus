@@ -210,8 +210,20 @@ Form_pg_sequence
 pg_get_sequencedef(Oid sequenceRelationId)
 {
 	Form_pg_sequence pgSequenceForm = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+	heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		elog(ERROR, "cache lookup failed for sequence %u", sequenceRelationId);
+	}
+
+	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
+
+	ReleaseSysCache(heapTuple);
+#else
+	SysScanDesc scanDescriptor = NULL;
 	Relation sequenceRel = NULL;
 	AclResult permissionCheck = ACLCHECK_NO_PRIV;
 
@@ -241,6 +253,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	systable_endscan(scanDescriptor);
 
 	heap_close(sequenceRel, AccessShareLock);
+#endif
 
 	return pgSequenceForm;
 }
