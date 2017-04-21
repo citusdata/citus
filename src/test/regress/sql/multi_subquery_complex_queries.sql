@@ -2216,7 +2216,7 @@ FROM
                    FROM
                     (SELECT 
                         1 as user_id, now(), 3 AS event
-                    ) events_subquery_4) OFFSET 3) t1
+                    ) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
      (SELECT 
@@ -2275,7 +2275,7 @@ FROM
                    FROM
                     (SELECT 
                         1 as user_id, now(), 3 AS event
-                    ) events_subquery_4) OFFSET 3) t1
+                    ) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
      (SELECT random()::int as user_id) AS t 

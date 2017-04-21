@@ -2978,12 +2978,12 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 /*
  * ExtractQueryWalker walks over a query, and finds all queries in the query
- * tree and returns these queries.
+ * tree and returns these queries. Note that the function also recurses into
+ * the subqueries in WHERE clause.
  */
 bool
 ExtractQueryWalker(Node *node, List **queryList)
 {
-	bool walkerResult = false;
 	if (node == NULL)
 	{
 		return false;
@@ -2994,11 +2994,10 @@ ExtractQueryWalker(Node *node, List **queryList)
 		Query *query = (Query *) node;
 
 		(*queryList) = lappend(*queryList, query);
-		walkerResult = query_tree_walker(query, ExtractQueryWalker, queryList,
-										 QTW_EXAMINE_RTES);
+		return query_tree_walker(query, ExtractQueryWalker, queryList, 0);
 	}
 
-	return walkerResult;
+	return expression_tree_walker(node, ExtractQueryWalker, queryList);
 }
 
 

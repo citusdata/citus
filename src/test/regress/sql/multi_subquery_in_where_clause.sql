@@ -462,6 +462,34 @@ WHERE
            OFFSET 3
           );
 
+-- we can detect errors even if they appear in WHERE -> FROM -> WHERE
+-- subqueries
+SELECT user_id 
+FROM   users_table 
+WHERE  user_id 
+  IN (SELECT 
+      f_inner.user_id 
+        FROM  
+            (
+              SELECT 
+                e1.user_id 
+              FROM 
+                users_table u1, events_table e1 
+              WHERE 
+                e1.user_id = u1.user_id
+             ) as f_inner,
+				  (
+              SELECT 
+                e1.user_id 
+              FROM 
+                users_table u1, events_table e1 
+              WHERE 
+                e1.user_id = u1.user_id
+                AND e1.user_id IN (SELECT user_id FROM users_table LIMIT 3 )
+             ) as f_outer
+		WHERE f_inner.user_id = f_outer.user_id
+          );
+
 -- semi join is not on the partition key for the third subquery
 SELECT user_id
 FROM users_table
