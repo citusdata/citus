@@ -532,7 +532,18 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 			copyStatement->options = list_make1(copyOption);
 		}
 
+#if (PG_VERSION_NUM >= 100000)
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			pstate->p_sourcetext = queryString;
+
+			DoCopy(pstate, copyStatement, -1, -1, &copiedRowCount);
+
+			free_parsestate(pstate);
+		}
+#else
 		DoCopy(copyStatement, queryString, &copiedRowCount);
+#endif
 		copiedRowTotal += copiedRowCount;
 		CommandCounterIncrement();
 	}
