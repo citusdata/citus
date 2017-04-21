@@ -394,11 +394,9 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext)
 {
-	ListCell *rangeTableEntryCell = NULL;
-	ListCell *sublinkCell = NULL;
-	List *subqueryEntryList = NIL;
 	bool outerMostQueryHasLimit = false;
-	List *sublinkList = NIL;
+	ListCell *subqueryCell = NULL;
+	List *subqueryList = NIL;
 	DeferredErrorMessage *error = NULL;
 	RelationRestrictionContext *relationRestrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -437,13 +435,20 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 							 "equality operator.", NULL);
 	}
 
-	subqueryEntryList = SubqueryEntryList(originalQuery);
-	foreach(rangeTableEntryCell, subqueryEntryList)
-	{
-		RangeTblEntry *rangeTableEntry = lfirst(rangeTableEntryCell);
-		Query *subquery = rangeTableEntry->subquery;
+	/*
+	 * We first extract all the queries that appear in the orignal query. Later,
+	 * we delete the original query given that error rules does not apply to the
+	 * top level query.
+	 */
+	ExtractQueryWalker((Node *) originalQuery, &subqueryList);
+	subqueryList = list_delete(subqueryList, originalQuery);
 
-		error = DeferErrorIfCannotPushdownSubquery(subquery, outerMostQueryHasLimit);
+	/* iterate on the subquery list and error out accordingly */
+	foreach(subqueryCell, subqueryList)
+	{
+		Query *subquery = lfirst(subqueryCell);
+		error = DeferErrorIfCannotPushdownSubquery(subquery,
+												   outerMostQueryHasLimit);
 		if (error)
 		{
 			return error;
@@ -453,23 +458,6 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		if (error)
 		{
 			return error;
-		}
-	}
-
-	sublinkList = SublinkList(originalQuery);
-	foreach(sublinkCell, sublinkList)
-	{
-		SubLink *sublink = (SubLink *) lfirst(sublinkCell);
-		Node *subselect = sublink->subselect;
-
-		if (subselect && IsA(subselect, Query))
-		{
-			error = DeferErrorIfCannotPushdownSubquery((Query *) subselect,
-													   outerMostQueryHasLimit);
-			if (error)
-			{
-				return error;
-			}
 		}
 	}
 
@@ -489,6 +477,18 @@ DeferErrorIfUnsupportedFilters(Query *subquery)
 	ListCell *queryCell = NULL;
 	List *subqueryOpExpressionList = NIL;
 	List *relationIdList = RelationIdList(subquery);
+	Var *partitionColumn = NULL;
+	Oid relationId = InvalidOid;
+
+	/*
+	 * If there are no appropriate relations, we're going to error out on
+	 * DeferErrorIfCannotPushdownSubquery(). It may happen once the subquery
+	 * does not include a relation.
+	 */
+	if (relationIdList == NIL)
+	{
+		return NULL;
+	}
 
 	/*
 	 * Get relation id of any relation in the subquery and create partiton column
@@ -496,8 +496,8 @@ DeferErrorIfUnsupportedFilters(Query *subquery)
 	 * expressions on different tables. Then we compare these operator expressions
 	 * to see if they consist of same operator and constant value.
 	 */
-	Oid relationId = linitial_oid(relationIdList);
-	Var *partitionColumn = PartitionColumn(relationId, 0);
+	relationId = linitial_oid(relationIdList);
+	partitionColumn = PartitionColumn(relationId, 0);
 
 	ExtractQueryWalker((Node *) subquery, &queryList);
 	foreach(queryCell, queryList)
@@ -617,8 +617,6 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
-	List *subqueryEntryList = NIL;
-	ListCell *rangeTableEntryCell = NULL;
 	DeferredErrorMessage *deferredError = NULL;
 
 	deferredError = DeferErrorIfUnsupportedTableCombination(subqueryTree);
@@ -748,41 +746,20 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 							 errorDetail, NULL);
 	}
 
-	/* recursively do same check for subqueries of this query */
-	subqueryEntryList = SubqueryEntryList(subqueryTree);
-	foreach(rangeTableEntryCell, subqueryEntryList)
-	{
-		RangeTblEntry *rangeTableEntry =
-			(RangeTblEntry *) lfirst(rangeTableEntryCell);
-
-		Query *innerSubquery = rangeTableEntry->subquery;
-		deferredError = DeferErrorIfCannotPushdownSubquery(innerSubquery,
-														   outerMostQueryHasLimit);
-		if (deferredError)
-		{
-			return deferredError;
-		}
-	}
-
 	return NULL;
 }
 
 
 /*
  * DeferErrorIfUnsupportedUnionQuery is a helper function for ErrorIfCannotPushdownSubquery().
- * It basically iterates over the subqueries that reside under the given set operations.
- *
  * The function also errors out for set operations INTERSECT and EXCEPT.
  */
 static DeferredErrorMessage *
 DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 								  bool outerMostQueryHasLimit)
 {
-	List *rangeTableIndexList = NIL;
-	ListCell *rangeTableIndexCell = NULL;
 	List *setOperationStatementList = NIL;
 	ListCell *setOperationStatmentCell = NULL;
-	List *rangeTableList = subqueryTree->rtable;
 
 	ExtractSetOperationStatmentWalker((Node *) subqueryTree->setOperations,
 									  &setOperationStatementList);
@@ -796,24 +773,6 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot push down this subquery",
 								 "Intersect and Except are currently unsupported", NULL);
-		}
-	}
-
-	ExtractRangeTableIndexWalker((Node *) subqueryTree->setOperations,
-								 &rangeTableIndexList);
-	foreach(rangeTableIndexCell, rangeTableIndexList)
-	{
-		int rangeTableIndex = lfirst_int(rangeTableIndexCell);
-		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
-		DeferredErrorMessage *deferredError = NULL;
-
-		Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
-
-		deferredError = DeferErrorIfCannotPushdownSubquery(rangeTableEntry->subquery,
-														   outerMostQueryHasLimit);
-		if (deferredError)
-		{
-			return deferredError;
 		}
 	}
 

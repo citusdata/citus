@@ -1311,6 +1311,30 @@ SET client_min_messages TO INFO;
 -- avoid constraint violations
 TRUNCATE raw_events_first;
 
+-- we don't support LIMIT even if it exists in the subqueries 
+-- in where clause
+INSERT INTO agg_events(user_id)
+SELECT user_id 
+FROM   users_table 
+WHERE  user_id 
+  IN (SELECT 
+      user_id 
+        FROM  (
+                (
+                  SELECT 
+                    user_id 
+                    FROM
+                    (
+                      SELECT 
+                        e1.user_id 
+                      FROM 
+                        users_table u1, events_table e1 
+                      WHERE 
+                        e1.user_id = u1.user_id LIMIT 3
+                     ) as f_inner
+                  )
+          ) AS f2); 
+
 -- Altering a table and selecting from it using a multi-shard statement
 -- in the same transaction is allowed because we will use the same
 -- connections for all co-located placements.
