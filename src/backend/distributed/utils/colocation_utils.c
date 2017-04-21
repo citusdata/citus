@@ -638,7 +638,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 							   distributedRelationName)));
 	}
 
-	memset(values, 0, sizeof(replace));
+	memset(values, 0, sizeof(values));
 	memset(isNull, false, sizeof(isNull));
 	memset(replace, false, sizeof(replace));
 
