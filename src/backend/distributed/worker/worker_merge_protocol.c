@@ -329,7 +329,6 @@ RemoveJobSchema(StringInfo schemaName)
 	if (OidIsValid(schemaId))
 	{
 		ObjectAddress schemaObject = { 0, 0, 0 };
-		bool showNotices = false;
 
 		bool permissionsOK = pg_namespace_ownercheck(schemaId, GetUserId());
 		if (!permissionsOK)
@@ -347,7 +346,16 @@ RemoveJobSchema(StringInfo schemaName)
 		 * can suppress notice messages that are typically displayed during
 		 * cascading deletes.
 		 */
-		deleteWhatDependsOn(&schemaObject, showNotices);
+#if (PG_VERSION_NUM >= 100000)
+		performDeletion(&schemaObject, DROP_CASCADE,
+						PERFORM_DELETION_INTERNAL |
+						PERFORM_DELETION_QUIETLY |
+						PERFORM_DELETION_SKIP_ORIGINAL |
+						PERFORM_DELETION_SKIP_EXTENSIONS);
+#else
+		deleteWhatDependsOn(&schemaObject, false);
+#endif
+
 		CommandCounterIncrement();
 
 		/* drop the empty schema */
