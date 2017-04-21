@@ -3,8 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1180000;
-
 
 \set JobId 201010
 \set Range_TaskId 101106

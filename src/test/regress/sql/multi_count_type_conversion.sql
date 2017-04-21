@@ -3,9 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 400000;
-
-
 -- Verify that we can sort count(*) results correctly. We perform this check as
 -- our count() operations execute in two steps: worker nodes report their
 -- count() results, and the master node sums these counts up. During this sum(),
