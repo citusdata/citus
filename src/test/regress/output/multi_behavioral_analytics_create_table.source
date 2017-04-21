@@ -1,5 +1,5 @@
 --
--- multi insert select behavioral analytics
+-- multi behavioral analytics
 -- this file is intended to create the table requires for the tests
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
