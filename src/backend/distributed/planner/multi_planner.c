@@ -265,7 +265,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	PlannedStmt *resultPlan = NULL;
 	bool hasUnresolvedParams = false;
 
-	if (HasUnresolvedExternParamsWalker((Node *) query, boundParams))
+	if (HasUnresolvedExternParamsWalker((Node *) originalQuery, boundParams))
 	{
 		hasUnresolvedParams = true;
 	}

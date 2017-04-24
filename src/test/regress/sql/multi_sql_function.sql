@@ -134,11 +134,20 @@ AS $$
     SELECT count(*) AS count_val from test_parameterized_sql where org_id = org_id_val;
 $$ LANGUAGE SQL STABLE;
 
+CREATE OR REPLACE FUNCTION test_parameterized_sql_function_in_subquery_where(org_id_val integer)
+RETURNS TABLE (a bigint)
+AS $$
+    SELECT count(*) AS count_val from test_parameterized_sql as t1 where 
+    org_id IN (SELECT org_id FROM test_parameterized_sql as t2 WHERE t2.org_id = t1.org_id AND org_id = org_id_val);
+$$ LANGUAGE SQL STABLE;
+
+
 INSERT INTO test_parameterized_sql VALUES(1, 1);
 
--- both of them should fail
+-- all of them should fail
 SELECT * FROM test_parameterized_sql_function(1);
 SELECT test_parameterized_sql_function(1);
+SELECT test_parameterized_sql_function_in_subquery_where(1);
 
 DROP TABLE temp_table;
 DROP TABLE test_parameterized_sql;
@@ -153,3 +162,4 @@ DROP FUNCTION non_partition_parameter_insert_sql(int);
 DROP FUNCTION non_partition_parameter_update_sql(int, int);
 DROP FUNCTION non_partition_parameter_delete_sql(int);
 DROP FUNCTION test_parameterized_sql_function(int);
+DROP FUNCTION test_parameterized_sql_function_in_subquery_where(int);
