@@ -3218,18 +3218,9 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 	 * certain expressions such as parameters are not evaluated and converted
 	 * into Consts on the op node.
 	 */
-	if (!IsA(originalOpNode->limitCount, Const))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unsupported limit clause")));
-	}
-
-	/* same as the above but this time for OFFSET clause */
-	if (originalOpNode->limitOffset && !IsA(originalOpNode->limitOffset, Const))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unsupported offset clause")));
-	}
+	Assert(IsA(originalOpNode->limitCount, Const));
+	Assert(originalOpNode->limitOffset == NULL ||
+		   IsA(originalOpNode->limitOffset, Const));
 
 	/*
 	 * If we don't have group by clauses, or if we have order by clauses without
