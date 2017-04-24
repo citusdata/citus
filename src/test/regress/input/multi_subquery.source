@@ -1329,6 +1329,8 @@ ORDER BY
 	count_pay;
 
 -- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS OFF)
 SELECT
 	tenant_id,

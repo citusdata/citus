@@ -407,20 +407,8 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270006 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
@@ -429,20 +417,8 @@ DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270007 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
@@ -1202,15 +1178,14 @@ FROM
                ->  Aggregate
                      ->  GroupAggregate
                            Group Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id)
-                           ->  Merge Join
+                           ->  Sort
                                  Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id)
-                                 ->  Sort
+                                 ->  Hash Join
                                        Hash Cond: ((NULL::user_composite_type) = events.composite_id)
-                                       ->  Seq Scan on users_270013 users
+                                       ->  Result
                                              One-Time Filter: false
-                                 ->  Sort
-                                             ->  Seq Scan on events_270011 events  (cost=0.00..11.79 rows=3 width=556)
-                                       ->  Seq Scan on events_270009 events
+                                       ->  Hash
+                                             ->  Seq Scan on events_270011 events
                                                    Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
 (18 rows)
 
@@ -1279,46 +1254,46 @@ GROUP BY
 	hasdone;
                                                                                                                          QUERY PLAN                                                                                                                          
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-x HashAggregate
+ HashAggregate
+   Group Key: remote_scan.hasdone
    ->  Custom Scan (Citus Real-Time)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
                ->  GroupAggregate
+                     Group Key: subquery_top.hasdone
                      ->  Sort
+                           Sort Key: subquery_top.hasdone
                            ->  Subquery Scan on subquery_top
                                  ->  GroupAggregate
+                                       Group Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
                                        ->  Sort
-                                             ->  Merge Left Join
+                                             Sort Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
+                                             ->  Hash Right Join
+                                                   Hash Cond: (events.composite_id = subquery_1.composite_id)
                                                    ->  Unique
                                                          ->  Sort
-                                                               ->  Append
-                                                                     ->  Nested Loop
-                                                                           ->  Seq Scan on events_270009 events
-                                                                           ->  Seq Scan on users_270013 users
-                                                                     ->  Nested Loop
-                                                                           ->  Seq Scan on events_270009 events_1
-                                                                           ->  Seq Scan on users_270013 users_1
-                                                   ->  Materialize
-                                                         ->  Unique
-                                                               ->  Sort
-                                                                     ->  Seq Scan on events_270009 events_2
-                                                               ->  Seq Scan on events_270011 events  (cost=0.00..76.62 rows=1 width=80)
+                                                               Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
+                                                               ->  Seq Scan on events_270011 events
                                                                      Filter: (((event_type)::text = 'pay'::text) AND (composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                   ->  Hash  (cost=23.89..23.89 rows=2 width=88)
-                                                         ->  Subquery Scan on subquery_1  (cost=23.84..23.89 rows=2 width=88)
-                                                               ->  Unique  (cost=23.84..23.87 rows=2 width=88)
-                                                                     ->  Sort  (cost=23.84..23.84 rows=2 width=88)
+                                                   ->  Hash
+                                                         ->  Subquery Scan on subquery_1
+                                                               ->  Unique
+                                                                     ->  Sort
                                                                            Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id), (NULL::user_composite_type), ('action=>1'::text), events_1.event_time
-                                                                           ->  Append  (cost=0.00..23.83 rows=2 width=88)
-                                                                                 ->  Nested Loop  (cost=0.00..11.90 rows=1 width=88)
+                                                                           ->  Append
+                                                                                 ->  Nested Loop
                                                                                        Join Filter: ((NULL::user_composite_type) = events_1.composite_id)
-                                                                                       ->  Result  (cost=0.00..0.01 rows=1 width=40)
+                                                                                       ->  Result
                                                                                              One-Time Filter: false
-                                                                                       ->  Seq Scan on events_270011 events_1  (cost=0.00..11.62 rows=1 width=40)
+                                                                                       ->  Seq Scan on events_270011 events_1
                                                                                              Filter: ((event_type)::text = 'click'::text)
-                                                                                 ->  Nested Loop  (cost=0.00..11.90 rows=1 width=88)
+                                                                                 ->  Nested Loop
                                                                                        Join Filter: ((NULL::user_composite_type) = events_2.composite_id)
-                                                                                       ->  Result  (cost=0.00..0.01 rows=1 width=40)
+                                                                                       ->  Result
                                                                                              One-Time Filter: false
-                                                                                       ->  Seq Scan on events_270011 events_2  (cost=0.00..11.62 rows=1 width=40)
+                                                                                       ->  Seq Scan on events_270011 events_2
                                                                                              Filter: ((event_type)::text = 'submit'::text)
 (41 rows)
 
@@ -1395,6 +1370,8 @@ ORDER BY
 	count_pay;
 ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS OFF)
 SELECT
 	tenant_id,
@@ -1445,8 +1422,8 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-                                                               QUERY PLAN                                                                
------------------------------------------------------------------------------------------------------------------------------------------
+                                                       QUERY PLAN                                                       
+------------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_lastseen DESC
@@ -1466,13 +1443,13 @@ LIMIT
                                                    ->  Limit
                                                          ->  Sort
                                                                Sort Key: users.lastseen DESC
-                                                               ->  Seq Scan on users_270013 users
-                                                                     ->  Result  (cost=0.00..0.01 rows=1 width=40)
+                                                               ->  Subquery Scan on users
+                                                                     ->  Result
+                                                                           One-Time Filter: false
                                                    ->  Limit
                                                          ->  Sort
-                                                         ->  Sort  (cost=43.81..43.82 rows=1 width=524)
                                                                Sort Key: events.event_time DESC
-                                                               ->  Seq Scan on events_270009 events
+                                                               ->  Seq Scan on events_270011 events
                                                                      Filter: (composite_id = users.composite_id)
 (27 rows)
 

@@ -1930,7 +1930,7 @@ FROM (
  ORDER BY 2 DESC, 1
  LIMIT $1 OFFSET $2;
  EXECUTE parametrized_limit(3,3);
-ERROR:  unsupported limit clause
+ERROR:  no value found for parameter 1
 PREPARE parametrized_offset AS
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -1947,7 +1947,7 @@ FROM (
  ORDER BY 2 DESC, 1
  LIMIT 3 OFFSET $1;
  EXECUTE parametrized_offset(3);
-ERROR:  unsupported offset clause
+ERROR:  no value found for parameter 1
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
 SET citus.subquery_pushdown to OFF;
