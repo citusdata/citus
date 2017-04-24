@@ -2977,24 +2977,6 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 
 /*
- * CoPartitionedTables checks if given two distributed tables have 1-to-1
- * shard partitioning.
-	/*
-	 * Check if the tables have the same colocation ID - if so, we know
-	 * they're colocated.
-	 */
-	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
-		firstTableCache->colocationId == secondTableCache->colocationId)
-	{
-		return true;
-	}
-
-	/*
-	 * If not known to be colocated check if the remaining shards are
-	 * anyway. Do so by comparing the shard interval arrays that are sorted on
-	 * interval minimum values. Then it compares every shard interval in order
-	 * and if any pair of shard intervals are not equal it returns false.
-	 */
  * ExtractQueryWalker walks over a query, and finds all queries in the query
  * tree and returns these queries.
  */
@@ -3237,18 +3219,9 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 	 * certain expressions such as parameters are not evaluated and converted
 	 * into Consts on the op node.
 	 */
-	if (!IsA(originalOpNode->limitCount, Const))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unsupported limit clause")));
-	}
-
-	/* same as the above but this time for OFFSET clause */
-	if (originalOpNode->limitOffset && !IsA(originalOpNode->limitOffset, Const))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("unsupported offset clause")));
-	}
+	Assert(IsA(originalOpNode->limitCount, Const));
+	Assert(originalOpNode->limitOffset == NULL ||
+		   IsA(originalOpNode->limitOffset, Const));
 
 	/*
 	 * If we don't have group by clauses, or if we have order by clauses without

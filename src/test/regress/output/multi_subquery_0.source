@@ -407,20 +407,8 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270007
 DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270006 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270008
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
@@ -429,20 +417,8 @@ DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned
 SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270005 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
 DEBUG:  Skipping the target shard interval 270007 because SELECT query is pruned away for the interval
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
 DEBUG:  Skipping the target shard interval 270008 because SELECT query is pruned away for the interval
  count 
 -------
@@ -1199,16 +1175,14 @@ FROM
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=57637 dbname=regression
-                ->  Aggregate
+               ->  Aggregate
                      ->  GroupAggregate
                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                           ->  Merge Join
-                                 ->  Sort
+                           ->  Sort
                                  Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                       ->  Seq Scan on users_270013 users
+                                 ->  Result
                                        One-Time Filter: false
-                                 ->  Sort
-                                       ->  Seq Scan on events_270009 events
+(13 rows)
 
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -1276,34 +1250,34 @@ GROUP BY
                                                                                                                    QUERY PLAN                                                                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  HashAggregate
+   Group Key: remote_scan.hasdone
    ->  Custom Scan (Citus Real-Time)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
                ->  HashAggregate
+                     Group Key: COALESCE(('Has done paying'::text), 'Has not done paying'::text)
                      ->  GroupAggregate
+                           Group Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
                            ->  Sort
-                                 ->  Merge Left Join
+                                 Sort Key: subquery_1.tenant_id, subquery_1.user_id, ('Has done paying'::text)
+                                 ->  Hash Right Join
+                                       Hash Cond: (events.composite_id = subquery_1.composite_id)
                                        ->  Unique
                                              ->  Sort
-                                                   ->  Append
-                                                         ->  Nested Loop
-                                                               ->  Seq Scan on events_270009 events
-                                                               ->  Seq Scan on users_270013 users
-                                                         ->  Nested Loop
-                                                               ->  Seq Scan on events_270009 events_1
-                                                               ->  Seq Scan on users_270013 users_1
-                                       ->  Materialize
-                                             ->  Unique
-                                                   ->  Sort
-                                                         ->  Seq Scan on events_270009 events_2
+                                                   Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
+                                                   ->  Seq Scan on events_270011 events
                                                          Filter: (((event_type)::text = 'pay'::text) AND (composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                       ->  Hash  (cost=0.10..0.10 rows=2 width=88)
-                                             ->  Subquery Scan on subquery_1  (cost=0.05..0.10 rows=2 width=88)
-                                                   ->  Unique  (cost=0.05..0.08 rows=2 width=0)
-                                                         ->  Sort  (cost=0.05..0.06 rows=2 width=0)
+                                       ->  Hash
+                                             ->  Subquery Scan on subquery_1
+                                                   ->  Unique
+                                                         ->  Sort
                                                                Sort Key: ((composite_id).tenant_id), ((composite_id).user_id), composite_id, ('action=>1'::text), event_time
-                                                               ->  Append  (cost=0.00..0.04 rows=2 width=0)
-                                                                     ->  Result  (cost=0.00..0.01 rows=1 width=0)
+                                                               ->  Append
+                                                                     ->  Result
                                                                            One-Time Filter: false
-                                                                     ->  Result  (cost=0.00..0.01 rows=1 width=0)
+                                                                     ->  Result
                                                                            One-Time Filter: false
 (30 rows)
 
@@ -1380,6 +1354,8 @@ ORDER BY
 	count_pay;
 ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS OFF)
 SELECT
 	tenant_id,
@@ -1430,8 +1406,8 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
-                                                               QUERY PLAN                                                                
------------------------------------------------------------------------------------------------------------------------------------------
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.user_lastseen DESC
@@ -1451,12 +1427,12 @@ LIMIT
                                                    ->  Limit
                                                          ->  Sort
                                                                Sort Key: lastseen DESC
-                                                               ->  Seq Scan on users_270013 users
+                                                               ->  Result
                                                                      One-Time Filter: false
                                                    ->  Limit
                                                          ->  Sort
                                                                Sort Key: events.event_time DESC
-                                                               ->  Seq Scan on events_270009 events
+                                                               ->  Seq Scan on events_270011 events
                                                                      Filter: (composite_id = composite_id)
 (26 rows)
 
