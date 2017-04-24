@@ -235,3 +235,15 @@ EXPLAIN (COSTS FALSE) EXECUTE real_time_executor_query;
 -- at least make sure to fail without crashing
 PREPARE router_executor_query_param(int) AS SELECT l_quantity FROM lineitem WHERE l_orderkey = $1;
 EXPLAIN EXECUTE router_executor_query_param(5);
+
+-- test explain in a transaction with alter table to test we use right connections
+BEGIN;
+
+CREATE TABLE explain_table(id int);
+SELECT create_distributed_table('explain_table', 'id');
+
+ALTER TABLE explain_table ADD COLUMN value int;
+
+EXPLAIN (COSTS FALSE) SELECT value FROM explain_table WHERE id = 1;
+
+ROLLBACK;
