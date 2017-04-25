@@ -58,6 +58,7 @@ typedef struct PlannerRestrictionContext
 {
 	RelationRestrictionContext *relationRestrictionContext;
 	JoinRestrictionContext *joinRestrictionContext;
+	MemoryContext memoryContext;
 } PlannerRestrictionContext;
 
 typedef struct RelationShard
