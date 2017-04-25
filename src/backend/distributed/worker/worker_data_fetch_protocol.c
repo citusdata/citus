@@ -482,6 +482,7 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	/* run the CREATE SEQUENCE command */
 	ProcessUtility(commandNode, commandString, PROCESS_UTILITY_TOPLEVEL,
 				   NULL, None_Receiver, NULL);
+	CommandCounterIncrement();
 
 	createSequenceStatement = (CreateSeqStmt *) commandNode;
 
