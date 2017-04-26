@@ -123,8 +123,6 @@ static ShardCacheEntry * LookupShardCacheEntry(int64 shardId);
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
 static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void BuildCachedShardList(DistTableCacheEntry *cacheEntry);
-static FmgrInfo * ShardIntervalCompareFunction(ShardInterval **shardIntervalArray,
-											   char partitionMethod);
 static ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray,
 											   int shardCount,
 											   FmgrInfo *
@@ -608,6 +606,10 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	int shardIndex = 0;
+	GetPartitionTypeInputInfo(cacheEntry->partitionKeyString,
+							  cacheEntry->partitionMethod,
+							  &intervalTypeId,
+							  &intervalTypeMod);
 
 	distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
 	shardIntervalArrayLength = list_length(distShardTupleList);
@@ -617,13 +619,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
 		ListCell *distShardTupleCell = NULL;
 		int arrayIndex = 0;
-		Oid intervalTypeId = InvalidOid;
-		int32 intervalTypeMod = -1;
-
-		GetPartitionTypeInputInfo(cacheEntry->partitionKeyString,
-								  cacheEntry->partitionMethod,
-								  &intervalTypeId,
-								  &intervalTypeMod);
 
 		shardIntervalArray = MemoryContextAllocZero(CacheMemoryContext,
 													shardIntervalArrayLength *
@@ -663,22 +658,18 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	}
 
 	/* decide and allocate interval comparison function */
-	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	if (intervalTypeId != InvalidOid)
+	{
+		/* allocate the comparison function in the cache context */
+		MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+		shardIntervalCompareFunction = GetFunctionInfo(intervalTypeId, BTREE_AM_OID,
+													   BTORDER_PROC);
+		MemoryContextSwitchTo(oldContext);
+	}
+	else
 	{
 		shardIntervalCompareFunction = NULL;
-	}
-	else if (shardIntervalArrayLength > 0)
-	{
-		MemoryContext oldContext = CurrentMemoryContext;
-
-		/* allocate the comparison function in the cache context */
-		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
-
-		shardIntervalCompareFunction =
-			ShardIntervalCompareFunction(shardIntervalArray,
-										 cacheEntry->partitionMethod);
-
-		MemoryContextSwitchTo(oldContext);
 	}
 
 	/* reference tables has a single shard which is not initialized */
@@ -781,37 +772,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
 	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
 	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
-}
-
-
-/*
- * ShardIntervalCompareFunction returns the appropriate compare function for the
- * partition column type. In case of hash-partitioning, it always returns the compare
- * function for integers. Callers of this function has to ensure that shardIntervalArray
- * has at least one element.
- */
-static FmgrInfo *
-ShardIntervalCompareFunction(ShardInterval **shardIntervalArray, char partitionMethod)
-{
-	FmgrInfo *shardIntervalCompareFunction = NULL;
-	Oid comparisonTypeId = InvalidOid;
-
-	Assert(shardIntervalArray != NULL);
-
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		comparisonTypeId = INT4OID;
-	}
-	else
-	{
-		ShardInterval *shardInterval = shardIntervalArray[0];
-		comparisonTypeId = shardInterval->valueTypeId;
-	}
-
-	shardIntervalCompareFunction = GetFunctionInfo(comparisonTypeId, BTREE_AM_OID,
-												   BTORDER_PROC);
-
-	return shardIntervalCompareFunction;
 }
 
 

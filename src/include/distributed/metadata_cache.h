@@ -47,7 +47,7 @@ typedef struct
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
 
-	FmgrInfo *shardIntervalCompareFunction; /* NULL if no shard intervals exist */
+	FmgrInfo *shardIntervalCompareFunction;  /* NULL if DISTRIBUTE_BY_NONE */
 	FmgrInfo *hashFunction; /* NULL if table is not distributed by hash */
 
 	/* pg_dist_shard_placement metadata */
