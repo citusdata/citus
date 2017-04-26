@@ -9,6 +9,36 @@ SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO DEBUG2;
 SET citus.task_executor_type TO 'task-tracker';
 -- Single range-repartition join to test join-pruning behaviour.
+EXPLAIN (COSTS OFF)
+SELECT
+	count(*)
+FROM
+	orders, customer
+WHERE
+	o_custkey = c_custkey;
+DEBUG:  join prunable for intervals [1,1000] and [1001,2000]
+DEBUG:  join prunable for intervals [1,1000] and [6001,7000]
+DEBUG:  join prunable for intervals [1001,2000] and [1,1000]
+DEBUG:  join prunable for intervals [1001,2000] and [6001,7000]
+DEBUG:  join prunable for intervals [6001,7000] and [1,1000]
+DEBUG:  join prunable for intervals [6001,7000] and [1001,2000]
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 11
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
+         Task Count: 3
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 2
+               Merge Task Count: 3
+(7 rows)
+
 SELECT
 	count(*)
 FROM
@@ -34,6 +64,25 @@ DETAIL:  Creating dependency on merge taskId 11
 
 -- Single range-repartition join with a selection clause on the partitioned
 -- table to test the case when all map tasks are pruned away.
+EXPLAIN (COSTS OFF)
+SELECT
+	count(*)
+FROM
+	orders, customer
+WHERE
+	o_custkey = c_custkey AND
+	o_orderkey < 0;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
+         Task Count: 0
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 0
+               Merge Task Count: 0
+(7 rows)
+
 SELECT
 	count(*)
 FROM
@@ -48,6 +97,25 @@ WHERE
 
 -- Single range-repartition join with a selection clause on the base table to
 -- test the case when all sql tasks are pruned away.
+EXPLAIN (COSTS OFF)
+SELECT
+	count(*)
+FROM
+	orders, customer
+WHERE
+	o_custkey = c_custkey AND
+	c_custkey < 0;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
+         Task Count: 0
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 2
+               Merge Task Count: 3
+(7 rows)
+
 SELECT
 	count(*)
 FROM
@@ -63,6 +131,55 @@ WHERE
 -- Dual hash-repartition join test case. Note that this query doesn't produce
 -- meaningful results and is only to test hash-partitioning of two large tables
 -- on non-partition columns.
+EXPLAIN (COSTS OFF)
+SELECT
+	count(*)
+FROM
+	lineitem, customer
+WHERE
+	l_partkey = c_nationkey;
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 17
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 7
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 26
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 11
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 35
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 44
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 19
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
+         Task Count: 4
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 8
+               Merge Task Count: 4
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+(10 rows)
+
 SELECT
 	count(*)
 FROM
@@ -104,6 +221,28 @@ DETAIL:  Creating dependency on merge taskId 19
 
 -- Dual hash-repartition join with a selection clause on one of the tables to
 -- test the case when all map tasks are pruned away.
+EXPLAIN (COSTS OFF)
+SELECT
+	count(*)
+FROM
+	lineitem, customer
+WHERE
+	l_partkey = c_nationkey AND
+	l_orderkey < 0;
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Task-Tracker)
+         Task Count: 0
+         Tasks Shown: None, not supported for re-partition queries
+         ->  MapMergeJob
+               Map Task Count: 0
+               Merge Task Count: 0
+         ->  MapMergeJob
+               Map Task Count: 3
+               Merge Task Count: 4
+(10 rows)
+
 SELECT
 	count(*)
 FROM
@@ -117,6 +256,24 @@ WHERE
 (1 row)
 
 -- Test cases with false in the WHERE clause
+EXPLAIN (COSTS OFF)
+SELECT
+	o_orderkey
+FROM
+	orders INNER JOIN customer ON (o_custkey = c_custkey)
+WHERE
+	false;
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Custom Scan (Citus Task-Tracker)
+   Task Count: 0
+   Tasks Shown: None, not supported for re-partition queries
+   ->  MapMergeJob
+         Map Task Count: 0
+         Merge Task Count: 0
+(6 rows)
+
+-- execute once, to verify that's handled
 SELECT
 	o_orderkey
 FROM
@@ -127,31 +284,46 @@ WHERE
 ------------
 (0 rows)
 
+EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
 	orders INNER JOIN customer ON (o_custkey = c_custkey)
 WHERE
 	1=0 AND c_custkey < 0;
- o_orderkey 
-------------
-(0 rows)
+                         QUERY PLAN                          
+-------------------------------------------------------------
+ Custom Scan (Citus Task-Tracker)
+   Task Count: 0
+   Tasks Shown: None, not supported for re-partition queries
+   ->  MapMergeJob
+         Map Task Count: 0
+         Merge Task Count: 0
+(6 rows)
 
+EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
 	orders INNER JOIN customer ON (o_custkey = c_custkey AND false);
- o_orderkey 
-------------
-(0 rows)
+            QUERY PLAN            
+----------------------------------
+ Custom Scan (Citus Task-Tracker)
+   Task Count: 0
+   Tasks Shown: All
+(3 rows)
 
+EXPLAIN (COSTS OFF)
 SELECT
 	o_orderkey
 FROM
 	orders, customer
 WHERE
 	o_custkey = c_custkey AND false;
- o_orderkey 
-------------
-(0 rows)
+            QUERY PLAN            
+----------------------------------
+ Custom Scan (Citus Task-Tracker)
+   Task Count: 0
+   Tasks Shown: All
+(3 rows)
 
