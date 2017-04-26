@@ -8,10 +8,6 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 770000;
 
-
-SET citus.explain_distributed_queries TO off;
-SET client_min_messages TO DEBUG2;
-
 -- Adding additional l_orderkey = 1 to make this query not router executable
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 
@@ -131,15 +127,21 @@ INSERT INTO pg_dist_shard_placement (shardid, shardstate, shardlength, nodename,
 	ORDER BY nodename, nodeport ASC
 	LIMIT 1;
 
--- Verify that shard pruning works. Note that these queries should all prune
--- one shard.
+-- Verify that shard pruning works. Note that these queries should all
+-- prune one shard (see task count).  As these tables don't exist
+-- remotely, temporarily disable WARNING messages.
+SET client_min_messages TO ERROR;
 
-EXPLAIN SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
 
-EXPLAIN SELECT count(*) FROM array_partitioned_table
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM varchar_partitioned_table WHERE varchar_column = 'BA2';
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM array_partitioned_table
 	WHERE array_column > '{BA1000U2AMO4ZGX, BZZXSP27F21T6}';
 
-EXPLAIN SELECT count(*) FROM composite_partitioned_table
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM composite_partitioned_table
 	WHERE composite_column < '(b,5,c)'::composite_type;
 
 SET client_min_messages TO NOTICE;
