@@ -5,3 +5,7 @@
 /tmp_check/
 /results/
 /log/
+
+# Regression test output
+/regression.diffs
+/regression.out
