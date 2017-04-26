@@ -61,7 +61,6 @@ typedef struct CitusCopyDestReceiver
 
 	/* distributed table metadata */
 	DistTableCacheEntry *tableMetadata;
-	bool useBinarySearch;
 
 	/* open relation handle */
 	Relation distributedRelation;

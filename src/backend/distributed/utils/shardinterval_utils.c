@@ -23,9 +23,7 @@
 #include "utils/memutils.h"
 
 
-static int FindShardIntervalIndex(Datum searchedValue, ShardInterval **shardIntervalCache,
-								  int shardCount, char partitionMethod,
-								  FmgrInfo *compareFunction, bool useBinarySearch);
+static int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
 static int SearchCachedShardInterval(Datum partitionColumnValue,
 									 ShardInterval **shardIntervalCache,
 									 int shardCount, FmgrInfo *compareFunction);
@@ -188,12 +186,7 @@ ShardIndex(ShardInterval *shardInterval)
 	Datum shardMinValue = shardInterval->minValue;
 
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
-	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
-	int shardCount = cacheEntry->shardIntervalArrayLength;
 	char partitionMethod = cacheEntry->partitionMethod;
-	FmgrInfo *compareFunction = cacheEntry->shardIntervalCompareFunction;
-	bool hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
-	bool useBinarySearch = false;
 
 	/*
 	 * Note that, we can also support append and range distributed tables, but
@@ -215,15 +208,7 @@ ShardIndex(ShardInterval *shardInterval)
 		return shardIndex;
 	}
 
-	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
-	{
-		useBinarySearch = true;
-	}
-
-	shardIndex = FindShardIntervalIndex(shardMinValue, shardIntervalCache,
-										shardCount, partitionMethod,
-										compareFunction, useBinarySearch);
+	shardIndex = FindShardIntervalIndex(shardMinValue, cacheEntry);
 
 	return shardIndex;
 }
@@ -236,28 +221,24 @@ ShardIndex(ShardInterval *shardInterval)
  * as NULL for them.
  */
 ShardInterval *
-FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache,
-				  int shardCount, char partitionMethod, FmgrInfo *compareFunction,
-				  FmgrInfo *hashFunction, bool useBinarySearch)
+FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
 {
 	Datum searchedValue = partitionColumnValue;
 	int shardIndex = INVALID_SHARD_INDEX;
 
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
+	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
 	{
-		searchedValue = FunctionCall1(hashFunction, partitionColumnValue);
+		searchedValue = FunctionCall1(cacheEntry->hashFunction, partitionColumnValue);
 	}
 
-	shardIndex = FindShardIntervalIndex(searchedValue, shardIntervalCache,
-										shardCount, partitionMethod,
-										compareFunction, useBinarySearch);
+	shardIndex = FindShardIntervalIndex(searchedValue, cacheEntry);
 
 	if (shardIndex == INVALID_SHARD_INDEX)
 	{
 		return NULL;
 	}
 
-	return shardIntervalCache[shardIndex];
+	return cacheEntry->sortedShardIntervalArray[shardIndex];
 }
 
 
@@ -273,10 +254,14 @@ FindShardInterval(Datum partitionColumnValue, ShardInterval **shardIntervalCache
  * fire this.
  */
 static int
-FindShardIntervalIndex(Datum searchedValue, ShardInterval **shardIntervalCache,
-					   int shardCount, char partitionMethod, FmgrInfo *compareFunction,
-					   bool useBinarySearch)
+FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 {
+	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
+	int shardCount = cacheEntry->shardIntervalArrayLength;
+	char partitionMethod = cacheEntry->partitionMethod;
+	FmgrInfo *compareFunction = cacheEntry->shardIntervalCompareFunction;
+	bool useBinarySearch = (partitionMethod != DISTRIBUTE_BY_HASH ||
+							!cacheEntry->hasUniformHashDistribution);
 	int shardIndex = INVALID_SHARD_INDEX;
 
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
