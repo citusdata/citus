@@ -142,6 +142,7 @@ static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relation
 static List * LookupDistShardTuples(Oid relationId);
 static Oid LookupShardRelation(int64 shardId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
+									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor, Oid intervalTypeId,
@@ -603,11 +604,19 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	ShardInterval **shardIntervalArray = NULL;
 	ShardInterval **sortedShardIntervalArray = NULL;
 	FmgrInfo *shardIntervalCompareFunction = NULL;
+	FmgrInfo *shardColumnCompareFunction = NULL;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	int shardIndex = 0;
+	Oid columnTypeId = InvalidOid;
+	int32 columnTypeMod = -1;
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = -1;
+
 	GetPartitionTypeInputInfo(cacheEntry->partitionKeyString,
 							  cacheEntry->partitionMethod,
+							  &columnTypeId,
+							  &columnTypeMod,
 							  &intervalTypeId,
 							  &intervalTypeMod);
 
@@ -657,7 +666,22 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		heap_close(distShardRelation, AccessShareLock);
 	}
 
-	/* decide and allocate interval comparison function */
+	/* look up value comparison function */
+	if (columnTypeId != InvalidOid)
+	{
+		/* allocate the comparison function in the cache context */
+		MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+		shardColumnCompareFunction = GetFunctionInfo(columnTypeId, BTREE_AM_OID,
+													 BTORDER_PROC);
+		MemoryContextSwitchTo(oldContext);
+	}
+	else
+	{
+		shardColumnCompareFunction = NULL;
+	}
+
+	/* look up interval comparison function */
 	if (intervalTypeId != InvalidOid)
 	{
 		/* allocate the comparison function in the cache context */
@@ -771,6 +795,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
 	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
+	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
 	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
 }
 
@@ -2068,8 +2093,11 @@ LookupShardRelation(int64 shardId)
  */
 static void
 GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
+						  Oid *columnTypeId, int32 *columnTypeMod,
 						  Oid *intervalTypeId, int32 *intervalTypeMod)
 {
+	*columnTypeId = InvalidOid;
+	*columnTypeMod = -1;
 	*intervalTypeId = InvalidOid;
 	*intervalTypeMod = -1;
 
@@ -2084,18 +2112,25 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 
 			*intervalTypeId = partitionColumn->vartype;
 			*intervalTypeMod = partitionColumn->vartypmod;
+			*columnTypeId = partitionColumn->vartype;
+			*columnTypeMod = partitionColumn->vartypmod;
 			break;
 		}
 
 		case DISTRIBUTE_BY_HASH:
 		{
+			Node *partitionNode = stringToNode(partitionKeyString);
+			Var *partitionColumn = (Var *) partitionNode;
+			Assert(IsA(partitionNode, Var));
+
 			*intervalTypeId = INT4OID;
+			*columnTypeId = partitionColumn->vartype;
+			*columnTypeMod = partitionColumn->vartypmod;
 			break;
 		}
 
 		case DISTRIBUTE_BY_NONE:
 		{
-			*intervalTypeId = InvalidOid;
 			break;
 		}
 

@@ -16,8 +16,14 @@ CREATE TYPE test_composite_type AS (
 
 -- ... as well as a function to use as its comparator...
 CREATE FUNCTION equal_test_composite_type_function(test_composite_type, test_composite_type) RETURNS boolean
-AS 'select $1.i = $2.i AND $1.i2 = $2.i2;'
-LANGUAGE SQL
+LANGUAGE 'internal'
+AS 'record_eq'
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
+
+CREATE FUNCTION cmp_test_composite_type_function(test_composite_type, test_composite_type) RETURNS int
+LANGUAGE 'internal'
+AS 'btrecordcmp'
 IMMUTABLE
 RETURNS NULL ON NULL INPUT;
 
@@ -45,7 +51,8 @@ RETURNS NULL ON NULL INPUT;
 -- One uses BTREE the other uses HASH
 CREATE OPERATOR CLASS cats_op_fam_clas3
 DEFAULT FOR TYPE test_composite_type USING BTREE AS
-OPERATOR 3 = (test_composite_type, test_composite_type);
+OPERATOR 3 = (test_composite_type, test_composite_type),
+FUNCTION 1 cmp_test_composite_type_function(test_composite_type, test_composite_type);
 
 CREATE OPERATOR CLASS cats_op_fam_class
 DEFAULT FOR TYPE test_composite_type USING HASH AS

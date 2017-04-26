@@ -47,7 +47,15 @@ typedef struct
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
 
-	FmgrInfo *shardIntervalCompareFunction;  /* NULL if DISTRIBUTE_BY_NONE */
+	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
+	FmgrInfo *shardColumnCompareFunction;
+
+	/*
+	 * Comparator for partition interval type (different from
+	 * shardValueCompareFunction if hash-partitioned), NULL if
+	 * DISTRIBUTE_BY_NONE.
+	 */
+	FmgrInfo *shardIntervalCompareFunction;
 	FmgrInfo *hashFunction; /* NULL if table is not distributed by hash */
 
 	/* pg_dist_shard_placement metadata */
