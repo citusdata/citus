@@ -373,53 +373,47 @@ SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
 
 SET citus.subquery_pushdown TO TRUE;
 SET client_min_messages TO DEBUG2;
-SELECT * FROM 
-	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
+SELECT * FROM
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)
 
-SELECT * FROM 
+SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)
 
 SET client_min_messages TO NOTICE;
--- test subquery join on VARCHAR partition column 
+-- test subquery join on VARCHAR partition column
 SELECT * FROM
-	(SELECT 
+	(SELECT
 		a_inner AS a
 	FROM
-		(SELECT 
+		(SELECT
 			subquery_pruning_varchar_test_table.a AS a_inner
-		FROM 
+		FROM
 		 	subquery_pruning_varchar_test_table
-		GROUP BY 
+		GROUP BY
 		  	subquery_pruning_varchar_test_table.a
-		HAVING 
-		  	count(subquery_pruning_varchar_test_table.a) < 3) 
+		HAVING
+		  	count(subquery_pruning_varchar_test_table.a) < 3)
 		AS f1,
-		(SELECT 
+		(SELECT
 		 	subquery_pruning_varchar_test_table.a
-		FROM 
+		FROM
 		  	subquery_pruning_varchar_test_table
-		GROUP BY 
+		GROUP BY
 		  	subquery_pruning_varchar_test_table.a
-		HAVING 
-		  	sum(coalesce(subquery_pruning_varchar_test_table.b,0)) > 20.0) 
+		HAVING
+		  	sum(coalesce(subquery_pruning_varchar_test_table.b,0)) > 20.0)
 		AS f2
-	WHERE 
+	WHERE
 		f1.a_inner = f2.a
-	GROUP BY 
+	GROUP BY
 		a_inner)
 AS foo;
  a 
@@ -738,7 +732,8 @@ LIMIT
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM
 	(SELECT
@@ -765,29 +760,30 @@ FROM
 		user_id) AS subquery;
                                                                                           QUERY PLAN                                                                                          
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Aggregate  (cost=0.00..0.00 rows=0 width=0)
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+ Aggregate
+   ->  Custom Scan (Citus Real-Time)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
                Node: host=localhost port=57637 dbname=regression
-               ->  Aggregate  (cost=40.01..40.02 rows=1 width=16)
-                     ->  GroupAggregate  (cost=39.89..39.99 rows=1 width=48)
+               ->  Aggregate
+                     ->  GroupAggregate
                            Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                           ->  Merge Join  (cost=39.89..39.97 rows=1 width=540)
+                           ->  Merge Join
                                  Merge Cond: ((((users.composite_id).tenant_id) = ((events.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events.composite_id).user_id)))
-                                 ->  Sort  (cost=28.08..28.09 rows=6 width=32)
+                                 ->  Sort
                                        Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                       ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=32)
+                                       ->  Seq Scan on users_270013 users
                                              Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                 ->  Sort  (cost=11.81..11.82 rows=3 width=556)
+                                 ->  Sort
                                        Sort Key: ((events.composite_id).tenant_id), ((events.composite_id).user_id)
-                                       ->  Seq Scan on events_270009 events  (cost=0.00..11.79 rows=3 width=556)
+                                       ->  Seq Scan on events_270009 events
                                              Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
 (19 rows)
 
 -- Union and left join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	avg(array_length(events, 1)) AS event_average,
 	hasdone
 FROM
@@ -851,50 +847,51 @@ GROUP BY
 	hasdone;
                                                                                                                             QUERY PLAN                                                                                                                             
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- HashAggregate  (cost=0.00..0.00 rows=0 width=0)
+ HashAggregate
    Group Key: remote_scan.hasdone
-   ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Custom Scan (Citus Real-Time)
          Task Count: 2
          Tasks Shown: One of 2
          ->  Task
                Node: host=localhost port=57637 dbname=regression
-               ->  GroupAggregate  (cost=91.93..91.98 rows=2 width=48)
+               ->  GroupAggregate
                      Group Key: subquery_top.hasdone
-                     ->  Sort  (cost=91.93..91.93 rows=2 width=64)
+                     ->  Sort
                            Sort Key: subquery_top.hasdone
-                           ->  Subquery Scan on subquery_top  (cost=91.85..91.92 rows=2 width=64)
-                                 ->  GroupAggregate  (cost=91.85..91.90 rows=2 width=112)
+                           ->  Subquery Scan on subquery_top
+                                 ->  GroupAggregate
                                        Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
-                                       ->  Sort  (cost=91.85..91.85 rows=2 width=88)
+                                       ->  Sort
                                              Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('Has done paying'::text)
-                                             ->  Merge Left Join  (cost=91.75..91.84 rows=2 width=88)
+                                             ->  Merge Left Join
                                                    Merge Cond: ((((users.composite_id).tenant_id) = ((events_2.composite_id).tenant_id)) AND (((users.composite_id).user_id) = ((events_2.composite_id).user_id)))
-                                                   ->  Unique  (cost=79.46..79.48 rows=2 width=56)
-                                                         ->  Sort  (cost=79.46..79.47 rows=2 width=56)
+                                                   ->  Unique
+                                                         ->  Sort
                                                                Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id), ('action=>1'::text), events.event_time
-                                                               ->  Append  (cost=0.00..79.45 rows=2 width=56)
-                                                                     ->  Nested Loop  (cost=0.00..39.72 rows=1 width=56)
+                                                               ->  Append
+                                                                     ->  Nested Loop
                                                                            Join Filter: (((users.composite_id).tenant_id = (events.composite_id).tenant_id) AND ((users.composite_id).user_id = (events.composite_id).user_id))
-                                                                           ->  Seq Scan on events_270009 events  (cost=0.00..11.62 rows=1 width=40)
+                                                                           ->  Seq Scan on events_270009 events
                                                                                  Filter: ((event_type)::text = 'click'::text)
-                                                                           ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=32)
+                                                                           ->  Seq Scan on users_270013 users
                                                                                  Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                                     ->  Nested Loop  (cost=0.00..39.72 rows=1 width=56)
+                                                                     ->  Nested Loop
                                                                            Join Filter: (((users_1.composite_id).tenant_id = (events_1.composite_id).tenant_id) AND ((users_1.composite_id).user_id = (events_1.composite_id).user_id))
-                                                                           ->  Seq Scan on events_270009 events_1  (cost=0.00..11.62 rows=1 width=40)
+                                                                           ->  Seq Scan on events_270009 events_1
                                                                                  Filter: ((event_type)::text = 'submit'::text)
-                                                                           ->  Seq Scan on users_270013 users_1  (cost=0.00..28.00 rows=6 width=32)
+                                                                           ->  Seq Scan on users_270013 users_1
                                                                                  Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                   ->  Materialize  (cost=12.29..12.31 rows=1 width=48)
-                                                         ->  Unique  (cost=12.29..12.30 rows=1 width=80)
-                                                               ->  Sort  (cost=12.29..12.29 rows=1 width=80)
+                                                   ->  Materialize
+                                                         ->  Unique
+                                                               ->  Sort
                                                                      Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
-                                                                     ->  Seq Scan on events_270009 events_2  (cost=0.00..12.28 rows=1 width=80)
+                                                                     ->  Seq Scan on events_270009 events_2
                                                                            Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 (40 rows)
 
 -- Union, left join and having subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+  SELECT
 	avg(array_length(events, 1)) AS event_average,
 	count_pay
 	FROM (
@@ -966,7 +963,8 @@ ORDER BY
 	count_pay;
 ERROR:  bogus varattno for OUTER_VAR var: 3
 -- Lateral join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	tenant_id,
 	user_id,
 	user_lastseen,
@@ -1017,31 +1015,31 @@ LIMIT
 	10;
                                                                                                       QUERY PLAN                                                                                                      
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Limit  (cost=0.00..0.00 rows=0 width=0)
-   ->  Sort  (cost=0.00..0.00 rows=0 width=0)
+ Limit
+   ->  Sort
          Sort Key: remote_scan.user_lastseen DESC
-         ->  Custom Scan (Citus Real-Time)  (cost=0.00..0.00 rows=0 width=0)
+         ->  Custom Scan (Citus Real-Time)
                Task Count: 2
                Tasks Shown: One of 2
                ->  Task
                      Node: host=localhost port=57637 dbname=regression
-                     ->  Limit  (cost=100.43..100.44 rows=6 width=56)
-                           ->  Sort  (cost=100.43..100.44 rows=6 width=56)
+                     ->  Limit
+                           ->  Sort
                                  Sort Key: (max(users.lastseen)) DESC
-                                 ->  GroupAggregate  (cost=100.14..100.29 rows=6 width=56)
+                                 ->  GroupAggregate
                                        Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                       ->  Sort  (cost=100.14..100.16 rows=6 width=548)
+                                       ->  Sort
                                              Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
-                                             ->  Nested Loop Left Join  (cost=40.04..100.06 rows=6 width=548)
-                                                   ->  Limit  (cost=28.08..28.09 rows=6 width=24)
-                                                         ->  Sort  (cost=28.08..28.09 rows=6 width=24)
+                                             ->  Nested Loop Left Join
+                                                   ->  Limit
+                                                         ->  Sort
                                                                Sort Key: users.lastseen DESC
-                                                               ->  Seq Scan on users_270013 users  (cost=0.00..28.00 rows=6 width=24)
+                                                               ->  Seq Scan on users_270013 users
                                                                      Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type))
-                                                   ->  Limit  (cost=11.96..11.96 rows=1 width=524)
-                                                         ->  Sort  (cost=11.96..11.96 rows=1 width=524)
+                                                   ->  Limit
+                                                         ->  Sort
                                                                Sort Key: events.event_time DESC
-                                                               ->  Seq Scan on events_270009 events  (cost=0.00..11.95 rows=1 width=524)
+                                                               ->  Seq Scan on events_270009 events
                                                                      Filter: (((composite_id).tenant_id = ((users.composite_id).tenant_id)) AND ((composite_id).user_id = ((users.composite_id).user_id)))
 (26 rows)
 
