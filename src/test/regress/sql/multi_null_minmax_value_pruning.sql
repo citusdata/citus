@@ -8,8 +8,11 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 760000;
 
-
 SET client_min_messages TO DEBUG2;
+SET citus.explain_all_tasks TO on;
+-- to avoid differing explain output - executor doesn't matter,
+-- because were testing pruning here.
+SET citus.task_executor_type TO 'real-time';
 
 -- Change configuration to treat lineitem and orders tables as large
 
@@ -20,8 +23,10 @@ SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
 
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
+EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 
+EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 
@@ -30,8 +35,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 290000;
 
+EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 
+EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 
@@ -40,8 +47,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 290001;
 
+EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 
+EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 
@@ -50,8 +59,10 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 
 UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 290000;
 
+EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 
+EXPLAIN (COSTS FALSE)
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 

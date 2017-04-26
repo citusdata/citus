@@ -34,7 +34,6 @@ test: multi_average_expression multi_working_columns
 test: multi_array_agg
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_hash_pruning
-test: multi_null_minmax_value_pruning
 test: multi_query_directory_cleanup
 test: multi_utility_statements
 test: multi_dropped_column_aliases
@@ -50,7 +49,6 @@ test: multi_tpch_query7 multi_tpch_query7_nested
 # Parallel tests to check our join order planning logic. Note that we load data
 # below; and therefore these tests should come after the execution tests.
 # ----------
-test: multi_join_order_additional
 test: multi_load_more_data
 test: multi_join_order_tpch_large
 
