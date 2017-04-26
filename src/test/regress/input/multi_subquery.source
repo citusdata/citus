@@ -339,43 +339,43 @@ SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
 SET citus.subquery_pushdown TO TRUE;
 SET client_min_messages TO DEBUG2;
 
-SELECT * FROM 
-	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
+SELECT * FROM
+	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a)
 AS foo;
 
-SELECT * FROM 
+SELECT * FROM
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
 
 SET client_min_messages TO NOTICE;
 
--- test subquery join on VARCHAR partition column 
+-- test subquery join on VARCHAR partition column
 SELECT * FROM
-	(SELECT 
+	(SELECT
 		a_inner AS a
 	FROM
-		(SELECT 
+		(SELECT
 			subquery_pruning_varchar_test_table.a AS a_inner
-		FROM 
+		FROM
 		 	subquery_pruning_varchar_test_table
-		GROUP BY 
+		GROUP BY
 		  	subquery_pruning_varchar_test_table.a
-		HAVING 
-		  	count(subquery_pruning_varchar_test_table.a) < 3) 
+		HAVING
+		  	count(subquery_pruning_varchar_test_table.a) < 3)
 		AS f1,
 
-		(SELECT 
+		(SELECT
 		 	subquery_pruning_varchar_test_table.a
-		FROM 
+		FROM
 		  	subquery_pruning_varchar_test_table
-		GROUP BY 
+		GROUP BY
 		  	subquery_pruning_varchar_test_table.a
-		HAVING 
-		  	sum(coalesce(subquery_pruning_varchar_test_table.b,0)) > 20.0) 
+		HAVING
+		  	sum(coalesce(subquery_pruning_varchar_test_table.b,0)) > 20.0)
 		AS f2
-	WHERE 
+	WHERE
 		f1.a_inner = f2.a
-	GROUP BY 
+	GROUP BY
 		a_inner)
 AS foo;
 
@@ -702,7 +702,8 @@ LIMIT
 -- Same queries above with explain
 -- Simple join subquery pushdown
 
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM
 	(SELECT
@@ -729,7 +730,8 @@ FROM
 		user_id) AS subquery;
 
 -- Union and left join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	avg(array_length(events, 1)) AS event_average,
 	hasdone
 FROM
@@ -793,7 +795,8 @@ GROUP BY
 	hasdone;
 
 -- Union, left join and having subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+  SELECT
 	avg(array_length(events, 1)) AS event_average,
 	count_pay
 	FROM (
@@ -865,7 +868,8 @@ ORDER BY
 	count_pay;
 
 -- Lateral join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS OFF)
+SELECT
 	tenant_id,
 	user_id,
 	user_lastseen,
