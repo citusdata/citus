@@ -2162,35 +2162,13 @@ ShardInterval *
 FastShardPruning(Oid distributedTableId, Datum partitionValue)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
-	int shardCount = cacheEntry->shardIntervalArrayLength;
-	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
-	bool useBinarySearch = false;
-	char partitionMethod = cacheEntry->partitionMethod;
-	FmgrInfo *shardIntervalCompareFunction = cacheEntry->shardIntervalCompareFunction;
-	bool hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
-	FmgrInfo *hashFunction = NULL;
 	ShardInterval *shardInterval = NULL;
-
-	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
-	{
-		useBinarySearch = true;
-	}
-
-	/* we only need hash functions for hash distributed tables */
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		hashFunction = cacheEntry->hashFunction;
-	}
 
 	/*
 	 * Call FindShardInterval to find the corresponding shard interval for the
 	 * given partition value.
 	 */
-	shardInterval = FindShardInterval(partitionValue, sortedShardIntervalArray,
-									  shardCount, partitionMethod,
-									  shardIntervalCompareFunction, hashFunction,
-									  useBinarySearch);
+	shardInterval = FindShardInterval(partitionValue, cacheEntry);
 
 	return shardInterval;
 }

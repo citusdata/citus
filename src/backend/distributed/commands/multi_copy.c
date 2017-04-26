@@ -279,18 +279,11 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	uint32 columnCount = 0;
 	Datum *columnValues = NULL;
 	bool *columnNulls = NULL;
-	FmgrInfo *hashFunction = NULL;
-	FmgrInfo *compareFunction = NULL;
-	bool hasUniformHashDistribution = false;
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(tableId);
 	const char *delimiterCharacter = "\t";
 	const char *nullPrintCharacter = "\\N";
 
-	int shardCount = 0;
 	List *shardIntervalList = NULL;
-	ShardInterval **shardIntervalCache = NULL;
-	bool useBinarySearch = false;
-
 	HTAB *shardConnectionHash = NULL;
 	ShardConnections *shardConnections = NULL;
 	List *shardConnectionsList = NIL;
@@ -306,15 +299,9 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	uint64 processedRowCount = 0;
 
 	Var *partitionColumn = PartitionColumn(tableId, 0);
-	char partitionMethod = PartitionMethod(tableId);
+	char partitionMethod = cacheEntry->partitionMethod;
 
 	ErrorContextCallback errorCallback;
-
-	/* get hash function for partition column */
-	hashFunction = cacheEntry->hashFunction;
-
-	/* get compare function for shard intervals */
-	compareFunction = cacheEntry->shardIntervalCompareFunction;
 
 	/* allocate column values and nulls arrays */
 	distributedRelation = heap_open(tableId, RowExclusiveLock);
@@ -365,17 +352,6 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	/* prevent concurrent placement changes and non-commutative DML statements */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 	LockShardListResources(shardIntervalList, ShareLock);
-
-	/* initialize the shard interval cache */
-	shardCount = cacheEntry->shardIntervalArrayLength;
-	shardIntervalCache = cacheEntry->sortedShardIntervalArray;
-	hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
-
-	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
-	{
-		useBinarySearch = true;
-	}
 
 	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
 	{
@@ -462,11 +438,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 		 * For reference table, this function blindly returns the tables single
 		 * shard.
 		 */
-		shardInterval = FindShardInterval(partitionColumnValue,
-										  shardIntervalCache,
-										  shardCount, partitionMethod,
-										  compareFunction, hashFunction,
-										  useBinarySearch);
+		shardInterval = FindShardInterval(partitionColumnValue, cacheEntry);
 
 		if (shardInterval == NULL)
 		{
