@@ -13,6 +13,7 @@
 #define SHARDINTERVAL_UTILS_H_
 
 #include "distributed/master_metadata_utility.h"
+#include "distributed/metadata_cache.h"
 #include "nodes/primnodes.h"
 
 #define INVALID_SHARD_INDEX -1
@@ -33,10 +34,7 @@ extern int CompareRelationShards(const void *leftElement,
 								 const void *rightElement);
 extern int ShardIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
-										 ShardInterval **shardIntervalCache,
-										 int shardCount, char partitionMethod,
-										 FmgrInfo *compareFunction,
-										 FmgrInfo *hashFunction, bool useBinarySearch);
+										 DistTableCacheEntry *cacheEntry);
 extern bool SingleReplicatedTable(Oid relationId);
 
 #endif /* SHARDINTERVAL_UTILS_H_ */

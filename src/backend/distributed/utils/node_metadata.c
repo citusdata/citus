@@ -332,6 +332,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		char *distributionValueString = NULL;
 		Datum inputDatum = 0;
 		Datum distributionValueDatum = 0;
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
 
 		/* if given table is not reference table, distributionValue cannot be NULL */
 		if (PG_ARGISNULL(1))
@@ -351,7 +352,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		distributionValueDatum = StringToDatum(distributionValueString,
 											   distributionDataType);
 
-		shardInterval = FastShardPruning(relationId, distributionValueDatum);
+		shardInterval = FindShardInterval(distributionValueDatum, cacheEntry);
 	}
 	else
 	{
