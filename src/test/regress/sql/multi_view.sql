@@ -259,7 +259,7 @@ CREATE VIEW recent_selected_users AS SELECT su.* FROM selected_users su JOIN rec
 SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 
 -- this would be supported when we implement where partition_key in (subquery) support
-SELECT et.* FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users);
+SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users) GROUP BY 1,2 ORDER BY 1 DESC,2 DESC LIMIT 5;
 
 -- it is supported when it is a router query
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 90);
@@ -351,21 +351,9 @@ CREATE VIEW router_view AS SELECT * FROM users_table WHERE user_id = 2;
 -- router plannable
 SELECT user_id FROM router_view GROUP BY 1;
 
--- There is a known issue with router plannable subqueries joined with non-router
--- plannable subqueries. Following tests should be uncommented when we fix it
-
--- join a router view (not implement error)
--- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id);
-
--- it still does not work when converted to 2 subquery join
--- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id);
-
--- views are completely removed and still it does not work
--- SELECT * FROM
---	(SELECT user_id FROM (SELECT * FROM users_table WHERE user_id = 2) rv1  GROUP BY 1) rv2
---	JOIN (SELECT user_id, time FROM events_table
---	WHERE time > '2014-01-20 01:45:49.978738'::timestamp) re 
---	USING (user_id);
+-- join a router view
+ SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id) ORDER BY 2 LIMIT 3;
+ SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id) ORDER BY 2 LIMIT 3;
 
 -- views with limits
 CREATE VIEW recent_10_users AS
