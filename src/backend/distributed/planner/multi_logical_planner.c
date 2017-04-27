@@ -103,7 +103,6 @@ static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
 static MultiSelect * MultiSelectNode(List *whereClauseList);
 static bool IsSelectClause(Node *clause);
-static void ErrorIfSublink(Node *clause);
 static bool IsSublinkClause(Node *clause);
 static MultiProject * MultiProjectNode(List *targetEntryList);
 static MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);
@@ -195,7 +194,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 
 /*
  * SublinkList finds the subquery nodes in the where clause of the given query. Note
- * that the function should be called on the orignal query given that postgres
+ * that the function should be called on the original query given that postgres
  * standard_planner() may convert the subqueries in WHERE clause to joins.
  */
 static List *
@@ -436,8 +435,9 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	}
 
 	/*
-	 * We first extract all the queries that appear in the orignal query. Later,
+	 * We first extract all the queries that appear in the original query. Later,
 	 * we delete the original query given that error rules does not apply to the
+	 * top level query. For instance, we could support any LIMIT/ORDER BY on the
 	 * top level query.
 	 */
 	ExtractQueryWalker((Node *) originalQuery, &subqueryList);
@@ -589,13 +589,11 @@ EqualOpExpressionLists(List *firstOpExpressionList, List *secondOpExpressionList
 
 
 /*
- * DeferErrorIfCannotPushdownSubquery recursively checks if we can push down the given
+ * DeferErrorIfCannotPushdownSubquery checks if we can push down the given
  * subquery to worker nodes. If we cannot push down the subquery, this function
  * returns a deferred error.
  *
- * We can push down a subquery if it follows rules below. We support nested queries
- * as long as they follow the same rules, and we recurse to validate each subquery
- * for this given query.
+ * We can push down a subquery if it follows rules below:
  * a. If there is an aggregate, it must be grouped on partition column.
  * b. If there is a join, it must be between two regular tables or two subqueries.
  * We don't support join between a regular table and a subquery. And columns on
@@ -1279,6 +1277,10 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	const char *filterHint = "Consider using an equality filter on the distributed "
 							 "table's partition column.";
 
+	/*
+	 * There could be Sublinks in the target list as well. To produce better
+	 * error messages we're checking sublinks in the where clause.
+	 */
 	if (queryTree->hasSubLinks && SublinkList(queryTree) == NIL)
 	{
 		preconditionsSatisfied = false;
@@ -1789,8 +1791,11 @@ ValidateClauseList(List *clauseList)
 	{
 		Node *clause = (Node *) lfirst(clauseCell);
 
-		/* produce a better error message for sublinks */
-		ErrorIfSublink(clause);
+		/*
+		 * There could never be sublinks here given that it is handled
+		 * in subquery pushdown code-path.
+		 */
+		Assert(!IsSublinkClause(clause));
 
 		if (!(IsSelectClause(clause) || IsJoinClause(clause) || or_clause(clause)))
 		{
@@ -1808,7 +1813,7 @@ ValidateClauseList(List *clauseList)
  * prevents erroneous results.
  *
  * Note that this function is slightly different than ValidateClauseList(),
- * additionally allowing subkinks.
+ * additionally allowing sublinks.
  */
 static void
 ValidateSubqueryPushdownClauseList(List *clauseList)
@@ -2304,25 +2309,6 @@ IsSelectClause(Node *clause)
 	}
 
 	return isSelectClause;
-}
-
-
-/*
- * ErrorIfSublink errors out if the input claise is either sublink or subplan.
- */
-static void
-ErrorIfSublink(Node *clause)
-{
-	NodeTag nodeTag = nodeTag(clause);
-
-	/* error out for subqueries in WHERE clause */
-	if (nodeTag == T_SubLink || nodeTag == T_SubPlan)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning on this query"),
-						errdetail("Subqueries other than in from-clause are currently "
-								  "unsupported")));
-	}
 }
 
 

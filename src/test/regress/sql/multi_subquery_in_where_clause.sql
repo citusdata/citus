@@ -4,8 +4,6 @@
 -- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
 --
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
--- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1430000;
--- ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1430000;
 
 -- subqueries in WHERE with greater operator
 SELECT 
@@ -107,7 +105,7 @@ ORDER BY
 	user_id;
 
 
--- the following query doesn't have a meaningul result
+-- the following query doesn't have a meaningful result
 -- but it is a valid query with an arbitrary subquery in
 -- WHERE clause
 SELECT user_id, value_2 FROM users_table WHERE
@@ -173,7 +171,7 @@ ORDER BY 1, 2;
 
 
 -- similar to the above query
--- the following query doesn't have a meaningul result
+-- the following query doesn't have a meaningful result
 -- but it is a valid query with an arbitrary subquery in
 -- WHERE clause
 SELECT 
@@ -192,7 +190,7 @@ WHERE
 	  (
 	    (SELECT
 	      users_table.user_id,
-	      'action=>1'AS event,
+	      'action=>1' AS event,
 	      events_table.time
 	    FROM
 	      users_table,
@@ -206,7 +204,7 @@ WHERE
 	    UNION
 	    (SELECT
 	      users_table.user_id,
-	      'action=>2'AS event,
+	      'action=>2' AS event,
 	      events_table.time
 	    FROM
 	      users_table,
@@ -245,7 +243,7 @@ HAVING count(*) > 3 AND sum(value_2) > 49000
 ORDER BY 1;
 
 
--- the following query doesn't have a meaningul result
+-- the following query doesn't have a meaningful result
 -- but it is a valid query with an arbitrary subquery in
 -- FROM clause involving a complex query in WHERE clause
 SELECT user_id, array_length(events_table, 1)
@@ -357,7 +355,7 @@ WHERE
 	  (
 	    (SELECT
 	      2 * users_table.user_id as user_id,
-	      'action=>1'AS event,
+	      'action=>1' AS event,
 	      events_table.time
 	    FROM
 	      users_table,
@@ -371,7 +369,7 @@ WHERE
 	    UNION
 	    (SELECT
 	      users_table.user_id,
-	      'action=>2'AS event,
+	      'action=>2' AS event,
 	      events_table.time
 	    FROM
 	      users_table,
@@ -462,8 +460,8 @@ WHERE
            OFFSET 3
           );
 
--- we can detect errors even if they appear in WHERE -> FROM -> WHERE
--- subqueries
+-- we can detect unsupported subquerues even if they appear
+-- in WHERE subquery -> FROM subquery -> WHERE subquery
 SELECT user_id 
 FROM   users_table 
 WHERE  user_id 
