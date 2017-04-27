@@ -44,7 +44,6 @@ extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 extern ShardInterval * FindShardForInsert(Query *query,
 										  DeferredErrorMessage **planningError);
-extern ShardInterval * FastShardPruning(Oid distributedTableId, Datum partitionValue);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */

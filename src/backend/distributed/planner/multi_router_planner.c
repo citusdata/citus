@@ -1974,8 +1974,9 @@ FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
 	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE)
 	{
 		Datum partitionValue = partitionValueConst->constvalue;
-		ShardInterval *shardInterval = FastShardPruning(distributedTableId,
-														partitionValue);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+		ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
+
 		if (shardInterval != NULL)
 		{
 			prunedShardList = list_make1(shardInterval);
@@ -2044,50 +2045,6 @@ FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
 	}
 
 	return (ShardInterval *) linitial(prunedShardList);
-}
-
-
-/*
- * FastShardPruning is a higher level API for FindShardInterval function. Given the
- * relationId of the distributed table and partitionValue, FastShardPruning function finds
- * the corresponding shard interval that the partitionValue should be in. FastShardPruning
- * returns NULL if no ShardIntervals exist for the given partitionValue.
- */
-ShardInterval *
-FastShardPruning(Oid distributedTableId, Datum partitionValue)
-{
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
-	int shardCount = cacheEntry->shardIntervalArrayLength;
-	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
-	bool useBinarySearch = false;
-	char partitionMethod = cacheEntry->partitionMethod;
-	FmgrInfo *shardIntervalCompareFunction = cacheEntry->shardIntervalCompareFunction;
-	bool hasUniformHashDistribution = cacheEntry->hasUniformHashDistribution;
-	FmgrInfo *hashFunction = NULL;
-	ShardInterval *shardInterval = NULL;
-
-	/* determine whether to use binary search */
-	if (partitionMethod != DISTRIBUTE_BY_HASH || !hasUniformHashDistribution)
-	{
-		useBinarySearch = true;
-	}
-
-	/* we only need hash functions for hash distributed tables */
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		hashFunction = cacheEntry->hashFunction;
-	}
-
-	/*
-	 * Call FindShardInterval to find the corresponding shard interval for the
-	 * given partition value.
-	 */
-	shardInterval = FindShardInterval(partitionValue, sortedShardIntervalArray,
-									  shardCount, partitionMethod,
-									  shardIntervalCompareFunction, hashFunction,
-									  useBinarySearch);
-
-	return shardInterval;
 }
 
 
