@@ -121,16 +121,6 @@ FROM
 WHERE
   user_id < 0;
 NOTICE:  evaluating on master
--- make sure stable functions in CTEs are evaluated
-INSERT INTO raw_events_second (user_id, value_1)
-WITH sub_cte AS (SELECT evaluate_on_master())
-SELECT
-  user_id, (SELECT * FROM sub_cte)
-FROM
-  raw_events_first
-WHERE
-  user_id < 0;
-ERROR:  Subqueries without relations are not allowed in INSERT ... SELECT queries
 -- make sure we don't evaluate stable functions with column arguments
 CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
 RETURNS int LANGUAGE plpgsql STABLE
@@ -665,7 +655,7 @@ INSERT INTO agg_events
               fist_table_agg;
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
--- We do support some CTEs
+-- We don't support CTEs that consist of const values as well
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
