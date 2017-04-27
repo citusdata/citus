@@ -227,6 +227,9 @@ multi_ProcessUtility(Node *parsetree,
 
 	if (IsA(parsetree, CopyStmt))
 	{
+		/* copy parse tree since we might scribble on it to fix the schema name */
+		parsetree = copyObject(parsetree);
+
 		parsetree = ProcessCopyStmt((CopyStmt *) parsetree, completionTag,
 									&commandMustRunAsOwner);
 
@@ -261,6 +264,8 @@ multi_ProcessUtility(Node *parsetree,
 
 		if (IsA(parsetree, IndexStmt))
 		{
+			/* copy parse tree since we might scribble on it to fix the schema name */
+			parsetree = copyObject(parsetree);
 			parsetree = ProcessIndexStmt((IndexStmt *) parsetree, queryString,
 										 isTopLevel);
 		}
@@ -698,7 +703,13 @@ ProcessIndexStmt(IndexStmt *createIndexStatement, const char *createIndexCommand
 
 		isDistributedRelation = IsDistributedTable(relationId);
 
-		/* ensure future lookups hit the same relation */
+		/*
+		 * Before we do any further processing, fix the schema name to make sure
+		 * that a (distributed) table with the same name does not appear on the
+		 * search path in front of the current schema. We do this even if the
+		 * table is not distributed, since a distributed table may appear on the
+		 * search path by the time postgres starts processing this statement.
+		 */
 		namespaceName = get_namespace_name(RelationGetNamespace(relation));
 		createIndexStatement->relation->schemaname = namespaceName;
 

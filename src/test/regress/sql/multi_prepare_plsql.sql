@@ -497,6 +497,39 @@ END;
 $$;
 DROP TABLE execute_parameter_test;
 
+-- test prepared DDL, mainly to verify we don't mess up the query tree
+SET citus.multi_shard_commit_protocol TO '2pc';
+CREATE TABLE prepare_ddl (x int, y int);
+SELECT create_distributed_table('prepare_ddl', 'x');
+
+CREATE OR REPLACE FUNCTION ddl_in_plpgsql()
+RETURNS VOID  AS
+$BODY$
+BEGIN
+    CREATE INDEX prepared_index ON public.prepare_ddl(x);
+    DROP INDEX prepared_index;
+END;
+$BODY$ LANGUAGE plpgsql;
+
+SELECT ddl_in_plpgsql();
+SELECT ddl_in_plpgsql();
+
+-- test prepared COPY
+CREATE OR REPLACE FUNCTION copy_in_plpgsql()
+RETURNS VOID  AS
+$BODY$
+BEGIN
+    COPY prepare_ddl (x) FROM PROGRAM 'echo 1' WITH CSV;
+END;
+$BODY$ LANGUAGE plpgsql;
+
+SELECT copy_in_plpgsql();
+SELECT copy_in_plpgsql();
+
+DROP FUNCTION ddl_in_plpgsql();
+DROP FUNCTION copy_in_plpgsql();
+DROP TABLE prepare_ddl;
+
 -- clean-up functions
 DROP FUNCTION plpgsql_test_1();
 DROP FUNCTION plpgsql_test_2();
