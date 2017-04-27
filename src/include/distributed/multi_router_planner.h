@@ -45,7 +45,6 @@ extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
-extern ShardInterval * FastShardPruning(Oid distributedTableId, Datum partitionValue);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */

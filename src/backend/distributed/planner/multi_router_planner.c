@@ -2058,8 +2058,8 @@ TargetShardIntervalForModify(Query *query, DeferredErrorMessage **planningError)
 		Var *partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
 		Const *partitionValueConst = ExtractInsertPartitionValue(query, partitionColumn);
 		Datum partitionValue = partitionValueConst->constvalue;
-		ShardInterval *shardInterval = FastShardPruning(distributedTableId,
-														partitionValue);
+		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+		ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
 
 		if (shardInterval != NULL)
 		{
@@ -2149,28 +2149,6 @@ FastShardPruningPossible(CmdType commandType, char partitionMethod)
 	}
 
 	return false;
-}
-
-
-/*
- * FastShardPruning is a higher level API for FindShardInterval function. Given the
- * relationId of the distributed table and partitionValue, FastShardPruning function finds
- * the corresponding shard interval that the partitionValue should be in. FastShardPruning
- * returns NULL if no ShardIntervals exist for the given partitionValue.
- */
-ShardInterval *
-FastShardPruning(Oid distributedTableId, Datum partitionValue)
-{
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
-	ShardInterval *shardInterval = NULL;
-
-	/*
-	 * Call FindShardInterval to find the corresponding shard interval for the
-	 * given partition value.
-	 */
-	shardInterval = FindShardInterval(partitionValue, cacheEntry);
-
-	return shardInterval;
 }
 
 
