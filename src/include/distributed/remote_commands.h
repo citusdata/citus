@@ -44,6 +44,7 @@ extern int SendRemoteCommand(MultiConnection *connection, const char *command);
 extern int SendRemoteCommandParams(MultiConnection *connection, const char *command,
 								   int parameterCount, const Oid *parameterTypes,
 								   const char *const *parameterValues);
+extern List * ReadFirstColumnAsText(struct pg_result *queryResult);
 extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
 												 bool raiseInterrupts);
 
