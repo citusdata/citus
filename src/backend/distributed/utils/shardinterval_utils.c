@@ -16,6 +16,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_planner.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
@@ -23,7 +24,6 @@
 #include "utils/memutils.h"
 
 
-static int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
 static int SearchCachedShardInterval(Datum partitionColumnValue,
 									 ShardInterval **shardIntervalCache,
 									 int shardCount, FmgrInfo *compareFunction);
@@ -254,7 +254,7 @@ FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
  * somewhere. Such as a hash function which returns a value not in the range
  * of [INT32_MIN, INT32_MAX] can fire this.
  */
-static int
+int
 FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 {
 	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
