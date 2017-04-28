@@ -7,7 +7,7 @@ step s1a:
 
 master_add_node
 
-(1,1,localhost,57637,default,f)
+(1,1,localhost,57637,default,f,t)
 master_add_node
 
-(2,2,localhost,57638,default,f)
+(2,2,localhost,57638,default,f,t)
