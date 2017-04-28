@@ -41,6 +41,7 @@
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_pruning.h"
 #include "executor/execdesc.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -558,6 +559,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
  *
  * The function errors out if the given shard interval does not belong to a hash,
  * range and append distributed tables.
+ *
+ * NB: If you update this, also look at PrunableExpressionsWalker().
  */
 static List *
 ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
@@ -1998,9 +2001,7 @@ FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		restrictClauseList = list_make1(equalityExpr);
 
-		shardIntervalList = LoadShardIntervalList(distributedTableId);
-		prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
-										 shardIntervalList);
+		prunedShardList = PruneShards(distributedTableId, tableId, restrictClauseList);
 	}
 
 	prunedShardCount = list_length(prunedShardList);
@@ -2060,7 +2061,6 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	char partitionMethod = cacheEntry->partitionMethod;
 	CmdType commandType = query->commandType;
-	List *shardIntervalList = NIL;
 	List *restrictClauseList = NIL;
 	Index tableId = 1;
 	List *prunedShardList = NIL;
@@ -2068,11 +2068,8 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(commandType == CMD_UPDATE || commandType == CMD_DELETE);
 
-	shardIntervalList = LoadShardIntervalList(distributedTableId);
-
 	restrictClauseList = QueryRestrictList(query, partitionMethod);
-	prunedShardList = PruneShardList(distributedTableId, tableId, restrictClauseList,
-									 shardIntervalList);
+	prunedShardList = PruneShards(distributedTableId, tableId, restrictClauseList);
 
 	prunedShardCount = list_length(prunedShardList);
 	if (prunedShardCount != 1)
@@ -2412,7 +2409,6 @@ TargetShardIntervalsForSelect(Query *query,
 		List *baseRestrictionList = relationRestriction->relOptInfo->baserestrictinfo;
 		List *restrictClauseList = get_all_actual_clauses(baseRestrictionList);
 		List *prunedShardList = NIL;
-		int shardIndex = 0;
 		List *joinInfoList = relationRestriction->relOptInfo->joininfo;
 		List *pseudoRestrictionList = extract_actual_clauses(joinInfoList, true);
 		bool whereFalseQuery = false;
@@ -2428,18 +2424,8 @@ TargetShardIntervalsForSelect(Query *query,
 		whereFalseQuery = ContainsFalseClause(pseudoRestrictionList);
 		if (!whereFalseQuery && shardCount > 0)
 		{
-			List *shardIntervalList = NIL;
-
-			for (shardIndex = 0; shardIndex < shardCount; shardIndex++)
-			{
-				ShardInterval *shardInterval =
-					cacheEntry->sortedShardIntervalArray[shardIndex];
-				shardIntervalList = lappend(shardIntervalList, shardInterval);
-			}
-
-			prunedShardList = PruneShardList(relationId, tableId,
-											 restrictClauseList,
-											 shardIntervalList);
+			prunedShardList = PruneShards(relationId, tableId,
+										  restrictClauseList);
 
 			/*
 			 * Quick bail out. The query can not be router plannable if one

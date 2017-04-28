@@ -16,6 +16,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_planner.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
@@ -23,7 +24,6 @@
 #include "utils/memutils.h"
 
 
-static int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
 static int SearchCachedShardInterval(Datum partitionColumnValue,
 									 ShardInterval **shardIntervalCache,
 									 int shardCount, FmgrInfo *compareFunction);
@@ -247,13 +247,14 @@ FindShardInterval(Datum partitionColumnValue, DistTableCacheEntry *cacheEntry)
  * the searched value. Note that the searched value must be the hashed value
  * of the original value if the distribution method is hash.
  *
- * Note that, if the searched value can not be found for hash partitioned tables,
- * we error out. This should only happen if something is terribly wrong, either
- * metadata tables are corrupted or we have a bug somewhere. Such as a hash
- * function which returns a value not in the range of [INT32_MIN, INT32_MAX] can
- * fire this.
+ * Note that, if the searched value can not be found for hash partitioned
+ * tables, we error out (unless there are no shards, in which case
+ * INVALID_SHARD_INDEX is returned). This should only happen if something is
+ * terribly wrong, either metadata tables are corrupted or we have a bug
+ * somewhere. Such as a hash function which returns a value not in the range
+ * of [INT32_MIN, INT32_MAX] can fire this.
  */
-static int
+int
 FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 {
 	ShardInterval **shardIntervalCache = cacheEntry->sortedShardIntervalArray;
@@ -263,6 +264,11 @@ FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry)
 	bool useBinarySearch = (partitionMethod != DISTRIBUTE_BY_HASH ||
 							!cacheEntry->hasUniformHashDistribution);
 	int shardIndex = INVALID_SHARD_INDEX;
+
+	if (shardCount == 0)
+	{
+		return INVALID_SHARD_INDEX;
+	}
 
 	if (partitionMethod == DISTRIBUTE_BY_HASH)
 	{

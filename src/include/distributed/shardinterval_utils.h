@@ -35,6 +35,7 @@ extern int CompareRelationShards(const void *leftElement,
 extern int ShardIndex(ShardInterval *shardInterval);
 extern ShardInterval * FindShardInterval(Datum partitionColumnValue,
 										 DistTableCacheEntry *cacheEntry);
+extern int FindShardIntervalIndex(Datum searchedValue, DistTableCacheEntry *cacheEntry);
 extern bool SingleReplicatedTable(Oid relationId);
 
 #endif /* SHARDINTERVAL_UTILS_H_ */
