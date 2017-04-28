@@ -8,6 +8,18 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1390000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1390000;
 
+-- Tests with invalid relation IDs
+SELECT citus_table_size(1);
+SELECT citus_relation_size(1);
+SELECT citus_total_relation_size(1);
+
+-- Tests with non-distributed table
+CREATE TABLE non_distributed_table (x int);
+SELECT citus_table_size('non_distributed_table');
+SELECT citus_relation_size('non_distributed_table');
+SELECT citus_total_relation_size('non_distributed_table');
+DROP TABLE non_distributed_table;
+
 -- Tests on distributed table with replication factor > 1
 SELECT citus_table_size('lineitem_hash_part');
 SELECT citus_relation_size('lineitem_hash_part');

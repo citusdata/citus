@@ -134,6 +134,7 @@ citus_relation_size(PG_FUNCTION_ARGS)
 static uint64
 DistributedTableSize(Oid relationId, char *sizeQuery)
 {
+	Relation relation = NULL;
 	Relation pgDistNode = NULL;
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
@@ -145,6 +146,9 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 						errmsg("citus size functions cannot be called in transaction"
 							   " blocks which contain multi-shard data modifications")));
 	}
+
+	/* try to open relation, will error out if the relation does not exist */
+	relation = relation_open(relationId, AccessShareLock);
 
 	ErrorIfNotSuitableToGetSize(relationId);
 
@@ -161,6 +165,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 	}
 
 	heap_close(pgDistNode, NoLock);
+	heap_close(relation, AccessShareLock);
 
 	return totalRelationSize;
 }
