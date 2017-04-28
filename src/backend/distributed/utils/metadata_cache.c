@@ -793,7 +793,14 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 		shardEntry = hash_search(DistShardCacheHash, &shardInterval->shardId, HASH_ENTER,
 								 &foundInCache);
-		Assert(!foundInCache);
+		if (foundInCache)
+		{
+			ereport(ERROR, (errmsg("cached metadata for shard " UINT64_FORMAT
+								   " is inconsistent",
+								   shardInterval->shardId),
+							errhint("Reconnect and try again.")));
+		}
+
 		shardEntry->shardIndex = shardIndex;
 		shardEntry->tableEntry = cacheEntry;
 
@@ -2121,7 +2128,7 @@ WorkerNodeHashCode(const void *key, Size keySize)
  * ResetDistTableCacheEntry frees any out-of-band memory used by a cache entry,
  * but does not free the entry itself.
  */
-void
+static void
 ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 {
 	int shardIndex = 0;
