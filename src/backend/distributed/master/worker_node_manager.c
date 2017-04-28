@@ -303,7 +303,7 @@ uint32
 WorkerGetLiveNodeCount(void)
 {
 	List *workerNodeList = ActiveWorkerNodeList();
-	uint32 liveWorkerCount = workerNodeList->length;
+	uint32 liveWorkerCount = list_length(workerNodeList);
 
 	return liveWorkerCount;
 }
