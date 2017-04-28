@@ -134,8 +134,6 @@ static ShardCacheEntry * LookupShardCacheEntry(int64 shardId);
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
 static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void BuildCachedShardList(DistTableCacheEntry *cacheEntry);
-static FmgrInfo * ShardIntervalCompareFunction(ShardInterval **shardIntervalArray,
-											   char partitionMethod);
 static ShardInterval ** SortShardIntervalArray(ShardInterval **shardIntervalArray,
 											   int shardCount,
 											   FmgrInfo *
@@ -147,6 +145,9 @@ static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArr
 static void ErrorIfInstalledVersionMismatch(void);
 static char * AvailableExtensionVersion(void);
 static char * InstalledExtensionVersion(void);
+static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+										int shardIntervalArrayLength,
+										FmgrInfo *shardIntervalSortCompareFunction);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
@@ -158,6 +159,7 @@ static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relation
 static List * LookupDistShardTuples(Oid relationId);
 static Oid LookupShardRelation(int64 shardId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
+									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor, Oid intervalTypeId,
@@ -619,9 +621,21 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	ShardInterval **shardIntervalArray = NULL;
 	ShardInterval **sortedShardIntervalArray = NULL;
 	FmgrInfo *shardIntervalCompareFunction = NULL;
+	FmgrInfo *shardColumnCompareFunction = NULL;
 	List *distShardTupleList = NIL;
 	int shardIntervalArrayLength = 0;
 	int shardIndex = 0;
+	Oid columnTypeId = InvalidOid;
+	int32 columnTypeMod = -1;
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = -1;
+
+	GetPartitionTypeInputInfo(cacheEntry->partitionKeyString,
+							  cacheEntry->partitionMethod,
+							  &columnTypeId,
+							  &columnTypeMod,
+							  &intervalTypeId,
+							  &intervalTypeMod);
 
 	distShardTupleList = LookupDistShardTuples(cacheEntry->relationId);
 	shardIntervalArrayLength = list_length(distShardTupleList);
@@ -631,13 +645,6 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
 		ListCell *distShardTupleCell = NULL;
 		int arrayIndex = 0;
-		Oid intervalTypeId = InvalidOid;
-		int32 intervalTypeMod = -1;
-
-		GetPartitionTypeInputInfo(cacheEntry->partitionKeyString,
-								  cacheEntry->partitionMethod,
-								  &intervalTypeId,
-								  &intervalTypeMod);
 
 		shardIntervalArray = MemoryContextAllocZero(CacheMemoryContext,
 													shardIntervalArrayLength *
@@ -676,29 +683,41 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		heap_close(distShardRelation, AccessShareLock);
 	}
 
-	/* decide and allocate interval comparison function */
-	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
+	/* look up value comparison function */
+	if (columnTypeId != InvalidOid)
+	{
+		/* allocate the comparison function in the cache context */
+		MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+		shardColumnCompareFunction = GetFunctionInfo(columnTypeId, BTREE_AM_OID,
+													 BTORDER_PROC);
+		MemoryContextSwitchTo(oldContext);
+	}
+	else
+	{
+		shardColumnCompareFunction = NULL;
+	}
+
+	/* look up interval comparison function */
+	if (intervalTypeId != InvalidOid)
+	{
+		/* allocate the comparison function in the cache context */
+		MemoryContext oldContext = MemoryContextSwitchTo(CacheMemoryContext);
+
+		shardIntervalCompareFunction = GetFunctionInfo(intervalTypeId, BTREE_AM_OID,
+													   BTORDER_PROC);
+		MemoryContextSwitchTo(oldContext);
+	}
+	else
 	{
 		shardIntervalCompareFunction = NULL;
-	}
-	else if (shardIntervalArrayLength > 0)
-	{
-		MemoryContext oldContext = CurrentMemoryContext;
-
-		/* allocate the comparison function in the cache context */
-		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
-
-		shardIntervalCompareFunction =
-			ShardIntervalCompareFunction(shardIntervalArray,
-										 cacheEntry->partitionMethod);
-
-		MemoryContextSwitchTo(oldContext);
 	}
 
 	/* reference tables has a single shard which is not initialized */
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		cacheEntry->hasUninitializedShardInterval = true;
+		cacheEntry->hasOverlappingShardInterval = true;
 
 		/*
 		 * Note that during create_reference_table() call,
@@ -727,6 +746,35 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		cacheEntry->hasUninitializedShardInterval =
 			HasUninitializedShardInterval(sortedShardIntervalArray,
 										  shardIntervalArrayLength);
+
+		if (!cacheEntry->hasUninitializedShardInterval)
+		{
+			cacheEntry->hasOverlappingShardInterval =
+				HasOverlappingShardInterval(sortedShardIntervalArray,
+											shardIntervalArrayLength,
+											shardIntervalCompareFunction);
+		}
+		else
+		{
+			cacheEntry->hasOverlappingShardInterval = true;
+		}
+
+		/*
+		 * If table is hash-partitioned and has shards, there never should be
+		 * any uninitalized shards.  Historically we've not prevented that for
+		 * range partitioned tables, but it might be a good idea to start
+		 * doing so.
+		 */
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+			cacheEntry->hasUninitializedShardInterval)
+		{
+			ereport(ERROR, (errmsg("hash partitioned table has uninitialized shards")));
+		}
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+			cacheEntry->hasOverlappingShardInterval)
+		{
+			ereport(ERROR, (errmsg("hash partitioned table has overlapping shards")));
+		}
 	}
 
 
@@ -794,38 +842,8 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 	cacheEntry->shardIntervalArrayLength = shardIntervalArrayLength;
 	cacheEntry->sortedShardIntervalArray = sortedShardIntervalArray;
+	cacheEntry->shardColumnCompareFunction = shardColumnCompareFunction;
 	cacheEntry->shardIntervalCompareFunction = shardIntervalCompareFunction;
-}
-
-
-/*
- * ShardIntervalCompareFunction returns the appropriate compare function for the
- * partition column type. In case of hash-partitioning, it always returns the compare
- * function for integers. Callers of this function has to ensure that shardIntervalArray
- * has at least one element.
- */
-static FmgrInfo *
-ShardIntervalCompareFunction(ShardInterval **shardIntervalArray, char partitionMethod)
-{
-	FmgrInfo *shardIntervalCompareFunction = NULL;
-	Oid comparisonTypeId = InvalidOid;
-
-	Assert(shardIntervalArray != NULL);
-
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		comparisonTypeId = INT4OID;
-	}
-	else
-	{
-		ShardInterval *shardInterval = shardIntervalArray[0];
-		comparisonTypeId = shardInterval->valueTypeId;
-	}
-
-	shardIntervalCompareFunction = GetFunctionInfo(comparisonTypeId, BTREE_AM_OID,
-												   BTORDER_PROC);
-
-	return shardIntervalCompareFunction;
 }
 
 
@@ -929,6 +947,52 @@ HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shar
 	}
 
 	return hasUninitializedShardInterval;
+}
+
+
+/*
+ * HasOverlappingShardInterval determines whether the given list of sorted
+ * shards has overlapping ranges.
+ */
+static bool
+HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+							int shardIntervalArrayLength,
+							FmgrInfo *shardIntervalSortCompareFunction)
+{
+	int shardIndex = 0;
+	ShardInterval *lastShardInterval = NULL;
+	Datum comparisonDatum = 0;
+	int comparisonResult = 0;
+
+	/* zero/a single shard can't overlap */
+	if (shardIntervalArrayLength < 2)
+	{
+		return false;
+	}
+
+	lastShardInterval = shardIntervalArray[0];
+	for (shardIndex = 1; shardIndex < shardIntervalArrayLength; shardIndex++)
+	{
+		ShardInterval *curShardInterval = shardIntervalArray[shardIndex];
+
+		/* only called if !hasUninitializedShardInterval */
+		Assert(lastShardInterval->minValueExists && lastShardInterval->maxValueExists);
+		Assert(curShardInterval->minValueExists && curShardInterval->maxValueExists);
+
+		comparisonDatum = CompareCall2(shardIntervalSortCompareFunction,
+									   lastShardInterval->maxValue,
+									   curShardInterval->minValue);
+		comparisonResult = DatumGetInt32(comparisonDatum);
+
+		if (comparisonResult >= 0)
+		{
+			return true;
+		}
+
+		lastShardInterval = curShardInterval;
+	}
+
+	return false;
 }
 
 
@@ -2153,6 +2217,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	cacheEntry->shardIntervalArrayLength = 0;
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
+	cacheEntry->hasOverlappingShardInterval = false;
 }
 
 
@@ -2415,8 +2480,11 @@ LookupShardRelation(int64 shardId)
  */
 static void
 GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
+						  Oid *columnTypeId, int32 *columnTypeMod,
 						  Oid *intervalTypeId, int32 *intervalTypeMod)
 {
+	*columnTypeId = InvalidOid;
+	*columnTypeMod = -1;
 	*intervalTypeId = InvalidOid;
 	*intervalTypeMod = -1;
 
@@ -2431,18 +2499,25 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 
 			*intervalTypeId = partitionColumn->vartype;
 			*intervalTypeMod = partitionColumn->vartypmod;
+			*columnTypeId = partitionColumn->vartype;
+			*columnTypeMod = partitionColumn->vartypmod;
 			break;
 		}
 
 		case DISTRIBUTE_BY_HASH:
 		{
+			Node *partitionNode = stringToNode(partitionKeyString);
+			Var *partitionColumn = (Var *) partitionNode;
+			Assert(IsA(partitionNode, Var));
+
 			*intervalTypeId = INT4OID;
+			*columnTypeId = partitionColumn->vartype;
+			*columnTypeMod = partitionColumn->vartypmod;
 			break;
 		}
 
 		case DISTRIBUTE_BY_NONE:
 		{
-			*intervalTypeId = InvalidOid;
 			break;
 		}
 

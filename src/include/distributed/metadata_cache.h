@@ -38,6 +38,7 @@ typedef struct
 	bool isDistributedTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
+	bool hasOverlappingShardInterval;
 
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;
@@ -49,7 +50,15 @@ typedef struct
 	int shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray;
 
-	FmgrInfo *shardIntervalCompareFunction; /* NULL if no shard intervals exist */
+	/* comparator for partition column's type, NULL if DISTRIBUTE_BY_NONE */
+	FmgrInfo *shardColumnCompareFunction;
+
+	/*
+	 * Comparator for partition interval type (different from
+	 * shardValueCompareFunction if hash-partitioned), NULL if
+	 * DISTRIBUTE_BY_NONE.
+	 */
+	FmgrInfo *shardIntervalCompareFunction;
 	FmgrInfo *hashFunction; /* NULL if table is not distributed by hash */
 
 	/* pg_dist_shard_placement metadata */
