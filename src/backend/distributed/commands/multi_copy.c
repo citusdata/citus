@@ -67,6 +67,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
+#include "distributed/shard_pruning.h"
 #include "executor/executor.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"

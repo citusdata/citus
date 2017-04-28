@@ -40,6 +40,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -131,9 +132,6 @@ static List * RangeTableFragmentsList(List *rangeTableList, List *whereClauseLis
 static OperatorCacheEntry * LookupOperatorByType(Oid typeId, Oid accessMethodId,
 												 int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
-static Node * HashableClauseMutator(Node *originalNode, Var *partitionColumn);
-static OpExpr * MakeHashedOperatorExpression(OpExpr *operatorExpression);
-static List * BuildRestrictInfoList(List *qualList);
 static List * FragmentCombinationList(List *rangeTableFragmentsList, Query *jobQuery,
 									  List *dependedJobList);
 static JoinSequenceNode * JoinSequenceArray(List *rangeTableFragmentsList,
@@ -2044,7 +2042,6 @@ SubquerySqlTaskList(Job *job)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 		Oid relationId = rangeTableEntry->relid;
-		List *shardIntervalList = LoadShardIntervalList(relationId);
 		List *finalShardIntervalList = NIL;
 		ListCell *fragmentCombinationCell = NULL;
 		ListCell *shardIntervalCell = NULL;
@@ -2057,12 +2054,11 @@ SubquerySqlTaskList(Job *job)
 			Var *partitionColumn = PartitionColumn(relationId, tableId);
 			List *whereClauseList = ReplaceColumnsInOpExpressionList(opExpressionList,
 																	 partitionColumn);
-			finalShardIntervalList = PruneShardList(relationId, tableId, whereClauseList,
-													shardIntervalList);
+			finalShardIntervalList = PruneShards(relationId, tableId, whereClauseList);
 		}
 		else
 		{
-			finalShardIntervalList = shardIntervalList;
+			finalShardIntervalList = LoadShardIntervalList(relationId);
 		}
 
 		/* if all shards are pruned away, we return an empty task list */
@@ -2499,11 +2495,8 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 			Oid relationId = rangeTableEntry->relid;
 			ListCell *shardIntervalCell = NULL;
 			List *shardFragmentList = NIL;
-
-			List *shardIntervalList = LoadShardIntervalList(relationId);
-			List *prunedShardIntervalList = PruneShardList(relationId, tableId,
-														   whereClauseList,
-														   shardIntervalList);
+			List *prunedShardIntervalList = PruneShards(relationId, tableId,
+														whereClauseList);
 
 			/*
 			 * If we prune all shards for one table, query results will be empty.
@@ -2569,119 +2562,6 @@ RangeTableFragmentsList(List *rangeTableList, List *whereClauseList,
 	}
 
 	return rangeTableFragmentsList;
-}
-
-
-/*
- * PruneShardList prunes shard intervals from given list based on the selection criteria,
- * and returns remaining shard intervals in another list.
- *
- * For reference tables, the function simply returns the single shard that the table has.
- */
-List *
-PruneShardList(Oid relationId, Index tableId, List *whereClauseList,
-			   List *shardIntervalList)
-{
-	List *remainingShardList = NIL;
-	ListCell *shardIntervalCell = NULL;
-	List *restrictInfoList = NIL;
-	Node *baseConstraint = NULL;
-
-	Var *partitionColumn = PartitionColumn(relationId, tableId);
-	char partitionMethod = PartitionMethod(relationId);
-
-	/* short circuit for reference tables */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
-	{
-		return shardIntervalList;
-	}
-
-	if (ContainsFalseClause(whereClauseList))
-	{
-		/* always return empty result if WHERE clause is of the form: false (AND ..) */
-		return NIL;
-	}
-
-	/* build the filter clause list for the partition method */
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		Node *hashedNode = HashableClauseMutator((Node *) whereClauseList,
-												 partitionColumn);
-
-		List *hashedClauseList = (List *) hashedNode;
-		restrictInfoList = BuildRestrictInfoList(hashedClauseList);
-	}
-	else
-	{
-		restrictInfoList = BuildRestrictInfoList(whereClauseList);
-	}
-
-	/* override the partition column for hash partitioning */
-	if (partitionMethod == DISTRIBUTE_BY_HASH)
-	{
-		partitionColumn = MakeInt4Column();
-	}
-
-	/* build the base expression for constraint */
-	baseConstraint = BuildBaseConstraint(partitionColumn);
-
-	/* walk over shard list and check if shards can be pruned */
-	foreach(shardIntervalCell, shardIntervalList)
-	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		List *constraintList = NIL;
-		bool shardPruned = false;
-
-		if (shardInterval->minValueExists && shardInterval->maxValueExists)
-		{
-			/* set the min/max values in the base constraint */
-			UpdateConstraint(baseConstraint, shardInterval);
-			constraintList = list_make1(baseConstraint);
-
-			shardPruned = predicate_refuted_by(constraintList, restrictInfoList);
-		}
-
-		if (shardPruned)
-		{
-			ereport(DEBUG2, (errmsg("predicate pruning for shardId "
-									UINT64_FORMAT, shardInterval->shardId)));
-		}
-		else
-		{
-			remainingShardList = lappend(remainingShardList, shardInterval);
-		}
-	}
-
-	return remainingShardList;
-}
-
-
-/*
- * ContainsFalseClause returns whether the flattened where clause list
- * contains false as a clause.
- */
-bool
-ContainsFalseClause(List *whereClauseList)
-{
-	bool containsFalseClause = false;
-	ListCell *clauseCell = NULL;
-
-	foreach(clauseCell, whereClauseList)
-	{
-		Node *clause = (Node *) lfirst(clauseCell);
-
-		if (IsA(clause, Const))
-		{
-			Const *constant = (Const *) clause;
-			if (constant->consttype == BOOLOID && !DatumGetBool(constant->constvalue))
-			{
-				containsFalseClause = true;
-				break;
-			}
-		}
-	}
-
-	return containsFalseClause;
 }
 
 
@@ -2908,87 +2788,6 @@ SimpleOpExpression(Expr *clause)
 
 
 /*
- * HashableClauseMutator walks over the original where clause list, replaces
- * hashable nodes with hashed versions and keeps other nodes as they are.
- */
-static Node *
-HashableClauseMutator(Node *originalNode, Var *partitionColumn)
-{
-	Node *newNode = NULL;
-	if (originalNode == NULL)
-	{
-		return NULL;
-	}
-
-	if (IsA(originalNode, OpExpr))
-	{
-		OpExpr *operatorExpression = (OpExpr *) originalNode;
-		bool hasPartitionColumn = false;
-
-		Oid leftHashFunction = InvalidOid;
-		Oid rightHashFunction = InvalidOid;
-
-		/*
-		 * If operatorExpression->opno is NOT the registered '=' operator for
-		 * any hash opfamilies, then get_op_hash_functions will return false.
-		 * This means this function both ensures a hash function exists for the
-		 * types in question AND filters out any clauses lacking equality ops.
-		 */
-		bool hasHashFunction = get_op_hash_functions(operatorExpression->opno,
-													 &leftHashFunction,
-													 &rightHashFunction);
-
-		bool simpleOpExpression = SimpleOpExpression((Expr *) operatorExpression);
-		if (simpleOpExpression)
-		{
-			hasPartitionColumn = OpExpressionContainsColumn(operatorExpression,
-															partitionColumn);
-		}
-
-		if (hasHashFunction && hasPartitionColumn)
-		{
-			OpExpr *hashedOperatorExpression =
-				MakeHashedOperatorExpression((OpExpr *) originalNode);
-			newNode = (Node *) hashedOperatorExpression;
-		}
-	}
-	else if (IsA(originalNode, ScalarArrayOpExpr))
-	{
-		ScalarArrayOpExpr *arrayOperatorExpression = (ScalarArrayOpExpr *) originalNode;
-		Node *leftOpExpression = linitial(arrayOperatorExpression->args);
-		Node *strippedLeftOpExpression = strip_implicit_coercions(leftOpExpression);
-		bool usingEqualityOperator = OperatorImplementsEquality(
-			arrayOperatorExpression->opno);
-
-		/*
-		 * Citus cannot prune hash-distributed shards with ANY/ALL. We show a NOTICE
-		 * if the expression is ANY/ALL performed on the partition column with equality.
-		 */
-		if (usingEqualityOperator && strippedLeftOpExpression != NULL &&
-			equal(strippedLeftOpExpression, partitionColumn))
-		{
-			ereport(NOTICE, (errmsg("cannot use shard pruning with "
-									"ANY/ALL (array expression)"),
-							 errhint("Consider rewriting the expression with "
-									 "OR/AND clauses.")));
-		}
-	}
-
-	/*
-	 * If this node is not hashable, continue walking down the expression tree
-	 * to find and hash clauses which are eligible.
-	 */
-	if (newNode == NULL)
-	{
-		newNode = expression_tree_mutator(originalNode, HashableClauseMutator,
-										  (void *) partitionColumn);
-	}
-
-	return newNode;
-}
-
-
-/*
  * OpExpressionContainsColumn checks if the operator expression contains the
  * given partition column. We assume that given operator expression is a simple
  * operator expression which means it is a binary operator expression with
@@ -3015,77 +2814,6 @@ OpExpressionContainsColumn(OpExpr *operatorExpression, Var *partitionColumn)
 	}
 
 	return equal(column, partitionColumn);
-}
-
-
-/*
- * MakeHashedOperatorExpression creates a new operator expression with a column
- * of int4 type and hashed constant value.
- */
-static OpExpr *
-MakeHashedOperatorExpression(OpExpr *operatorExpression)
-{
-	const Oid hashResultTypeId = INT4OID;
-	TypeCacheEntry *hashResultTypeEntry = NULL;
-	Oid operatorId = InvalidOid;
-	OpExpr *hashedExpression = NULL;
-	Var *hashedColumn = NULL;
-	Datum hashedValue = 0;
-	Const *hashedConstant = NULL;
-	FmgrInfo *hashFunction = NULL;
-	TypeCacheEntry *typeEntry = NULL;
-
-	Node *leftOperand = get_leftop((Expr *) operatorExpression);
-	Node *rightOperand = get_rightop((Expr *) operatorExpression);
-	Const *constant = NULL;
-
-	if (IsA(rightOperand, Const))
-	{
-		constant = (Const *) rightOperand;
-	}
-	else
-	{
-		constant = (Const *) leftOperand;
-	}
-
-	/* Load the operator from type cache */
-	hashResultTypeEntry = lookup_type_cache(hashResultTypeId, TYPECACHE_EQ_OPR);
-	operatorId = hashResultTypeEntry->eq_opr;
-
-	/* Get a column with int4 type */
-	hashedColumn = MakeInt4Column();
-
-	/* Load the hash function from type cache */
-	typeEntry = lookup_type_cache(constant->consttype, TYPECACHE_HASH_PROC_FINFO);
-	hashFunction = &(typeEntry->hash_proc_finfo);
-	if (!OidIsValid(hashFunction->fn_oid))
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
-						errmsg("could not identify a hash function for type %s",
-							   format_type_be(constant->consttype)),
-						errdatatype(constant->consttype)));
-	}
-
-	/*
-	 * Note that any changes to PostgreSQL's hashing functions will change the
-	 * new value created by this function.
-	 */
-	hashedValue = FunctionCall1(hashFunction, constant->constvalue);
-	hashedConstant = MakeInt4Constant(hashedValue);
-
-	/* Now create the expression with modified partition column and hashed constant */
-	hashedExpression = (OpExpr *) make_opclause(operatorId,
-												InvalidOid, /* no result type yet */
-												false,    /* no return set */
-												(Expr *) hashedColumn,
-												(Expr *) hashedConstant,
-												InvalidOid, InvalidOid);
-
-	/* Set implementing function id and result type */
-	hashedExpression->opfuncid = get_opcode(operatorId);
-	hashedExpression->opresulttype = get_func_rettype(hashedExpression->opfuncid);
-
-	return hashedExpression;
 }
 
 
@@ -3127,30 +2855,6 @@ MakeInt4Constant(Datum constantValue)
 									constantLength, constantValue, constantIsNull,
 									constantByValue);
 	return int4Constant;
-}
-
-
-/*
- * BuildRestrictInfoList builds restrict info list using the selection criteria,
- * and then return this list. Note that this function assumes there is only one
- * relation for now.
- */
-static List *
-BuildRestrictInfoList(List *qualList)
-{
-	List *restrictInfoList = NIL;
-	ListCell *qualCell = NULL;
-
-	foreach(qualCell, qualList)
-	{
-		RestrictInfo *restrictInfo = NULL;
-		Node *qualNode = (Node *) lfirst(qualCell);
-
-		restrictInfo = make_simple_restrictinfo((Expr *) qualNode);
-		restrictInfoList = lappend(restrictInfoList, restrictInfo);
-	}
-
-	return restrictInfoList;
 }
 
 

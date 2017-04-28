@@ -60,10 +60,10 @@ SELECT prune_using_single_value('pruning', NULL);
 -- build an OR clause and expect more than one sahrd
 SELECT prune_using_either_value('pruning', 'tomato', 'petunia');
 
--- an AND clause with incompatible values returns no shards
+-- an AND clause with values on different shards returns no shards
 SELECT prune_using_both_values('pruning', 'tomato', 'petunia');
 
--- but if both values are on the same shard, should get back that shard
+-- even if both values are on the same shard, a value can't be equal to two others
 SELECT prune_using_both_values('pruning', 'tomato', 'rose');
 
 -- unit test of the equality expression generation code

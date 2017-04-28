@@ -40,6 +40,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/shard_pruning.h"
 #include "distributed/worker_protocol.h"
 #include "optimizer/clauses.h"
 #include "optimizer/predtest.h"
@@ -81,7 +82,6 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	Node *queryTreeNode;
 	List *restrictClauseList = NIL;
 	bool failOK = false;
-	List *shardIntervalList = NIL;
 	List *prunedShardIntervalList = NIL;
 	List *taskList = NIL;
 	int32 affectedTupleCount = 0;
@@ -156,11 +156,10 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	ExecuteMasterEvaluableFunctions(modifyQuery);
 
-	shardIntervalList = LoadShardIntervalList(relationId);
 	restrictClauseList = WhereClauseList(modifyQuery->jointree);
 
 	prunedShardIntervalList =
-		PruneShardList(relationId, tableId, restrictClauseList, shardIntervalList);
+		PruneShards(relationId, tableId, restrictClauseList);
 
 	CHECK_FOR_INTERRUPTS();
 

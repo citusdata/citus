@@ -24,6 +24,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
+#include "distributed/shard_pruning.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
 #include "nodes/nodes.h"
@@ -203,11 +204,11 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 	Oid shardIdTypeId = INT8OID;
 	Index tableId = 1;
 
-	List *shardList = LoadShardIntervalList(distributedTableId);
+	List *shardList = NIL;
 	int shardIdCount = -1;
 	Datum *shardIdDatumArray = NULL;
 
-	shardList = PruneShardList(distributedTableId, tableId, whereClauseList, shardList);
+	shardList = PruneShards(distributedTableId, tableId, whereClauseList);
 
 	shardIdCount = list_length(shardList);
 	shardIdDatumArray = palloc0(shardIdCount * sizeof(Datum));

@@ -70,21 +70,21 @@ SELECT prune_using_single_value('pruning', NULL);
 SELECT prune_using_either_value('pruning', 'tomato', 'petunia');
  prune_using_either_value 
 --------------------------
- {800001,800002}
+ {800002,800001}
 (1 row)
 
--- an AND clause with incompatible values returns no shards
+-- an AND clause with values on different shards returns no shards
 SELECT prune_using_both_values('pruning', 'tomato', 'petunia');
  prune_using_both_values 
 -------------------------
  {}
 (1 row)
 
--- but if both values are on the same shard, should get back that shard
+-- even if both values are on the same shard, a value can't be equal to two others
 SELECT prune_using_both_values('pruning', 'tomato', 'rose');
  prune_using_both_values 
 -------------------------
- {800002}
+ {}
 (1 row)
 
 -- unit test of the equality expression generation code
