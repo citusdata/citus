@@ -233,3 +233,9 @@ test: multi_transactional_drop_shards
 # multi_multiuser tests simple combinations of permission access and queries
 # ----------
 test: multi_multiuser
+
+# ---------
+# multi_cache_invalidation tests for an obscure crash citus used to exhibit when shardids
+# changed the table they belonged to during a session
+# --------
+test: multi_cache_invalidation
