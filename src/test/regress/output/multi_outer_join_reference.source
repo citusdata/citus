@@ -229,15 +229,14 @@ LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_
 
 -- load some more data
 \copy multi_outer_join_right_reference FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
--- Update shards so that they do not have 1-1 matching. We should error here.
+-- Update shards so that they do not have 1-1 matching, triggering an error.
 UPDATE pg_dist_shard SET shardminvalue = '2147483646' WHERE shardid = 1260006;
 UPDATE pg_dist_shard SET shardmaxvalue = '2147483647' WHERE shardid = 1260006;
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  hash partitioned table has overlapping shards
 UPDATE pg_dist_shard SET shardminvalue = '-2147483648' WHERE shardid = 1260006;
 UPDATE pg_dist_shard SET shardmaxvalue = '-1073741825' WHERE shardid = 1260006;
 -- empty tables

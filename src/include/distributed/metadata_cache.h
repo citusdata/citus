@@ -36,6 +36,7 @@ typedef struct
 	bool isDistributedTable;
 	bool hasUninitializedShardInterval;
 	bool hasUniformHashDistribution; /* valid for hash partitioned tables */
+	bool hasOverlappingShardInterval;
 
 	/* pg_dist_partition metadata for this table */
 	char *partitionKeyString;

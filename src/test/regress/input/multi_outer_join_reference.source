@@ -167,7 +167,7 @@ FROM
 -- load some more data
 \copy multi_outer_join_right_reference FROM '@abs_srcdir@/data/customer-21-30.data' with delimiter '|'
 
--- Update shards so that they do not have 1-1 matching. We should error here.
+-- Update shards so that they do not have 1-1 matching, triggering an error.
 UPDATE pg_dist_shard SET shardminvalue = '2147483646' WHERE shardid = 1260006;
 UPDATE pg_dist_shard SET shardmaxvalue = '2147483647' WHERE shardid = 1260006;
 SELECT

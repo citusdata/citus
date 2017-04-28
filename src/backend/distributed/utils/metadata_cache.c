@@ -131,6 +131,9 @@ static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
+static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+										int shardIntervalArrayLength,
+										FmgrInfo *shardIntervalSortCompareFunction);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
@@ -700,6 +703,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 	if (cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE)
 	{
 		cacheEntry->hasUninitializedShardInterval = true;
+		cacheEntry->hasOverlappingShardInterval = true;
 
 		/*
 		 * Note that during create_reference_table() call,
@@ -728,6 +732,35 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		cacheEntry->hasUninitializedShardInterval =
 			HasUninitializedShardInterval(sortedShardIntervalArray,
 										  shardIntervalArrayLength);
+
+		if (!cacheEntry->hasUninitializedShardInterval)
+		{
+			cacheEntry->hasOverlappingShardInterval =
+				HasOverlappingShardInterval(sortedShardIntervalArray,
+											shardIntervalArrayLength,
+											shardIntervalCompareFunction);
+		}
+		else
+		{
+			cacheEntry->hasOverlappingShardInterval = true;
+		}
+
+		/*
+		 * If table is hash-partitioned and has shards, there never should be
+		 * any uninitalized shards.  Historically we've not prevented that for
+		 * range partitioned tables, but it might be a good idea to start
+		 * doing so.
+		 */
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+			cacheEntry->hasUninitializedShardInterval)
+		{
+			ereport(ERROR, (errmsg("hash partitioned table has uninitialized shards")));
+		}
+		if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH &&
+			cacheEntry->hasOverlappingShardInterval)
+		{
+			ereport(ERROR, (errmsg("hash partitioned table has overlapping shards")));
+		}
 	}
 
 
@@ -900,6 +933,52 @@ HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray, int shar
 	}
 
 	return hasUninitializedShardInterval;
+}
+
+
+/*
+ * HasOverlappingShardInterval determines whether the given list of sorted
+ * shards has overlapping ranges.
+ */
+static bool
+HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
+							int shardIntervalArrayLength,
+							FmgrInfo *shardIntervalSortCompareFunction)
+{
+	int shardIndex = 0;
+	ShardInterval *lastShardInterval = NULL;
+	Datum comparisonDatum = 0;
+	int comparisonResult = 0;
+
+	/* zero/a single shard can't overlap */
+	if (shardIntervalArrayLength < 2)
+	{
+		return false;
+	}
+
+	lastShardInterval = shardIntervalArray[0];
+	for (shardIndex = 1; shardIndex < shardIntervalArrayLength; shardIndex++)
+	{
+		ShardInterval *curShardInterval = shardIntervalArray[shardIndex];
+
+		/* only called if !hasUninitializedShardInterval */
+		Assert(lastShardInterval->minValueExists && lastShardInterval->maxValueExists);
+		Assert(curShardInterval->minValueExists && curShardInterval->maxValueExists);
+
+		comparisonDatum = CompareCall2(shardIntervalSortCompareFunction,
+									   lastShardInterval->maxValue,
+									   curShardInterval->minValue);
+		comparisonResult = DatumGetInt32(comparisonDatum);
+
+		if (comparisonResult >= 0)
+		{
+			return true;
+		}
+
+		lastShardInterval = curShardInterval;
+	}
+
+	return false;
 }
 
 
@@ -1832,6 +1911,7 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 	cacheEntry->shardIntervalArrayLength = 0;
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
+	cacheEntry->hasOverlappingShardInterval = false;
 }
 
 
