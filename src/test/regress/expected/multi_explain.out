@@ -669,3 +669,20 @@ Custom Scan (Citus Router)  (cost=0.00..0.00 rows=0 width=0)
         Node: host=localhost port=57637 dbname=regression
         ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem  (cost=0.28..11.83 rows=3 width=5)
               Index Cond: (l_orderkey = 5)
+-- test explain in a transaction with alter table to test we use right connections
+BEGIN;
+CREATE TABLE explain_table(id int);
+SELECT create_distributed_table('explain_table', 'id');
+
+ALTER TABLE explain_table ADD COLUMN value int;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+EXPLAIN (COSTS FALSE) SELECT value FROM explain_table WHERE id = 1;
+Custom Scan (Citus Router)
+  Task Count: 1
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Seq Scan on explain_table_570001 explain_table
+              Filter: (id = 1)
+ROLLBACK;

@@ -14,6 +14,7 @@
 
 #include "distributed/connection_management.h"
 #include "distributed/remote_commands.h"
+#include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
 
@@ -322,6 +323,38 @@ int
 SendRemoteCommand(MultiConnection *connection, const char *command)
 {
 	return SendRemoteCommandParams(connection, command, 0, NULL, NULL);
+}
+
+
+/*
+ * ReadFirstColumnAsText reads the first column of result tuples from the given
+ * PGresult struct and returns them in a StringInfo list.
+ */
+List *
+ReadFirstColumnAsText(PGresult *queryResult)
+{
+	List *resultRowList = NIL;
+	const int columnIndex = 0;
+	int64 rowIndex = 0;
+	int64 rowCount = 0;
+
+	ExecStatusType status = PQresultStatus(queryResult);
+	if (status == PGRES_TUPLES_OK)
+	{
+		rowCount = PQntuples(queryResult);
+	}
+
+	for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
+	{
+		char *rowValue = PQgetvalue(queryResult, rowIndex, columnIndex);
+
+		StringInfo rowValueString = makeStringInfo();
+		appendStringInfoString(rowValueString, rowValue);
+
+		resultRowList = lappend(resultRowList, rowValueString);
+	}
+
+	return resultRowList;
 }
 
 

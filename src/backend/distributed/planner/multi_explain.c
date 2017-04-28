@@ -8,6 +8,7 @@
  */
 
 #include "postgres.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 
 #include "access/xact.h"
@@ -20,6 +21,7 @@
 #include "commands/tablecmds.h"
 #include "optimizer/cost.h"
 #include "distributed/citus_nodefuncs.h"
+#include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
@@ -29,6 +31,8 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/remote_commands.h"
+#include "distributed/placement_connection.h"
 #include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
@@ -288,15 +292,60 @@ RemoteExplain(Task *task, ExplainState *es)
 	remotePlan = (RemoteExplainPlan *) palloc0(sizeof(RemoteExplainPlan));
 	explainQuery = BuildRemoteExplainQuery(task->queryString, es);
 
+	/*
+	 * Use a coordinated transaction to ensure that we open a transaction block
+	 * such that we can set a savepoint.
+	 */
+	BeginOrContinueCoordinatedTransaction();
+
 	for (placementIndex = 0; placementIndex < placementCount; placementIndex++)
 	{
 		ShardPlacement *taskPlacement = list_nth(taskPlacementList, placementIndex);
-		char *nodeName = taskPlacement->nodeName;
-		uint32 nodePort = taskPlacement->nodePort;
+		MultiConnection *connection = NULL;
+		PGresult *queryResult = NULL;
+		int connectionFlags = 0;
+		int executeResult = 0;
 
 		remotePlan->placementIndex = placementIndex;
-		remotePlan->explainOutputList = ExecuteRemoteQuery(nodeName, nodePort,
-														   NULL, explainQuery);
+
+		connection = GetPlacementConnection(connectionFlags, taskPlacement, NULL);
+
+		/* try other placements if we fail to connect this one */
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			continue;
+		}
+
+		RemoteTransactionBeginIfNecessary(connection);
+
+		/*
+		 * Start a savepoint for the explain query. After running the explain
+		 * query, we will rollback to this savepoint. This saves us from side
+		 * effects of EXPLAIN ANALYZE on DML queries.
+		 */
+		ExecuteCriticalRemoteCommand(connection, "SAVEPOINT citus_explain_savepoint");
+
+		/* run explain query */
+		executeResult = ExecuteOptionalRemoteCommand(connection, explainQuery->data,
+													 &queryResult);
+		if (executeResult != 0)
+		{
+			PQclear(queryResult);
+			ForgetResults(connection);
+
+			continue;
+		}
+
+		/* read explain query results */
+		remotePlan->explainOutputList = ReadFirstColumnAsText(queryResult);
+
+		PQclear(queryResult);
+		ForgetResults(connection);
+
+		/* rollback to the savepoint */
+		ExecuteCriticalRemoteCommand(connection,
+									 "ROLLBACK TO SAVEPOINT citus_explain_savepoint");
+
 		if (remotePlan->explainOutputList != NIL)
 		{
 			break;
