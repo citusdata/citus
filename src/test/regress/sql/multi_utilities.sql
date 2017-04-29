@@ -222,6 +222,8 @@ SELECT worker_hash('1997-08-08'::date);
 SELECT worker_hash('(1, 2)');
 SELECT worker_hash('(1, 2)'::test_composite_type);
 
+SELECT citus_truncate_trigger();
+
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
 -- VACUUM (FULL, VERBOSE) dustbunnies;
