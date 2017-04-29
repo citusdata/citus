@@ -17,5 +17,6 @@
 
 extern bool RequiresMasterEvaluation(Query *query);
 extern void ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState);
+extern Node * PartiallyEvaluateExpression(Node *expression, PlanState *planState);
 
 #endif /* CITUS_CLAUSES_H */

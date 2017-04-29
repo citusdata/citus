@@ -117,23 +117,303 @@ SELECT l_suppkey, count(*) FROM
 		GROUP BY l_suppkey, l_shipdate) supps
 	GROUP BY l_suppkey ORDER BY 2 DESC, 1 LIMIT 5;
 
+-- repartition query on view with single table subquery
+CREATE VIEW supp_count_view AS SELECT * FROM (SELECT l_suppkey, count(*) FROM lineitem_hash_part GROUP BY 1) s1;
+SELECT * FROM supp_count_view ORDER BY 2 DESC, 1 LIMIT 10;
+
 SET citus.task_executor_type to DEFAULT;
 
 -- create a view with aggregate
 CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
 
--- following will fail due to non-flattening of subquery due to GROUP BY
+-- following will fail due to non GROUP BY of partition key
 SELECT * FROM  lineitems_by_shipping_method;
 
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
-	SELECT l_orderkey, count(*) FROM lineitem_hash_part GROUP BY 1;
+	SELECT 
+		l_orderkey, count(*) 
+	FROM 
+		lineitem_hash_part 
+	GROUP BY 1;
 
--- this will also fail due to same reason
-SELECT * FROM  lineitems_by_orderkey;
+-- this should work since we're able to push down this query
+SELECT * FROM  lineitems_by_orderkey ORDER BY 2 DESC, 1 ASC LIMIT 10;
 
--- however it would work if it is made router plannable
+-- it would also work since it is made router plannable
 SELECT * FROM  lineitems_by_orderkey WHERE l_orderkey = 100;
 
 DROP TABLE temp_lineitem CASCADE;
+
+DROP VIEW supp_count_view;
+DROP VIEW lineitems_by_orderkey;
+DROP VIEW lineitems_by_shipping_method;
+DROP VIEW air_shipped_lineitems;
+DROP VIEW priority_lineitem;
+DROP VIEW priority_orders;
+
+-- new tests for real time use case including views and subqueries
+
+-- create view to display recent user who has an activity after a timestamp
+CREATE VIEW recent_users AS
+	SELECT user_id, max(time) as lastseen FROM users_table
+	GROUP BY user_id
+	HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC; 
+SELECT * FROM recent_users;
+
+-- create a view for recent_events
+CREATE VIEW recent_events AS
+	SELECT user_id, time FROM events_table
+	WHERE time > '2014-01-20 01:45:49.978738'::timestamp;
+
+SELECT count(*) FROM recent_events;
+
+-- count number of events of recent_users
+SELECT count(*) FROM recent_users ru JOIN events_table et ON (ru.user_id = et.user_id);
+-- count number of events of per recent users order by count
+SELECT ru.user_id, count(*) 
+	FROM recent_users ru 
+		JOIN events_table et
+		ON (ru.user_id = et.user_id)
+	GROUP BY ru.user_id
+	ORDER BY 2 DESC, 1;
+
+-- the same query with a left join however, it would still generate the same result
+SELECT ru.user_id, count(*) 
+	FROM recent_users ru 
+		LEFT JOIN events_table et
+		ON (ru.user_id = et.user_id)
+	GROUP BY ru.user_id
+	ORDER BY 2 DESC, 1;
+
+-- query wrapped inside a subquery, it needs another top level order by
+SELECT * FROM
+	(SELECT ru.user_id, count(*) 
+		FROM recent_users ru 
+			JOIN events_table et
+			ON (ru.user_id = et.user_id)
+		GROUP BY ru.user_id
+		ORDER BY 2 DESC, 1) s1
+ORDER BY 2 DESC, 1;
+
+-- non-partition key joins are not supported inside subquery
+SELECT * FROM
+	(SELECT ru.user_id, count(*) 
+		FROM recent_users ru 
+			JOIN events_table et
+			ON (ru.user_id = et.event_type)
+		GROUP BY ru.user_id
+		ORDER BY 2 DESC, 1) s1
+ORDER BY 2 DESC, 1;
+
+-- join between views
+-- recent users who has an event in recent events
+SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROUP BY ru.user_id ORDER BY ru.user_id;
+
+-- outer join inside a subquery
+-- recent_events who are not done by recent users
+SELECT count(*) FROM (
+	SELECT re.*, ru.user_id AS recent_user
+		FROM recent_events re LEFT JOIN recent_users ru USING(user_id)) reu 
+	WHERE recent_user IS NULL;
+
+-- same query with anti-join
+SELECT count(*)
+	FROM recent_events re LEFT JOIN recent_users ru ON(ru.user_id = re.user_id)
+	WHERE ru.user_id IS NULL;
+
+-- join between view and table
+-- users who has recent activity and they have an entry with value_1 is less than 15
+SELECT ut.* FROM recent_users ru JOIN users_table ut USING (user_id) WHERE ut.value_1 < 15 ORDER BY 1,2;
+
+-- determine if a recent user has done a given event type or not
+SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
+	FROM recent_users ru
+	LEFT JOIN events_table et
+	ON(ru.user_id = et.user_id AND et.event_type = 625)
+	ORDER BY 2 DESC, 1;
+
+-- view vs table join wrapped inside a subquery
+SELECT * FROM
+	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
+		FROM recent_users ru
+		LEFT JOIN events_table et
+		ON(ru.user_id = et.user_id AND et.event_type = 625)
+	) s1
+ORDER BY 2 DESC, 1;
+
+-- event vs table non-partition-key join is not supported
+SELECT * FROM
+	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
+		FROM recent_users ru
+		LEFT JOIN events_table et
+		ON(ru.user_id = et.event_type)
+	) s1
+ORDER BY 2 DESC, 1;
+
+-- create a select only view
+CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150;
+CREATE VIEW recent_selected_users AS SELECT su.* FROM selected_users su JOIN recent_users ru USING(user_id);
+
+SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
+
+-- this would be supported when we implement where partition_key in (subquery) support
+SELECT et.* FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users);
+
+-- it is supported when it is a router query
+SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 90);
+
+-- expected this to work but it did not
+(SELECT user_id FROM recent_users) 
+UNION
+(SELECT user_id FROM selected_users);
+
+-- wrapping it inside a SELECT * works
+SELECT *
+	FROM (
+		(SELECT user_id FROM recent_users) 
+		UNION
+		(SELECT user_id FROM selected_users) ) u
+	WHERE user_id < 15 AND user_id > 10
+	ORDER BY user_id;
+
+-- union all also works for views
+SELECT *
+	FROM (
+		(SELECT user_id FROM recent_users) 
+		UNION ALL
+		(SELECT user_id FROM selected_users) ) u
+	WHERE user_id < 15 AND user_id > 10
+	ORDER BY user_id;
+
+SELECT count(*)
+	FROM (
+		(SELECT user_id FROM recent_users) 
+		UNION
+		(SELECT user_id FROM selected_users) ) u
+	WHERE user_id < 15 AND user_id > 10;
+
+-- expected this to work but it does not
+SELECT count(*)
+	FROM (
+		(SELECT user_id FROM recent_users) 
+		UNION ALL
+		(SELECT user_id FROM selected_users) ) u
+	WHERE user_id < 15 AND user_id > 10;
+
+-- expand view definitions and re-run last 2 queries
+SELECT count(*)
+	FROM (
+		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
+			GROUP BY user_id
+			HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC) aa
+		) 
+		UNION
+		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150) bb) ) u
+	WHERE user_id < 15 AND user_id > 10;
+
+SELECT count(*)
+	FROM (
+		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
+			GROUP BY user_id
+			HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC) aa
+		) 
+		UNION ALL
+		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150) bb) ) u
+	WHERE user_id < 15 AND user_id > 10;
+
+-- test distinct
+-- distinct is supported if it is on a partition key
+CREATE VIEW distinct_user_with_value_1_15 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 15;
+SELECT * FROM distinct_user_with_value_1_15 ORDER BY user_id;
+
+-- distinct is not supported if it is on a non-partition key
+CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 15;
+SELECT * FROM distinct_value_1;
+
+-- CTEs are not supported even if they are on views
+CREATE VIEW cte_view_1 AS
+WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 15) SELECT * FROM c1 WHERE value_2 < 500;
+
+SELECT * FROM cte_view_1;
+
+-- this is single shard query but still not supported since it has view + cte
+-- router planner can't detect it
+SELECT * FROM cte_view_1 WHERE user_id = 8;
+
+-- if CTE itself prunes down to a single shard than the view is supported (router plannable)
+CREATE VIEW cte_view_2 AS
+WITH c1 AS (SELECT * FROM users_table WHERE user_id = 8) SELECT * FROM c1 WHERE value_1 = 15;
+SELECT * FROM cte_view_2;
+
+CREATE VIEW router_view AS SELECT * FROM users_table WHERE user_id = 2;
+-- router plannable
+SELECT user_id FROM router_view GROUP BY 1;
+
+-- There is a known issue with router plannable subqueries joined with non-router
+-- plannable subqueries. Following tests should be uncommented when we fix it
+
+-- join a router view (not implement error)
+-- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id);
+
+-- it still does not work when converted to 2 subquery join
+-- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id);
+
+-- views are completely removed and still it does not work
+-- SELECT * FROM
+--	(SELECT user_id FROM (SELECT * FROM users_table WHERE user_id = 2) rv1  GROUP BY 1) rv2
+--	JOIN (SELECT user_id, time FROM events_table
+--	WHERE time > '2014-01-20 01:45:49.978738'::timestamp) re 
+--	USING (user_id);
+
+-- views with limits
+CREATE VIEW recent_10_users AS
+	SELECT user_id, max(time) as lastseen FROM users_table
+	GROUP BY user_id
+	ORDER BY lastseen DESC
+	LIMIT 10;
+
+-- this is not supported since it has limit in it and subquery_pushdown is not set
+SELECT * FROM recent_10_users;
+
+SET citus.subquery_pushdown to ON;
+-- still not supported since outer query does not have limit
+-- it shows a different (subquery with single relation) error message
+SELECT * FROM recent_10_users;
+-- now it displays more correct error message
+SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id);
+
+-- now both are supported when there is a limit on the outer most query
+SELECT * FROM recent_10_users ORDER BY lastseen DESC LIMIT 10;
+SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
+
+RESET citus.subquery_pushdown;
+
+-- explain tests
+EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
+
+EXPLAIN (COSTS FALSE) SELECT *
+	FROM (
+		(SELECT user_id FROM recent_users) 
+		UNION
+		(SELECT user_id FROM selected_users) ) u
+	WHERE user_id < 15 AND user_id > 10
+	ORDER BY user_id;
+
+EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
+SET citus.subquery_pushdown to ON;
+EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
+
+RESET citus.subquery_pushdown;
+
+DROP VIEW recent_10_users;
+DROP VIEW router_view;
+DROP VIEW cte_view_2;
+DROP VIEW cte_view_1;
+DROP VIEW distinct_value_1;
+DROP VIEW distinct_user_with_value_1_15;
+DROP VIEW recent_selected_users;
+DROP VIEW selected_users;
+DROP VIEW recent_events;
+DROP VIEW recent_users;
