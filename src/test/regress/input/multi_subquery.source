@@ -501,6 +501,15 @@ BEGIN
         RETURN -1;
     end if;
 
+    if  v1.user_id > v2.user_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.user_id < v2.user_id THEN 
+        RETURN -1;
+    end if;
+
+
     RETURN 0;
 END;
 $$ language 'plpgsql' immutable 
@@ -657,6 +666,14 @@ BEGIN
         RETURN -1;
     end if;
 
+    if  v1.user_id > v2.user_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.user_id < v2.user_id THEN 
+        RETURN -1;
+    end if;
+    
     RETURN 0;
 END;
 $$ language 'plpgsql' immutable 
@@ -809,6 +826,14 @@ BEGIN
     end if;
 
     if v1.tenant_id < v2.tenant_id THEN 
+        RETURN -1;
+    end if;
+
+    if  v1.user_id > v2.user_id THEN 
+        RETURN 1;
+    end if;
+
+    if v1.user_id < v2.user_id THEN 
         RETURN -1;
     end if;
 
