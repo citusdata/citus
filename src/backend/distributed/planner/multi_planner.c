@@ -72,8 +72,7 @@ static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *cust
 static void CheckNodeIsDumpable(Node *node);
 static List * CopyPlanParamList(List *originalPlanParamList);
 static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
-static RelationRestrictionContext * CurrentRelationRestrictionContext(void);
-static JoinRestrictionContext * CurrentJoinRestrictionContext(void);
+static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
 static void PopPlannerRestrictionContext(void);
 static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boundParams);
 
@@ -310,8 +309,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		 */
 		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
-			/* Create and optimize logical plan */
-			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
+			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+																plannerRestrictionContext);
 			MultiLogicalPlanOptimize(logicalPlan);
 
 			/*
@@ -324,7 +323,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			CheckNodeIsDumpable((Node *) logicalPlan);
 
 			/* Create the physical plan */
-			distributedPlan = MultiPhysicalPlanCreate(logicalPlan);
+			distributedPlan = MultiPhysicalPlanCreate(logicalPlan,
+													  plannerRestrictionContext);
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);
@@ -658,20 +658,40 @@ multi_join_restriction_hook(PlannerInfo *root,
 							JoinType jointype,
 							JoinPathExtraData *extra)
 {
-	JoinRestrictionContext *joinContext = NULL;
-	JoinRestriction *joinRestriction = palloc0(sizeof(JoinRestriction));
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	JoinRestrictionContext *joinRestrictionContext = NULL;
+	JoinRestriction *joinRestriction = NULL;
+	MemoryContext restrictionsMemoryContext = NULL;
+	MemoryContext oldMemoryContext = NULL;
 	List *restrictInfoList = NIL;
 
-	restrictInfoList = extra->restrictlist;
-	joinContext = CurrentJoinRestrictionContext();
-	Assert(joinContext != NULL);
+	/*
+	 * Use a memory context that's guaranteed to live long enough, could be
+	 * called in a more shorted lived one (e.g. with GEQO).
+	 */
+	plannerRestrictionContext = CurrentPlannerRestrictionContext();
+	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
+	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
 
+	/*
+	 * We create a copy of restrictInfoList because it may be created in a memory
+	 * context which will be deleted when we still need it, thus we create a copy
+	 * of it in our memory context.
+	 */
+	restrictInfoList = copyObject(extra->restrictlist);
+
+	joinRestrictionContext = plannerRestrictionContext->joinRestrictionContext;
+	Assert(joinRestrictionContext != NULL);
+
+	joinRestriction = palloc0(sizeof(JoinRestriction));
 	joinRestriction->joinType = jointype;
 	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
 
-	joinContext->joinRestrictionList =
-		lappend(joinContext->joinRestrictionList, joinRestriction);
+	joinRestrictionContext->joinRestrictionList =
+		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);
+
+	MemoryContextSwitchTo(oldMemoryContext);
 }
 
 
@@ -684,7 +704,10 @@ void
 multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index index,
 								RangeTblEntry *rte)
 {
-	RelationRestrictionContext *restrictionContext = NULL;
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	RelationRestrictionContext *relationRestrictionContext = NULL;
+	MemoryContext restrictionsMemoryContext = NULL;
+	MemoryContext oldMemoryContext = NULL;
 	RelationRestriction *relationRestriction = NULL;
 	DistTableCacheEntry *cacheEntry = NULL;
 	bool distributedTable = false;
@@ -695,11 +718,16 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 		return;
 	}
 
+	/*
+	 * Use a memory context that's guaranteed to live long enough, could be
+	 * called in a more shorted lived one (e.g. with GEQO).
+	 */
+	plannerRestrictionContext = CurrentPlannerRestrictionContext();
+	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
+	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
+
 	distributedTable = IsDistributedTable(rte->relid);
 	localTable = !distributedTable;
-
-	restrictionContext = CurrentRelationRestrictionContext();
-	Assert(restrictionContext != NULL);
 
 	relationRestriction = palloc0(sizeof(RelationRestriction));
 	relationRestriction->index = index;
@@ -718,8 +746,9 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 			CopyPlanParamList(root->parent_root->plan_params);
 	}
 
-	restrictionContext->hasDistributedRelation |= distributedTable;
-	restrictionContext->hasLocalRelation |= localTable;
+	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
+	relationRestrictionContext->hasDistributedRelation |= distributedTable;
+	relationRestrictionContext->hasLocalRelation |= localTable;
 
 	/*
 	 * We're also keeping track of whether all participant
@@ -729,12 +758,14 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	{
 		cacheEntry = DistributedTableCacheEntry(rte->relid);
 
-		restrictionContext->allReferenceTables &=
+		relationRestrictionContext->allReferenceTables &=
 			(cacheEntry->partitionMethod == DISTRIBUTE_BY_NONE);
 	}
 
-	restrictionContext->relationRestrictionList =
-		lappend(restrictionContext->relationRestrictionList, relationRestriction);
+	relationRestrictionContext->relationRestrictionList =
+		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
+
+	MemoryContextSwitchTo(oldMemoryContext);
 }
 
 
@@ -766,11 +797,10 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new planner restriction context.
- * Later, it creates a relation restriction context and a join restriction
- * context, and sets those contexts in the planner restriction context. Finally,
- * the planner restriction context is inserted to the beginning of the
- * plannerRestrictionContextList and it is returned.
+ * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
+ * and a new join context, inserts it to the beginning of the
+ * plannerRestrictionContextList. Finally, the planner restriction context is
+ * inserted to the beginning of the plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
 CreateAndPushPlannerRestrictionContext(void)
@@ -784,6 +814,8 @@ CreateAndPushPlannerRestrictionContext(void)
 	plannerRestrictionContext->joinRestrictionContext =
 		palloc0(sizeof(JoinRestrictionContext));
 
+	plannerRestrictionContext->memoryContext = CurrentMemoryContext;
+
 	/* we'll apply logical AND as we add tables */
 	plannerRestrictionContext->relationRestrictionContext->allReferenceTables = true;
 
@@ -795,44 +827,20 @@ CreateAndPushPlannerRestrictionContext(void)
 
 
 /*
- * CurrentRelationRestrictionContext returns the the last restriction context from the
- * relationRestrictionContext list.
+ * CurrentRestrictionContext returns the the most recently added
+ * PlannerRestrictionContext from the plannerRestrictionContextList list.
  */
-static RelationRestrictionContext *
-CurrentRelationRestrictionContext(void)
+static PlannerRestrictionContext *
+CurrentPlannerRestrictionContext(void)
 {
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	RelationRestrictionContext *relationRestrictionContext = NULL;
 
 	Assert(plannerRestrictionContextList != NIL);
 
 	plannerRestrictionContext =
 		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
 
-	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
-
-	return relationRestrictionContext;
-}
-
-
-/*
- * CurrentJoinRestrictionContext returns the the last restriction context from the
- * list.
- */
-static JoinRestrictionContext *
-CurrentJoinRestrictionContext(void)
-{
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	JoinRestrictionContext *joinRestrictionContext = NULL;
-
-	Assert(plannerRestrictionContextList != NIL);
-
-	plannerRestrictionContext =
-		(PlannerRestrictionContext *) linitial(plannerRestrictionContextList);
-
-	joinRestrictionContext = plannerRestrictionContext->joinRestrictionContext;
-
-	return joinRestrictionContext;
+	return plannerRestrictionContext;
 }
 
 
