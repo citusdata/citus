@@ -186,6 +186,9 @@ static List * PruneWithBoundaries(DistTableCacheEntry *cacheEntry,
 static List * ExhaustivePrune(DistTableCacheEntry *cacheEntry,
 							  ClauseWalkerContext *context,
 							  PruningInstance *prune);
+static bool ExhaustivePruneOne(ShardInterval *curInterval,
+							   ClauseWalkerContext *context,
+							   PruningInstance *prune);
 static int UpperShardBoundary(Datum partitionColumnValue,
 							  ShardInterval **shardIntervalCache,
 							  int shardCount, FunctionCallInfoData *compareFunction,
@@ -894,14 +897,26 @@ PruneOne(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 	}
 
 	/*
-	 * If previous pruning method yielded a single shard, we could also
-	 * attempt range based pruning to exclude it further.  But that seems
-	 * rarely useful in practice, and thus likely a waste of runtime and code
-	 * complexity.
+	 * If previous pruning method yielded a single shard, and the table is not
+	 * hash partitioned, attempt range based pruning to exclude it further.
+	 *
+	 * That's particularly important in particular for subquery pushdown,
+	 * where it's very common to have a user specified equality restriction,
+	 * and a range based restriction for shard boundaries, added by the
+	 * subquery machinery.
 	 */
 	if (shardInterval)
 	{
-		return list_make1(shardInterval);
+		if (context->partitionMethod != DISTRIBUTE_BY_HASH &&
+			ExhaustivePruneOne(shardInterval, context, prune))
+		{
+			return NIL;
+		}
+		else
+		{
+			/* no chance to prune further, return */
+			return list_make1(shardInterval);
+		}
 	}
 
 	/*
@@ -1252,88 +1267,104 @@ ExhaustivePrune(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *context,
 				PruningInstance *prune)
 {
 	List *remainingShardList = NIL;
-	FunctionCallInfo compareFunctionCall = &context->compareIntervalFunctionCall;
 	int shardCount = cacheEntry->shardIntervalArrayLength;
 	ShardInterval **sortedShardIntervalArray = cacheEntry->sortedShardIntervalArray;
 	int curIdx = 0;
 
 	for (curIdx = 0; curIdx < shardCount; curIdx++)
 	{
-		Datum compareWith = 0;
 		ShardInterval *curInterval = sortedShardIntervalArray[curIdx];
 
-		/* NULL boundaries can't be compared to */
-		if (!curInterval->minValueExists || !curInterval->maxValueExists)
+		if (!ExhaustivePruneOne(curInterval, context, prune))
 		{
 			remainingShardList = lappend(remainingShardList, curInterval);
-			continue;
 		}
-
-		if (prune->equalConsts)
-		{
-			compareWith = prune->equalConsts->constvalue;
-
-			if (PerformValueCompare(compareFunctionCall,
-									compareWith,
-									curInterval->minValue) < 0)
-			{
-				continue;
-			}
-
-			if (PerformValueCompare(compareFunctionCall,
-									compareWith,
-									curInterval->maxValue) > 0)
-			{
-				continue;
-			}
-		}
-		if (prune->greaterEqualConsts)
-		{
-			compareWith = prune->greaterEqualConsts->constvalue;
-
-			if (PerformValueCompare(compareFunctionCall,
-									curInterval->maxValue,
-									compareWith) < 0)
-			{
-				continue;
-			}
-		}
-		if (prune->greaterConsts)
-		{
-			compareWith = prune->greaterConsts->constvalue;
-
-			if (PerformValueCompare(compareFunctionCall,
-									curInterval->maxValue,
-									compareWith) <= 0)
-			{
-				continue;
-			}
-		}
-		if (prune->lessEqualConsts)
-		{
-			compareWith = prune->lessEqualConsts->constvalue;
-
-			if (PerformValueCompare(compareFunctionCall,
-									curInterval->minValue,
-									compareWith) > 0)
-			{
-				continue;
-			}
-		}
-		if (prune->lessConsts)
-		{
-			compareWith = prune->lessConsts->constvalue;
-
-			if (PerformValueCompare(compareFunctionCall,
-									curInterval->minValue,
-									compareWith) >= 0)
-			{
-				continue;
-			}
-		}
-
-		remainingShardList = lappend(remainingShardList, curInterval);
 	}
 
 	return remainingShardList;
+}
+
+
+/*
+ * ExhaustivePruneOne returns true if curInterval is pruned away, false
+ * otherwise.
+ */
+static bool
+ExhaustivePruneOne(ShardInterval *curInterval,
+				   ClauseWalkerContext *context,
+				   PruningInstance *prune)
+{
+	FunctionCallInfo compareFunctionCall = &context->compareIntervalFunctionCall;
+	Datum compareWith = 0;
+
+	/* NULL boundaries can't be compared to */
+	if (!curInterval->minValueExists || !curInterval->maxValueExists)
+	{
+		return false;
+	}
+
+	if (prune->equalConsts)
+	{
+		compareWith = prune->equalConsts->constvalue;
+
+		if (PerformValueCompare(compareFunctionCall,
+								compareWith,
+								curInterval->minValue) < 0)
+		{
+			return true;
+		}
+
+		if (PerformValueCompare(compareFunctionCall,
+								compareWith,
+								curInterval->maxValue) > 0)
+		{
+			return true;
+		}
+	}
+	if (prune->greaterEqualConsts)
+	{
+		compareWith = prune->greaterEqualConsts->constvalue;
+
+		if (PerformValueCompare(compareFunctionCall,
+								curInterval->maxValue,
+								compareWith) < 0)
+		{
+			return true;
+		}
+	}
+	if (prune->greaterConsts)
+	{
+		compareWith = prune->greaterConsts->constvalue;
+
+		if (PerformValueCompare(compareFunctionCall,
+								curInterval->maxValue,
+								compareWith) <= 0)
+		{
+			return true;
+		}
+	}
+	if (prune->lessEqualConsts)
+	{
+		compareWith = prune->lessEqualConsts->constvalue;
+
+		if (PerformValueCompare(compareFunctionCall,
+								curInterval->minValue,
+								compareWith) > 0)
+		{
+			return true;
+		}
+	}
+	if (prune->lessConsts)
+	{
+		compareWith = prune->lessConsts->constvalue;
+
+		if (PerformValueCompare(compareFunctionCall,
+								curInterval->minValue,
+								compareWith) >= 0)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
