@@ -346,6 +346,8 @@ SELECT worker_hash('(1, 2)'::test_composite_type);
  -1895345704
 (1 row)
 
+SELECT citus_truncate_trigger();
+ERROR:  must be called as trigger
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
 -- VACUUM (FULL, VERBOSE) dustbunnies;
