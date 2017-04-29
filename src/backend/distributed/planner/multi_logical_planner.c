@@ -14,15 +14,18 @@
 
 #include "postgres.h"
 
+#include "access/heapam.h"
 #include "access/nbtree.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_class.h"
 #include "commands/defrem.h"
+#include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/relation_restriction_equivalence.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -34,6 +37,8 @@
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/rel.h"
+#include "utils/relcache.h"
 
 
 /* Config variable managed via guc.c */
@@ -56,11 +61,32 @@ typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNo
 static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
+static bool SingleRelationRepartitionSubquery(Query *queryTree);
+static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
+																	  originalQuery,
+																	  PlannerRestrictionContext
+																	  *
+																	  plannerRestrictionContext);
+static DeferredErrorMessage * DeferErrorIfUnsupportedFilters(Query *subquery);
+static bool EqualOpExpressionLists(List *firstOpExpressionList,
+								   List *secondOpExpressionList);
+static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
+																 bool
+																 outerMostQueryHasLimit);
+static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree,
+																bool
+																outerMostQueryHasLimit);
+static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
+static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
+static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
+static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
+static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiPlanTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
-static void ErrorIfSubqueryNotSupported(Query *subqueryTree);
+static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
+																		 subqueryTree);
 static bool HasTablesample(Query *queryTree);
 static bool HasOuterJoin(Query *queryTree);
 static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
@@ -104,34 +130,47 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * Local functions forward declarations for subquery pushdown. Note that these
  * functions will be removed with upcoming subqery changes.
  */
-static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree,
-												 List *subqueryEntryList);
-static void ErrorIfSubqueryJoin(Query *queryTree);
-static MultiTable * MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry);
+static MultiNode * MultiSubqueryPlanTree(Query *originalQuery,
+										 Query *queryTree,
+										 PlannerRestrictionContext *
+										 plannerRestrictionContext);
+static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree);
+
+static List * CreateSubqueryTargetEntryList(List *columnList);
+static void UpdateVarMappingsForExtendedOpNode(List *columnList,
+											   List *subqueryTargetEntryList);
+static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
 
 
 /*
- * MultiLogicalPlanCreate takes in a parsed query tree, uses helper functions to
- * create logical plan and adds a root node to top of it.
+ * MultiLogicalPlanCreate takes in both the original query and its corresponding modified
+ * query tree yield by the standard planner. It uses helper functions to create logical
+ * plan and adds a root node to top of it. The  original query is only used for subquery
+ * pushdown planning.
+ *
+ * We also pass queryTree and plannerRestrictionContext to the planner. They
+ * are primarily used to decide whether the subquery is safe to pushdown.
+ * If not, it helps to produce meaningful error messages for subquery
+ * pushdown planning.
  */
 MultiTreeRoot *
-MultiLogicalPlanCreate(Query *queryTree)
+MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
+					   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
+	List *subqueryEntryList = NULL;
 
-	List *subqueryEntryList = SubqueryEntryList(queryTree);
+	/*
+	 * We check the existence of subqueries in the modified query given that
+	 * if postgres already flattened the subqueries, MultiPlanTree() can plan
+	 * corresponding distributed plan.
+	 */
+	subqueryEntryList = SubqueryEntryList(queryTree);
 	if (subqueryEntryList != NIL)
 	{
-		if (SubqueryPushdown)
-		{
-			multiQueryNode = SubqueryPushdownMultiPlanTree(queryTree, subqueryEntryList);
-		}
-		else
-		{
-			ErrorIfSubqueryJoin(queryTree);
-			multiQueryNode = MultiPlanTree(queryTree);
-		}
+		multiQueryNode = MultiSubqueryPlanTree(originalQuery, queryTree,
+											   plannerRestrictionContext);
 	}
 	else
 	{
@@ -143,6 +182,838 @@ MultiLogicalPlanCreate(Query *queryTree)
 	SetChild((MultiUnaryNode *) rootNode, multiQueryNode);
 
 	return rootNode;
+}
+
+
+/*
+ * MultiSubqueryPlanTree gets the query objects and returns logical plan
+ * for subqueries.
+ *
+ * We currently have two different code paths for creating logic plan for subqueries:
+ *   (i) subquery pushdown
+ *   (ii) single relation repartition subquery
+ *
+ * In order to create the logical plan, we follow the algorithm below:
+ *    -  If subquery pushdown planner can plan the query
+ *        -  We're done, we create the multi plan tree and return
+ *    -  Else
+ *       - If the query is not eligible for single table repartition subquery planning
+ *            - Throw the error that the subquery pushdown planner generated
+ *       - If it is eligible for single table repartition subquery planning
+ *            - Check for the errors for single table repartition subquery planning
+ *                - If no errors found, we're done. Create the multi plan and return
+ *                - If found errors, throw it
+ */
+static MultiNode *
+MultiSubqueryPlanTree(Query *originalQuery, Query *queryTree,
+					  PlannerRestrictionContext *plannerRestrictionContext)
+{
+	MultiNode *multiQueryNode = NULL;
+	DeferredErrorMessage *subqueryPushdownError = NULL;
+
+	/*
+	 * This is a generic error check that applies to both subquery pushdown
+	 * and single table repartition subquery.
+	 */
+	ErrorIfQueryNotSupported(originalQuery);
+
+	/*
+	 * In principle, we're first trying subquery pushdown planner. If it fails
+	 * to create a logical plan, continue with trying the single table
+	 * repartition subquery planning.
+	 */
+	subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
+																	plannerRestrictionContext);
+	if (!subqueryPushdownError)
+	{
+		multiQueryNode = SubqueryPushdownMultiPlanTree(originalQuery);
+	}
+	else if (subqueryPushdownError)
+	{
+		bool singleRelationRepartitionSubquery = false;
+		RangeTblEntry *subqueryRangeTableEntry = NULL;
+		Query *subqueryTree = NULL;
+		DeferredErrorMessage *repartitionQueryError = NULL;
+		List *subqueryEntryList = NULL;
+
+		/*
+		 * If not eligible for single relation repartition query, we should raise
+		 * subquery pushdown error.
+		 */
+		singleRelationRepartitionSubquery =
+			SingleRelationRepartitionSubquery(originalQuery);
+		if (!singleRelationRepartitionSubquery)
+		{
+			RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
+		}
+
+		subqueryEntryList = SubqueryEntryList(queryTree);
+		subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
+		Assert(subqueryRangeTableEntry->rtekind == RTE_SUBQUERY);
+
+		subqueryTree = subqueryRangeTableEntry->subquery;
+
+		repartitionQueryError = DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
+		if (repartitionQueryError)
+		{
+			RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
+		}
+
+		/* all checks has passed, safe to create the multi plan */
+		multiQueryNode = MultiPlanTree(queryTree);
+	}
+
+	Assert(multiQueryNode != NULL);
+
+	return multiQueryNode;
+}
+
+
+/*
+ * SingleRelationRepartitionSubquery returns true if it is eligible single
+ * repartition query planning in the sense that:
+ *   - None of the levels of the subquery contains a join
+ *   - Only a single RTE_RELATION exists, which means only a single table
+ *     name is specified on the whole query
+ *   - No sublinks exists in the subquery
+ *
+ * Note that the caller should still call DeferErrorIfUnsupportedSubqueryRepartition()
+ * to ensure that Citus supports the subquery. Also, this function is designed to run
+ * on the original query.
+ */
+static bool
+SingleRelationRepartitionSubquery(Query *queryTree)
+{
+	List *rangeTableIndexList = NULL;
+	RangeTblEntry *rangeTableEntry = NULL;
+	List *rangeTableList = queryTree->rtable;
+	int rangeTableIndex = 0;
+
+	/* we don't support subqueries in WHERE */
+	if (queryTree->hasSubLinks)
+	{
+		return false;
+	}
+
+	/*
+	 * Don't allow joins and set operations. If join appears in the queryTree, the
+	 * length would be greater than 1. If only set operations exists, the length
+	 * would be 0.
+	 */
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree,
+								 &rangeTableIndexList);
+	if (list_length(rangeTableIndexList) != 1)
+	{
+		return false;
+	}
+
+	rangeTableIndex = linitial_int(rangeTableIndexList);
+	rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
+	if (rangeTableEntry->rtekind == RTE_RELATION)
+	{
+		return true;
+	}
+	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+	{
+		Query *subqueryTree = rangeTableEntry->subquery;
+
+		return SingleRelationRepartitionSubquery(subqueryTree);
+	}
+
+	return false;
+}
+
+
+/*
+ * DeferErrorIfContainsUnsupportedSubqueryPushdown iterates on the query's subquery
+ * entry list and uses helper functions to check if we can push down subquery
+ * to worker nodes. These helper functions returns a deferred error if we
+ * cannot push down the subquery.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
+										PlannerRestrictionContext *
+										plannerRestrictionContext)
+{
+	ListCell *rangeTableEntryCell = NULL;
+	List *subqueryEntryList = NIL;
+	bool outerMostQueryHasLimit = false;
+	DeferredErrorMessage *error = NULL;
+	RelationRestrictionContext *relationRestrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+
+	if (originalQuery->limitCount != NULL)
+	{
+		outerMostQueryHasLimit = true;
+	}
+
+	/*
+	 * We're checking two things here:
+	 *    (i)   If the query contains a top level union, ensure that all leaves
+	 *          return the partition key at the same position
+	 *    (ii)  Else, check whether all relations joined on the partition key or not
+	 */
+	if (ContainsUnionSubquery(originalQuery))
+	{
+		if (!SafeToPushdownUnionSubquery(relationRestrictionContext))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot pushdown the subquery since all leaves of "
+								 "the UNION does not include partition key at the "
+								 "same position",
+								 "Each leaf query of the UNION should return "
+								 "partition key at the same position on its "
+								 "target list.", NULL);
+		}
+	}
+	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery since all relations are not "
+							 "joined using distribution keys",
+							 "Each relation should be joined with at least "
+							 "one another relation using distribution keys and "
+							 "equality operator.", NULL);
+	}
+
+	subqueryEntryList = SubqueryEntryList(originalQuery);
+	foreach(rangeTableEntryCell, subqueryEntryList)
+	{
+		RangeTblEntry *rangeTableEntry = lfirst(rangeTableEntryCell);
+		Query *subquery = rangeTableEntry->subquery;
+
+		error = DeferErrorIfCannotPushdownSubquery(subquery, outerMostQueryHasLimit);
+		if (error)
+		{
+			return error;
+		}
+
+		error = DeferErrorIfUnsupportedFilters(subquery);
+		if (error)
+		{
+			return error;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedFilters checks if all leaf queries in the given query have
+ * same filter on the partition column. Note that if there are queries without
+ * any filter on the partition column, they don't break this prerequisite.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedFilters(Query *subquery)
+{
+	List *queryList = NIL;
+	ListCell *queryCell = NULL;
+	List *subqueryOpExpressionList = NIL;
+	List *relationIdList = RelationIdList(subquery);
+
+	/*
+	 * Get relation id of any relation in the subquery and create partiton column
+	 * for this relation. We will use this column to replace columns on operator
+	 * expressions on different tables. Then we compare these operator expressions
+	 * to see if they consist of same operator and constant value.
+	 */
+	Oid relationId = linitial_oid(relationIdList);
+	Var *partitionColumn = PartitionColumn(relationId, 0);
+
+	ExtractQueryWalker((Node *) subquery, &queryList);
+	foreach(queryCell, queryList)
+	{
+		Query *query = (Query *) lfirst(queryCell);
+		List *opExpressionList = NIL;
+		List *newOpExpressionList = NIL;
+
+		bool leafQuery = LeafQuery(query);
+		if (!leafQuery)
+		{
+			continue;
+		}
+
+		opExpressionList = PartitionColumnOpExpressionList(query);
+		if (opExpressionList == NIL)
+		{
+			continue;
+		}
+
+		newOpExpressionList = ReplaceColumnsInOpExpressionList(opExpressionList,
+															   partitionColumn);
+
+		if (subqueryOpExpressionList == NIL)
+		{
+			subqueryOpExpressionList = newOpExpressionList;
+		}
+		else
+		{
+			bool equalOpExpressionLists = EqualOpExpressionLists(subqueryOpExpressionList,
+																 newOpExpressionList);
+			if (!equalOpExpressionLists)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot push down this subquery",
+									 "Currently all leaf queries need to "
+									 "have same filters on partition column", NULL);
+			}
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * EqualOpExpressionLists checks if given two operator expression lists are
+ * equal.
+ */
+static bool
+EqualOpExpressionLists(List *firstOpExpressionList, List *secondOpExpressionList)
+{
+	bool equalOpExpressionLists = false;
+	ListCell *firstOpExpressionCell = NULL;
+	uint32 equalOpExpressionCount = 0;
+	uint32 firstOpExpressionCount = list_length(firstOpExpressionList);
+	uint32 secondOpExpressionCount = list_length(secondOpExpressionList);
+
+	if (firstOpExpressionCount != secondOpExpressionCount)
+	{
+		return false;
+	}
+
+	foreach(firstOpExpressionCell, firstOpExpressionList)
+	{
+		OpExpr *firstOpExpression = (OpExpr *) lfirst(firstOpExpressionCell);
+		ListCell *secondOpExpressionCell = NULL;
+
+		foreach(secondOpExpressionCell, secondOpExpressionList)
+		{
+			OpExpr *secondOpExpression = (OpExpr *) lfirst(secondOpExpressionCell);
+			bool equalExpressions = equal(firstOpExpression, secondOpExpression);
+
+			if (equalExpressions)
+			{
+				equalOpExpressionCount++;
+				continue;
+			}
+		}
+	}
+
+	if (equalOpExpressionCount == firstOpExpressionCount)
+	{
+		equalOpExpressionLists = true;
+	}
+
+	return equalOpExpressionLists;
+}
+
+
+/*
+ * DeferErrorIfCannotPushdownSubquery recursively checks if we can push down the given
+ * subquery to worker nodes. If we cannot push down the subquery, this function
+ * returns a deferred error.
+ *
+ * We can push down a subquery if it follows rules below. We support nested queries
+ * as long as they follow the same rules, and we recurse to validate each subquery
+ * for this given query.
+ * a. If there is an aggregate, it must be grouped on partition column.
+ * b. If there is a join, it must be between two regular tables or two subqueries.
+ * We don't support join between a regular table and a subquery. And columns on
+ * the join condition must be partition columns.
+ * c. If there is a distinct clause, it must be on the partition column.
+ *
+ * This function is very similar to ErrorIfQueryNotSupported() in logical
+ * planner, but we don't reuse it, because differently for subqueries we support
+ * a subset of distinct, union and left joins.
+ *
+ * Note that this list of checks is not exhaustive, there can be some cases
+ * which we let subquery to run but returned results would be wrong. Such as if
+ * a subquery has a group by on another subquery which includes order by with
+ * limit, we let this query to run, but results could be wrong depending on the
+ * features of underlying tables.
+ */
+static DeferredErrorMessage *
+DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
+{
+	bool preconditionsSatisfied = true;
+	char *errorDetail = NULL;
+	List *subqueryEntryList = NIL;
+	ListCell *rangeTableEntryCell = NULL;
+	DeferredErrorMessage *deferredError = NULL;
+
+	deferredError = DeferErrorIfUnsupportedTableCombination(subqueryTree);
+	if (deferredError)
+	{
+		return deferredError;
+	}
+
+	if (subqueryTree->hasSubLinks)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Subqueries other than from-clause subqueries are unsupported";
+	}
+
+	if (subqueryTree->rtable == NIL)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Subqueries without relations are unsupported";
+	}
+
+	if (subqueryTree->hasWindowFuncs)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Window functions are currently unsupported";
+	}
+
+	if (subqueryTree->limitOffset)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Offset clause is currently unsupported";
+	}
+
+	/* limit is not supported when SubqueryPushdown is not set */
+	if (subqueryTree->limitCount && !SubqueryPushdown)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Limit in subquery is currently unsupported";
+	}
+
+	/*
+	 * Limit is partially supported when SubqueryPushdown is set.
+	 * The outermost query must have a limit clause.
+	 */
+	if (subqueryTree->limitCount && SubqueryPushdown && !outerMostQueryHasLimit)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Limit in subquery without limit in the outermost query is "
+					  "unsupported";
+	}
+
+	if (subqueryTree->setOperations)
+	{
+		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree,
+														  outerMostQueryHasLimit);
+		if (deferredError)
+		{
+			return deferredError;
+		}
+	}
+
+	if (subqueryTree->hasRecursive)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Recursive queries are currently unsupported";
+	}
+
+	if (subqueryTree->cteList)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Common Table Expressions are currently unsupported";
+	}
+
+	if (subqueryTree->hasForUpdate)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "For Update/Share commands are currently unsupported";
+	}
+
+	/* group clause list must include partition column */
+	if (subqueryTree->groupClause)
+	{
+		List *groupClauseList = subqueryTree->groupClause;
+		List *targetEntryList = subqueryTree->targetList;
+		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
+														  targetEntryList);
+		bool groupOnPartitionColumn = TargetListOnPartitionColumn(subqueryTree,
+																  groupTargetEntryList);
+		if (!groupOnPartitionColumn)
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Group by list without partition column is currently "
+						  "unsupported";
+		}
+	}
+
+	/* we don't support aggregates without group by */
+	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Aggregates without group by are currently unsupported";
+	}
+
+	/* having clause without group by on partition column is not supported */
+	if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
+	{
+		preconditionsSatisfied = false;
+		errorDetail = "Having qual without group by on partition column is "
+					  "currently unsupported";
+	}
+
+	/* distinct clause list must include partition column */
+	if (subqueryTree->distinctClause)
+	{
+		List *distinctClauseList = subqueryTree->distinctClause;
+		List *targetEntryList = subqueryTree->targetList;
+		List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
+															 targetEntryList);
+		bool distinctOnPartitionColumn =
+			TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
+		if (!distinctOnPartitionColumn)
+		{
+			preconditionsSatisfied = false;
+			errorDetail = "Distinct on columns without partition column is "
+						  "currently unsupported";
+		}
+	}
+
+	/* finally check and return deferred if not satisfied */
+	if (!preconditionsSatisfied)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 errorDetail, NULL);
+	}
+
+	/* recursively do same check for subqueries of this query */
+	subqueryEntryList = SubqueryEntryList(subqueryTree);
+	foreach(rangeTableEntryCell, subqueryEntryList)
+	{
+		RangeTblEntry *rangeTableEntry =
+			(RangeTblEntry *) lfirst(rangeTableEntryCell);
+
+		Query *innerSubquery = rangeTableEntry->subquery;
+		deferredError = DeferErrorIfCannotPushdownSubquery(innerSubquery,
+														   outerMostQueryHasLimit);
+		if (deferredError)
+		{
+			return deferredError;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedUnionQuery is a helper function for ErrorIfCannotPushdownSubquery().
+ * It basically iterates over the subqueries that reside under the given set operations.
+ *
+ * The function also errors out for set operations INTERSECT and EXCEPT.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
+								  bool outerMostQueryHasLimit)
+{
+	List *rangeTableIndexList = NIL;
+	ListCell *rangeTableIndexCell = NULL;
+	List *setOperationStatementList = NIL;
+	ListCell *setOperationStatmentCell = NULL;
+	List *rangeTableList = subqueryTree->rtable;
+
+	ExtractSetOperationStatmentWalker((Node *) subqueryTree->setOperations,
+									  &setOperationStatementList);
+	foreach(setOperationStatmentCell, setOperationStatementList)
+	{
+		SetOperationStmt *setOperation =
+			(SetOperationStmt *) lfirst(setOperationStatmentCell);
+
+		if (setOperation->op != SETOP_UNION)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot push down this subquery",
+								 "Intersect and Except are currently unsupported", NULL);
+		}
+	}
+
+	ExtractRangeTableIndexWalker((Node *) subqueryTree->setOperations,
+								 &rangeTableIndexList);
+	foreach(rangeTableIndexCell, rangeTableIndexList)
+	{
+		int rangeTableIndex = lfirst_int(rangeTableIndexCell);
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableIndex, rangeTableList);
+		DeferredErrorMessage *deferredError = NULL;
+
+		Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
+
+		deferredError = DeferErrorIfCannotPushdownSubquery(rangeTableEntry->subquery,
+														   outerMostQueryHasLimit);
+		if (deferredError)
+		{
+			return deferredError;
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * ExtractSetOperationStatementWalker walks over a set operations statment,
+ * and finds all set operations in the tree.
+ */
+static bool
+ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
+{
+	bool walkerResult = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, SetOperationStmt))
+	{
+		SetOperationStmt *setOperation = (SetOperationStmt *) node;
+
+		(*setOperationList) = lappend(*setOperationList, setOperation);
+	}
+
+	walkerResult = expression_tree_walker(node, ExtractSetOperationStatmentWalker,
+										  setOperationList);
+
+	return walkerResult;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedTableCombination checks if the given query tree contains any
+ * unsupported range table combinations. For this, the function walks over all
+ * range tables in the join tree, and checks if they correspond to simple relations
+ * or subqueries. It also checks if there is a join between a regular table and
+ * a subquery and if join is on more than two range table entries. If any error is found,
+ * a deferred error is returned. Else, NULL is returned.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedTableCombination(Query *queryTree)
+{
+	List *rangeTableList = queryTree->rtable;
+	List *joinTreeTableIndexList = NIL;
+	ListCell *joinTreeTableIndexCell = NULL;
+	bool unsupporteTableCombination = false;
+	char *errorDetail = NULL;
+	uint32 relationRangeTableCount = 0;
+	uint32 subqueryRangeTableCount = 0;
+
+	/*
+	 * Extract all range table indexes from the join tree. Note that sub-queries
+	 * that get pulled up by PostgreSQL don't appear in this join tree.
+	 */
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
+	foreach(joinTreeTableIndexCell, joinTreeTableIndexList)
+	{
+		/*
+		 * Join tree's range table index starts from 1 in the query tree. But,
+		 * list indexes start from 0.
+		 */
+		int joinTreeTableIndex = lfirst_int(joinTreeTableIndexCell);
+		int rangeTableListIndex = joinTreeTableIndex - 1;
+
+		RangeTblEntry *rangeTableEntry =
+			(RangeTblEntry *) list_nth(rangeTableList, rangeTableListIndex);
+
+		/*
+		 * Check if the range table in the join tree is a simple relation or a
+		 * subquery.
+		 */
+		if (rangeTableEntry->rtekind == RTE_RELATION)
+		{
+			relationRangeTableCount++;
+		}
+		else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			subqueryRangeTableCount++;
+		}
+		else
+		{
+			unsupporteTableCombination = true;
+			errorDetail = "Table expressions other than simple relations and "
+						  "subqueries are currently unsupported";
+			break;
+		}
+	}
+
+	/* finally check and error out if not satisfied */
+	if (unsupporteTableCombination)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 errorDetail, NULL);
+	}
+
+	return NULL;
+}
+
+
+/*
+ * TargetListOnPartitionColumn checks if at least one target list entry is on
+ * partition column.
+ */
+static bool
+TargetListOnPartitionColumn(Query *query, List *targetEntryList)
+{
+	bool targetListOnPartitionColumn = false;
+	List *compositeFieldList = NIL;
+
+	ListCell *targetEntryCell = NULL;
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Expr *targetExpression = targetEntry->expr;
+
+		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
+		if (isPartitionColumn)
+		{
+			FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
+																  query);
+			if (compositeField)
+			{
+				compositeFieldList = lappend(compositeFieldList, compositeField);
+			}
+			else
+			{
+				targetListOnPartitionColumn = true;
+				break;
+			}
+		}
+	}
+
+	/* check composite fields */
+	if (!targetListOnPartitionColumn)
+	{
+		bool fullCompositeFieldList = FullCompositeFieldList(compositeFieldList);
+		if (fullCompositeFieldList)
+		{
+			targetListOnPartitionColumn = true;
+		}
+	}
+
+	return targetListOnPartitionColumn;
+}
+
+
+/*
+ * FullCompositeFieldList gets a composite field list, and checks if all fields
+ * of composite type are used in the list.
+ */
+static bool
+FullCompositeFieldList(List *compositeFieldList)
+{
+	bool fullCompositeFieldList = true;
+	bool *compositeFieldArray = NULL;
+	uint32 compositeFieldCount = 0;
+	uint32 fieldIndex = 0;
+
+	ListCell *fieldSelectCell = NULL;
+	foreach(fieldSelectCell, compositeFieldList)
+	{
+		FieldSelect *fieldSelect = (FieldSelect *) lfirst(fieldSelectCell);
+		uint32 compositeFieldIndex = 0;
+
+		Expr *fieldExpression = fieldSelect->arg;
+		if (!IsA(fieldExpression, Var))
+		{
+			continue;
+		}
+
+		if (compositeFieldArray == NULL)
+		{
+			uint32 index = 0;
+			Var *compositeColumn = (Var *) fieldExpression;
+			Oid compositeTypeId = compositeColumn->vartype;
+			Oid compositeRelationId = get_typ_typrelid(compositeTypeId);
+
+			/* get composite type attribute count */
+			Relation relation = relation_open(compositeRelationId, AccessShareLock);
+			compositeFieldCount = relation->rd_att->natts;
+			compositeFieldArray = palloc0(compositeFieldCount * sizeof(bool));
+			relation_close(relation, AccessShareLock);
+
+			for (index = 0; index < compositeFieldCount; index++)
+			{
+				compositeFieldArray[index] = false;
+			}
+		}
+
+		compositeFieldIndex = fieldSelect->fieldnum - 1;
+		compositeFieldArray[compositeFieldIndex] = true;
+	}
+
+	for (fieldIndex = 0; fieldIndex < compositeFieldCount; fieldIndex++)
+	{
+		if (!compositeFieldArray[fieldIndex])
+		{
+			fullCompositeFieldList = false;
+		}
+	}
+
+	if (compositeFieldCount == 0)
+	{
+		fullCompositeFieldList = false;
+	}
+
+	return fullCompositeFieldList;
+}
+
+
+/*
+ * CompositeFieldRecursive recursively finds composite field in the query tree
+ * referred by given expression. If expression does not refer to a composite
+ * field, then it returns NULL.
+ *
+ * If expression is a field select we directly return composite field. If it is
+ * a column is referenced from a subquery, then we recursively check that subquery
+ * until we reach the source of that column, and find composite field. If this
+ * column is referenced from join range table entry, then we resolve which join
+ * column it refers and recursively use this column with the same query.
+ */
+static FieldSelect *
+CompositeFieldRecursive(Expr *expression, Query *query)
+{
+	FieldSelect *compositeField = NULL;
+	List *rangetableList = query->rtable;
+	Index rangeTableEntryIndex = 0;
+	RangeTblEntry *rangeTableEntry = NULL;
+	Var *candidateColumn = NULL;
+
+	if (IsA(expression, FieldSelect))
+	{
+		compositeField = (FieldSelect *) expression;
+		return compositeField;
+	}
+
+	if (IsA(expression, Var))
+	{
+		candidateColumn = (Var *) expression;
+	}
+	else
+	{
+		return NULL;
+	}
+
+	rangeTableEntryIndex = candidateColumn->varno - 1;
+	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
+
+	if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+	{
+		Query *subquery = rangeTableEntry->subquery;
+		List *targetEntryList = subquery->targetList;
+		AttrNumber targetEntryIndex = candidateColumn->varattno - 1;
+		TargetEntry *subqueryTargetEntry = list_nth(targetEntryList, targetEntryIndex);
+
+		Expr *subqueryExpression = subqueryTargetEntry->expr;
+		compositeField = CompositeFieldRecursive(subqueryExpression, subquery);
+	}
+	else if (rangeTableEntry->rtekind == RTE_JOIN)
+	{
+		List *joinColumnList = rangeTableEntry->joinaliasvars;
+		AttrNumber joinColumnIndex = candidateColumn->varattno - 1;
+		Expr *joinColumn = list_nth(joinColumnList, joinColumnIndex);
+
+		compositeField = CompositeFieldRecursive(joinColumn, query);
+	}
+
+	return compositeField;
 }
 
 
@@ -248,14 +1119,14 @@ MultiPlanTree(Query *queryTree)
 		List *columnList = NIL;
 		ListCell *columnCell = NULL;
 
+		/* we only support single subquery in the entry list */
+		Assert(list_length(subqueryEntryList) == 1);
+
 		subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
 		subqueryTree = subqueryRangeTableEntry->subquery;
 
-		/* check if subquery satisfies preconditons */
-		ErrorIfSubqueryNotSupported(subqueryTree);
-
-		/* check if subquery has joining tables */
-		ErrorIfSubqueryJoin(subqueryTree);
+		/* ensure if subquery satisfies preconditions */
+		Assert(DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree) == NULL);
 
 		subqueryNode = CitusMakeNode(MultiTable);
 		subqueryNode->relationId = SUBQUERY_RELATION_ID;
@@ -591,14 +1462,19 @@ ErrorHintRequired(const char *errorHint, Query *queryTree)
 
 
 /*
- * ErrorIfSubqueryNotSupported checks that we can perform distributed planning for
- * the given subquery.
+ * DeferErrorIfSubqueryNotSupported checks that we can perform distributed planning for
+ * the given subquery. If not, a deferred error is returned. The function recursively
+ * does this check to all lower levels of the subquery.
  */
-static void
-ErrorIfSubqueryNotSupported(Query *subqueryTree)
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedSubqueryRepartition(Query *subqueryTree)
 {
 	char *errorDetail = NULL;
 	bool preconditionsSatisfied = true;
+	List *joinTreeTableIndexList = NIL;
+	int rangeTableIndex = 0;
+	RangeTblEntry *rangeTableEntry = NULL;
+	Query *innerSubquery = NULL;
 
 	if (!subqueryTree->hasAggs)
 	{
@@ -630,13 +1506,35 @@ ErrorIfSubqueryNotSupported(Query *subqueryTree)
 		errorDetail = "Subqueries with offset are not supported yet";
 	}
 
-	/* finally check and error out if not satisfied */
+	/* finally check and return error if conditions are not satisfied */
 	if (!preconditionsSatisfied)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning on this query"),
-						errdetail("%s", errorDetail)));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot perform distributed planning on this query",
+							 errorDetail, NULL);
 	}
+
+	/*
+	 * Extract all range table indexes from the join tree. Note that sub-queries
+	 * that get pulled up by PostgreSQL don't appear in this join tree.
+	 */
+	ExtractRangeTableIndexWalker((Node *) subqueryTree->jointree,
+								 &joinTreeTableIndexList);
+	Assert(list_length(joinTreeTableIndexList) == 1);
+
+	/* continue with the inner subquery */
+	rangeTableIndex = linitial_int(joinTreeTableIndexList);
+	rangeTableEntry = rt_fetch(rangeTableIndex, subqueryTree->rtable);
+	if (rangeTableEntry->rtekind == RTE_RELATION)
+	{
+		return NULL;
+	}
+
+	Assert(rangeTableEntry->rtekind == RTE_SUBQUERY);
+	innerSubquery = rangeTableEntry->subquery;
+
+	/* recursively continue to the inner subqueries */
+	return DeferErrorIfUnsupportedSubqueryRepartition(innerSubquery);
 }
 
 
@@ -1980,65 +2878,108 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
  * SubqueryPushdownMultiTree creates logical plan for subquery pushdown logic.
  * Note that this logic will be changed in next iterations, so we decoupled it
  * from other parts of code although it causes some code duplication.
+ *
+ * Current subquery pushdown support in MultiTree logic requires a single range
+ * table entry in the top most from clause. Therefore we inject an synthetic
+ * query derived from the top level query and make it the only range table
+ * entry for the top level query. This way we can push down any subquery joins
+ * down to workers without invoking join order planner.
  */
 static MultiNode *
-SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
+SubqueryPushdownMultiPlanTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
 	List *qualifierList = NIL;
-	List *qualifierColumnList = NIL;
-	List *targetListColumnList = NIL;
 	List *columnList = NIL;
-	ListCell *columnCell = NULL;
+	List *targetColumnList = NIL;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
 	MultiTable *subqueryNode = NULL;
-	MultiSelect *selectNode = NULL;
 	MultiProject *projectNode = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
-	RangeTblEntry *subqueryRangeTableEntry = NULL;
+	Query *pushedDownQuery = NULL;
+	List *subqueryTargetEntryList = NIL;
+	List *havingClauseColumnList = NIL;
 
 	/* verify we can perform distributed planning on this query */
 	ErrorIfQueryNotSupported(queryTree);
-	ErrorIfSubqueryJoin(queryTree);
 
 	/* extract qualifiers and verify we can plan for them */
 	qualifierList = QualifierList(queryTree->jointree);
 	ValidateClauseList(qualifierList);
 
 	/*
-	 * We disregard pulled subqueries. This changes order of range table list.
-	 * We do not allow subquery joins, so we will have only one range table
-	 * entry in range table list after dropping pulled subquery. For this reason,
-	 * here we are updating columns in the most outer query for where clause
-	 * list and target list accordingly.
+	 * We would be creating a new Query and pushing down top level query's
+	 * contents down to it. Join and filter clauses in higher level query would
+	 * be transferred to lower query. Therefore after this function we would
+	 * only have a single range table entry in the top level query. We need to
+	 * create a target list entry in lower query for each column reference in
+	 * upper level query's target list and having clauses. Any column reference
+	 * in the upper query will be updated to have varno=1, and varattno=<resno>
+	 * of matching target entry in pushed down query.
+	 * Consider query
+	 *      SELECT s1.a, sum(s2.c)
+	 *      FROM (some subquery) s1, (some subquery) s2
+	 *      WHERE s1.a = s2.a
+	 *      GROUP BY s1.a
+	 *      HAVING avg(s2.b);
+	 *
+	 * We want to prepare a multi tree to avoid subquery joins at top level,
+	 * therefore above query is converted to an equivalent
+	 *      SELECT worker_column_0, sum(worker_column_1)
+	 *      FROM (
+	 *              SELECT
+	 *                  s1.a AS worker_column_0,
+	 *                  s2.c AS worker_column_1,
+	 *                  s2.b AS as worker_column_2
+	 *              FROM (some subquery) s1, (some subquery) s2
+	 *              WHERE s1.a = s2.a) worker_subquery
+	 *      GROUP BY worker_column_0
+	 *      HAVING avg(worker_column_2);
+	 *  After this conversion MultiTree is created as follows
+	 *
+	 *  MultiExtendedOpNode(
+	 *      targetList : worker_column_0, sum(worker_column_1)
+	 *      groupBy : worker_column_0
+	 *      having :  avg(worker_column_2))
+	 * --->MultiProject (worker_column_0, worker_column_1, worker_column_2)
+	 * --->--->	MultiTable (subquery : worker_subquery)
+	 *
+	 * Master and worker queries will be created out of this MultiTree at later stages.
 	 */
-	Assert(list_length(subqueryEntryList) == 1);
 
-	qualifierColumnList = pull_var_clause_default((Node *) qualifierList);
-	targetListColumnList = pull_var_clause_default((Node *) targetEntryList);
+	/*
+	 * uniqueColumnList contains all columns returned by subquery. Subquery target
+	 * entry list, subquery range table entry's column name list are derived from
+	 * uniqueColumnList. Columns mentioned in multiProject node and multiExtendedOp
+	 * node are indexed with their respective position in uniqueColumnList.
+	 */
+	targetColumnList = pull_var_clause_default((Node *) targetEntryList);
+	havingClauseColumnList = pull_var_clause_default(queryTree->havingQual);
+	columnList = list_concat(targetColumnList, havingClauseColumnList);
 
-	columnList = list_concat(qualifierColumnList, targetListColumnList);
-	foreach(columnCell, columnList)
-	{
-		Var *column = (Var *) lfirst(columnCell);
-		column->varno = 1;
-	}
+	/* create a target entry for each unique column */
+	subqueryTargetEntryList = CreateSubqueryTargetEntryList(columnList);
 
-	/* create multi node for the subquery */
-	subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
-	subqueryNode = MultiSubqueryPushdownTable(subqueryRangeTableEntry);
+	/*
+	 * Update varno/varattno fields of columns in columnList to
+	 * point to corresponding target entry in subquery target entry list.
+	 */
+	UpdateVarMappingsForExtendedOpNode(columnList, subqueryTargetEntryList);
+
+	/* new query only has target entries, join tree, and rtable*/
+	pushedDownQuery = makeNode(Query);
+	pushedDownQuery->commandType = queryTree->commandType;
+	pushedDownQuery->targetList = subqueryTargetEntryList;
+	pushedDownQuery->jointree = copyObject(queryTree->jointree);
+	pushedDownQuery->rtable = copyObject(queryTree->rtable);
+	pushedDownQuery->setOperations = copyObject(queryTree->setOperations);
+	pushedDownQuery->querySource = queryTree->querySource;
+
+	subqueryNode = MultiSubqueryPushdownTable(pushedDownQuery);
 
 	SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 	currentTopNode = (MultiNode *) subqueryCollectNode;
-
-	/* build select node if the query has selection criteria */
-	selectNode = MultiSelectNode(qualifierList);
-	if (selectNode != NULL)
-	{
-		SetChild((MultiUnaryNode *) selectNode, currentTopNode);
-		currentTopNode = (MultiNode *) selectNode;
-	}
 
 	/* build project node for the columns to project */
 	projectNode = MultiProjectNode(targetEntryList);
@@ -2052,6 +2993,31 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 	 * in the logical optimizer.
 	 */
 	extendedOpNode = MultiExtendedOpNode(queryTree);
+
+	/*
+	 * Postgres standard planner converts having qual node to a list of and
+	 * clauses and expects havingQual to be of type List when executing the
+	 * query later. This function is called on an original query, therefore
+	 * havingQual has not been converted yet. Perform conversion here.
+	 */
+	if (extendedOpNode->havingQual != NULL &&
+		!IsA(extendedOpNode->havingQual, List))
+	{
+		extendedOpNode->havingQual =
+			(Node *) make_ands_implicit((Expr *) extendedOpNode->havingQual);
+	}
+
+	/*
+	 * Postgres standard planner evaluates expressions in the LIMIT/OFFSET clauses.
+	 * Since we're using original query here, we should manually evaluate the
+	 * expression on the LIMIT and OFFSET clauses. Note that logical optimizer
+	 * expects those clauses to be already evaluated.
+	 */
+	extendedOpNode->limitCount =
+		PartiallyEvaluateExpression(extendedOpNode->limitCount, NULL);
+	extendedOpNode->limitOffset =
+		PartiallyEvaluateExpression(extendedOpNode->limitOffset, NULL);
+
 	SetChild((MultiUnaryNode *) extendedOpNode, currentTopNode);
 	currentTopNode = (MultiNode *) extendedOpNode;
 
@@ -2060,48 +3026,105 @@ SubqueryPushdownMultiPlanTree(Query *queryTree, List *subqueryEntryList)
 
 
 /*
- * ErrorIfSubqueryJoin errors out if the given query is a join query. Note that
- * this function will not be required once we implement subquery joins.
+ * CreateSubqueryTargetEntryList creates a target entry for each unique column
+ * in the column list and returns the target entry list.
+ */
+static List *
+CreateSubqueryTargetEntryList(List *columnList)
+{
+	AttrNumber resNo = 1;
+	ListCell *columnCell = NULL;
+	List *uniqueColumnList = NIL;
+	List *subqueryTargetEntryList = NIL;
+
+	foreach(columnCell, columnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		uniqueColumnList = list_append_unique(uniqueColumnList, copyObject(column));
+	}
+
+	foreach(columnCell, uniqueColumnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		TargetEntry *newTargetEntry = makeNode(TargetEntry);
+		StringInfo columnNameString = makeStringInfo();
+
+		newTargetEntry->expr = (Expr *) copyObject(column);
+		appendStringInfo(columnNameString, WORKER_COLUMN_FORMAT, resNo);
+		newTargetEntry->resname = columnNameString->data;
+		newTargetEntry->resjunk = false;
+		newTargetEntry->resno = resNo;
+
+		subqueryTargetEntryList = lappend(subqueryTargetEntryList, newTargetEntry);
+		resNo++;
+	}
+
+	return subqueryTargetEntryList;
+}
+
+
+/*
+ * UpdateVarMappingsForExtendedOpNode updates varno/varattno fields of columns
+ * in columnList to point to corresponding target in subquery target entry
+ * list.
  */
 static void
-ErrorIfSubqueryJoin(Query *queryTree)
+UpdateVarMappingsForExtendedOpNode(List *columnList, List *subqueryTargetEntryList)
 {
-	List *joinTreeTableIndexList = NIL;
-	uint32 joiningRangeTableCount = 0;
-
-	/*
-	 * Extract all range table indexes from the join tree. Note that sub-queries
-	 * that get pulled up by PostgreSQL don't appear in this join tree.
-	 */
-	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
-	joiningRangeTableCount = list_length(joinTreeTableIndexList);
-
-	if (joiningRangeTableCount > 1)
+	ListCell *columnCell = NULL;
+	foreach(columnCell, columnList)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot perform distributed planning on this query"),
-						errdetail("Join in subqueries is not supported yet")));
+		Var *columnOnTheExtendedNode = (Var *) lfirst(columnCell);
+		ListCell *targetEntryCell = NULL;
+		foreach(targetEntryCell, subqueryTargetEntryList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			Var *targetColumn = NULL;
+
+			Assert(IsA(targetEntry->expr, Var));
+			targetColumn = (Var *) targetEntry->expr;
+			if (columnOnTheExtendedNode->varno == targetColumn->varno &&
+				columnOnTheExtendedNode->varattno == targetColumn->varattno)
+			{
+				columnOnTheExtendedNode->varno = 1;
+				columnOnTheExtendedNode->varattno = targetEntry->resno;
+				break;
+			}
+		}
 	}
 }
 
 
 /*
- * MultiSubqueryPushdownTable creates a MultiTable from the given subquery range
- * table entry and returns it. Note that this sets subquery field of MultiTable
- * to subquery of the given range table entry.
+ * MultiSubqueryPushdownTable creates a MultiTable from the given subquery,
+ * populates column list and returns the multitable.
  */
 static MultiTable *
-MultiSubqueryPushdownTable(RangeTblEntry *subqueryRangeTableEntry)
+MultiSubqueryPushdownTable(Query *subquery)
 {
-	Query *subquery = subqueryRangeTableEntry->subquery;
+	MultiTable *subqueryTableNode = NULL;
+	StringInfo rteName = makeStringInfo();
+	List *columnNamesList = NIL;
+	ListCell *targetEntryCell = NULL;
 
-	MultiTable *subqueryTableNode = CitusMakeNode(MultiTable);
+	appendStringInfo(rteName, "worker_subquery");
+
+	foreach(targetEntryCell, subquery->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		columnNamesList = lappend(columnNamesList, makeString(targetEntry->resname));
+	}
+
+	subqueryTableNode = CitusMakeNode(MultiTable);
 	subqueryTableNode->subquery = subquery;
-	subqueryTableNode->relationId = HEAP_ANALYTICS_SUBQUERY_RELATION_ID;
+	subqueryTableNode->relationId = SUBQUERY_PUSHDOWN_RELATION_ID;
 	subqueryTableNode->rangeTableId = SUBQUERY_RANGE_TABLE_ID;
 	subqueryTableNode->partitionColumn = NULL;
-	subqueryTableNode->alias = subqueryRangeTableEntry->alias;
-	subqueryTableNode->referenceNames = subqueryRangeTableEntry->eref;
+	subqueryTableNode->alias = makeNode(Alias);
+	subqueryTableNode->alias->aliasname = rteName->data;
+	subqueryTableNode->referenceNames = makeNode(Alias);
+	subqueryTableNode->referenceNames->aliasname = rteName->data;
+	subqueryTableNode->referenceNames->colnames = columnNamesList;
 
 	return subqueryTableNode;
 }

@@ -964,6 +964,50 @@ DETAIL:  Select query cannot be pushed down to the worker.
    outer_most.id;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
+ -- if the given filter was on value_1 as shown in the above, Citus could
+ -- push it down. But here the query is refused
+ INSERT INTO agg_events 
+             (user_id) 
+ SELECT raw_events_first.user_id 
+ FROM   raw_events_first, 
+        raw_events_second 
+ WHERE  raw_events_second.user_id = raw_events_first.value_1 
+        AND raw_events_first.value_2 = 12;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
+ -- lets do some unsupported query tests with subqueries
+ -- foo is not joined on the partition key so the query is not 
+ -- pushed down
+ INSERT INTO agg_events
+             (user_id, value_4_agg)
+ SELECT
+   outer_most.id, max(outer_most.value)
+ FROM
+ (
+   SELECT f2.id as id, f2.v4 as value FROM
+     (SELECT
+           id
+       FROM   (SELECT reference_table.user_id      AS id
+                FROM   raw_events_first LEFT JOIN
+                       reference_table
+             ON (raw_events_first.value_1 = reference_table.user_id)) AS foo) as f
+   INNER JOIN
+     (SELECT v4,
+           v1,
+           id
+     FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
+                SUM(raw_events_first.value_1) AS v1,
+                raw_events_second.user_id      AS id
+             FROM   raw_events_first,
+                     raw_events_second
+             WHERE  raw_events_first.user_id = raw_events_second.user_id
+             GROUP  BY raw_events_second.user_id
+             HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
+ ON (f.id = f2.id)) as outer_most
+ GROUP BY
+   outer_most.id;
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 INSERT INTO agg_events
             (value_4_agg,
              value_1_agg,

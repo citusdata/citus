@@ -16,6 +16,7 @@
 
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
+#include "distributed/relation_restriction_equivalence.h"
 
 
 /* Definitions local to logical plan optimizer */

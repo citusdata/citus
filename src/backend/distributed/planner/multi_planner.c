@@ -309,8 +309,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		 */
 		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
-			/* Create and optimize logical plan */
-			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(query);
+			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+																plannerRestrictionContext);
 			MultiLogicalPlanOptimize(logicalPlan);
 
 			/*
@@ -323,7 +323,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			CheckNodeIsDumpable((Node *) logicalPlan);
 
 			/* Create the physical plan */
-			distributedPlan = MultiPhysicalPlanCreate(logicalPlan);
+			distributedPlan = MultiPhysicalPlanCreate(logicalPlan,
+													  plannerRestrictionContext);
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);
@@ -796,11 +797,10 @@ CopyPlanParamList(List *originalPlanParamList)
 
 
 /*
- * CreateAndPushPlannerRestrictionContext creates a new planner restriction context.
- * Later, it creates a relation restriction context and a join restriction
- * context, and sets those contexts in the planner restriction context. Finally,
- * the planner restriction context is inserted to the beginning of the
- * plannerRestrictionContextList and it is returned.
+ * CreateAndPushPlannerRestrictionContext creates a new relation restriction context
+ * and a new join context, inserts it to the beginning of the
+ * plannerRestrictionContextList. Finally, the planner restriction context is
+ * inserted to the beginning of the plannerRestrictionContextList and it is returned.
  */
 static PlannerRestrictionContext *
 CreateAndPushPlannerRestrictionContext(void)
