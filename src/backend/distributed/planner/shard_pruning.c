@@ -1158,9 +1158,19 @@ PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *contex
 	}
 	if (prune->greaterConsts)
 	{
-		lowerBound = prune->greaterConsts->constvalue;
-		lowerBoundInclusive = false;
-		hasLowerBound = true;
+		/*
+		 * Use the more restrictive one, if both greater and greaterEqual
+		 * constraints are specified.
+		 */
+		if (!hasLowerBound ||
+			PerformValueCompare(compareFunctionCall,
+								prune->greaterConsts->constvalue,
+								lowerBound) >= 0)
+		{
+			lowerBound = prune->greaterConsts->constvalue;
+			lowerBoundInclusive = false;
+			hasLowerBound = true;
+		}
 	}
 	if (prune->lessEqualConsts)
 	{
@@ -1170,9 +1180,19 @@ PruneWithBoundaries(DistTableCacheEntry *cacheEntry, ClauseWalkerContext *contex
 	}
 	if (prune->lessConsts)
 	{
-		upperBound = prune->lessConsts->constvalue;
-		upperBoundInclusive = false;
-		hasUpperBound = true;
+		/*
+		 * Use the more restrictive one, if both less and lessEqual
+		 * constraints are specified.
+		 */
+		if (!hasUpperBound ||
+			PerformValueCompare(compareFunctionCall,
+								prune->lessConsts->constvalue,
+								upperBound) <= 0)
+		{
+			upperBound = prune->lessConsts->constvalue;
+			upperBoundInclusive = false;
+			hasUpperBound = true;
+		}
 	}
 
 	Assert(hasLowerBound || hasUpperBound);
