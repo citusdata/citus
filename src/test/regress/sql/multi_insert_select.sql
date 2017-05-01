@@ -96,16 +96,6 @@ FROM
 WHERE
   user_id < 0;
 
--- make sure stable functions in CTEs are evaluated
-INSERT INTO raw_events_second (user_id, value_1)
-WITH sub_cte AS (SELECT evaluate_on_master())
-SELECT
-  user_id, (SELECT * FROM sub_cte)
-FROM
-  raw_events_first
-WHERE
-  user_id < 0;
-
 -- make sure we don't evaluate stable functions with column arguments
 CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
 RETURNS int LANGUAGE plpgsql STABLE
@@ -517,7 +507,7 @@ INSERT INTO agg_events
             FROM
               fist_table_agg;
 
--- We do support some CTEs
+-- We don't support CTEs that consist of const values as well
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
@@ -1310,6 +1300,30 @@ SET client_min_messages TO INFO;
 
 -- avoid constraint violations
 TRUNCATE raw_events_first;
+
+-- we don't support LIMIT even if it exists in the subqueries 
+-- in where clause
+INSERT INTO agg_events(user_id)
+SELECT user_id 
+FROM   users_table 
+WHERE  user_id 
+  IN (SELECT 
+      user_id 
+        FROM  (
+                (
+                  SELECT 
+                    user_id 
+                    FROM
+                    (
+                      SELECT 
+                        e1.user_id 
+                      FROM 
+                        users_table u1, events_table e1 
+                      WHERE 
+                        e1.user_id = u1.user_id LIMIT 3
+                     ) as f_inner
+                  )
+          ) AS f2); 
 
 -- Altering a table and selecting from it using a multi-shard statement
 -- in the same transaction is allowed because we will use the same

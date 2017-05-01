@@ -458,57 +458,66 @@ ORDER BY user_lastseen DESC, user_id;
 
 ------------------------------------
 -- Count the number of distinct users_table who are in segment X and Y and Z
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT DISTINCT user_id
+SELECT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60)
+GROUP BY 
+  user_id
+ORDER BY
+  user_id DESC
+  LIMIT 5;
 
 ------------------------------------
 -- Find customers who have done X, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 101 AND value_1 < 110
   AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 101 AND event_type < 110 AND value_3 > 100 AND user_id = users_table.user_id);
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 101 AND event_type < 110 AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 2 DESC, 1 DESC
+LIMIT 5;
 
 ------------------------------------
 -- Customers who haven’t done X, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 = 101
   AND value_2 >= 5
-  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id = users_table.user_id);
+  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 1 DESC, 2 DESC
+LIMIT 3;
 
 ------------------------------------
 -- Customers who have done X and Y, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT user_id, value_2 FROM users_table WHERE
+SELECT user_id, sum(value_2) as cnt FROM users_table WHERE
   value_1 > 100
   AND value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type != 100 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 101 AND value_3 > 100 AND user_id = users_table.user_id);
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 101 AND value_3 > 100 AND user_id = users_table.user_id)
+GROUP BY
+  user_id
+ORDER BY cnt DESC, user_id DESC
+LIMIT 5;
 
 ------------------------------------
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id);
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 2 DESC, 1 DESC
+LIMIT 4;
 
 ------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id,
-         value_2
+         avg(value_2)
   FROM   users_table
   WHERE  value_1 > 100
          AND value_1 < 124
@@ -520,7 +529,12 @@ SELECT user_id,
                             AND value_3 > 100
                             AND user_id = users_table.user_id
                      GROUP  BY user_id
-                     HAVING Count(*) > 2);
+                     HAVING Count(*) > 2)
+GROUP BY 
+  user_id
+ORDER BY 
+  1 DESC, 2 DESC
+LIMIT 5;
 
 ------------------------------------
 -- Find me all users_table who logged in more than once
@@ -555,7 +569,6 @@ ORDER BY
 
 ------------------------------------
 -- Find me all users_table who has done some event and has filters
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id
 FROM events_table
@@ -568,15 +581,20 @@ WHERE
               users_table
              WHERE
    	          value_1 = 15 AND value_2 > 25
-            );
+            )
+ORDER BY 1;
 
 ------------------------------------
 -- Which events_table did people who has done some specific events_table
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT user_id, event_type FROM events_table
-WHERE user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
-GROUP BY user_id, event_type;
+SELECT 
+  user_id, event_type FROM events_table
+WHERE 
+  user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
+GROUP BY 
+  user_id, event_type
+ORDER BY 2 DESC, 1 
+LIMIT 3;
 
 ------------------------------------
 -- Find me all the users_table who has done some event more than three times
@@ -1600,5 +1618,47 @@ FROM (
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
 
-SET citus.subquery_pushdown to OFF;
+CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
+    AS 'select $1 > $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+
+-- we don't support joins via functions 
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE test_join_function_2(u.user_id, e.user_id)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1;
+
+-- note that the following query has joins on the partition keys
+-- however we fail to push down it due to the function call on the
+-- where clause. We probably need to relax that check
+SELECT
+    users_table.user_id, users_table.value_1, prob
+FROM
+   users_table
+        JOIN
+   (SELECT
+      ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM
+      users_table AS ma, events_table as short_list
+    WHERE
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
+    ) temp
+  ON users_table.user_id = temp.user_id
+  WHERE 
+    users_table.value_1 < 50 AND test_join_function_2(users_table.user_id, temp.user_id);
+
+DROP FUNCTION test_join_function_2(integer, integer);
+
 SET citus.enable_router_execution TO TRUE;
+SET citus.subquery_pushdown to OFF;
+

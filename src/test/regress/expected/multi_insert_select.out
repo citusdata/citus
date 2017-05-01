@@ -121,16 +121,6 @@ FROM
 WHERE
   user_id < 0;
 NOTICE:  evaluating on master
--- make sure stable functions in CTEs are evaluated
-INSERT INTO raw_events_second (user_id, value_1)
-WITH sub_cte AS (SELECT evaluate_on_master())
-SELECT
-  user_id, (SELECT * FROM sub_cte)
-FROM
-  raw_events_first
-WHERE
-  user_id < 0;
-NOTICE:  evaluating on master
 -- make sure we don't evaluate stable functions with column arguments
 CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
 RETURNS int LANGUAGE plpgsql STABLE
@@ -665,18 +655,14 @@ INSERT INTO agg_events
               fist_table_agg;
 ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
--- We do support some CTEs
+-- We don't support CTEs that consist of const values as well
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
     raw_events_first.user_id, (SELECT * FROM sub_cte)
   FROM
     raw_events_first;
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300000 raw_events_first WHERE ((worker_hash(user_id) >= '-2147483648'::integer) AND (worker_hash(user_id) <= '-1073741825'::integer))
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) >= '-1073741824'::integer) AND (worker_hash(user_id) <= '-1'::integer))
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) >= 0) AND (worker_hash(user_id) <= 1073741823))
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) WITH sub_cte AS (SELECT 1) SELECT user_id, (SELECT sub_cte."?column?" FROM sub_cte) FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) >= 1073741824) AND (worker_hash(user_id) <= 2147483647))
-DEBUG:  Plan is router executable
+ERROR:  Subqueries without relations are not allowed in INSERT ... SELECT queries
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
@@ -1581,6 +1567,30 @@ ERROR:  grouping sets are not allowed in INSERT ... SELECT queries
 SET client_min_messages TO INFO;
 -- avoid constraint violations
 TRUNCATE raw_events_first;
+-- we don't support LIMIT even if it exists in the subqueries 
+-- in where clause
+INSERT INTO agg_events(user_id)
+SELECT user_id 
+FROM   users_table 
+WHERE  user_id 
+  IN (SELECT 
+      user_id 
+        FROM  (
+                (
+                  SELECT 
+                    user_id 
+                    FROM
+                    (
+                      SELECT 
+                        e1.user_id 
+                      FROM 
+                        users_table u1, events_table e1 
+                      WHERE 
+                        e1.user_id = u1.user_id LIMIT 3
+                     ) as f_inner
+                  )
+          ) AS f2); 
+ERROR:  LIMIT clauses are not allowed in INSERT ... SELECT queries
 -- Altering a table and selecting from it using a multi-shard statement
 -- in the same transaction is allowed because we will use the same
 -- connections for all co-located placements.

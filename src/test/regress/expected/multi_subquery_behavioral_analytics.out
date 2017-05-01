@@ -546,62 +546,103 @@ ORDER BY user_lastseen DESC, user_id;
 
 ------------------------------------
 -- Count the number of distinct users_table who are in segment X and Y and Z
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT DISTINCT user_id
+SELECT user_id
 FROM users_table
 WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
     AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60)
+GROUP BY 
+  user_id
+ORDER BY
+  user_id DESC
+  LIMIT 5;
+ user_id 
+---------
+      93
+      90
+      88
+      87
+      84
+(5 rows)
+
 ------------------------------------
 -- Find customers who have done X, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 > 101 AND value_1 < 110
   AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 101 AND event_type < 110 AND value_3 > 100 AND user_id = users_table.user_id);
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 101 AND event_type < 110 AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 2 DESC, 1 DESC
+LIMIT 5;
+ user_id | value_2 
+---------+---------
+      95 |     951
+       4 |     934
+       2 |     908
+      90 |     900
+      49 |     847
+(5 rows)
+
 ------------------------------------
 -- Customers who haven’t done X, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_1 = 101
   AND value_2 >= 5
-  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id = users_table.user_id);
-ERROR:  could not run distributed query with subquery outside the FROM clause
-HINT:  Consider using an equality filter on the distributed table's partition column.
+  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 1 DESC, 2 DESC
+LIMIT 3;
+ user_id | value_2 
+---------+---------
+      58 |     585
+      51 |    1000
+      48 |     861
+(3 rows)
+
 ------------------------------------
 -- Customers who have done X and Y, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT user_id, value_2 FROM users_table WHERE
+SELECT user_id, sum(value_2) as cnt FROM users_table WHERE
   value_1 > 100
   AND value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type != 100 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 101 AND value_3 > 100 AND user_id = users_table.user_id);
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 101 AND value_3 > 100 AND user_id = users_table.user_id)
+GROUP BY
+  user_id
+ORDER BY cnt DESC, user_id DESC
+LIMIT 5;
+ user_id |  cnt  
+---------+-------
+      49 | 48606
+      69 | 46524
+      86 | 46163
+      80 | 45995
+      35 | 45437
+(5 rows)
+
 ------------------------------------
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
   value_2 >= 5
   AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id);
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id)
+ORDER BY 2 DESC, 1 DESC
+LIMIT 4;
+ user_id | value_2 
+---------+---------
+       8 |     996
+      96 |     995
+       8 |     995
+      96 |     989
+(4 rows)
+
 ------------------------------------
 -- Customers who have done X more than 2 times, and satisfy other customer specific criteria
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id,
-         value_2
+         avg(value_2)
   FROM   users_table
   WHERE  value_1 > 100
          AND value_1 < 124
@@ -613,9 +654,21 @@ SELECT user_id,
                             AND value_3 > 100
                             AND user_id = users_table.user_id
                      GROUP  BY user_id
-                     HAVING Count(*) > 2);
-ERROR:  could not run distributed query with subquery outside the FROM clause
-HINT:  Consider using an equality filter on the distributed table's partition column.
+                     HAVING Count(*) > 2)
+GROUP BY 
+  user_id
+ORDER BY 
+  1 DESC, 2 DESC
+LIMIT 5;
+ user_id |         avg          
+---------+----------------------
+      99 | 571.6666666666666667
+      98 | 758.0000000000000000
+      96 | 459.6666666666666667
+      90 | 453.3333333333333333
+      89 | 215.0000000000000000
+(5 rows)
+
 ------------------------------------
 -- Find me all users_table who logged in more than once
 ------------------------------------
@@ -671,7 +724,6 @@ ORDER BY
 
 ------------------------------------
 -- Find me all users_table who has done some event and has filters
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
 SELECT user_id
 FROM events_table
@@ -684,18 +736,32 @@ WHERE
               users_table
              WHERE
    	          value_1 = 15 AND value_2 > 25
-            );
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+            )
+ORDER BY 1;
+ user_id 
+---------
+       7
+      53
+(2 rows)
+
 ------------------------------------
 -- Which events_table did people who has done some specific events_table
--- This query will be supported when we have subqueries in where clauses.
 ------------------------------------
-SELECT user_id, event_type FROM events_table
-WHERE user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
-GROUP BY user_id, event_type;
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+SELECT 
+  user_id, event_type FROM events_table
+WHERE 
+  user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
+GROUP BY 
+  user_id, event_type
+ORDER BY 2 DESC, 1 
+LIMIT 3;
+ user_id | event_type 
+---------+------------
+      18 |        999
+      23 |        999
+      26 |        999
+(3 rows)
+
 ------------------------------------
 -- Find me all the users_table who has done some event more than three times
 ------------------------------------
@@ -1950,5 +2016,45 @@ FROM (
 ERROR:  no value found for parameter 1
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
-SET citus.subquery_pushdown to OFF;
+CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
+    AS 'select $1 > $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+-- we don't support joins via functions 
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT u.user_id, e.event_type::text AS event, e.time
+    FROM users_table AS u,
+         events_table AS e
+    WHERE test_join_function_2(u.user_id, e.user_id)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- note that the following query has joins on the partition keys
+-- however we fail to push down it due to the function call on the
+-- where clause. We probably need to relax that check
+SELECT
+    users_table.user_id, users_table.value_1, prob
+FROM
+   users_table
+        JOIN
+   (SELECT
+      ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM
+      users_table AS ma, events_table as short_list
+    WHERE
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
+    ) temp
+  ON users_table.user_id = temp.user_id
+  WHERE 
+    users_table.value_1 < 50 AND test_join_function_2(users_table.user_id, temp.user_id);
+ERROR:  unsupported clause type
+DROP FUNCTION test_join_function_2(integer, integer);
 SET citus.enable_router_execution TO TRUE;
+SET citus.subquery_pushdown to OFF;

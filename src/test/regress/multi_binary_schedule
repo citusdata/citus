@@ -21,7 +21,7 @@ test: multi_table_ddl
 test: multi_create_table
 test: multi_load_data
 
-test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
+test: multi_basic_queries multi_complex_expressions 
 test: multi_single_relation_subquery
 test: multi_binary_master_copy_format
 
