@@ -2939,10 +2939,10 @@ InsertSelectQuery(Query *query)
  * shallowly, for lack of copyObject support.
  *
  * Note that CopyRelationRestrictionContext copies the following fields per relation
- * context: index, relationId, distributedRelation, rte, relOptInfo->baserestrictinfo,
- * relOptInfo->joininfo and prunedShardIntervalList. Also, the function shallowly copies
- * plannerInfo which is read-only. All other parts of the relOptInfo is also shallowly
- * copied.
+ * context: index, relationId, distributedRelation, rte, relOptInfo->baserestrictinfo
+ * and relOptInfo->joininfo. Also, the function shallowly copies plannerInfo and
+ * prunedShardIntervalList which are read-only. All other parts of the relOptInfo
+ * is also shallowly copied.
  */
 RelationRestrictionContext *
 CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
@@ -2981,8 +2981,7 @@ CopyRelationRestrictionContext(RelationRestrictionContext *oldContext)
 
 		/* not copyable, but readonly */
 		newRestriction->plannerInfo = oldRestriction->plannerInfo;
-		newRestriction->prunedShardIntervalList =
-			copyObject(oldRestriction->prunedShardIntervalList);
+		newRestriction->prunedShardIntervalList = oldRestriction->prunedShardIntervalList;
 
 		newContext->relationRestrictionList =
 			lappend(newContext->relationRestrictionList, newRestriction);

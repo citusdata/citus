@@ -520,15 +520,6 @@ DEBUG:  Plan is router executable
 SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
 ERROR:  could not run distributed query with complex table expressions
 HINT:  Consider using an equality filter on the distributed table's partition column.
--- subqueries are not supported in WHERE clause in Citus
-SELECT * FROM articles_hash WHERE author_id IN (SELECT id FROM authors_hash WHERE name LIKE '%a');
-ERROR:  cannot plan queries that include both regular and partitioned relations
-SELECT * FROM articles_hash WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 1 or author_id = 3);
-ERROR:  could not run distributed query with join types other than INNER or OUTER JOINS
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
-SELECT * FROM articles_hash WHERE author_id = (SELECT 1);
-ERROR:  could not run distributed query with subquery outside the FROM clause
-HINT:  Consider using an equality filter on the distributed table's partition column.
 -- unless the query can be transformed into a join
 SELECT * FROM articles_hash
 WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
@@ -615,7 +606,7 @@ HINT:  Set citus.task_executor_type to "task-tracker".
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
-ERROR:  could not run distributed query with subquery outside the FROM clause
+ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- simple lookup query
 SELECT *

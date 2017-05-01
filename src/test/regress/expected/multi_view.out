@@ -568,9 +568,16 @@ SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 (12 rows)
 
 -- this would be supported when we implement where partition_key in (subquery) support
-SELECT et.* FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users);
-ERROR:  could not run distributed query with subquery outside the FROM clause
-HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users) GROUP BY 1,2 ORDER BY 1 DESC,2 DESC LIMIT 5;
+ user_id |              time               
+---------+---------------------------------
+      90 | Tue Jan 21 02:50:05.379732 2014
+      90 | Tue Jan 21 00:08:33.911898 2014
+      90 | Mon Jan 20 22:25:39.21906 2014
+      90 | Mon Jan 20 21:11:10.814326 2014
+      90 | Mon Jan 20 19:16:33.359257 2014
+(5 rows)
+
 -- it is supported when it is a router query
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 90);
  count 
@@ -725,18 +732,23 @@ SELECT user_id FROM router_view GROUP BY 1;
        2
 (1 row)
 
--- There is a known issue with router plannable subqueries joined with non-router
--- plannable subqueries. Following tests should be uncommented when we fix it
--- join a router view (not implement error)
--- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id);
--- it still does not work when converted to 2 subquery join
--- SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id);
--- views are completely removed and still it does not work
--- SELECT * FROM
---	(SELECT user_id FROM (SELECT * FROM users_table WHERE user_id = 2) rv1  GROUP BY 1) rv2
---	JOIN (SELECT user_id, time FROM events_table
---	WHERE time > '2014-01-20 01:45:49.978738'::timestamp) re 
---	USING (user_id);
+-- join a router view
+ SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id) ORDER BY 2 LIMIT 3;
+ user_id |              time               
+---------+---------------------------------
+       2 | Mon Jan 20 02:02:03.208351 2014
+       2 | Mon Jan 20 02:34:14.54301 2014
+       2 | Mon Jan 20 03:16:38.418772 2014
+(3 rows)
+
+ SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id) ORDER BY 2 LIMIT 3;
+ user_id |              time               
+---------+---------------------------------
+       2 | Mon Jan 20 02:02:03.208351 2014
+       2 | Mon Jan 20 02:34:14.54301 2014
+       2 | Mon Jan 20 03:16:38.418772 2014
+(3 rows)
+
 -- views with limits
 CREATE VIEW recent_10_users AS
 	SELECT user_id, max(time) as lastseen FROM users_table

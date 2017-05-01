@@ -38,10 +38,10 @@ test: multi_insert_select
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query
-test: multi_basic_queries multi_complex_expressions multi_verify_no_subquery
+test: multi_basic_queries multi_complex_expressions 
 test: multi_explain
 test: multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
-test: multi_subquery_union
+test: multi_subquery_union multi_subquery_in_where_clause
 test: multi_reference_table
 test: multi_outer_join_reference
 test: multi_single_relation_subquery

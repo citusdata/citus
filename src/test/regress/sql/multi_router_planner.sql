@@ -281,13 +281,6 @@ SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or a
 -- they are not supported if multiple workers are involved
 SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
 
--- subqueries are not supported in WHERE clause in Citus
-SELECT * FROM articles_hash WHERE author_id IN (SELECT id FROM authors_hash WHERE name LIKE '%a');
-
-SELECT * FROM articles_hash WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 1 or author_id = 3);
-
-SELECT * FROM articles_hash WHERE author_id = (SELECT 1);
-
 -- unless the query can be transformed into a join
 SELECT * FROM articles_hash
 WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
