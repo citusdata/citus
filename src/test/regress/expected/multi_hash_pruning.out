@@ -192,10 +192,6 @@ DEBUG:  Plan is router executable
 -- a notice message when used with the partition column
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = ANY ('{1,2,3}');
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
  count 
 -------
      0
