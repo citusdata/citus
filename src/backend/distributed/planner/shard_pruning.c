@@ -61,7 +61,9 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
+#include "utils/arrayaccess.h"
 #include "utils/catcache.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -169,8 +171,12 @@ static bool PrunableExpressionsWalker(Node *originalNode, ClauseWalkerContext *c
 static void AddPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
 												 OpExpr *opClause, Var *varClause,
 												 Const *constantClause);
+static void AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
+													ScalarArrayOpExpr *
+													arrayOperatorExpression);
 static void AddHashRestrictionToInstance(ClauseWalkerContext *context, OpExpr *opClause,
 										 Var *varClause, Const *constantClause);
+static void AddNewConjuction(ClauseWalkerContext *context, OpExpr *op);
 static PruningInstance * CopyPartialPruningInstance(PruningInstance *sourceInstance);
 static List * ShardArrayToList(ShardInterval **shardArray, int length);
 static List * DeepCopyShardIntervalList(List *originalShardIntervalList);
@@ -541,40 +547,8 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 	}
 	else if (IsA(node, ScalarArrayOpExpr))
 	{
-		PruningInstance *prune = context->currentPruningInstance;
 		ScalarArrayOpExpr *arrayOperatorExpression = (ScalarArrayOpExpr *) node;
-		Node *leftOpExpression = linitial(arrayOperatorExpression->args);
-		Node *strippedLeftOpExpression = strip_implicit_coercions(leftOpExpression);
-		bool usingEqualityOperator = OperatorImplementsEquality(
-			arrayOperatorExpression->opno);
-
-		/*
-		 * Citus cannot prune hash-distributed shards with ANY/ALL. We show a NOTICE
-		 * if the expression is ANY/ALL performed on the partition column with equality.
-		 *
-		 * TODO: this'd now be easy to implement, similar to the OR_EXPR case
-		 * above, except that one would push an appropriately constructed
-		 * OpExpr(LHS = $array_element) as continueAt.
-		 */
-		if (usingEqualityOperator && strippedLeftOpExpression != NULL &&
-			equal(strippedLeftOpExpression, context->partitionColumn))
-		{
-			ereport(NOTICE, (errmsg("cannot use shard pruning with "
-									"ANY/ALL (array expression)"),
-							 errhint("Consider rewriting the expression with "
-									 "OR/AND clauses.")));
-		}
-
-		/*
-		 * Mark expression as added, so we'll fail pruning if there's no ANDed
-		 * restrictions that we can deal with.
-		 */
-		if (!prune->addedToPruningInstances)
-		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
-			prune->addedToPruningInstances = true;
-		}
+		AddSAOPartitionKeyRestrictionToInstance(context, arrayOperatorExpression);
 
 		return false;
 	}
@@ -597,6 +571,110 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 	}
 
 	return expression_tree_walker(node, PrunableExpressionsWalker, context);
+}
+
+
+/*
+ * AddSAOPartitionKeyRestrictionToInstance adds partcol = arrayelem operator
+ * restriction to the current pruning instance for each element of the array. These
+ * restrictions are added to pruning instance to prune shards based on IN/=ANY
+ * constraints.
+ */
+static void
+AddSAOPartitionKeyRestrictionToInstance(ClauseWalkerContext *context,
+										ScalarArrayOpExpr *arrayOperatorExpression)
+{
+	PruningInstance *prune = context->currentPruningInstance;
+	Node *leftOpExpression = linitial(arrayOperatorExpression->args);
+	Node *strippedLeftOpExpression = strip_implicit_coercions(leftOpExpression);
+	bool usingEqualityOperator = OperatorImplementsEquality(
+		arrayOperatorExpression->opno);
+	Expr *arrayArgument = (Expr *) lsecond(arrayOperatorExpression->args);
+
+	/* checking for partcol = ANY(const, value, s); or partcol IN (const,b,c); */
+	if (usingEqualityOperator && strippedLeftOpExpression != NULL &&
+		equal(strippedLeftOpExpression, context->partitionColumn) &&
+		IsA(arrayArgument, Const))
+	{
+		ArrayType *array = NULL;
+		int16 typlen = 0;
+		bool typbyval = false;
+		char typalign = '\0';
+		Oid elementType = 0;
+		ArrayIterator arrayIterator = NULL;
+		Datum arrayElement = 0;
+		Datum inArray = ((Const *) arrayArgument)->constvalue;
+		bool isNull = false;
+
+		/* check for the NULL right-hand expression*/
+		if (inArray == 0)
+		{
+			return;
+		}
+
+		array = DatumGetArrayTypeP(((Const *) arrayArgument)->constvalue);
+
+		/* get the necessary information from array type to iterate over it */
+		elementType = ARR_ELEMTYPE(array);
+		get_typlenbyvalalign(elementType,
+							 &typlen,
+							 &typbyval,
+							 &typalign);
+
+		/* Iterate over the righthand array of expression */
+		arrayIterator = array_create_iterator(array, 0, NULL);
+		while (array_iterate(arrayIterator, &arrayElement, &isNull))
+		{
+			OpExpr *arrayEqualityOp = NULL;
+			Const *constElement = makeConst(elementType, -1,
+											DEFAULT_COLLATION_OID, typlen, arrayElement,
+											isNull, typbyval);
+
+			/* build partcol = arrayelem operator */
+			arrayEqualityOp = makeNode(OpExpr);
+			arrayEqualityOp->opno = arrayOperatorExpression->opno;
+			arrayEqualityOp->opfuncid = arrayOperatorExpression->opfuncid;
+			arrayEqualityOp->inputcollid = arrayOperatorExpression->inputcollid;
+			arrayEqualityOp->opresulttype = get_func_rettype(
+				arrayOperatorExpression->opfuncid);
+			arrayEqualityOp->opcollid = DEFAULT_COLLATION_OID;
+			arrayEqualityOp->location = -1;
+			arrayEqualityOp->args = list_make2(strippedLeftOpExpression, constElement);
+
+			AddNewConjuction(context, arrayEqualityOp);
+		}
+	}
+
+	/* Since we could not deal with the constraint, add the pruning instance to
+	 * pruning instance list and labeled it as added.
+	 */
+	else if (!prune->addedToPruningInstances)
+	{
+		context->pruningInstances = lappend(context->pruningInstances, prune);
+		prune->addedToPruningInstances = true;
+	}
+}
+
+
+/*
+ * AddNewConjuction adds the OpExpr to pending instance list of context
+ * as conjunction as partial instance.
+ */
+static void
+AddNewConjuction(ClauseWalkerContext *context, OpExpr *op)
+{
+	PendingPruningInstance *instance = palloc0(sizeof(PendingPruningInstance));
+
+	instance->instance = context->currentPruningInstance;
+	instance->continueAt = (Node *) op;
+
+	/*
+	 * Signal that this instance is not to be used for pruning on
+	 * its own.  Once the pending instance is processed, it'll be
+	 * used.
+	 */
+	instance->instance->isPartial = true;
+	context->pendingInstances = lappend(context->pendingInstances, instance);
 }
 
 
