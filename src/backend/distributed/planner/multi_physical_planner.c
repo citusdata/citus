@@ -32,6 +32,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_router_planner.h"
@@ -2166,9 +2167,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 
 /*
  * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
- * partitioning. It uses shard interval array that are sorted on interval minimum
- * values. Then it compares every shard interval in order and if any pair of
- * shard intervals are not equal it returns false.
+ * partitioning.
  */
 static bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
@@ -2197,6 +2196,22 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 
 	Assert(comparisonFunction != NULL);
 
+	/*
+	 * Check if the tables have the same colocation ID - if so, we know
+	 * they're colocated.
+	 */
+	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
+		firstTableCache->colocationId == secondTableCache->colocationId)
+	{
+		return true;
+	}
+
+	/*
+	 * If not known to be colocated check if the remaining shards are
+	 * anyway. Do so by comparing the shard interval arrays that are sorted on
+	 * interval minimum values. Then it compares every shard interval in order
+	 * and if any pair of shard intervals are not equal it returns false.
+	 */
 	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
 	{
 		ShardInterval *firstInterval = sortedFirstIntervalArray[intervalIndex];
