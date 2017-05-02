@@ -188,19 +188,108 @@ DEBUG:  Plan is router executable
      0
 (1 row)
 
--- Check that we don't support pruning for ANY (array expression) and give
--- a notice message when used with the partition column
-SELECT count(*) FROM orders_hash_partitioned
-	WHERE o_orderkey = ANY ('{1,2,3}');
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
+SET client_min_messages TO DEFAULT;
+-- Check that we support runing for ANY/IN with literal.
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY ('{1,2,3}');
+ count 
+-------
+    13
+(1 row)
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (1,2,3);
+ count 
+-------
+    13
+(1 row)
+
+-- Check whether we can deal with null arrays
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (NULL);
  count 
 -------
      0
 (1 row)
 
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY (NULL);
+ count 
+-------
+     0
+(1 row)
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (NULL) OR TRUE;
+ count 
+-------
+ 12000
+(1 row)
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY (NULL) OR TRUE;	
+ count 
+-------
+ 12000
+(1 row)
+
+-- Check whether we support IN/ANY in subquery
+SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem_hash_part);
+ count 
+-------
+ 12000
+(1 row)
+
+SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderkey FROM lineitem_hash_part);
+ count 
+-------
+ 12000
+(1 row)
+
+-- Check whether we support IN/ANY in subquery with append and range distributed table 
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey = ANY ('{1,2,3}');
+ count 
+-------
+    13
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey IN (1,2,3);
+ count 
+-------
+    13
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+ count 
+-------
+ 12000
+(1 row)
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey = ANY ('{1,2,3}');
+ count 
+-------
+    13
+(1 row)
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey IN (1,2,3);
+ count 
+-------
+    13
+(1 row)
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+ count 
+-------
+ 12000
+(1 row)
+
+SET client_min_messages TO DEBUG2;
 -- Check that we don't show the message if the operator is not
 -- equality operator
 SELECT count(*) FROM orders_hash_partitioned
