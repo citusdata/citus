@@ -51,6 +51,7 @@
 #include "optimizer/predtest.h"
 #include "optimizer/restrictinfo.h"
 #include "storage/lock.h"
+#include "storage/lmgr.h"
 #include "tcop/tcopprot.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
@@ -105,9 +106,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	Node *queryTreeNode = NULL;
 	DeleteStmt *deleteStatement = NULL;
 	int droppedShardCount = 0;
-	LOCKTAG lockTag;
-	bool sessionLock = false;
-	bool dontWait = false;
+	LOCKMODE lockMode = 0;
 	char partitionMethod = 0;
 	bool failOK = false;
 
@@ -124,7 +123,15 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 	schemaName = deleteStatement->relation->schemaname;
 	relationName = deleteStatement->relation->relname;
-	relationId = RangeVarGetRelid(deleteStatement->relation, NoLock, failOK);
+
+	/*
+	 * We take an exclusive lock while dropping shards to prevent concurrent
+	 * writes. We don't want to block SELECTs, which means queries might fail
+	 * if they access a shard that has just been dropped.
+	 */
+	lockMode = ExclusiveLock;
+
+	relationId = RangeVarGetRelid(deleteStatement->relation, lockMode, failOK);
 
 	/* schema-prefix if it is not specified already */
 	if (schemaName == NULL)
@@ -165,10 +172,6 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 
 	CheckDeleteCriteria(deleteCriteria);
 	CheckPartitionColumn(relationId, deleteCriteria);
-
-	/* acquire lock */
-	SET_LOCKTAG_ADVISORY(lockTag, MyDatabaseId, relationId, 0, 0);
-	LockAcquire(&lockTag, ExclusiveLock, sessionLock, dontWait);
 
 	shardIntervalList = LoadShardIntervalList(relationId);
 
@@ -213,6 +216,14 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
+
+	/*
+	 * master_drop_all_shards is typically called from the DROP TABLE trigger,
+	 * but could be called by a user directly. Make sure we have an
+	 * AccessExlusiveLock to prevent any other commands from running on this table
+	 * concurrently.
+	 */
+	LockRelationOid(relationId, AccessExclusiveLock);
 
 	shardIntervalList = LoadShardIntervalList(relationId);
 	droppedShardCount = DropShards(relationId, schemaName, relationName,
