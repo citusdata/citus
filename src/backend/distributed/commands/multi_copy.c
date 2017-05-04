@@ -92,8 +92,8 @@ static void OpenCopyConnections(CopyStmt *copyStatement,
 								ShardConnections *shardConnections, bool stopOnFailure,
 								bool useBinaryCopyFormat);
 
-static bool CanUseBinaryCopyFormat(TupleDesc tupleDescription,
-								   CopyOutState rowOutputState);
+static bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
+static bool BinaryOutputFunctionDefined(Oid typeId);
 static List * MasterShardPlacementList(uint64 shardId);
 static List * RemoteFinalizedShardPlacementList(uint64 shardId);
 
@@ -397,7 +397,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
-	copyOutState->binary = CanUseBinaryCopyFormat(tupleDescriptor, copyOutState);
+	copyOutState->binary = CanUseBinaryCopyFormat(tupleDescriptor);
 	copyOutState->fe_msgbuf = makeStringInfo();
 	copyOutState->rowcontext = executorTupleContext;
 
@@ -593,7 +593,7 @@ CopyToNewShards(CopyStmt *copyStatement, char *completionTag, Oid relationId)
 	copyOutState->delim = (char *) delimiterCharacter;
 	copyOutState->null_print = (char *) nullPrintCharacter;
 	copyOutState->null_print_client = (char *) nullPrintCharacter;
-	copyOutState->binary = CanUseBinaryCopyFormat(tupleDescriptor, copyOutState);
+	copyOutState->binary = CanUseBinaryCopyFormat(tupleDescriptor);
 	copyOutState->fe_msgbuf = makeStringInfo();
 	copyOutState->rowcontext = executorTupleContext;
 
@@ -931,14 +931,15 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 
 
 /*
- * CanUseBinaryCopyFormat iterates over columns of the relation given in rowOutputState
- * and looks for a column whose type is array of user-defined type or composite type.
- * If it finds such column, that means we cannot use binary format for COPY, because
- * binary format sends Oid of the types, which are generally not same in master and
- * worker nodes for user-defined types.
+ * CanUseBinaryCopyFormat iterates over columns of the relation and looks for a
+ * column whose type is array of user-defined type or composite type. If it finds
+ * such column, that means we cannot use binary format for COPY, because binary
+ * format sends Oid of the types, which are generally not same in master and
+ * worker nodes for user-defined types. If the function can not detect a binary
+ * output function for any of the column, it returns false.
  */
 static bool
-CanUseBinaryCopyFormat(TupleDesc tupleDescription, CopyOutState rowOutputState)
+CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 {
 	bool useBinaryCopyFormat = true;
 	int totalColumnCount = tupleDescription->natts;
@@ -950,6 +951,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription, CopyOutState rowOutputState)
 		Oid typeId = InvalidOid;
 		char typeCategory = '\0';
 		bool typePreferred = false;
+		bool binaryOutputFunctionDefined = false;
 
 		if (currentColumn->attisdropped)
 		{
@@ -957,6 +959,15 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription, CopyOutState rowOutputState)
 		}
 
 		typeId = currentColumn->atttypid;
+
+		/* built-in types may also don't have binary output function */
+		binaryOutputFunctionDefined = BinaryOutputFunctionDefined(typeId);
+		if (!binaryOutputFunctionDefined)
+		{
+			useBinaryCopyFormat = false;
+			break;
+		}
+
 		if (typeId >= FirstNormalObjectId)
 		{
 			get_type_category_preferred(typeId, &typeCategory, &typePreferred);
@@ -970,6 +981,32 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription, CopyOutState rowOutputState)
 	}
 
 	return useBinaryCopyFormat;
+}
+
+
+/*
+ * BinaryOutputFunctionDefined checks whether binary output function is defined
+ * for the given type.
+ */
+static bool
+BinaryOutputFunctionDefined(Oid typeId)
+{
+	Oid typeFunctionId = InvalidOid;
+	Oid typeIoParam = InvalidOid;
+	int16 typeLength = 0;
+	bool typeByVal = false;
+	char typeAlign = 0;
+	char typeDelim = 0;
+
+	get_type_io_data(typeId, IOFunc_send, &typeLength, &typeByVal,
+					 &typeAlign, &typeDelim, &typeIoParam, &typeFunctionId);
+
+	if (OidIsValid(typeFunctionId))
+	{
+		return true;
+	}
+
+	return false;
 }
 
 

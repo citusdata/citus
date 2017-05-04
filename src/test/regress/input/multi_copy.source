@@ -749,3 +749,19 @@ SELECT shardid, shardstate, nodename, nodeport
 DROP TABLE numbers_hash;
 SELECT * FROM run_command_on_workers('DROP USER test_user');
 DROP USER test_user;
+
+-- Test copy with built-in type without binary output function
+CREATE TABLE test_smgr (
+col1 smgr NOT NULL,
+col2 character varying(255) NOT NULL
+);
+
+SELECT create_reference_table('test_smgr');
+
+\COPY test_smgr FROM STDIN WITH (format CSV)
+magnetic disk, test
+\.
+
+SELECT * FROM test_smgr;
+
+DROP TABLE test_smgr;

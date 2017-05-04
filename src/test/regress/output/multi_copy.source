@@ -1015,3 +1015,22 @@ SELECT * FROM run_command_on_workers('DROP USER test_user');
 (2 rows)
 
 DROP USER test_user;
+-- Test copy with built-in type without binary output function
+CREATE TABLE test_smgr (
+col1 smgr NOT NULL,
+col2 character varying(255) NOT NULL
+);
+SELECT create_reference_table('test_smgr');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+\COPY test_smgr FROM STDIN WITH (format CSV)
+SELECT * FROM test_smgr;
+     col1      | col2  
+---------------+-------
+ magnetic disk |  test
+(1 row)
+
+DROP TABLE test_smgr;
