@@ -1,3 +1,23 @@
+### citus v6.1.1 (May 5, 2017) ###
+
+* Fixes a crash caused by router executor use after connection timeouts
+
+* Fixes a crash caused by relation cache invalidation during COPY
+
+* Fixes bug related to DDL use within PL/pgSQL functions
+
+* Fixes a COPY bug related to types lacking binary output functions
+
+* Fixes a bug related to modifications with parameterized partition values
+
+* Fixes improper value interpolation in worker sequence generation
+
+* Guards shard pruning logic against zero-shard tables
+
+* Fixes possible NULL pointer dereference and buffer underflow (via PVS-Studio)
+
+* Fixes a INSERT ... SELECT bug that could push down non-partition column JOINs
+
 ### citus v6.1.0 (February 9, 2017) ###
 
 * Implements _reference tables_, transactionally replicated to all nodes
