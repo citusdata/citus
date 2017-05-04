@@ -126,6 +126,224 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	GROUP BY l_quantity
 	HAVING l_quantity > (100 * random());
 
+
+-- Subquery pushdown tests with explain
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		array_agg(event_type ORDER BY event_time) AS events
+	FROM
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			event_type,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type IN ('click', 'submit', 'pay')) AS subquery
+	GROUP BY
+		tenant_id,
+		user_id) AS subquery;
+
+-- Union and left join subquery pushdown
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average,
+	hasdone
+FROM
+	(SELECT
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		array_agg(event ORDER BY event_time) AS events,
+		COALESCE(hasdone, 'Has not done paying') AS hasdone
+	FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+	(SELECT
+		DISTINCT ON ((composite_id).tenant_id, (composite_id).user_id) composite_id,
+		(composite_id).tenant_id,
+		(composite_id).user_id,
+		'Has done paying'::TEXT AS hasdone
+	FROM
+		events
+	WHERE
+		events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+		event_type = 'pay') AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		hasdone) AS subquery_top
+GROUP BY
+	hasdone;
+
+-- Union, left join and having subquery pushdown
+EXPLAIN (COSTS OFF)
+  SELECT
+	avg(array_length(events, 1)) AS event_average,
+	count_pay
+	FROM (
+  SELECT
+	subquery_1.tenant_id,
+	subquery_1.user_id,
+	array_agg(event ORDER BY event_time) AS events,
+	COALESCE(count_pay, 0) AS count_pay
+  FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			COUNT(*) AS count_pay
+		FROM
+			events
+		WHERE
+			events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'pay'
+		GROUP BY
+			composite_id
+		HAVING
+			COUNT(*) > 2) AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		count_pay) AS subquery_top
+WHERE
+	array_ndims(events) > 0
+GROUP BY
+	count_pay
+ORDER BY
+	count_pay;
+
+-- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
+EXPLAIN (COSTS OFF)
+SELECT
+	tenant_id,
+	user_id,
+	user_lastseen,
+	event_array
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		max(lastseen) as user_lastseen,
+		array_agg(event_type ORDER BY event_time) AS event_array
+	FROM
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			lastseen
+		FROM
+			users
+		WHERE
+			composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			composite_id <= '(1, 9223372036854775807)'::user_composite_type
+		ORDER BY
+			lastseen DESC
+		LIMIT
+			10
+		) AS subquery_top
+		LEFT JOIN LATERAL
+			(SELECT
+				event_type,
+				event_time
+			FROM
+				events
+			WHERE
+				(composite_id) = subquery_top.composite_id
+			ORDER BY
+				event_time DESC
+			LIMIT
+				99) AS subquery_lateral
+		ON
+			true
+		GROUP BY
+			tenant_id,
+			user_id
+	) AS shard_union
+ORDER BY
+	user_lastseen DESC
+LIMIT
+	10;
+
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 

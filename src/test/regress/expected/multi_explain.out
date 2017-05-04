@@ -397,6 +397,305 @@ HashAggregate
                     Group Key: lineitem.l_quantity
                     ->  Seq Scan on public.lineitem_290001 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+-- Subquery pushdown tests with explain
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		array_agg(event_type ORDER BY event_time) AS events
+	FROM
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			event_type,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type IN ('click', 'submit', 'pay')) AS subquery
+	GROUP BY
+		tenant_id,
+		user_id) AS subquery;
+Aggregate
+  ->  Custom Scan (Citus Real-Time)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=57637 dbname=regression
+              ->  Aggregate
+                    ->  GroupAggregate
+                          Group Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id)
+                          ->  Sort
+                                Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id)
+                                ->  Nested Loop
+                                      Join Filter: ((NULL::user_composite_type) = events.composite_id)
+                                      ->  Result
+                                            One-Time Filter: false
+                                      ->  Seq Scan on events_1400027 events
+                                            Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
+-- Union and left join subquery pushdown
+EXPLAIN (COSTS OFF)
+SELECT
+	avg(array_length(events, 1)) AS event_average,
+	hasdone
+FROM
+	(SELECT
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		array_agg(event ORDER BY event_time) AS events,
+		COALESCE(hasdone, 'Has not done paying') AS hasdone
+	FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id) as composite_id,
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+	(SELECT
+		DISTINCT ON ((composite_id).tenant_id, (composite_id).user_id) composite_id,
+		(composite_id).tenant_id,
+		(composite_id).user_id,
+		'Has done paying'::TEXT AS hasdone
+	FROM
+		events
+	WHERE
+		events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+		events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+		event_type = 'pay') AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		hasdone) AS subquery_top
+GROUP BY
+	hasdone;
+HashAggregate
+  Group Key: remote_scan.hasdone
+  ->  Custom Scan (Citus Real-Time)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=57637 dbname=regression
+              ->  GroupAggregate
+                    Group Key: subquery_top.hasdone
+                    ->  Sort
+                          Sort Key: subquery_top.hasdone
+                          ->  Subquery Scan on subquery_top
+                                ->  GroupAggregate
+                                      Group Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id), subquery_2.hasdone
+                                      ->  Sort
+                                            Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id), subquery_2.hasdone
+                                            ->  Hash Left Join
+                                                  Hash Cond: ((NULL::user_composite_type) = subquery_2.composite_id)
+                                                  ->  Unique
+                                                        ->  Sort
+                                                              Sort Key: (((NULL::user_composite_type)).tenant_id), (((NULL::user_composite_type)).user_id), (NULL::user_composite_type), ('action=>1'::text), events.event_time
+                                                              ->  Append
+                                                                    ->  Nested Loop
+                                                                          Join Filter: ((NULL::user_composite_type) = events.composite_id)
+                                                                          ->  Result
+                                                                                One-Time Filter: false
+                                                                          ->  Seq Scan on events_1400027 events
+                                                                                Filter: ((event_type)::text = 'click'::text)
+                                                                    ->  Nested Loop
+                                                                          Join Filter: ((NULL::user_composite_type) = events_1.composite_id)
+                                                                          ->  Result
+                                                                                One-Time Filter: false
+                                                                          ->  Seq Scan on events_1400027 events_1
+                                                                                Filter: ((event_type)::text = 'submit'::text)
+                                                  ->  Hash
+                                                        ->  Subquery Scan on subquery_2
+                                                              ->  Unique
+                                                                    ->  Sort
+                                                                          Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
+                                                                          ->  Seq Scan on events_1400027 events_2
+                                                                                Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
+-- Union, left join and having subquery pushdown
+EXPLAIN (COSTS OFF)
+  SELECT
+	avg(array_length(events, 1)) AS event_average,
+	count_pay
+	FROM (
+  SELECT
+	subquery_1.tenant_id,
+	subquery_1.user_id,
+	array_agg(event ORDER BY event_time) AS events,
+	COALESCE(count_pay, 0) AS count_pay
+  FROM
+	(
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>1'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'click')
+		UNION
+		(SELECT
+			(users.composite_id).tenant_id,
+			(users.composite_id).user_id,
+			(users.composite_id),
+			'action=>2'AS event,
+			events.event_time
+		FROM
+			users,
+			events
+		WHERE
+			(users.composite_id) = (events.composite_id) AND
+			users.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			users.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'submit')
+	) AS subquery_1
+	LEFT JOIN
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			COUNT(*) AS count_pay
+		FROM
+			events
+		WHERE
+			events.composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			events.composite_id <= '(1, 9223372036854775807)'::user_composite_type AND
+			event_type = 'pay'
+		GROUP BY
+			composite_id
+		HAVING
+			COUNT(*) > 2) AS subquery_2
+	ON
+		subquery_1.composite_id = subquery_2.composite_id
+	GROUP BY
+		subquery_1.tenant_id,
+		subquery_1.user_id,
+		count_pay) AS subquery_top
+WHERE
+	array_ndims(events) > 0
+GROUP BY
+	count_pay
+ORDER BY
+	count_pay;
+ERROR:  bogus varattno for OUTER_VAR var: 3
+-- Lateral join subquery pushdown
+-- set subquery_pushdown due to limit in the query
+SET citus.subquery_pushdown to ON;
+EXPLAIN (COSTS OFF)
+SELECT
+	tenant_id,
+	user_id,
+	user_lastseen,
+	event_array
+FROM
+	(SELECT
+		tenant_id,
+		user_id,
+		max(lastseen) as user_lastseen,
+		array_agg(event_type ORDER BY event_time) AS event_array
+	FROM
+		(SELECT
+			(composite_id).tenant_id,
+			(composite_id).user_id,
+			composite_id,
+			lastseen
+		FROM
+			users
+		WHERE
+			composite_id >= '(1, -9223372036854775808)'::user_composite_type AND
+			composite_id <= '(1, 9223372036854775807)'::user_composite_type
+		ORDER BY
+			lastseen DESC
+		LIMIT
+			10
+		) AS subquery_top
+		LEFT JOIN LATERAL
+			(SELECT
+				event_type,
+				event_time
+			FROM
+				events
+			WHERE
+				(composite_id) = subquery_top.composite_id
+			ORDER BY
+				event_time DESC
+			LIMIT
+				99) AS subquery_lateral
+		ON
+			true
+		GROUP BY
+			tenant_id,
+			user_id
+	) AS shard_union
+ORDER BY
+	user_lastseen DESC
+LIMIT
+	10;
+Limit
+  ->  Sort
+        Sort Key: remote_scan.user_lastseen DESC
+        ->  Custom Scan (Citus Real-Time)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  Limit
+                          ->  Sort
+                                Sort Key: (max(users.lastseen)) DESC
+                                ->  GroupAggregate
+                                      Group Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                      ->  Sort
+                                            Sort Key: ((users.composite_id).tenant_id), ((users.composite_id).user_id)
+                                            ->  Nested Loop Left Join
+                                                  ->  Limit
+                                                        ->  Sort
+                                                              Sort Key: users.lastseen DESC
+                                                              ->  Subquery Scan on users
+                                                                    ->  Result
+                                                                          One-Time Filter: false
+                                                  ->  Limit
+                                                        ->  Sort
+                                                              Sort Key: events.event_time DESC
+                                                              ->  Seq Scan on events_1400027 events
+                                                                    Filter: (composite_id = users.composite_id)
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
