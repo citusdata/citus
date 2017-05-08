@@ -137,8 +137,12 @@ SELECT master_remove_node('localhost', 5432);
 TRUNCATE mx_table;
 SELECT count(*) FROM mx_table;
 
--- INSERT / SELECT
+-- INSERT / SELECT pulls results to worker
+BEGIN;
+SET LOCAL client_min_messages TO DEBUG;
 INSERT INTO mx_table_2 SELECT * FROM mx_table;
+END;
+
 SELECT count(*) FROM mx_table_2;
 
 -- mark_tables_colocated

@@ -1927,6 +1927,8 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	MemoryContextSwitchTo(oldContext);
 
+	copyDest->tuplesSent++;
+
 #if PG_VERSION_NUM >= 90600
 	return true;
 #endif

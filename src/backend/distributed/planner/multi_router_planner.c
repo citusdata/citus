@@ -741,9 +741,12 @@ ExtractSelectRangeTableEntry(Query *query)
 	RangeTblRef *reference = NULL;
 	RangeTblEntry *subqueryRte = NULL;
 
-	Assert(InsertSelectQuery(query));
+	Assert(InsertSelectIntoDistributedTable(query));
 
-	/* since we already asserted InsertSelectQuery() it is safe to access both lists */
+	/*
+	 * Since we already asserted InsertSelectIntoDistributedTable() it is safe to access
+	 * both lists
+	 */
 	fromList = query->jointree->fromlist;
 	reference = linitial(fromList);
 	subqueryRte = rt_fetch(reference->rtindex, query->rtable);
@@ -763,8 +766,6 @@ ExtractInsertRangeTableEntry(Query *query)
 	int resultRelation = query->resultRelation;
 	List *rangeTableList = query->rtable;
 	RangeTblEntry *insertRTE = NULL;
-
-	AssertArg(InsertSelectQuery(query));
 
 	insertRTE = rt_fetch(resultRelation, rangeTableList);
 
@@ -788,9 +789,25 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 	DeferredErrorMessage *error = NULL;
 
 	/* we only do this check for INSERT ... SELECT queries */
-	AssertArg(InsertSelectQuery(queryTree));
+	AssertArg(InsertSelectIntoDistributedTable(queryTree));
 
-	EnsureCoordinator();
+	subquery = subqueryRte->subquery;
+
+	if (!NeedsDistributedPlanning(subquery))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT can only select from "
+							 "distributed tables",
+							 NULL, NULL);
+	}
+
+	if (GetLocalGroupId() != 0)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "distributed INSERT ... SELECT can only be performed from "
+							 "the coordinator",
+							 NULL, NULL);
+	}
 
 	/* we do not expect to see a view in modify target */
 	foreach(rangeTableCell, queryTree->rtable)
@@ -805,13 +822,11 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 		}
 	}
 
-	subquery = subqueryRte->subquery;
-
 	if (contain_volatile_functions((Node *) queryTree))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "volatile functions are not allowed in INSERT ... SELECT "
-							 "queries",
+							 "volatile functions are not allowed in distributed "
+							 "INSERT ... SELECT queries",
 							 NULL, NULL);
 	}
 
@@ -832,7 +847,7 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "only reference tables may be queried when targeting "
-								 "a reference table with INSERT ... SELECT",
+								 "a reference table with distributed INSERT ... SELECT",
 								 NULL, NULL);
 		}
 	}
@@ -857,7 +872,7 @@ InsertSelectQuerySupported(Query *queryTree, RangeTblEntry *insertRte,
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "INSERT target table and the source relation of the SELECT partition "
-								 "column value must be colocated",
+								 "column value must be colocated in distributed INSERT ... SELECT",
 								 NULL, NULL);
 		}
 	}
@@ -888,7 +903,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "Subqueries without relations are not allowed in "
-								 "INSERT ... SELECT queries",
+								 "distributed INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 
@@ -896,8 +911,8 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->limitCount != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "LIMIT clauses are not allowed in INSERT ... SELECT "
-								 "queries",
+								 "LIMIT clauses are not allowed in distirbuted INSERT "
+								 "... SELECT queries",
 								 NULL, NULL);
 		}
 
@@ -905,8 +920,8 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->limitOffset != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "OFFSET clauses are not allowed in INSERT ... SELECT "
-								 "queries",
+								 "OFFSET clauses are not allowed in distributed "
+								 "INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 
@@ -918,16 +933,16 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->windowClause != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "window functions are not allowed in INSERT ... SELECT "
-								 "queries",
+								 "window functions are not allowed in distributed "
+								 "INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 
 		if (subquery->setOperations != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "Set operations are not allowed in INSERT ... SELECT "
-								 "queries",
+								 "Set operations are not allowed in distributed "
+								 "INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 
@@ -940,8 +955,8 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->groupingSets != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "grouping sets are not allowed in INSERT ... SELECT "
-								 "queries",
+								 "grouping sets are not allowed in distributed "
+								 "INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 
@@ -952,7 +967,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->hasDistinctOn)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "DISTINCT ON clauses are not allowed in "
+								 "DISTINCT ON clauses are not allowed in distributed "
 								 "INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
@@ -1134,8 +1149,9 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 			}
 
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "INSERT INTO ... SELECT partition columns in the source "
-								 "table and subquery do not match",
+								 "cannot perform distributed INSERT INTO ... SELECT "
+								 "because the partition columns in the source table "
+								 "and subquery do not match",
 								 psprintf(errorDetailTemplate, exprDescription),
 								 "Ensure the target table's partition column has a "
 								 "corresponding simple column reference to a distributed "
@@ -1149,8 +1165,9 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		if (!IsA(targetEntry->expr, Var))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "INSERT INTO ... SELECT partition columns in the source "
-								 "table and subquery do not match",
+								 "cannot perform distributed INSERT INTO ... SELECT "
+								 "because the partition columns in the source table "
+								 "and subquery do not match",
 								 "The data type of the target table's partition column "
 								 "should exactly match the data type of the "
 								 "corresponding simple column reference in the subquery.",
@@ -1161,13 +1178,15 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		if (!IsPartitionColumn(selectTargetExpr, subquery))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "INSERT INTO ... SELECT partition columns in the source "
-								 "table and subquery do not match",
+								 "cannot perform distributed INSERT INTO ... SELECT "
+								 "becuase the partition columns in the source table "
+								 "and subquery do not match",
 								 "The target table's partition column should correspond "
 								 "to a partition column in the subquery.",
 								 NULL);
 		}
 
+		/* finally, check that the select target column is a partition column */
 		/* we can set the select relation id */
 		*selectPartitionColumnTableId = subqueryPartitionColumnRelationId;
 
@@ -1177,8 +1196,9 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 	if (!targetTableHasPartitionColumn)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "INSERT INTO ... SELECT partition columns in the source "
-							 "table and subquery do not match",
+							 "cannot perform distributed INSERT INTO ... SELECT "
+							 "because the partition columns in the source table "
+							 "and subquery do not match",
 							 "the query doesn't include the target table's "
 							 "partition column",
 							 NULL);
@@ -1210,8 +1230,6 @@ ModifyQuerySupported(Query *queryTree)
 	Node *onConflictWhere = NULL;
 
 	CmdType commandType = queryTree->commandType;
-	Assert(commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		   commandType == CMD_DELETE);
 
 	/*
 	 * Reject subqueries which are in SELECT or WHERE clause.
@@ -2731,7 +2749,7 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 	int subqueryTargetLength = 0;
 	int targetEntryIndex = 0;
 
-	AssertArg(InsertSelectQuery(originalQuery));
+	AssertArg(InsertSelectIntoDistributedTable(originalQuery));
 
 	subquery = subqueryRte->subquery;
 
@@ -2867,8 +2885,9 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 
 
 /*
- * InsertSelectQuery returns true when the input query
- * is INSERT INTO ... SELECT kind of query.
+ * InsertSelectIntoDistributedTable returns true when the input query is an
+ * INSERT INTO ... SELECT kind of query and the target is a distributed
+ * table.
  *
  * Note that the input query should be the original parsetree of
  * the query (i.e., not passed trough the standard planner).
@@ -2877,12 +2896,13 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
  * rewrite/rewriteManip.c.
  */
 bool
-InsertSelectQuery(Query *query)
+InsertSelectIntoDistributedTable(Query *query)
 {
 	CmdType commandType = query->commandType;
 	List *fromList = NULL;
 	RangeTblRef *rangeTableReference = NULL;
 	RangeTblEntry *subqueryRte = NULL;
+	RangeTblEntry *insertRte = NULL;
 
 	if (commandType != CMD_INSERT)
 	{
@@ -2901,7 +2921,10 @@ InsertSelectQuery(Query *query)
 	}
 
 	rangeTableReference = linitial(fromList);
-	Assert(IsA(rangeTableReference, RangeTblRef));
+	if (!IsA(rangeTableReference, RangeTblRef))
+	{
+		return false;
+	}
 
 	subqueryRte = rt_fetch(rangeTableReference->rtindex, query->rtable);
 	if (subqueryRte->rtekind != RTE_SUBQUERY)
@@ -2911,6 +2934,12 @@ InsertSelectQuery(Query *query)
 
 	/* ensure that there is a query */
 	Assert(IsA(subqueryRte->subquery, Query));
+
+	insertRte = ExtractInsertRangeTableEntry(query);
+	if (!IsDistributedTable(insertRte->relid))
+	{
+		return false;
+	}
 
 	return true;
 }

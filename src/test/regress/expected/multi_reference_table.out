@@ -1091,12 +1091,11 @@ LOG:  join order: [ "colocated_table_test" ][ broadcast join "reference_table_te
        2
 (2 rows)
 
-SET client_min_messages TO NOTICE;
 SET citus.log_multi_join_order TO FALSE;
 SET citus.shard_count TO DEFAULT;
 SET citus.task_executor_type to "real-time";
 -- some INSERT .. SELECT queries that involve both hash distributed and reference tables
--- should error out since we're inserting into reference table where 
+-- should go via coordinator since we're inserting into reference table where 
 -- not all the participants are reference tables
 INSERT INTO
 	reference_table_test (value_1)
@@ -1105,9 +1104,10 @@ SELECT
 FROM
 	colocated_table_test, colocated_table_test_2
 WHERE
-	colocated_table_test.value_1 = colocated_table_test.value_1;
-ERROR:  only reference tables may be queried when targeting a reference table with INSERT ... SELECT
--- should error out, same as the above
+	colocated_table_test.value_1 = colocated_table_test_2.value_1;
+DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+-- should go via coordinator, same as the above
 INSERT INTO
 	reference_table_test (value_1)
 SELECT
@@ -1116,7 +1116,8 @@ FROM
 	colocated_table_test, reference_table_test
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
-ERROR:  only reference tables may be queried when targeting a reference table with INSERT ... SELECT
+DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 -- now, insert into the hash partitioned table and use reference 
 -- tables in the SELECT queries
 INSERT INTO
@@ -1150,8 +1151,7 @@ RETURNING value_1, value_2;
        2 |       2
 (2 rows)
 
--- partition column value comes from reference table but still first error is
--- on data type mismatch
+-- partition column value comes from reference table, goes via coordinator
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -1159,11 +1159,10 @@ SELECT
 FROM
 	colocated_table_test_2, reference_table_test
 WHERE
-	colocated_table_test_2.value_4 = reference_table_test.value_4
-RETURNING value_1, value_2;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+	colocated_table_test_2.value_4 = reference_table_test.value_4;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
--- partition column value comes from reference table which should error out
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT
@@ -1171,10 +1170,11 @@ SELECT
 FROM
 	colocated_table_test_2, reference_table_test
 WHERE
-	colocated_table_test_2.value_4 = reference_table_test.value_4
-RETURNING value_1, value_2;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+	colocated_table_test_2.value_4 = reference_table_test.value_4;
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
 -- some tests for mark_tables_colocated
 -- should error out
 SELECT mark_tables_colocated('colocated_table_test_2', ARRAY['reference_table_test']);

@@ -221,6 +221,11 @@ typedef struct MultiPlan
 	Query *masterQuery;
 	bool routerExecutable;
 
+	/* INSERT ... SELECT via coordinator only */
+	Query *insertSelectSubquery;
+	List *insertTargetList;
+	Oid targetRelationId;
+
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
