@@ -60,7 +60,7 @@ deparse_shard_query_test(PG_FUNCTION_ARGS)
 			StringInfo buffer = makeStringInfo();
 
 			/* reoreder the target list only for INSERT .. SELECT queries */
-			if (InsertSelectQuery(query))
+			if (InsertSelectIntoDistributedTable(query))
 			{
 				RangeTblEntry *insertRte = linitial(query->rtable);
 				RangeTblEntry *subqueryRte = lsecond(query->rtable);

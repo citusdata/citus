@@ -141,20 +141,6 @@ WARNING:  function public.evaluate_on_master(integer) does not exist
 WARNING:  function public.evaluate_on_master(integer) does not exist
 ERROR:  could not modify any active placements
 \set VERBOSITY default
--- volatile functions should be disallowed
-INSERT INTO raw_events_second (user_id, value_1)
-SELECT
-  user_id, (random()*10)::int
-FROM
-  raw_events_first;
-ERROR:  volatile functions are not allowed in INSERT ... SELECT queries
-INSERT INTO raw_events_second (user_id, value_1)
-WITH sub_cte AS (SELECT (random()*10)::int)
-SELECT
-  user_id, (SELECT * FROM sub_cte)
-FROM
-  raw_events_first;
-ERROR:  volatile functions are not allowed in INSERT ... SELECT queries
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES
                          (7, now());
@@ -645,7 +631,10 @@ INSERT INTO agg_events (value_1_agg, user_id)
     DISTINCT ON (value_1) value_1, user_id
   FROM
     raw_events_first;
-ERROR:  DISTINCT ON clauses are not allowed in INSERT ... SELECT queries
+DEBUG:  DISTINCT ON clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  could not run distributed query with DISTINCT clause
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- We do not support some CTEs
 WITH fist_table_agg AS
   (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
@@ -655,8 +644,10 @@ INSERT INTO agg_events
               v1_agg, user_id
             FROM
               fist_table_agg;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
-DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- We don't support CTEs that consist of const values as well
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
@@ -664,8 +655,12 @@ INSERT INTO agg_events
     raw_events_first.user_id, (SELECT * FROM sub_cte)
   FROM
     raw_events_first;
-ERROR:  Subqueries without relations are not allowed in INSERT ... SELECT queries
--- We do not support any set operations
+DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  could not run distributed query with common table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- We support set operations via the coordinator
+BEGIN;
 INSERT INTO
   raw_events_first(user_id)
 SELECT
@@ -673,14 +668,19 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first) UNION
    (SELECT user_id FROM raw_events_second)) as foo;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ROLLBACK;
 -- We do not support any set operations
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
--- We do not support any set operations
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- If the query is router plannable then it is executed via the coordinator
 INSERT INTO
   raw_events_first(user_id)
 SELECT
@@ -688,7 +688,10 @@ SELECT
 FROM
   ((SELECT user_id FROM raw_events_first WHERE user_id = 15) EXCEPT
    (SELECT user_id FROM raw_events_second where user_id = 17)) as foo;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
 -- some supported LEFT joins
  INSERT INTO agg_events (user_id)
  SELECT
@@ -1027,42 +1030,53 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id = raw_events_second.user_id
         GROUP  BY raw_events_second.value_3) AS foo;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported
 -- error cases
 -- no part column at all
 INSERT INTO raw_events_second
             (value_1)
 SELECT value_1
 FROM   raw_events_first;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  the query doesn't include the target table's partition column
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  the partition column of table public.raw_events_second should have a value
 INSERT INTO raw_events_second
             (value_1)
 SELECT user_id
 FROM   raw_events_first;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  the query doesn't include the target table's partition column
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  the partition column of table public.raw_events_second should have a value
 INSERT INTO raw_events_second
             (user_id)
 SELECT value_1
 FROM   raw_events_first;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  the partition column of table public.raw_events_second should have a value
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id * 2
 FROM   raw_events_first;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an operator in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id :: bigint
 FROM   raw_events_first;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit cast in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1076,9 +1090,11 @@ SELECT SUM(value_3),
        Avg(value_2)
 FROM   raw_events_first
 GROUP  BY user_id;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  the partition column of table public.agg_events should have a value
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1093,16 +1109,21 @@ SELECT SUM(value_3),
 FROM   raw_events_first
 GROUP  BY user_id,
           value_2;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  the partition column of table public.agg_events should have a value
 -- tables should be co-located
 INSERT INTO agg_events (user_id)
 SELECT
   user_id
 FROM
   reference_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
 -- unsupported joins between subqueries
 -- we do not return bare partition column on the inner query
 INSERT INTO agg_events
@@ -1127,9 +1148,12 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
@@ -1564,7 +1588,10 @@ SELECT user_id,
        Sum(value_2) AS sum_val2
 FROM   raw_events_second
 GROUP  BY grouping sets ( ( user_id ), ( value_1 ), ( user_id, value_1 ), ( ) );
-ERROR:  grouping sets are not allowed in INSERT ... SELECT queries
+DEBUG:  grouping sets are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  could not run distributed query with GROUPING SETS, CUBE, or ROLLUP
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- set back to INFO
 SET client_min_messages TO INFO;
 -- avoid constraint violations
@@ -1592,7 +1619,8 @@ WHERE  user_id
                      ) as f_inner
                   )
           ) AS f2); 
-ERROR:  LIMIT clauses are not allowed in INSERT ... SELECT queries
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery is currently unsupported
 -- Altering a table and selecting from it using a multi-shard statement
 -- in the same transaction is allowed because we will use the same
 -- connections for all co-located placements.
@@ -1646,7 +1674,7 @@ INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4)
 SELECT count(*) FROM raw_events_second;
  count 
 -------
-    18
+    36
 (1 row)
 
 INSERT INTO raw_events_second SELECT * FROM test_view;
@@ -1656,12 +1684,9 @@ INSERT INTO raw_events_second SELECT * FROM test_view WHERE user_id = 17 GROUP B
 SELECT count(*) FROM raw_events_second;
  count 
 -------
-    20
+    38
 (1 row)
 
--- inserting into views does not
-INSERT INTO test_view SELECT * FROM raw_events_second;
-ERROR:  cannot insert into view over distributed table
 -- we need this in our next test
 truncate raw_events_first;
 SET client_min_messages TO DEBUG2;
@@ -1912,7 +1937,7 @@ FROM
   table_with_defaults
 GROUP BY
   store_id;
-ERROR:  volatile functions are not allowed in INSERT ... SELECT queries
+ERROR:  INSERT ... SELECT cannot generate sequence values when selecting from a distributed table
 -- do some more error/error message checks
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
@@ -1937,49 +1962,61 @@ SELECT create_distributed_table('table_with_starts_with_defaults', 'c');
  
 (1 row)
 
+SET client_min_messages TO DEBUG;
 INSERT INTO text_table (part_col) 
   SELECT 
     CASE WHEN part_col = 'onder' THEN 'marco'
       END 
 FROM text_table ;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains a case expression in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT COALESCE(part_col, 'onder') FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains a coalesce expression in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT GREATEST(part_col, 'jason') FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains a min/max expression in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT LEAST(part_col, 'andres') FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains a min/max expression in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT NULLIF(part_col, 'metin') FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT part_col isnull FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT part_col::text from char_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT (part_col = 'burak') is true FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT val FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
 INSERT INTO text_table (part_col) SELECT val::text FROM text_table;
-ERROR:  INSERT INTO ... SELECT partition columns in the source table and subquery do not match
+DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
 DETAIL:  Subquery contains an explicit coercion in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+RESET client_min_messages;
 insert into table_with_starts_with_defaults (b,c) select b,c FROM table_with_starts_with_defaults;
 -- Test on partition column without native hash function 
 CREATE TABLE raw_table
@@ -2012,10 +2049,380 @@ SELECT * FROM summary_table;
  11-11-1980 |     1
 (1 row)
 
+-- Test INSERT ... SELECT via coordinator
+-- Select from constants
+TRUNCATE raw_events_first;
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT * FROM (VALUES (1,2), (3,4), (5,6)) AS v(int,int);
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id;
+ user_id | value_1 
+---------+---------
+       1 |       2
+       3 |       4
+       5 |       6
+(3 rows)
+
+-- Select from local functions
+TRUNCATE raw_events_first;
+CREATE SEQUENCE insert_select_test_seq;
+SET client_min_messages TO DEBUG;
+INSERT INTO raw_events_first (user_id, value_1, value_2)
+SELECT
+  s, nextval('insert_select_test_seq'), (random()*10)::int
+FROM
+  generate_series(1, 5) s;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- ON CONFLICT is unsupported
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
+ON CONFLICT DO NOTHING;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+ERROR:  ON CONFLICT is not supported in INSERT ... SELECT via coordinator
+-- RETURNING is unsupported
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT s, nextval('insert_select_test_seq') FROM generate_series(1, 5) s
+RETURNING *;
+DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
+ERROR:  RETURNING is not supported in INSERT ... SELECT via coordinator
+RESET client_min_messages;
+-- INSERT ... SELECT and multi-shard SELECT in the same transaction is unsupported
+TRUNCATE raw_events_first;
+BEGIN;
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT s, s FROM generate_series(1, 5) s;
+SELECT user_id, value_1 FROM raw_events_first;
+ERROR:  cannot open new connections after the first modification command within a transaction
+ROLLBACK;
+-- INSERT ... SELECT and single-shard SELECT in the same transaction is supported
+TRUNCATE raw_events_first;
+BEGIN;
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT s, s FROM generate_series(1, 5) s;
+SELECT user_id, value_1 FROM raw_events_first WHERE user_id = 1;
+ user_id | value_1 
+---------+---------
+       1 |       1
+(1 row)
+
+COMMIT;
+-- Select from local table
+TRUNCATE raw_events_first;
+CREATE TEMPORARY TABLE raw_events_first_local AS
+SELECT s AS u, 2*s AS v FROM generate_series(1, 5) s;
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT u, v FROM raw_events_first_local;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       2
+       2 |       4
+       3 |       6
+       4 |       8
+       5 |      10
+(5 rows)
+
+-- Use columns in opposite order
+TRUNCATE raw_events_first;
+INSERT INTO raw_events_first (value_1, user_id)
+SELECT u, v FROM raw_events_first_local;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       2 |       1
+       4 |       2
+       6 |       3
+       8 |       4
+      10 |       5
+(5 rows)
+
+-- Set operations can work with opposite column order
+TRUNCATE raw_events_first;
+INSERT INTO raw_events_first (value_3, user_id)
+( SELECT v, u::bigint FROM raw_events_first_local )
+UNION ALL
+( SELECT v, u FROM raw_events_first_local );
+SELECT user_id, value_3 FROM raw_events_first ORDER BY user_id, value_3;
+ user_id | value_3 
+---------+---------
+       1 |       2
+       1 |       2
+       2 |       4
+       2 |       4
+       3 |       6
+       3 |       6
+       4 |       8
+       4 |       8
+       5 |      10
+       5 |      10
+(10 rows)
+
+-- Select from other distributed table with limit
+TRUNCATE raw_events_first;
+TRUNCATE raw_events_second;
+INSERT INTO raw_events_second (user_id, value_4)
+SELECT s, 3*s FROM generate_series (1,5) s;
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT user_id, value_4 FROM raw_events_second LIMIT 5;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       3
+       2 |       6
+       3 |       9
+       4 |      12
+       5 |      15
+(5 rows)
+
+-- CTEs are supported in local queries
+TRUNCATE raw_events_first;
+WITH removed_rows AS (
+  DELETE FROM raw_events_first_local RETURNING u
+)
+INSERT INTO raw_events_first (user_id, value_1)
+WITH value AS (SELECT 1)
+SELECT * FROM removed_rows, value;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       1
+       2 |       1
+       3 |       1
+       4 |       1
+       5 |       1
+(5 rows)
+
+-- nested CTEs are also supported
+TRUNCATE raw_events_first;
+INSERT INTO raw_events_first_local SELECT s, 2*s FROM generate_series(0, 10) s;
+WITH rows_to_remove AS (
+  SELECT u FROM raw_events_first_local WHERE u > 0
+),
+removed_rows AS (
+  DELETE FROM raw_events_first_local
+  WHERE u IN (SELECT * FROM rows_to_remove)
+  RETURNING u, v
+)
+INSERT INTO raw_events_first (user_id, value_1)
+WITH ultra_rows AS (
+  WITH numbers AS (
+    SELECT s FROM generate_series(1,10) s
+  ),
+  super_rows AS (
+    SELECT u, v FROM removed_rows JOIN numbers ON (u = s)
+  )
+  SELECT * FROM super_rows LIMIT 5
+)
+SELECT u, v FROM ultra_rows;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       2
+       2 |       4
+       3 |       6
+       4 |       8
+       5 |      10
+(5 rows)
+
+-- CTEs with duplicate names are also supported
+TRUNCATE raw_events_first;
+WITH super_rows AS (
+  SELECT u FROM raw_events_first_local
+)
+INSERT INTO raw_events_first (user_id, value_1)
+WITH super_rows AS (
+  SELECT * FROM super_rows GROUP BY u
+)
+SELECT u, 5 FROM super_rows;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       0 |       5
+(1 row)
+
+-- CTEs are supported in router queries
+TRUNCATE raw_events_first;
+WITH user_two AS (
+  SELECT user_id, value_4 FROM raw_events_second WHERE user_id = 2
+)
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT * FROM user_two;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       2 |       6
+(1 row)
+
+-- CTEs are supported when there are name collisions
+WITH numbers AS (
+  SELECT s FROM generate_series(1,10) s
+)
+INSERT INTO raw_events_first(user_id, value_1)
+WITH numbers AS (
+  SELECT s, s FROM generate_series(1,5) s
+)
+SELECT * FROM numbers;
+-- Select into distributed table with a sequence
+CREATE TABLE "CaseSensitiveTable" ("UserID" int, "Value1" int);
+SELECT create_distributed_table('"CaseSensitiveTable"', 'UserID');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO "CaseSensitiveTable"
+SELECT s, s FROM generate_series(1,10) s;
+SELECT * FROM "CaseSensitiveTable" ORDER BY "UserID";
+ UserID | Value1 
+--------+--------
+      1 |      1
+      2 |      2
+      3 |      3
+      4 |      4
+      5 |      5
+      6 |      6
+      7 |      7
+      8 |      8
+      9 |      9
+     10 |     10
+(10 rows)
+
+DROP TABLE "CaseSensitiveTable";
+-- Select into distributed table with a sequence
+CREATE TABLE dist_table_with_sequence (user_id serial, value_1 serial);
+SELECT create_distributed_table('dist_table_with_sequence', 'user_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- from local query
+INSERT INTO dist_table_with_sequence (value_1)
+SELECT s FROM generate_series(1,5) s;
+SELECT * FROM dist_table_with_sequence ORDER BY user_id;
+ user_id | value_1 
+---------+---------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- from a distributed query
+INSERT INTO dist_table_with_sequence (value_1)
+SELECT value_1 FROM dist_table_with_sequence;
+ERROR:  INSERT ... SELECT cannot generate sequence values when selecting from a distributed table
+SELECT * FROM dist_table_with_sequence ORDER BY user_id;
+ user_id | value_1 
+---------+---------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- Select from distributed table into reference table
+CREATE TABLE ref_table (user_id int, value_1 int);
+SELECT create_reference_table('ref_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO ref_table
+SELECT user_id, value_1 FROM raw_events_second;
+SELECT * FROM ref_table ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |        
+       2 |        
+       3 |        
+       4 |        
+       5 |        
+(5 rows)
+
+DROP TABLE ref_table;
+-- Select into an append-partitioned table is not supported
+CREATE TABLE insert_append_table (user_id int, value_4 bigint);
+SELECT create_distributed_table('insert_append_table', 'user_id', 'append');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO insert_append_table (user_id, value_4)
+SELECT user_id, 1 FROM raw_events_second LIMIT 5;
+ERROR:  INSERT ... SELECT into an append-distributed table is not supported
+DROP TABLE insert_append_table;
+-- Insert from other distributed table as prepared statement
+TRUNCATE raw_events_first;
+PREPARE insert_prep(int) AS
+INSERT INTO raw_events_first (user_id, value_1)
+SELECT $1, value_4 FROM raw_events_second ORDER BY value_4 LIMIT 1;
+EXECUTE insert_prep(1);
+EXECUTE insert_prep(2);
+EXECUTE insert_prep(3);
+EXECUTE insert_prep(4);
+EXECUTE insert_prep(5);
+EXECUTE insert_prep(6);
+SELECT user_id, value_1 FROM raw_events_first ORDER BY user_id, value_1;
+ user_id | value_1 
+---------+---------
+       1 |       3
+       2 |       3
+       3 |       3
+       4 |       3
+       5 |       3
+       6 |       3
+(6 rows)
+
+-- Inserting into views is handled via coordinator
+TRUNCATE raw_events_first;
+INSERT INTO test_view
+SELECT * FROM raw_events_second;
+SELECT user_id, value_4 FROM test_view ORDER BY user_id, value_4;
+ user_id | value_4 
+---------+---------
+       1 |       3
+       2 |       6
+       3 |       9
+       4 |      12
+       5 |      15
+(5 rows)
+
+-- Drop the view now, because the column we are about to drop depends on it
+DROP VIEW test_view;
+-- Make sure we handle dropped columns correctly
+TRUNCATE raw_events_first;
+ALTER TABLE raw_events_first DROP COLUMN value_1;
+INSERT INTO raw_events_first (user_id, value_4)
+SELECT value_4, user_id FROM raw_events_second LIMIT 5;
+SELECT user_id, value_4 FROM raw_events_first ORDER BY user_id;
+ user_id | value_4 
+---------+---------
+       3 |       1
+       6 |       2
+       9 |       3
+      12 |       4
+      15 |       5
+(5 rows)
+
+RESET client_min_messages;
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE raw_events_first CASCADE;
-NOTICE:  drop cascades to view test_view
 DROP TABLE raw_events_second;
 DROP TABLE reference_table;
 DROP TABLE agg_events;

@@ -104,7 +104,7 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 	ListCell *rteCell = NULL;
 	ListCell *cteCell = NULL;
 	Node *modifiedNode = NULL;
-	bool insertSelectQuery = InsertSelectQuery(query);
+	bool insertSelectQuery = InsertSelectIntoDistributedTable(query);
 
 	if (query->jointree && query->jointree->quals)
 	{

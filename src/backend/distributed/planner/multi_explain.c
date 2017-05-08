@@ -22,6 +22,7 @@
 #include "optimizer/cost.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
@@ -44,7 +45,9 @@
 #include "tcop/dest.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
+#include "utils/builtins.h"
 #include "utils/json.h"
+#include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
 
 
@@ -69,6 +72,8 @@ typedef struct RemoteExplainPlan
 
 
 /* Explain functions for distributed queries */
+static void CitusExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
+								 const char *queryString, ParamListInfo params);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
@@ -708,5 +713,75 @@ ExplainYAMLLineStarting(ExplainState *es)
 	{
 		appendStringInfoChar(es->str, '\n');
 		appendStringInfoSpaces(es->str, es->indent * 2);
+	}
+}
+
+
+/*
+ * CoordinatorInsertSelectExplainScan is a custom scan explain callback function
+ * which is used to print explain information of a Citus plan for an INSERT INTO
+ * distributed_table SELECT ... query that is evaluated on the coordinator.
+ */
+void
+CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
+								   struct ExplainState *es)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	MultiPlan *multiPlan = scanState->multiPlan;
+	Query *query = multiPlan->insertSelectSubquery;
+	IntoClause *into = NULL;
+	ParamListInfo params = NULL;
+	char *queryString = NULL;
+
+	if (es->analyze)
+	{
+		/* avoiding double execution here is tricky, error out for now */
+		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
+							   "... SELECT commands via the coordinator")));
+	}
+
+	ExplainOpenGroup("Select Query", "Select Query", false, es);
+
+	/* explain the inner SELECT query */
+	CitusExplainOneQuery(query, into, es, queryString, params);
+
+	ExplainCloseGroup("Select Query", "Select Query", false, es);
+}
+
+
+/*
+ * CitusExplainOneQuery is simply a duplicate of ExplainOneQuery in explain.c, which
+ * is static.
+ */
+static void
+CitusExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
+					 const char *queryString, ParamListInfo params)
+{
+	/* copied from ExplainOneQuery in explain.c */
+	if (ExplainOneQuery_hook)
+	{
+		(*ExplainOneQuery_hook) (query, into, es, queryString, params);
+	}
+	else
+	{
+		PlannedStmt *plan;
+		instr_time  planstart,
+					planduration;
+		int cursorOptions = 0;
+
+		INSTR_TIME_SET_CURRENT(planstart);
+
+		#if (PG_VERSION_NUM >= 90600)
+		cursorOptions = into ? 0 : CURSOR_OPT_PARALLEL_OK;
+		#endif
+
+		/* plan the query */
+		plan = pg_plan_query(query, cursorOptions, params);
+
+		INSTR_TIME_SET_CURRENT(planduration);
+		INSTR_TIME_SUBTRACT(planduration, planstart);
+
+		/* run it (if needed) and produce output */
+		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
 	}
 }

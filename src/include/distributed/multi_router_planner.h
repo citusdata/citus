@@ -46,7 +46,7 @@ extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rte
 extern RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
 
-extern bool InsertSelectQuery(Query *query);
+extern bool InsertSelectIntoDistributedTable(Query *query);
 extern Oid ExtractFirstDistributedTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);

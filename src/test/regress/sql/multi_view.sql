@@ -93,9 +93,6 @@ SELECT count(*) FROM temp_lineitem;
 INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems WHERE l_shipmode = 'MAIL';
 SELECT count(*) FROM temp_lineitem;
 
--- modifying views is disallowed
-INSERT INTO air_shipped_lineitems SELECT * from temp_lineitem;
-
 SET citus.task_executor_type to "task-tracker";
 
 -- single view repartition subqueries are not supported

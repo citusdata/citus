@@ -266,14 +266,17 @@ SELECT count(*) FROM mx_table;
      5
 (1 row)
 
--- INSERT / SELECT
+-- INSERT / SELECT pulls results to worker
+BEGIN;
+SET LOCAL client_min_messages TO DEBUG;
 INSERT INTO mx_table_2 SELECT * FROM mx_table;
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
+DEBUG:  distributed INSERT ... SELECT can only be performed from the coordinator
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+END;
 SELECT count(*) FROM mx_table_2;
  count 
 -------
-     0
+     5
 (1 row)
 
 -- mark_tables_colocated
