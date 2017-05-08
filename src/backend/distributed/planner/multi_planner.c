@@ -16,6 +16,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_planner.h"
@@ -225,7 +226,7 @@ IsModifyCommand(Query *query)
 	CmdType commandType = query->commandType;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE || query->hasModifyingCTE)
+		commandType == CMD_DELETE)
 	{
 		return true;
 	}
@@ -273,9 +274,17 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 	if (IsModifyCommand(query))
 	{
-		/* modifications are always routed through the same planner/executor */
-		distributedPlan =
-			CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+		if (InsertSelectQuery(originalQuery))
+		{
+			distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
+																plannerRestrictionContext);
+		}
+		else
+		{
+			/* modifications are always routed through the same planner/executor */
+			distributedPlan =
+				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+		}
 
 		Assert(distributedPlan);
 	}
@@ -506,7 +515,6 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 	customScan->custom_private = list_make1(multiPlanData);
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
 
-	/* check if we have a master query */
 	if (multiPlan->masterQuery)
 	{
 		finalPlan = FinalizeNonRouterPlan(localPlan, multiPlan, customScan);

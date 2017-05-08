@@ -426,7 +426,9 @@ WITH new_article AS (
     INSERT INTO articles_hash VALUES (1,  1, 'arsenous', 9572) RETURNING *
 )
 SELECT * FROM new_article;
-ERROR:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEBUG:  data-modifying statements are not supported in the WITH clauses of distributed queries
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- Modifying statement in nested CTE case is covered by PostgreSQL itself
 WITH new_article AS (
     WITH nested_cte AS (
