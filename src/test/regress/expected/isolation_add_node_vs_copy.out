@@ -1,0 +1,73 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-add-second-worker s2-begin s2-copy-to-reference-table s1-commit s2-commit s2-print-content s1-remove-second-worker s1-begin s1-add-second-worker s2-begin s2-copy-to-reference-table s1-commit s2-commit s2-print-content
+create_reference_table
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-second-worker: 
+   	SELECT master_add_node('localhost', 57638);
+
+master_add_node
+
+(4,4,localhost,57638,default,f,t)
+step s2-begin: 
+    BEGIN;
+
+step s2-copy-to-reference-table: 
+	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-copy-to-reference-table: <... completed>
+step s2-commit: 
+    COMMIT;
+
+step s2-print-content: 
+	SELECT run_command_on_placements('test_reference_table', 'select count(*) from %s');
+
+run_command_on_placements
+
+(localhost,57637,102197,t,5)
+(localhost,57638,102197,t,5)
+step s1-remove-second-worker: 
+   	SELECT master_remove_node('localhost', 57638);
+
+master_remove_node
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-add-second-worker: 
+   	SELECT master_add_node('localhost', 57638);
+
+master_add_node
+
+(5,5,localhost,57638,default,f,t)
+step s2-begin: 
+    BEGIN;
+
+step s2-copy-to-reference-table: 
+	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-copy-to-reference-table: <... completed>
+step s2-commit: 
+    COMMIT;
+
+step s2-print-content: 
+	SELECT run_command_on_placements('test_reference_table', 'select count(*) from %s');
+
+run_command_on_placements
+
+(localhost,57637,102197,t,10)
+(localhost,57638,102197,t,10)
+master_add_node
+
+(5,5,localhost,57638,default,f,t)
