@@ -160,3 +160,83 @@ step s2-drop-all-shards: <... completed>
 master_drop_all_shards
 
 0              
+
+starting permutation: s1-begin s1-truncate s2-truncate s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-truncate: 
+	TRUNCATE append_table;
+
+step s2-truncate: 
+	TRUNCATE append_table;
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-truncate: <... completed>
+
+starting permutation: s1-begin s1-truncate s2-apply-delete-command s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-truncate: 
+	TRUNCATE append_table;
+
+step s2-apply-delete-command: 
+	SELECT master_apply_delete_command('DELETE FROM append_table');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-apply-delete-command: <... completed>
+master_apply_delete_command
+
+0              
+
+starting permutation: s1-begin s1-truncate s2-drop-all-shards s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-truncate: 
+	TRUNCATE append_table;
+
+step s2-drop-all-shards: 
+	SELECT master_drop_all_shards('append_table', 'public', 'append_table');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-drop-all-shards: <... completed>
+master_drop_all_shards
+
+0              
+
+starting permutation: s1-begin s1-truncate s2-select s1-commit
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-truncate: 
+	TRUNCATE append_table;
+
+step s2-select: 
+	SELECT * FROM append_table;
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-select: <... completed>
+test_id        data           
+
