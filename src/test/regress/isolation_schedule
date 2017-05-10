@@ -1,3 +1,4 @@
+test: isolation_add_remove_node
 test: isolation_add_node_vs_reference_table_operations
 
 # tests that change node metadata should precede
