@@ -1,0 +1,404 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-begin: 
+	BEGIN;
+
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-table-1: <... completed>
+create_distributed_table
+
+               
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57638          
+localhost      57638          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+               
+
+starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-begin: 
+	BEGIN;
+
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+ <waiting ...>
+step s1-abort: 
+	ABORT;
+
+step s2-create-table-1: <... completed>
+create_distributed_table
+
+               
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57637          
+localhost      57637          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+
+starting permutation: s2-begin s2-create-table-1 s1-add-node-2 s2-commit s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s2-begin: 
+	BEGIN;
+
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+
+create_distributed_table
+
+               
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-add-node-2: <... completed>
+?column?       
+
+1              
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57637          
+localhost      57637          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+               
+
+starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-remove-node-2: 
+	SELECT * FROM master_remove_node('localhost', 57638);
+
+master_remove_node
+
+               
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-table-1: <... completed>
+create_distributed_table
+
+               
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57637          
+localhost      57637          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+
+starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-remove-node-2: 
+	SELECT * FROM master_remove_node('localhost', 57638);
+
+master_remove_node
+
+               
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+ <waiting ...>
+step s1-abort: 
+	ABORT;
+
+step s2-create-table-1: <... completed>
+create_distributed_table
+
+               
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57638          
+localhost      57638          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+               
+
+starting permutation: s1-add-node-2 s2-begin s2-create-table-1 s1-remove-node-2 s2-commit s1-show-placements s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s2-begin: 
+	BEGIN;
+
+step s2-create-table-1: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 1;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+
+create_distributed_table
+
+               
+step s1-remove-node-2: 
+	SELECT * FROM master_remove_node('localhost', 57638);
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-remove-node-2: <... completed>
+error in steps s2-commit s1-remove-node-2: ERROR:  you cannot remove a node which has shard placements
+step s1-show-placements: 
+	SELECT
+		nodename, nodeport
+	FROM
+		pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
+	WHERE
+		logicalrelid = 'dist_table'::regclass
+	ORDER BY
+		nodename, nodeport;
+
+nodename       nodeport       
+
+localhost      57637          
+localhost      57637          
+localhost      57638          
+localhost      57638          
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+               
+
+starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-2 s1-commit s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s1-remove-node-2: 
+	SELECT * FROM master_remove_node('localhost', 57638);
+
+master_remove_node
+
+               
+step s2-create-table-2: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 2;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-table-2: <... completed>
+error in steps s1-commit s2-create-table-2: ERROR:  replication_factor (2) exceeds number of worker nodes (1)
+step s2-select: 
+	SELECT * FROM dist_table;
+
+ERROR:  relation "dist_table" does not exist
+master_remove_node
+
+               
+
+starting permutation: s1-add-node-2 s1-begin s2-create-table-2 s1-remove-node-2 s1-commit s2-select
+node_name      node_port      
+
+localhost      57637          
+step s1-add-node-2: 
+	SELECT 1 FROM master_add_node('localhost', 57638);
+
+?column?       
+
+1              
+step s1-begin: 
+	BEGIN;
+
+step s2-create-table-2: 
+	SET citus.shard_count TO 4;
+	SET citus.shard_replication_factor TO 2;
+	CREATE TABLE dist_table (x int, y int);
+	SELECT create_distributed_table('dist_table', 'x');
+
+create_distributed_table
+
+               
+step s1-remove-node-2: 
+	SELECT * FROM master_remove_node('localhost', 57638);
+
+ERROR:  you cannot remove a node which has shard placements
+step s1-commit: 
+	COMMIT;
+
+step s2-select: 
+	SELECT * FROM dist_table;
+
+x              y              
+
+master_remove_node
+
+               
+               
