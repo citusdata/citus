@@ -1996,7 +1996,14 @@ FROM (
  ORDER BY 2 DESC, 1
  LIMIT $1 OFFSET $2;
  EXECUTE parametrized_limit(3,3);
-ERROR:  no value found for parameter 1
+DEBUG:  push down of limit count: 6
+ user_id | array_length 
+---------+--------------
+      13 |          172
+      12 |          121
+      23 |          115
+(3 rows)
+
 PREPARE parametrized_offset AS
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -2013,7 +2020,14 @@ FROM (
  ORDER BY 2 DESC, 1
  LIMIT 3 OFFSET $1;
  EXECUTE parametrized_offset(3);
-ERROR:  no value found for parameter 1
+DEBUG:  push down of limit count: 6
+ user_id | array_length 
+---------+--------------
+      13 |          172
+      12 |          121
+      23 |          115
+(3 rows)
+
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
 CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
