@@ -1,23 +1,18 @@
+# remove one of the nodes for the purpose of the test
 setup
-{
-	truncate pg_dist_shard_placement;
-	truncate pg_dist_shard;
-	truncate pg_dist_partition;
-	truncate pg_dist_colocation;
-	truncate pg_dist_node;
-	
-	SELECT master_add_node('localhost', 57637);
+{	
+	SELECT master_remove_node('localhost', 57638);
 	
     CREATE TABLE test_reference_table (test_id integer);
     SELECT create_reference_table('test_reference_table');
 }
 
+# ensure that both nodes exists for the remaining of the isolation tests
 teardown
 {
-    DROP TABLE IF EXISTS test_reference_table CASCADE;
-
-	SELECT master_add_node('localhost', 57637);
-	SELECT master_add_node('localhost', 57638);
+	DROP TABLE test_reference_table;
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57637);
+	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
 }
 
 session "s1"
@@ -29,7 +24,7 @@ step "s1-begin"
 
 step "s1-add-second-worker"
 {
-   	SELECT master_add_node('localhost', 57638);
+   	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
 }
 
 step "s1-remove-second-worker"
@@ -61,8 +56,14 @@ step "s2-commit"
 
 step "s2-print-content"
 {
-	SELECT run_command_on_placements('test_reference_table', 'select count(*) from %s');
+	SELECT 
+		nodeport, success, result 
+	FROM 
+		run_command_on_placements('test_reference_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport;
 }
+
 
 # verify that copy gets the invalidation and re-builts its metadata cache
 # note that we need to run the same test twice to ensure that metadata is cached

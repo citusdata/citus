@@ -8,11 +8,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-   	SELECT master_add_node('localhost', 57638);
+   	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
 
-master_add_node
+nodename       nodeport       isactive       
 
-(4,4,localhost,57638,default,f,t)
+localhost      57638          t              
 step s2-begin: 
     BEGIN;
 
@@ -27,12 +27,17 @@ step s2-commit:
     COMMIT;
 
 step s2-print-content: 
-	SELECT run_command_on_placements('test_reference_table', 'select count(*) from %s');
+	SELECT 
+		nodeport, success, result 
+	FROM 
+		run_command_on_placements('test_reference_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport;
 
-run_command_on_placements
+nodeport       success        result         
 
-(localhost,57637,102197,t,5)
-(localhost,57638,102197,t,5)
+57637          t              5              
+57638          t              5              
 step s1-remove-second-worker: 
    	SELECT master_remove_node('localhost', 57638);
 
@@ -43,11 +48,11 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker: 
-   	SELECT master_add_node('localhost', 57638);
+   	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
 
-master_add_node
+nodename       nodeport       isactive       
 
-(5,5,localhost,57638,default,f,t)
+localhost      57638          t              
 step s2-begin: 
     BEGIN;
 
@@ -62,12 +67,17 @@ step s2-commit:
     COMMIT;
 
 step s2-print-content: 
-	SELECT run_command_on_placements('test_reference_table', 'select count(*) from %s');
+	SELECT 
+		nodeport, success, result 
+	FROM 
+		run_command_on_placements('test_reference_table', 'select count(*) from %s')
+	ORDER BY
+		nodeport;
 
-run_command_on_placements
+nodeport       success        result         
 
-(localhost,57637,102197,t,10)
-(localhost,57638,102197,t,10)
-master_add_node
+57637          t              10             
+57638          t              10             
+nodename       nodeport       isactive       
 
-(5,5,localhost,57638,default,f,t)
+localhost      57638          t              
