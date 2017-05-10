@@ -230,6 +230,9 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
 
+	/* prevent concurrent pg_dist_node changes */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
 	workerNodeList = ActivePrimaryNodeList();
 
 	/*
