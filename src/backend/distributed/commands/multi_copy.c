@@ -72,6 +72,7 @@
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"
 #include "utils/builtins.h"
+#include "utils/inval.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/memutils.h"
@@ -1750,6 +1751,14 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	/* prevent concurrent placement changes and non-commutative DML statements */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 	LockShardListResources(shardIntervalList, ShareLock);
+
+	/*
+	 * We might have some concurrent metadata changes. In order to get the changes,
+	 * we first need to accept the cache invalidation messages and then access the
+	 * cache entry to trigger the cache entry rebuild.
+	 */
+	AcceptInvalidationMessages();
+	cacheEntry = DistributedTableCacheEntry(tableId);
 
 	/* keep the table metadata to avoid looking it up for every tuple */
 	copyDest->tableMetadata = cacheEntry;
