@@ -762,6 +762,17 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	/* take an ExclusiveLock to block all operations except SELECT */
 	distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
 
+	/*
+	 * All writes have finished, make sure that we can see them by using the
+	 * latest snapshot. We use GetLatestSnapshot instead of
+	 * GetTransactionSnapshot since the latter would not reveal all writes
+	 * in serializable or repeatable read mode. Note that subsequent reads
+	 * from the distributed table would reveal those writes, temporarily
+	 * violating the isolation level. However, this seems preferable over
+	 * dropping the writes entirely.
+	 */
+	PushActiveSnapshot(GetLatestSnapshot());
+
 	/* get the table columns */
 	tupleDescriptor = RelationGetDescr(distributedRelation);
 	slot = MakeSingleTupleTableSlot(tupleDescriptor);
@@ -827,6 +838,8 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	ExecDropSingleTupleTableSlot(slot);
 	FreeExecutorState(estate);
 	heap_close(distributedRelation, NoLock);
+
+	PopActiveSnapshot();
 }
 
 
