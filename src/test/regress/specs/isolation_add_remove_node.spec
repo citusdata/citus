@@ -50,6 +50,11 @@ step "s1-remove-node-2"
 	SELECT * FROM master_remove_node('localhost', 57638);
 }
 
+step "s1-abort"
+{
+	ABORT;
+}
+
 step "s1-commit"
 {
 	COMMIT;
@@ -105,9 +110,14 @@ step "s2-commit"
 # session 1 adds a node, session 2 removes it, should be ok
 permutation "s1-begin" "s1-add-node-1" "s2-remove-node-1" "s1-commit" "s1-show-nodes"
 # add a different node from 2 sessions, should be ok
-permutation "s1-begin" "s1-add-node-1" "s2-add-node-1" "s1-commit" "s1-show-nodes"
+permutation "s1-begin" "s1-add-node-1" "s2-add-node-2" "s1-commit" "s1-show-nodes"
 # add the same node from 2 sessions, should be ok (idempotent)
 permutation "s1-begin" "s1-add-node-1" "s2-add-node-1" "s1-commit" "s1-show-nodes"
+# add a different node from 2 sessions, one aborts
+permutation "s1-begin" "s1-add-node-1" "s2-add-node-2" "s1-abort" "s1-show-nodes"
+# add the same node from 2 sessions, one aborts
+permutation "s1-begin" "s1-add-node-1" "s2-add-node-1" "s1-abort" "s1-show-nodes"
+
 # remove a different node from 2 transactions, should be ok
 permutation "s1-add-node-1" "s1-add-node-2" "s1-begin" "s1-remove-node-1" "s2-remove-node-2" "s1-commit" "s1-show-nodes"
 # remove the same node from 2 transactions, should be ok (idempotent)
@@ -132,3 +142,8 @@ permutation "s1-add-node-1" "s1-begin" "s1-activate-node-1" "s2-disable-node-1" 
 permutation "s1-add-inactive-1" "s1-begin" "s1-disable-node-1" "s2-activate-node-1" "s1-commit" "s1-show-nodes"
 # activate and disable an inactive node node from 2 transactions, should be ok
 permutation "s1-add-inactive-1" "s1-begin" "s1-activate-node-1" "s2-disable-node-1" "s1-commit" "s1-show-nodes"
+
+# activate and disable an inactive node from 2 transactions, one aborts
+permutation "s1-add-inactive-1" "s1-begin" "s1-activate-node-1" "s2-disable-node-1" "s1-abort" "s1-show-nodes"
+# disable an active node from 2 transactions, one aborts
+permutation "s1-add-node-1" "s1-begin" "s1-disable-node-1" "s2-disable-node-1" "s1-abort" "s1-show-nodes"
