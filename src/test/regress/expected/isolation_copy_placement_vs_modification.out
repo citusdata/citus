@@ -82,7 +82,7 @@ master_copy_shard_placement
 
                
 step s1-delete: 
-	UPDATE test_table SET y = 5 WHERE x = 5;
+	DELETE FROM test_table WHERE x = 5;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -103,8 +103,8 @@ step s2-print-content:
 
 nodeport       success        result         
 
-57637          t              5              
-57638          t              5              
+57637          t                             
+57638          t                             
 
 starting permutation: s1-load-cache s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-load-cache: 
@@ -332,7 +332,7 @@ master_copy_shard_placement
 
                
 step s1-delete: 
-	UPDATE test_table SET y = 5 WHERE x = 5;
+	DELETE FROM test_table WHERE x = 5;
  <waiting ...>
 step s2-commit: 
 	COMMIT;
@@ -353,8 +353,8 @@ step s2-print-content:
 
 nodeport       success        result         
 
-57637          t              5              
-57638          t              5              
+57637          t                             
+57638          t                             
 
 starting permutation: s1-begin s1-select s2-set-placement-inactive s2-begin s2-repair-placement s1-insert s2-commit s1-commit s2-print-content
 step s1-begin: 
