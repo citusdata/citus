@@ -42,7 +42,7 @@ step "s1-update"
 
 step "s1-delete"
 {
-	UPDATE test_table SET y = 5 WHERE x = 5;
+	DELETE FROM test_table WHERE x = 5;
 }
 
 step "s1-select"
