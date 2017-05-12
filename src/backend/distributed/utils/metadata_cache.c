@@ -385,14 +385,23 @@ LookupShardCacheEntry(int64 shardId)
 
 		recheck = true;
 	}
-	else if (!shardEntry->tableEntry->isValid)
+	else
 	{
 		/*
-		 * The cache entry might not be valid right now. Reload cache entry
-		 * and recheck (as the offset might have changed).
+		 * We might have some concurrent metadata changes. In order to get the changes,
+		 * we first need to accept the cache invalidation messages.
 		 */
-		LookupDistTableCacheEntry(shardEntry->tableEntry->relationId);
-		recheck = true;
+		AcceptInvalidationMessages();
+
+		if (!shardEntry->tableEntry->isValid)
+		{
+			/*
+			 * The cache entry might not be valid right now. Reload cache entry
+			 * and recheck (as the offset might have changed).
+			 */
+			LookupDistTableCacheEntry(shardEntry->tableEntry->relationId);
+			recheck = true;
+		}
 	}
 
 	/*
@@ -472,6 +481,12 @@ LookupDistTableCacheEntry(Oid relationId)
 	/* return valid matches */
 	if (foundInCache)
 	{
+		/*
+		 * We might have some concurrent metadata changes. In order to get the changes,
+		 * we first need to accept the cache invalidation messages.
+		 */
+		AcceptInvalidationMessages();
+
 		if (cacheEntry->isValid)
 		{
 			return cacheEntry;
@@ -1927,6 +1942,12 @@ InitializeDistTableCache(void)
 HTAB *
 GetWorkerNodeHash(void)
 {
+	/*
+	 * We might have some concurrent metadata changes. In order to get the changes,
+	 * we first need to accept the cache invalidation messages.
+	 */
+	AcceptInvalidationMessages();
+
 	if (!workerNodeHashValid)
 	{
 		InitializeWorkerNodeCache();
