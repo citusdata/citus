@@ -53,7 +53,7 @@ static List * SequenceDDLCommandsForTable(Oid relationId);
 static void EnsureSupportedSequenceColumnType(Oid sequenceOid);
 static Oid TypeOfColumn(Oid tableId, int16 columnId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
-static char * OwnerName(Oid objectId);
+static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 
 
@@ -893,7 +893,7 @@ CreateSchemaDDLCommand(Oid schemaId)
 	}
 
 	schemaNameDef = makeStringInfo();
-	ownerName = OwnerName(schemaId);
+	ownerName = SchemaOwnerName(schemaId);
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, schemaName, ownerName);
 
 	return schemaNameDef->data;
@@ -968,19 +968,19 @@ TruncateTriggerCreateCommand(Oid relationId)
 
 
 /*
- * OwnerName returns the name of the owner of the specified object.
+ * SchemaOwnerName returns the name of the owner of the specified schema.
  */
 static char *
-OwnerName(Oid objectId)
+SchemaOwnerName(Oid objectId)
 {
 	HeapTuple tuple = NULL;
 	Oid ownerId = InvalidOid;
 	char *ownerName = NULL;
 
-	tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(objectId));
+	tuple = SearchSysCache1(NAMESPACEOID, ObjectIdGetDatum(objectId));
 	if (HeapTupleIsValid(tuple))
 	{
-		ownerId = ((Form_pg_class) GETSTRUCT(tuple))->relowner;
+		ownerId = ((Form_pg_namespace) GETSTRUCT(tuple))->nspowner;
 	}
 	else
 	{
@@ -988,6 +988,8 @@ OwnerName(Oid objectId)
 	}
 
 	ownerName = GetUserNameFromId(ownerId, false);
+
+	ReleaseSysCache(tuple);
 
 	return ownerName;
 }
