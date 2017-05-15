@@ -737,3 +737,31 @@ SET citus.task_executor_type TO "real-time";
 -- we expect that it will warn out
 SET search_path TO public;
 ALTER TABLE test_schema_support.nation_hash SET SCHEMA public;
+
+-- we will use this function in next test
+CREATE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+     EXECUTE p_sql;
+     PERFORM run_command_on_workers(p_sql);
+END;$$;
+
+-- test schema propagation with user other than current user
+SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');
+SELECT run_command_on_coordinator_and_workers('GRANT ALL ON DATABASE postgres to "test-user"');
+
+CREATE SCHEMA schema_with_user AUTHORIZATION "test-user";
+CREATE TABLE schema_with_user.test_table(column1 int);
+SELECT create_reference_table('schema_with_user.test_table');
+
+-- verify that owner of the created schema is test-user
+\c - - - :worker_1_port
+\dn schema_with_user
+
+\c - - - :master_port
+-- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
+DROP OWNED BY "test-user" CASCADE;
+SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
+SELECT run_command_on_coordinator_and_workers('DROP USER "test-user"');
+
+DROP FUNCTION run_command_on_coordinator_and_workers(p_sql text);
