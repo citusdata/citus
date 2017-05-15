@@ -388,7 +388,6 @@ SET citus.task_executor_type TO 'real-time';
 SELECT *
 	FROM articles
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
@@ -404,7 +403,6 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles
 	WHERE author_id = 1 OR author_id = 17;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
@@ -433,7 +431,6 @@ SELECT *
 SELECT id as article_id, word_count * id as random_value
 	FROM articles
 	WHERE author_id = 1;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  article_id | random_value 
@@ -451,8 +448,6 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
-DEBUG:  predicate pruning for shardId 850001
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  first_author | second_word_count 
@@ -468,7 +463,6 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles a, articles_single_shard b
 	WHERE a.author_id = 10 and a.author_id = b.author_id
 	LIMIT 3;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  first_author | second_word_count 
@@ -483,7 +477,6 @@ SELECT *
 	FROM articles
 	WHERE author_id = 1
 	LIMIT 2;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id | author_id |  title   | word_count 
@@ -500,7 +493,6 @@ SELECT id
 	WHERE author_id = 1
 	GROUP BY id
 	ORDER BY id;
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
  id 
@@ -521,7 +513,6 @@ DEBUG:  Plan is router executable
 SELECT avg(word_count)
 	FROM articles
 	WHERE author_id = 2;
-DEBUG:  predicate pruning for shardId 850000
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
         avg         
@@ -535,7 +526,6 @@ SELECT max(word_count) as max, min(word_count) as min,
 	   sum(word_count) as sum, count(word_count) as cnt
 	FROM articles
 	WHERE author_id = 2;
-DEBUG:  predicate pruning for shardId 850000
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
   max  | min  |  sum  | cnt 
@@ -547,8 +537,6 @@ DEBUG:  Plan is router executable
 SELECT *
 	FROM articles a, articles b
 	WHERE a.id = b.id  AND a.author_id = 1;
-DEBUG:  predicate pruning for shardId 850001
-DEBUG:  predicate pruning for shardId 850001
 DEBUG:  join prunable for task partitionId 0 and 1
 DEBUG:  join prunable for task partitionId 0 and 2
 DEBUG:  join prunable for task partitionId 0 and 3

@@ -42,8 +42,6 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	o_orderkey < 0;
-DEBUG:  predicate pruning for shardId 290008
-DEBUG:  predicate pruning for shardId 290009
  count 
 -------
      0
@@ -58,9 +56,6 @@ FROM
 WHERE
 	o_custkey = c_custkey AND
 	c_custkey < 0;
-DEBUG:  predicate pruning for shardId 290010
-DEBUG:  predicate pruning for shardId 280001
-DEBUG:  predicate pruning for shardId 280000
  count 
 -------
      0
@@ -117,14 +112,6 @@ FROM
 WHERE
 	l_partkey = c_nationkey AND
 	l_orderkey < 0;
-DEBUG:  predicate pruning for shardId 290000
-DEBUG:  predicate pruning for shardId 290001
-DEBUG:  predicate pruning for shardId 290002
-DEBUG:  predicate pruning for shardId 290003
-DEBUG:  predicate pruning for shardId 290004
-DEBUG:  predicate pruning for shardId 290005
-DEBUG:  predicate pruning for shardId 290006
-DEBUG:  predicate pruning for shardId 290007
  count 
 -------
      0

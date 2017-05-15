@@ -26,10 +26,6 @@ DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
-DEBUG:  predicate pruning for shardId 290000
-DEBUG:  predicate pruning for shardId 290001
-DEBUG:  predicate pruning for shardId 290002
-DEBUG:  predicate pruning for shardId 290003
 DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
 DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
 DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
@@ -43,14 +39,6 @@ DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
 -- works as expected in this case.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
-DEBUG:  predicate pruning for shardId 290000
-DEBUG:  predicate pruning for shardId 290001
-DEBUG:  predicate pruning for shardId 290002
-DEBUG:  predicate pruning for shardId 290003
-DEBUG:  predicate pruning for shardId 290004
-DEBUG:  predicate pruning for shardId 290005
-DEBUG:  predicate pruning for shardId 290006
-DEBUG:  predicate pruning for shardId 290007
  sum | avg 
 -----+-----
      |    
@@ -61,11 +49,6 @@ DEBUG:  predicate pruning for shardId 290007
 -- out all the shards, and leave us with an empty task list.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-DEBUG:  predicate pruning for shardId 290000
-DEBUG:  predicate pruning for shardId 290001
-DEBUG:  predicate pruning for shardId 290002
-DEBUG:  predicate pruning for shardId 290003
-DEBUG:  predicate pruning for shardId 290009
 DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
 DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
 DEBUG:  join prunable for intervals [12036,13473] and [1,5986]

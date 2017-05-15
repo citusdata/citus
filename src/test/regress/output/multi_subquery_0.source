@@ -377,9 +377,6 @@ SET client_min_messages TO DEBUG2;
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE a = 'onder' GROUP BY a) 
 AS foo;
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270006
-DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)
@@ -387,9 +384,6 @@ DEBUG:  predicate pruning for shardId 270008
 SELECT * FROM 
 	(SELECT count(*) FROM subquery_pruning_varchar_test_table WHERE 'eren' = a GROUP BY a)
 AS foo;
-DEBUG:  predicate pruning for shardId 270005
-DEBUG:  predicate pruning for shardId 270007
-DEBUG:  predicate pruning for shardId 270008
  count 
 -------
 (0 rows)

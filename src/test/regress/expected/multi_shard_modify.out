@@ -130,9 +130,6 @@ SELECT count(*) FROM multi_shard_modify_test;
 -- Check that shard pruning works
 SET client_min_messages TO DEBUG2;
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = 15');
-DEBUG:  predicate pruning for shardId 350001
-DEBUG:  predicate pruning for shardId 350002
-DEBUG:  predicate pruning for shardId 350003
  master_modify_multiple_shards 
 -------------------------------
                              1
