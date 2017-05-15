@@ -885,7 +885,7 @@ CreateSchemaDDLCommand(Oid schemaId)
 {
 	char *schemaName = get_namespace_name(schemaId);
 	StringInfo schemaNameDef = NULL;
-	char *ownerName = NULL;
+	const char *ownerName = NULL;
 
 	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
 	{
@@ -893,7 +893,7 @@ CreateSchemaDDLCommand(Oid schemaId)
 	}
 
 	schemaNameDef = makeStringInfo();
-	ownerName = SchemaOwnerName(schemaId);
+	ownerName = quote_identifier(SchemaOwnerName(schemaId));
 	appendStringInfo(schemaNameDef, CREATE_SCHEMA_COMMAND, schemaName, ownerName);
 
 	return schemaNameDef->data;
