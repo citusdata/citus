@@ -1,4 +1,4 @@
-ignore: isolation_add_node_vs_reference_table_operations
+test: isolation_add_node_vs_reference_table_operations
 
 # tests that change node metadata should precede 
 # isolation_cluster_management such that tests 
