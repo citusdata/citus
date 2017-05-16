@@ -1,7 +1,5 @@
 -- Tests related to distributed DDL commands on mx cluster
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1600000;
-
 SELECT * FROM mx_ddl_table ORDER BY key;
 
 -- CREATE INDEX
@@ -105,12 +103,12 @@ SELECT create_distributed_table('mx_sequence', 'key');
 \c - - - :worker_1_port
 
 SELECT groupid FROM pg_dist_local_group;
-SELECT * FROM mx_sequence_value_seq;
+SELECT last_value FROM mx_sequence_value_seq;
 
 \c - - - :worker_2_port
 
 SELECT groupid FROM pg_dist_local_group;
-SELECT * FROM mx_sequence_value_seq;
+SELECT last_value FROM mx_sequence_value_seq;
 
 \c - - - :master_port
 

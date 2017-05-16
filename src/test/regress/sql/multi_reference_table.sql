@@ -228,17 +228,26 @@ WHERE
 	value_1 = 1 OR value_1 = 2;
 
 -- set operations are supported
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-UNION
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	UNION
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
 
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-EXCEPT
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	EXCEPT
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
 
-(SELECT * FROM reference_table_test WHERE value_1 = 1)
-INTERSECT
-(SELECT * FROM reference_table_test WHERE value_1 = 3);
+SELECT * FROM (
+	SELECT * FROM reference_table_test WHERE value_1 = 1
+	INTERSECT
+	SELECT * FROM reference_table_test WHERE value_1 = 3
+) AS combination
+ORDER BY value_1;
 
 -- to make the tests more interested for aggregation tests, ingest some more data
 INSERT INTO reference_table_test VALUES (1, 1.0, '1', '2016-12-01');

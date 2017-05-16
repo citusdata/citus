@@ -62,7 +62,6 @@ static volatile sig_atomic_t got_SIGHUP = false;
 static volatile sig_atomic_t got_SIGTERM = false;
 
 /* initialization forward declarations */
-static void TaskTrackerMain(Datum main_arg);
 static Size TaskTrackerShmemSize(void);
 static void TaskTrackerShmemInit(void);
 
@@ -108,7 +107,8 @@ TaskTrackerRegister(void)
 	worker.bgw_flags = BGWORKER_SHMEM_ACCESS;
 	worker.bgw_start_time = BgWorkerStart_ConsistentState;
 	worker.bgw_restart_time = 1;
-	worker.bgw_main = TaskTrackerMain;
+	snprintf(worker.bgw_library_name, BGW_MAXLEN, "citus");
+	snprintf(worker.bgw_function_name, BGW_MAXLEN, "TaskTrackerMain");
 	worker.bgw_notify_pid = 0;
 	snprintf(worker.bgw_name, BGW_MAXLEN, "task tracker");
 
@@ -117,7 +117,7 @@ TaskTrackerRegister(void)
 
 
 /* Main entry point for task tracker process. */
-static void
+void
 TaskTrackerMain(Datum main_arg)
 {
 	MemoryContext TaskTrackerContext = NULL;

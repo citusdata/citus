@@ -5,7 +5,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 570000;
 
 -- print major version to make version-specific tests clear
-SELECT substring(version(), '\d+\.\d+') AS major_version;
+SELECT substring(version(), '\d+(?:\.\d+)?') AS major_version;
 
 \a\t
 

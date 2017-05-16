@@ -4,7 +4,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
 -- print major version to make version-specific tests clear
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+\.\d+') AS major_version;
+SELECT substring(:'server_version', '\d+(?:\.\d+)?') AS major_version;
  major_version 
 ---------------
  9.5
@@ -1021,11 +1021,13 @@ FROM
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
-	hasdone;
+	hasdone
+ORDER BY
+	event_average;
    event_average    |       hasdone       
 --------------------+---------------------
- 4.0000000000000000 | Has not done paying
  2.5000000000000000 | Has done paying
+ 4.0000000000000000 | Has not done paying
 (2 rows)
 
 -- Union, left join and having subquery pushdown

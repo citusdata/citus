@@ -1,5 +1,4 @@
 -- Tests related to distributed DDL commands on mx cluster
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1600000;
 SELECT * FROM mx_ddl_table ORDER BY key;
  key | value 
 -----+-------
@@ -207,10 +206,10 @@ SELECT groupid FROM pg_dist_local_group;
       12
 (1 row)
 
-SELECT * FROM mx_sequence_value_seq;
-     sequence_name     |    last_value    |   start_value    | increment_by |    max_value     |    min_value     | cache_value | log_cnt | is_cycled | is_called 
------------------------+------------------+------------------+--------------+------------------+------------------+-------------+---------+-----------+-----------
- mx_sequence_value_seq | 3377699720527873 | 3377699720527873 |            1 | 3659174697238529 | 3377699720527873 |           1 |       0 | f         | f
+SELECT last_value FROM mx_sequence_value_seq;
+    last_value    
+------------------
+ 3377699720527873
 (1 row)
 
 \c - - - :worker_2_port
@@ -220,10 +219,10 @@ SELECT groupid FROM pg_dist_local_group;
       14
 (1 row)
 
-SELECT * FROM mx_sequence_value_seq;
-     sequence_name     |    last_value    |   start_value    | increment_by |    max_value     |    min_value     | cache_value | log_cnt | is_cycled | is_called 
------------------------+------------------+------------------+--------------+------------------+------------------+-------------+---------+-----------+-----------
- mx_sequence_value_seq | 3940649673949185 | 3940649673949185 |            1 | 4222124650659841 | 3940649673949185 |           1 |       0 | f         | f
+SELECT last_value FROM mx_sequence_value_seq;
+    last_value    
+------------------
+ 3940649673949185
 (1 row)
 
 \c - - - :master_port

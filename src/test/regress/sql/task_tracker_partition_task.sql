@@ -3,8 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1080000;
-
 
 \set JobId 401010
 \set PartitionTaskId 801106

@@ -3,9 +3,6 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 970000;
-
-
 -- Change configuration to treat lineitem AND orders tables as large
 
 SET citus.large_table_shard_count TO 2;

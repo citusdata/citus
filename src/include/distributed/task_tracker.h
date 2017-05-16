@@ -112,6 +112,8 @@ extern int MaxRunningTasksPerNode;
 /* State shared by the task tracker and task tracker protocol functions */
 extern WorkerTasksSharedStateData *WorkerTasksSharedState;
 
+/* Entry point */
+extern void TaskTrackerMain(Datum main_arg);
 
 /* Function declarations local to the worker module */
 extern WorkerTask * WorkerTasksHashEnter(uint64 jobId, uint32 taskId);
