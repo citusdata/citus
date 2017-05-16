@@ -1,3 +1,63 @@
+### citus v6.2.0 (May 16, 2017) ###
+
+* Increases SQL subquery coverage by pushing down more kinds of queries
+
+* Adds CustomScan API support to allow read-only transactions
+
+* Adds support for `CREATE/DROP INDEX CONCURRENTLY`
+
+* Adds support for `ALTER TABLE ... ADD CONSTRAINT`
+
+* Adds support for `ALTER TABLE ... RENAME COLUMN`
+
+* Adds support for `DISABLE/ENABLE TRIGGER ALL`
+
+* Adds support for expressions in the partition column in INSERTs
+
+* Adds support for query parameters in combination with function evaluation
+
+* Adds support for creating distributed tables from non-empty local tables
+
+* Adds UDFs to get size of distributed tables
+
+* Adds UDFs to add a new node without replicating reference tables
+
+* Adds checks to prevent running Citus binaries with wrong metadata tables
+
+* Improves shard pruning performance for range queries
+
+* Improves planner performance for joins involving co-located tables
+
+* Improves shard copy performance by creating indexes after copy
+
+* Improves task-tracker performance by batching several status checks
+
+* Enables router planner for queries on range partitioned table
+
+* Changes `TRUNCATE` to drop local data only if `enable_ddl_propagation` is off
+
+* Starts to execute DDL on coordinator before workers
+
+* Fixes a bug causing incorrectly reading invalidated cache
+
+* Fixes a bug related to creation of schemas of in workers with incorrect owner
+
+* Fixes a bug related to concurrent run of shard drop functions
+
+* Fixes a bug related to `EXPLAIN ANALYZE` with DML queries
+
+* Fixes a bug related to SQL functions in FROM clause
+
+* Adds a GUC variable to report cross shard queries
+
+* Fixes a bug related to partition columns without native hash function
+
+* Adds internal infrastructures and tests to improve development process
+
+* Addresses various race conditions and deadlocks
+
+* Improves and standardizes error messages
+
 ### citus v6.1.1 (May 5, 2017) ###
 
 * Fixes a crash caused by router executor use after connection timeouts
