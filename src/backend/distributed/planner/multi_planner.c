@@ -9,6 +9,7 @@
 
 #include "postgres.h"
 
+#include <float.h>
 #include <limits.h>
 
 #include "catalog/pg_type.h"

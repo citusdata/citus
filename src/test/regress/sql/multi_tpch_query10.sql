@@ -7,9 +7,6 @@
 -- coming from postgresql.conf or multi_task_tracker_executor.conf.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 900000;
-
-
 SELECT
 	c_custkey,
 	c_name,

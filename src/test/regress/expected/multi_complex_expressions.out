@@ -1,7 +1,6 @@
 --
 -- MULTI_COMPLEX_EXPRESSIONS
 --
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 420000;
 -- Check that we can correctly handle complex expressions and aggregates.
 SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
         ?column?        
@@ -435,22 +434,21 @@ FROM
 	lineitem li JOIN orders o ON li.l_orderkey = o.o_orderkey
 WHERE 
 	li.l_quantity > 25
-ORDER BY
-	li.l_quantity, li.l_partkey, o.o_custkey
+ORDER BY 1, 2, 3
 LIMIT 10 OFFSET 20;
 DEBUG:  push down of limit count: 30
  l_partkey | o_custkey | l_quantity 
 -----------+-----------+------------
-     25221 |       656 |      26.00
-     25373 |      1369 |      26.00
-     27331 |       571 |      26.00
-     27699 |      1150 |      26.00
-     28226 |       913 |      26.00
-     28635 |      1207 |      26.00
-     29101 |      1283 |      26.00
-     31143 |       640 |      26.00
-     31239 |       685 |      26.00
-     33646 |       860 |      26.00
+       655 |        58 |      50.00
+       669 |       319 |      34.00
+       699 |      1255 |      50.00
+       716 |        61 |      45.00
+       723 |        14 |      36.00
+       802 |       754 |      50.00
+       831 |       589 |      32.00
+       835 |        67 |      33.00
+       864 |       439 |      32.00
+       875 |        13 |      43.00
 (10 rows)
 
 RESET client_min_messages;

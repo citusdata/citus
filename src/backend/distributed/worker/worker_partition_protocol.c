@@ -20,6 +20,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <math.h>
 #include <unistd.h>
 
 #include "access/hash.h"

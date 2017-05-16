@@ -7,7 +7,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 270000;
 
 -- print major version to make version-specific tests clear
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+\.\d+') AS major_version;
+SELECT substring(:'server_version', '\d+(?:\.\d+)?') AS major_version;
 
 
 -- Create tables for subquery tests
@@ -1060,7 +1060,9 @@ FROM
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
-	hasdone;
+	hasdone
+ORDER BY
+	event_average;
 
 -- Union, left join and having subquery pushdown
 SELECT

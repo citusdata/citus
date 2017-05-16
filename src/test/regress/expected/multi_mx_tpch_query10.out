@@ -4,7 +4,6 @@
 -- Query #10 from the TPC-H decision support benchmark. Unlike other TPC-H tests,
 -- we don't set citus.large_table_shard_count here, and instead use the default value
 -- coming from postgresql.conf or multi_task_tracker_executor.conf.
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
 -- connect to master
 \c - - - :master_port
 SELECT
@@ -65,7 +64,6 @@ LIMIT 20;
 
 -- connect one of the workers
 \c - - - :worker_1_port
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
 SELECT
 	c_custkey,
 	c_name,
@@ -124,7 +122,6 @@ LIMIT 20;
 
 -- connect to the other worker
 \c - - - :worker_2_port
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
 SELECT
 	c_custkey,
 	c_name,

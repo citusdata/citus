@@ -8,9 +8,6 @@
 -- grouping.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1040000;
-
-
 SELECT l_quantity FROM lineitem ORDER BY l_shipdate, l_quantity LIMIT 20;
 
 SELECT l_quantity, count(*) as count FROM lineitem
