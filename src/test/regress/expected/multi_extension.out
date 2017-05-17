@@ -80,11 +80,12 @@ ALTER EXTENSION citus UPDATE TO '6.2-1';
 ALTER EXTENSION citus UPDATE TO '6.2-2';
 ALTER EXTENSION citus UPDATE TO '6.2-3';
 ALTER EXTENSION citus UPDATE TO '6.2-4';
+ALTER EXTENSION citus UPDATE TO '7.0-1';
 -- show running version
 SHOW citus.version;
  citus.version 
 ---------------
- 6.2devel
+ 7.0devel
 (1 row)
 
 -- ensure no objects were created outside pg_catalog
@@ -106,7 +107,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '5.0';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 6.2, but 5.0 was specified.
+DETAIL:  Loaded library requires 7.0, but 5.0 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- re-create in newest version
 \c
