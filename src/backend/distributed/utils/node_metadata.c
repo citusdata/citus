@@ -274,7 +274,6 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 						workerNode->workerRack, false, workerNode->isActive,
 						&nodeAlreadyExists);
 
-		ActivateNode(workerNode->workerName, workerNode->workerPort);
 	}
 
 	PG_RETURN_BOOL(true);
@@ -1045,7 +1044,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
-		workerNode->isActive = false;
+		workerNode->isActive = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}
