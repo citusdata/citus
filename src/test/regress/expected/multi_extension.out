@@ -108,6 +108,67 @@ CREATE EXTENSION citus VERSION '5.0';
 ERROR:  specified version incompatible with loaded Citus library
 DETAIL:  Loaded library requires 6.2, but 5.0 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
+-- Test non-distributed queries work even in version mismatch
+SET citus.enable_version_checks TO 'false';
+CREATE EXTENSION citus VERSION '6.1-17';
+SET citus.enable_version_checks TO 'true';
+-- Test CREATE TABLE
+CREATE TABLE version_mismatch_table(column1 int);
+-- Test COPY
+\copy version_mismatch_table FROM STDIN;
+-- Test INSERT
+INSERT INTO version_mismatch_table(column1) VALUES(5);
+ 
+-- Test SELECT
+SELECT * FROM version_mismatch_table ORDER BY column1;
+ column1 
+---------
+       0
+       1
+       2
+       3
+       4
+       5
+(6 rows)
+
+-- Test SELECT from pg_catalog
+SELECT d.datname as "Name",
+       pg_catalog.pg_get_userbyid(d.datdba) as "Owner",
+       pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
+FROM pg_catalog.pg_database d
+ORDER BY 1;
+    Name    |  Owner   |   Access privileges   
+------------+----------+-----------------------
+ postgres   | postgres | 
+ regression | postgres | 
+ template0  | postgres | =c/postgres          +
+            |          | postgres=CTc/postgres
+ template1  | postgres | =c/postgres          +
+            |          | postgres=CTc/postgres
+(4 rows)
+
+-- We should not distribute table in version mistmatch
+SELECT create_distributed_table('version_mismatch_table', 'column1');
+ERROR:  loaded Citus library version differs from installed extension version
+DETAIL:  Loaded library requires 6.2, but the installed extension version is 6.1-17.
+HINT:  Run ALTER EXTENSION citus UPDATE and try again.
+-- This function will cause fail in next ALTER EXTENSION
+CREATE OR REPLACE FUNCTION pg_catalog.citus_table_size(table_name regclass)
+RETURNS bigint LANGUAGE plpgsql
+AS $function$
+BEGIN
+END;
+$function$;
+SET citus.enable_version_checks TO 'false';
+-- This will fail because of previous function declaration
+ALTER EXTENSION citus UPDATE TO '6.2-2';
+ERROR:  function "citus_table_size" already exists with same argument types
+-- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
+SET citus.enable_version_checks TO 'true';
+DROP FUNCTION citus_table_size(regclass);
+SET citus.enable_version_checks TO 'false';
+ALTER EXTENSION citus UPDATE TO '6.2-2';
 -- re-create in newest version
+DROP EXTENSION citus;
 \c
 CREATE EXTENSION citus;

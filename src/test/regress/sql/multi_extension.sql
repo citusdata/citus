@@ -100,6 +100,59 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '5.0';
 
+-- Test non-distributed queries work even in version mismatch
+SET citus.enable_version_checks TO 'false';
+CREATE EXTENSION citus VERSION '6.1-17';
+SET citus.enable_version_checks TO 'true';
+
+-- Test CREATE TABLE
+CREATE TABLE version_mismatch_table(column1 int);
+
+-- Test COPY
+\copy version_mismatch_table FROM STDIN;
+0
+1
+2
+3
+4
+\.
+
+-- Test INSERT
+INSERT INTO version_mismatch_table(column1) VALUES(5);
+ 
+-- Test SELECT
+SELECT * FROM version_mismatch_table ORDER BY column1;
+
+-- Test SELECT from pg_catalog
+SELECT d.datname as "Name",
+       pg_catalog.pg_get_userbyid(d.datdba) as "Owner",
+       pg_catalog.array_to_string(d.datacl, E'\n') AS "Access privileges"
+FROM pg_catalog.pg_database d
+ORDER BY 1;
+
+-- We should not distribute table in version mistmatch
+SELECT create_distributed_table('version_mismatch_table', 'column1');
+
+-- This function will cause fail in next ALTER EXTENSION
+CREATE OR REPLACE FUNCTION pg_catalog.citus_table_size(table_name regclass)
+RETURNS bigint LANGUAGE plpgsql
+AS $function$
+BEGIN
+END;
+$function$;
+
+SET citus.enable_version_checks TO 'false';
+-- This will fail because of previous function declaration
+ALTER EXTENSION citus UPDATE TO '6.2-2';
+
+-- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
+SET citus.enable_version_checks TO 'true';
+DROP FUNCTION citus_table_size(regclass);
+
+SET citus.enable_version_checks TO 'false';
+ALTER EXTENSION citus UPDATE TO '6.2-2';
+
 -- re-create in newest version
+DROP EXTENSION citus;
 \c
 CREATE EXTENSION citus;
