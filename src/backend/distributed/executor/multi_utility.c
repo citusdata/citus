@@ -99,7 +99,6 @@ struct DropRelationCallbackState
 
 
 /* Local functions forward declarations for deciding when to perform processing/checks */
-static bool SkipCitusProcessingForUtility(Node *parsetree);
 static bool IsCitusExtensionStmt(Node *parsetree);
 
 /* Local functions forward declarations for Transmit statement */
@@ -185,22 +184,28 @@ multi_ProcessUtility(Node *parsetree,
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	List *ddlJobs = NIL;
-	bool skipCitusProcessing = SkipCitusProcessingForUtility(parsetree);
+	bool checkExtensionVersion = false;
 
-	if (skipCitusProcessing)
+	if (IsA(parsetree, TransactionStmt))
 	{
-		bool checkExtensionVersion = IsCitusExtensionStmt(parsetree);
-
+		/*
+		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
+		 * transactions in which case a lot of checks cannot be done safely in
+		 * that state. Since we never need to intercept transaction statements,
+		 * skip our checks and immediately fall into standard_ProcessUtility.
+		 */
 		standard_ProcessUtility(parsetree, queryString, context,
 								params, dest, completionTag);
 
-		if (EnableVersionChecks && checkExtensionVersion)
-		{
-			ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
-		}
-
 		return;
 	}
+
+	checkExtensionVersion = IsCitusExtensionStmt(parsetree);
+	if (EnableVersionChecks && checkExtensionVersion)
+	{
+		ErrorIfUnstableCreateOrAlterExtensionStmt(parsetree);
+	}
+
 
 	if (!CitusHasBeenLoaded())
 	{
@@ -443,63 +448,6 @@ multi_ProcessUtility(Node *parsetree,
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
 
 		ProcessVacuumStmt(vacuumStmt, queryString);
-	}
-}
-
-
-/*
- * SkipCitusProcessingForUtility simply returns whether a given utility should
- * bypass Citus processing and checks and be handled exclusively by standard
- * PostgreSQL utility processing. At present, CREATE/ALTER/DROP EXTENSION,
- * ABORT, COMMIT, ROLLBACK, and SET (GUC) statements are exempt from Citus.
- */
-static bool
-SkipCitusProcessingForUtility(Node *parsetree)
-{
-	switch (parsetree->type)
-	{
-		/*
-		 * In the CitusHasBeenLoaded check, we compare versions of loaded code,
-		 * the installed extension, and available extension. If they differ, we
-		 * force user to execute ALTER EXTENSION citus UPDATE. To allow this,
-		 * CREATE/DROP/ALTER extension must be omitted from Citus processing.
-		 */
-		case T_DropStmt:
-		{
-			DropStmt *dropStatement = (DropStmt *) parsetree;
-
-			if (dropStatement->removeType != OBJECT_EXTENSION)
-			{
-				return false;
-			}
-		}
-
-		/* no break, fall through */
-
-		case T_CreateExtensionStmt:
-		case T_AlterExtensionStmt:
-
-		/*
-		 * Transaction statements (e.g. ABORT, COMMIT) can be run in aborted
-		 * transactions in which case a lot of checks cannot be done safely in
-		 * that state. Since we never need to intercept transaction statements,
-		 * skip our checks and immediately fall into standard_ProcessUtility.
-		 */
-		case T_TransactionStmt:
-
-		/*
-		 * Skip processing of variable set statements, to allow changing the
-		 * enable_version_checks GUC during testing.
-		 */
-		case T_VariableSetStmt:
-		{
-			return true;
-		}
-
-		default:
-		{
-			return false;
-		}
 	}
 }
 
@@ -1474,8 +1422,8 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 		 * from the citus.control file. In case a new default is available, we
 		 * will force a compatibility check of the latest available version.
 		 */
-		availableExtensionVersion = NULL;
-		ErrorIfAvailableVersionMismatch();
+		citusVersionKnownCompatible = false;
+		CheckCitusVersion(ERROR);
 	}
 }
 
