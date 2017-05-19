@@ -105,6 +105,8 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
 
+	CheckCitusVersion(ERROR);
+
 	/* find partition tuple for partitioned relation */
 	partitionEntry = DistributedTableCacheEntry(relationId);
 
@@ -194,6 +196,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	FuncCallContext *functionContext = NULL;
 	ListCell *tableDDLEventCell = NULL;
 
+	CheckCitusVersion(ERROR);
+
 	/*
 	 * On the very first call to this function, we first use the given relation
 	 * name to get to the relation. We then recreate the list of DDL statements
@@ -264,6 +268,7 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 	Datum shardIdDatum = 0;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	shardId = GetNextShardId();
 	shardIdDatum = Int64GetDatum(shardId);
@@ -321,6 +326,7 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 	Datum placementIdDatum = 0;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	placementId = GetNextPlacementId();
 	placementIdDatum = Int64GetDatum(placementId);
@@ -375,6 +381,8 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 	FuncCallContext *functionContext = NULL;
 	uint32 workerNodeIndex = 0;
 	uint32 workerNodeCount = 0;
+
+	CheckCitusVersion(ERROR);
 
 	if (SRF_IS_FIRSTCALL())
 	{

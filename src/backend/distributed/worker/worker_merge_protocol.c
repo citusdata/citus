@@ -81,6 +81,9 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	/* we should have the same number of column names and types */
 	int32 columnNameCount = ArrayObjectCount(columnNameObject);
 	int32 columnTypeCount = ArrayObjectCount(columnTypeObject);
+
+	CheckCitusVersion(ERROR);
+
 	if (columnNameCount != columnTypeCount)
 	{
 		ereport(ERROR, (errmsg("column name array size: %d and type array size: %d"
@@ -151,6 +154,8 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 	int createMergeTableResult = 0;
 	int createIntermediateTableResult = 0;
 	int finished = 0;
+
+	CheckCitusVersion(ERROR);
 
 	/*
 	 * If the schema for the job isn't already created by the task tracker
@@ -225,6 +230,8 @@ worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
+
+	CheckCitusVersion(ERROR);
 
 	pgNamespace = heap_open(NamespaceRelationId, AccessExclusiveLock);
 	scanDescriptor = heap_beginscan_catalog(pgNamespace, scanKeyCount, scanKey);

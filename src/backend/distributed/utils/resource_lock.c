@@ -54,6 +54,8 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 	int shardIdCount = 0;
 	int shardIdIndex = 0;
 
+	CheckCitusVersion(ERROR);
+
 	if (ARR_NDIM(shardIdArrayObject) == 0)
 	{
 		ereport(ERROR, (errmsg("no locks specified")));
@@ -91,6 +93,8 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	Datum *shardIdArrayDatum = NULL;
 	int shardIdCount = 0;
 	int shardIdIndex = 0;
+
+	CheckCitusVersion(ERROR);
 
 	if (ARR_NDIM(shardIdArrayObject) == 0)
 	{

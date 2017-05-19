@@ -67,8 +67,12 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	char *taskCallString = text_to_cstring(taskCallStringText);
 	uint32 taskCallStringLength = strlen(taskCallString);
 
+	bool taskTrackerRunning = false;
+
+	CheckCitusVersion(ERROR);
+
 	/* check that we have a running task tracker on this host */
-	bool taskTrackerRunning = TaskTrackerRunning();
+	taskTrackerRunning = TaskTrackerRunning();
 	if (!taskTrackerRunning)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CANNOT_CONNECT_NOW),
@@ -129,7 +133,12 @@ task_tracker_task_status(PG_FUNCTION_ARGS)
 	WorkerTask *workerTask = NULL;
 	uint32 taskStatus = 0;
 
-	bool taskTrackerRunning = TaskTrackerRunning();
+	bool taskTrackerRunning = false;
+
+	CheckCitusVersion(ERROR);
+
+	taskTrackerRunning = TaskTrackerRunning();
+
 	if (taskTrackerRunning)
 	{
 		LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_SHARED);
@@ -169,6 +178,8 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	WorkerTask *currentTask = NULL;
 	StringInfo jobDirectoryName = NULL;
 	StringInfo jobSchemaName = NULL;
+
+	CheckCitusVersion(ERROR);
 
 	/*
 	 * We first clean up any open connections, and remove tasks belonging to
