@@ -114,6 +114,9 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	 * task directory does not exist. We then lock and create the directory.
 	 */
 	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
+
+	CheckCitusVersion(ERROR);
+
 	if (!taskDirectoryExists)
 	{
 		InitTaskDirectory(jobId, upstreamTaskId);
@@ -155,6 +158,9 @@ worker_fetch_query_results_file(PG_FUNCTION_ARGS)
 	 * task directory does not exist. We then lock and create the directory.
 	 */
 	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
+
+	CheckCitusVersion(ERROR);
+
 	if (!taskDirectoryExists)
 	{
 		InitTaskDirectory(jobId, upstreamTaskId);
@@ -415,6 +421,8 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
 
+	CheckCitusVersion(ERROR);
+
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
 	ProcessUtility(ddlCommandNode, ddlCommand, PROCESS_UTILITY_TOPLEVEL,
@@ -442,6 +450,8 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	char *rightShardSchemaName = text_to_cstring(rightShardSchemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
+
+	CheckCitusVersion(ERROR);
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
@@ -472,6 +482,9 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	Oid sequenceRelationId = InvalidOid;
 
 	NodeTag nodeType = nodeTag(commandNode);
+
+	CheckCitusVersion(ERROR);
+
 	if (nodeType != T_CreateSeqStmt)
 	{
 		ereport(ERROR,
@@ -512,6 +525,8 @@ worker_fetch_regular_table(PG_FUNCTION_ARGS)
 	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
 	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
 
+	CheckCitusVersion(ERROR);
+
 	/*
 	 * Run common logic to fetch the remote table, and use the provided function
 	 * pointer to perform the actual table fetching.
@@ -535,6 +550,8 @@ worker_fetch_foreign_file(PG_FUNCTION_ARGS)
 	uint64 foreignFileSize = PG_GETARG_INT64(1);
 	ArrayType *nodeNameObject = PG_GETARG_ARRAYTYPE_P(2);
 	ArrayType *nodePortObject = PG_GETARG_ARRAYTYPE_P(3);
+
+	CheckCitusVersion(ERROR);
 
 	/*
 	 * Run common logic to fetch the remote table, and use the provided function
@@ -1209,6 +1226,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	uint64 shardId = INVALID_SHARD_ID;
 	bool received = false;
 	StringInfo queryString = NULL;
+
+	CheckCitusVersion(ERROR);
 
 	/* We extract schema names and table names from qualified names */
 	DeconstructQualifiedName(shardQualifiedNameList, &shardSchemaName, &shardTableName);

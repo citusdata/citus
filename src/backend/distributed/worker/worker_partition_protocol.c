@@ -111,6 +111,9 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 
 	/* first check that array element's and partition column's types match */
 	Oid splitPointType = ARR_ELEMTYPE(splitPointObject);
+
+	CheckCitusVersion(ERROR);
+
 	if (splitPointType != partitionColumnType)
 	{
 		ereport(ERROR, (errmsg("partition column type %u and split point type %u "
@@ -182,6 +185,8 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	StringInfo taskAttemptDirectory = NULL;
 	FileOutputStream *partitionFileArray = NULL;
 	uint32 fileCount = partitionCount;
+
+	CheckCitusVersion(ERROR);
 
 	/* use column's type information to get the hashing function */
 	hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID, HASHPROC);

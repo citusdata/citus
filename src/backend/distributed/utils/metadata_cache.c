@@ -1754,6 +1754,8 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
 
@@ -1814,6 +1816,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
+
+	CheckCitusVersion(ERROR);
 
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
@@ -1876,6 +1880,8 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
 
@@ -1932,6 +1938,8 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
@@ -1954,6 +1962,8 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
+
+	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistLocalGroupIdRelationId());
 

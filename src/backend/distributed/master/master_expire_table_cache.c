@@ -46,13 +46,20 @@ Datum
 master_expire_table_cache(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
-	List *workerNodeList = ActiveWorkerNodeList();
+	DistTableCacheEntry *cacheEntry = NULL;
+	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
-	int shardCount = cacheEntry->shardIntervalArrayLength;
-	ShardInterval **shardIntervalArray = cacheEntry->sortedShardIntervalArray;
+	int shardCount = 0;
+	ShardInterval **shardIntervalArray = NULL;
 	List **placementListArray = NULL;
 	int shardIndex = 0;
+
+	CheckCitusVersion(ERROR);
+
+	cacheEntry = DistributedTableCacheEntry(relationId);
+	workerNodeList = ActiveWorkerNodeList();
+	shardCount = cacheEntry->shardIntervalArrayLength;
+	shardIntervalArray = cacheEntry->sortedShardIntervalArray;
 
 	if (shardCount == 0)
 	{

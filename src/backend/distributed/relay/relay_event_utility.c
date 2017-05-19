@@ -28,6 +28,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_constraint.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
 #include "lib/stringinfo.h"
 #include "mb/pg_wchar.h"
@@ -673,9 +674,10 @@ shard_name(PG_FUNCTION_ARGS)
 						errmsg("shard_id cannot be null")));
 	}
 
-
 	relationId = PG_GETARG_OID(0);
 	shardId = PG_GETARG_INT64(1);
+
+	CheckCitusVersion(ERROR);
 
 	if (shardId <= 0)
 	{
