@@ -83,6 +83,8 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 	int commandIndex = 0;
 	int commandCount = 0;
 
+	CheckCitusVersion(ERROR);
+
 	/* check to see if caller supports us returning a tuplestore */
 	if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
 	{

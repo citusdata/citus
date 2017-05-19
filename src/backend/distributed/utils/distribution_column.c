@@ -17,6 +17,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "distributed/distribution_column.h"
+#include "distributed/metadata_cache.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/primnodes.h"
@@ -54,6 +55,8 @@ column_name_to_column(PG_FUNCTION_ARGS)
 	Var *column = NULL;
 	char *columnNodeString = NULL;
 	text *columnNodeText = NULL;
+
+	CheckCitusVersion(ERROR);
 
 	relation = relation_open(relationId, AccessShareLock);
 
@@ -106,6 +109,8 @@ column_to_column_name(PG_FUNCTION_ARGS)
 	char *columnNodeString = text_to_cstring(columnNodeText);
 	char *columnName = NULL;
 	text *columnText = NULL;
+
+	CheckCitusVersion(ERROR);
 
 	columnName = ColumnNameToColumn(relationId, columnNodeString);
 

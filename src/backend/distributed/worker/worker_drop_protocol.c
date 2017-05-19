@@ -50,11 +50,14 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
 	Relation distributedRelation = NULL;
-	List *shardList = LoadShardList(relationId);
+	List *shardList = NULL;
 	ListCell *shardCell = NULL;
 	char relationKind = '\0';
 
+	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
+
+	shardList = LoadShardList(relationId);
 
 	/* first check the relation type */
 	distributedRelation = relation_open(relationId, AccessShareLock);

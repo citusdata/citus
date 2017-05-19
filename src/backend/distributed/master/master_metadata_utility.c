@@ -87,6 +87,8 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 totalRelationSize = 0;
 
+	CheckCitusVersion(ERROR);
+
 	totalRelationSize = DistributedTableSize(relationId,
 											 PG_TOTAL_RELATION_SIZE_FUNCTION);
 
@@ -104,6 +106,8 @@ citus_table_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 tableSize = 0;
 
+	CheckCitusVersion(ERROR);
+
 	tableSize = DistributedTableSize(relationId, PG_TABLE_SIZE_FUNCTION);
 
 	PG_RETURN_INT64(tableSize);
@@ -119,6 +123,8 @@ citus_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 relationSize = 0;
+
+	CheckCitusVersion(ERROR);
 
 	relationSize = DistributedTableSize(relationId, PG_RELATION_SIZE_FUNCTION);
 

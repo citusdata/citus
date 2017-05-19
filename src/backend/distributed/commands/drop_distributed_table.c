@@ -39,6 +39,7 @@ master_drop_distributed_table_metadata(PG_FUNCTION_ARGS)
 	char *tableName = text_to_cstring(tableNameText);
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
