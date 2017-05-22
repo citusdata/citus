@@ -75,6 +75,7 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	}
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
 

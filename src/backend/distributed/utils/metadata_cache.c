@@ -106,8 +106,7 @@ static Oid workerHashFunctionId = InvalidOid;
 /* Citus extension version variables */
 bool EnableVersionChecks = true; /* version checks are enabled */
 
-char *availableExtensionVersion = NULL;
-static char *installedExtensionVersion = NULL;
+bool citusVersionKnownCompatible = false;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -130,6 +129,7 @@ static ScanKeyData DistShardScanKey[1];
 
 
 /* local function forward declarations */
+static bool IsDistributedTableViaCatalog(Oid relationId);
 static ShardCacheEntry * LookupShardCacheEntry(int64 shardId);
 static DistTableCacheEntry * LookupDistTableCacheEntry(Oid relationId);
 static void BuildDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
@@ -142,7 +142,8 @@ static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 									   int shardIntervalArrayLength);
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
-static void ErrorIfInstalledVersionMismatch(void);
+static bool CheckInstalledVersion(int elevel);
+static bool CheckAvailableVersion(int elevel);
 static char * AvailableExtensionVersion(void);
 static char * InstalledExtensionVersion(void);
 static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
@@ -184,19 +185,56 @@ IsDistributedTable(Oid relationId)
 {
 	DistTableCacheEntry *cacheEntry = NULL;
 
+	cacheEntry = LookupDistTableCacheEntry(relationId);
+
 	/*
-	 * Can't be a distributed relation if the extension hasn't been loaded
-	 * yet. As we can't do lookups in nonexistent tables, directly return
-	 * false.
+	 * If extension hasn't been created, or has the wrong version and the
+	 * table isn't a distributed one, LookupDistTableCacheEntry() will return NULL.
 	 */
-	if (!CitusHasBeenLoaded())
+	if (!cacheEntry)
 	{
 		return false;
 	}
 
-	cacheEntry = LookupDistTableCacheEntry(relationId);
-
 	return cacheEntry->isDistributedTable;
+}
+
+
+/*
+ * IsDistributedTableViaCatalog returns whether the given relation is a
+ * distributed table or not.
+ *
+ * It does so by searching pg_dist_partition, explicitly bypassing caches,
+ * because this function is designed to be used in cases where accessing
+ * metadata tables is not safe.
+ *
+ * NB: Currently this still hardcodes pg_dist_partition logicalrelid column
+ * offset and the corresponding index.  If we ever come close to changing
+ * that, we'll have to work a bit harder.
+ */
+static bool
+IsDistributedTableViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	const int scanKeyCount = 1;
+	ScanKeyData scanKey[scanKeyCount];
+	bool indexOK = true;
+
+	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(relationId));
+
+	scanDescriptor = systable_beginscan(pgDistPartition,
+										DistPartitionLogicalRelidIndexId(),
+										indexOK, NULL, scanKeyCount, scanKey);
+
+	partitionTuple = systable_getnext(scanDescriptor);
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistPartition, AccessShareLock);
+
+	return HeapTupleIsValid(partitionTuple);
 }
 
 
@@ -210,6 +248,8 @@ DistributedTableList(void)
 	List *distTableOidList = NIL;
 	List *distributedTableList = NIL;
 	ListCell *distTableOidCell = NULL;
+
+	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
 
 	/* first, we need to iterate over pg_dist_partition */
 	distTableOidList = DistTableOidList();
@@ -360,6 +400,8 @@ LookupShardCacheEntry(int64 shardId)
 	bool foundInCache = false;
 	bool recheck = false;
 
+	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
+
 	/* probably not reachable */
 	if (DistShardCacheHash == NULL)
 	{
@@ -435,27 +477,16 @@ DistributedTableCacheEntry(Oid distributedRelationId)
 {
 	DistTableCacheEntry *cacheEntry = NULL;
 
-	/*
-	 * Can't be a distributed relation if the extension hasn't been loaded
-	 * yet. As we can't do lookups in nonexistent tables, directly return NULL
-	 * here.
-	 */
-	if (!CitusHasBeenLoaded())
-	{
-		return NULL;
-	}
-
 	cacheEntry = LookupDistTableCacheEntry(distributedRelationId);
 
-	if (cacheEntry->isDistributedTable)
+	if (cacheEntry && cacheEntry->isDistributedTable)
 	{
 		return cacheEntry;
 	}
 	else
 	{
 		char *relationName = get_rel_name(distributedRelationId);
-		ereport(ERROR, (errmsg("relation %s is not distributed",
-							   relationName)));
+		ereport(ERROR, (errmsg("relation %s is not distributed", relationName)));
 	}
 }
 
@@ -470,6 +501,43 @@ LookupDistTableCacheEntry(Oid relationId)
 	DistTableCacheEntry *cacheEntry = NULL;
 	bool foundInCache = false;
 	void *hashKey = (void *) &relationId;
+
+	/*
+	 * Can't be a distributed relation if the extension hasn't been loaded
+	 * yet. As we can't do lookups in nonexistent tables, directly return NULL
+	 * here.
+	 */
+	if (!CitusHasBeenLoaded())
+	{
+		return NULL;
+	}
+
+	/*
+	 * If the version is not known to be compatible, perform thorough check,
+	 * unless such checks are disabled.
+	 */
+	if (!citusVersionKnownCompatible && EnableVersionChecks)
+	{
+		bool isDistributed = IsDistributedTableViaCatalog(relationId);
+		int reportLevel = DEBUG1;
+
+		/*
+		 * If there's a version-mismatch, and we're dealing with a distributed
+		 * table, we have to error out as we can't return a valid entry.  We
+		 * want to check compatibility in the non-distributed case as well, so
+		 * future lookups can use the cache if compatible.
+		 */
+		if (isDistributed)
+		{
+			reportLevel = ERROR;
+		}
+
+		if (!CheckCitusVersion(reportLevel))
+		{
+			/* incompatible, can't access cache, so return before doing so */
+			return NULL;
+		}
+	}
 
 	if (DistTableCacheHash == NULL)
 	{
@@ -1066,17 +1134,11 @@ CitusHasBeenLoaded(void)
 			DistPartitionRelationId();
 
 			/*
-			 * We also set installedExtensionVersion to NULL so that it will be re-read
-			 * in case of extension update.
+			 * We also reset citusVersionKnownCompatible, so it will be re-read in
+			 * case of extension update.
 			 */
-			installedExtensionVersion = NULL;
+			citusVersionKnownCompatible = false;
 		}
-	}
-
-	if (extensionLoaded)
-	{
-		ErrorIfAvailableVersionMismatch();
-		ErrorIfInstalledVersionMismatch();
 	}
 
 	return extensionLoaded;
@@ -1084,68 +1146,102 @@ CitusHasBeenLoaded(void)
 
 
 /*
- * ErrorIfAvailableExtensionVersionMismatch compares CITUS_EXTENSIONVERSION and
- * currently available version from citus.control file. If they are not same in
- * major or minor version numbers, this function errors out. It ignores the schema
- * version.
+ * CheckCitusVersion checks whether there is a version mismatch between the
+ * available version and the loaded version or between the installed version
+ * and the loaded version. Returns true if compatible, false otherwise.
+ *
+ * As a side effect, this function also sets citusVersionKnownCompatible global
+ * variable to true which reduces version check cost of next calls.
  */
-void
-ErrorIfAvailableVersionMismatch(void)
+bool
+CheckCitusVersion(int elevel)
+{
+	if (citusVersionKnownCompatible ||
+		!CitusHasBeenLoaded() ||
+		!EnableVersionChecks)
+	{
+		return true;
+	}
+
+	if (CheckAvailableVersion(elevel) && CheckInstalledVersion(elevel))
+	{
+		citusVersionKnownCompatible = true;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+/*
+ * CheckAvailableVersion compares CITUS_EXTENSIONVERSION and the currently
+ * available version from the citus.control file. If they are not compatible,
+ * this function logs an error with the specified elevel and returns false,
+ * otherwise it returns true.
+ */
+static bool
+CheckAvailableVersion(int elevel)
 {
 	char *availableVersion = NULL;
 
-	if (!EnableVersionChecks)
-	{
-		return;
-	}
+	Assert(CitusHasBeenLoaded());
+	Assert(EnableVersionChecks);
 
 	availableVersion = AvailableExtensionVersion();
+
 	if (!MajorVersionsCompatible(availableVersion, CITUS_EXTENSIONVERSION))
 	{
-		ereport(ERROR, (errmsg("loaded Citus library version differs from latest "
-							   "available extension version"),
-						errdetail("Loaded library requires %s, but the latest control "
-								  "file specifies %s.", CITUS_MAJORVERSION,
-								  availableVersion),
-						errhint("Restart the database to load the latest Citus "
-								"library.")));
+		ereport(elevel, (errmsg("loaded Citus library version differs from latest "
+								"available extension version"),
+						 errdetail("Loaded library requires %s, but the latest control "
+								   "file specifies %s.", CITUS_MAJORVERSION,
+								   availableVersion),
+						 errhint("Restart the database to load the latest Citus "
+								 "library.")));
+		return false;
 	}
+
+	return true;
 }
 
 
 /*
- * ErrorIfInstalledVersionMismatch compares CITUS_EXTENSIONVERSION and currently
- * and catalog version from pg_extemsion catalog table. If they are not same in
- * major or minor version numbers, this function errors out. It ignores the schema
- * version.
+ * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the the
+ * extension's current version from the pg_extemsion catalog table. If they
+ * are not compatible, this function logs an error with the specified elevel,
+ * otherwise it returns true.
  */
-static void
-ErrorIfInstalledVersionMismatch(void)
+static bool
+CheckInstalledVersion(int elevel)
 {
 	char *installedVersion = NULL;
 
-	if (!EnableVersionChecks)
-	{
-		return;
-	}
+	Assert(CitusHasBeenLoaded());
+	Assert(EnableVersionChecks);
 
 	installedVersion = InstalledExtensionVersion();
+
 	if (!MajorVersionsCompatible(installedVersion, CITUS_EXTENSIONVERSION))
 	{
-		ereport(ERROR, (errmsg("loaded Citus library version differs from installed "
-							   "extension version"),
-						errdetail("Loaded library requires %s, but the installed "
-								  "extension version is %s.", CITUS_MAJORVERSION,
-								  installedVersion),
-						errhint("Run ALTER EXTENSION citus UPDATE and try again.")));
+		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
+								"extension version"),
+						 errdetail("Loaded library requires %s, but the installed "
+								   "extension version is %s.", CITUS_MAJORVERSION,
+								   installedVersion),
+						 errhint("Run ALTER EXTENSION citus UPDATE and try again.")));
+		return false;
 	}
+
+	return true;
 }
 
 
 /*
- * MajorVersionsCompatible compares given two versions. If they are same in major
- * and minor version numbers, this function returns true. It ignores the schema
- * version.
+ * MajorVersionsCompatible checks whether both versions are compatible. They
+ * are if major and minor version numbers match, the schema version is
+ * ignored.  Returns true if compatible, false otherwise.
  */
 bool
 MajorVersionsCompatible(char *leftVersion, char *rightVersion)
@@ -1203,12 +1299,7 @@ AvailableExtensionVersion(void)
 	bool hasTuple = false;
 	bool goForward = true;
 	bool doCopy = false;
-
-	/* if we cached the result before, return it*/
-	if (availableExtensionVersion != NULL)
-	{
-		return availableExtensionVersion;
-	}
+	char *availableExtensionVersion;
 
 	estate = CreateExecutorState();
 	extensionsResultSet = makeNode(ReturnSetInfo);
@@ -1274,8 +1365,6 @@ AvailableExtensionVersion(void)
 
 /*
  * InstalledExtensionVersion returns the Citus version in PostgreSQL pg_extension table.
- * It also saves the result, thus consecutive calls to CitusExtensionCatalogVersion
- * will not read the catalog tables again.
  */
 static char *
 InstalledExtensionVersion(void)
@@ -1284,12 +1373,7 @@ InstalledExtensionVersion(void)
 	SysScanDesc scandesc;
 	ScanKeyData entry[1];
 	HeapTuple extensionTuple = NULL;
-
-	/* if we cached the result before, return it*/
-	if (installedExtensionVersion != NULL)
-	{
-		return installedExtensionVersion;
-	}
+	char *installedExtensionVersion = NULL;
 
 	relation = heap_open(ExtensionRelationId, AccessShareLock);
 
@@ -1670,6 +1754,8 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
 
@@ -1730,6 +1816,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
+
+	CheckCitusVersion(ERROR);
 
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
@@ -1792,6 +1880,8 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	newTuple = triggerData->tg_newtuple;
 	oldTuple = triggerData->tg_trigtuple;
 
@@ -1848,6 +1938,8 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 						errmsg("must be called as trigger")));
 	}
 
+	CheckCitusVersion(ERROR);
+
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
 	PG_RETURN_DATUM(PointerGetDatum(NULL));
@@ -1870,6 +1962,8 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
+
+	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistLocalGroupIdRelationId());
 

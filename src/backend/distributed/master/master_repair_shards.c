@@ -85,6 +85,7 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	}
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	/* RepairShardPlacement function repairs only given shard */
 	RepairShardPlacement(shardId, sourceNodeName, sourceNodePort, targetNodeName,
