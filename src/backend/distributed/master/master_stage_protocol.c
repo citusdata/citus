@@ -71,7 +71,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 {
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = NIL;
 	uint64 shardId = INVALID_SHARD_ID;
 	List *ddlEventList = NULL;
 	uint32 attemptableNodeCount = 0;
@@ -89,6 +89,10 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char *relationOwner = TableOwner(relationId);
 	char replicationModel = REPLICATION_MODEL_INVALID;
 	bool includeSequenceDefaults = false;
+
+	CheckCitusVersion(ERROR);
+
+	workerNodeList = ActiveWorkerNodeList();
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -219,11 +223,18 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	float4 shardFillLevel = 0.0;
 	char partitionMethod = 0;
 
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid relationId = shardInterval->relationId;
-	bool cstoreTable = CStoreTable(relationId);
+	ShardInterval *shardInterval = NULL;
+	Oid relationId = InvalidOid;
+	bool cstoreTable = false;
 
-	char storageType = shardInterval->storageType;
+	char storageType = 0;
+
+	CheckCitusVersion(ERROR);
+
+	shardInterval = LoadShardInterval(shardId);
+	relationId = shardInterval->relationId;
+	cstoreTable = CStoreTable(relationId);
+	storageType = shardInterval->storageType;
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 
@@ -317,6 +328,8 @@ master_update_shard_statistics(PG_FUNCTION_ARGS)
 {
 	int64 shardId = PG_GETARG_INT64(0);
 	uint64 shardSize = 0;
+
+	CheckCitusVersion(ERROR);
 
 	shardSize = UpdateShardStatistics(shardId);
 

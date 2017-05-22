@@ -110,6 +110,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	bool requireEmpty = true;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
 	{
@@ -147,6 +148,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	char *colocateWithTableName = NULL;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	/* guard against a binary update without a function update */
 	if (PG_NARGS() >= 4)
@@ -233,13 +235,17 @@ static void
 CreateReferenceTable(Oid relationId)
 {
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	List *workerNodeList = ActiveWorkerNodeList();
-	int replicationFactor = list_length(workerNodeList);
+	List *workerNodeList = NIL;
+	int replicationFactor = 0;
 	char *distributionColumnName = NULL;
 	bool requireEmpty = true;
 	char relationKind = 0;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
+
+	workerNodeList = ActiveWorkerNodeList();
+	replicationFactor = list_length(workerNodeList);
 
 	/* if there are no workers, error out */
 	if (replicationFactor == 0)

@@ -38,6 +38,7 @@ worker_create_truncate_trigger(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	EnsureSuperUser();
+	CheckCitusVersion(ERROR);
 
 	/* Create the truncate trigger */
 	CreateTruncateTrigger(relationId);

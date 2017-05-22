@@ -87,6 +87,8 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 	int32 affectedTupleCount = 0;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
+
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (IsA(queryTreeNode, DeleteStmt))
