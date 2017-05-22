@@ -67,6 +67,8 @@ worker_hash(PG_FUNCTION_ARGS)
 	FmgrInfo *hashFunction = NULL;
 	Oid valueDataType = InvalidOid;
 
+	CheckCitusVersion(ERROR);
+
 	/* figure out hash function from the data type */
 	valueDataType = get_fn_expr_argtype(fcinfo->flinfo, 0);
 	typeEntry = lookup_type_cache(valueDataType, TYPECACHE_HASH_PROC_FINFO);

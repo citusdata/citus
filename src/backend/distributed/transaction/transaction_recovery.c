@@ -65,6 +65,8 @@ recover_prepared_transactions(PG_FUNCTION_ARGS)
 {
 	int recoveredTransactionCount = 0;
 
+	CheckCitusVersion(ERROR);
+
 	recoveredTransactionCount = RecoverPreparedTransactions();
 
 	PG_RETURN_INT32(recoveredTransactionCount);

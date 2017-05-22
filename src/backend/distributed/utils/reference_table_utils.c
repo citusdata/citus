@@ -60,6 +60,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 	DistTableCacheEntry *tableEntry = NULL;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	if (!IsDistributedTable(relationId))
 	{
