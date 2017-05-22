@@ -95,9 +95,12 @@ master_add_node(PG_FUNCTION_ARGS)
 	bool hasMetadata = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
+	Datum nodeRecord;
 
-	Datum nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-									   hasMetadata, isActive, &nodeAlreadyExists);
+	CheckCitusVersion(ERROR);
+
+	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+								 hasMetadata, isActive, &nodeAlreadyExists);
 
 	/*
 	 * After adding new node, if the node did not already exist, we will activate
@@ -129,9 +132,12 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	bool hasMetadata = false;
 	bool isActive = false;
 	bool nodeAlreadyExists = false;
+	Datum nodeRecord;
 
-	Datum nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
-									   hasMetadata, isActive, &nodeAlreadyExists);
+	CheckCitusVersion(ERROR);
+
+	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+								 hasMetadata, isActive, &nodeAlreadyExists);
 
 	PG_RETURN_CSTRING(nodeRecord);
 }
@@ -152,6 +158,8 @@ master_remove_node(PG_FUNCTION_ARGS)
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
+
+	CheckCitusVersion(ERROR);
 
 	RemoveNodeFromCluster(nodeNameString, nodePort);
 
@@ -178,6 +186,8 @@ master_disable_node(PG_FUNCTION_ARGS)
 	char *nodeName = text_to_cstring(nodeNameText);
 	bool hasShardPlacements = false;
 	bool isActive = false;
+
+	CheckCitusVersion(ERROR);
 
 	DeleteAllReferenceTablePlacementsFromNode(nodeName, nodePort);
 
@@ -209,6 +219,8 @@ master_activate_node(PG_FUNCTION_ARGS)
 
 	char *nodeNameString = text_to_cstring(nodeName);
 	Datum nodeRecord = 0;
+
+	CheckCitusVersion(ERROR);
 
 	nodeRecord = ActivateNode(nodeNameString, nodePort);
 
@@ -263,9 +275,12 @@ Datum
 master_initialize_node_metadata(PG_FUNCTION_ARGS)
 {
 	ListCell *workerNodeCell = NULL;
-	List *workerNodes = ParseWorkerNodeFileAndRename();
+	List *workerNodes = NULL;
 	bool nodeAlreadyExists = false;
 
+	CheckCitusVersion(ERROR);
+
+	workerNodes = ParseWorkerNodeFileAndRename();
 	foreach(workerNodeCell, workerNodes)
 	{
 		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
@@ -273,8 +288,6 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 		AddNodeMetadata(workerNode->workerName, workerNode->workerPort, 0,
 						workerNode->workerRack, false, workerNode->isActive,
 						&nodeAlreadyExists);
-
-		ActivateNode(workerNode->workerName, workerNode->workerPort);
 	}
 
 	PG_RETURN_BOOL(true);
@@ -292,6 +305,8 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 	ShardInterval *shardInterval = NULL;
 	char distributionMethod = 0;
 	Oid relationId = InvalidOid;
+
+	CheckCitusVersion(ERROR);
 
 	/*
 	 * To have optional parameter as NULL, we defined this UDF as not strict, therefore
@@ -1045,7 +1060,7 @@ ParseWorkerNodeFileAndRename()
 		strlcpy(workerNode->workerRack, nodeRack, WORKER_LENGTH);
 		workerNode->workerPort = nodePort;
 		workerNode->hasMetadata = false;
-		workerNode->isActive = false;
+		workerNode->isActive = true;
 
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}

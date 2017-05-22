@@ -111,6 +111,7 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	bool failOK = false;
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
@@ -214,6 +215,7 @@ master_drop_all_shards(PG_FUNCTION_ARGS)
 	char *relationName = text_to_cstring(relationNameText);
 
 	EnsureCoordinator();
+	CheckCitusVersion(ERROR);
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &relationName);
 
@@ -249,6 +251,8 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	bool isNull = false;
 	StringInfo dropSeqCommand = makeStringInfo();
 	bool coordinator = IsCoordinator();
+
+	CheckCitusVersion(ERROR);
 
 	/* do nothing if DDL propagation is switched off or this is not the coordinator */
 	if (!EnableDDLPropagation || !coordinator)

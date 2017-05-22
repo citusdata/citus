@@ -40,6 +40,9 @@ worker_foreign_file_path(PG_FUNCTION_ARGS)
 	ForeignTable *foreignTable = GetForeignTable(relationId);
 
 	ListCell *optionCell = NULL;
+
+	CheckCitusVersion(ERROR);
+
 	foreach(optionCell, foreignTable->options)
 	{
 		DefElem *option = (DefElem *) lfirst(optionCell);
@@ -79,6 +82,8 @@ worker_find_block_local_path(PG_FUNCTION_ARGS)
 	/* keep the compiler silent */
 	(void) blockId;
 	(void) dataDirectoryObject;
+
+	CheckCitusVersion(ERROR);
 
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("called function is currently unsupported")));

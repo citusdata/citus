@@ -86,6 +86,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	EnsureSuperUser();
+	CheckCitusVersion(ERROR);
 
 	PreventTransactionChain(true, "start_metadata_sync_to_node");
 
@@ -154,6 +155,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	EnsureSuperUser();
+	CheckCitusVersion(ERROR);
 
 	workerNode = FindWorkerNode(nodeNameString, nodePort);
 	if (workerNode == NULL)
