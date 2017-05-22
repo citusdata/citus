@@ -4,10 +4,12 @@
 -- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
 --
 
--- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
--- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1430000;
--- ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1430000;
+--- We don't need shard id sequence here given that we're not creating any shards, so not writing it at all
 
+-- The following line is intended to force Citus to NOT use router planner for the tests in this
+-- file. The motivation for doing this is to make sure that single-task queries can be planned
+-- by non-router code-paths. Thus, this flag should NOT be used in production. Otherwise, the actual
+-- router queries would fail.
 SET citus.enable_router_execution TO FALSE;
 
 ------------------------------------
