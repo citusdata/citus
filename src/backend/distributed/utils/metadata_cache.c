@@ -511,6 +511,11 @@ LookupDistTableCacheEntry(Oid relationId)
 		return NULL;
 	}
 
+	if (DistTableCacheHash == NULL)
+	{
+		InitializeDistTableCache();
+	}
+
 	/*
 	 * If the version is not known to be compatible, perform thorough check,
 	 * unless such checks are disabled.
@@ -536,11 +541,6 @@ LookupDistTableCacheEntry(Oid relationId)
 			/* incompatible, can't access cache, so return before doing so */
 			return NULL;
 		}
-	}
-
-	if (DistTableCacheHash == NULL)
-	{
-		InitializeDistTableCache();
 	}
 
 	cacheEntry = hash_search(DistTableCacheHash, hashKey, HASH_ENTER, &foundInCache);
