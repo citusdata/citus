@@ -106,7 +106,7 @@ static Oid workerHashFunctionId = InvalidOid;
 /* Citus extension version variables */
 bool EnableVersionChecks = true; /* version checks are enabled */
 
-bool citusVersionKnownCompatible = false;
+static bool citusVersionKnownCompatible = false;
 
 /* Hash table for informations about each partition */
 static HTAB *DistTableCacheHash = NULL;
@@ -143,7 +143,6 @@ static bool HasUniformHashDistribution(ShardInterval **shardIntervalArray,
 static bool HasUninitializedShardInterval(ShardInterval **sortedShardIntervalArray,
 										  int shardCount);
 static bool CheckInstalledVersion(int elevel);
-static bool CheckAvailableVersion(int elevel);
 static char * AvailableExtensionVersion(void);
 static char * InstalledExtensionVersion(void);
 static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
@@ -1181,13 +1180,15 @@ CheckCitusVersion(int elevel)
  * this function logs an error with the specified elevel and returns false,
  * otherwise it returns true.
  */
-static bool
+bool
 CheckAvailableVersion(int elevel)
 {
 	char *availableVersion = NULL;
 
-	Assert(CitusHasBeenLoaded());
-	Assert(EnableVersionChecks);
+	if (!EnableVersionChecks)
+	{
+		return true;
+	}
 
 	availableVersion = AvailableExtensionVersion();
 
