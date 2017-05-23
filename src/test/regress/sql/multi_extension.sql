@@ -152,7 +152,25 @@ DROP FUNCTION citus_table_size(regclass);
 SET citus.enable_version_checks TO 'false';
 ALTER EXTENSION citus UPDATE TO '6.2-2';
 
+-- Test updating to the latest version without specifying the version number
+ALTER EXTENSION citus UPDATE;
+
 -- re-create in newest version
 DROP EXTENSION citus;
 \c
 CREATE EXTENSION citus;
+
+-- test cache invalidation in workers
+\c - - - :worker_1_port
+
+-- this will initialize the cache
+\d
+DROP EXTENSION citus;
+SET citus.enable_version_checks TO 'false';
+CREATE EXTENSION citus VERSION '5.2-4';
+SET citus.enable_version_checks TO 'true';
+-- during ALTER EXTENSION, we should invalidate the cache
+ALTER EXTENSION citus UPDATE;
+
+-- if cache is invalidated succesfull, this \d should work without any problem
+\d
