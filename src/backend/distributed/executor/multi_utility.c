@@ -1419,11 +1419,9 @@ ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree)
 	{
 		/*
 		 * No version was specified, so PostgreSQL will use the default_version
-		 * from the citus.control file. In case a new default is available, we
-		 * will force a compatibility check of the latest available version.
+		 * from the citus.control file.
 		 */
-		citusVersionKnownCompatible = false;
-		CheckCitusVersion(ERROR);
+		CheckAvailableVersion(ERROR);
 	}
 }
 

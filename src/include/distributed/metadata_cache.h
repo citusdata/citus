@@ -18,7 +18,6 @@
 #include "utils/hsearch.h"
 
 extern bool EnableVersionChecks;
-extern bool citusVersionKnownCompatible;
 
 /*
  * Representation of a table's metadata that is frequently used for
@@ -80,6 +79,7 @@ extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
+extern bool CheckAvailableVersion(int elevel);
 bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 
 /* access WorkerNodeHash */
