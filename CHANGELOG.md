@@ -1,3 +1,7 @@
+### citus v6.2.1 (May 24, 2017) ###
+
+* Relaxes version-check logic to avoid breaking non-distributed commands
+
 ### citus v6.2.0 (May 16, 2017) ###
 
 * Increases SQL subquery coverage by pushing down more kinds of queries
