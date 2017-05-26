@@ -282,3 +282,14 @@ SELECT create_distributed_table('lineitem_hash_part', 'l_orderkey');
 
 CREATE TABLE orders_hash_part (like orders);
 SELECT create_distributed_table('orders_hash_part', 'o_orderkey');
+
+CREATE UNLOGGED TABLE unlogged_table
+(
+	key text,
+	value text
+);
+SELECT create_distributed_table('unlogged_table', 'key');
+SELECT * FROM master_get_table_ddl_events('unlogged_table');
+
+\c - - - :worker_1_port
+SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
