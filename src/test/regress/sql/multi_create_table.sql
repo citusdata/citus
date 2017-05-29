@@ -274,7 +274,6 @@ SELECT * FROM data_load_test;
 DROP TABLE data_load_test;
 
 SET citus.shard_replication_factor TO default;
-
 SET citus.shard_count to 4;
 
 CREATE TABLE lineitem_hash_part (like lineitem);
@@ -293,3 +292,177 @@ SELECT * FROM master_get_table_ddl_events('unlogged_table');
 
 \c - - - :worker_1_port
 SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
+\c - - - :master_port
+
+-- Test rollback of create table
+BEGIN;
+CREATE TABLE rollback_table(id int, name varchar(20));
+SELECT create_distributed_table('rollback_table','id');
+ROLLBACK;
+
+-- Table should not exist on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
+\c - - - :master_port
+
+-- Insert 3 rows to make sure that copy after shard creation touches the same 
+-- worker node twice. 
+BEGIN;
+CREATE TABLE rollback_table(id int, name varchar(20));
+INSERT INTO rollback_table VALUES(1, 'Name_1');
+INSERT INTO rollback_table VALUES(2, 'Name_2');
+INSERT INTO rollback_table VALUES(3, 'Name_3');
+SELECT create_distributed_table('rollback_table','id');
+ROLLBACK;
+
+-- Table should not exist on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
+\c - - - :master_port
+
+BEGIN;
+CREATE TABLE rollback_table(id int, name varchar(20));
+SELECT create_distributed_table('rollback_table','id');
+\copy rollback_table from stdin delimiter ','
+1, 'name_1'
+2, 'name_2'
+3, 'name_3'
+\.
+CREATE INDEX rollback_index ON rollback_table(id);
+COMMIT;
+
+-- Check the table is created 
+SELECT count(*) FROM rollback_table;
+DROP TABLE rollback_table;
+
+BEGIN;
+CREATE TABLE rollback_table(id int, name varchar(20));
+SELECT create_distributed_table('rollback_table','id');
+\copy rollback_table from stdin delimiter ','
+1, 'name_1'
+2, 'name_2'
+3, 'name_3'
+\.
+ROLLBACK;
+
+-- Table should not exist on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid FROM pg_class WHERE relname LIKE 'rollback_table%');
+\c - - - :master_port
+
+BEGIN;
+CREATE TABLE tt1(id int);
+SELECT create_distributed_table('tt1','id');
+CREATE TABLE tt2(id int);
+SELECT create_distributed_table('tt2','id');
+INSERT INTO tt1 VALUES(1);
+INSERT INTO tt2 SELECT * FROM tt1 WHERE id = 1;
+COMMIT;
+
+
+-- Table should exist on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360430'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360462'::regclass;
+\c - - - :master_port
+
+DROP TABLE tt1;
+DROP TABLE tt2;
+
+-- It is known that creating a table with master_create_empty_shard is not 
+-- transactional, so table stay remaining on the worker node after the rollback
+BEGIN;
+CREATE TABLE append_tt1(id int);
+SELECT create_distributed_table('append_tt1','id','append');
+SELECT master_create_empty_shard('append_tt1');
+ROLLBACK;
+
+-- Table exists on the worker node.
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360494'::regclass;
+\c - - - :master_port
+
+-- There should be no table on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE relname LIKE 'public.tt1%');
+\c - - - :master_port
+
+-- Queries executing with router executor is allowed in the same transaction
+-- with create_distributed_table
+BEGIN;
+CREATE TABLE tt1(id int);
+INSERT INTO tt1 VALUES(1);
+SELECT create_distributed_table('tt1','id');
+INSERT INTO tt1 VALUES(2);
+SELECT * FROM tt1 WHERE id = 1;
+COMMIT;
+
+-- Placements should be created on the worker
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360495'::regclass;
+\c - - - :master_port
+
+DROP TABLE tt1;
+
+BEGIN;
+CREATE TABLE tt1(id int);
+SELECT create_distributed_table('tt1','id');
+DROP TABLE tt1;
+COMMIT;
+
+-- There should be no table on the worker node
+\c - - - :worker_1_port
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = (SELECT oid from pg_class WHERE  relname LIKE 'tt1%');
+\c - - - :master_port
+
+-- Tests with create_distributed_table & DDL & DML commands
+
+-- Test should pass since GetPlacementListConnection can provide connections
+-- in this order of execution
+CREATE TABLE sample_table(id int);
+SELECT create_distributed_table('sample_table','id');
+
+BEGIN;
+CREATE TABLE stage_table (LIKE sample_table);
+\COPY stage_table FROM stdin; -- Note that this operation is a local copy
+1
+2
+3
+4
+\.
+SELECT create_distributed_table('stage_table', 'id');
+INSERT INTO sample_table SELECT * FROM stage_table;
+DROP TABLE stage_table;
+SELECT * FROM sample_table WHERE id = 3;
+COMMIT;
+
+-- Show that rows of sample_table are updated 
+SELECT count(*) FROM sample_table;
+DROP table sample_table;
+
+-- Test as create_distributed_table - copy - create_distributed_table - copy
+-- This combination is used by tests written by some ORMs.
+BEGIN;
+CREATE TABLE tt1(id int);
+SELECT create_distributed_table('tt1','id');
+\COPY tt1 from stdin;
+1
+2
+3
+\.
+CREATE TABLE tt2(like tt1);
+SELECT create_distributed_table('tt2','id');
+\COPY tt2 from stdin;
+4
+5
+6
+\.
+INSERT INTO tt1 SELECT * FROM tt2;
+SELECT * FROM tt1 WHERE id = 3;
+SELECT * FROM tt2 WHERE id = 6;
+END;
+
+SELECT count(*) FROM tt1;
+
+DROP TABLE tt1;
+DROP TABLE tt2;

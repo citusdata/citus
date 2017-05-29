@@ -359,6 +359,24 @@ LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 
 
 /*
+ * LoadShardPlacement returns a shard placement for the primary node.
+ */
+ShardPlacement *
+LoadShardPlacement(uint64 shardId, uint64 placementId)
+{
+	ShardCacheEntry *shardEntry = NULL;
+	GroupShardPlacement *groupPlacement = NULL;
+	ShardPlacement *nodePlacement = NULL;
+
+	shardEntry = LookupShardCacheEntry(shardId);
+	groupPlacement = LoadGroupShardPlacement(shardId, placementId);
+	nodePlacement = ResolveGroupShardPlacement(groupPlacement, shardEntry);
+
+	return nodePlacement;
+}
+
+
+/*
  * FindShardPlacementOnGroup returns the shard placement for the given shard
  * on the given group, or returns NULL of no placement for the shard exists
  * on the group.

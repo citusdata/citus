@@ -847,9 +847,10 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 /*
  * InsertShardPlacementRow opens the shard placement system catalog, and inserts
  * a new row with the given values into that system catalog. If placementId is
- * INVALID_PLACEMENT_ID, a new placement id will be assigned.
+ * INVALID_PLACEMENT_ID, a new placement id will be assigned.Then, returns the
+ * placement id of the added shard placement.
  */
-void
+uint64
 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 						char shardState, uint64 shardLength,
 						uint32 groupId)
@@ -886,6 +887,8 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 
 	CommandCounterIncrement();
 	heap_close(pgDistPlacement, NoLock);
+
+	return placementId;
 }
 
 
