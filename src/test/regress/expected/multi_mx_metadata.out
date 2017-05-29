@@ -224,11 +224,11 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schema
      0
 (1 row)
 
--- but the shard exists since we do not create shards in a transaction
+-- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
  count 
 -------
-     1
+     0
 (1 row)
 
 -- make sure that master_drop_all_shards does not work from the worker nodes

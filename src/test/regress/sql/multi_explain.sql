@@ -463,8 +463,6 @@ SELECT create_distributed_table('explain_table', 'id');
 
 ALTER TABLE explain_table ADD COLUMN value int;
 
-EXPLAIN (COSTS FALSE) SELECT value FROM explain_table WHERE id = 1;
-
 ROLLBACK;
 
 -- test explain with local INSERT ... SELECT

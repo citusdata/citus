@@ -48,8 +48,7 @@ DETAIL:  Distributed relations must not specify the WITH (OIDS) option in their 
 ALTER TABLE table_to_distribute SET WITHOUT OIDS;
 -- use an index instead of table name
 SELECT master_create_distributed_table('table_to_distribute_pkey', 'id', 'hash');
-ERROR:  cannot distribute relation: table_to_distribute_pkey
-DETAIL:  Distributed relations must be regular or foreign tables.
+ERROR:  table_to_distribute_pkey is not a regular or foreign table
 -- use a bad column name
 SELECT master_create_distributed_table('table_to_distribute', 'bad_column', 'hash');
 ERROR:  column "bad_column" of relation "table_to_distribute" does not exist
