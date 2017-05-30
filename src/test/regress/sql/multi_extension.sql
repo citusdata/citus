@@ -175,3 +175,131 @@ ALTER EXTENSION citus UPDATE;
 
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
+
+\c - - - :master_port
+
+CREATE VIEW table_fkeys AS
+SELECT r.conname AS "Constraint",
+       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
+       conrelid AS "relid"
+FROM pg_catalog.pg_constraint r
+WHERE r.contype = 'f';
+
+-- create views used to describe relations
+CREATE VIEW table_attrs AS
+SELECT a.attname AS "name",
+    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
+    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
+     FROM pg_catalog.pg_attrdef d
+     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
+    a.attnotnull AS "notnull",
+    a.attrelid AS "relid"
+FROM pg_catalog.pg_attribute a
+WHERE a.attnum > 0 AND NOT a.attisdropped
+ORDER BY a.attnum;
+
+CREATE VIEW table_desc AS
+SELECT "name" AS "Column",
+       "type" as "Type",
+       rtrim((
+           CASE "notnull"
+               WHEN true THEN 'not null '
+               ELSE ''
+           END
+       ) || (
+           CASE WHEN "default" IS NULL THEN ''
+               ELSE 'default ' || "default"
+           END
+       )) AS "Modifiers",
+	   "relid"
+FROM table_attrs;
+
+CREATE VIEW table_checks AS
+SELECT r.conname AS "Constraint",
+       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
+       conrelid AS "relid"
+FROM pg_catalog.pg_constraint r
+WHERE r.contype = 'c';
+
+\c - - - :worker_1_port
+
+CREATE VIEW table_fkeys AS
+SELECT r.conname AS "Constraint",
+       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
+       conrelid AS "relid"
+FROM pg_catalog.pg_constraint r
+WHERE r.contype = 'f';
+
+-- create views used to describe relations
+CREATE VIEW table_attrs AS
+SELECT a.attname AS "name",
+    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
+    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
+     FROM pg_catalog.pg_attrdef d
+     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
+    a.attnotnull AS "notnull",
+    a.attrelid AS "relid"
+FROM pg_catalog.pg_attribute a
+WHERE a.attnum > 0 AND NOT a.attisdropped
+ORDER BY a.attnum;
+
+CREATE VIEW table_desc AS
+SELECT "name" AS "Column",
+       "type" as "Type",
+       rtrim((
+           CASE "notnull"
+               WHEN true THEN 'not null '
+               ELSE ''
+           END
+       ) || (
+           CASE WHEN "default" IS NULL THEN ''
+               ELSE 'default ' || "default"
+           END
+       )) AS "Modifiers",
+	   "relid"
+FROM table_attrs;
+
+CREATE VIEW table_checks AS
+SELECT r.conname AS "Constraint",
+       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
+       conrelid AS "relid"
+FROM pg_catalog.pg_constraint r
+WHERE r.contype = 'c';
+
+\c - - - :worker_2_port
+
+-- create views used to describe relations
+CREATE VIEW table_attrs AS
+SELECT a.attname AS "name",
+    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
+    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
+     FROM pg_catalog.pg_attrdef d
+     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
+    a.attnotnull AS "notnull",
+    a.attrelid AS "relid"
+FROM pg_catalog.pg_attribute a
+WHERE a.attnum > 0 AND NOT a.attisdropped
+ORDER BY a.attnum;
+
+CREATE VIEW table_desc AS
+SELECT "name" AS "Column",
+       "type" as "Type",
+       rtrim((
+           CASE "notnull"
+               WHEN true THEN 'not null '
+               ELSE ''
+           END
+       ) || (
+           CASE WHEN "default" IS NULL THEN ''
+               ELSE 'default ' || "default"
+           END
+       )) AS "Modifiers",
+	   "relid"
+FROM table_attrs;
+
+CREATE VIEW table_checks AS
+SELECT r.conname AS "Constraint",
+       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
+       conrelid AS "relid"
+FROM pg_catalog.pg_constraint r
+WHERE r.contype = 'c';
