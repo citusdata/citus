@@ -326,10 +326,18 @@ multi_ProcessUtility10(PlannedStmt *pstmt,
 	{
 		if (IsA(parsetree, IndexStmt))
 		{
-			/* copy parse tree since we might scribble on it to fix the schema name */
-			parsetree = copyObject(parsetree);
+			/*
+			 * copy parse tree since we might scribble on it to fix the schema name
+			 * FIXME: PostgreSQL 10 changes caching behavior and breaks this approach,
+			 *        so for that version we do assign back the modified tree.
+			 */
+			Node *parsetreeCopy = copyObject(parsetree);
 
-			ddlJobs = PlanIndexStmt((IndexStmt *) parsetree, queryString);
+			ddlJobs = PlanIndexStmt((IndexStmt *) parsetreeCopy, queryString);
+
+#if (PG_VERSION_NUM < 100000)
+			parsetree = parsetreeCopy;
+#endif
 		}
 
 		if (IsA(parsetree, DropStmt))
