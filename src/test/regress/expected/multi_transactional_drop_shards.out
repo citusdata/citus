@@ -46,34 +46,24 @@ ORDER BY
 (8 rows)
 
 -- verify table is not dropped
-\d transactional_drop_shards;
-Table "public.transactional_drop_shards"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards
+                   List of relations
+ Schema |           Name            | Type  |  Owner   
+--------+---------------------------+-------+----------
+ public | transactional_drop_shards | table | postgres
+(1 row)
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410000"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
-
-Table "public.transactional_drop_shards_1410001"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
-
-Table "public.transactional_drop_shards_1410002"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
-
-Table "public.transactional_drop_shards_1410003"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410000 | table | postgres
+ public | transactional_drop_shards_1410001 | table | postgres
+ public | transactional_drop_shards_1410002 | table | postgres
+ public | transactional_drop_shards_1410003 | table | postgres
+(4 rows)
 
 \c - - - :master_port
 -- test DROP TABLE(ergo master_drop_all_shards) in transaction, then COMMIT
@@ -99,10 +89,20 @@ ORDER BY
 (0 rows)
 
 -- verify table is dropped
-\d transactional_drop_shards;
+\dt transactional_drop_shards
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
 -- verify shards are dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
+\dt transactional_drop_shards_*
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
 \c - - - :master_port
 -- test master_delete_protocol in transaction, then ROLLBACK
 CREATE TABLE transactional_drop_shards(column1 int);
@@ -149,11 +149,12 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410004"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410004 | table | postgres
+(1 row)
 
 \c - - - :master_port
 -- test master_delete_protocol in transaction, then COMMIT
@@ -185,7 +186,12 @@ ORDER BY
 
 -- verify shards are dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
+\dt transactional_drop_shards_*
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
 \c - - - :master_port
 -- test DROP table in a transaction after insertion
 SELECT master_create_empty_shard('transactional_drop_shards');
@@ -223,19 +229,21 @@ ORDER BY
 (2 rows)
 
 -- verify table is not dropped
-\d transactional_drop_shards;
-Table "public.transactional_drop_shards"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards
+                   List of relations
+ Schema |           Name            | Type  |  Owner   
+--------+---------------------------+-------+----------
+ public | transactional_drop_shards | table | postgres
+(1 row)
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410005"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410005 | table | postgres
+(1 row)
 
 \c - - - :master_port
 -- test master_apply_delete_command in a transaction after insertion
@@ -267,11 +275,12 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410005"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410005 | table | postgres
+(1 row)
 
 -- test DROP table with failing worker
 CREATE FUNCTION fail_drop_table() RETURNS event_trigger AS $fdt$
@@ -307,19 +316,21 @@ ORDER BY
 (2 rows)
 
 -- verify table is not dropped
-\d transactional_drop_shards;
-Table "public.transactional_drop_shards"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards
+                   List of relations
+ Schema |           Name            | Type  |  Owner   
+--------+---------------------------+-------+----------
+ public | transactional_drop_shards | table | postgres
+(1 row)
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410005"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410005 | table | postgres
+(1 row)
 
 \c - - - :master_port
 -- test DROP reference table with failing worker
@@ -356,19 +367,21 @@ ORDER BY
 (2 rows)
 
 -- verify table is not dropped
-\d transactional_drop_reference;
-Table "public.transactional_drop_reference"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_reference
+                    List of relations
+ Schema |             Name             | Type  |  Owner   
+--------+------------------------------+-------+----------
+ public | transactional_drop_reference | table | postgres
+(1 row)
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_reference*;
-Table "public.transactional_drop_reference_1410006"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_reference*
+                        List of relations
+ Schema |                 Name                 | Type  |  Owner   
+--------+--------------------------------------+-------+----------
+ public | transactional_drop_reference_1410006 | table | postgres
+(1 row)
 
 \c - - - :master_port
 -- test master_apply_delete_command table with failing worker
@@ -399,11 +412,12 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_shards_*;
-Table "public.transactional_drop_shards_1410005"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- column1 | integer | 
+\dt transactional_drop_shards_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_shards_1410005 | table | postgres
+(1 row)
 
 DROP EVENT TRIGGER fail_drop_table;
 \c - - - :master_port
@@ -463,16 +477,29 @@ ORDER BY
 (16 rows)
 
 -- verify table is not dropped
-\d transactional_drop_serial;
-                            Table "public.transactional_drop_serial"
- Column  |  Type   |                                  Modifiers                                  
----------+---------+-----------------------------------------------------------------------------
- column1 | integer | 
- column2 | integer | not null default nextval('transactional_drop_serial_column2_seq'::regclass)
+\dt transactional_drop_serial
+                   List of relations
+ Schema |           Name            | Type  |  Owner   
+--------+---------------------------+-------+----------
+ public | transactional_drop_serial | table | postgres
+(1 row)
 
 -- verify shards and sequence are not dropped
 \c - - - :worker_1_port
-\d transactional_drop_serial_1410006;
+\dt transactional_drop_serial_*
+                       List of relations
+ Schema |               Name                | Type  |  Owner   
+--------+-----------------------------------+-------+----------
+ public | transactional_drop_serial_1410007 | table | postgres
+ public | transactional_drop_serial_1410008 | table | postgres
+ public | transactional_drop_serial_1410009 | table | postgres
+ public | transactional_drop_serial_1410010 | table | postgres
+ public | transactional_drop_serial_1410011 | table | postgres
+ public | transactional_drop_serial_1410012 | table | postgres
+ public | transactional_drop_serial_1410013 | table | postgres
+ public | transactional_drop_serial_1410014 | table | postgres
+(8 rows)
+
 \ds transactional_drop_serial_column2_seq
                           List of relations
  Schema |                 Name                  |   Type   |  Owner   
@@ -504,10 +531,20 @@ ORDER BY
 (0 rows)
 
 -- verify table is dropped
-\d transactional_drop_serial;
+\dt transactional_drop_serial
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
 -- verify shards and sequence are dropped
 \c - - - :worker_1_port
-\d transactional_drop_serial_1410006;
+\dt transactional_drop_serial_*
+      List of relations
+ Schema | Name | Type | Owner 
+--------+------+------+-------
+(0 rows)
+
 \ds transactional_drop_serial_column2_seq
       List of relations
  Schema | Name | Type | Owner 
