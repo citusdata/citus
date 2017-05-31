@@ -1,3 +1,7 @@
+### citus v6.2.2 (May 31, 2017) ###
+
+* Fixes a common cause of deadlocks when repairing tables with foreign keys
+
 ### citus v6.2.1 (May 24, 2017) ###
 
 * Relaxes version-check logic to avoid breaking non-distributed commands
