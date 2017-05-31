@@ -1,3 +1,7 @@
+### citus v6.1.2 (May 31, 2017) ###
+
+* Fixes a common cause of deadlocks when repairing tables with foreign keys
+
 ### citus v6.1.1 (May 5, 2017) ###
 
 * Fixes a crash caused by router executor use after connection timeouts
