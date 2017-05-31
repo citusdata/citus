@@ -240,16 +240,27 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
  1310007 |          1 |           0 | localhost |    57638 |      100007
 (8 rows)
 
-\d mx_testing_schema.mx_test_table
-                              Table "mx_testing_schema.mx_test_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
  Column |  Type   |                                    Modifiers                                    
 --------+---------+---------------------------------------------------------------------------------
  col_1  | integer | 
  col_2  | text    | not null
  col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
-Indexes:
-    "mx_test_table_col_1_key" UNIQUE CONSTRAINT, btree (col_1)
-    "mx_index" btree (col_2)
+(3 rows)
+
+\d mx_testing_schema.mx_test_table_col_1_key
+Index "mx_testing_schema.mx_test_table_col_1_key"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+unique, btree, for table "mx_testing_schema.mx_test_table"
+
+\d mx_testing_schema.mx_index
+Index "mx_testing_schema.mx_index"
+ Column | Type | Definition 
+--------+------+------------
+ col_2  | text | col_2
+btree, for table "mx_testing_schema.mx_test_table"
 
 -- Check that pg_dist_colocation is not synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
@@ -295,15 +306,11 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
 \c - - - :worker_1_port
-\d mx_testing_schema_2.fk_test_2
-Table "mx_testing_schema_2.fk_test_2"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | integer | 
- col3   | text    | 
-Foreign-key constraints:
-    "fk_test_2_col1_fkey" FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schema_2.fk_test_2'::regclass;
+     Constraint      |                                 Definition                                  
+---------------------+-----------------------------------------------------------------------------
+ fk_test_2_col1_fkey | FOREIGN KEY (col1, col2) REFERENCES mx_testing_schema.fk_test_1(col1, col3)
+(1 row)
 
 \c - - - :master_port
 DROP TABLE mx_testing_schema_2.fk_test_2;
@@ -370,16 +377,27 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
  1310007 |          1 |           0 | localhost |    57638 |      100007
 (8 rows)
 
-\d mx_testing_schema.mx_test_table
-                              Table "mx_testing_schema.mx_test_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
  Column |  Type   |                                    Modifiers                                    
 --------+---------+---------------------------------------------------------------------------------
  col_1  | integer | 
  col_2  | text    | not null
  col_3  | bigint  | not null default nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass)
-Indexes:
-    "mx_test_table_col_1_key" UNIQUE CONSTRAINT, btree (col_1)
-    "mx_index" btree (col_2)
+(3 rows)
+
+\d mx_testing_schema.mx_test_table_col_1_key
+Index "mx_testing_schema.mx_test_table_col_1_key"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+unique, btree, for table "mx_testing_schema.mx_test_table"
+
+\d mx_testing_schema.mx_index
+Index "mx_testing_schema.mx_index"
+ Column | Type | Definition 
+--------+------+------------
+ col_2  | text | col_2
+btree, for table "mx_testing_schema.mx_test_table"
 
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
  count 
@@ -499,28 +517,46 @@ CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 (col1);
 CREATE TABLE mx_test_schema_2.mx_table_2 (col1 int, col2 text);
 CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 (col2);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col1) REFERENCES mx_test_schema_1.mx_table_1(col1);
-\d mx_test_schema_1.mx_table_1
-Table "mx_test_schema_1.mx_table_1"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col1   | integer | 
  col2   | text    | 
-Indexes:
-    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
-    "mx_index_1" btree (col1)
-Referenced by:
-    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+(2 rows)
 
-\d mx_test_schema_2.mx_table_2
-Table "mx_test_schema_2.mx_table_2"
+\d mx_test_schema_1.mx_table_1_col1_key
+Index "mx_test_schema_1.mx_table_1_col1_key"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+unique, btree, for table "mx_test_schema_1.mx_table_1"
+
+\d mx_test_schema_1.mx_index_1
+Index "mx_test_schema_1.mx_index_1"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+btree, for table "mx_test_schema_1.mx_table_1"
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col1   | integer | 
  col2   | text    | 
-Indexes:
-    "mx_index_2" btree (col2)
-Foreign-key constraints:
-    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+(2 rows)
+
+\d mx_test_schema_2.mx_index_2
+Index "mx_test_schema_2.mx_index_2"
+ Column | Type | Definition 
+--------+------+------------
+ col2   | text | col2
+btree, for table "mx_test_schema_2.mx_table_2"
+
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_2.mx_table_2'::regclass;
+    Constraint    |                           Definition                            
+------------------+-----------------------------------------------------------------
+ mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+(1 row)
 
 SELECT create_distributed_table('mx_test_schema_1.mx_table_1', 'col1');
  create_distributed_table 
@@ -578,28 +614,13 @@ ORDER BY
 -- Check that metadata of MX tables exist on the metadata worker
 \c - - - :worker_1_port
 -- Check that tables are created
-\d mx_test_schema_1.mx_table_1
-Table "mx_test_schema_1.mx_table_1"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | text    | 
-Indexes:
-    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
-    "mx_index_1" btree (col1)
-Referenced by:
-    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
-
-\d mx_test_schema_2.mx_table_2
-Table "mx_test_schema_2.mx_table_2"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | text    | 
-Indexes:
-    "mx_index_2" btree (col2)
-Foreign-key constraints:
-    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+\dt mx_test_schema_?.mx_table_?
+                List of relations
+      Schema      |    Name    | Type  |  Owner   
+------------------+------------+-------+----------
+ mx_test_schema_1 | mx_table_1 | table | postgres
+ mx_test_schema_2 | mx_table_2 | table | postgres
+(2 rows)
 
 -- Check that table metadata are created
 SELECT 
@@ -665,36 +686,26 @@ SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 CREATE UNIQUE INDEX mx_index_4 ON mx_test_schema_2.mx_table_2(col1);
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_table_2
-Table "mx_test_schema_2.mx_table_2"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | text    | 
-Indexes:
-    "mx_index_4" UNIQUE, btree (col1)
-    "mx_index_2" btree (col2)
-    "mx_index_3" hash (col1)
-Foreign-key constraints:
-    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+\d mx_test_schema_2.mx_index_3
+Index "mx_test_schema_2.mx_index_3"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+hash, for table "mx_test_schema_2.mx_table_2"
+
+\d mx_test_schema_2.mx_index_4
+Index "mx_test_schema_2.mx_index_4"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col1   | integer | col1
+unique, btree, for table "mx_test_schema_2.mx_table_2"
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
-\d mx_test_schema_2.mx_table_2
-Table "mx_test_schema_2.mx_table_2"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | text    | 
-Indexes:
-    "mx_index_4" UNIQUE, btree (col1)
-    "mx_index_2" btree (col2)
-Foreign-key constraints:
-    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
-
+\d mx_test_schema_2.mx_index_3
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
 SET citus.multi_shard_commit_protocol TO '2pc';
@@ -709,20 +720,19 @@ FOREIGN KEY
 REFERENCES
 	mx_test_schema_2.mx_table_2(col1);
 \c - - - :worker_1_port
-\d mx_test_schema_1.mx_table_1
-Table "mx_test_schema_1.mx_table_1"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col1   | integer | 
  col2   | text    | 
  col3   | integer | 
-Indexes:
-    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
-    "mx_index_1" btree (col1)
-Foreign-key constraints:
-    "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
-Referenced by:
-    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+(3 rows)
+
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+    Constraint    |                           Definition                            
+------------------+-----------------------------------------------------------------
+ mx_fk_constraint | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
+(1 row)
 
 -- Check that foreign key constraint with NOT VALID works as well
 \c - - - :master_port
@@ -738,20 +748,11 @@ REFERENCES
 	mx_test_schema_2.mx_table_2(col1)
 NOT VALID;
 \c - - - :worker_1_port
-\d mx_test_schema_1.mx_table_1
-Table "mx_test_schema_1.mx_table_1"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col1   | integer | 
- col2   | text    | 
- col3   | integer | 
-Indexes:
-    "mx_table_1_col1_key" UNIQUE CONSTRAINT, btree (col1)
-    "mx_index_1" btree (col1)
-Foreign-key constraints:
-    "mx_fk_constraint_2" FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
-Referenced by:
-    TABLE "mx_test_schema_2.mx_table_2" CONSTRAINT "mx_fk_constraint" FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
+     Constraint     |                                Definition                                 
+--------------------+---------------------------------------------------------------------------
+ mx_fk_constraint_2 | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
+(1 row)
 
 -- Check that mark_tables_colocated call propagates the changes to the workers 
 \c - - - :master_port
@@ -932,13 +933,13 @@ SELECT create_distributed_table('mx_table_with_sequence', 'a');
  
 (1 row)
 
-\d mx_table_with_sequence
-                         Table "public.mx_table_with_sequence"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
  Column |  Type   |                             Modifiers                              
 --------+---------+--------------------------------------------------------------------
  a      | integer | 
  b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
  c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
 
 \ds mx_table_with_sequence_b_seq
                       List of relations
@@ -956,13 +957,13 @@ SELECT create_distributed_table('mx_table_with_sequence', 'a');
 
 -- Check that the sequences created on the metadata worker as well
 \c - - - :worker_1_port
-\d mx_table_with_sequence
-                         Table "public.mx_table_with_sequence"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
  Column |  Type   |                             Modifiers                              
 --------+---------+--------------------------------------------------------------------
  a      | integer | 
  b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
  c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
 
 \ds mx_table_with_sequence_b_seq
                       List of relations
@@ -1006,13 +1007,13 @@ SELECT groupid FROM pg_dist_local_group;
        2
 (1 row)
 
-\d mx_table_with_sequence
-                         Table "public.mx_table_with_sequence"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
  Column |  Type   |                             Modifiers                              
 --------+---------+--------------------------------------------------------------------
  a      | integer | 
  b      | bigint  | not null default nextval('mx_table_with_sequence_b_seq'::regclass)
  c      | bigint  | not null default nextval('mx_table_with_sequence_c_seq'::regclass)
+(3 rows)
 
 \ds mx_table_with_sequence_b_seq
                       List of relations
@@ -1204,20 +1205,20 @@ SELECT create_reference_table('mx_ref');
  
 (1 row)
 
-\d mx_ref
-    Table "public.mx_ref"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col_1  | integer | 
- col_2  | text    | 
+\dt mx_ref
+         List of relations
+ Schema |  Name  | Type  |  Owner   
+--------+--------+-------+----------
+ public | mx_ref | table | postgres
+(1 row)
 
 \c - - - :worker_1_port
-\d mx_ref
-    Table "public.mx_ref"
- Column |  Type   | Modifiers 
---------+---------+-----------
- col_1  | integer | 
- col_2  | text    | 
+\dt mx_ref
+         List of relations
+ Schema |  Name  | Type  |  Owner   
+--------+--------+-------+----------
+ public | mx_ref | table | postgres
+(1 row)
 
 SELECT
 	logicalrelid, partmethod, repmodel, shardid, placementid, nodename, nodeport
@@ -1243,26 +1244,36 @@ ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX mx_ref_index ON mx_ref(col_1);
-\d mx_ref
-    Table "public.mx_ref"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | numeric | default 0
-Indexes:
-    "mx_ref_index" btree (col_1)
+(3 rows)
+
+\d mx_ref_index
+  Index "public.mx_ref_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+btree, for table "public.mx_ref"
 
 \c - - - :worker_1_port
-\d mx_ref
-    Table "public.mx_ref"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | numeric | default 0
-Indexes:
-    "mx_ref_index" btree (col_1)
+(3 rows)
+
+\d mx_ref_index
+  Index "public.mx_ref_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ col_1  | integer | col_1
+btree, for table "public.mx_ref"
 
 	
 -- Check that metada is cleaned successfully upon drop table
