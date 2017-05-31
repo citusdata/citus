@@ -94,11 +94,12 @@ CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
 \c - - - :worker_1_port
 
 -- DDL commands
-\d mx_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 CREATE INDEX mx_test_index ON mx_table(col_2);
 ALTER TABLE mx_table ADD COLUMN col_4 int;
 ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERENCES mx_table(col_1);
-\d mx_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
+\d mx_test_index
 
 -- master_modify_multiple_shards
 SELECT master_modify_multiple_shards('UPDATE mx_table SET col_2=''none''');
@@ -213,9 +214,9 @@ DROP SEQUENCE some_sequence;
 
 -- Show that dropping the sequence of an MX table with cascade harms the table and shards
 BEGIN;
-\d mx_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-\d mx_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
 ROLLBACK;
 
 -- Cleanup
