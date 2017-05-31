@@ -859,15 +859,18 @@ ALTER TABLE reference_table_ddl ALTER COLUMN value_2 SET DEFAULT 25.0;
 ALTER TABLE reference_table_ddl ALTER COLUMN value_3 SET NOT NULL;
 
 -- see that Citus applied all DDLs to the table
-\d reference_table_ddl
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl'::regclass;
+\d reference_index_2
 
 -- also to the shard placements
 \c - - - :worker_1_port
-\d reference_table_ddl*
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
+\d reference_index_2_1250019
 \c - - - :master_port
 DROP INDEX reference_index_2;
 \c - - - :worker_1_port
-\d reference_table_ddl*
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
+\di reference_index_2*
 \c - - - :master_port
 
 -- as we expect, renaming and setting WITH OIDS does not work for reference tables
