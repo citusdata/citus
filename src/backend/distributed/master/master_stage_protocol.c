@@ -763,9 +763,8 @@ ForeignConstraintGetReferencedTableId(char *queryString)
 		if (constraint->contype == CONSTR_FOREIGN)
 		{
 			RangeVar *referencedTable = constraint->pktable;
-			LOCKMODE lockmode = AlterTableGetLockLevel(foreignConstraintStmt->cmds);
 
-			return RangeVarGetRelid(referencedTable, lockmode,
+			return RangeVarGetRelid(referencedTable, NoLock,
 									foreignConstraintStmt->missing_ok);
 		}
 	}
