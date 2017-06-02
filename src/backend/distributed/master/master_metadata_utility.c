@@ -190,8 +190,12 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 	char *workerNodeName = workerNode->workerName;
 	uint32 workerNodePort = workerNode->workerPort;
 	char *tableSizeString;
-	List *sizeList = NIL;
 	uint64 tableSize = 0;
+	MultiConnection *connection = NULL;
+	uint32 connectionFlag = FORCE_NEW_CONNECTION;
+	PGresult *result = NULL;
+	int queryResult = 0;
+	List *sizeList = NIL;
 
 	List *shardIntervalsOnNode = ShardIntervalsOnWorkerNode(workerNode, relationId);
 
@@ -199,14 +203,16 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId, char *sizeQ
 														   shardIntervalsOnNode,
 														   sizeQuery);
 
-	sizeList = ExecuteRemoteQuery(workerNodeName, workerNodePort, NULL, tableSizeQuery);
+	connection = GetNodeConnection(connectionFlag, workerNodeName, workerNodePort);
+	queryResult = ExecuteOptionalRemoteCommand(connection, tableSizeQuery->data, &result);
 
-	if (sizeList == NIL)
+	if (queryResult != 0)
 	{
 		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
 						errmsg("cannot get the size because of a connection error")));
 	}
 
+	sizeList = ReadFirstColumnAsText(result);
 	tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	tableSizeString = tableSizeStringInfo->data;
 	tableSize = atol(tableSizeString);
