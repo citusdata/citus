@@ -14,6 +14,7 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 #include <unistd.h>
 #include <sys/stat.h>
@@ -26,12 +27,14 @@
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/relay_utility.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_protocol.h"
@@ -1007,11 +1010,17 @@ ForeignFilePath(const char *nodeName, uint32 nodePort, const char *tableName)
 	List *foreignPathList = NIL;
 	StringInfo foreignPathCommand = NULL;
 	StringInfo foreignPath = NULL;
+	MultiConnection *connection = NULL;
+	PGresult *result = NULL;
+	int connectionFlag = FORCE_NEW_CONNECTION;
 
 	foreignPathCommand = makeStringInfo();
 	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	foreignPathList = ExecuteRemoteQuery(nodeName, nodePort, NULL, foreignPathCommand);
+	ExecuteOptionalRemoteCommand(connection, foreignPathCommand->data, &result);
+
+	foreignPathList = ReadFirstColumnAsText(result);
 	if (foreignPathList != NIL)
 	{
 		foreignPath = (StringInfo) linitial(foreignPathList);
