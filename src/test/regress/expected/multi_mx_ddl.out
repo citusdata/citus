@@ -30,67 +30,112 @@ SELECT master_modify_multiple_shards('UPDATE mx_ddl_table SET version=0.1 WHERE 
 -- SET NOT NULL
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET NOT NULL;
 -- See that the changes are applied on coordinator, worker tables and shards
-\d mx_ddl_table
-      Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column  |  Type   |     Modifiers      
 ---------+---------+--------------------
  key     | integer | not null
  value   | integer | 
  version | integer | not null default 1
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
-    "ddl_test_concurrent_index" btree (value)
-    "ddl_test_index" btree (value)
+(3 rows)
+
+\d ddl_test*_index
+Index "public.ddl_test_concurrent_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
+
+ Index "public.ddl_test_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
 
 \c - - - :worker_1_port
-\d mx_ddl_table
-      Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column  |  Type   |     Modifiers      
 ---------+---------+--------------------
  key     | integer | not null
  value   | integer | 
  version | integer | not null default 1
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
-    "ddl_test_concurrent_index" btree (value)
-    "ddl_test_index" btree (value)
+(3 rows)
 
-\d mx_ddl_table_1220088
-  Table "public.mx_ddl_table_1220088"
+\d ddl_test*_index
+Index "public.ddl_test_concurrent_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
+
+ Index "public.ddl_test_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
  Column  |  Type   |     Modifiers      
 ---------+---------+--------------------
  key     | integer | not null
  value   | integer | 
  version | integer | not null default 1
-Indexes:
-    "mx_ddl_table_pkey_1220088" PRIMARY KEY, btree (key)
-    "ddl_test_concurrent_index_1220088" btree (value)
-    "ddl_test_index_1220088" btree (value)
+(3 rows)
+
+\d ddl_test*_index_1220088
+Index "public.ddl_test_concurrent_index_1220088"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table_1220088"
+
+Index "public.ddl_test_index_1220088"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table_1220088"
 
 \c - - - :worker_2_port
-\d mx_ddl_table
-      Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column  |  Type   |     Modifiers      
 ---------+---------+--------------------
  key     | integer | not null
  value   | integer | 
  version | integer | not null default 1
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
-    "ddl_test_concurrent_index" btree (value)
-    "ddl_test_index" btree (value)
+(3 rows)
 
-\d mx_ddl_table_1220089
-  Table "public.mx_ddl_table_1220089"
+\d ddl_test*_index
+Index "public.ddl_test_concurrent_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
+
+ Index "public.ddl_test_index"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table"
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220089'::regclass;
  Column  |  Type   |     Modifiers      
 ---------+---------+--------------------
  key     | integer | not null
  value   | integer | 
  version | integer | not null default 1
-Indexes:
-    "mx_ddl_table_pkey_1220089" PRIMARY KEY, btree (key)
-    "ddl_test_concurrent_index_1220089" btree (value)
-    "ddl_test_index_1220089" btree (value)
+(3 rows)
+
+\d ddl_test*_index_1220089
+Index "public.ddl_test_concurrent_index_1220089"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table_1220089"
+
+Index "public.ddl_test_index_1220089"
+ Column |  Type   | Definition 
+--------+---------+------------
+ value  | integer | value
+btree, for table "public.mx_ddl_table_1220089"
 
 INSERT INTO mx_ddl_table VALUES (37, 78, 2);
 INSERT INTO mx_ddl_table VALUES (38, 78);
@@ -132,52 +177,72 @@ ALTER TABLE mx_ddl_table ALTER COLUMN version DROP NOT NULL;
 -- DROP COLUMN
 ALTER TABLE mx_ddl_table DROP COLUMN version;
 -- See that the changes are applied on coordinator, worker tables and shards
-\d mx_ddl_table
- Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  key    | integer | not null
  value  | integer | 
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+(2 rows)
+
+\di ddl_test*_index
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
 
 \c - - - :worker_1_port
-\d mx_ddl_table
- Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  key    | integer | not null
  value  | integer | 
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+(2 rows)
 
-\d mx_ddl_table_1220088
-Table "public.mx_ddl_table_1220088"
+\di ddl_test*_index
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220088'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  key    | integer | not null
  value  | integer | 
-Indexes:
-    "mx_ddl_table_pkey_1220088" PRIMARY KEY, btree (key)
+(2 rows)
+
+\di ddl_test*_index_1220088
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
 
 \c - - - :worker_2_port
-\d mx_ddl_table
- Table "public.mx_ddl_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  key    | integer | not null
  value  | integer | 
-Indexes:
-    "mx_ddl_table_pkey" PRIMARY KEY, btree (key)
+(2 rows)
 
-\d mx_ddl_table_1220089
-Table "public.mx_ddl_table_1220089"
+\di ddl_test*_index
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
+
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1220089'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  key    | integer | not null
  value  | integer | 
-Indexes:
-    "mx_ddl_table_pkey_1220089" PRIMARY KEY, btree (key)
+(2 rows)
+
+\di ddl_test*_index_1220089
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
 
 -- Show that DDL commands are done within a two-phase commit transaction
 \c - - - :master_port
