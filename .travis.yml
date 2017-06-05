@@ -22,6 +22,7 @@ before_install:
 install:
   - install_uncrustify
   - install_pg
+  - install_custom_pg
 before_script: citus_indent --quiet --check
 script: CFLAGS=-Werror pg_travis_multi_test check
 after_success:
