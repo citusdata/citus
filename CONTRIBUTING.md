@@ -90,3 +90,32 @@ why we ask this as well as instructions for how to proceed, see the
   cd src/test/regress
   make check
   ```
+
+### Following our coding conventions
+
+Travis will automatically reject any PRs which do not follow our coding conventions, it
+won't even run tests! The easiest way to ensure your PR adheres to those conventions is
+to use the [citus_indent](https://github.com/citusdata/tools/tree/develop/uncrustify)
+tool.
+
+  ```bash
+  # Ubuntu does have uncrustify in the package manager however it's an older
+  # version which doesn't work with our citus-style.cfg file. We require version
+  # 0.60 or greater. If your package manager has a more recent version of uncrustify
+  # feel free to use that instead of installing from source
+  git clone --branch uncrustify-0.60 https://github.com/uncrustify/uncrustify.git
+  pushd uncrustify
+  ./configure
+  sudo make install
+  popd
+
+  git clone https://github.com/citusdata/tools.git
+  pushd tools/uncrustify
+  make install
+  popd
+  ```
+
+Once you've done that, you can run the `citus_indent` command to recursively check and
+correct the style of any source files in the current directory. You can also run `make
+reindent` from within the Citus repo to correct the style of all source files in the
+repository.
