@@ -162,6 +162,26 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 \.
 COMMIT;
 
+-- COPY cannot be performed if multiple shards were modified over the same connection
+BEGIN;
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
+INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+\copy researchers from stdin delimiter ','
+3,1,Duth Knonald
+10,6,Lesport Lampie
+\.
+ROLLBACK;
+
+-- after a COPY you can modify multiple shards, since they'll use different connections
+BEGIN;
+\copy researchers from stdin delimiter ','
+3,1,Duth Knonald
+10,6,Lesport Lampie
+\.
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
+INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+ROLLBACK;
+
 -- COPY can happen before single row INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
@@ -269,28 +289,21 @@ ORDER BY nodeport, shardid;
 SELECT * FROM run_command_on_workers('drop function reject_large_id()')
 ORDER BY nodeport;
 
--- finally, ALTER and copy aren't compatible
+-- ALTER TABLE and COPY are compatible if ALTER TABLE precedes COPY
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 \copy labs from stdin delimiter ','
 12,fsociety,lol
 \.
-COMMIT;
+ROLLBACK;
 
--- but the DDL should correctly roll back
-\d labs
-
--- and if the copy is before the ALTER...
+-- but not if COPY precedes ALTER TABLE
 BEGIN;
 \copy labs from stdin delimiter ','
 12,fsociety
 \.
 ALTER TABLE labs ADD COLUMN motto text;
-COMMIT;
-
--- the DDL fails, but copy persists
-\d labs
-SELECT * FROM labs WHERE id = 12;
+ROLLBACK;
 
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;

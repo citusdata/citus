@@ -1634,8 +1634,6 @@ ROLLBACK;
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY raw_events_first, line 1: "102,102"
 ROLLBACK;
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
