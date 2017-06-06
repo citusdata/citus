@@ -202,6 +202,20 @@ BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 \copy labs from stdin delimiter ','
 COMMIT;
+-- COPY cannot be performed if multiple shards were modified over the same connection
+BEGIN;
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
+INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+\copy researchers from stdin delimiter ','
+ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
+ROLLBACK;
+-- after a COPY you can modify multiple shards, since they'll use different connections
+BEGIN;
+\copy researchers from stdin delimiter ','
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
+INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+ROLLBACK;
 -- COPY can happen before single row INSERT
 BEGIN;
 \copy labs from stdin delimiter ','
@@ -369,41 +383,17 @@ ORDER BY nodeport;
  localhost |    57638 | t       | DROP FUNCTION
 (2 rows)
 
--- finally, ALTER and copy aren't compatible
+-- ALTER TABLE and COPY are compatible if ALTER TABLE precedes COPY
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 \copy labs from stdin delimiter ','
-ERROR:  distributed copy operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  COPY labs, line 1: "12,fsociety,lol"
-COMMIT;
--- but the DDL should correctly roll back
-\d labs
-     Table "public.labs"
- Column |  Type  | Modifiers 
---------+--------+-----------
- id     | bigint | not null
- name   | text   | not null
-
--- and if the copy is before the ALTER...
+ROLLBACK;
+-- but not if COPY precedes ALTER TABLE
 BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
 ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
-COMMIT;
--- the DDL fails, but copy persists
-\d labs
-     Table "public.labs"
- Column |  Type  | Modifiers 
---------+--------+-----------
- id     | bigint | not null
- name   | text   | not null
-
-SELECT * FROM labs WHERE id = 12;
- id |   name   
-----+----------
- 12 | fsociety
-(1 row)
-
+ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;

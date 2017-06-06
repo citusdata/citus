@@ -734,14 +734,6 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 
 	MemoryContextSwitchTo(oldContext);
 
-	if (XactModificationLevel > XACT_MODIFICATION_DATA)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("distributed copy operations must not appear in "
-							   "transaction blocks containing other distributed "
-							   "modifications")));
-	}
-
 	foreach(placementCell, finalizedPlacementList)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
