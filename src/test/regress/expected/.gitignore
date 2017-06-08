@@ -12,8 +12,6 @@
 /multi_load_data.out
 /multi_load_large_records.out
 /multi_load_more_data.out
-/multi_subquery.out
-/multi_subquery_0.out
 /worker_copy.out
 /multi_complex_count_distinct.out
 /multi_mx_copy_data.out
