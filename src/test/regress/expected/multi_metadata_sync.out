@@ -312,6 +312,7 @@ RESET citus.shard_replication_factor;
 RESET citus.replication_model;
 -- Check that repeated calls to start_metadata_sync_to_node has no side effects
 \c - - - :master_port
+BEGIN;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node 
 -----------------------------
@@ -324,6 +325,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  
 (1 row)
 
+COMMIT;
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
  groupid 
@@ -385,18 +387,6 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
  count 
 -------
      1
-(1 row)
-
--- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
-\c - - - :master_port
-BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
-ROLLBACK;
-SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
- hasmetadata 
--------------
- f
 (1 row)
 
 -- Check that the distributed table can be queried from the worker
