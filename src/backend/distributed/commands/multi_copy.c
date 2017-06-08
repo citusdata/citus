@@ -51,6 +51,7 @@
 #include <arpa/inet.h> /* for htons */
 #include <netinet/in.h> /* for htons */
 #include <string.h>
+#include <netinet/in.h>
 
 #include "access/htup_details.h"
 #include "access/htup.h"
