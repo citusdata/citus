@@ -244,6 +244,23 @@ multi_ProcessUtility(Node *parsetree,
 		return;
 	}
 
+	if (IsA(parsetree, ExplainStmt))
+	{
+		ExplainStmt *explainStmt = (ExplainStmt *) parsetree;
+
+		if (IsA(explainStmt->query, Query))
+		{
+			Query *query = (Query *) explainStmt->query;
+
+			if (query->commandType == CMD_UTILITY &&
+				IsA(query->utilityStmt, ExecuteStmt))
+			{
+				/* Due to a postgres limitation these cause crashes. Skip them for now */
+				ereport(ERROR, (errmsg("Citus does not support EXPLAIN EXECUTE")));
+			}
+		}
+	}
+
 	if (IsA(parsetree, CopyStmt))
 	{
 		/* copy parse tree since we might scribble on it to fix the schema name */
