@@ -658,6 +658,9 @@ shard_name(PG_FUNCTION_ARGS)
 	Oid relationId = InvalidOid;
 	int64 shardId = 0;
 	char *relationName = NULL;
+	Oid schemaId = InvalidOid;
+	char *schemaName = NULL;
+	char *qualifiedName = NULL;
 
 	/*
 	 * Have to check arguments for NULLness as it can't be declared STRICT
@@ -685,7 +688,6 @@ shard_name(PG_FUNCTION_ARGS)
 						errmsg("shard_id cannot be zero or negative value")));
 	}
 
-
 	if (!OidIsValid(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -693,7 +695,6 @@ shard_name(PG_FUNCTION_ARGS)
 	}
 
 	relationName = get_rel_name(relationId);
-
 	if (relationName == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
@@ -701,5 +702,10 @@ shard_name(PG_FUNCTION_ARGS)
 	}
 
 	AppendShardIdToName(&relationName, shardId);
-	PG_RETURN_TEXT_P(cstring_to_text(relationName));
+
+	schemaId = get_rel_namespace(relationId);
+	schemaName = get_namespace_name(schemaId);
+	qualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+	PG_RETURN_TEXT_P(cstring_to_text(qualifiedName));
 }
