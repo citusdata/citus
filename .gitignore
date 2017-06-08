@@ -25,6 +25,11 @@ win32ver.rc
 *.exe
 lib*dll.def
 lib*.pc
+.cproject
+.project
+gmon.out
+*.unc-backup.md5~
+*.unc-backup~
 
 # Local excludes in root directory
 /config.log
