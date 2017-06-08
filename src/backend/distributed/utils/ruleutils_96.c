@@ -2970,21 +2970,42 @@ get_insert_query_def(Query *query, deparse_context *context)
 	 * Start the query with INSERT INTO relname
 	 */
 	rte = rt_fetch(query->resultRelation, query->rtable);
-	Assert(rte->rtekind == RTE_RELATION);
+	Assert(rte->rtekind == RTE_RELATION || GetRangeTblKind(rte) == CITUS_RTE_SHARD);
 
 	if (PRETTY_INDENT(context))
 	{
 		context->indentLevel += PRETTYINDENT_STD;
 		appendStringInfoChar(buf, ' ');
 	}
-	appendStringInfo(buf, "INSERT INTO %s ",
-					 generate_relation_or_shard_name(rte->relid,
-													 context->distrelid,
-													 context->shardid, NIL));
+
+	if(rte->rtekind == RTE_RELATION)
+	{
+		appendStringInfo(buf, "INSERT INTO %s ",
+						 generate_relation_or_shard_name(rte->relid,
+														 context->distrelid,
+														 context->shardid, NIL));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		char *fragmentSchemaName = NULL;
+		char *fragmentTableName = NULL;
+
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName,
+								 NULL);
+
+		appendStringInfo(buf, "INSERT INTO %s ",
+						 generate_fragment_name(fragmentSchemaName, fragmentTableName));
+	}
+
 	/* INSERT requires AS keyword for target alias */
 	if (rte->alias != NULL)
-		appendStringInfo(buf, "AS %s ",
-						 quote_identifier(rte->alias->aliasname));
+	{
+		appendStringInfo(buf, "AS %s ", quote_identifier(rte->alias->aliasname));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		appendStringInfo(buf, "AS %s ", get_relation_name(rte->relid));
+	}
 
 	/*
 	 * Add the insert-column-names list.  Any indirection decoration needed on
@@ -3152,20 +3173,42 @@ get_update_query_def(Query *query, deparse_context *context)
 	 * Start the query with UPDATE relname SET
 	 */
 	rte = rt_fetch(query->resultRelation, query->rtable);
-	Assert(rte->rtekind == RTE_RELATION);
+	Assert(rte->rtekind == RTE_RELATION || GetRangeTblKind(rte) == CITUS_RTE_SHARD);
 	if (PRETTY_INDENT(context))
 	{
 		appendStringInfoChar(buf, ' ');
 		context->indentLevel += PRETTYINDENT_STD;
 	}
-	appendStringInfo(buf, "UPDATE %s%s",
-					 only_marker(rte),
-					 generate_relation_or_shard_name(rte->relid,
-													 context->distrelid,
-													 context->shardid, NIL));
+	appendStringInfo(buf, "UPDATE %s", only_marker(rte));
+
+	if(rte->rtekind == RTE_RELATION)
+	{
+		appendStringInfo(buf, "%s",
+						 generate_relation_or_shard_name(rte->relid,
+														 context->distrelid,
+														 context->shardid, NIL));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		char *fragmentSchemaName = NULL;
+		char *fragmentTableName = NULL;
+
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName,
+								 NULL);
+
+		appendStringInfoString(buf, generate_fragment_name(fragmentSchemaName,
+														   fragmentTableName));
+	}
+
 	if (rte->alias != NULL)
-		appendStringInfo(buf, " %s",
-						 quote_identifier(rte->alias->aliasname));
+	{
+		appendStringInfo(buf, " %s", quote_identifier(rte->alias->aliasname));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		appendStringInfo(buf, " %s", get_relation_name(rte->relid));
+	}
+
 	appendStringInfoString(buf, " SET ");
 
 	/* Deparse targetlist */
@@ -3349,20 +3392,41 @@ get_delete_query_def(Query *query, deparse_context *context)
 	 * Start the query with DELETE FROM relname
 	 */
 	rte = rt_fetch(query->resultRelation, query->rtable);
-	Assert(rte->rtekind == RTE_RELATION);
+	Assert(rte->rtekind == RTE_RELATION || GetRangeTblKind(rte) == CITUS_RTE_SHARD);
 	if (PRETTY_INDENT(context))
 	{
 		appendStringInfoChar(buf, ' ');
 		context->indentLevel += PRETTYINDENT_STD;
 	}
-	appendStringInfo(buf, "DELETE FROM %s%s",
-					 only_marker(rte),
-					 generate_relation_or_shard_name(rte->relid,
-													 context->distrelid,
-													 context->shardid, NIL));
+	appendStringInfo(buf, "DELETE FROM %s", only_marker(rte));
+
+	if(rte->rtekind == RTE_RELATION)
+	{
+		appendStringInfo(buf, "%s",
+						 generate_relation_or_shard_name(rte->relid,
+														 context->distrelid,
+														 context->shardid, NIL));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		char *fragmentSchemaName = NULL;
+		char *fragmentTableName = NULL;
+
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName,
+								 NULL);
+
+		appendStringInfoString(buf, generate_fragment_name(fragmentSchemaName,
+														   fragmentTableName));
+	}
+
 	if (rte->alias != NULL)
-		appendStringInfo(buf, " %s",
-						 quote_identifier(rte->alias->aliasname));
+	{
+		appendStringInfo(buf, " %s", quote_identifier(rte->alias->aliasname));
+	}
+	else if(GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		appendStringInfo(buf, " %s", get_relation_name(rte->relid));
+	}
 
 	/* Add the USING clause if given */
 	get_from_clause(query, " USING ", context);
