@@ -203,21 +203,25 @@ FROM table_fkey_cols
 GROUP BY (name, relid);
 
 -- create views used to describe relations
-CREATE VIEW table_attrs AS
-SELECT a.attname AS "name",
-    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
-    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
-     FROM pg_catalog.pg_attrdef d
-     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
-    a.attnotnull AS "notnull",
-    a.attrelid AS "relid"
-FROM pg_catalog.pg_attribute a
-WHERE a.attnum > 0 AND NOT a.attisdropped
-ORDER BY a.attnum;
+CREATE OR REPLACE VIEW table_attrs AS
+SELECT c.column_name AS "name",
+       c.data_type AS "type",
+       CASE
+            WHEN character_maximum_length IS NOT NULL THEN
+                 format('(%s)', character_maximum_length)
+            WHEN data_type = 'numeric' AND numeric_precision IS NOT NULL THEN
+                 format('(%s,%s)', numeric_precision, numeric_scale)
+            ELSE ''
+       END AS "modifier",
+       c.column_default AS "default",
+       (NOT c.is_nullable::boolean) AS "notnull",
+       format('%I.%I', c.table_schema, c.table_name)::regclass::oid AS "relid"
+FROM information_schema.columns AS c
+ORDER BY ordinal_position;
 
 CREATE VIEW table_desc AS
 SELECT "name" AS "Column",
-       "type" as "Type",
+       "type" || "modifier" AS "Type",
        rtrim((
            CASE "notnull"
                WHEN true THEN 'not null '
@@ -268,21 +272,25 @@ FROM table_fkey_cols
 GROUP BY (name, relid);
 
 -- create views used to describe relations
-CREATE VIEW table_attrs AS
-SELECT a.attname AS "name",
-    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
-    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
-     FROM pg_catalog.pg_attrdef d
-     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
-    a.attnotnull AS "notnull",
-    a.attrelid AS "relid"
-FROM pg_catalog.pg_attribute a
-WHERE a.attnum > 0 AND NOT a.attisdropped
-ORDER BY a.attnum;
+CREATE OR REPLACE VIEW table_attrs AS
+SELECT c.column_name AS "name",
+       c.data_type AS "type",
+       CASE
+            WHEN character_maximum_length IS NOT NULL THEN
+                 format('(%s)', character_maximum_length)
+            WHEN data_type = 'numeric' AND numeric_precision IS NOT NULL THEN
+                 format('(%s,%s)', numeric_precision, numeric_scale)
+            ELSE ''
+       END AS "modifier",
+       c.column_default AS "default",
+       (NOT c.is_nullable::boolean) AS "notnull",
+       format('%I.%I', c.table_schema, c.table_name)::regclass::oid AS "relid"
+FROM information_schema.columns AS c
+ORDER BY ordinal_position;
 
 CREATE VIEW table_desc AS
 SELECT "name" AS "Column",
-       "type" as "Type",
+       "type" || "modifier" AS "Type",
        rtrim((
            CASE "notnull"
                WHEN true THEN 'not null '
@@ -309,21 +317,25 @@ ORDER BY cc.constraint_name ASC;
 \c - - - :worker_2_port
 
 -- create views used to describe relations
-CREATE VIEW table_attrs AS
-SELECT a.attname AS "name",
-    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "type",
-    (SELECT substring(pg_catalog.pg_get_expr(d.adbin, d.adrelid) for 128)
-     FROM pg_catalog.pg_attrdef d
-     WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum AND a.atthasdef) AS "default",
-    a.attnotnull AS "notnull",
-    a.attrelid AS "relid"
-FROM pg_catalog.pg_attribute a
-WHERE a.attnum > 0 AND NOT a.attisdropped
-ORDER BY a.attnum;
+CREATE OR REPLACE VIEW table_attrs AS
+SELECT c.column_name AS "name",
+       c.data_type AS "type",
+       CASE
+            WHEN character_maximum_length IS NOT NULL THEN
+                 format('(%s)', character_maximum_length)
+            WHEN data_type = 'numeric' AND numeric_precision IS NOT NULL THEN
+                 format('(%s,%s)', numeric_precision, numeric_scale)
+            ELSE ''
+       END AS "modifier",
+       c.column_default AS "default",
+       (NOT c.is_nullable::boolean) AS "notnull",
+       format('%I.%I', c.table_schema, c.table_name)::regclass::oid AS "relid"
+FROM information_schema.columns AS c
+ORDER BY ordinal_position;
 
 CREATE VIEW table_desc AS
 SELECT "name" AS "Column",
-       "type" as "Type",
+       "type" || "modifier" AS "Type",
        rtrim((
            CASE "notnull"
                WHEN true THEN 'not null '
