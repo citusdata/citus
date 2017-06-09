@@ -445,7 +445,9 @@ FROM
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
-	hasdone;
+	hasdone
+ORDER BY
+    event_average DESC;
    event_average    |       hasdone       
 --------------------+---------------------
  4.0000000000000000 | Has not done paying

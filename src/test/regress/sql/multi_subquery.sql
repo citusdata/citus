@@ -391,7 +391,9 @@ FROM
 		subquery_1.user_id,
 		hasdone) AS subquery_top
 GROUP BY
-	hasdone;
+	hasdone
+ORDER BY
+    event_average DESC;
 
 -- Union, left join and having subquery pushdown
 SELECT
