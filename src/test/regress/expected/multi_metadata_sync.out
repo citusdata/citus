@@ -684,7 +684,7 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
-CREATE UNIQUE INDEX mx_index_4 ON mx_test_schema_2.mx_table_2(col1);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
 \c - - - :worker_1_port
 \d mx_test_schema_2.mx_index_3
 Index "mx_test_schema_2.mx_index_3"
@@ -693,8 +693,8 @@ Index "mx_test_schema_2.mx_index_3"
  col1   | integer | col1
 hash, for table "mx_test_schema_2.mx_table_2"
 
-\d mx_test_schema_2.mx_index_4
-Index "mx_test_schema_2.mx_index_4"
+\d mx_test_schema_2.mx_table_2_col1_key
+Index "mx_test_schema_2.mx_table_2_col1_key"
  Column |  Type   | Definition 
 --------+---------+------------
  col1   | integer | col1
@@ -749,9 +749,9 @@ REFERENCES
 NOT VALID;
 \c - - - :worker_1_port
 SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1.mx_table_1'::regclass;
-     Constraint     |                                Definition                                 
---------------------+---------------------------------------------------------------------------
- mx_fk_constraint_2 | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
+     Constraint     |                           Definition                            
+--------------------+-----------------------------------------------------------------
+ mx_fk_constraint_2 | FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1)
 (1 row)
 
 -- Check that mark_tables_colocated call propagates the changes to the workers 

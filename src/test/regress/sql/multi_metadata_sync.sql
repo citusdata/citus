@@ -268,10 +268,10 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
-CREATE UNIQUE INDEX mx_index_4 ON mx_test_schema_2.mx_table_2(col1);
+ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
 \c - - - :worker_1_port
 \d mx_test_schema_2.mx_index_3
-\d mx_test_schema_2.mx_index_4
+\d mx_test_schema_2.mx_table_2_col1_key
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port

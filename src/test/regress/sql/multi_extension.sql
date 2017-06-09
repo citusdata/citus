@@ -178,12 +178,29 @@ ALTER EXTENSION citus UPDATE;
 
 \c - - - :master_port
 
+CREATE VIEW table_fkey_cols AS
+SELECT rc.constraint_name AS "name",
+       kcu.column_name AS "column_name",
+       uc_kcu.column_name AS "refd_column_name",
+       format('%I.%I', kcu.table_schema, kcu.table_name)::regclass::oid AS relid,
+       format('%I.%I', uc_kcu.table_schema, uc_kcu.table_name)::regclass::oid AS refd_relid
+FROM information_schema.referential_constraints rc,
+     information_schema.key_column_usage kcu,
+     information_schema.key_column_usage uc_kcu
+WHERE rc.constraint_schema = kcu.constraint_schema AND
+      rc.constraint_name = kcu.constraint_name AND
+      rc.unique_constraint_schema = uc_kcu.constraint_schema AND
+      rc.unique_constraint_name = uc_kcu.constraint_name;
+
 CREATE VIEW table_fkeys AS
-SELECT r.conname AS "Constraint",
-       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
-       conrelid AS "relid"
-FROM pg_catalog.pg_constraint r
-WHERE r.contype = 'f';
+SELECT name AS "Constraint",
+       format('FOREIGN KEY (%s) REFERENCES %s(%s)',
+              string_agg(DISTINCT quote_ident(column_name), ', '),
+              string_agg(DISTINCT refd_relid::regclass::text, ', '),
+              string_agg(DISTINCT quote_ident(refd_column_name), ', ')) AS "Definition",
+       "relid"
+FROM table_fkey_cols
+GROUP BY (name, relid);
 
 -- create views used to describe relations
 CREATE VIEW table_attrs AS
@@ -226,12 +243,29 @@ ORDER BY cc.constraint_name ASC;
 
 \c - - - :worker_1_port
 
+CREATE VIEW table_fkey_cols AS
+SELECT rc.constraint_name AS "name",
+       kcu.column_name AS "column_name",
+       uc_kcu.column_name AS "refd_column_name",
+       format('%I.%I', kcu.table_schema, kcu.table_name)::regclass::oid AS relid,
+       format('%I.%I', uc_kcu.table_schema, uc_kcu.table_name)::regclass::oid AS refd_relid
+FROM information_schema.referential_constraints rc,
+     information_schema.key_column_usage kcu,
+     information_schema.key_column_usage uc_kcu
+WHERE rc.constraint_schema = kcu.constraint_schema AND
+      rc.constraint_name = kcu.constraint_name AND
+      rc.unique_constraint_schema = uc_kcu.constraint_schema AND
+      rc.unique_constraint_name = uc_kcu.constraint_name;
+
 CREATE VIEW table_fkeys AS
-SELECT r.conname AS "Constraint",
-       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
-       conrelid AS "relid"
-FROM pg_catalog.pg_constraint r
-WHERE r.contype = 'f';
+SELECT name AS "Constraint",
+       format('FOREIGN KEY (%s) REFERENCES %s(%s)',
+              string_agg(DISTINCT quote_ident(column_name), ', '),
+              string_agg(DISTINCT refd_relid::regclass::text, ', '),
+              string_agg(DISTINCT quote_ident(refd_column_name), ', ')) AS "Definition",
+       "relid"
+FROM table_fkey_cols
+GROUP BY (name, relid);
 
 -- create views used to describe relations
 CREATE VIEW table_attrs AS
