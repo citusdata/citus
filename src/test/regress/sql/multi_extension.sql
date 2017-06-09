@@ -215,11 +215,14 @@ SELECT "name" AS "Column",
 FROM table_attrs;
 
 CREATE VIEW table_checks AS
-SELECT r.conname AS "Constraint",
-       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
-       conrelid AS "relid"
-FROM pg_catalog.pg_constraint r
-WHERE r.contype = 'c';
+SELECT cc.constraint_name AS "Constraint",
+       ('CHECK ' || regexp_replace(check_clause, '^\((.*)\)$', '\1')) AS "Definition",
+       format('%I.%I', ccu.table_schema, ccu.table_name)::regclass::oid AS relid
+FROM information_schema.check_constraints cc,
+     information_schema.constraint_column_usage ccu
+WHERE cc.constraint_schema = ccu.constraint_schema AND
+      cc.constraint_name = ccu.constraint_name
+ORDER BY cc.constraint_name ASC;
 
 \c - - - :worker_1_port
 
@@ -260,11 +263,14 @@ SELECT "name" AS "Column",
 FROM table_attrs;
 
 CREATE VIEW table_checks AS
-SELECT r.conname AS "Constraint",
-       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
-       conrelid AS "relid"
-FROM pg_catalog.pg_constraint r
-WHERE r.contype = 'c';
+SELECT cc.constraint_name AS "Constraint",
+       ('CHECK ' || regexp_replace(check_clause, '^\((.*)\)$', '\1')) AS "Definition",
+       format('%I.%I', ccu.table_schema, ccu.table_name)::regclass::oid AS relid
+FROM information_schema.check_constraints cc,
+     information_schema.constraint_column_usage ccu
+WHERE cc.constraint_schema = ccu.constraint_schema AND
+      cc.constraint_name = ccu.constraint_name
+ORDER BY cc.constraint_name ASC;
 
 \c - - - :worker_2_port
 
@@ -298,8 +304,11 @@ SELECT "name" AS "Column",
 FROM table_attrs;
 
 CREATE VIEW table_checks AS
-SELECT r.conname AS "Constraint",
-       pg_catalog.pg_get_constraintdef(r.oid, true) AS "Definition",
-       conrelid AS "relid"
-FROM pg_catalog.pg_constraint r
-WHERE r.contype = 'c';
+SELECT cc.constraint_name AS "Constraint",
+       ('CHECK ' || regexp_replace(check_clause, '^\((.*)\)$', '\1')) AS "Definition",
+       format('%I.%I', ccu.table_schema, ccu.table_name)::regclass::oid AS relid
+FROM information_schema.check_constraints cc,
+     information_schema.constraint_column_usage ccu
+WHERE cc.constraint_schema = ccu.constraint_schema AND
+      cc.constraint_name = ccu.constraint_name
+ORDER BY cc.constraint_name ASC;
