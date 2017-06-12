@@ -22,6 +22,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
@@ -161,6 +162,8 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 
+	InitializeMaintenanceDaemon();
+
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
 
@@ -189,6 +192,7 @@ _PG_init(void)
 void
 StartupCitusBackend(void)
 {
+	InitializeMaintenanceDaemonBackend();
 }
 
 
