@@ -35,6 +35,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/pg_dist_shard_placement.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
@@ -1118,6 +1119,13 @@ CitusHasBeenLoaded(void)
 			{
 				extensionScriptExecuted = false;
 			}
+
+			/*
+			 * Whenever the extension exists, even when currently creating it,
+			 * we need the infrastructure to run citus in this database to be
+			 * ready.
+			 */
+			StartupCitusBackend();
 		}
 
 		/* we disable extension features during pg_upgrade */
