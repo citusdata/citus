@@ -78,8 +78,7 @@ static void AssignInsertTaskShardId(Query *jobQuery, List *taskList);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
-static List * GetModifyConnections(List *taskPlacementList, bool markCritical,
-								   bool startedInTransaction);
+static List * GetModifyConnections(List *taskPlacementList, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
@@ -666,8 +665,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 
 	char *queryString = task->queryString;
 	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
-	bool startedInTransaction =
-		InCoordinatedTransaction() && XactModificationLevel == XACT_MODIFICATION_DATA;
 
 	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
 	{
@@ -706,8 +703,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	 * table) and start a transaction (when in a transaction).
 	 */
 	connectionList = GetModifyConnections(taskPlacementList,
-										  taskRequiresTwoPhaseCommit,
-										  startedInTransaction);
+										  taskRequiresTwoPhaseCommit);
 
 	/* prevent replicas of the same shard from diverging */
 	AcquireExecutorShardLock(task, operation);
@@ -808,7 +804,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
  * transaction in progress.
  */
 static List *
-GetModifyConnections(List *taskPlacementList, bool markCritical, bool noNewTransactions)
+GetModifyConnections(List *taskPlacementList, bool markCritical)
 {
 	ListCell *taskPlacementCell = NULL;
 	List *multiConnectionList = NIL;
@@ -827,26 +823,6 @@ GetModifyConnections(List *taskPlacementList, bool markCritical, bool noNewTrans
 		 * with all the involved shards.
 		 */
 		multiConnection = StartPlacementConnection(connectionFlags, taskPlacement, NULL);
-
-		/*
-		 * If already in a transaction, disallow expanding set of remote
-		 * transactions. That prevents some forms of distributed deadlocks.
-		 */
-		if (noNewTransactions)
-		{
-			RemoteTransaction *transaction = &multiConnection->remoteTransaction;
-
-			if (EnableDeadlockPrevention &&
-				transaction->transactionState == REMOTE_TRANS_INVALID)
-			{
-				ereport(ERROR, (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
-								errmsg("no transaction participant matches %s:%d",
-									   taskPlacement->nodeName, taskPlacement->nodePort),
-								errdetail("Transactions which modify distributed tables "
-										  "may only target nodes affected by the "
-										  "modification command which began the transaction.")));
-			}
-		}
 
 		if (markCritical)
 		{
