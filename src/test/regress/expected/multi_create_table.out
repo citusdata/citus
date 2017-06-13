@@ -438,6 +438,14 @@ WHERE col1 = 132;
 
 DROP TABLE data_load_test1, data_load_test2;
 END;
+-- There should be no table on the worker node
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
+ relname 
+---------
+(0 rows)
+
+\c - - - :master_port
 -- creating an index after loading data works
 BEGIN;
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
@@ -450,8 +458,10 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 CREATE INDEX data_load_test_idx ON data_load_test (col2);
-END;
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP TABLE data_load_test;
+END;
 -- popping in and out of existence in the same transaction works
 BEGIN;
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
@@ -478,9 +488,6 @@ NOTICE:  Copying data from local table...
 
 INSERT INTO data_load_test VALUES (243, 'world');
 DROP TABLE data_load_test;
-ERROR:  shard drop operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
 END;
 -- Test data loading after dropping a column
 CREATE TABLE data_load_test (col1 int, col2 text, col3 text);

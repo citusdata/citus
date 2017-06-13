@@ -233,14 +233,19 @@ WHERE col1 = 132;
 DROP TABLE data_load_test1, data_load_test2;
 END;
 
+-- There should be no table on the worker node
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'data_load_test%';
+\c - - - :master_port
+
 -- creating an index after loading data works
 BEGIN;
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
 INSERT INTO data_load_test VALUES (132, 'hello');
 SELECT create_distributed_table('data_load_test', 'col1');
 CREATE INDEX data_load_test_idx ON data_load_test (col2);
-END;
 DROP TABLE data_load_test;
+END;
 
 -- popping in and out of existence in the same transaction works
 BEGIN;

@@ -197,9 +197,6 @@ SELECT master_create_empty_shard('transactional_drop_shards');
 BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
 DROP TABLE transactional_drop_shards;
-ERROR:  shard drop operations must not appear in transaction blocks containing other distributed modifications
-CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
 ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
@@ -242,7 +239,11 @@ Table "public.transactional_drop_shards_1410005"
 BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
 SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
-ERROR:  shard drop operations must not appear in transaction blocks containing other distributed modifications
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
 ROLLBACK;
 -- verify metadata is not deleted
 SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'transactional_drop_shards'::regclass ORDER BY shardid;
