@@ -340,14 +340,6 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	ListCell *shardIntervalCell = NULL;
 	int droppedShardCount = 0;
 
-	if (XactModificationLevel != XACT_MODIFICATION_NONE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("shard drop operations must not appear in "
-							   "transaction blocks containing other distributed "
-							   "modifications")));
-	}
-
 	BeginOrContinueCoordinatedTransaction();
 
 	/* At this point we intentionally decided to not use 2PC for reference tables */
@@ -396,8 +388,8 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 								 quotedShardName);
 			}
 
-			connection = GetNodeUserDatabaseConnection(connectionFlags, workerName,
-													   workerPort, extensionOwner, NULL);
+			connection = GetPlacementConnection(connectionFlags, shardPlacement,
+												extensionOwner);
 
 			RemoteTransactionBeginIfNecessary(connection);
 

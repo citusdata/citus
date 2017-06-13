@@ -873,3 +873,25 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 (1 row)
 
 \c - - - :master_port
+-- Test alter table with drop table in the same transaction
+BEGIN;
+CREATE TABLE test_table_1(id int);
+SELECT create_distributed_table('test_table_1','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE test_table_1 ADD CONSTRAINT u_key UNIQUE(id);
+NOTICE:  using one-phase commit for distributed DDL commands
+HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
+DROP TABLE test_table_1;
+END;
+-- There should be no test_table_1 shard on workers
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
+ relname 
+---------
+(0 rows)
+
+\c - - - :master_port
