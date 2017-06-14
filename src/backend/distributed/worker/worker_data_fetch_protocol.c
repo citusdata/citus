@@ -996,11 +996,20 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName
 {
 	List *ddlCommandList = NIL;
 	StringInfo queryString = NULL;
+	MultiConnection *connection = NULL;
+	PGresult *result = NULL;
+	uint32 connectionFlag = FORCE_NEW_CONNECTION;
 
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	ddlCommandList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
+	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
+	ddlCommandList = ReadFirstColumnAsText(result);
+
+	ForgetResults(connection);
+	CloseConnection(connection);
+
 	return ddlCommandList;
 }
 
