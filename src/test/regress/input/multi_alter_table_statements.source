@@ -442,3 +442,16 @@ DROP TABLE lineitem_alter;
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
 \c - - - :master_port
+
+-- Test alter table with drop table in the same transaction
+BEGIN;
+CREATE TABLE test_table_1(id int);
+SELECT create_distributed_table('test_table_1','id');
+ALTER TABLE test_table_1 ADD CONSTRAINT u_key UNIQUE(id);
+DROP TABLE test_table_1;
+END;
+
+-- There should be no test_table_1 shard on workers
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
+\c - - - :master_port

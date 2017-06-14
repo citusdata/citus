@@ -764,3 +764,19 @@ magnetic disk, test
 SELECT * FROM test_smgr;
 
 DROP TABLE test_smgr;
+
+-- Test drop table with copy in the same transaction
+BEGIN;
+CREATE TABLE tt1(id int);
+SELECT create_distributed_table('tt1','id');
+\copy tt1 from STDIN;
+1
+2
+\.
+DROP TABLE tt1;
+END;
+
+-- There should be no "tt1" shard on the worker nodes
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'tt1%';
+\c - - - :master_port
