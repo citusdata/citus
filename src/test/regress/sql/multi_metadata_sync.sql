@@ -8,9 +8,9 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
 
-SELECT nextval('pg_catalog.pg_dist_shard_placement_placementid_seq') AS last_placement_id
+SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
 \gset
-ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART 100000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
 
 SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
@@ -479,10 +479,11 @@ DROP TABLE mx_table_with_sequence;
 -- Remove a node so that shards and sequences won't be created on table creation. Therefore,
 -- we can test that start_metadata_sync_to_node can actually create the sequence with proper
 -- owner
-CREATE TABLE pg_dist_shard_placement_temp AS SELECT * FROM pg_dist_shard_placement;
+CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
-DELETE FROM pg_dist_shard_placement;
+DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
+SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
 
  -- the master user needs superuser permissions to change the replication model
@@ -518,11 +519,25 @@ SELECT * FROM mx_table ORDER BY a;
 \c - mx_user - :master_port
 DROP TABLE mx_table;
 
+-- put the metadata back into a consistent state
 \c - postgres - :master_port
-INSERT INTO pg_dist_shard_placement SELECT * FROM pg_dist_shard_placement_temp;
+INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
-DROP TABLE pg_dist_shard_placement_temp;
+DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :worker_1_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+\c - - - :worker_2_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+
+\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 DROP USER mx_user;
@@ -575,8 +590,12 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 
 -- Check that master_add_node propagates the metadata about new placements of a reference table
 \c - - - :master_port
-CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
-DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
+SELECT groupid AS old_worker_2_group
+  FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+CREATE TABLE tmp_placement AS
+  SELECT * FROM pg_dist_placement WHERE groupid = :old_worker_2_group;
+DELETE FROM pg_dist_placement
+  WHERE groupid = :old_worker_2_group;
 SELECT master_remove_node('localhost', :worker_2_port);
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
@@ -604,9 +623,19 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
 
+-- Get the metadata back into a consistent state
 \c - - - :master_port
-INSERT INTO pg_dist_shard_placement (SELECT * FROM tmp_shard_placement);
-DROP TABLE tmp_shard_placement;
+INSERT INTO pg_dist_placement (SELECT * FROM tmp_placement);
+DROP TABLE tmp_placement;
+
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
+
+\c - - - :worker_1_port
+UPDATE pg_dist_placement
+  SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
+  WHERE groupid = :old_worker_2_group;
 
 -- Cleanup
 \c - - - :master_port
@@ -625,4 +654,4 @@ RESET citus.multi_shard_commit_protocol;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
-ALTER SEQUENCE pg_catalog.pg_dist_shard_placement_placementid_seq RESTART :last_placement_id;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;

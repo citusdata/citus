@@ -108,15 +108,17 @@ SELECT create_distributed_table('mx_sequence', 'key');
 
 \c - - - :worker_1_port
 
-SELECT groupid FROM pg_dist_local_group;
-SELECT last_value FROM mx_sequence_value_seq;
+SELECT last_value AS worker_1_lastval FROM mx_sequence_value_seq \gset
 
 \c - - - :worker_2_port
 
-SELECT groupid FROM pg_dist_local_group;
-SELECT last_value FROM mx_sequence_value_seq;
+SELECT last_value AS worker_2_lastval FROM mx_sequence_value_seq \gset
 
 \c - - - :master_port
+
+-- don't look at the actual values because they rely on the groupids of the nodes
+-- which can change depending on the tests which have run before this one
+SELECT :worker_1_lastval = :worker_2_lastval;
 
 -- the type of sequences can't be changed
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;

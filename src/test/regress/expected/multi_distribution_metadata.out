@@ -60,7 +60,8 @@ SELECT master_create_worker_shards('events_hash', 4, 2);
 (1 row)
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
-UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 540000 AND 540003;
+UPDATE pg_dist_placement SET shardstate = 0 WHERE shardid BETWEEN 540000 AND 540003
+  AND groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port);
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
       load_shard_id_array      
@@ -175,7 +176,7 @@ ERROR:  cannot reference system column "ctid" in relation "events_hash"
 SELECT column_name_to_column_id('events_hash', 'non_existent');
 ERROR:  column "non_existent" of relation "events_hash" does not exist
 -- drop shard rows (must drop placements first)
-DELETE FROM pg_dist_shard_placement
+DELETE FROM pg_dist_placement
 	WHERE shardid BETWEEN 540000 AND 540004;
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_hash'::regclass;

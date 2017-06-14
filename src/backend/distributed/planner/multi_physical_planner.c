@@ -5100,7 +5100,7 @@ ActiveShardPlacementLists(List *taskList)
 
 /*
  * CompareShardPlacements compares two shard placements by their tuple oid; this
- * oid reflects the tuple's insertion order into pg_dist_shard_placement.
+ * oid reflects the tuple's insertion order into pg_dist_placement.
  */
 int
 CompareShardPlacements(const void *leftElement, const void *rightElement)

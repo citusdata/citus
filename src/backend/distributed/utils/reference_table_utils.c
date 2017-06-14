@@ -210,7 +210,7 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 	/*
 	 * After the table has been officially marked as a reference table, we need to create
 	 * the reference table itself and insert its pg_dist_partition, pg_dist_shard and
-	 * existing pg_dist_shard_placement rows.
+	 * existing pg_dist_placement rows.
 	 */
 	CreateTableMetadataOnWorkers(relationId);
 }
@@ -254,7 +254,7 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
  * ReplicateShardToNode function replicates given shard to the given worker node
  * in a separate transaction. While replicating, it only replicates the shard to the
  * workers which does not have a healthy replica of the shard. This function also modifies
- * metadata by inserting/updating related rows in pg_dist_shard_placement.
+ * metadata by inserting/updating related rows in pg_dist_placement.
  */
 static void
 ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
@@ -279,11 +279,12 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	 * placements always have shardState = FILE_FINALIZED, in case of an upgrade of
 	 * a non-reference table to reference table, unhealty placements may exist. In
 	 * this case, we repair the shard placement and update its state in
-	 * pg_dist_shard_placement table.
+	 * pg_dist_placement table.
 	 */
 	if (targetPlacement == NULL || targetPlacement->shardState != FILE_FINALIZED)
 	{
 		uint64 placementId = 0;
+		uint32 groupId = 0;
 
 		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
 								get_rel_name(shardInterval->relationId), nodeName,
@@ -293,12 +294,14 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 												   ddlCommandList);
 		if (targetPlacement == NULL)
 		{
+			groupId = GroupForNode(nodeName, nodePort);
+
 			placementId = GetNextPlacementId();
-			InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0,
-									nodeName, nodePort);
+			InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, 0, groupId);
 		}
 		else
 		{
+			groupId = targetPlacement->groupId;
 			placementId = targetPlacement->placementId;
 			UpdateShardPlacementState(placementId, FILE_FINALIZED);
 		}
@@ -314,7 +317,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 		{
 			char *placementCommand = PlacementUpsertCommand(shardId, placementId,
 															FILE_FINALIZED, 0,
-															nodeName, nodePort);
+															groupId);
 
 			SendCommandToWorkers(WORKERS_WITH_METADATA, placementCommand);
 		}
@@ -380,7 +383,7 @@ CreateReferenceTableColocationId()
 
 /*
  * DeleteAllReferenceTablePlacementsFromNode function iterates over list of reference
- * tables and deletes all reference table placements from pg_dist_shard_placement table
+ * tables and deletes all reference table placements from pg_dist_placement table
  * for given worker node. However, it does not modify replication factor of the colocation
  * group of reference tables. It is caller's responsibility to do that if it is necessary.
  */
@@ -403,20 +406,24 @@ DeleteAllReferenceTablePlacementsFromNode(char *workerName, uint32 workerPort)
 	referenceTableList = SortList(referenceTableList, CompareOids);
 	foreach(referenceTableCell, referenceTableList)
 	{
-		Oid referenceTableId = lfirst_oid(referenceTableCell);
+		uint32 workerGroup = GroupForNode(workerName, workerPort);
 
-		List *shardIntervalList = LoadShardIntervalList(referenceTableId);
-		ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
-		uint64 shardId = shardInterval->shardId;
-		uint64 placementId = INVALID_PLACEMENT_ID;
+		Oid referenceTableId = lfirst_oid(referenceTableCell);
+		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
+															   workerGroup);
+		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
+
+		uint64 shardId = placement->shardId;
+		uint64 placementId = placement->placementId;
+
 		StringInfo deletePlacementCommand = makeStringInfo();
 
 		LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-		placementId = DeleteShardPlacementRow(shardId, workerName, workerPort);
+		DeleteShardPlacementRow(placementId);
 
 		appendStringInfo(deletePlacementCommand,
-						 "DELETE FROM pg_dist_shard_placement WHERE placementid=%lu",
+						 "DELETE FROM pg_dist_placement WHERE placementid=%lu",
 						 placementId);
 		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
 	}
