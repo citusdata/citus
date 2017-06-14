@@ -127,6 +127,33 @@ RemoteTransactionBegin(struct MultiConnection *connection)
 
 
 /*
+ * RemoteTransactionListBegin sends BEGIN over all connections in the
+ * given connection list and waits for all of them to finish.
+ */
+void
+RemoteTransactionListBegin(List *connectionList)
+{
+	ListCell *connectionCell = NULL;
+
+	/* send BEGIN to all nodes */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		StartRemoteTransactionBegin(connection);
+	}
+
+	/* wait for BEGIN to finish on all nodes */
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+
+		FinishRemoteTransactionBegin(connection);
+	}
+}
+
+
+/*
  * StartRemoteTransactionCommit initiates transaction commit in a non-blocking
  * manner.  If the transaction is in a failed state, it'll instead get rolled
  * back.
