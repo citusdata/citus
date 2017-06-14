@@ -964,11 +964,17 @@ RemoteTableOwner(const char *nodeName, uint32 nodePort, const char *tableName)
 	List *ownerList = NIL;
 	StringInfo queryString = NULL;
 	StringInfo relationOwner;
+	MultiConnection *connection = NULL;
+	uint32 connectionFlag = FORCE_NEW_CONNECTION;
+	PGresult *result = NULL;
 
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_OWNER, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	ownerList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
+	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
+
+	ownerList = ReadFirstColumnAsText(result);
 	if (list_length(ownerList) != 1)
 	{
 		return NULL;
