@@ -145,8 +145,8 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
  * The call to the master_remove_node should be done by the super user and the specified
  * node should not have any active placements.
  * This function also deletes all reference table placements belong to the given node from
- * pg_dist_shard_placement, but it does not drop actual placement at the node. In the case
- * of re-adding the node, master_add_node first drops and re-creates the reference tables.
+ * pg_dist_placement, but it does not drop actual placement at the node. In the case of
+ * re-adding the node, master_add_node first drops and re-creates the reference tables.
  */
 Datum
 master_remove_node(PG_FUNCTION_ARGS)
@@ -164,31 +164,35 @@ master_remove_node(PG_FUNCTION_ARGS)
 
 
 /*
- * master_disable_node function sets isactive value of the provided node as inactive
- * at master node and all nodes with metadata regardless of the node having an
- * active shard placement.
+ * master_disable_node function sets isactive value of the provided node as inactive at
+ * master node and all nodes with metadata regardless of the node having an active shard
+ * placement.
+ *
  * The call to the master_disable_node must be done by the super user.
- * This function also deletes all reference table placements belong to the given
- * node from pg_dist_shard_placement, but it does not drop actual placement at
- * the node. In the case of re-activating the node, master_add_node first drops
- * and re-creates the reference tables.
+ *
+ * This function also deletes all reference table placements belong to the given node
+ * from pg_dist_placement, but it does not drop actual placement at the node. In the case
+ * of re-activating the node, master_add_node first drops and re-creates the reference
+ * tables.
  */
 Datum
 master_disable_node(PG_FUNCTION_ARGS)
 {
+	const bool onlyConsiderActivePlacements = true;
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
 	char *nodeName = text_to_cstring(nodeNameText);
-	bool hasShardPlacements = false;
+	bool hasActiveShardPlacements = false;
 	bool isActive = false;
 
 	CheckCitusVersion(ERROR);
 
 	DeleteAllReferenceTablePlacementsFromNode(nodeName, nodePort);
 
-	hasShardPlacements = NodeHasActiveShardPlacements(nodeName, nodePort);
-	if (hasShardPlacements)
+	hasActiveShardPlacements = NodeHasShardPlacements(nodeName, nodePort,
+													  onlyConsiderActivePlacements);
+	if (hasActiveShardPlacements)
 	{
 		ereport(NOTICE, (errmsg("Node %s:%d has active shard placements. Some queries "
 								"may fail after this operation. Use "
@@ -221,6 +225,51 @@ master_activate_node(PG_FUNCTION_ARGS)
 	nodeRecord = ActivateNode(nodeNameString, nodePort);
 
 	PG_RETURN_CSTRING(nodeRecord);
+}
+
+
+/*
+ * GroupForNode returns the group which a given node belongs to
+ */
+uint32
+GroupForNode(char *nodeName, int nodePort)
+{
+	WorkerNode *workerNode = FindWorkerNode(nodeName, nodePort);
+
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
+	}
+
+	return workerNode->groupId;
+}
+
+
+/*
+ * NodeForGroup returns the (unique) node which is in this group.
+ * In a future where we have nodeRole this will return the primary node.
+ */
+WorkerNode *
+NodeForGroup(uint32 groupId)
+{
+	WorkerNode *workerNode = NULL;
+	HASH_SEQ_STATUS status;
+	HTAB *workerNodeHash = GetWorkerNodeHash();
+
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		uint32 workerNodeGroupId = workerNode->groupId;
+
+		if (workerNodeGroupId == groupId)
+		{
+			hash_seq_term(&status);
+			return workerNode;
+		}
+	}
+
+	return NULL;
 }
 
 
@@ -451,15 +500,16 @@ ReadWorkerNodes()
  * The call to the master_remove_node should be done by the super user. If there are
  * active shard placements on the node; the function errors out.
  * This function also deletes all reference table placements belong to the given node from
- * pg_dist_shard_placement, but it does not drop actual placement at the node. It also
+ * pg_dist_placement, but it does not drop actual placement at the node. It also
  * modifies replication factor of the colocation group of reference tables, so that
  * replication factor will be equal to worker count.
  */
 static void
 RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 {
+	const bool onlyConsiderActivePlacements = false;
 	char *nodeDeleteCommand = NULL;
-	bool hasShardPlacements = false;
+	bool hasAnyShardPlacements = false;
 	WorkerNode *workerNode = NULL;
 	List *referenceTableList = NIL;
 	uint32 deletedNodeId = INVALID_PLACEMENT_ID;
@@ -474,9 +524,16 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		deletedNodeId = workerNode->nodeId;
 	}
 
-	DeleteNodeRow(nodeName, nodePort);
-
 	DeleteAllReferenceTablePlacementsFromNode(nodeName, nodePort);
+
+	hasAnyShardPlacements = NodeHasShardPlacements(nodeName, nodePort,
+												   onlyConsiderActivePlacements);
+	if (hasAnyShardPlacements)
+	{
+		ereport(ERROR, (errmsg("you cannot remove a node which has shard placements")));
+	}
+
+	DeleteNodeRow(nodeName, nodePort);
 
 	/*
 	 * After deleting reference tables placements, we will update replication factor
@@ -493,13 +550,6 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		int workerCount = list_length(workerNodeList);
 
 		UpdateColocationGroupReplicationFactor(referenceTableColocationId, workerCount);
-	}
-
-	hasShardPlacements = NodeHasActiveShardPlacements(nodeName, nodePort);
-	if (hasShardPlacements)
-	{
-		ereport(ERROR, (errmsg("you cannot remove a node which has active "
-							   "shard placements")));
 	}
 
 	nodeDeleteCommand = NodeDeleteCommand(deletedNodeId);

@@ -154,8 +154,9 @@ PREPARE TRANSACTION 'citus_0_should_be_sorted_into_middle';
 
 \c - - - :master_port
 -- Add "fake" pg_dist_transaction records and run recovery
-INSERT INTO pg_dist_transaction VALUES (12, 'citus_0_should_commit');
-INSERT INTO pg_dist_transaction VALUES (12, 'citus_0_should_be_forgotten');
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_commit');
+INSERT INTO pg_dist_transaction VALUES (:worker_1_group, 'citus_0_should_be_forgotten');
 
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;

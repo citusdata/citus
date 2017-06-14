@@ -406,7 +406,7 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 			const uint64 shardSize = 0;
 
 			InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardState, shardSize,
-									nodeName, nodePort);
+									workerNode->groupId);
 			placementsCreated++;
 		}
 		else
@@ -601,12 +601,11 @@ UpdateShardStatistics(int64 shardId)
 	{
 		ShardPlacement *placement = (ShardPlacement *) lfirst(shardPlacementCell);
 		uint64 placementId = placement->placementId;
-		char *workerName = placement->nodeName;
-		uint32 workerPort = placement->nodePort;
+		uint32 groupId = placement->groupId;
 
-		DeleteShardPlacementRow(shardId, workerName, workerPort);
+		DeleteShardPlacementRow(placementId);
 		InsertShardPlacementRow(shardId, placementId, FILE_FINALIZED, shardSize,
-								workerName, workerPort);
+								groupId);
 	}
 
 	/* only update shard min/max values for append-partitioned tables */

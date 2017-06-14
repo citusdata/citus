@@ -1543,6 +1543,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 				(ShardPlacement *) CitusMakeNode(ShardPlacement);
 			dummyPlacement->nodeName = workerNode->workerName;
 			dummyPlacement->nodePort = workerNode->workerPort;
+			dummyPlacement->groupId = workerNode->groupId;
 
 			workerList = lappend(workerList, dummyPlacement);
 		}

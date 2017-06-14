@@ -34,7 +34,7 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
-#include "distributed/pg_dist_shard_placement.h"
+#include "distributed/pg_dist_placement.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_manager.h"
@@ -91,7 +91,7 @@ typedef struct MetadataCacheData
 {
 	bool extensionLoaded;
 	Oid distShardRelationId;
-	Oid distShardPlacementRelationId;
+	Oid distPlacementRelationId;
 	Oid distNodeRelationId;
 	Oid distLocalGroupRelationId;
 	Oid distColocationRelationId;
@@ -102,9 +102,9 @@ typedef struct MetadataCacheData
 	Oid distPartitionColocationidIndexId;
 	Oid distShardLogicalRelidIndexId;
 	Oid distShardShardidIndexId;
-	Oid distShardPlacementShardidIndexId;
-	Oid distShardPlacementPlacementidIndexId;
-	Oid distShardPlacementNodeidIndexId;
+	Oid distPlacementShardidIndexId;
+	Oid distPlacementPlacementidIndexId;
+	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
 	Oid extraDataContainerFuncId;
@@ -114,7 +114,6 @@ typedef struct MetadataCacheData
 
 
 static MetadataCacheData MetadataCache;
-
 
 /* Citus extension version variables */
 bool EnableVersionChecks = true; /* version checks are enabled */
@@ -179,6 +178,8 @@ static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
 											TupleDesc tupleDescriptor, Oid intervalTypeId,
 											int32 intervalTypeMod);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
+static ShardPlacement * ResolveGroupShardPlacement(
+	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
 
 
 /* exports for SQL callable functions */
@@ -315,18 +316,18 @@ LoadShardInterval(uint64 shardId)
 
 
 /*
- * LoadShardPlacement returns the, cached, metadata about a shard placement.
+ * LoadGroupShardPlacement returns the cached shard placement metadata
  *
- * The return value is a copy of the cached ShardPlacement struct and may
+ * The return value is a copy of the cached GroupShardPlacement struct and may
  * therefore be modified and/or freed.
  */
-ShardPlacement *
-LoadShardPlacement(uint64 shardId, uint64 placementId)
+GroupShardPlacement *
+LoadGroupShardPlacement(uint64 shardId, uint64 placementId)
 {
 	ShardCacheEntry *shardEntry = NULL;
 	DistTableCacheEntry *tableEntry = NULL;
 
-	ShardPlacement *placementArray = NULL;
+	GroupShardPlacement *placementArray = NULL;
 	int numberOfPlacements = 0;
 
 	int i = 0;
@@ -344,8 +345,9 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 	{
 		if (placementArray[i].placementId == placementId)
 		{
-			ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
-			CopyShardPlacement(&placementArray[i], shardPlacement);
+			GroupShardPlacement *shardPlacement = CitusMakeNode(GroupShardPlacement);
+
+			memcpy(shardPlacement, &placementArray[i], sizeof(GroupShardPlacement));
 
 			return shardPlacement;
 		}
@@ -357,16 +359,16 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 
 
 /*
- * FindShardPlacementOnNode returns the shard placement for the given shard
- * on the given node, or returns NULL of no placement for the shard exists
- * on the node.
+ * FindShardPlacementOnGroup returns the shard placement for the given shard
+ * on the given group, or returns NULL of no placement for the shard exists
+ * on the group.
  */
 ShardPlacement *
-FindShardPlacementOnNode(char *nodeName, int nodePort, uint64 shardId)
+FindShardPlacementOnGroup(uint32 groupId, uint64 shardId)
 {
 	ShardCacheEntry *shardEntry = NULL;
 	DistTableCacheEntry *tableEntry = NULL;
-	ShardPlacement *placementArray = NULL;
+	GroupShardPlacement *placementArray = NULL;
 	int numberOfPlacements = 0;
 	ShardPlacement *placementOnNode = NULL;
 	int placementIndex = 0;
@@ -378,18 +380,72 @@ FindShardPlacementOnNode(char *nodeName, int nodePort, uint64 shardId)
 
 	for (placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
 	{
-		ShardPlacement *placement = &placementArray[placementIndex];
+		GroupShardPlacement *placement = &placementArray[placementIndex];
 
-		if (strncmp(nodeName, placement->nodeName, WORKER_LENGTH) == 0 &&
-			nodePort == placement->nodePort)
+		if (placement->groupId == groupId)
 		{
-			placementOnNode = CitusMakeNode(ShardPlacement);
-			CopyShardPlacement(placement, placementOnNode);
+			placementOnNode = ResolveGroupShardPlacement(placement, shardEntry);
 			break;
 		}
 	}
 
 	return placementOnNode;
+}
+
+
+/*
+ * ResolveGroupShardPlacement takes a GroupShardPlacement and adds additional data to it,
+ * such as the node we should consider it to be on.
+ */
+static ShardPlacement *
+ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
+						   ShardCacheEntry *shardEntry)
+{
+	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
+	int shardIndex = shardEntry->shardIndex;
+	ShardInterval *shardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
+
+	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
+	uint32 groupId = groupShardPlacement->groupId;
+	WorkerNode *workerNode = NodeForGroup(groupId);
+
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("the metadata is inconsistent"),
+						errdetail("there is a placement in group %u but "
+								  "there are no nodes in that group", groupId)));
+	}
+
+	/* copy everything into shardPlacement but preserve the header */
+	memcpy((((CitusNode *) shardPlacement) + 1),
+		   (((CitusNode *) groupShardPlacement) + 1),
+		   sizeof(GroupShardPlacement) - sizeof(CitusNode));
+
+	shardPlacement->nodeName = pstrdup(workerNode->workerName);
+	shardPlacement->nodePort = workerNode->workerPort;
+
+	/* fill in remaining fields */
+	Assert(tableEntry->partitionMethod != 0);
+	shardPlacement->partitionMethod = tableEntry->partitionMethod;
+	shardPlacement->colocationGroupId = tableEntry->colocationId;
+	if (tableEntry->partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		Assert(shardInterval->minValueExists);
+		Assert(shardInterval->valueTypeId == INT4OID);
+
+		/*
+		 * Use the lower boundary of the interval's range to identify
+		 * it for colocation purposes. That remains meaningful even if
+		 * a concurrent session splits a shard.
+		 */
+		shardPlacement->representativeValue = DatumGetInt32(shardInterval->minValue);
+	}
+	else
+	{
+		shardPlacement->representativeValue = 0;
+	}
+
+	return shardPlacement;
 }
 
 
@@ -405,7 +461,7 @@ ShardPlacementList(uint64 shardId)
 {
 	ShardCacheEntry *shardEntry = NULL;
 	DistTableCacheEntry *tableEntry = NULL;
-	ShardPlacement *placementArray = NULL;
+	GroupShardPlacement *placementArray = NULL;
 	int numberOfPlacements = 0;
 	List *placementList = NIL;
 	int i = 0;
@@ -421,11 +477,11 @@ ShardPlacementList(uint64 shardId)
 
 	for (i = 0; i < numberOfPlacements; i++)
 	{
-		/* copy placement into target context */
-		ShardPlacement *placement = CitusMakeNode(ShardPlacement);
-		CopyShardPlacement(&placementArray[i], placement);
+		GroupShardPlacement *groupShardPlacement = &placementArray[i];
+		ShardPlacement *shardPlacement = ResolveGroupShardPlacement(groupShardPlacement,
+																	shardEntry);
 
-		placementList = lappend(placementList, placement);
+		placementList = lappend(placementList, shardPlacement);
 	}
 
 	/* if no shard placements are found, warn the user */
@@ -779,7 +835,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		cacheEntry->arrayOfPlacementArrays =
 			MemoryContextAllocZero(CacheMemoryContext,
 								   shardIntervalArrayLength *
-								   sizeof(ShardPlacement *));
+								   sizeof(GroupShardPlacement *));
 		cacheEntry->arrayOfPlacementArrayLengths =
 			MemoryContextAllocZero(CacheMemoryContext,
 								   shardIntervalArrayLength *
@@ -913,7 +969,7 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 		List *placementList = NIL;
 		MemoryContext oldContext = NULL;
 		ListCell *placementCell = NULL;
-		ShardPlacement *placementArray = NULL;
+		GroupShardPlacement *placementArray = NULL;
 		int placementOffset = 0;
 		int numberOfPlacements = 0;
 
@@ -936,35 +992,14 @@ BuildCachedShardList(DistTableCacheEntry *cacheEntry)
 
 		/* and copy that list into the cache entry */
 		oldContext = MemoryContextSwitchTo(CacheMemoryContext);
-		placementArray = palloc0(numberOfPlacements * sizeof(ShardPlacement));
+		placementArray = palloc0(numberOfPlacements * sizeof(GroupShardPlacement));
 		foreach(placementCell, placementList)
 		{
-			ShardPlacement *srcPlacement = (ShardPlacement *) lfirst(placementCell);
-			ShardPlacement *dstPlacement = &placementArray[placementOffset];
+			GroupShardPlacement *srcPlacement =
+				(GroupShardPlacement *) lfirst(placementCell);
+			GroupShardPlacement *dstPlacement = &placementArray[placementOffset];
 
-			CopyShardPlacement(srcPlacement, dstPlacement);
-
-			/* fill in remaining fields */
-			Assert(cacheEntry->partitionMethod != 0);
-			dstPlacement->partitionMethod = cacheEntry->partitionMethod;
-			dstPlacement->colocationGroupId = cacheEntry->colocationId;
-			if (cacheEntry->partitionMethod == DISTRIBUTE_BY_HASH)
-			{
-				Assert(shardInterval->minValueExists);
-				Assert(shardInterval->valueTypeId == INT4OID);
-
-				/*
-				 * Use the lower boundary of the interval's range to identify
-				 * it for colocation purposes. That remains meaningful even if
-				 * a concurrent session splits a shard.
-				 */
-				dstPlacement->representativeValue =
-					DatumGetInt32(shardInterval->minValue);
-			}
-			else
-			{
-				dstPlacement->representativeValue = 0;
-			}
+			memcpy(dstPlacement, srcPlacement, sizeof(GroupShardPlacement));
 			placementOffset++;
 		}
 		MemoryContextSwitchTo(oldContext);
@@ -1486,14 +1521,14 @@ DistShardRelationId(void)
 }
 
 
-/* return oid of pg_dist_shard_placement relation */
+/* return oid of pg_dist_placement relation */
 Oid
-DistShardPlacementRelationId(void)
+DistPlacementRelationId(void)
 {
-	CachedRelationLookup("pg_dist_shard_placement",
-						 &MetadataCache.distShardPlacementRelationId);
+	CachedRelationLookup("pg_dist_placement",
+						 &MetadataCache.distPlacementRelationId);
 
-	return MetadataCache.distShardPlacementRelationId;
+	return MetadataCache.distPlacementRelationId;
 }
 
 
@@ -1607,25 +1642,25 @@ DistShardShardidIndexId(void)
 }
 
 
-/* return oid of pg_dist_shard_placement_shardid_index */
+/* return oid of pg_dist_placement_shardid_index */
 Oid
-DistShardPlacementShardidIndexId(void)
+DistPlacementShardidIndexId(void)
 {
-	CachedRelationLookup("pg_dist_shard_placement_shardid_index",
-						 &MetadataCache.distShardPlacementShardidIndexId);
+	CachedRelationLookup("pg_dist_placement_shardid_index",
+						 &MetadataCache.distPlacementShardidIndexId);
 
-	return MetadataCache.distShardPlacementShardidIndexId;
+	return MetadataCache.distPlacementShardidIndexId;
 }
 
 
-/* return oid of pg_dist_shard_placement_shardid_index */
+/* return oid of pg_dist_placement_placementid_index */
 Oid
-DistShardPlacementPlacementidIndexId(void)
+DistPlacementPlacementidIndexId(void)
 {
-	CachedRelationLookup("pg_dist_shard_placement_placementid_index",
-						 &MetadataCache.distShardPlacementPlacementidIndexId);
+	CachedRelationLookup("pg_dist_placement_placementid_index",
+						 &MetadataCache.distPlacementPlacementidIndexId);
 
-	return MetadataCache.distShardPlacementPlacementidIndexId;
+	return MetadataCache.distPlacementPlacementidIndexId;
 }
 
 
@@ -1651,14 +1686,14 @@ DistTransactionGroupIndexId(void)
 }
 
 
-/* return oid of pg_dist_shard_placement_nodeid_index */
+/* return oid of pg_dist_placement_groupid_index */
 Oid
-DistShardPlacementNodeidIndexId(void)
+DistPlacementGroupidIndexId(void)
 {
-	CachedRelationLookup("pg_dist_shard_placement_nodeid_index",
-						 &MetadataCache.distShardPlacementNodeidIndexId);
+	CachedRelationLookup("pg_dist_placement_groupid_index",
+						 &MetadataCache.distPlacementGroupidIndexId);
 
-	return MetadataCache.distShardPlacementNodeidIndexId;
+	return MetadataCache.distPlacementGroupidIndexId;
 }
 
 
@@ -1914,8 +1949,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 
 
 /*
- * master_dist_placmeent_cache_invalidate is a trigger function that performs
- * relcache invalidations when the contents of pg_dist_shard_placement are
+ * master_dist_placement_cache_invalidate is a trigger function that performs
+ * relcache invalidations when the contents of pg_dist_placement are
  * changed on the SQL level.
  *
  * NB: We decided there is little point in checking permissions here, there
@@ -1944,16 +1979,16 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 	/* collect shardid for OLD and NEW tuple */
 	if (oldTuple != NULL)
 	{
-		Form_pg_dist_shard_placement distPlacement =
-			(Form_pg_dist_shard_placement) GETSTRUCT(oldTuple);
+		Form_pg_dist_placement distPlacement =
+			(Form_pg_dist_placement) GETSTRUCT(oldTuple);
 
 		oldShardId = distPlacement->shardid;
 	}
 
 	if (newTuple != NULL)
 	{
-		Form_pg_dist_shard_placement distPlacement =
-			(Form_pg_dist_shard_placement) GETSTRUCT(newTuple);
+		Form_pg_dist_placement distPlacement =
+			(Form_pg_dist_placement) GETSTRUCT(newTuple);
 
 		newShardId = distPlacement->shardid;
 	}
@@ -2360,26 +2395,12 @@ ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry)
 		 shardIndex++)
 	{
 		ShardInterval *shardInterval = cacheEntry->sortedShardIntervalArray[shardIndex];
-		ShardPlacement *placementArray = cacheEntry->arrayOfPlacementArrays[shardIndex];
-		int numberOfPlacements = cacheEntry->arrayOfPlacementArrayLengths[shardIndex];
+		GroupShardPlacement *placementArray =
+			cacheEntry->arrayOfPlacementArrays[shardIndex];
 		bool valueByVal = shardInterval->valueByVal;
 		bool foundInCache = false;
-		int placementIndex = 0;
 
 		/* delete the shard's placements */
-		for (placementIndex = 0;
-			 placementIndex < numberOfPlacements;
-			 placementIndex++)
-		{
-			ShardPlacement *placement = &placementArray[placementIndex];
-
-			if (placement->nodeName)
-			{
-				pfree(placement->nodeName);
-			}
-
-			/* placement itself is deleted as part of the array */
-		}
 		pfree(placementArray);
 
 		/* delete per-shard cache-entry */

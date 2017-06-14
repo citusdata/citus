@@ -176,8 +176,8 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :worker_2_port
-DELETE FROM pg_dist_node;
 SELECT worker_drop_distributed_table(logicalrelid) FROM pg_dist_partition;
+DELETE FROM pg_dist_node;
 \c - - - :worker_1_port
 
 -- DROP TABLE
@@ -195,8 +195,9 @@ WHERE logicalrelid = 'mx_table'::regclass AND nodeport=:worker_1_port
 ORDER BY shardid
 LIMIT 1 \gset
 
-INSERT INTO pg_dist_shard_placement (nodename, nodeport, shardid, shardstate, shardlength)
-VALUES ('localhost', :worker_2_port, :testshardid, 3, 0);
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
+VALUES (:worker_2_group, :testshardid, 3, 0);
 
 SELECT master_copy_shard_placement(:testshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
@@ -205,7 +206,7 @@ FROM pg_dist_shard_placement
 WHERE shardid = :testshardid
 ORDER BY nodeport;
 
-DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port AND shardid = :testshardid;
+DELETE FROM pg_dist_placement WHERE groupid = :worker_2_group AND shardid = :testshardid;
 
 -- master_get_new_placementid
 SELECT master_get_new_placementid();

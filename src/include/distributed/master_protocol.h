@@ -51,7 +51,7 @@
 #define CSTORE_FDW_NAME "cstore_fdw"
 
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
-#define PLACEMENTID_SEQUENCE_NAME "pg_dist_shard_placement_placementid_seq"
+#define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
 
 /* Remote call definitions to help with data staging and deletion */
 #define WORKER_APPLY_SHARD_DDL_COMMAND \

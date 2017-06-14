@@ -357,12 +357,27 @@ OutShardPlacement(OUTFUNC_ARGS)
 	WRITE_UINT64_FIELD(shardId);
 	WRITE_UINT64_FIELD(shardLength);
 	WRITE_ENUM_FIELD(shardState, RelayFileState);
+	WRITE_UINT_FIELD(groupId);
 	WRITE_STRING_FIELD(nodeName);
 	WRITE_UINT_FIELD(nodePort);
 	/* so we can deal with 0 */
 	WRITE_INT_FIELD(partitionMethod);
 	WRITE_UINT_FIELD(colocationGroupId);
 	WRITE_UINT_FIELD(representativeValue);
+}
+
+
+void
+OutGroupShardPlacement(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(GroupShardPlacement);
+	WRITE_NODE_TYPE("GROUPSHARDPLACEMENT");
+
+	WRITE_UINT64_FIELD(placementId);
+	WRITE_UINT64_FIELD(shardId);
+	WRITE_UINT64_FIELD(shardLength);
+	WRITE_ENUM_FIELD(shardState, RelayFileState);
+	WRITE_UINT_FIELD(groupId);
 }
 
 
