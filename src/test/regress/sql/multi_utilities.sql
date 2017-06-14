@@ -224,6 +224,9 @@ SELECT worker_hash('(1, 2)'::test_composite_type);
 
 SELECT citus_truncate_trigger();
 
+-- confirm that citus_create_restore_point works
+SELECT 1 FROM citus_create_restore_point('regression-test');
+
 -- TODO: support VERBOSE
 -- VACUUM VERBOSE dustbunnies;
 -- VACUUM (FULL, VERBOSE) dustbunnies;
