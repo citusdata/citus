@@ -290,7 +290,14 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	initStringInfo(&buffer);
 	if (relationKind == RELKIND_RELATION)
 	{
-		appendStringInfo(&buffer, "CREATE TABLE %s (", relationName);
+		appendStringInfoString(&buffer, "CREATE ");
+
+		if (relation->rd_rel->relpersistence == RELPERSISTENCE_UNLOGGED)
+		{
+			appendStringInfoString(&buffer, "UNLOGGED ");
+		}
+
+		appendStringInfo(&buffer, "TABLE %s (", relationName);
 	}
 	else
 	{
