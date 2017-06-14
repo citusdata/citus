@@ -525,3 +525,30 @@ SELECT create_distributed_table('orders_hash_part', 'o_orderkey');
  
 (1 row)
 
+CREATE UNLOGGED TABLE unlogged_table
+(
+	key text,
+	value text
+);
+SELECT create_distributed_table('unlogged_table', 'key');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT * FROM master_get_table_ddl_events('unlogged_table');
+                    master_get_table_ddl_events                     
+--------------------------------------------------------------------
+ CREATE UNLOGGED TABLE public.unlogged_table (key text, value text)
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relpersistence FROM pg_class WHERE relname LIKE 'unlogged_table_%';
+ relpersistence 
+----------------
+ u
+ u
+ u
+ u
+(4 rows)
+
