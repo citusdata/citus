@@ -46,21 +46,6 @@ CREATE FUNCTION create_monolithic_shard_row(regclass)
 	AS 'citus'
 	LANGUAGE C STRICT;
 
-CREATE FUNCTION create_healthy_local_shard_placement_row(bigint)
-	RETURNS void
-	AS 'citus'
-	LANGUAGE C STRICT;
-
-CREATE FUNCTION delete_shard_placement_row(bigint, text, bigint)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
-
-CREATE FUNCTION update_shard_placement_row_state(bigint, text, bigint, int)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
-
 CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	RETURNS void
 	AS 'citus'
@@ -167,25 +152,6 @@ SELECT create_monolithic_shard_row('customers') AS new_shard_id
 \gset
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 WHERE shardid = :new_shard_id;
-
--- add a placement and manually inspect row
-SELECT create_healthy_local_shard_placement_row(:new_shard_id);
-SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- mark it as unhealthy and inspect
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
-SELECT shardstate FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- remove it and verify it is gone
-SELECT delete_shard_placement_row(:new_shard_id, 'localhost', 5432);
-SELECT COUNT(*) FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- deleting or updating a non-existent row should fail
-SELECT delete_shard_placement_row(:new_shard_id, 'wrong_localhost', 5432);
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
 
 -- now we'll even test our lock methods...
 
