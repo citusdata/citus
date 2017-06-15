@@ -34,18 +34,6 @@ CREATE FUNCTION create_monolithic_shard_row(regclass)
 	RETURNS bigint
 	AS 'citus'
 	LANGUAGE C STRICT;
-CREATE FUNCTION create_healthy_local_shard_placement_row(bigint)
-	RETURNS void
-	AS 'citus'
-	LANGUAGE C STRICT;
-CREATE FUNCTION delete_shard_placement_row(bigint, text, bigint)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
-CREATE FUNCTION update_shard_placement_row_state(bigint, text, bigint, int)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
 CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	RETURNS void
 	AS 'citus'
@@ -227,53 +215,6 @@ WHERE shardid = :new_shard_id;
  t            | -2147483648   | 2147483647
 (1 row)
 
--- add a placement and manually inspect row
-SELECT create_healthy_local_shard_placement_row(:new_shard_id);
- create_healthy_local_shard_placement_row 
-------------------------------------------
- 
-(1 row)
-
-SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
- shardstate | nodename  | nodeport 
-------------+-----------+----------
-          1 | localhost |     5432
-(1 row)
-
--- mark it as unhealthy and inspect
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
- update_shard_placement_row_state 
-----------------------------------
- t
-(1 row)
-
-SELECT shardstate FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
- shardstate 
-------------
-          3
-(1 row)
-
--- remove it and verify it is gone
-SELECT delete_shard_placement_row(:new_shard_id, 'localhost', 5432);
- delete_shard_placement_row 
-----------------------------
- t
-(1 row)
-
-SELECT COUNT(*) FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
- count 
--------
-     0
-(1 row)
-
--- deleting or updating a non-existent row should fail
-SELECT delete_shard_placement_row(:new_shard_id, 'wrong_localhost', 5432);
-ERROR:  could not find valid entry for shard placement 540005 on node "wrong_localhost:5432"
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
-ERROR:  could not find valid entry for shard placement 540005 on node "localhost:5432"
 -- now we'll even test our lock methods...
 -- use transaction to bound how long we hold the lock
 BEGIN;
