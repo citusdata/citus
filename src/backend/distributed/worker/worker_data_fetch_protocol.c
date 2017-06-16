@@ -14,6 +14,7 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "libpq-fe.h"
 #include "miscadmin.h"
 #include <unistd.h>
 #include <sys/stat.h>
@@ -26,12 +27,14 @@
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/relay_utility.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_protocol.h"
@@ -961,11 +964,17 @@ RemoteTableOwner(const char *nodeName, uint32 nodePort, const char *tableName)
 	List *ownerList = NIL;
 	StringInfo queryString = NULL;
 	StringInfo relationOwner;
+	MultiConnection *connection = NULL;
+	uint32 connectionFlag = FORCE_NEW_CONNECTION;
+	PGresult *result = NULL;
 
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_OWNER, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	ownerList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
+	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
+
+	ownerList = ReadFirstColumnAsText(result);
 	if (list_length(ownerList) != 1)
 	{
 		return NULL;
@@ -987,11 +996,20 @@ TableDDLCommandList(const char *nodeName, uint32 nodePort, const char *tableName
 {
 	List *ddlCommandList = NIL;
 	StringInfo queryString = NULL;
+	MultiConnection *connection = NULL;
+	PGresult *result = NULL;
+	uint32 connectionFlag = FORCE_NEW_CONNECTION;
 
 	queryString = makeStringInfo();
 	appendStringInfo(queryString, GET_TABLE_DDL_EVENTS, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	ddlCommandList = ExecuteRemoteQuery(nodeName, nodePort, NULL, queryString);
+	ExecuteOptionalRemoteCommand(connection, queryString->data, &result);
+	ddlCommandList = ReadFirstColumnAsText(result);
+
+	ForgetResults(connection);
+	CloseConnection(connection);
+
 	return ddlCommandList;
 }
 
@@ -1007,11 +1025,17 @@ ForeignFilePath(const char *nodeName, uint32 nodePort, const char *tableName)
 	List *foreignPathList = NIL;
 	StringInfo foreignPathCommand = NULL;
 	StringInfo foreignPath = NULL;
+	MultiConnection *connection = NULL;
+	PGresult *result = NULL;
+	int connectionFlag = FORCE_NEW_CONNECTION;
 
 	foreignPathCommand = makeStringInfo();
 	appendStringInfo(foreignPathCommand, FOREIGN_FILE_PATH_COMMAND, tableName);
+	connection = GetNodeConnection(connectionFlag, nodeName, nodePort);
 
-	foreignPathList = ExecuteRemoteQuery(nodeName, nodePort, NULL, foreignPathCommand);
+	ExecuteOptionalRemoteCommand(connection, foreignPathCommand->data, &result);
+
+	foreignPathList = ReadFirstColumnAsText(result);
 	if (foreignPathList != NIL)
 	{
 		foreignPath = (StringInfo) linitial(foreignPathList);
@@ -1098,65 +1122,6 @@ ExecuteRemoteQuery(const char *nodeName, uint32 nodePort, char *runAsUser,
 	MultiClientDisconnect(connectionId);
 
 	return resultList;
-}
-
-
-/*
- * ExecuteRemoteCommand executes the given SQL command. This command could be an
- * Insert, Update, or Delete statement, or a utility command that returns
- * nothing. If query is successfuly executed, the function returns true.
- * Otherwise, it returns false.
- */
-bool
-ExecuteRemoteCommand(const char *nodeName, uint32 nodePort, StringInfo queryString)
-{
-	char *nodeDatabase = get_database_name(MyDatabaseId);
-	int32 connectionId = -1;
-	QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-	bool querySent = false;
-	bool queryReady = false;
-	bool queryDone = false;
-
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, NULL);
-	if (connectionId == INVALID_CONNECTION_ID)
-	{
-		return false;
-	}
-
-	querySent = MultiClientSendQuery(connectionId, queryString->data);
-	if (!querySent)
-	{
-		MultiClientDisconnect(connectionId);
-		return false;
-	}
-
-	while (!queryReady)
-	{
-		ResultStatus resultStatus = MultiClientResultStatus(connectionId);
-		if (resultStatus == CLIENT_RESULT_READY)
-		{
-			queryReady = true;
-		}
-		else if (resultStatus == CLIENT_RESULT_BUSY)
-		{
-			long sleepIntervalPerCycle = RemoteTaskCheckInterval * 1000L;
-			pg_usleep(sleepIntervalPerCycle);
-		}
-		else
-		{
-			MultiClientDisconnect(connectionId);
-			return false;
-		}
-	}
-
-	queryStatus = MultiClientQueryStatus(connectionId);
-	if (queryStatus == CLIENT_QUERY_DONE)
-	{
-		queryDone = true;
-	}
-
-	MultiClientDisconnect(connectionId);
-	return queryDone;
 }
 
 
