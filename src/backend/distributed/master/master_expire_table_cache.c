@@ -15,12 +15,15 @@
 
 #include "postgres.h"
 #include "funcapi.h"
+#include "libpq-fe.h"
 
 #include "catalog/pg_class.h"
+#include "distributed/connection_management.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "utils/builtins.h"
@@ -154,6 +157,9 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 	StringInfo workerCommand = makeStringInfo();
 	StringInfo shardNames = makeStringInfo();
 	ListCell *shardIntervalCell = NULL;
+	MultiConnection *connection = NULL;
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	PGresult *result = NULL;
 
 	if (shardIntervalList == NIL)
 	{
@@ -191,5 +197,7 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 						errmsg("expire target is not a regular or foreign table")));
 	}
 
-	ExecuteRemoteCommand(workerNode->workerName, workerNode->workerPort, workerCommand);
+	connection = GetNodeConnection(connectionFlag, workerNode->workerName,
+								   workerNode->workerPort);
+	ExecuteOptionalRemoteCommand(connection, workerCommand->data, &result);
 }
