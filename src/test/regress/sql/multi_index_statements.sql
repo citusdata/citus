@@ -66,6 +66,11 @@ CREATE INDEX IF NOT EXISTS lineitem_orderkey_index on index_test_hash(a);
 -- Verify that we can create indexes concurrently
 CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
 
+-- Verify that no-name local CREATE INDEX CONCURRENTLY works
+CREATE TABLE local_table (id integer, name text);
+CREATE INDEX CONCURRENTLY ON local_table(id);
+DROP TABLE local_table;
+
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port

@@ -395,7 +395,11 @@ multi_ProcessUtility(Node *parsetree,
 	standard_ProcessUtility(parsetree, queryString, context,
 							params, dest, completionTag);
 
-	PostProcessUtility(parsetree);
+	/* don't run post-process code for local commands */
+	if (ddlJobs != NIL)
+	{
+		PostProcessUtility(parsetree);
+	}
 
 	if (commandMustRunAsOwner)
 	{
