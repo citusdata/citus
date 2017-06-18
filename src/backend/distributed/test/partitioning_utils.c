@@ -1,0 +1,129 @@
+/*-------------------------------------------------------------------------
+ *
+ * test/src/partitioning_utils.c
+ *
+ * This file contains functions to test partitioning utility functions
+ * implemented in Citus.
+ *
+ * Copyright (c) 2017, Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+#include "postgres.h"
+#include "fmgr.h"
+
+#include "catalog/pg_type.h"
+#include "distributed/listutils.h"
+#include "distributed/multi_partitioning_utils.h"
+#include "distributed/reference_table_utils.h"
+#include "lib/stringinfo.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
+
+
+PG_FUNCTION_INFO_V1(generate_alter_table_detach_partition_command);
+PG_FUNCTION_INFO_V1(generate_alter_table_attach_partition_command);
+PG_FUNCTION_INFO_V1(generate_partition_information);
+PG_FUNCTION_INFO_V1(print_partitions);
+PG_FUNCTION_INFO_V1(table_inherits);
+PG_FUNCTION_INFO_V1(table_inherited);
+
+
+/*
+ * Just a wrapper around GenereateDetachPartitionCommand().
+ */
+Datum
+generate_alter_table_detach_partition_command(PG_FUNCTION_ARGS)
+{
+	char *command = "";
+
+#if (PG_VERSION_NUM >= 100000)
+	command = GenerateDetachPartitionCommand(PG_GETARG_OID(0));
+#endif
+
+	PG_RETURN_TEXT_P(cstring_to_text(command));
+}
+
+
+/*
+ * Just a wrapper around GenerateAlterTableAttachPartitionCommand().
+ */
+Datum
+generate_alter_table_attach_partition_command(PG_FUNCTION_ARGS)
+{
+	char *command = "";
+
+#if (PG_VERSION_NUM >= 100000)
+	command = GenerateAlterTableAttachPartitionCommand(PG_GETARG_OID(0));
+#endif
+
+	PG_RETURN_TEXT_P(cstring_to_text(command));
+}
+
+
+/*
+ * Just a wrapper around GenereatePartitioningInformation().
+ */
+Datum
+generate_partition_information(PG_FUNCTION_ARGS)
+{
+	char *command = "";
+
+#if (PG_VERSION_NUM >= 100000)
+	command = GeneratePartitioningInformation(PG_GETARG_OID(0));
+#endif
+
+	PG_RETURN_TEXT_P(cstring_to_text(command));
+}
+
+
+/*
+ * Just a wrapper around PartitionList() with human readable table name outpus.
+ */
+Datum
+print_partitions(PG_FUNCTION_ARGS)
+{
+	StringInfo resultRelationNames = makeStringInfo();
+
+#if (PG_VERSION_NUM >= 100000)
+	List *partitionList = PartitionList(PG_GETARG_OID(0));
+	ListCell *partitionOidCell = NULL;
+
+	partitionList = SortList(partitionList, CompareOids);
+
+	foreach(partitionOidCell, partitionList)
+	{
+		Oid partitionOid = lfirst_oid(partitionOidCell);
+
+		/* at least one table is already added, add comma */
+		if (resultRelationNames->len > 0)
+		{
+			appendStringInfoString(resultRelationNames, ",");
+		}
+
+		appendStringInfoString(resultRelationNames, get_rel_name(partitionOid));
+	}
+#endif
+
+	PG_RETURN_TEXT_P(cstring_to_text(resultRelationNames->data));
+}
+
+
+/*
+ * Just a wrapper around IsChildTable()
+ */
+Datum
+table_inherits(PG_FUNCTION_ARGS)
+{
+	return IsChildTable(PG_GETARG_OID(0));
+}
+
+
+/*
+ * Just a wrapper around IsParentTable()
+ */
+Datum
+table_inherited(PG_FUNCTION_ARGS)
+{
+	return IsParentTable(PG_GETARG_OID(0));
+}
