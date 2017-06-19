@@ -36,6 +36,7 @@ extern bool RouterSelectQuery(Query *originalQuery,
 							  List **placementList, uint64 *anchorShardId,
 							  List **relationShardList, bool replacePrunedQueryWithDummy);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree);
+extern bool UpdateFromQuery(Query *query);
 extern Query * ReorderInsertSelectTargetLists(Query *originalQuery,
 											  RangeTblEntry *insertRte,
 											  RangeTblEntry *subqueryRte);

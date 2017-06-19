@@ -202,6 +202,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	Task *task = NULL;
 	List *placementList = NIL;
 	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
+	bool updateFromQuery = UpdateFromQuery(query);
 
 	multiPlan->operation = query->commandType;
 
@@ -211,7 +212,20 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 		modifyTask = true;
 	}
 
-	if (modifyTask)
+	if (updateFromQuery)
+	{
+		DeferredErrorMessage *planningError = NULL;
+		planningError = ModifyQuerySupported(query);
+
+		if (planningError != NULL)
+		{
+			multiPlan->planningError = planningError;
+			return multiPlan;
+		}
+
+		task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
+	}
+	else if (modifyTask)
 	{
 		Oid distributedTableId = ExtractFirstDistributedTableId(originalQuery);
 		ShardInterval *targetShardInterval = NULL;
@@ -267,6 +281,33 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 	}
 
 	return multiPlan;
+}
+
+
+bool
+UpdateFromQuery(Query *query)
+{
+	CmdType commandType = query->commandType;
+	List *rangeTableList = query->rtable;
+	bool hasSubquery = false;
+	ListCell *rangeTableCell = NULL;
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			hasSubquery = true;
+			break;
+		}
+	}
+
+	if (commandType == CMD_UPDATE && hasSubquery)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -1233,7 +1274,6 @@ ModifyQuerySupported(Query *queryTree)
 
 	/*
 	 * Reject subqueries which are in SELECT or WHERE clause.
-	 * Queries which include subqueries in FROM clauses are rejected below.
 	 */
 	if (queryTree->hasSubLinks == true)
 	{
@@ -1298,6 +1338,10 @@ ModifyQuerySupported(Query *queryTree)
 		{
 			hasValuesScan = true;
 		}
+		else if (UpdateFromQuery(queryTree))
+		{
+			continue;
+		}
 		else
 		{
 			/*
@@ -1341,7 +1385,7 @@ ModifyQuerySupported(Query *queryTree)
 	 * Queries like "INSERT INTO table_name ON CONFLICT DO UPDATE (col) SET other_col = ''"
 	 * contains two range table entries, and we have to allow them.
 	 */
-	if (commandType != CMD_INSERT && queryTableCount != 1)
+	if (commandType != CMD_INSERT && queryTableCount != 1 && !UpdateFromQuery(queryTree))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot perform distributed planning for the given"
@@ -2262,7 +2306,6 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 									  placementList, &shardId, &relationShardList,
 									  replacePrunedQueryWithDummy);
 
-
 	if (!queryRoutable)
 	{
 		return NULL;
@@ -2316,7 +2359,7 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 		return false;
 	}
 
-	Assert(commandType == CMD_SELECT);
+	Assert(commandType == CMD_SELECT || UpdateFromQuery(originalQuery));
 
 	foreach(prunedRelationShardListCell, prunedRelationShardList)
 	{
@@ -2429,7 +2472,7 @@ TargetShardIntervalsForSelect(Query *query,
 	List *prunedRelationShardList = NIL;
 	ListCell *restrictionCell = NULL;
 
-	Assert(query->commandType == CMD_SELECT);
+	Assert(query->commandType == CMD_SELECT || UpdateFromQuery(query));
 	Assert(restrictionContext != NULL);
 
 	foreach(restrictionCell, restrictionContext->relationRestrictionList)
