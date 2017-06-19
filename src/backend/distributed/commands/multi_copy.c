@@ -1684,6 +1684,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	Relation distributedRelation = NULL;
 	int columnIndex = 0;
 	List *columnNameList = copyDest->columnNameList;
+	List *quotedColumnNameList = NIL;
 
 	ListCell *columnNameCell = NULL;
 
@@ -1777,6 +1778,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	foreach(columnNameCell, columnNameList)
 	{
 		char *columnName = (char *) lfirst(columnNameCell);
+		char *quotedColumnName = (char *) quote_identifier(columnName);
 
 		/* load the column information from pg_attribute */
 		AttrNumber attrNumber = get_attnum(tableId, columnName);
@@ -1790,6 +1792,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 		}
 
 		columnIndex++;
+
+		quotedColumnNameList = lappend(quotedColumnNameList, quotedColumnName);
 	}
 
 	if (partitionMethod != DISTRIBUTE_BY_NONE && partitionColumnIndex == -1)
@@ -1805,7 +1809,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	copyStatement = makeNode(CopyStmt);
 	copyStatement->relation = makeRangeVar(schemaName, relationName, -1);
 	copyStatement->query = NULL;
-	copyStatement->attlist = columnNameList;
+	copyStatement->attlist = quotedColumnNameList;
 	copyStatement->is_from = true;
 	copyStatement->is_program = false;
 	copyStatement->filename = NULL;
