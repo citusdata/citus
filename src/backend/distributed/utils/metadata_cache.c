@@ -81,27 +81,39 @@ typedef struct ShardCacheEntry
 } ShardCacheEntry;
 
 
-/* state which should be cleared upon DROP EXTENSION */
-static bool extensionLoaded = false;
-static Oid distShardRelationId = InvalidOid;
-static Oid distShardPlacementRelationId = InvalidOid;
-static Oid distNodeRelationId = InvalidOid;
-static Oid distLocalGroupRelationId = InvalidOid;
-static Oid distColocationRelationId = InvalidOid;
-static Oid distColocationConfigurationIndexId = InvalidOid;
-static Oid distColocationColocationidIndexId = InvalidOid;
-static Oid distPartitionRelationId = InvalidOid;
-static Oid distPartitionLogicalRelidIndexId = InvalidOid;
-static Oid distPartitionColocationidIndexId = InvalidOid;
-static Oid distShardLogicalRelidIndexId = InvalidOid;
-static Oid distShardShardidIndexId = InvalidOid;
-static Oid distShardPlacementShardidIndexId = InvalidOid;
-static Oid distShardPlacementPlacementidIndexId = InvalidOid;
-static Oid distShardPlacementNodeidIndexId = InvalidOid;
-static Oid distTransactionRelationId = InvalidOid;
-static Oid distTransactionGroupIndexId = InvalidOid;
-static Oid extraDataContainerFuncId = InvalidOid;
-static Oid workerHashFunctionId = InvalidOid;
+/*
+ * State which should be cleared upon DROP EXTENSION.  When the configuration
+ * changes, e.g. because the extension is dropped, these summarily get set to
+ * 0.
+ */
+typedef struct MetadataCacheData
+{
+	bool extensionLoaded;
+	Oid distShardRelationId;
+	Oid distShardPlacementRelationId;
+	Oid distNodeRelationId;
+	Oid distLocalGroupRelationId;
+	Oid distColocationRelationId;
+	Oid distColocationConfigurationIndexId;
+	Oid distColocationColocationidIndexId;
+	Oid distPartitionRelationId;
+	Oid distPartitionLogicalRelidIndexId;
+	Oid distPartitionColocationidIndexId;
+	Oid distShardLogicalRelidIndexId;
+	Oid distShardShardidIndexId;
+	Oid distShardPlacementShardidIndexId;
+	Oid distShardPlacementPlacementidIndexId;
+	Oid distShardPlacementNodeidIndexId;
+	Oid distTransactionRelationId;
+	Oid distTransactionGroupIndexId;
+	Oid extraDataContainerFuncId;
+	Oid workerHashFunctionId;
+	Oid extensionOwner;
+} MetadataCacheData;
+
+
+static MetadataCacheData MetadataCache;
+
 
 /* Citus extension version variables */
 bool EnableVersionChecks = true; /* version checks are enabled */
@@ -1094,7 +1106,7 @@ bool
 CitusHasBeenLoaded(void)
 {
 	/* recheck presence until citus has been loaded */
-	if (!extensionLoaded || creating_extension)
+	if (!MetadataCache.extensionLoaded || creating_extension)
 	{
 		bool extensionPresent = false;
 		bool extensionScriptExecuted = true;
@@ -1115,9 +1127,11 @@ CitusHasBeenLoaded(void)
 		}
 
 		/* we disable extension features during pg_upgrade */
-		extensionLoaded = extensionPresent && extensionScriptExecuted && !IsBinaryUpgrade;
+		MetadataCache.extensionLoaded = extensionPresent &&
+										extensionScriptExecuted &&
+										!IsBinaryUpgrade;
 
-		if (extensionLoaded)
+		if (MetadataCache.extensionLoaded)
 		{
 			/*
 			 * InvalidateDistRelationCacheCallback resets state such as extensionLoaded
@@ -1140,7 +1154,7 @@ CitusHasBeenLoaded(void)
 		}
 	}
 
-	return extensionLoaded;
+	return MetadataCache.extensionLoaded;
 }
 
 
@@ -1433,9 +1447,10 @@ InstalledExtensionVersion(void)
 Oid
 DistShardRelationId(void)
 {
-	CachedRelationLookup("pg_dist_shard", &distShardRelationId);
+	CachedRelationLookup("pg_dist_shard",
+						 &MetadataCache.distShardRelationId);
 
-	return distShardRelationId;
+	return MetadataCache.distShardRelationId;
 }
 
 
@@ -1443,9 +1458,10 @@ DistShardRelationId(void)
 Oid
 DistShardPlacementRelationId(void)
 {
-	CachedRelationLookup("pg_dist_shard_placement", &distShardPlacementRelationId);
+	CachedRelationLookup("pg_dist_shard_placement",
+						 &MetadataCache.distShardPlacementRelationId);
 
-	return distShardPlacementRelationId;
+	return MetadataCache.distShardPlacementRelationId;
 }
 
 
@@ -1453,9 +1469,10 @@ DistShardPlacementRelationId(void)
 Oid
 DistNodeRelationId(void)
 {
-	CachedRelationLookup("pg_dist_node", &distNodeRelationId);
+	CachedRelationLookup("pg_dist_node",
+						 &MetadataCache.distNodeRelationId);
 
-	return distNodeRelationId;
+	return MetadataCache.distNodeRelationId;
 }
 
 
@@ -1463,9 +1480,10 @@ DistNodeRelationId(void)
 Oid
 DistLocalGroupIdRelationId(void)
 {
-	CachedRelationLookup("pg_dist_local_group", &distLocalGroupRelationId);
+	CachedRelationLookup("pg_dist_local_group",
+						 &MetadataCache.distLocalGroupRelationId);
 
-	return distLocalGroupRelationId;
+	return MetadataCache.distLocalGroupRelationId;
 }
 
 
@@ -1473,9 +1491,10 @@ DistLocalGroupIdRelationId(void)
 Oid
 DistColocationRelationId(void)
 {
-	CachedRelationLookup("pg_dist_colocation", &distColocationRelationId);
+	CachedRelationLookup("pg_dist_colocation",
+						 &MetadataCache.distColocationRelationId);
 
-	return distColocationRelationId;
+	return MetadataCache.distColocationRelationId;
 }
 
 
@@ -1484,9 +1503,9 @@ Oid
 DistColocationConfigurationIndexId(void)
 {
 	CachedRelationLookup("pg_dist_colocation_configuration_index",
-						 &distColocationConfigurationIndexId);
+						 &MetadataCache.distColocationConfigurationIndexId);
 
-	return distColocationConfigurationIndexId;
+	return MetadataCache.distColocationConfigurationIndexId;
 }
 
 
@@ -1495,9 +1514,9 @@ Oid
 DistColocationColocationidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_colocation_pkey",
-						 &distColocationColocationidIndexId);
+						 &MetadataCache.distColocationColocationidIndexId);
 
-	return distColocationColocationidIndexId;
+	return MetadataCache.distColocationColocationidIndexId;
 }
 
 
@@ -1505,9 +1524,10 @@ DistColocationColocationidIndexId(void)
 Oid
 DistPartitionRelationId(void)
 {
-	CachedRelationLookup("pg_dist_partition", &distPartitionRelationId);
+	CachedRelationLookup("pg_dist_partition",
+						 &MetadataCache.distPartitionRelationId);
 
-	return distPartitionRelationId;
+	return MetadataCache.distPartitionRelationId;
 }
 
 
@@ -1516,9 +1536,9 @@ Oid
 DistPartitionLogicalRelidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_partition_logical_relid_index",
-						 &distPartitionLogicalRelidIndexId);
+						 &MetadataCache.distPartitionLogicalRelidIndexId);
 
-	return distPartitionLogicalRelidIndexId;
+	return MetadataCache.distPartitionLogicalRelidIndexId;
 }
 
 
@@ -1527,9 +1547,9 @@ Oid
 DistPartitionColocationidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_partition_colocationid_index",
-						 &distPartitionColocationidIndexId);
+						 &MetadataCache.distPartitionColocationidIndexId);
 
-	return distPartitionColocationidIndexId;
+	return MetadataCache.distPartitionColocationidIndexId;
 }
 
 
@@ -1538,9 +1558,9 @@ Oid
 DistShardLogicalRelidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_logical_relid_index",
-						 &distShardLogicalRelidIndexId);
+						 &MetadataCache.distShardLogicalRelidIndexId);
 
-	return distShardLogicalRelidIndexId;
+	return MetadataCache.distShardLogicalRelidIndexId;
 }
 
 
@@ -1548,9 +1568,10 @@ DistShardLogicalRelidIndexId(void)
 Oid
 DistShardShardidIndexId(void)
 {
-	CachedRelationLookup("pg_dist_shard_shardid_index", &distShardShardidIndexId);
+	CachedRelationLookup("pg_dist_shard_shardid_index",
+						 &MetadataCache.distShardShardidIndexId);
 
-	return distShardShardidIndexId;
+	return MetadataCache.distShardShardidIndexId;
 }
 
 
@@ -1559,9 +1580,9 @@ Oid
 DistShardPlacementShardidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_placement_shardid_index",
-						 &distShardPlacementShardidIndexId);
+						 &MetadataCache.distShardPlacementShardidIndexId);
 
-	return distShardPlacementShardidIndexId;
+	return MetadataCache.distShardPlacementShardidIndexId;
 }
 
 
@@ -1570,9 +1591,9 @@ Oid
 DistShardPlacementPlacementidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_placement_placementid_index",
-						 &distShardPlacementPlacementidIndexId);
+						 &MetadataCache.distShardPlacementPlacementidIndexId);
 
-	return distShardPlacementPlacementidIndexId;
+	return MetadataCache.distShardPlacementPlacementidIndexId;
 }
 
 
@@ -1580,9 +1601,10 @@ DistShardPlacementPlacementidIndexId(void)
 Oid
 DistTransactionRelationId(void)
 {
-	CachedRelationLookup("pg_dist_transaction", &distTransactionRelationId);
+	CachedRelationLookup("pg_dist_transaction",
+						 &MetadataCache.distTransactionRelationId);
 
-	return distTransactionRelationId;
+	return MetadataCache.distTransactionRelationId;
 }
 
 
@@ -1591,9 +1613,9 @@ Oid
 DistTransactionGroupIndexId(void)
 {
 	CachedRelationLookup("pg_dist_transaction_group_index",
-						 &distTransactionGroupIndexId);
+						 &MetadataCache.distTransactionGroupIndexId);
 
-	return distTransactionGroupIndexId;
+	return MetadataCache.distTransactionGroupIndexId;
 }
 
 
@@ -1602,9 +1624,9 @@ Oid
 DistShardPlacementNodeidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_placement_nodeid_index",
-						 &distShardPlacementNodeidIndexId);
+						 &MetadataCache.distShardPlacementNodeidIndexId);
 
-	return distShardPlacementNodeidIndexId;
+	return MetadataCache.distShardPlacementNodeidIndexId;
 }
 
 
@@ -1615,14 +1637,15 @@ CitusExtraDataContainerFuncId(void)
 	List *nameList = NIL;
 	Oid paramOids[1] = { INTERNALOID };
 
-	if (extraDataContainerFuncId == InvalidOid)
+	if (MetadataCache.extraDataContainerFuncId == InvalidOid)
 	{
 		nameList = list_make2(makeString("pg_catalog"),
 							  makeString("citus_extradata_container"));
-		extraDataContainerFuncId = LookupFuncName(nameList, 1, paramOids, false);
+		MetadataCache.extraDataContainerFuncId =
+			LookupFuncName(nameList, 1, paramOids, false);
 	}
 
-	return extraDataContainerFuncId;
+	return MetadataCache.extraDataContainerFuncId;
 }
 
 
@@ -1630,17 +1653,18 @@ CitusExtraDataContainerFuncId(void)
 Oid
 CitusWorkerHashFunctionId(void)
 {
-	if (workerHashFunctionId == InvalidOid)
+	if (MetadataCache.workerHashFunctionId == InvalidOid)
 	{
 		Oid citusExtensionOid = get_extension_oid("citus", false);
 		Oid citusSchemaOid = get_extension_schema(citusExtensionOid);
 		char *citusSchemaName = get_namespace_name(citusSchemaOid);
 		const int argCount = 1;
 
-		workerHashFunctionId = FunctionOid(citusSchemaName, "worker_hash", argCount);
+		MetadataCache.workerHashFunctionId =
+			FunctionOid(citusSchemaName, "worker_hash", argCount);
 	}
 
-	return workerHashFunctionId;
+	return MetadataCache.workerHashFunctionId;
 }
 
 
@@ -1657,11 +1681,10 @@ CitusExtensionOwner(void)
 	ScanKeyData entry[1];
 	HeapTuple extensionTuple = NULL;
 	Form_pg_extension extensionForm = NULL;
-	static Oid extensionOwner = InvalidOid;
 
-	if (extensionOwner != InvalidOid)
+	if (MetadataCache.extensionOwner != InvalidOid)
 	{
-		return extensionOwner;
+		return MetadataCache.extensionOwner;
 	}
 
 	relation = heap_open(ExtensionRelationId, AccessShareLock);
@@ -1693,8 +1716,8 @@ CitusExtensionOwner(void)
 			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 							errmsg("citus extension needs to be owned by superuser")));
 		}
-		extensionOwner = extensionForm->extowner;
-		Assert(OidIsValid(extensionOwner));
+		MetadataCache.extensionOwner = extensionForm->extowner;
+		Assert(OidIsValid(MetadataCache.extensionOwner));
 	}
 	else
 	{
@@ -1706,7 +1729,7 @@ CitusExtensionOwner(void)
 
 	heap_close(relation, AccessShareLock);
 
-	return extensionOwner;
+	return MetadataCache.extensionOwner;
 }
 
 
@@ -2382,27 +2405,9 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	 * This happens pretty rarely, but most importantly happens during
 	 * DROP EXTENSION citus;
 	 */
-	if (relationId != InvalidOid && relationId == distPartitionRelationId)
+	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
 	{
-		extensionLoaded = false;
-		distShardRelationId = InvalidOid;
-		distShardPlacementRelationId = InvalidOid;
-		distLocalGroupRelationId = InvalidOid;
-		distNodeRelationId = InvalidOid;
-		distColocationRelationId = InvalidOid;
-		distColocationConfigurationIndexId = InvalidOid;
-		distColocationColocationidIndexId = InvalidOid;
-		distPartitionRelationId = InvalidOid;
-		distPartitionLogicalRelidIndexId = InvalidOid;
-		distPartitionColocationidIndexId = InvalidOid;
-		distShardLogicalRelidIndexId = InvalidOid;
-		distShardShardidIndexId = InvalidOid;
-		distShardPlacementShardidIndexId = InvalidOid;
-		distShardPlacementPlacementidIndexId = InvalidOid;
-		distTransactionRelationId = InvalidOid;
-		distTransactionGroupIndexId = InvalidOid;
-		extraDataContainerFuncId = InvalidOid;
-		workerHashFunctionId = InvalidOid;
+		memset(&MetadataCache, 0, sizeof(MetadataCache));
 	}
 }
 
@@ -2461,7 +2466,7 @@ DistTableOidList(void)
 static void
 InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
 {
-	if (relationId == InvalidOid || relationId == distNodeRelationId)
+	if (relationId == InvalidOid || relationId == MetadataCache.distNodeRelationId)
 	{
 		workerNodeHashValid = false;
 	}
@@ -2476,7 +2481,7 @@ static void
 InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId)
 {
 	/* when invalidation happens simply set the LocalGroupId to the default value */
-	if (relationId == InvalidOid || relationId == distLocalGroupRelationId)
+	if (relationId == InvalidOid || relationId == MetadataCache.distLocalGroupRelationId)
 	{
 		LocalGroupId = -1;
 	}
