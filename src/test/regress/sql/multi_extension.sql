@@ -120,7 +120,7 @@ CREATE TABLE version_mismatch_table(column1 int);
 
 -- Test INSERT
 INSERT INTO version_mismatch_table(column1) VALUES(5);
- 
+
 -- Test SELECT
 SELECT * FROM version_mismatch_table ORDER BY column1;
 
@@ -164,8 +164,6 @@ CREATE EXTENSION citus;
 -- test cache invalidation in workers
 \c - - - :worker_1_port
 
--- this will initialize the cache
-\d
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '5.2-4';

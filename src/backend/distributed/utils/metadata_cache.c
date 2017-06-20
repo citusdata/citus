@@ -130,8 +130,6 @@ static HTAB *DistShardCacheHash = NULL;
 static HTAB *WorkerNodeHash = NULL;
 static bool workerNodeHashValid = false;
 
-static bool invalidationRegistered = false;
-
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int LocalGroupId = -1;
 
@@ -160,8 +158,11 @@ static char * InstalledExtensionVersion(void);
 static bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 										int shardIntervalArrayLength,
 										FmgrInfo *shardIntervalSortCompareFunction);
+static void InitializeCaches(void);
 static void InitializeDistTableCache(void);
 static void InitializeWorkerNodeCache(void);
+static void RegisterWorkerNodeCacheCallbacks(void);
+static void RegisterLocalGroupIdCacheCallbacks(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
@@ -413,11 +414,7 @@ LookupShardCacheEntry(int64 shardId)
 
 	Assert(CitusHasBeenLoaded() && CheckCitusVersion(WARNING));
 
-	/* probably not reachable */
-	if (DistShardCacheHash == NULL)
-	{
-		InitializeDistTableCache();
-	}
+	InitializeCaches();
 
 	/* lookup cache entry */
 	shardEntry = hash_search(DistShardCacheHash, &shardId, HASH_FIND, &foundInCache);
@@ -523,10 +520,7 @@ LookupDistTableCacheEntry(Oid relationId)
 		return NULL;
 	}
 
-	if (DistTableCacheHash == NULL)
-	{
-		InitializeDistTableCache();
-	}
+	InitializeCaches();
 
 	/*
 	 * If the version is not known to be compatible, perform thorough check,
@@ -1316,6 +1310,8 @@ AvailableExtensionVersion(void)
 	bool doCopy = false;
 	char *availableExtensionVersion;
 
+	InitializeCaches();
+
 	estate = CreateExecutorState();
 	extensionsResultSet = makeNode(ReturnSetInfo);
 	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
@@ -1348,10 +1344,6 @@ AvailableExtensionVersion(void)
 			Datum availableVersion = slot_getattr(tupleTableSlot, 2, &isNull);
 
 			/* we will cache the result of citus version to prevent catalog access */
-			if (CacheMemoryContext == NULL)
-			{
-				CreateCacheMemoryContext();
-			}
 			oldMemoryContext = MemoryContextSwitchTo(CacheMemoryContext);
 
 			availableExtensionVersion = text_to_cstring(DatumGetTextPP(availableVersion));
@@ -1418,11 +1410,6 @@ InstalledExtensionVersion(void)
 		}
 
 		/* we will cache the result of citus version to prevent catalog access */
-		if (CacheMemoryContext == NULL)
-		{
-			CreateCacheMemoryContext();
-		}
-
 		oldMemoryContext = MemoryContextSwitchTo(CacheMemoryContext);
 
 		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
@@ -1995,17 +1982,38 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * InitializeCaches() registers invalidation handlers for metadata_cache.c's
+ * caches.
+ */
+static void
+InitializeCaches(void)
+{
+	static bool performedInitialization = false;
+
+	if (!performedInitialization)
+	{
+		/* set first, to avoid recursion dangers */
+		performedInitialization = true;
+
+		/* make sure we've initialized CacheMemoryContext */
+		if (CacheMemoryContext == NULL)
+		{
+			CreateCacheMemoryContext();
+		}
+
+		InitializeDistTableCache();
+		RegisterWorkerNodeCacheCallbacks();
+		RegisterLocalGroupIdCacheCallbacks();
+	}
+}
+
+
 /* initialize the infrastructure for the metadata cache */
 static void
 InitializeDistTableCache(void)
 {
 	HASHCTL info;
-
-	/* make sure we've initialized CacheMemoryContext */
-	if (CacheMemoryContext == NULL)
-	{
-		CreateCacheMemoryContext();
-	}
 
 	/* build initial scan keys, copied for every relation scan */
 	memset(&DistPartitionScanKey, 0, sizeof(DistPartitionScanKey));
@@ -2060,6 +2068,8 @@ InitializeDistTableCache(void)
 HTAB *
 GetWorkerNodeHash(void)
 {
+	InitializeCaches(); /* ensure relevant callbacks are registered */
+
 	/*
 	 * We might have some concurrent metadata changes. In order to get the changes,
 	 * we first need to accept the cache invalidation messages.
@@ -2085,7 +2095,6 @@ GetWorkerNodeHash(void)
 static void
 InitializeWorkerNodeCache(void)
 {
-	static bool invalidationRegistered = false;
 	HTAB *oldWorkerNodeHash = NULL;
 	List *workerNodeList = NIL;
 	ListCell *workerNodeCell = NULL;
@@ -2093,11 +2102,7 @@ InitializeWorkerNodeCache(void)
 	int hashFlags = 0;
 	long maxTableSize = (long) MaxWorkerNodesTracked;
 
-	/* make sure we've initialized CacheMemoryContext */
-	if (CacheMemoryContext == NULL)
-	{
-		CreateCacheMemoryContext();
-	}
+	InitializeCaches();
 
 	/*
 	 * Create the hash that holds the worker nodes. The key is the combination of
@@ -2155,16 +2160,20 @@ InitializeWorkerNodeCache(void)
 
 	/* now, safe to destroy the old hash */
 	hash_destroy(oldWorkerNodeHash);
+}
 
-	/* prevent multiple invalidation registrations */
-	if (!invalidationRegistered)
-	{
-		/* Watch for invalidation events. */
-		CacheRegisterRelcacheCallback(InvalidateNodeRelationCacheCallback,
-									  (Datum) 0);
 
-		invalidationRegistered = true;
-	}
+/*
+ * RegisterWorkerNodeCacheCallbacks registers the callbacks required for the
+ * worker node cache.  It's separate from InitializeWorkerNodeCache so the
+ * callback can be registered early, before the metadata tables exist.
+ */
+static void
+RegisterWorkerNodeCacheCallbacks(void)
+{
+	/* Watch for invalidation events. */
+	CacheRegisterRelcacheCallback(InvalidateNodeRelationCacheCallback,
+								  (Datum) 0);
 }
 
 
@@ -2184,6 +2193,8 @@ GetLocalGroupId(void)
 	Oid groupId = InvalidOid;
 	Relation pgDistLocalGroupId = NULL;
 	Oid localGroupTableOid = InvalidOid;
+
+	InitializeCaches();
 
 	/*
 	 * Already set the group id, no need to read the heap again.
@@ -2226,20 +2237,25 @@ GetLocalGroupId(void)
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistLocalGroupId, AccessShareLock);
 
-	/* prevent multiple invalidation registrations */
-	if (!invalidationRegistered)
-	{
-		/* Watch for invalidation events. */
-		CacheRegisterRelcacheCallback(InvalidateLocalGroupIdRelationCacheCallback,
-									  (Datum) 0);
-
-		invalidationRegistered = true;
-	}
-
 	/* set the local cache variable */
 	LocalGroupId = groupId;
 
 	return groupId;
+}
+
+
+/*
+ * RegisterLocalGroupIdCacheCallbacks registers the callbacks required to
+ * maintain LocalGroupId at a consistent value. It's separate from
+ * GetLocalGroupId so the callback can be registered early, before metadata
+ * tables exist.
+ */
+static void
+RegisterLocalGroupIdCacheCallbacks(void)
+{
+	/* Watch for invalidation events. */
+	CacheRegisterRelcacheCallback(InvalidateLocalGroupIdRelationCacheCallback,
+								  (Datum) 0);
 }
 
 
@@ -2739,6 +2755,9 @@ TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid interva
 static void
 CachedRelationLookup(const char *relationName, Oid *cachedOid)
 {
+	/* force callbacks to be registered, so we always get notified upon changes */
+	InitializeCaches();
+
 	if (*cachedOid == InvalidOid)
 	{
 		*cachedOid = get_relname_relid(relationName, PG_CATALOG_NAMESPACE);
