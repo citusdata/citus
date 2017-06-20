@@ -119,7 +119,6 @@ CREATE TABLE version_mismatch_table(column1 int);
 \copy version_mismatch_table FROM STDIN;
 -- Test INSERT
 INSERT INTO version_mismatch_table(column1) VALUES(5);
- 
 -- Test SELECT
 SELECT * FROM version_mismatch_table ORDER BY column1;
  column1 
@@ -177,13 +176,6 @@ DROP EXTENSION citus;
 CREATE EXTENSION citus;
 -- test cache invalidation in workers
 \c - - - :worker_1_port
--- this will initialize the cache
-\d
-      List of relations
- Schema | Name | Type | Owner 
---------+------+------+-------
-(0 rows)
-
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '5.2-4';
