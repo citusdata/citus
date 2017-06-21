@@ -454,7 +454,6 @@ my $startTime = time();
 # Finally run the tests
 if ($vanillatest)
 {
-    push(@arguments, "--schedule=${postgresSrcdir}/parallel_schedule");
     $ENV{PGHOST} = $host;
     $ENV{PGPORT} = $masterPort;
     $ENV{PGUSER} = $user;
