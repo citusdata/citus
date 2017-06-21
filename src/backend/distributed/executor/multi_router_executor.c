@@ -75,6 +75,8 @@ bool EnableDeadlockPrevention = true;
 /* functions needed during run phase */
 static void ReacquireMetadataLocks(List *taskList);
 static void AssignInsertTaskShardId(Query *jobQuery, List *taskList);
+static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
+													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
@@ -601,6 +603,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
+	List *relationShardList = task->relationShardList;
 
 	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
 	{
@@ -620,8 +623,32 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		bool dontFailOnError = false;
 		int64 currentAffectedTupleCount = 0;
 		int connectionFlags = SESSION_LIFESPAN;
-		MultiConnection *connection =
-			GetPlacementConnection(connectionFlags, taskPlacement, NULL);
+		List *placementAccessList = NIL;
+		MultiConnection *connection = NULL;
+
+		if (list_length(relationShardList) > 0)
+		{
+			placementAccessList = BuildPlacementSelectList(taskPlacement->nodeName,
+														   taskPlacement->nodePort,
+														   relationShardList);
+		}
+		else
+		{
+			/*
+			 * When the SELECT prunes down to 0 shards, just use the dummy placement.
+			 *
+			 * FIXME: it would be preferable to evaluate the SELECT locally since no
+			 * data from the workers is required.
+			 */
+
+			ShardPlacementAccess *placementAccess =
+				CreatePlacementAccess(taskPlacement, PLACEMENT_ACCESS_SELECT);
+
+			placementAccessList = list_make1(placementAccess);
+		}
+
+		connection = GetPlacementListConnection(connectionFlags, placementAccessList,
+												NULL);
 
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
@@ -638,6 +665,56 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 	}
 
 	ereport(ERROR, (errmsg("could not receive query results")));
+}
+
+
+/*
+ * BuildPlacementSelectList builds a list of SELECT placement accesses
+ * which can be used to call StartPlacementListConnection or
+ * GetPlacementListConnection.
+ */
+List *
+BuildPlacementSelectList(char *nodeName, int nodePort, List *relationShardList)
+{
+	ListCell *relationShardCell = NULL;
+	List *placementAccessList = NIL;
+
+	foreach(relationShardCell, relationShardList)
+	{
+		RelationShard *relationShard = (RelationShard *) lfirst(relationShardCell);
+		ShardPlacement *placement = NULL;
+		ShardPlacementAccess *placementAccess = NULL;
+
+		placement = FindShardPlacementOnNode(nodeName, nodePort, relationShard->shardId);
+		if (placement == NULL)
+		{
+			ereport(ERROR, (errmsg("no active placement of shard %ld found on node "
+								   "%s:%d",
+								   relationShard->shardId, nodeName, nodePort)));
+		}
+
+		placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_SELECT);
+		placementAccessList = lappend(placementAccessList, placementAccess);
+	}
+
+	return placementAccessList;
+}
+
+
+/*
+ * CreatePlacementAccess returns a new ShardPlacementAccess for the given placement
+ * and access type.
+ */
+static ShardPlacementAccess *
+CreatePlacementAccess(ShardPlacement *placement, ShardPlacementAccessType accessType)
+{
+	ShardPlacementAccess *placementAccess = NULL;
+
+	placementAccess = (ShardPlacementAccess *) palloc0(sizeof(ShardPlacementAccess));
+	placementAccess->placement = placement;
+	placementAccess->accessType = accessType;
+
+	return placementAccess;
 }
 
 

@@ -186,7 +186,7 @@ typedef struct Task
 	char replicationModel;         /* only applies to modify tasks */
 
 	bool insertSelectQuery;
-	List *relationShardList;       /* only applies INSERT/SELECT tasks */
+	List *relationShardList;
 } Task;
 
 
