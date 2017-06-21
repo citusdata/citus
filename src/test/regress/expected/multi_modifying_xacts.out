@@ -172,18 +172,16 @@ SELECT count(*) FROM researchers WHERE lab_id = 6;
 (1 row)
 
 ABORT;
--- applies to DDL, too
+-- we can mix DDL and INSERT
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
-COMMIT;
+ABORT;
 -- whether it occurs first or second
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 INSERT INTO labs VALUES (6, 'Bell Labs');
-ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
-COMMIT;
+ABORT;
 -- but the DDL should correctly roll back
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::regclass;
  Column |  Type  | Modifiers 
@@ -383,16 +381,29 @@ ORDER BY nodeport;
  localhost |    57638 | t       | DROP FUNCTION
 (2 rows)
 
--- ALTER TABLE and COPY are compatible if ALTER TABLE precedes COPY
+-- ALTER and copy are compatible
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
 \copy labs from stdin delimiter ','
 ROLLBACK;
--- but not if COPY precedes ALTER TABLE
 BEGIN;
 \copy labs from stdin delimiter ','
 ALTER TABLE labs ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
+ABORT;
+-- cannot perform DDL once a connection is used for multiple shards
+BEGIN;
+SELECT lab_id FROM researchers WHERE lab_id = 1 AND id = 0;
+ lab_id 
+--------
+(0 rows)
+
+SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
+ lab_id 
+--------
+(0 rows)
+
+ALTER TABLE researchers ADD COLUMN motto text;
+ERROR:  cannot perform parallel DDL command because multiple placements have been accessed over the same connection
 ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
@@ -1283,3 +1294,212 @@ SELECT * FROM run_command_on_workers('DROP USER test_user');
 (2 rows)
 
 DROP USER test_user;
+-- set up foreign keys to test transactions with co-located and reference tables
+BEGIN;
+SET LOCAL citus.shard_replication_factor TO 1;
+SET LOCAL citus.shard_count TO 4;
+CREATE TABLE usergroups (
+    gid int PRIMARY KEY,
+    name text
+);
+SELECT create_reference_table('usergroups');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE itemgroups (
+    gid int PRIMARY KEY,
+    name text
+);
+SELECT create_reference_table('itemgroups');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+CREATE TABLE users (
+    id int PRIMARY KEY,
+    name text,
+    user_group int
+);
+SELECT create_distributed_table('users', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+CREATE TABLE items (
+    user_id int REFERENCES users (id) ON DELETE CASCADE,
+	item_name text,
+    item_group int
+);
+SELECT create_distributed_table('items', 'user_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- Table to find values that live in different shards on the same node
+SELECT id, shard_name('users', shardid), nodename, nodeport
+FROM
+  pg_dist_shard_placement
+JOIN
+  ( SELECT id, get_shard_id_for_distribution_column('users', id) shardid FROM generate_series(1,10) id ) ids
+USING (shardid)
+ORDER BY
+  id;
+ id |  shard_name   | nodename  | nodeport 
+----+---------------+-----------+----------
+  1 | users_1200022 | localhost |    57637
+  2 | users_1200025 | localhost |    57638
+  3 | users_1200023 | localhost |    57638
+  4 | users_1200023 | localhost |    57638
+  5 | users_1200022 | localhost |    57637
+  6 | users_1200024 | localhost |    57637
+  7 | users_1200023 | localhost |    57638
+  8 | users_1200022 | localhost |    57637
+  9 | users_1200025 | localhost |    57638
+ 10 | users_1200022 | localhost |    57637
+(10 rows)
+
+END;
+-- the INSERTs into items should see the users
+BEGIN;
+\COPY users FROM STDIN WITH CSV
+INSERT INTO items VALUES (1, 'item-1');
+INSERT INTO items VALUES (6, 'item-6');
+END;
+SELECT user_id FROM items ORDER BY user_id;
+ user_id 
+---------
+       1
+       6
+(2 rows)
+
+-- should not be able to open multiple connections per node after INSERTing over one connection
+BEGIN;
+INSERT INTO users VALUES (2, 'burak');
+INSERT INTO users VALUES (3, 'burak');
+\COPY items FROM STDIN WITH CSV
+ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+END;
+-- cannot perform DDL after a co-located table has been read over 1 connection
+BEGIN;
+SELECT id FROM users WHERE id = 1;
+ id 
+----
+  1
+(1 row)
+
+SELECT id FROM users WHERE id = 6;
+ id 
+----
+  6
+(1 row)
+
+ALTER TABLE items ADD COLUMN last_update timestamptz;
+NOTICE:  using one-phase commit for distributed DDL commands
+ERROR:  cannot perform parallel DDL command because multiple placements have been accessed over the same connection
+END;
+-- but the other way around is fine
+BEGIN;
+ALTER TABLE items ADD COLUMN last_update timestamptz;
+SELECT id FROM users JOIN items ON (id = user_id) WHERE id = 1;
+ id 
+----
+  1
+(1 row)
+
+SELECT id FROM users JOIN items ON (id = user_id) WHERE id = 6;
+ id 
+----
+  6
+(1 row)
+
+END;
+BEGIN;
+-- establish multiple connections to a node
+\COPY users FROM STDIN WITH CSV
+-- now read from the reference table over each connection
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 2;
+ user_id 
+---------
+(0 rows)
+
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 3;
+ user_id 
+---------
+(0 rows)
+
+-- perform a DDL command on the reference table
+ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
+ERROR:  cannot perform DDL on a placement which has been read over multiple connections
+END;
+BEGIN;
+-- establish multiple connections to a node
+\COPY users FROM STDIN WITH CSV
+-- read from the reference table over each connection
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 2;
+ user_id 
+---------
+(0 rows)
+
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 3;
+ user_id 
+---------
+(0 rows)
+
+-- perform a DDL command on a co-located reference table
+ALTER TABLE usergroups ADD COLUMN last_update timestamptz;
+ERROR:  cannot perform DDL on a placement if a co-located placement has been read over multiple connections
+END;
+BEGIN;
+-- make a modification over connection 1
+INSERT INTO usergroups VALUES (0,'istanbul');
+-- copy over connections 1 and 2
+\COPY users FROM STDIN WITH CSV
+-- cannot read modifications made over different connections
+SELECT id FROM users JOIN usergroups ON (gid = user_group) WHERE id = 3;
+ERROR:  cannot perform query with placements that were modified over multiple connections
+END;
+-- make sure we can see cascading deletes
+BEGIN;
+SELECT master_modify_multiple_shards('DELETE FROM users');
+ master_modify_multiple_shards 
+-------------------------------
+                             2
+(1 row)
+
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 1;
+ user_id 
+---------
+(0 rows)
+
+SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 6;
+ user_id 
+---------
+(0 rows)
+
+END;
+-- test visibility after COPY
+INSERT INTO usergroups VALUES (2,'group');
+BEGIN;
+-- opens two separate connections to node
+\COPY users FROM STDIN WITH CSV
+-- Uses first connection, which wrote the row with id = 2
+SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 2;
+ id | name  | user_group | gid | name  
+----+-------+------------+-----+-------
+  2 | onder |          2 |   2 | group
+(1 row)
+
+-- Should use second connection, which wrote the row with id = 4
+SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 4;
+ id | name  | user_group | gid | name  
+----+-------+------------+-----+-------
+  4 | murat |          2 |   2 | group
+(1 row)
+
+END;
+DROP TABLE items, users, itemgroups, usergroups;

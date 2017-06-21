@@ -604,13 +604,6 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 	char *queryString = task->queryString;
 	List *relationShardList = task->relationShardList;
 
-	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("single-shard query may not appear in transaction blocks "
-							   "which contain multi-shard data modifications")));
-	}
-
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
 	 * attempt the query on the next placement.
@@ -744,14 +737,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
 	bool startedInTransaction =
 		InCoordinatedTransaction() && XactModificationLevel == XACT_MODIFICATION_DATA;
-
-	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("single-shard DML commands must not appear in "
-							   "transaction blocks which contain multi-shard data "
-							   "modifications")));
-	}
 
 	/*
 	 * Modifications for reference tables are always done using 2PC. First
@@ -1039,14 +1024,6 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		return 0;
 	}
 
-	if (XactModificationLevel == XACT_MODIFICATION_DATA)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("multi-shard data modifications must not appear in "
-							   "transaction blocks which contain single-shard DML "
-							   "commands")));
-	}
-
 	/* ensure that there are no concurrent modifications on the same shards */
 	AcquireExecutorMultiShardLocks(taskList);
 
@@ -1072,7 +1049,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	/* open connection to all relevant placements, if not already open */
 	shardConnectionHash = OpenTransactionsForAllTasks(taskList, connectionFlags);
 
-	XactModificationLevel = XACT_MODIFICATION_MULTI_SHARD;
+	XactModificationLevel = XACT_MODIFICATION_DATA;
 
 	/* iterate over placements in rounds, to ensure in-order execution */
 	while (tasksPending)

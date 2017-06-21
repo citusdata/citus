@@ -1609,19 +1609,22 @@ SELECT * FROM reference_table_test;
       10 |       2 | 2       | Fri Dec 02 00:00:00 2016
 (1 row)
 
--- do not allow mixing transactions
+-- DML+master_modify_multiple_shards is allowed
 BEGIN;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
-ERROR:  multi-shard data modifications must not appear in transaction blocks which contain single-shard DML commands
+ master_modify_multiple_shards 
+-------------------------------
+                            10
+(1 row)
+
 ROLLBACK;
--- Do not allow DDL and modification in the same transaction
+-- DDL+DML is allowed
 BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
-ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 ROLLBACK;
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 

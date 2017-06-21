@@ -1332,9 +1332,19 @@ ALTER TABLE raw_events_second DROP COLUMN value_4;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100; 
 ROLLBACK;
 
--- Insert after copy is currently disallowed because of the way the 
--- transaction modification state is currently handled. Copy is also
--- rolled back.
+-- Altering a reference table and then performing an INSERT ... SELECT which
+-- joins with the reference table is not allowed, since the INSERT ... SELECT
+-- would read from the reference table over others connections than the ones
+-- that performed the DDL.
+BEGIN;
+ALTER TABLE reference_table ADD COLUMN z int;
+INSERT INTO raw_events_first (user_id)
+SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
+ROLLBACK;
+
+-- Insert after copy is disallowed when the INSERT INTO ... SELECT  chooses
+-- to use a connection for one shard, while the connection already modified
+-- another shard.
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 100,100
@@ -1352,7 +1362,6 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 101
 SELECT user_id FROM raw_events_first WHERE user_id = 101;
 ROLLBACK;
 
--- Copy after insert is currently disallowed.
 BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';

@@ -994,13 +994,13 @@ UPDATE reference_table_test SET value_1 = 10 WHERE value_1 = 2;
 COMMIT;
 SELECT * FROM reference_table_test;
 
--- do not allow mixing transactions
+-- DML+master_modify_multiple_shards is allowed
 BEGIN;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
 ROLLBACK;
 
--- Do not allow DDL and modification in the same transaction
+-- DDL+DML is allowed
 BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');

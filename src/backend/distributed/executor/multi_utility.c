@@ -2494,14 +2494,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 {
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(ddlJob->targetRelationId);
 
-	if (XactModificationLevel == XACT_MODIFICATION_DATA)
-	{
-		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
-						errmsg("distributed DDL commands must not appear within "
-							   "transaction blocks containing single-shard data "
-							   "modifications")));
-	}
-
 	EnsureCoordinator();
 
 	if (!ddlJob->concurrentIndexCmd)

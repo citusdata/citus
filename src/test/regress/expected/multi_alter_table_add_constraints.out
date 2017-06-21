@@ -441,9 +441,9 @@ SELECT create_distributed_table('products', 'product_no');
 
 BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
--- Should error out since conflicts with the above single-shard data modification command.
+-- DDL may error out after an INSERT because it might pick the wrong connection
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
-ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
+ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
 ROLLBACK;
 BEGIN;
 -- Add constraints
@@ -451,9 +451,7 @@ ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ALTER COLUMN product_no SET NOT NULL;
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
--- Single shard DML command can't be located in the same transaction with above commands.
 INSERT INTO products VALUES(1,'product_1', 10, 8);
-ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 ROLLBACK;
 -- There should be no constraint on master and worker(s) 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;

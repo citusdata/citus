@@ -146,7 +146,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 	ListCell *workerNodeCell = NULL;
 	uint64 totalRelationSize = 0;
 
-	if (XactModificationLevel == XACT_MODIFICATION_MULTI_SHARD)
+	if (XactModificationLevel == XACT_MODIFICATION_DATA)
 	{
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("citus size functions cannot be called in transaction"
