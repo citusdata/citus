@@ -10,6 +10,34 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 580000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 
+CREATE SCHEMA test;
+
+CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
+    RETURNS pg_stat_activity
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+   activity record;
+BEGIN
+    LOOP
+        SELECT * INTO activity FROM pg_stat_activity
+	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        IF activity.pid IS NOT NULL THEN
+            RETURN activity;
+        ELSE
+            PERFORM pg_sleep(0.1);
+            PERFORM pg_stat_clear_snapshot();
+        END IF ;
+    END LOOP;
+END;
+$$;
+
+-- check maintenance daemon is started
+SELECT datname,
+    datname = current_database(),
+    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+
 -- ensure no objects were created outside pg_catalog
 SELECT COUNT(*)
 FROM pg_depend AS pgd,
@@ -18,7 +46,8 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'test');
+
 
 -- DROP EXTENSION pre-created by the regression suite
 DROP EXTENSION citus;
@@ -94,7 +123,7 @@ FROM pg_depend AS pgd,
 WHERE pgd.refclassid = 'pg_extension'::regclass AND
 	  pgd.refobjid   = pge.oid AND
 	  pge.extname    = 'citus' AND
-	  pgio.schema    NOT IN ('pg_catalog', 'citus');
+	  pgio.schema    NOT IN ('pg_catalog', 'citus', 'test');
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
@@ -173,3 +202,62 @@ ALTER EXTENSION citus UPDATE;
 
 -- if cache is invalidated succesfull, this \d should work without any problem
 \d
+
+\c - - - :master_port
+
+-- check that maintenance daemon gets (re-)started for the right user
+DROP EXTENSION citus;
+CREATE USER testuser SUPERUSER;
+SET ROLE testuser;
+CREATE EXTENSION citus;
+
+SELECT datname,
+    datname = current_database(),
+    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+
+-- and recreate as the right owner
+RESET ROLE;
+DROP EXTENSION citus;
+CREATE EXTENSION citus;
+
+
+-- Check that maintenance daemon can also be started in another database
+CREATE DATABASE another;
+\c another
+CREATE EXTENSION citus;
+
+CREATE SCHEMA test;
+
+CREATE OR REPLACE FUNCTION test.maintenance_worker(p_dbname text DEFAULT current_database())
+    RETURNS pg_stat_activity
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+   activity record;
+BEGIN
+    LOOP
+        SELECT * INTO activity FROM pg_stat_activity
+	WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        IF activity.pid IS NOT NULL THEN
+            RETURN activity;
+        ELSE
+            PERFORM pg_sleep(0.1);
+            PERFORM pg_stat_clear_snapshot();
+        END IF ;
+    END LOOP;
+END;
+$$;
+
+SELECT datname,
+    datname = current_database(),
+    usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
+FROM test.maintenance_worker();
+
+-- Test that database with active worker can be dropped. That'll
+-- require killing the maintenance worker.
+\c regression
+SELECT datname,
+    pg_terminate_backend(pid)
+FROM test.maintenance_worker('another');
+DROP DATABASE another;
