@@ -179,12 +179,6 @@ SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
 (1 row)
 
 ABORT;
--- applies to DDL
-BEGIN;
-INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
-ALTER TABLE labs_mx ADD COLUMN motto text;
-ERROR:  distributed DDL commands must not appear within transaction blocks containing single-shard data modifications
-COMMIT;
 -- doesn't apply to COPY after modifications
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
