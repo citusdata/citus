@@ -1060,7 +1060,7 @@ FROM   raw_events_first;
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  the partition column of table public.raw_events_second should have a value
+ERROR:  the partition column of table public.raw_events_second cannot be NULL
 INSERT INTO raw_events_second
             (user_id)
 SELECT user_id * 2
@@ -1094,7 +1094,7 @@ DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition 
 DETAIL:  Subquery contains an aggregation in the same position as the target table's partition column.
 HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  the partition column of table public.agg_events should have a value
+ERROR:  the partition column of table public.agg_events cannot be NULL
 INSERT INTO agg_events
             (value_3_agg,
              value_4_agg,
@@ -1112,7 +1112,7 @@ GROUP  BY user_id,
 DEBUG:  cannot perform distributed INSERT INTO ... SELECT becuase the partition columns in the source table and subquery do not match
 DETAIL:  The target table's partition column should correspond to a partition column in the subquery.
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  the partition column of table public.agg_events should have a value
+ERROR:  the partition column of table public.agg_events cannot be NULL
 -- tables should be co-located
 INSERT INTO agg_events (user_id)
 SELECT
