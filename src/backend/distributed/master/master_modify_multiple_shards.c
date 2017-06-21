@@ -210,7 +210,7 @@ ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, Oid relation
 		task = CitusMakeNode(Task);
 		task->jobId = jobId;
 		task->taskId = taskId++;
-		task->taskType = SQL_TASK;
+		task->taskType = MODIFY_TASK;
 		task->queryString = shardQueryString->data;
 		task->dependedTaskList = NULL;
 		task->replicationModel = REPLICATION_MODEL_INVALID;
