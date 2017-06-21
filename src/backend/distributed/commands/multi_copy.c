@@ -1874,7 +1874,7 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 																  relationName);
 
 			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-							errmsg("the partition column of table %s should have a value",
+							errmsg("the partition column of table %s cannot be NULL",
 								   qualifiedTableName)));
 		}
 
