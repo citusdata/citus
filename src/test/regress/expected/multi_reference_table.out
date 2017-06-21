@@ -39,7 +39,9 @@ SELECT
 FROM
 	pg_dist_shard_placement
 WHERE
-	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass);
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass)
+ORDER BY
+	nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1250000 |          1 | localhost |    57637
@@ -822,7 +824,9 @@ SELECT
 FROM
 	pg_dist_shard_placement
 WHERE
-	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass);
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass)
+ORDER BY
+	nodeport;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
  1250003 |          1 | localhost |    57637
