@@ -10,9 +10,7 @@
 
 #include "postgres.h"
 
-#ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
 
 #include "libpq-fe.h"
 
