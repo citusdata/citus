@@ -23,12 +23,15 @@ FROM
 	pg_dist_shard
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
+
 SELECT
 	shardid, shardstate, nodename, nodeport
 FROM
 	pg_dist_shard_placement
 WHERE
-	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass);
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test'::regclass)
+ORDER BY
+	nodeport;
 
 -- check whether data was copied into distributed table
 SELECT * FROM reference_table_test;
@@ -501,7 +504,9 @@ SELECT
 FROM
 	pg_dist_shard_placement
 WHERE
-	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass);
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'reference_table_test_fourth'::regclass)
+ORDER BY
+	nodeport;
 
 -- let's not run some update/delete queries on arbitrary columns
 DELETE FROM

@@ -657,3 +657,47 @@ INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *
 (1 row)
 
 DROP TABLE app_analytics_events;
+-- test UPDATE ... FROM
+CREATE TABLE raw_table (id bigint, value bigint);
+CREATE TABLE summary_table (id bigint, min_value numeric, average_value numeric);
+SELECT create_distributed_table('raw_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('summary_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO raw_table VALUES (1, 100);
+INSERT INTO raw_table VALUES (1, 200);
+INSERT INTO summary_table VALUES (1, NULL);
+SELECT * FROM summary_table WHERE id = 1;
+ id | min_value | average_value 
+----+-----------+---------------
+  1 |           |              
+(1 row)
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1;
+SELECT * FROM summary_table WHERE id = 1;
+ id | min_value |    average_value     
+----+-----------+----------------------
+  1 |           | 150.0000000000000000
+(1 row)
+
+UPDATE summary_table SET min_value = 100
+	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
+SELECT * FROM summary_table WHERE id = 1;
+ id | min_value |    average_value     
+----+-----------+----------------------
+  1 |       100 | 150.0000000000000000
+(1 row)
+
+DROP TABLE raw_table;
+DROP TABLE summary_table;
