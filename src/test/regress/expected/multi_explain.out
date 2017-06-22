@@ -985,3 +985,62 @@ Custom Scan (Citus Router)
         ->  Seq Scan on explain_table_570001 explain_table
               Filter: (id = 1)
 ROLLBACK;
+-- test explain with local INSERT ... SELECT
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part
+SELECT o_orderkey FROM orders_hash_part LIMIT 3;
+Custom Scan (Citus INSERT ... SELECT via coordinator)
+  ->  Limit
+        ->  Custom Scan (Citus Real-Time)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  Limit
+                          ->  Seq Scan on orders_hash_part_360295 orders_hash_part
+SELECT true AS valid FROM explain_json($$
+  INSERT INTO lineitem_hash_part (l_orderkey)
+  SELECT o_orderkey FROM orders_hash_part LIMIT 3;
+$$);
+t
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part (l_orderkey, l_quantity)
+SELECT o_orderkey, 5 FROM orders_hash_part LIMIT 3;
+Custom Scan (Citus INSERT ... SELECT via coordinator)
+  ->  Limit
+        ->  Custom Scan (Citus Real-Time)
+              Task Count: 4
+              Tasks Shown: One of 4
+              ->  Task
+                    Node: host=localhost port=57637 dbname=regression
+                    ->  Limit
+                          ->  Seq Scan on orders_hash_part_360295 orders_hash_part
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part (l_orderkey)
+SELECT s FROM generate_series(1,5) s;
+Custom Scan (Citus INSERT ... SELECT via coordinator)
+  ->  Function Scan on generate_series s
+EXPLAIN (COSTS OFF)
+WITH cte1 AS (SELECT s FROM generate_series(1,10) s)
+INSERT INTO lineitem_hash_part
+WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
+SELECT s FROM cte1;
+Custom Scan (Citus INSERT ... SELECT via coordinator)
+  ->  Subquery Scan on citus_insert_select_subquery
+        CTE cte1
+          ->  Function Scan on generate_series s
+        ->  CTE Scan on cte1
+              CTE cte1
+                ->  Limit
+                      ->  CTE Scan on cte1 cte1_1
+EXPLAIN (COSTS OFF)
+INSERT INTO lineitem_hash_part
+( SELECT s FROM generate_series(1,5) s) UNION
+( SELECT s FROM generate_series(5,10) s);
+Custom Scan (Citus INSERT ... SELECT via coordinator)
+  ->  Subquery Scan on citus_insert_select_subquery
+        ->  HashAggregate
+              Group Key: s.s
+              ->  Append
+                    ->  Function Scan on generate_series s
+                    ->  Function Scan on generate_series s_1

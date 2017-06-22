@@ -38,6 +38,7 @@ typedef struct CitusScanState
 extern Node * RealTimeCreateScan(CustomScan *scan);
 extern Node * TaskTrackerCreateScan(CustomScan *scan);
 extern Node * RouterCreateScan(CustomScan *scan);
+extern Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
 extern Node * DelayedErrorCreateScan(CustomScan *scan);
 extern void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
 extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);

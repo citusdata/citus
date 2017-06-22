@@ -79,9 +79,6 @@ DELETE FROM limit_orders_mx WHERE id = 246 AND placed_at = current_timestamp::ti
 -- commands with multiple rows are unsupported
 INSERT INTO limit_orders_mx VALUES (DEFAULT), (DEFAULT);
 
--- INSERT ... SELECT ... FROM commands are unsupported from workers
-INSERT INTO limit_orders_mx SELECT * FROM limit_orders_mx;
-
 -- connect back to the other node
 \c - - - :worker_1_port
 
@@ -272,6 +269,16 @@ DELETE FROM multiple_hash_mx WHERE category = '1' RETURNING category;
 -- check
 SELECT * FROM multiple_hash_mx WHERE category = '1' ORDER BY category, data;
 SELECT * FROM multiple_hash_mx WHERE category = '2' ORDER BY category, data;
+
+--- INSERT ... SELECT ... FROM commands are supported from workers
+INSERT INTO multiple_hash_mx
+SELECT s, s*2 FROM generate_series(1,10) s;
+
+-- but are never distributed
+BEGIN;
+SET LOCAL client_min_messages TO DEBUG1;
+INSERT INTO multiple_hash_mx SELECT * FROM multiple_hash_mx;
+END;
 
 -- verify interaction of default values, SERIAL, and RETURNING
 \set QUIET on

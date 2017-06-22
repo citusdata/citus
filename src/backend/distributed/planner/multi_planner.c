@@ -16,6 +16,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_planner.h"
@@ -49,6 +50,11 @@ static CustomScanMethods TaskTrackerCustomScanMethods = {
 static CustomScanMethods RouterCustomScanMethods = {
 	"Citus Router",
 	RouterCreateScan
+};
+
+static CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
+	"Citus INSERT ... SELECT via coordinator",
+	CoordinatorInsertSelectCreateScan
 };
 
 static CustomScanMethods DelayedErrorCustomScanMethods = {
@@ -225,7 +231,7 @@ IsModifyCommand(Query *query)
 	CmdType commandType = query->commandType;
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
-		commandType == CMD_DELETE || query->hasModifyingCTE)
+		commandType == CMD_DELETE)
 	{
 		return true;
 	}
@@ -273,9 +279,25 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 	if (IsModifyCommand(query))
 	{
-		/* modifications are always routed through the same planner/executor */
-		distributedPlan =
-			CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+		if (InsertSelectIntoDistributedTable(originalQuery))
+		{
+			distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
+																plannerRestrictionContext);
+
+			if (distributedPlan->planningError != NULL)
+			{
+				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+
+				/* if INSERT..SELECT cannot be distributed, pull to coordinator */
+				distributedPlan = CreateCoordinatorInsertSelectPlan(originalQuery);
+			}
+		}
+		else
+		{
+			/* modifications are always routed through the same planner/executor */
+			distributedPlan =
+				CreateModifyPlan(originalQuery, query, plannerRestrictionContext);
+		}
 
 		Assert(distributedPlan);
 	}
@@ -494,6 +516,12 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 			break;
 		}
 
+		case MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT:
+		{
+			customScan->methods = &CoordinatorInsertSelectCustomScanMethods;
+			break;
+		}
+
 		default:
 		{
 			customScan->methods = &DelayedErrorCustomScanMethods;
@@ -506,7 +534,6 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 	customScan->custom_private = list_make1(multiPlanData);
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
 
-	/* check if we have a master query */
 	if (multiPlan->masterQuery)
 	{
 		finalPlan = FinalizeNonRouterPlan(localPlan, multiPlan, customScan);

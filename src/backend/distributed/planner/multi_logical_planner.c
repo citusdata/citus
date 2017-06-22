@@ -26,6 +26,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/relation_restriction_equivalence.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -2660,6 +2661,15 @@ NeedsDistributedPlanning(Query *queryTree)
 		commandType != CMD_UPDATE && commandType != CMD_DELETE)
 	{
 		return false;
+	}
+
+	/*
+	 * We can handle INSERT INTO distributed_table SELECT ... even if the SELECT
+	 * part references local tables, so skip the remaining checks.
+	 */
+	if (InsertSelectIntoDistributedTable(queryTree))
+	{
+		return true;
 	}
 
 	/* extract range table entries for simple relations only */

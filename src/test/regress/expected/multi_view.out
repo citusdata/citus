@@ -197,9 +197,6 @@ SELECT count(*) FROM temp_lineitem;
   1706
 (1 row)
 
--- modifying views is disallowed
-INSERT INTO air_shipped_lineitems SELECT * from temp_lineitem;
-ERROR:  cannot insert into view over distributed table
 SET citus.task_executor_type to "task-tracker";
 -- single view repartition subqueries are not supported
 SELECT l_suppkey, count(*) FROM

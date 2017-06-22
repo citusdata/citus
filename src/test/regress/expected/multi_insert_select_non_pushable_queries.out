@@ -66,7 +66,8 @@ FROM (
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- not pushable since the JOIN is not an equi join right part of the UNION
 -- is not joined on the partition key
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
@@ -107,7 +108,8 @@ FROM (
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- the LEFT JOIN conditon is not on the partition column (i.e., is it part_key divided by 2)
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg )
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event)
@@ -147,7 +149,8 @@ FROM (
   ) t2 ON (t1.user_id = (t2.user_id)/2)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 ------------------------------------
 ------------------------------------
 -- Funnel, grouped by the number of times a user has done an event
@@ -220,7 +223,8 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   count_pay;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- not pushable since the JOIN condition is not equi JOIN
 -- (subquery_1 JOIN subquery_2)
 INSERT INTO agg_results_third (user_id, value_1_agg, value_2_agg)
@@ -288,7 +292,8 @@ GROUP BY
   count_pay, user_id
 ORDER BY
   count_pay;
-ERROR:  Set operations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 ------------------------------------
 ------------------------------------
 -- Most recently seen users_table events_table
@@ -686,4 +691,5 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
-ERROR:  Subqueries without relations are not allowed in INSERT ... SELECT queries
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without relations are unsupported
