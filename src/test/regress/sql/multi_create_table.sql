@@ -265,7 +265,7 @@ DROP TABLE data_load_test;
 END;
 
 -- Test data loading after dropping a column
-CREATE TABLE data_load_test (col1 int, col2 text, col3 text);
+CREATE TABLE data_load_test (col1 int, col2 text, col3 text, "CoL4"")" int);
 INSERT INTO data_load_test VALUES (132, 'hello', 'world');
 INSERT INTO data_load_test VALUES (243, 'world', 'hello');
 ALTER TABLE data_load_test DROP COLUMN col2;
