@@ -71,7 +71,7 @@ FROM (
 ) t GROUP BY user_id, hasdone_event;
 
 -- get some statistics from the aggregated results to ensure the results are correct
--- SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 
 ------------------------------------
 ------------------------------------
@@ -148,7 +148,7 @@ ORDER BY
   count_pay;
 
 -- get some statistics from the aggregated results to ensure the results are correct
--- SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 
 ------------------------------------
 ------------------------------------

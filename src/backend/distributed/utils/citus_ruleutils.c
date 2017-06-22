@@ -59,7 +59,7 @@
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
 static const char * convert_aclright_to_string(int aclright);
-static bool contain_nextval_expression_walker(Node *node, void *context);
+
 
 /*
  * pg_get_extensiondef_string finds the foreign data wrapper that corresponds to
@@ -989,7 +989,7 @@ convert_aclright_to_string(int aclright)
  * contain_nextval_expression_walker walks over expression tree and returns
  * true if it contains call to 'nextval' function.
  */
-static bool
+bool
 contain_nextval_expression_walker(Node *node, void *context)
 {
 	if (node == NULL)

@@ -15,6 +15,9 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "distributed/insert_select_executor.h"
+#include "distributed/insert_select_planner.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_planner.h"
@@ -26,6 +29,7 @@
 #include "executor/execdebug.h"
 #include "commands/copy.h"
 #include "nodes/makefuncs.h"
+#include "parser/parsetree.h"
 #include "storage/lmgr.h"
 #include "tcop/utility.h"
 #include "utils/snapmgr.h"
@@ -78,6 +82,15 @@ static CustomExecMethods RouterSelectCustomExecMethods = {
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
+};
+
+static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
+	.CustomName = "CoordinatorInsertSelectScan",
+	.BeginCustomScan = CitusSelectBeginScan,
+	.ExecCustomScan = CoordinatorInsertSelectExecScan,
+	.EndCustomScan = CitusEndScan,
+	.ReScanCustomScan = CitusReScan,
+	.ExplainCustomScan = CoordinatorInsertSelectExplainScan
 };
 
 
@@ -162,6 +175,25 @@ RouterCreateScan(CustomScan *scan)
 		Assert(isModificationQuery);
 		scanState->customScanState.methods = &RouterMultiModifyCustomExecMethods;
 	}
+
+	return (Node *) scanState;
+}
+
+
+/*
+ * CoordinatorInsertSelectCrateScan creates the scan state for executing
+ * INSERT..SELECT into a distributed table via the coordinator.
+ */
+Node *
+CoordinatorInsertSelectCreateScan(CustomScan *scan)
+{
+	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
+
+	scanState->executorType = MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
+	scanState->customScanState.ss.ps.type = T_CustomScanState;
+	scanState->multiPlan = GetMultiPlan(scan);
+
+	scanState->customScanState.methods = &CoordinatorInsertSelectCustomExecMethods;
 
 	return (Node *) scanState;
 }
