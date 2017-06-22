@@ -281,16 +281,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	{
 		if (InsertSelectIntoDistributedTable(originalQuery))
 		{
-			distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
-																plannerRestrictionContext);
-
-			if (distributedPlan->planningError != NULL)
-			{
-				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
-
-				/* if INSERT..SELECT cannot be distributed, pull to coordinator */
-				distributedPlan = CreateCoordinatorInsertSelectPlan(originalQuery);
-			}
+			distributedPlan =
+				CreateInsertSelectPlan(originalQuery, plannerRestrictionContext);
 		}
 		else
 		{
