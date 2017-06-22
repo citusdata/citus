@@ -483,7 +483,7 @@ CONTEXT:  SQL statement "SELECT master_drop_all_shards(v_obj.objid, v_obj.schema
 PL/pgSQL function citus_drop_trigger() line 21 at PERFORM
 END;
 -- Test data loading after dropping a column
-CREATE TABLE data_load_test (col1 int, col2 text, col3 text);
+CREATE TABLE data_load_test (col1 int, col2 text, col3 text, "CoL4"")" int);
 INSERT INTO data_load_test VALUES (132, 'hello', 'world');
 INSERT INTO data_load_test VALUES (243, 'world', 'hello');
 ALTER TABLE data_load_test DROP COLUMN col2;
@@ -495,10 +495,10 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 SELECT * FROM data_load_test;
- col1 | col3  
-------+-------
-  132 | world
-  243 | hello
+ col1 | col3  | CoL4") 
+------+-------+--------
+  132 | world |       
+  243 | hello |       
 (2 rows)
 
 DROP TABLE data_load_test;
