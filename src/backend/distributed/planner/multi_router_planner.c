@@ -292,6 +292,11 @@ UpdateFromQuery(Query *query)
 	bool hasSubquery = false;
 	ListCell *rangeTableCell = NULL;
 
+	if (query->hasSubLinks)
+	{
+		hasSubquery = true;
+	}
+
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
@@ -1275,7 +1280,7 @@ ModifyQuerySupported(Query *queryTree)
 	/*
 	 * Reject subqueries which are in SELECT or WHERE clause.
 	 */
-	if (queryTree->hasSubLinks == true)
+	if (queryTree->hasSubLinks == true && !UpdateFromQuery(queryTree))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "subqueries are not supported in distributed modifications",
