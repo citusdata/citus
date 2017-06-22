@@ -16,6 +16,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"

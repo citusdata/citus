@@ -22,6 +22,7 @@
 #include "distributed/citus_clauses.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
