@@ -2361,6 +2361,22 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 
 	if (prunedRelationShardList == NULL)
 	{
+		if (UpdateFromQuery(originalQuery))
+		{
+			StringInfo errorMessage = makeStringInfo();
+			StringInfo errorHint = makeStringInfo();
+			appendStringInfo(errorMessage,
+							 "cannot run UPDATE command which targets multiple "
+							 "shards");
+
+			appendStringInfo(errorHint, "Make sure the value for partition column "
+										"falls into a single shard.");
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("%s", errorMessage->data),
+							errhint("%s", errorHint->data)));
+		}
+
 		return false;
 	}
 
@@ -2376,6 +2392,22 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 		/* no shard is present or all shards are pruned out case will be handled later */
 		if (prunedShardList == NIL)
 		{
+			if (UpdateFromQuery(originalQuery))
+			{
+				StringInfo errorMessage = makeStringInfo();
+				StringInfo errorHint = makeStringInfo();
+				appendStringInfo(errorMessage,
+								 "cannot run UPDATE command which targets no "
+								 "shards");
+
+				appendStringInfo(errorHint, "Make sure the value for partition column "
+											"falls into a single shard.");
+
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("%s", errorMessage->data),
+								errhint("%s", errorHint->data)));
+			}
+
 			continue;
 		}
 

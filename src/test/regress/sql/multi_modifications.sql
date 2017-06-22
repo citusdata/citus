@@ -456,5 +456,25 @@ UPDATE summary_table SET min_value = 100
 
 SELECT * FROM summary_table WHERE id = 1;
 
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1 AND id = 4;
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1;
+
+SELECT * FROM summary_table WHERE id = 1;
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1 AND id = 4;
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table) average_query;
+
 DROP TABLE raw_table;
 DROP TABLE summary_table;

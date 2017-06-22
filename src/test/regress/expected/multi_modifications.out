@@ -699,5 +699,33 @@ SELECT * FROM summary_table WHERE id = 1;
   1 |       100 | 150.0000000000000000
 (1 row)
 
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1 AND id = 4;
+ERROR:  cannot run UPDATE command which targets no shards
+HINT:  Make sure the value for partition column falls into a single shard.
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1;
+ERROR:  cannot run UPDATE command which targets no shards
+HINT:  Make sure the value for partition column falls into a single shard.
+SELECT * FROM summary_table WHERE id = 1;
+ id | min_value |    average_value     
+----+-----------+----------------------
+  1 |       100 | 150.0000000000000000
+(1 row)
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1 AND id = 4;
+ERROR:  cannot run UPDATE command which targets no shards
+HINT:  Make sure the value for partition column falls into a single shard.
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table) average_query;
+ERROR:  cannot run UPDATE command which targets multiple shards
+HINT:  Make sure the value for partition column falls into a single shard.
 DROP TABLE raw_table;
 DROP TABLE summary_table;
