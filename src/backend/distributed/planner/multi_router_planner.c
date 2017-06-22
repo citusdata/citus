@@ -2400,6 +2400,39 @@ RouterSelectQuery(Query *originalQuery, RelationRestrictionContext *restrictionC
 		*relationShardList = lappend(*relationShardList, relationShard);
 	}
 
+	if (UpdateFromQuery(originalQuery))
+	{
+		StringInfo errorMessage = makeStringInfo();
+		StringInfo errorHint = makeStringInfo();
+		const char *targetCountType = NULL;
+		bool errorOut = false;
+
+		if (RelationPrunesToMultipleShards(*relationShardList))
+		{
+			targetCountType = "multiple";
+			errorOut = true;
+		}
+		else if (!shardsPresent)
+		{
+			targetCountType = "no";
+			errorOut = true;
+		}
+
+		if (errorOut)
+		{
+			appendStringInfo(errorMessage, "cannot run UPDATE command which targets %s "
+										   "shards", targetCountType);
+
+			appendStringInfo(errorHint, "Make sure the value for partition column "
+										"falls into a single shard.");
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("%s", errorMessage->data),
+							errhint("%s", errorHint->data)));
+		}
+	}
+
+
 	/*
 	 * We bail out if there are RTEs that prune multiple shards above, but
 	 * there can also be multiple RTEs that reference the same relation.
