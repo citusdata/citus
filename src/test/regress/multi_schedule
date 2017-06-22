@@ -25,7 +25,7 @@ test: multi_metadata_access
 # ---
 # Tests for partitioning support
 # ---
-test: multi_partitioning_utils
+test: multi_partitioning_utils multi_partitioning
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and

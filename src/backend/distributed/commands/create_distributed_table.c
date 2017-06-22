@@ -29,6 +29,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/distribution_column.h"
 #include "distributed/master_metadata_utility.h"
@@ -38,6 +39,7 @@
 #include "distributed/multi_copy.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_utility.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
@@ -80,7 +82,8 @@ static void CreateHashDistributedTable(Oid relationId, char *distributionColumnN
 									   char *colocateWithTableName,
 									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
-static void CopyLocalDataIntoShards(Oid relationId);
+static void CopyLocalDataIntoShards(Oid destinationDistributedRelationId, List *
+									sourceLocalRelationList);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 #if (PG_VERSION_NUM >= 100000)
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
@@ -280,7 +283,7 @@ CreateReferenceTable(Oid relationId)
 	/* copy over data for regular relations */
 	if (relationKind == RELKIND_RELATION)
 	{
-		CopyLocalDataIntoShards(relationId);
+		CopyLocalDataIntoShards(relationId, list_make1_oid(relationId));
 	}
 }
 
@@ -339,9 +342,9 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  "(OIDS) option in their definitions.")));
 	}
 
-	/* verify target relation is either regular or foreign table */
 	relationKind = relation->rd_rel->relkind;
-	if (relationKind != RELKIND_RELATION && relationKind != RELKIND_FOREIGN_TABLE)
+
+	if (!SupportedRelationKind(relation))
 	{
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						errmsg("cannot distribute relation: %s",
@@ -351,13 +354,6 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 	}
 
 #if (PG_VERSION_NUM >= 100000)
-	if (relation->rd_rel->relispartition)
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distributing partition tables is unsupported.")));
-	}
-
 	if (RelationUsesIdentityColumns(relationDesc))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -366,6 +362,20 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  "... AS IDENTITY.")));
 	}
 #endif
+
+	/* partitions cannot be distributed unless thier parent is already partitioned */
+	if (PartitionTable(relationId) && !IsDistributedTable(PartitionParentOid(relationId)))
+	{
+		char *parentRelationName = get_rel_name(PartitionParentOid(relationId));
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errmsg("cannot distributed relation \"%s\" which is partition"
+							   " of \"%s\"", relationName, parentRelationName),
+						errdetail("Citus does not support partitioning among local "
+								  "tables and distributed tables"),
+						errhint("First distribute the partitioned table  \"%s\"",
+								parentRelationName)));
+	}
 
 	/* check that table is empty if that is required */
 	if (requireEmpty && !LocalTableEmpty(relationId))
@@ -664,7 +674,11 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 	/* relax empty table requirement for regular (non-foreign) tables */
 	relationKind = get_rel_relkind(relationId);
+#if (PG_VERSION_NUM >= 100000)
+	if (relationKind == RELKIND_RELATION || relationKind == RELKIND_PARTITIONED_TABLE)
+#else
 	if (relationKind == RELKIND_RELATION)
+#endif
 	{
 		requireEmpty = false;
 	}
@@ -688,10 +702,53 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
 	}
 
-	/* copy over data for regular relations */
-	if (relationKind == RELKIND_RELATION)
+	/*
+	 * Copy over data for regular relations. Note that here we skip the partitions
+	 * and copy them via the partitioned table below.
+	 */
+	if (relationKind == RELKIND_RELATION && !PartitionTable(relationId))
 	{
-		CopyLocalDataIntoShards(relationId);
+		CopyLocalDataIntoShards(relationId, list_make1_oid(relationId));
+	}
+
+	/* we also need to check for partitioned tables */
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		char *parentRelationName = get_rel_name(relationId);
+		ListCell *partitionCell = NULL;
+
+		/* partitioned distributed tables are only supported with replication */
+		if (replicationFactor != 1)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+							errmsg("cannot distribute relation \"%s\"",
+								   parentRelationName),
+							errdetail("Relation \"%s\" has partitions and "
+									  "distributing partitioned tables "
+									  "with shard replication factor greater "
+									  "than 1 is not supported.", parentRelationName)));
+		}
+
+		/*
+		 * For each partition, create a co-located hash distributed table. Note that
+		 * we pick the parent tables distribution key as the distribution key for
+		 * the partitions.
+		 */
+		foreach(partitionCell, partitionList)
+		{
+			Oid partitionOid = lfirst_oid(partitionCell);
+
+			CreateHashDistributedTable(partitionOid, distributionColumnName,
+									   parentRelationName, shardCount,
+									   replicationFactor);
+		}
+
+		/*
+		 * After converting all the partition tables into distributed tables, now lets
+		 * copy the existing data from the local partitions.
+		 */
+		CopyLocalDataIntoShards(relationId, partitionList);
 	}
 
 	heap_close(pgDistColocation, NoLock);
@@ -742,7 +799,7 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
 
 
 /*
- * CopyLocalDataIntoShards copies data from the local table, which is hidden
+ * CopyLocalDataIntoShards copies data from list of local tables, which are hidden
  * after converting it to a distributed table, into the shards of the distributed
  * table.
  *
@@ -758,33 +815,68 @@ EnsureReplicationSettings(Oid relationId, char replicationModel)
  * want to read from the local table. To keep it simple, we perform a heap scan
  * directly on the table.
  *
- * Any writes on the table that are started during this operation will be handled
- * as distributed queries once the current transaction commits. SELECTs will
- * continue to read from the local table until the current transaction commits,
- * after which new SELECTs will be handled as distributed queries.
+ * Any writes on both the source tables and target table that are started
+ * during this operation will be handled as distributed queries once the
+ * current transaction commits. SELECTs will continue to read from the
+ * local table until the current transaction commits, after which new
+ * SELECTs will be handled as distributed queries.
  *
  * After copying local data into the distributed table, the local data remains
  * in place and should be truncated at a later time.
+ *
+ * Note that it is allowed that destinationDistributedRelationId also appears on
+ * sourceOidList.
  */
 static void
-CopyLocalDataIntoShards(Oid distributedRelationId)
+CopyLocalDataIntoShards(Oid destinationDistributedRelationId, List *sourceOidList)
 {
 	DestReceiver *copyDest = NULL;
 	List *columnNameList = NIL;
 	Relation distributedRelation = NULL;
+	List *sourceRelationList = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	bool stopOnFailure = true;
 
 	EState *estate = NULL;
-	HeapScanDesc scan = NULL;
 	HeapTuple tuple = NULL;
 	ExprContext *econtext = NULL;
 	MemoryContext oldContext = NULL;
 	TupleTableSlot *slot = NULL;
 	uint64 rowsCopied = 0;
 
+	ListCell *sourceOidCell = NULL;
+	ListCell *sourceRelationCell = NULL;
+
 	/* take an ExclusiveLock to block all operations except SELECT */
-	distributedRelation = heap_open(distributedRelationId, ExclusiveLock);
+	distributedRelation = heap_open(destinationDistributedRelationId, ExclusiveLock);
+
+	/* take ExclusiveLock on all source relations as well */
+	foreach(sourceOidCell, sourceOidList)
+	{
+		Oid sourceRelationId = lfirst_oid(sourceOidCell);
+		Relation localRelation = heap_open(sourceRelationId, ExclusiveLock);
+
+		/*
+		 * This check currently cannot be exercised by any code path. However,
+		 * it should be here as a precaution in case the support is expanded.
+		 */
+		if (list_length(sourceOidList) > 1 &&
+			PartitionParentOid(sourceRelationId) != destinationDistributedRelationId)
+		{
+			NameData localRelationNameData = localRelation->rd_rel->relname;
+			char *localRelationName = pstrdup(NameStr(localRelationNameData));
+
+			NameData distributedRelationNameData = localRelation->rd_rel->relname;
+			char *distributedRelationName = pstrdup(NameStr(distributedRelationNameData));
+
+			ereport(ERROR, (errmsg("Local relation \"%s\" cannot be copied into "
+								   "distributed relation \"%s\"", localRelationName,
+								   distributedRelationName),
+							errdetail("Relations do not have partitioning hierarcy")));
+		}
+
+		sourceRelationList = lappend(sourceRelationList, localRelation);
+	}
 
 	/*
 	 * All writes have finished, make sure that we can see them by using the
@@ -808,52 +900,65 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	econtext->ecxt_scantuple = slot;
 
 	copyDest =
-		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
+		(DestReceiver *) CreateCitusCopyDestReceiver(destinationDistributedRelationId,
 													 columnNameList, estate,
 													 stopOnFailure);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
 
-	/* begin reading from local table */
-	scan = heap_beginscan(distributedRelation, GetActiveSnapshot(), 0, NULL);
-
-	oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
-
-	while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
+	/* iterate on the local relations, copy each into the destination relation */
+	foreach(sourceRelationCell, sourceRelationList)
 	{
-		/* materialize tuple and send it to a shard */
-		ExecStoreTuple(tuple, slot, InvalidBuffer, false);
-		copyDest->receiveSlot(slot, copyDest);
+		Relation localRelation = (Relation) lfirst(sourceRelationCell);
+		bool printNoticeMessage = true;
 
-		/* clear tuple memory */
-		ResetPerTupleExprContext(estate);
+		/* begin reading from local table */
+		HeapScanDesc scan = heap_beginscan(localRelation, GetActiveSnapshot(), 0, NULL);
 
-		/* make sure we roll back on cancellation */
-		CHECK_FOR_INTERRUPTS();
+		oldContext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 
-		if (rowsCopied == 0)
+		while ((tuple = heap_getnext(scan, ForwardScanDirection)) != NULL)
 		{
-			ereport(NOTICE, (errmsg("Copying data from local table...")));
+			/* materialize tuple and send it to a shard */
+			ExecStoreTuple(tuple, slot, InvalidBuffer, false);
+			copyDest->receiveSlot(slot, copyDest);
+
+			/* clear tuple memory */
+			ResetPerTupleExprContext(estate);
+
+			/* make sure we roll back on cancellation */
+			CHECK_FOR_INTERRUPTS();
+
+			if (printNoticeMessage)
+			{
+				/* we only want to print this once per relation */
+				printNoticeMessage = false;
+
+				ereport(NOTICE, (errmsg("Copying data from local table...")));
+			}
+
+			rowsCopied++;
+
+			if (rowsCopied % 1000000 == 0)
+			{
+				ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
+			}
 		}
 
-		rowsCopied++;
+		MemoryContextSwitchTo(oldContext);
 
-		if (rowsCopied % 1000000 == 0)
-		{
-			ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
-		}
+		/* finish reading from the local table */
+		heap_endscan(scan);
+
+		/* keep the lock */
+		heap_close(localRelation, NoLock);
 	}
 
 	if (rowsCopied % 1000000 != 0)
 	{
 		ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
 	}
-
-	MemoryContextSwitchTo(oldContext);
-
-	/* finish reading from the local table */
-	heap_endscan(scan);
 
 	/* finish writing into the shards */
 	copyDest->rShutdown(copyDest);

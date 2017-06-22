@@ -24,6 +24,9 @@
 #include "commands/tablecmds.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "catalog/partition.h"
+#endif
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
@@ -31,6 +34,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
@@ -396,10 +400,12 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 			relationId);
 		int shardIndex = -1; /* not used in this code path */
 		bool created = false;
+		char *alterTableAttachPartitionCommand = NULL;
 
 		created = WorkerCreateShard(relationId, nodeName, nodePort, shardIndex,
 									shardId, newPlacementOwner, ddlEventList,
-									foreignConstraintCommandList);
+									foreignConstraintCommandList,
+									alterTableAttachPartitionCommand);
 		if (created)
 		{
 			const RelayFileState shardState = FILE_FINALIZED;
@@ -438,7 +444,8 @@ CreateShardPlacements(Oid relationId, int64 shardId, List *ddlEventList,
 bool
 WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 				  int shardIndex, uint64 shardId, char *newShardOwner,
-				  List *ddlCommandList, List *foreignConstraintCommandList)
+				  List *ddlCommandList, List *foreignConstraintCommandList,
+				  char *alterTableAttachPartitionCommand)
 {
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
@@ -528,6 +535,45 @@ WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 		{
 			shardCreated = false;
 			break;
+		}
+	}
+
+	/*
+	 * If the shard is created for a partition, send the command to create the
+	 * partitioning hierarcy on the shard.
+	 */
+	if (alterTableAttachPartitionCommand != NULL)
+	{
+		Oid parentRelationId = PartitionParentOid(relationId);
+		uint64 correspondingParentShardId = InvalidOid;
+		StringInfo applyAttachPartitionCommand = makeStringInfo();
+		List *queryResultList = NIL;
+
+		Oid parentSchemaId = InvalidOid;
+		char *parentSchemaName = NULL;
+		char *escapedParentSchemaName = NULL;
+		char *escapedCommand = NULL;
+
+		Assert(PartitionTable(relationId));
+
+		parentSchemaId = get_rel_namespace(parentRelationId);
+		parentSchemaName = get_namespace_name(parentSchemaId);
+		escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
+		escapedCommand = quote_literal_cstr(alterTableAttachPartitionCommand);
+
+		correspondingParentShardId = ColocatedShardIdInRelation(parentRelationId,
+																shardIndex);
+
+		appendStringInfo(applyAttachPartitionCommand,
+						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, correspondingParentShardId,
+						 escapedParentSchemaName, shardId, escapedSchemaName,
+						 escapedCommand);
+
+		queryResultList = ExecuteRemoteQuery(nodeName, nodePort, newShardOwner,
+											 applyAttachPartitionCommand);
+		if (queryResultList == NIL)
+		{
+			shardCreated = false;
 		}
 	}
 

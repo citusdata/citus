@@ -116,7 +116,8 @@ extern void CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId);
 extern void CreateReferenceTableShard(Oid distributedTableId);
 extern bool WorkerCreateShard(Oid relationId, char *nodeName, uint32 nodePort,
 							  int shardIndex, uint64 shardId, char *newShardOwner,
-							  List *ddlCommandList, List *foreignConstraintCommadList);
+							  List *ddlCommandList, List *foreignConstraintCommadList,
+							  char *alterTableAttachPartitionCommand);
 extern Oid ForeignConstraintGetReferencedTableId(char *queryString);
 extern void CheckHashPartitionedTable(Oid distributedTableId);
 extern void CheckTableSchemaNameForDrop(Oid relationId, char **schemaName,

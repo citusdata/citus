@@ -59,7 +59,6 @@
 
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
-static bool SupportedRelationKind(Relation relation);
 static const char * convert_aclright_to_string(int aclright);
 
 
@@ -494,7 +493,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
  * SupportedRelationKind returns true if the given relation is supported as a
  * distributed relation.
  */
-static bool
+bool
 SupportedRelationKind(Relation relation)
 {
 	char relationKind = relation->rd_rel->relkind;

@@ -736,7 +736,11 @@ ShardStorageType(Oid relationId)
 	char shardStorageType = 0;
 
 	char relationType = get_rel_relkind(relationId);
+#if (PG_VERSION_NUM >= 100000)
+	if (relationType == RELKIND_RELATION || relationType == RELKIND_PARTITIONED_TABLE)
+#else
 	if (relationType == RELKIND_RELATION)
+#endif
 	{
 		shardStorageType = SHARD_STORAGE_TABLE;
 	}
