@@ -137,9 +137,7 @@ ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
 
-#if (PG_VERSION_NUM >= 90600)
 	cursorOptions = CURSOR_OPT_PARALLEL_OK;
-#endif
 
 	/* plan the subquery, this may be another distributed query */
 	queryPlan = pg_plan_query(query, cursorOptions, params);

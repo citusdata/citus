@@ -29,7 +29,6 @@
 
 /* Macros for declaring appropriate local variables */
 /* A few guys need only local_node */
-#if (PG_VERSION_NUM >= 90600)
 static inline Node *
 CitusSetTag(Node *node, int tag)
 {
@@ -42,10 +41,6 @@ CitusSetTag(Node *node, int tag)
 /* *INDENT-OFF* */
 #define READ_LOCALS_NO_FIELDS(nodeTypeName) \
 	nodeTypeName *local_node = (nodeTypeName *) CitusSetTag((Node *) node, T_##nodeTypeName)
-#else
-#define READ_LOCALS_NO_FIELDS(nodeTypeName) \
-	nodeTypeName *local_node = CitusMakeNode(nodeTypeName)
-#endif
 
 /* And a few guys need only the citus_pg_strtok support fields */
 #define READ_TEMP_LOCALS()	\
@@ -125,14 +120,8 @@ CitusSetTag(Node *node, int tag)
 	local_node->fldname = CitusNodeRead(NULL, 0)
 
 /* Routine exit */
-#if (PG_VERSION_NUM >= 90600)
 #define READ_DONE() \
 	return;
-#else
-#define READ_DONE() \
-	return (Node *) local_node
-#endif
-
 
 /*
  * NOTE: use atoi() to read values written with %d, or atoui() to read
@@ -349,74 +338,8 @@ ReadUnsupportedCitusNode(READFUNC_ARGS)
 }
 
 
-#if (PG_VERSION_NUM < 90600)
-
-/*
- * readDatum
- *
- * Given a string representation of a constant, recreate the appropriate
- * Datum.  The string representation embeds length info, but not byValue,
- * so we must be told that.
- */
-Datum
-readDatum(bool typbyval)
-{
-	Size		length,
-				i;
-	int			tokenLength;
-	char	   *token;
-	Datum		res;
-	char	   *s;
-
-	/*
-	 * read the actual length of the value
-	 */
-	token = citus_pg_strtok(&tokenLength);
-	length = atoui(token);
-
-	token = citus_pg_strtok(&tokenLength);	/* read the '[' */
-	if (token == NULL || token[0] != '[')
-		elog(ERROR, "expected \"[\" to start datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
-
-	if (typbyval)
-	{
-		if (length > (Size) sizeof(Datum))
-			elog(ERROR, "byval datum but length = %zu", length);
-		res = (Datum) 0;
-		s = (char *) (&res);
-		for (i = 0; i < (Size) sizeof(Datum); i++)
-		{
-			token = citus_pg_strtok(&tokenLength);
-			s[i] = (char) atoi(token);
-		}
-	}
-	else if (length <= 0)
-		res = (Datum) NULL;
-	else
-	{
-		s = (char *) palloc(length);
-		for (i = 0; i < length; i++)
-		{
-			token = citus_pg_strtok(&tokenLength);
-			s[i] = (char) atoi(token);
-		}
-		res = PointerGetDatum(s);
-	}
-
-	token = citus_pg_strtok(&tokenLength);	/* read the ']' */
-	if (token == NULL || token[0] != ']')
-		elog(ERROR, "expected \"]\" to end datum, but got \"%s\"; length = %zu",
-			 token ? (const char *) token : "[NULL]", length);
-
-	return res;
-}
-#endif
-
-
-#if (PG_VERSION_NUM >= 90600)
-
 /* *INDENT-ON* */
+
 
 /*
  * For 9.6+ we can just use the, now extensible, parseNodeString(). Before
@@ -427,6 +350,3 @@ CitusParseNodeString(void)
 {
 	return parseNodeString();
 }
-
-
-#endif

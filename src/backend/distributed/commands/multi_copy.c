@@ -132,13 +132,8 @@ static inline void CopyFlushOutput(CopyOutState outputState, char *start, char *
 /* CitusCopyDestReceiver functions */
 static void CitusCopyDestReceiverStartup(DestReceiver *copyDest, int operation,
 										 TupleDesc inputTupleDesc);
-#if PG_VERSION_NUM >= 90600
 static bool CitusCopyDestReceiverReceive(TupleTableSlot *slot,
 										 DestReceiver *copyDest);
-#else
-static void CitusCopyDestReceiverReceive(TupleTableSlot *slot,
-										 DestReceiver *copyDest);
-#endif
 static void CitusCopyDestReceiverShutdown(DestReceiver *destReceiver);
 static void CitusCopyDestReceiverDestroy(DestReceiver *destReceiver);
 
@@ -1837,11 +1832,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
  * CitusCopyDestReceiver. It takes a TupleTableSlot and sends the contents to
  * the appropriate shard placement(s).
  */
-#if PG_VERSION_NUM >= 90600
 static bool
-#else
-static void
-#endif
 CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) dest;
@@ -1949,9 +1940,7 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	copyDest->tuplesSent++;
 
-#if PG_VERSION_NUM >= 90600
 	return true;
-#endif
 }
 
 
