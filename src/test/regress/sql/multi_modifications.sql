@@ -432,15 +432,25 @@ DROP TABLE app_analytics_events;
 
 -- test UPDATE ... FROM
 CREATE TABLE raw_table (id bigint, value bigint);
-CREATE TABLE summary_table (id bigint, min_value numeric, average_value numeric);
+CREATE TABLE summary_table (
+	id bigint,
+	min_value numeric,
+	average_value numeric,
+	count int,
+	uniques int);
 
 SELECT create_distributed_table('raw_table', 'id');
 SELECT create_distributed_table('summary_table', 'id');
 
 INSERT INTO raw_table VALUES (1, 100);
 INSERT INTO raw_table VALUES (1, 200);
+INSERT INTO raw_table VALUES (1, 200);
+INSERT INTO raw_table VALUES (1, 300);
+INSERT INTO raw_table VALUES (2, 400);
+INSERT INTO raw_table VALUES (2, 500);
 
-INSERT INTO summary_table VALUES (1, NULL);
+INSERT INTO summary_table VALUES (1);
+INSERT INTO summary_table VALUES (2);
 
 SELECT * FROM summary_table WHERE id = 1;
 
@@ -451,11 +461,19 @@ WHERE id = 1;
 
 SELECT * FROM summary_table WHERE id = 1;
 
+-- try different syntax
+UPDATE summary_table SET (min_value, average_value) =
+	(SELECT min(value), avg(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+
+SELECT * FROM summary_table WHERE id = 2;
+
 UPDATE summary_table SET min_value = 100
 	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
 
 SELECT * FROM summary_table WHERE id = 1;
 
+-- test unsupported query types
 UPDATE summary_table SET average_value = average_query.average FROM (
 	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
 	) average_query
@@ -475,6 +493,28 @@ WHERE id = 1 AND id = 4;
 
 UPDATE summary_table SET average_value = average_query.average FROM (
 	SELECT avg(value) AS average FROM raw_table) average_query;
+
+UPDATE summary_table SET average_value = average_value + 1 WHERE id =
+  (SELECT id FROM raw_table WHERE value > 100);
+
+-- test complex queries
+UPDATE summary_table
+SET
+       uniques = metrics.expensive_uniques,
+       count = metrics.total_count
+FROM
+		(SELECT
+			id,
+			count(DISTINCT (CASE WHEN value > 100 then value end)) AS expensive_uniques,
+			count(value) AS total_count
+        FROM raw_table
+        WHERE id = 1
+        GROUP BY id) metrics
+WHERE
+   summary_table.id = metrics.id AND
+   summary_table.id = 1;
+
+SELECT * FROM summary_table WHERE id = 1;
 
 DROP TABLE raw_table;
 DROP TABLE summary_table;
