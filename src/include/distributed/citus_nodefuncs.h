@@ -27,17 +27,6 @@ extern void ExtractRangeTblExtraData(RangeTblEntry *rte, CitusRTEKind *rteKind,
 									 List **tableIdList);
 extern CitusRTEKind GetRangeTblKind(RangeTblEntry *rte);
 
-/* citus_outfuncs.c */
-extern char * CitusNodeToString(const void *obj);
-
-/* citus_read.c */
-extern void * CitusStringToNode(char *str);
-extern char * citus_pg_strtok(int *length);
-extern void * CitusNodeRead(char *token, int tok_len);
-
-/* citus_readfuncs.c */
-extern Node * CitusParseNodeString(void);
-
 extern void RegisterNodes(void);
 
 /*
