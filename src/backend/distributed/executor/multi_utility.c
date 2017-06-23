@@ -42,6 +42,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -545,6 +546,45 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			}
 		}
 	}
+	else if (IsA(parsetree, AlterTableStmt))
+	{
+		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
+		List *commandList = alterTableStatement->cmds;
+		ListCell *commandCell = NULL;
+
+		foreach(commandCell, commandList)
+		{
+			AlterTableCmd *alterTableCommand = (AlterTableCmd *) lfirst(commandCell);
+
+			AlterTableType alterTableType = alterTableCommand->subtype;
+
+			if (alterTableType == AT_AttachPartition)
+			{
+				PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
+
+				char *relationName = partitionCommand->name->relname;
+				char *schemaName = partitionCommand->name->schemaname ?
+								   partitionCommand->name->schemaname : "public";
+
+				Oid relationId = get_relname_relid(relationName,
+												   get_namespace_oid(schemaName, false));
+				Oid parentId = PartitionParentOid(relationId);
+
+				if (IsDistributedTable(parentId))
+				{
+					Var *parentPartitionKey = DistPartitionKey(parentId);
+					char *parentPartitionKeyStr =
+						get_relid_attribute_name(parentId,
+												 parentPartitionKey->varattno);
+
+					CreateHashDistributedTable(relationId, parentPartitionKeyStr,
+											   get_rel_name(parentId), 0, 0);
+				}
+			}
+		}
+	}
+
+
 #endif
 
 	/* TODO: fold VACUUM's processing into the above block */
@@ -1070,6 +1110,30 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 				constraint->skip_validation = true;
 			}
 		}
+#if (PG_VERSION_NUM >= 100000)
+		else if (alterTableType == AT_AttachPartition)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+			char *relationName = partitionCommand->name->relname;
+			char *schemaName = partitionCommand->name->schemaname ?
+							   partitionCommand->name->schemaname : "public";
+
+			Oid relationId = get_relname_relid(relationName,
+											   get_namespace_oid(schemaName, false));
+			Oid parentId = leftRelationId;
+
+			/*
+			 * Do not generate tasks if relation is not distributed and the parent
+			 * is distributed. Because, we'll manually convert the relation into
+			 * distribtued relation and co-locate with its parent.
+			 */
+			if (!IsDistributedTable(relationId) && IsDistributedTable(parentId))
+			{
+				return NIL;
+			}
+		}
+#endif
 	}
 
 	ddlJob = palloc0(sizeof(DDLJob));
@@ -1813,6 +1877,9 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_DropConstraint:
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
+#if (PG_VERSION_NUM >= 100000)
+			case AT_AttachPartition:
+#endif
 			{
 				/*
 				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT

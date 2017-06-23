@@ -85,6 +85,41 @@ GROUP BY
 ORDER BY
 	1,2,3;
 
+
+-- citus can also support ALTER TABLE .. ATTACH PARTITION 
+-- even if the partition is not distributed
+CREATE TABLE partitioning_test_2012(id int, time date);
+ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2012 FOR VALUES FROM ('2012-01-01') TO ('2013-01-01');
+
+SELECT 
+	* 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011', 'partitioning_test_2012')
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM pg_dist_shard 
+	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011', 'partitioning_test_2012')
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+SELECT 
+	nodename, nodeport, count(*)	
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011', 'partitioning_test_2012') )
+GROUP BY
+	nodename, nodeport
+ORDER BY
+	1,2,3;
+
+
 -- dropping the parent should CASCADE to the children as well
 DROP TABLE partitioning_test;
 
