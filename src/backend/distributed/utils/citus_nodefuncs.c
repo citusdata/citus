@@ -339,8 +339,6 @@ citus_extradata_container(PG_FUNCTION_ARGS)
 }
 
 
-#if (PG_VERSION_NUM >= 90600)
-
 static void
 CopyUnsupportedCitusNode(struct ExtensibleNode *newnode,
 						 const struct ExtensibleNode *oldnode)
@@ -403,12 +401,10 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS_NO_READ(MultiCartesianProduct),
 	DEFINE_NODE_METHODS_NO_READ(MultiExtendedOp)
 };
-#endif
 
 void
 RegisterNodes(void)
 {
-#if (PG_VERSION_NUM >= 90600)
 	int off;
 
 	StaticAssertExpr(lengthof(nodeMethods) == lengthof(CitusNodeTagNamesD),
@@ -418,5 +414,4 @@ RegisterNodes(void)
 	{
 		RegisterExtensibleNodeMethods(&nodeMethods[off]);
 	}
-#endif
 }

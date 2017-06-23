@@ -14,11 +14,7 @@
 #include "access/htup.h"
 #include "access/htup_details.h"
 #include "access/skey.h"
-#if (PG_VERSION_NUM >= 90500 && PG_VERSION_NUM < 90600)
-#include "access/stratnum.h"
-#else
 #include "access/skey.h"
-#endif
 #include "access/tupmacs.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"

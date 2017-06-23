@@ -2804,14 +2804,8 @@ ReorderInsertSelectTargetLists(Query *originalQuery, RangeTblEntry *insertRte,
 		 * It is safe to pull Var clause and ignore the coercions since that
 		 * are already going to be added on the workers implicitly.
 		 */
-#if (PG_VERSION_NUM >= 90600)
 		targetVarList = pull_var_clause((Node *) oldInsertTargetEntry->expr,
 										PVC_RECURSE_AGGREGATES);
-#else
-		targetVarList = pull_var_clause((Node *) oldInsertTargetEntry->expr,
-										PVC_RECURSE_AGGREGATES,
-										PVC_RECURSE_PLACEHOLDERS);
-#endif
 
 		targetVarCount = list_length(targetVarList);
 

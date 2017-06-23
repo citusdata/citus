@@ -21,9 +21,7 @@
 #include "catalog/dependency.h"
 #include "catalog/index.h"
 #include "catalog/pg_am.h"
-#if (PG_VERSION_NUM >= 90600)
 #include "catalog/pg_constraint_fn.h"
-#endif
 #include "catalog/pg_enum.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_opclass.h"

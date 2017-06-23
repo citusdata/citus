@@ -775,12 +775,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 								   taskPlacement->nodeName, taskPlacement->nodePort)));
 			}
 
-#if (PG_VERSION_NUM < 90600)
-
-			/* before 9.6, PostgreSQL used a uint32 for this field, so check */
-			Assert(currentAffectedTupleCount <= 0xFFFFFFFF);
-#endif
-
 			resultsOK = true;
 			gotResults = true;
 		}
@@ -1487,11 +1481,6 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 				Assert(currentAffectedTupleCount >= 0);
 			}
 
-#if (PG_VERSION_NUM < 90600)
-
-			/* before 9.6, PostgreSQL used a uint32 for this field, so check */
-			Assert(currentAffectedTupleCount <= 0xFFFFFFFF);
-#endif
 			*rows += currentAffectedTupleCount;
 		}
 		else

@@ -31,6 +31,7 @@
 #ifndef CITUS_NODES_H
 #define CITUS_NODES_H
 
+#include "nodes/extensible.h"
 
 /*
  * Citus Node Tags
@@ -63,9 +64,6 @@ typedef enum CitusNodeTag
 
 const char** CitusNodeTagNames;
 
-#if (PG_VERSION_NUM >= 90600)
-
-#include "nodes/extensible.h"
 
 typedef struct CitusNode
 {
@@ -97,30 +95,6 @@ CitusNodeTagI(Node *node)
 	_result; \
 })
 
-
-#else
-
-#include "nodes/nodes.h"
-
-typedef CitusNodeTag CitusNode;
-/*
- * nodeTag equivalent that returns the node tag for both citus and postgres
- * node tag types. Needs to return int as there's no type that covers both
- * postgres and citus node values.
- */
-#define CitusNodeTag(nodeptr)		(*((const int*)(nodeptr)))
-
-
-/* Citus variant of newNode(), don't use directly. */
-#define CitusNewNode(size, tag) \
-({	Node   *_result; \
-	AssertMacro((size) >= sizeof(Node));		/* need the tag, at least */ \
-	_result = (Node *) palloc0fast(size); \
-	_result->type = (int) (tag); \
-	_result; \
-})
-
-#endif
 
 /*
  * IsA equivalent that compares node tags, including Citus-specific nodes.

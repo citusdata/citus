@@ -1450,11 +1450,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->args = list_make1(hllTargetEntry);
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 		unionAggregate->aggfilter = NULL;
-#if (PG_VERSION_NUM >= 90600)
 		unionAggregate->aggtranstype = InvalidOid;
 		unionAggregate->aggargtypes = list_make1_oid(unionAggregate->aggtype);
 		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 		cardinalityExpression = makeNode(FuncExpr);
 		cardinalityExpression->funcid = cardinalityFunctionId;
@@ -1515,11 +1513,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfnoid = sumFunctionId;
 		newMasterAggregate->aggtype = masterReturnType;
 		newMasterAggregate->aggfilter = NULL;
-#if (PG_VERSION_NUM >= 90600)
 		newMasterAggregate->aggtranstype = InvalidOid;
 		newMasterAggregate->aggargtypes = list_make1_oid(newMasterAggregate->aggtype);
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 		column = makeVar(masterTableId, walkerContext->columnId, workerReturnType,
 						 workerReturnTypeMod, workerCollationId, columnLevelsUp);
@@ -1585,11 +1581,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->aggfnoid = aggregateFunctionId;
 		newMasterAggregate->args = list_make1(arrayCatAggArgument);
 		newMasterAggregate->aggfilter = NULL;
-#if (PG_VERSION_NUM >= 90600)
 		newMasterAggregate->aggtranstype = InvalidOid;
 		newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 		newMasterExpression = (Expr *) newMasterAggregate;
 	}
@@ -1644,12 +1638,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 	/* Run AggRefs through cost machinery to mark required fields sanely */
 	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
 
-#if PG_VERSION_NUM >= 90600
 	get_agg_clause_costs(NULL, (Node *) newMasterExpression, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
-#else
-	count_agg_clauses(NULL, (Node *) newMasterExpression, &aggregateCosts);
-#endif
 
 	return newMasterExpression;
 }
@@ -1693,11 +1683,9 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	firstSum->aggtype = get_func_rettype(firstSum->aggfnoid);
 	firstSum->args = list_make1(firstTargetEntry);
 	firstSum->aggkind = AGGKIND_NORMAL;
-#if (PG_VERSION_NUM >= 90600)
 	firstSum->aggtranstype = InvalidOid;
 	firstSum->aggargtypes = list_make1_oid(firstSum->aggtype);
 	firstSum->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 	/* create the second argument for sum(column2) */
 	secondColumn = makeVar(masterTableId, (*columnId), countAggregateType,
@@ -1710,11 +1698,9 @@ MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 	secondSum->aggtype = get_func_rettype(secondSum->aggfnoid);
 	secondSum->args = list_make1(secondTargetEntry);
 	secondSum->aggkind = AGGKIND_NORMAL;
-#if (PG_VERSION_NUM >= 90600)
 	secondSum->aggtranstype = InvalidOid;
 	secondSum->aggargtypes = list_make1_oid(firstSum->aggtype);
 	secondSum->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 	/*
 	 * Build the division operator between these two aggregates. This function
@@ -2090,20 +2076,16 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		sumAggregate->aggfnoid = AggregateFunctionOid(sumAggregateName, argumentType);
 		sumAggregate->aggtype = get_func_rettype(sumAggregate->aggfnoid);
 
-#if (PG_VERSION_NUM >= 90600)
 		sumAggregate->aggtranstype = InvalidOid;
 		sumAggregate->aggargtypes = list_make1_oid(argumentType);
 		sumAggregate->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 		/* count has any input type */
 		countAggregate->aggfnoid = AggregateFunctionOid(countAggregateName, ANYOID);
 		countAggregate->aggtype = get_func_rettype(countAggregate->aggfnoid);
-#if (PG_VERSION_NUM >= 90600)
 		countAggregate->aggtranstype = InvalidOid;
 		countAggregate->aggargtypes = list_make1_oid(argumentType);
 		countAggregate->aggsplit = AGGSPLIT_SIMPLE;
-#endif
 
 		workerAggregateList = lappend(workerAggregateList, sumAggregate);
 		workerAggregateList = lappend(workerAggregateList, countAggregate);
@@ -2122,12 +2104,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 	/* Run AggRefs through cost machinery to mark required fields sanely */
 	memset(&aggregateCosts, 0, sizeof(aggregateCosts));
 
-#if PG_VERSION_NUM >= 90600
 	get_agg_clause_costs(NULL, (Node *) workerAggregateList, AGGSPLIT_SIMPLE,
 						 &aggregateCosts);
-#else
-	count_agg_clauses(NULL, (Node *) workerAggregateList, &aggregateCosts);
-#endif
 
 	return workerAggregateList;
 }
@@ -2418,17 +2396,11 @@ ErrorIfContainsUnsupportedAggregate(MultiNode *logicalPlanNode)
 
 	List *targetList = extendedOpNode->targetList;
 
-#if (PG_VERSION_NUM >= 90600)
-
 	/*
-	 * PVC_REJECT_PLACEHOLDERS is now implicit if PVC_INCLUDE_PLACEHOLDERS
-	 * isn't specified.
+	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS isn't
+	 * specified.
 	 */
 	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
-#else
-	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES,
-										   PVC_REJECT_PLACEHOLDERS);
-#endif
 
 	ListCell *expressionCell = NULL;
 	foreach(expressionCell, expressionList)

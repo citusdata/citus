@@ -2769,17 +2769,11 @@ ExtractRangeTableEntryWalker(Node *node, List **rangeTableList)
 List *
 pull_var_clause_default(Node *node)
 {
-#if (PG_VERSION_NUM >= 90600)
-
 	/*
-	 * PVC_REJECT_PLACEHOLDERS is now implicit if PVC_INCLUDE_PLACEHOLDERS
+	 * PVC_REJECT_PLACEHOLDERS is implicit if PVC_INCLUDE_PLACEHOLDERS
 	 * isn't specified.
 	 */
 	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES);
-#else
-	List *columnList = pull_var_clause(node, PVC_RECURSE_AGGREGATES,
-									   PVC_REJECT_PLACEHOLDERS);
-#endif
 
 	return columnList;
 }
