@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * shared_library_init.c
- *	  Initialize Citus extension
+ *	  Functionality related to the initialization of the Citus extension.
  *
  * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
@@ -22,6 +22,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/multi_copy.h"
@@ -36,6 +37,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shared_library_init.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
@@ -160,6 +162,8 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 
+	InitializeMaintenanceDaemon();
+
 	/* organize that task tracker is started once server is up */
 	TaskTrackerRegister();
 
@@ -174,6 +178,21 @@ _PG_init(void)
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
 	}
+}
+
+
+/*
+ * StartupCitusBackend initializes per-backend infrastructure, and is called
+ * the first time citus is used in a database.
+ *
+ * NB: All code here has to be able to cope with this routine being called
+ * multiple times in the same backend.  This will e.g. happen when the
+ * extension is created or upgraded.
+ */
+void
+StartupCitusBackend(void)
+{
+	InitializeMaintenanceDaemonBackend();
 }
 
 
