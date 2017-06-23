@@ -416,14 +416,3 @@ OutDeferredErrorMessage(OUTFUNC_ARGS)
 	WRITE_INT_FIELD(linenumber);
 	WRITE_STRING_FIELD(functionname);
 }
-
-
-/*
- * CitusNodeToString -
- *	   returns the ascii representation of the Node as a palloc'd string
- */
-char *
-CitusNodeToString(const void *obj)
-{
-	return nodeToString(obj);
-}
