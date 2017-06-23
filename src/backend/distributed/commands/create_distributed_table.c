@@ -78,9 +78,6 @@ static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
 static bool LocalTableEmpty(Oid tableId);
-static void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
-									   char *colocateWithTableName,
-									   int shardCount, int replicationFactor);
 static Oid ColumnType(Oid relationId, char *columnName);
 static void CopyLocalDataIntoShards(Oid destinationDistributedRelationId, List *
 									sourceLocalRelationList);
@@ -618,7 +615,7 @@ CreateTruncateTrigger(Oid relationId)
 /*
  * CreateHashDistributedTable creates a hash distributed table.
  */
-static void
+void
 CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 						   char *colocateWithTableName, int shardCount,
 						   int replicationFactor)

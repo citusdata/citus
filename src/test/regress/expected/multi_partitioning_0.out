@@ -82,6 +82,45 @@ ORDER BY
 ERROR:  relation "partitioning_test" does not exist
 LINE 6: ...shardid FROM pg_dist_shard WHERE logicalrelid IN ('partition...
                                                              ^
+-- now create a partition and see that it also becomes a distributed table
+CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: CREATE TABLE partitioning_test_2011 PARTITION OF partitionin...
+                                            ^
+SELECT 
+	* 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011')
+ORDER BY 1;
+ERROR:  relation "partitioning_test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_test', 'partitioning_test_20...
+                          ^
+SELECT 
+	logicalrelid, count(*) 
+FROM pg_dist_shard 
+	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011')
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ERROR:  relation "partitioning_test" does not exist
+LINE 4:  WHERE logicalrelid IN ('partitioning_test', 'partitioning_t...
+                                ^
+SELECT 
+	nodename, nodeport, count(*)	
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011') )
+GROUP BY
+	nodename, nodeport
+ORDER BY
+	1,2,3;
+ERROR:  relation "partitioning_test" does not exist
+LINE 6: ...shardid FROM pg_dist_shard WHERE logicalrelid IN ('partition...
+                                                             ^
 -- dropping the parent should CASCADE to the children as well
 DROP TABLE partitioning_test;
 ERROR:  table "partitioning_test" does not exist

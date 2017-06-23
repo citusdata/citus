@@ -512,6 +512,41 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		}
 	}
 
+#if (PG_VERSION_NUM >= 100000)
+	if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStatement = (CreateStmt *) parsetree;
+
+		/* if a partition is being created */
+		if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
+		{
+			RangeVar *parentRelation = linitial(createStatement->inhRelations);
+			char *parentSchemaName = parentRelation->schemaname ?
+									 parentRelation->schemaname : "public";
+
+			Oid parentId = get_relname_relid(parentRelation->relname, get_namespace_oid(
+												 parentSchemaName, false));
+			char *schemaName = createStatement->relation->schemaname ?
+							   createStatement->relation->schemaname : "public";
+
+			Oid relationId = get_relname_relid(createStatement->relation->relname,
+											   get_namespace_oid(schemaName, false));
+
+			/* if the table is being attached to a distribtued table, it should be distributed as well */
+			if (IsDistributedTable(parentId))
+			{
+				Var *parentPartitionKey = DistPartitionKey(parentId);
+				char *parentPartitionKeyStr =
+					get_relid_attribute_name(parentId,
+											 parentPartitionKey->varattno);
+
+				CreateHashDistributedTable(relationId, parentPartitionKeyStr,
+										   get_rel_name(parentId), 0, 0);
+			}
+		}
+	}
+#endif
+
 	/* TODO: fold VACUUM's processing into the above block */
 	if (IsA(parsetree, VacuumStmt))
 	{

@@ -54,6 +54,37 @@ GROUP BY
 ORDER BY
 	1,2,3;
 
+-- now create a partition and see that it also becomes a distributed table
+CREATE TABLE partitioning_test_2011 PARTITION OF partitioning_test FOR VALUES FROM ('2011-01-01') TO ('2012-01-01');
+
+SELECT 
+	* 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011')
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM pg_dist_shard 
+	WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011')
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+SELECT 
+	nodename, nodeport, count(*)	
+FROM
+	pg_dist_shard_placement
+WHERE
+	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid IN ('partitioning_test', 'partitioning_test_2009', 'partitioning_test_2010', 'partitioning_test_2011') )
+GROUP BY
+	nodename, nodeport
+ORDER BY
+	1,2,3;
+
 -- dropping the parent should CASCADE to the children as well
 DROP TABLE partitioning_test;
 

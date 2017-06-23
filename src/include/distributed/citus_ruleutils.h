@@ -49,5 +49,9 @@ extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 
+/* TODO: THIS SHOULD NOT BE HERE */
+extern void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+									   char *colocateWithTableName,
+									   int shardCount, int replicationFactor);
 
 #endif /* CITUS_RULEUTILS_H */
