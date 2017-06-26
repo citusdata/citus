@@ -401,80 +401,19 @@ SELECT master_create_worker_shards('check_example', '2', '2');
 (1 row)
 
 \c - - - :worker_1_port
-\d check_example*
-  Table "public.check_example_365040"
-     Column      |  Type   | Modifiers 
------------------+---------+-----------
- partition_col   | integer | 
- other_col       | integer | 
- other_other_col | integer | 
-Indexes:
-    "check_example_partition_col_key_365040" UNIQUE CONSTRAINT, btree (partition_col)
-Check constraints:
-    "check_example_other_col_check" CHECK (other_col >= 100)
-    "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
-
-  Table "public.check_example_365041"
-     Column      |  Type   | Modifiers 
------------------+---------+-----------
- partition_col   | integer | 
- other_col       | integer | 
- other_other_col | integer | 
-Indexes:
-    "check_example_partition_col_key_365041" UNIQUE CONSTRAINT, btree (partition_col)
-Check constraints:
-    "check_example_other_col_check" CHECK (other_col >= 100)
-    "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
-
+\d check_example_partition_col_key_365040
 Index "public.check_example_partition_col_key_365040"
     Column     |  Type   |  Definition   
 ---------------+---------+---------------
  partition_col | integer | partition_col
 unique, btree, for table "public.check_example_365040"
 
-Index "public.check_example_partition_col_key_365041"
-    Column     |  Type   |  Definition   
----------------+---------+---------------
- partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365041"
-
-\c - - - :worker_2_port
-\d check_example*
-  Table "public.check_example_365040"
-     Column      |  Type   | Modifiers 
------------------+---------+-----------
- partition_col   | integer | 
- other_col       | integer | 
- other_other_col | integer | 
-Indexes:
-    "check_example_partition_col_key_365040" UNIQUE CONSTRAINT, btree (partition_col)
-Check constraints:
-    "check_example_other_col_check" CHECK (other_col >= 100)
-    "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
-
-  Table "public.check_example_365041"
-     Column      |  Type   | Modifiers 
------------------+---------+-----------
- partition_col   | integer | 
- other_col       | integer | 
- other_other_col | integer | 
-Indexes:
-    "check_example_partition_col_key_365041" UNIQUE CONSTRAINT, btree (partition_col)
-Check constraints:
-    "check_example_other_col_check" CHECK (other_col >= 100)
-    "check_example_other_other_col_check" CHECK (abs(other_other_col) >= 100)
-
-Index "public.check_example_partition_col_key_365040"
-    Column     |  Type   |  Definition   
----------------+---------+---------------
- partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365040"
-
-Index "public.check_example_partition_col_key_365041"
-    Column     |  Type   |  Definition   
----------------+---------+---------------
- partition_col | integer | partition_col
-unique, btree, for table "public.check_example_365041"
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.check_example_365040'::regclass;
+             Constraint              |             Definition              
+-------------------------------------+-------------------------------------
+ check_example_other_col_check       | CHECK (other_col >= 100)
+ check_example_other_other_col_check | CHECK (abs(other_other_col) >= 100)
+(2 rows)
 
 \c - - - :master_port
 -- drop unnecessary tables
@@ -501,15 +440,11 @@ SELECT create_distributed_table('raw_table_2', 'user_id');
 (1 row)
 
 -- see that the constraint exists
-\d raw_table_2
-  Table "public.raw_table_2"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- user_id | integer | 
-Indexes:
-    "raw_table_2_user_id_key" UNIQUE CONSTRAINT, btree (user_id)
-Foreign-key constraints:
-    "raw_table_2_user_id_fkey" FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
+        Constraint        |                      Definition                       
+--------------------------+-------------------------------------------------------
+ raw_table_2_user_id_fkey | FOREIGN KEY (user_id) REFERENCES raw_table_1(user_id)
+(1 row)
 
 -- should be prevented by the foreign key
 DROP TABLE raw_table_1;
@@ -520,13 +455,10 @@ HINT:  Use DROP ... CASCADE to drop the dependent objects too.
 DROP TABLE raw_table_1 CASCADE;
 NOTICE:  drop cascades to constraint raw_table_2_user_id_fkey on table raw_table_2
 -- see that the constraint also dropped
-\d raw_table_2
-  Table "public.raw_table_2"
- Column  |  Type   | Modifiers 
----------+---------+-----------
- user_id | integer | 
-Indexes:
-    "raw_table_2_user_id_key" UNIQUE CONSTRAINT, btree (user_id)
+SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='raw_table_2'::regclass;
+ Constraint | Definition 
+------------+------------
+(0 rows)
 
 -- drop the table as well
 DROP TABLE raw_table_2;

@@ -617,18 +617,18 @@ ERROR:  cannot colocate tables table1_groupe and table_bigint
 DETAIL:  Distribution column types don't match for table1_groupe and table_bigint.
 -- check worker table schemas
 \c - - - :worker_1_port
-\d table3_groupE_1300050
-Table "public.table3_groupe_1300050"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300050'::regclass;
     Column    |  Type   | Modifiers 
 --------------+---------+-----------
  dummy_column | text    | 
  id           | integer | 
+(2 rows)
 
-\d schema_collocation.table4_groupE_1300052
-Table "schema_collocation.table4_groupe_1300052"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300052'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 
+(1 row)
 
 \c - - - :master_port
 CREATE TABLE table1_groupF ( id int );

@@ -144,15 +144,13 @@ NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
 -- DDL commands
-\d mx_table
-                           Table "public.mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   |                        Modifiers                         
 --------+---------+----------------------------------------------------------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
-Indexes:
-    "mx_test_uniq_index" UNIQUE, btree (col_1)
+(3 rows)
 
 CREATE INDEX mx_test_index ON mx_table(col_2);
 ERROR:  operation is not allowed on this node
@@ -163,16 +161,15 @@ HINT:  Connect to the coordinator and run it again.
 ALTER TABLE mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY(col_1) REFERENCES mx_table(col_1);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-\d mx_table
-                           Table "public.mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   |                        Modifiers                         
 --------+---------+----------------------------------------------------------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
-Indexes:
-    "mx_test_uniq_index" UNIQUE, btree (col_1)
+(3 rows)
 
+\d mx_test_index
 -- master_modify_multiple_shards
 SELECT master_modify_multiple_shards('UPDATE mx_table SET col_2=''none''');
 ERROR:  operation is not allowed on this node
@@ -402,23 +399,23 @@ CREATE SEQUENCE some_sequence;
 DROP SEQUENCE some_sequence;
 -- Show that dropping the sequence of an MX table with cascade harms the table and shards
 BEGIN;
-\d mx_table
-                           Table "public.mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   |                        Modifiers                         
 --------+---------+----------------------------------------------------------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
+(3 rows)
 
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
 NOTICE:  drop cascades to default for table mx_table column col_3
-\d mx_table
-   Table "public.mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  col_1  | integer | 
  col_2  | text    | 
  col_3  | bigint  | not null
+(3 rows)
 
 ROLLBACK;
 -- Cleanup

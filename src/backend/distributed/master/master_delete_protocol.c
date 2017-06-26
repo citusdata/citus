@@ -109,11 +109,16 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	LOCKMODE lockMode = 0;
 	char partitionMethod = 0;
 	bool failOK = false;
+#if (PG_VERSION_NUM >= 100000)
+	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
+	queryTreeNode = rawStmt->stmt;
+#else
+	queryTreeNode = ParseTreeNode(queryString);
+#endif
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
-	queryTreeNode = ParseTreeNode(queryString);
 	if (!IsA(queryTreeNode, DeleteStmt))
 	{
 		ereport(ERROR, (errmsg("query \"%s\" is not a delete statement",
@@ -144,7 +149,11 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 	CheckDistributedTable(relationId);
 	EnsureTablePermissions(relationId, ACL_DELETE);
 
+#if (PG_VERSION_NUM >= 100000)
+	queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
+#else
 	queryTreeList = pg_analyze_and_rewrite(queryTreeNode, queryString, NULL, 0);
+#endif
 	deleteQuery = (Query *) linitial(queryTreeList);
 	CheckTableCount(deleteQuery);
 
@@ -490,7 +499,7 @@ CheckDeleteCriteria(Node *deleteCriteria)
 static void
 CheckPartitionColumn(Oid relationId, Node *whereClause)
 {
-	Var *partitionColumn = PartitionKey(relationId);
+	Var *partitionColumn = DistPartitionKey(relationId);
 	ListCell *columnCell = NULL;
 
 	List *columnList = pull_var_clause_default(whereClause);
@@ -558,7 +567,11 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
 			restrictInfoList = lappend(restrictInfoList, greaterThanRestrictInfo);
 
+#if (PG_VERSION_NUM >= 100000)
+			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList, false);
+#else
 			dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList);
+#endif
 			if (dropShard)
 			{
 				dropShardIntervalList = lappend(dropShardIntervalList, shardInterval);

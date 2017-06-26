@@ -361,7 +361,7 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 		inputDataType = get_fn_expr_argtype(fcinfo->flinfo, 1);
 		distributionValueString = DatumToString(inputDatum, inputDataType);
 
-		distributionColumn = PartitionKey(relationId);
+		distributionColumn = DistPartitionKey(relationId);
 		distributionDataType = distributionColumn->vartype;
 
 		distributionValueDatum = StringToDatum(distributionValueString,
@@ -625,9 +625,9 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 	replace[Anum_pg_dist_node_isactive - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-	simple_heap_update(pgDistNode, &heapTuple->t_self, heapTuple);
 
-	CatalogUpdateIndexes(pgDistNode, heapTuple);
+	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
+
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
@@ -868,8 +868,7 @@ InsertNodeRow(int nodeid, char *nodeName, int32 nodePort, uint32 groupId, char *
 	tupleDescriptor = RelationGetDescr(pgDistNode);
 	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	simple_heap_insert(pgDistNode, heapTuple);
-	CatalogUpdateIndexes(pgDistNode, heapTuple);
+	CatalogTupleInsert(pgDistNode, heapTuple);
 
 	/* close relation and invalidate previous cache entry */
 	heap_close(pgDistNode, AccessExclusiveLock);

@@ -513,7 +513,7 @@ ORDER BY
 
 -- verify that shard is replicated to other worker
 \c - - - :worker_2_port
-\d upgrade_reference_table_transaction_commit_*
+\dt upgrade_reference_table_transaction_commit_*
 \c - - - :master_port
 
 DROP TABLE upgrade_reference_table_transaction_commit;

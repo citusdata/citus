@@ -812,9 +812,8 @@ MarkNodeHasMetadata(char *nodeName, int32 nodePort, bool hasMetadata)
 	replace[Anum_pg_dist_node_hasmetadata - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-	simple_heap_update(pgDistNode, &heapTuple->t_self, heapTuple);
 
-	CatalogUpdateIndexes(pgDistNode, heapTuple);
+	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -837,7 +836,11 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
+#if (PG_VERSION_NUM >= 100000)
+	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
+#else
 	List *ownedSequences = getOwnedSequences(relationId);
+#endif
 	ListCell *listCell;
 	char *ownerName = TableOwner(relationId);
 
@@ -921,7 +924,19 @@ EnsureSupportedSequenceColumnType(Oid sequenceOid)
 	bool hasMetadataWorkers = HasMetadataWorkers();
 
 	/* call sequenceIsOwned in order to get the tableId and columnId */
+#if (PG_VERSION_NUM >= 100000)
+	bool sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_AUTO, &tableId,
+										 &columnId);
+	if (!sequenceOwned)
+	{
+		sequenceOwned = sequenceIsOwned(sequenceOid, DEPENDENCY_INTERNAL, &tableId,
+										&columnId);
+	}
+
+	Assert(sequenceOwned);
+#else
 	sequenceIsOwned(sequenceOid, &tableId, &columnId);
+#endif
 
 	shouldSyncMetadata = ShouldSyncTableMetadata(tableId);
 

@@ -398,11 +398,11 @@ INSERT INTO products VALUES(1,'product_1', 10, 8);
 ROLLBACK;
 
 -- There should be no constraint on master and worker(s) 
-\d products
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
 
 \c - - - :worker_1_port
 
-\d products_1450199
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
 
 \c - - - :master_port
 
@@ -415,11 +415,11 @@ ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 ROLLBACK;
 
 -- There should be no constraint on master and worker(s) 
-\d products
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
 
 \c - - - :worker_1_port
 
-\d products_1450199
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
 
 \c - - - :master_port
 DROP TABLE products;

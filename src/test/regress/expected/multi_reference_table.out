@@ -1331,43 +1331,61 @@ ALTER TABLE reference_table_ddl DROP COLUMN value_1;
 ALTER TABLE reference_table_ddl ALTER COLUMN value_2 SET DEFAULT 25.0;
 ALTER TABLE reference_table_ddl ALTER COLUMN value_3 SET NOT NULL;
 -- see that Citus applied all DDLs to the table
-\d reference_table_ddl
-          Table "public.reference_table_ddl"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl'::regclass;
  Column  |            Type             |  Modifiers   
 ---------+-----------------------------+--------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
  value_5 | double precision            | 
-Indexes:
-    "reference_index_2" btree (value_2, value_3)
+(4 rows)
+
+\d reference_index_2
+    Index "public.reference_index_2"
+ Column  |       Type       | Definition 
+---------+------------------+------------
+ value_2 | double precision | value_2
+ value_3 | text             | value_3
+btree, for table "public.reference_table_ddl"
 
 -- also to the shard placements
 \c - - - :worker_1_port
-\d reference_table_ddl*
-      Table "public.reference_table_ddl_1250019"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
  Column  |            Type             |  Modifiers   
 ---------+-----------------------------+--------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
  value_5 | double precision            | 
-Indexes:
-    "reference_index_2_1250019" btree (value_2, value_3)
+(4 rows)
+
+\d reference_index_2_1250019
+Index "public.reference_index_2_1250019"
+ Column  |       Type       | Definition 
+---------+------------------+------------
+ value_2 | double precision | value_2
+ value_3 | text             | value_3
+btree, for table "public.reference_table_ddl_1250019"
 
 \c - - - :master_port
 DROP INDEX reference_index_2;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
-\d reference_table_ddl*
-      Table "public.reference_table_ddl_1250019"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
  Column  |            Type             |  Modifiers   
 ---------+-----------------------------+--------------
  value_2 | double precision            | default 25.0
  value_3 | text                        | not null
  value_4 | timestamp without time zone | 
  value_5 | double precision            | 
+(4 rows)
+
+\di reference_index_2*
+          List of relations
+ Schema | Name | Type | Owner | Table 
+--------+------+------+-------+-------
+(0 rows)
 
 \c - - - :master_port
 -- as we expect, renaming and setting WITH OIDS does not work for reference tables

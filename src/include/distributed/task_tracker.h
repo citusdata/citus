@@ -99,7 +99,11 @@ typedef struct WorkerTasksSharedStateData
 
 	/* Lock protecting workerNodesHash */
 	int taskHashTrancheId;
+#if (PG_VERSION_NUM >= 100000)
+	char *taskHashTrancheName;
+#else
 	LWLockTranche taskHashLockTranche;
+#endif
 	LWLock taskHashLock;
 } WorkerTasksSharedStateData;
 

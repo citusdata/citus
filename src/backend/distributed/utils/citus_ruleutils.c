@@ -193,10 +193,18 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 
 	/* build our DDL command */
 	qualifiedSequenceName = generate_relation_name(sequenceRelationId, NIL);
+
+#if (PG_VERSION_NUM >= 100000)
+	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+						   pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
+						   pgSequenceForm->seqmax, pgSequenceForm->seqstart,
+						   pgSequenceForm->seqcycle ? "" : "NO ");
+#else
 	sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
 						   pgSequenceForm->increment_by, pgSequenceForm->min_value,
 						   pgSequenceForm->max_value, pgSequenceForm->start_value,
 						   pgSequenceForm->is_cycled ? "" : "NO ");
+#endif
 
 	return sequenceDef;
 }
@@ -210,8 +218,20 @@ Form_pg_sequence
 pg_get_sequencedef(Oid sequenceRelationId)
 {
 	Form_pg_sequence pgSequenceForm = NULL;
-	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
+
+#if (PG_VERSION_NUM >= 100000)
+	heapTuple = SearchSysCache1(SEQRELID, sequenceRelationId);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		elog(ERROR, "cache lookup failed for sequence %u", sequenceRelationId);
+	}
+
+	pgSequenceForm = (Form_pg_sequence) GETSTRUCT(heapTuple);
+
+	ReleaseSysCache(heapTuple);
+#else
+	SysScanDesc scanDescriptor = NULL;
 	Relation sequenceRel = NULL;
 	AclResult permissionCheck = ACLCHECK_NO_PRIV;
 
@@ -241,6 +261,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
 	systable_endscan(scanDescriptor);
 
 	heap_close(sequenceRel, AccessShareLock);
+#endif
 
 	return pgSequenceForm;
 }

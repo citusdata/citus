@@ -72,8 +72,6 @@ typedef struct RemoteExplainPlan
 
 
 /* Explain functions for distributed queries */
-static void CitusExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-								 const char *queryString, ParamListInfo params);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
@@ -85,6 +83,15 @@ static void ExplainTaskPlacement(ShardPlacement *taskPlacement, List *explainOut
 static StringInfo BuildRemoteExplainQuery(char *queryString, ExplainState *es);
 
 /* Static Explain functions copied from explain.c */
+#if (PG_VERSION_NUM >= 100000)
+static void ExplainOneQuery(Query *query, int cursorOptions,
+							IntoClause *into, ExplainState *es,
+							const char *queryString, ParamListInfo params,
+							QueryEnvironment *queryEnv);
+#else
+static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
+							const char *queryString, ParamListInfo params);
+#endif
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
 							 bool labeled, ExplainState *es);
 static void ExplainCloseGroup(const char *objtype, const char *labelname,
@@ -118,6 +125,42 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 	ExplainJob(multiPlan->workerJob, es);
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
+}
+
+
+/*
+ * CoordinatorInsertSelectExplainScan is a custom scan explain callback function
+ * which is used to print explain information of a Citus plan for an INSERT INTO
+ * distributed_table SELECT ... query that is evaluated on the coordinator.
+ */
+void
+CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
+								   struct ExplainState *es)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	MultiPlan *multiPlan = scanState->multiPlan;
+	Query *query = multiPlan->insertSelectSubquery;
+	IntoClause *into = NULL;
+	ParamListInfo params = NULL;
+	char *queryString = NULL;
+
+	if (es->analyze)
+	{
+		/* avoiding double execution here is tricky, error out for now */
+		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
+							   "... SELECT commands via the coordinator")));
+	}
+
+	ExplainOpenGroup("Select Query", "Select Query", false, es);
+
+	/* explain the inner SELECT query */
+#if (PG_VERSION_NUM >= 100000)
+	ExplainOneQuery(query, 0, into, es, queryString, params, NULL);
+#else
+	ExplainOneQuery(query, into, es, queryString, params);
+#endif
+
+	ExplainCloseGroup("Select Query", "Select Query", false, es);
 }
 
 
@@ -540,6 +583,61 @@ BuildRemoteExplainQuery(char *queryString, ExplainState *es)
 
 /* *INDENT-OFF* */
 /*
+ * ExplainOneQuery -
+ *	  print out the execution plan for one Query
+ *
+ * "into" is NULL unless we are explaining the contents of a CreateTableAsStmt.
+ */
+static void
+#if (PG_VERSION_NUM >= 100000)
+ExplainOneQuery(Query *query, int cursorOptions,
+				IntoClause *into, ExplainState *es,
+				const char *queryString, ParamListInfo params,
+				QueryEnvironment *queryEnv)
+#else
+ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
+				const char *queryString, ParamListInfo params)
+#endif
+{
+	/* if an advisor plugin is present, let it manage things */
+	if (ExplainOneQuery_hook)
+#if (PG_VERSION_NUM >= 100000)
+		(*ExplainOneQuery_hook) (query, cursorOptions, into, es,
+								 queryString, params);
+#else
+		(*ExplainOneQuery_hook) (query, into, es, queryString, params);
+#endif
+	else
+	{
+		PlannedStmt *plan;
+		instr_time	planstart,
+					planduration;
+
+		INSTR_TIME_SET_CURRENT(planstart);
+
+		/* plan the query */
+#if (PG_VERSION_NUM >= 100000)
+		plan = pg_plan_query(query, cursorOptions, params);
+#elif (PG_VERSION_NUM >= 90600)
+		plan = pg_plan_query(query, into ? 0 : CURSOR_OPT_PARALLEL_OK, params);
+#else
+		plan = pg_plan_query(query, 0, params);
+#endif
+
+		INSTR_TIME_SET_CURRENT(planduration);
+		INSTR_TIME_SUBTRACT(planduration, planstart);
+
+		/* run it (if needed) and produce output */
+#if (PG_VERSION_NUM >= 100000)
+		ExplainOnePlan(plan, into, es, queryString, params, queryEnv,
+					   &planduration);
+#else
+		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
+#endif
+	}
+}
+
+/*
  * Open a group of related objects.
  *
  * objtype is the type of the group object, labelname is its label within
@@ -713,75 +811,5 @@ ExplainYAMLLineStarting(ExplainState *es)
 	{
 		appendStringInfoChar(es->str, '\n');
 		appendStringInfoSpaces(es->str, es->indent * 2);
-	}
-}
-
-
-/*
- * CoordinatorInsertSelectExplainScan is a custom scan explain callback function
- * which is used to print explain information of a Citus plan for an INSERT INTO
- * distributed_table SELECT ... query that is evaluated on the coordinator.
- */
-void
-CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
-								   struct ExplainState *es)
-{
-	CitusScanState *scanState = (CitusScanState *) node;
-	MultiPlan *multiPlan = scanState->multiPlan;
-	Query *query = multiPlan->insertSelectSubquery;
-	IntoClause *into = NULL;
-	ParamListInfo params = NULL;
-	char *queryString = NULL;
-
-	if (es->analyze)
-	{
-		/* avoiding double execution here is tricky, error out for now */
-		ereport(ERROR, (errmsg("EXPLAIN ANALYZE is currently not supported for INSERT "
-							   "... SELECT commands via the coordinator")));
-	}
-
-	ExplainOpenGroup("Select Query", "Select Query", false, es);
-
-	/* explain the inner SELECT query */
-	CitusExplainOneQuery(query, into, es, queryString, params);
-
-	ExplainCloseGroup("Select Query", "Select Query", false, es);
-}
-
-
-/*
- * CitusExplainOneQuery is simply a duplicate of ExplainOneQuery in explain.c, which
- * is static.
- */
-static void
-CitusExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
-					 const char *queryString, ParamListInfo params)
-{
-	/* copied from ExplainOneQuery in explain.c */
-	if (ExplainOneQuery_hook)
-	{
-		(*ExplainOneQuery_hook) (query, into, es, queryString, params);
-	}
-	else
-	{
-		PlannedStmt *plan;
-		instr_time  planstart,
-					planduration;
-		int cursorOptions = 0;
-
-		INSTR_TIME_SET_CURRENT(planstart);
-
-		#if (PG_VERSION_NUM >= 90600)
-		cursorOptions = into ? 0 : CURSOR_OPT_PARALLEL_OK;
-		#endif
-
-		/* plan the query */
-		plan = pg_plan_query(query, cursorOptions, params);
-
-		INSTR_TIME_SET_CURRENT(planduration);
-		INSTR_TIME_SUBTRACT(planduration, planstart);
-
-		/* run it (if needed) and produce output */
-		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
 	}
 }

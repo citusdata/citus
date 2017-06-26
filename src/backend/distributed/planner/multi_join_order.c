@@ -1526,7 +1526,7 @@ RightColumn(OpExpr *joinClause)
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
-	Var *partitionKey = PartitionKey(relationId);
+	Var *partitionKey = DistPartitionKey(relationId);
 	Var *partitionColumn = NULL;
 
 	/* short circuit for reference tables */
@@ -1544,7 +1544,7 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 
 
 /*
- * PartitionKey returns the partition key column for the given relation. Note
+ * DistPartitionKey returns the partition key column for the given relation. Note
  * that in the context of distributed join and query planning, the callers of
  * this function *must* set the partition key column's range table reference
  * (varno) to match the table's location in the query range table list.
@@ -1553,7 +1553,7 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
  * returns NULL when called for reference tables.
  */
 Var *
-PartitionKey(Oid relationId)
+DistPartitionKey(Oid relationId)
 {
 	DistTableCacheEntry *partitionEntry = DistributedTableCacheEntry(relationId);
 	Node *variableNode = NULL;

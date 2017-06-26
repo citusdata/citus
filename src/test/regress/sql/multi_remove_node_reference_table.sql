@@ -384,7 +384,7 @@ WHERE
 \c - - - :master_port
 
 -- verify table structure is changed
-\d remove_node_reference_table
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;
 
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);

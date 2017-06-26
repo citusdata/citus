@@ -43,15 +43,26 @@ SELECT count(*) FROM pg_dist_transaction;
 (1 row)
 
 \c - - - :worker_1_port
-\d distributed_mx_table
-Table "public.distributed_mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
  Column | Type  | Modifiers 
 --------+-------+-----------
  key    | text  | not null
  value  | jsonb | 
-Indexes:
-    "distributed_mx_table_pkey" PRIMARY KEY, btree (key)
-    "distributed_mx_table_value_idx" gin (value)
+(2 rows)
+
+\d distributed_mx_table_pkey
+Index "public.distributed_mx_table_pkey"
+ Column | Type | Definition 
+--------+------+------------
+ key    | text | key
+primary key, btree, for table "public.distributed_mx_table"
+
+\d distributed_mx_table_value_idx
+Index "public.distributed_mx_table_value_idx"
+ Column | Type | Definition 
+--------+------+------------
+ value  | text | value
+gin, for table "public.distributed_mx_table"
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;
@@ -68,15 +79,26 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 (1 row)
 
 \c - - - :worker_2_port
-\d distributed_mx_table
-Table "public.distributed_mx_table"
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='distributed_mx_table'::regclass;
  Column | Type  | Modifiers 
 --------+-------+-----------
  key    | text  | not null
  value  | jsonb | 
-Indexes:
-    "distributed_mx_table_pkey" PRIMARY KEY, btree (key)
-    "distributed_mx_table_value_idx" gin (value)
+(2 rows)
+
+\d distributed_mx_table_pkey
+Index "public.distributed_mx_table_pkey"
+ Column | Type | Definition 
+--------+------+------------
+ key    | text | key
+primary key, btree, for table "public.distributed_mx_table"
+
+\d distributed_mx_table_value_idx
+Index "public.distributed_mx_table_value_idx"
+ Column | Type | Definition 
+--------+------+------------
+ value  | text | value
+gin, for table "public.distributed_mx_table"
 
 SELECT repmodel FROM pg_dist_partition
 WHERE logicalrelid = 'distributed_mx_table'::regclass;

@@ -43,7 +43,11 @@ typedef struct MaintenanceDaemonControlData
 	 * data in dbHash.
 	 */
 	int trancheId;
+#if (PG_VERSION_NUM >= 100000)
+	char *lockTrancheName;
+#else
 	LWLockTranche lockTranche;
+#endif
 	LWLock lock;
 
 	/*
@@ -257,7 +261,11 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		/*
 		 * Wait until timeout, or until somebody wakes us up.
 		 */
+#if (PG_VERSION_NUM >= 100000)
+		rc = WaitLatch(MyLatch, latchFlags, timeout, PG_WAIT_EXTENSION);
+#else
 		rc = WaitLatch(MyLatch, latchFlags, timeout);
+#endif
 
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -343,6 +351,13 @@ MaintenanceDaemonShmemInit(void)
 	 */
 	if (!alreadyInitialized)
 	{
+#if (PG_VERSION_NUM >= 100000)
+		MaintenanceDaemonControl->trancheId = LWLockNewTrancheId();
+		MaintenanceDaemonControl->lockTrancheName = "Citus Maintenance Daemon";
+		LWLockRegisterTranche(MaintenanceDaemonControl->trancheId,
+							  MaintenanceDaemonControl->lockTrancheName);
+#else
+
 		/* initialize lwlock  */
 		LWLockTranche *tranche = &MaintenanceDaemonControl->lockTranche;
 
@@ -355,6 +370,8 @@ MaintenanceDaemonShmemInit(void)
 		tranche->array_stride = sizeof(LWLock);
 		tranche->name = "Citus Maintenance Daemon";
 		LWLockRegisterTranche(MaintenanceDaemonControl->trancheId, tranche);
+#endif
+
 		LWLockInitialize(&MaintenanceDaemonControl->lock,
 						 MaintenanceDaemonControl->trancheId);
 	}

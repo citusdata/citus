@@ -90,7 +90,7 @@ extern OpExpr * DualPartitionJoinClause(List *applicableJoinClauses);
 extern Var * LeftColumn(OpExpr *joinClause);
 extern Var * RightColumn(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
-extern Var * PartitionKey(Oid relationId);
+extern Var * DistPartitionKey(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);
 
