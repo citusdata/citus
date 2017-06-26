@@ -293,8 +293,8 @@ SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_g
 
 -- check worker table schemas
 \c - - - :worker_1_port
-\d table3_groupE_1300050
-\d schema_collocation.table4_groupE_1300052
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300050'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300052'::regclass;
 
 \c - - - :master_port
 

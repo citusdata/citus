@@ -84,6 +84,9 @@ static void CreateHashDistributedTable(Oid relationId, char *distributionColumnN
 static Oid ColumnType(Oid relationId, char *columnName);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
+#if (PG_VERSION_NUM >= 100000)
+static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
+#endif
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -348,6 +351,23 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						errdetail("Distributed relations must be regular or "
 								  "foreign tables.")));
 	}
+
+#if (PG_VERSION_NUM >= 100000)
+	if (relation->rd_rel->relispartition)
+	{
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("cannot distribute relation: %s", relationName),
+						errdetail("Distributing partition tables is unsupported.")));
+	}
+
+	if (RelationUsesIdentityColumns(relationDesc))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot distribute relation: %s", relationName),
+						errdetail("Distributed relations must not use GENERATED "
+								  "... AS IDENTITY.")));
+	}
+#endif
 
 	/* check that table is empty if that is required */
 	if (requireEmpty && !LocalTableEmpty(relationId))
@@ -874,3 +894,30 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 
 	return columnNameList;
 }
+
+
+/*
+ * RelationUsesIdentityColumns returns whether a given relation uses the SQL
+ * GENERATED ... AS IDENTITY features supported as of PostgreSQL 10.
+ */
+#if (PG_VERSION_NUM >= 100000)
+static bool
+RelationUsesIdentityColumns(TupleDesc relationDesc)
+{
+	int attributeIndex = 0;
+
+	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
+	{
+		Form_pg_attribute attributeForm = relationDesc->attrs[attributeIndex];
+
+		if (attributeForm->attidentity != '\0')
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+#endif

@@ -456,17 +456,17 @@ INSERT INTO products VALUES(1,'product_1', 10, 8);
 ERROR:  single-shard DML commands must not appear in transaction blocks which contain multi-shard data modifications
 ROLLBACK;
 -- There should be no constraint on master and worker(s) 
-\d products
-        Table "public.products"
-      Column      |  Type   | Modifiers 
-------------------+---------+-----------
- product_no       | integer | 
- name             | text    | 
- price            | numeric | 
- discounted_price | numeric | 
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
+ Constraint | Definition 
+------------+------------
+(0 rows)
 
 \c - - - :worker_1_port
-\d products_1450199
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+ Constraint | Definition 
+------------+------------
+(0 rows)
+
 \c - - - :master_port
 -- Tests to check the effect of rollback
 BEGIN;
@@ -478,16 +478,16 @@ ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 ROLLBACK;
 -- There should be no constraint on master and worker(s) 
-\d products
-        Table "public.products"
-      Column      |  Type   | Modifiers 
-------------------+---------+-----------
- product_no       | integer | 
- name             | text    | 
- price            | numeric | 
- discounted_price | numeric | 
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
+ Constraint | Definition 
+------------+------------
+(0 rows)
 
 \c - - - :worker_1_port
-\d products_1450199
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+ Constraint | Definition 
+------------+------------
+(0 rows)
+
 \c - - - :master_port
 DROP TABLE products;

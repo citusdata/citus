@@ -100,8 +100,8 @@ LogTransactionRecord(int groupId, char *transactionName)
 	tupleDescriptor = RelationGetDescr(pgDistTransaction);
 	heapTuple = heap_form_tuple(tupleDescriptor, values, isNulls);
 
-	simple_heap_insert(pgDistTransaction, heapTuple);
-	CatalogUpdateIndexes(pgDistTransaction, heapTuple);
+	CatalogTupleInsert(pgDistTransaction, heapTuple);
+
 	CommandCounterIncrement();
 
 	/* close relation and invalidate previous cache entry */

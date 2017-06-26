@@ -131,6 +131,9 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 Oid *
 																 selectPartitionColumnTableId);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
+#if (PG_VERSION_NUM >= 100000)
+static List * get_all_actual_clauses(List *restrictinfo_list);
+#endif
 
 
 /*
@@ -1638,13 +1641,14 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 * should be checked in this function.
 	 *
 	 * Look through contain_mutable_functions_walker or future PG's equivalent for new
-	 * node types before bumping this version number to fix compilation.
+	 * node types before bumping this version number to fix compilation; e.g. for any
+	 * PostgreSQL after 9.5, see check_functions_in_node.
 	 *
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM < 90700, "When porting to a newer PG this section"
-											 " needs to be reviewed.");
+	StaticAssertStmt(PG_VERSION_NUM < 100100, "When porting to a newer PG this section"
+											  " needs to be reviewed.");
 	if (IsA(expression, Aggref))
 	{
 		Aggref *expr = (Aggref *) expression;
@@ -1836,12 +1840,20 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 		List *restrictClauseList = WhereClauseList(joinTree);
 		OpExpr *equalityExpr = MakeOpExpression(column, BTEqualStrategyNumber);
 		Const *rightConst = (Const *) get_rightop((Expr *) equalityExpr);
+		bool predicateIsImplied = false;
 
 		rightConst->constvalue = newValue->constvalue;
 		rightConst->constisnull = newValue->constisnull;
 		rightConst->constbyval = newValue->constbyval;
 
-		if (predicate_implied_by(list_make1(equalityExpr), restrictClauseList))
+#if (PG_VERSION_NUM >= 100000)
+		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
+												  restrictClauseList, false);
+#else
+		predicateIsImplied = predicate_implied_by(list_make1(equalityExpr),
+												  restrictClauseList);
+#endif
+		if (predicateIsImplied)
 		{
 			/* target entry of the form SET col = <x> WHERE col = <x> AND ... */
 			isColumnValueChanged = false;
@@ -3036,3 +3048,34 @@ ErrorIfQueryHasModifyingCTE(Query *queryTree)
 	/* everything OK */
 	return NULL;
 }
+
+
+#if (PG_VERSION_NUM >= 100000)
+
+/*
+ * get_all_actual_clauses
+ *
+ * Returns a list containing the bare clauses from 'restrictinfo_list'.
+ *
+ * This loses the distinction between regular and pseudoconstant clauses,
+ * so be careful what you use it for.
+ */
+static List *
+get_all_actual_clauses(List *restrictinfo_list)
+{
+	List *result = NIL;
+	ListCell *l;
+
+	foreach(l, restrictinfo_list)
+	{
+		RestrictInfo *rinfo = (RestrictInfo *) lfirst(l);
+
+		Assert(IsA(rinfo, RestrictInfo));
+
+		result = lappend(result, rinfo->clause);
+	}
+	return result;
+}
+
+
+#endif

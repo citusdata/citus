@@ -62,13 +62,6 @@ CREATE INDEX is_index3 ON users_table(value_1);
 CREATE INDEX is_index4 ON events_table(event_type);
 CREATE INDEX is_index5 ON users_table(value_2);
 CREATE INDEX is_index6 ON events_table(value_2);
--- create a helper function to create types/functions on each node
-CREATE FUNCTION run_command_on_master_and_workers(p_sql text)
-RETURNS void LANGUAGE plpgsql AS $$
-BEGIN
-     EXECUTE p_sql;
-     PERFORM run_command_on_workers(p_sql);
-END;$$;
 -- Create composite type to use in subquery pushdown
 SELECT run_command_on_master_and_workers($f$
 
