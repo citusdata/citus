@@ -436,17 +436,9 @@ for my $port (@workerPorts)
 my @arguments = (
     "--host", $host,
     '--port', $masterPort,
-    '--user', $user
+    '--user', $user,
+    '--bindir', "tmp_check/tmp-bin"
 );
-
-if ($majorversion eq '9.5' || $majorversion eq '9.6' || $majorversion eq '10')
-{
-    push(@arguments, '--bindir', "tmp_check/tmp-bin");
-}
-else
-{
-    die "Citus is not compatible with the detected PostgreSQL version $majorversion";
-}
 
 # Add load extension parameters to the argument list
 for my $extension (@extensions)

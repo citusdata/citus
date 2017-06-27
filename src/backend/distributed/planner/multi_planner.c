@@ -444,7 +444,7 @@ SerializeMultiPlan(MultiPlan *multiPlan)
 	char *serializedMultiPlan = NULL;
 	Const *multiPlanData = NULL;
 
-	serializedMultiPlan = CitusNodeToString(multiPlan);
+	serializedMultiPlan = nodeToString(multiPlan);
 
 	multiPlanData = makeNode(Const);
 	multiPlanData->consttype = CSTRINGOID;
@@ -472,7 +472,7 @@ DeserializeMultiPlan(Node *node)
 	multiPlanData = (Const *) node;
 	serializedMultiPlan = DatumGetCString(multiPlanData->constvalue);
 
-	multiPlan = (MultiPlan *) CitusStringToNode(serializedMultiPlan);
+	multiPlan = (MultiPlan *) stringToNode(serializedMultiPlan);
 	Assert(CitusIsA(multiPlan, MultiPlan));
 
 	return multiPlan;
@@ -661,14 +661,14 @@ RemoteScanRangeTableEntry(List *columnNameList)
 
 /*
  * CheckNodeIsDumpable checks that the passed node can be dumped using
- * CitusNodeToString(). As this checks is expensive, it's only active when
+ * nodeToString(). As this checks is expensive, it's only active when
  * assertions are enabled.
  */
 static void
 CheckNodeIsDumpable(Node *node)
 {
 #ifdef USE_ASSERT_CHECKING
-	char *out = CitusNodeToString(node);
+	char *out = nodeToString(node);
 	pfree(out);
 #endif
 }
