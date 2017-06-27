@@ -47,7 +47,7 @@ why we ask this as well as instructions for how to proceed, see the
        sudo apt-key add -
   sudo apt-get update
 
-  sudo apt-get install -y postgresql-server-dev-9.5 postgresql-9.5 \
+  sudo apt-get install -y postgresql-server-dev-9.6 postgresql-9.6 \
                           libedit-dev libselinux1-dev libxslt-dev  \
                           libpam0g-dev git flex make
   ```
@@ -66,7 +66,7 @@ why we ask this as well as instructions for how to proceed, see the
 
 #### Red Hat-based Linux (RHEL, CentOS, Fedora)
 
-1. Find the PostgreSQL 9.5 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg95)
+1. Find the PostgreSQL 9.6 RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php#pg96)
 2. Register its contents with Yum:
 
   ```bash
@@ -78,13 +78,13 @@ why we ask this as well as instructions for how to proceed, see the
   ```bash
   sudo yum update -y
   sudo yum groupinstall -y 'Development Tools'
-  sudo yum install -y postgresql95-devel postgresql95-server    \
+  sudo yum install -y postgresql96-devel postgresql96-server    \
                       libxml2-devel libxslt-devel openssl-devel \
                       pam-devel readline-devel git
 
   git clone https://github.com/citusdata/citus.git
   cd citus
-  PG_CONFIG=/usr/pgsql-9.5/bin/pg_config ./configure
+  PG_CONFIG=/usr/pgsql-9.6/bin/pg_config ./configure
   make
   sudo make install
   cd src/test/regress
