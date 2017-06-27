@@ -14,7 +14,6 @@ env:
     # During pull request builds (not push builds), use custom-built PostgreSQL
     - USE_CUSTOM_PG="${TRAVIS_PULL_REQUEST_SHA}"
   matrix:
-    - PGVERSION=9.5
     - PGVERSION=9.6
     - PGVERSION=10
 before_install:

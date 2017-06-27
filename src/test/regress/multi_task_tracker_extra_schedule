@@ -7,7 +7,7 @@
 #
 # Note that we use variant comparison files to test version dependent regression
 # test results. For more information:
-# http://www.postgresql.org/docs/9.5/static/regress-variant.html
+# http://www.postgresql.org/docs/current/static/regress-variant.html
 # ----------
 
 # ---

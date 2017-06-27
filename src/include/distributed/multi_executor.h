@@ -18,13 +18,6 @@
 #include "distributed/multi_server_executor.h"
 
 
-#if (PG_VERSION_NUM >= 90600)
-#define tuplecount_t uint64
-#else
-#define tuplecount_t long
-#endif
-
-
 typedef struct CitusScanState
 {
 	CustomScanState customScanState;  /* underlying custom scan node */

@@ -5,9 +5,6 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 650000;
 
--- print whether we're running on 9.5 to make version-specific tests clear
-SELECT substring(version(), '\d+(?:\.\d+)?') = '9.5' AS is_95;
-
 -- Set configuration to print table join order and pruned shards
 
 SET citus.explain_distributed_queries TO off;

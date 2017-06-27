@@ -618,10 +618,8 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 		/* plan the query */
 #if (PG_VERSION_NUM >= 100000)
 		plan = pg_plan_query(query, cursorOptions, params);
-#elif (PG_VERSION_NUM >= 90600)
-		plan = pg_plan_query(query, into ? 0 : CURSOR_OPT_PARALLEL_OK, params);
 #else
-		plan = pg_plan_query(query, 0, params);
+		plan = pg_plan_query(query, into ? 0 : CURSOR_OPT_PARALLEL_OK, params);
 #endif
 
 		INSTR_TIME_SET_CURRENT(planduration);
