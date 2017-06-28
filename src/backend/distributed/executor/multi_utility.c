@@ -1880,14 +1880,14 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 #if (PG_VERSION_NUM >= 100000)
 			case AT_AttachPartition:
 #endif
-			{
-				/*
-				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
-				 * , ALTER TABLE .. ALTER COLUMN .. SET NOT NULL and ALTER TABLE ENABLE/
-				 * DISABLE TRIGGER ALL
-				 */
-				break;
-			}
+				{
+					/*
+					 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
+					 * , ALTER TABLE .. ALTER COLUMN .. SET NOT NULL and ALTER TABLE ENABLE/
+					 * DISABLE TRIGGER ALL
+					 */
+					break;
+				}
 
 			default:
 			{
