@@ -146,7 +146,7 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;
 SELECT table_ddl_command_array('local_view');
-ERROR:  public.local_view is not a regular or foreign table
+ERROR:  public.local_view is not a regular, foreign, or partitioned table
 -- clean up
 DROP VIEW IF EXISTS local_view;
 DROP FOREIGN TABLE IF EXISTS foreign_table;

@@ -22,6 +22,11 @@ test: multi_table_ddl
 test: multi_name_lengths
 test: multi_metadata_access
 
+# ---
+# Tests for partitioning support
+# ---
+test: multi_partitioning_utils
+
 # ----------
 # The following distributed tests depend on creating a partitioned table and
 # uploading data to it.
