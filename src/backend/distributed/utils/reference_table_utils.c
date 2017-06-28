@@ -39,7 +39,6 @@ static void ReplicateShardToAllWorkers(ShardInterval *shardInterval);
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 								 int nodePort);
 static void ConvertToReferenceTableMetadata(Oid relationId, uint64 shardId);
-static int CompareOids(const void *leftElement, const void *rightElement);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -457,7 +456,7 @@ ReferenceTableOidList()
 
 
 /* CompareOids is a comparison function for sort shard oids */
-static int
+int
 CompareOids(const void *leftElement, const void *rightElement)
 {
 	Oid *leftId = (Oid *) leftElement;
