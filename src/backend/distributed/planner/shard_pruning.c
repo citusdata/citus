@@ -61,6 +61,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/makefuncs.h"
 #include "optimizer/clauses.h"
 #include "utils/catcache.h"
 #include "utils/lsyscache.h"
@@ -547,33 +548,126 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 		Node *strippedLeftOpExpression = strip_implicit_coercions(leftOpExpression);
 		bool usingEqualityOperator = OperatorImplementsEquality(
 			arrayOperatorExpression->opno);
+		Expr *arrayArgument = (Expr *) lsecond(arrayOperatorExpression->args);
 
 		/*
-		 * Citus cannot prune hash-distributed shards with ANY/ALL. We show a NOTICE
-		 * if the expression is ANY/ALL performed on the partition column with equality.
-		 *
-		 * TODO: this'd now be easy to implement, similar to the OR_EXPR case
-		 * above, except that one would push an appropriately constructed
-		 * OpExpr(LHS = $array_element) as continueAt.
+		 * Found partcol = ANY(const, value, s); or parcol IN (const,b,c);
 		 */
 		if (usingEqualityOperator && strippedLeftOpExpression != NULL &&
-			equal(strippedLeftOpExpression, context->partitionColumn))
+			equal(strippedLeftOpExpression, context->partitionColumn) &&
+			IsA(arrayArgument, Const))
 		{
-			ereport(NOTICE, (errmsg("cannot use shard pruning with "
-									"ANY/ALL (array expression)"),
-							 errhint("Consider rewriting the expression with "
-									 "OR/AND clauses.")));
-		}
+			ArrayType *array;
+			int16 typlen;
+			bool typbyval;
+			char typalign;
+			Oid element_type;
+			char *s;
+			bits8 *bitmap;
+			int bitmask;
+			int i;
+			int nitems;
 
-		/*
-		 * Mark expression as added, so we'll fail pruning if there's no ANDed
-		 * restrictions that we can deal with.
-		 */
-		if (!prune->addedToPruningInstances)
+			/*
+			 * FIXME: use array_iter_setup() / array_iter_next(), instead of
+			 * open-coding array iteration.
+			 */
+			array = DatumGetArrayTypeP(((Const *) arrayArgument)->constvalue);
+
+			element_type = ARR_ELEMTYPE(array);
+			get_typlenbyvalalign(element_type,
+								 &typlen,
+								 &typbyval,
+								 &typalign);
+
+			s = (char *) ARR_DATA_PTR(array);
+			bitmap = ARR_NULLBITMAP(array);
+			bitmask = 1;
+			nitems = ArrayGetNItems(ARR_NDIM(array), ARR_DIMS(array));
+
+			/*
+			 * Treat ScalarArrayOp as a logn list of ORs and treat it the same
+			 * way as BOOL_OR above.
+			 */
+			for (i = 0; i < nitems; i++)
+			{
+				OpExpr *op;
+				PendingPruningInstance *instance =
+					palloc0(sizeof(PendingPruningInstance));
+				Datum arg;
+				bool argnull;
+				Const *c;
+
+				/* Get array element, checking for NULL */
+				if (bitmap && (*bitmap & bitmask) == 0)
+				{
+					arg = (Datum) 0;
+					argnull = true;
+				}
+				else
+				{
+					arg = fetch_att(s, typbyval, typlen);
+					argnull = false;
+
+					s = att_addlength_pointer(s, typlen, s);
+					s = (char *) att_align_nominal(s, typalign);
+				}
+
+				/* advance bitmap pointer if any */
+				if (bitmap)
+				{
+					bitmask <<= 1;
+					if (bitmask == 0x100)
+					{
+						bitmap++;
+						bitmask = 1;
+					}
+				}
+
+				/* build partcol = arrayelem operator */
+				op = makeNode(OpExpr);
+				op->opno = arrayOperatorExpression->opno;
+				op->opfuncid = arrayOperatorExpression->opfuncid;
+				op->inputcollid = arrayOperatorExpression->inputcollid;
+				op->opresulttype = BOOLOID; /* FIXME: */
+				op->opcollid = DEFAULT_COLLATION_OID;
+				op->location = -1;
+
+				c = makeConst(element_type, -1,
+							  DEFAULT_COLLATION_OID,
+							  typlen,
+							  arg,
+							  argnull,
+							  typbyval);
+				op->args = list_make2(strippedLeftOpExpression, c);
+
+
+				/* and continue later */
+				instance->instance = context->currentPruningInstance;
+				instance->continueAt = (Node *) op;
+
+				/*
+				 * Signal that this instance is not to be used for pruning on
+				 * its own.  Once the pending instance is processed, it'll be
+				 * used.
+				 */
+				instance->instance->isPartial = true;
+
+				context->pendingInstances = lappend(context->pendingInstances, instance);
+			}
+		}
+		else
 		{
-			context->pruningInstances = lappend(context->pruningInstances,
-												prune);
-			prune->addedToPruningInstances = true;
+			/*
+			 * Mark expression as added, so we'll fail pruning if there's no ANDed
+			 * restrictions that we can deal with.
+			 */
+			if (!prune->addedToPruningInstances)
+			{
+				context->pruningInstances = lappend(context->pruningInstances,
+													prune);
+				prune->addedToPruningInstances = true;
+			}
 		}
 
 		return false;

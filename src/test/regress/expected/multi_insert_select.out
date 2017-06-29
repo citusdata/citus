@@ -769,18 +769,10 @@ DEBUG:  Plan is router executable
  FROM
    raw_events_first LEFT JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_first.user_id IN (19, 20, 21);
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first LEFT JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= '-2147483648'::integer) AND (worker_hash(raw_events_first.user_id) <= '-1073741825'::integer)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first LEFT JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) <= '-1'::integer)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first LEFT JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 0) AND (worker_hash(raw_events_first.user_id) <= 1073741823)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 1073741824) AND (worker_hash(raw_events_first.user_id) <= 2147483647)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM ((SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_first(user_id, "time", value_1, value_2, value_3, value_4) LEFT JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_first.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 1073741824) AND (worker_hash(raw_events_first.user_id) <= 2147483647)))
 DEBUG:  Plan is router executable
  
  INSERT INTO agg_events (user_id)
@@ -789,18 +781,10 @@ DEBUG:  Plan is router executable
  FROM
    raw_events_first INNER JOIN raw_events_second ON raw_events_first.user_id = raw_events_second.user_id
    WHERE raw_events_second.user_id IN (19, 20, 21);
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300000 raw_events_first JOIN public.raw_events_second_13300004 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= '-2147483648'::integer) AND (worker_hash(raw_events_first.user_id) <= '-1073741825'::integer)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300001 raw_events_first JOIN public.raw_events_second_13300005 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= '-1073741824'::integer) AND (worker_hash(raw_events_first.user_id) <= '-1'::integer)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300002 raw_events_first JOIN public.raw_events_second_13300006 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 0) AND (worker_hash(raw_events_first.user_id) <= 1073741823)))
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first JOIN public.raw_events_second_13300007 raw_events_second ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 1073741824) AND (worker_hash(raw_events_first.user_id) <= 2147483647)))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id) SELECT raw_events_first.user_id FROM (public.raw_events_first_13300003 raw_events_first JOIN (SELECT NULL::integer AS user_id, NULL::timestamp without time zone AS "time", NULL::integer AS value_1, NULL::integer AS value_2, NULL::double precision AS value_3, NULL::bigint AS value_4 WHERE false) raw_events_second(user_id, "time", value_1, value_2, value_3, value_4) ON ((raw_events_first.user_id = raw_events_second.user_id))) WHERE ((raw_events_second.user_id = ANY (ARRAY[19, 20, 21])) AND ((worker_hash(raw_events_first.user_id) >= 1073741824) AND (worker_hash(raw_events_first.user_id) <= 2147483647)))
 DEBUG:  Plan is router executable
  
  -- the following is a very tricky query for Citus
