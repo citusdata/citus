@@ -9,6 +9,7 @@
 #include "postgres.h"
 
 #include "distributed/citus_clauses.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/multi_router_planner.h"
 
 #include "catalog/pg_type.h"
