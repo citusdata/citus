@@ -11,6 +11,9 @@
 
 #include "lib/ilist.h"
 
+#include "datatype/timestamp.h"
+#include "storage/lwlock.h"
+
 /* describes what kind of modifications have occurred in the current transaction */
 typedef enum
 {
@@ -52,6 +55,39 @@ typedef enum
 	COMMIT_PROTOCOL_2PC = 2
 } CommitProtocolType;
 
+
+/* FIXME: move to different header? */
+typedef struct TmgmtTransactionId
+{
+	uint64 nodeId;
+	uint64 transactionId;
+	TimestampTz timestamp;
+} TmgmtTransactionId;
+
+typedef struct TmgmtBackendData
+{
+	Oid databaseId;
+	TmgmtTransactionId transactionId;
+} TmgmtBackendData;
+
+
+typedef struct TmgmtShmemControlData
+{
+	int trancheId;
+	LWLockTranche lockTranche;
+	LWLock lock;
+
+	int numSessions;
+
+	pg_atomic_uint64 nextTransactionId;
+
+	TmgmtBackendData sessions[FLEXIBLE_ARRAY_MEMBER];
+} TmgmtShmemControlData;
+
+extern TmgmtBackendData *MyTmgmtBackendData;
+extern TmgmtShmemControlData *TmgmtShmemControl;
+
+
 /* config variable managed via guc.c */
 extern int MultiShardCommitProtocol;
 
@@ -76,6 +112,7 @@ extern void CoordinatedTransactionUse2PC(void);
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
+extern void InitializeTransactionManagementBackend(void);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */

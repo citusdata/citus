@@ -70,6 +70,7 @@ FinishRemoteTransactionBegin(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	PGresult *result = NULL;
 	const bool raiseErrors = true;
+	char *query = NULL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_STARTING);
 
@@ -91,6 +92,33 @@ FinishRemoteTransactionBegin(struct MultiConnection *connection)
 	{
 		Assert(PQtransactionStatus(connection->pgConn) == PQTRANS_INTRANS);
 	}
+
+	{
+		const char *tzstr = timestamptz_to_str(
+			MyTmgmtBackendData->transactionId.timestamp);
+
+		query = psprintf("SELECT assign_distributed_transaction_id("
+						 UINT64_FORMAT ","UINT64_FORMAT ", '%s')",
+						 MyTmgmtBackendData->transactionId.nodeId,
+						 MyTmgmtBackendData->transactionId.transactionId,
+						 tzstr);
+	}
+
+	/* FIXME: this is a bad idea performancewise */
+	if (!SendRemoteCommand(connection, query))
+	{
+		ReportConnectionError(connection, WARNING);
+		MarkRemoteTransactionFailed(connection, true);
+	}
+	result = GetRemoteCommandResult(connection, raiseErrors);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, WARNING);
+		MarkRemoteTransactionFailed(connection, raiseErrors);
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
 }
 
 
@@ -263,7 +291,7 @@ RemoteTransactionCommit(MultiConnection *connection)
 
 
 /*
- * StartRemoteTransactionAbort initiates abortin the transaction in a
+ * StartRemoteTransactionAbort initiates aborting the transaction in a
  * non-blocking manner.
  */
 void
