@@ -339,7 +339,7 @@ FinishRemoteTransactionAbort(MultiConnection *connection)
 		if (transaction->transactionState == REMOTE_TRANS_1PC_ABORTING)
 		{
 			ereport(WARNING,
-					(errmsg("failed to abort 2PC transaction \"%s\" on %s:%d",
+					(errmsg("failed to abort 1PC transaction \"%s\" on %s:%d",
 							transaction->preparedName, connection->hostname,
 							connection->port)));
 		}
