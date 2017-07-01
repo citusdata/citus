@@ -60,7 +60,7 @@ check-isolation: all tempinstall-main
 
 check-vanilla: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --vanillatest
-	
+
 check-multi-mx: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
