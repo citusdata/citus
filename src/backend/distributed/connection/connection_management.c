@@ -718,8 +718,7 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			PQstatus(connection->pgConn) != CONNECTION_OK ||
 			PQtransactionStatus(connection->pgConn) != PQTRANS_IDLE)
 		{
-			PQfinish(connection->pgConn);
-			connection->pgConn = NULL;
+			ShutdownConnection(connection);
 
 			/* unlink from list */
 			dlist_delete(iter.cur);
