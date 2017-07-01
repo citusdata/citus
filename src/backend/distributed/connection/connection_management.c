@@ -402,6 +402,40 @@ CloseConnectionByPGconn(PGconn *pqConn)
 
 
 /*
+ * ShutdownConnection, if necessary cancels the currently running statement,
+ * and then closes the underlying libpq connection.  The MultiConnection
+ * itself is left intact.
+ *
+ * NB: Cancelling a statement requires network IO, and currently is not
+ * interruptible. Unfortunately libpq does not provide a non-blocking
+ * implementation of PQcancel(), so we don't have much choice for now.
+ */
+void
+ShutdownConnection(MultiConnection *connection)
+{
+	/*
+	 * Only cancel statement if there's currently one running, and the
+	 * connection is in an OK state.
+	 */
+	if (PQstatus(connection->pgConn) == CONNECTION_OK &&
+		PQtransactionStatus(connection->pgConn) == PQTRANS_ACTIVE)
+	{
+		char errorMessage[256] = { 0 };
+		PGcancel *cancel = PQgetCancel(connection->pgConn);
+
+		if (!PQcancel(cancel, errorMessage, sizeof(errorMessage)))
+		{
+			ereport(WARNING, (errmsg("could not cancel connection: %s",
+									 errorMessage)));
+		}
+		PQfreeCancel(cancel);
+	}
+	PQfinish(connection->pgConn);
+	connection->pgConn = NULL;
+}
+
+
+/*
  * FinishConnectionListEstablishment is a wrapper around FinishConnectionEstablishment.
  * The function iterates over the multiConnectionList and finishes the connection
  * establishment for each multi connection.
