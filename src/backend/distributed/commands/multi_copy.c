@@ -939,8 +939,8 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
 			char *placementIdString = PQgetvalue(queryResult, rowIndex, 0);
-			char *nodeName = PQgetvalue(queryResult, rowIndex, 1);
-			char *nodePortString = PQgetvalue(queryResult, rowIndex, 2);
+			char *nodeName = pstrdup(PQgetvalue(queryResult, rowIndex, 1));
+			char *nodePortString = pstrdup(PQgetvalue(queryResult, rowIndex, 2));
 			uint32 nodePort = atoi(nodePortString);
 			uint64 placementId = atoll(placementIdString);
 
@@ -959,6 +959,7 @@ RemoteFinalizedShardPlacementList(uint64 shardId)
 		ereport(ERROR, (errmsg("could not get shard placements from the master node")));
 	}
 
+	PQclear(queryResult);
 	return finalizedPlacementList;
 }
 
