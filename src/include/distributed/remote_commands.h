@@ -46,6 +46,9 @@ extern int SendRemoteCommandParams(MultiConnection *connection, const char *comm
 								   const char *const *parameterValues);
 extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
 												 bool raiseInterrupts);
+extern bool PutRemoteCopyData(MultiConnection *connection, const char *buffer,
+							  int nbytes);
+extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);
 
 
 #endif /* REMOTE_COMMAND_H */
