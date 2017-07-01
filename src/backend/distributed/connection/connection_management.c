@@ -640,6 +640,13 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	connection->pgConn = PQconnectStartParams(keywords, values, false);
 	connection->connectionStart = GetCurrentTimestamp();
 
+	/*
+	 * To avoid issues with interrupts not getting caught all our connections
+	 * are managed in a non-blocking manner. remote_commands.c provides
+	 * wrappers emulating blocking behaviour.
+	 */
+	PQsetnonblocking(connection->pgConn, true);
+
 	return connection;
 }
 
