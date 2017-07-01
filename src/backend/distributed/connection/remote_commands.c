@@ -48,8 +48,8 @@ IsResponseOK(PGresult *result)
 /*
  * ForgetResults clears a connection from pending activity.
  *
- * XXX: In the future it might be a good idea to use use PQcancel() if results
- * would require network IO.
+ * Note that this might require network IO. If that's not acceptable, use
+ * NonblockingForgetResults().
  */
 void
 ForgetResults(MultiConnection *connection)
@@ -72,6 +72,74 @@ ForgetResults(MultiConnection *connection)
 		}
 		PQclear(result);
 	}
+}
+
+
+/*
+ * NonblockingForgetResults clears a connection from pending activity if doing
+ * so does not require network IO. Returns true if successful, false
+ * otherwise.
+ */
+bool
+NonblockingForgetResults(MultiConnection *connection)
+{
+	PGconn *pgConn = connection->pgConn;
+
+	if (PQstatus(pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+
+	while (true)
+	{
+		PGresult *result = NULL;
+
+		/* just in case there's a lot of results */
+		CHECK_FOR_INTERRUPTS();
+
+		/*
+		 * If busy, there might still be results already received and buffered
+		 * by the OS. As connection is in non-blocking mode, we can check for
+		 * that without blocking.
+		 */
+		if (PQisBusy(pgConn))
+		{
+			if (PQflush(pgConn) == -1)
+			{
+				/* write failed */
+				return false;
+			}
+			if (PQconsumeInput(pgConn) == 0)
+			{
+				/* some low-level failure */
+				return false;
+			}
+		}
+
+		/* clearing would require blocking IO, return */
+		if (PQisBusy(pgConn))
+		{
+			return false;
+		}
+
+		result = PQgetResult(pgConn);
+		if (PQresultStatus(result) == PGRES_COPY_IN)
+		{
+			/* in copy, can't reliably recover without blocking */
+			return false;
+		}
+
+		if (result == NULL)
+		{
+			return true;
+		}
+
+		PQclear(result);
+	}
+
+	pg_unreachable();
 }
 
 
