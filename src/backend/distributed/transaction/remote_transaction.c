@@ -276,15 +276,20 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 	Assert(transaction->transactionState != REMOTE_TRANS_INVALID);
 
 	/*
-	 * Clear previous results, so we have a better chance to send
-	 * ROLLBACK [PREPARED];
+	 * Clear previous results, so we have a better chance to send ROLLBACK
+	 * [PREPARED]. If we've previously sent a PREPARE TRANSACTION, we always
+	 * want to wait for that result, as that shouldn't take long and will
+	 * reserve resources.  But if there's another query running, we don't want
+	 * to wait, because a longrunning statement may be running, force it to be
+	 * killed in that case.
 	 */
-	ForgetResults(connection);
-
 	if (transaction->transactionState == REMOTE_TRANS_PREPARING ||
 		transaction->transactionState == REMOTE_TRANS_PREPARED)
 	{
 		StringInfoData command;
+
+		/* await PREPARE TRANSACTION results, closing the connection would leave it dangling */
+		ForgetResults(connection);
 
 		initStringInfo(&command);
 		appendStringInfo(&command, "ROLLBACK PREPARED '%s'",
@@ -304,6 +309,14 @@ StartRemoteTransactionAbort(MultiConnection *connection)
 	}
 	else
 	{
+		if (!NonblockingForgetResults(connection))
+		{
+			ShutdownConnection(connection);
+
+			/* FinishRemoteTransactionAbort will emit warning */
+			return;
+		}
+
 		if (!SendRemoteCommand(connection, "ROLLBACK"))
 		{
 			/* no point in reporting a likely redundant message */
@@ -336,16 +349,16 @@ FinishRemoteTransactionAbort(MultiConnection *connection)
 		ReportResultError(connection, result, WARNING);
 		MarkRemoteTransactionFailed(connection, dontRaiseErrors);
 
-		if (transaction->transactionState == REMOTE_TRANS_1PC_ABORTING)
+		if (transaction->transactionState == REMOTE_TRANS_2PC_ABORTING)
+		{
+			WarnAboutLeakedPreparedTransaction(connection, isNotCommit);
+		}
+		else
 		{
 			ereport(WARNING,
 					(errmsg("failed to abort 1PC transaction \"%s\" on %s:%d",
 							transaction->preparedName, connection->hostname,
 							connection->port)));
-		}
-		else
-		{
-			WarnAboutLeakedPreparedTransaction(connection, isNotCommit);
 		}
 	}
 
