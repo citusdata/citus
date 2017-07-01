@@ -5,6 +5,6 @@ test: isolation_add_node_vs_reference_table_operations
 # that come later can be parallelized
 test: isolation_cluster_management
 
-test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
+test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement isolation_cancellation
 test: isolation_concurrent_dml isolation_data_migration
 test: isolation_drop_shards isolation_copy_placement_vs_modification
