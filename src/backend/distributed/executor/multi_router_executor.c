@@ -73,7 +73,7 @@ bool AllModificationsCommutative = false;
 bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
-static void ReacquireMetadataLocks(List *taskList);
+static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
@@ -100,22 +100,12 @@ static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 
 
 /*
- * ReacquireMetadataLocks re-acquires the metadata locks that are normally
- * acquired during planning.
- *
- * If we are executing a prepared statement, then planning might have
- * happened in a separate transaction and advisory locks are no longer
- * held. If a shard is currently being repaired/copied/moved, then
- * obtaining the locks will fail and this function throws an error to
- * prevent executing a stale plan.
- *
- * If we are executing a non-prepared statement or planning happened in
- * the same transaction, then we already have the locks and obtain them
- * again here. Since we always release these locks at the end of the
- * transaction, this is effectively a no-op.
+ * AcquireMetadataLocks acquires metadata locks on each of the anchor
+ * shards in the task list to prevent a shard being modified while it
+ * is being copied.
  */
 static void
-ReacquireMetadataLocks(List *taskList)
+AcquireMetadataLocks(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
@@ -130,28 +120,7 @@ ReacquireMetadataLocks(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		/*
-		 * Only obtain metadata locks for modifications to allow reads to
-		 * proceed during shard copy.
-		 */
-		if (task->taskType == MODIFY_TASK &&
-			!TryLockShardDistributionMetadata(task->anchorShardId, ShareLock))
-		{
-			/*
-			 * We could error out immediately to give quick feedback to the
-			 * client, but this might complicate flow control and our default
-			 * behaviour during shard copy is to block.
-			 *
-			 * Block until the lock becomes available such that the next command
-			 * will likely succeed and use the serialization failure error code
-			 * to signal to the client that it should retry the current command.
-			 */
-			LockShardDistributionMetadata(task->anchorShardId, ShareLock);
-
-			ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-							errmsg("prepared modifications cannot be executed on "
-								   "a shard while it is being copied")));
-		}
+		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
 }
 
@@ -457,7 +426,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	}
 
 	/* prevent concurrent placement changes */
-	ReacquireMetadataLocks(taskList);
+	AcquireMetadataLocks(taskList);
 
 	/* assign task placements */
 	workerJob->taskList = FirstReplicaAssignTaskList(taskList);

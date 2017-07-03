@@ -47,7 +47,7 @@ step "s1-prepared-insertall"
 
 step "s1-display"
 {
-    SELECT * FROM test_dml_vs_repair WHERE test_id = 1;
+    SELECT * FROM test_dml_vs_repair WHERE test_id = 1 ORDER BY test_id;
 }
 
 step "s1-commit"
@@ -102,8 +102,8 @@ permutation "s1-insertone" "s2-invalidate-57637" "s1-begin" "s1-insertall" "s2-r
 # verify that modifications wait for shard repair
 permutation "s2-invalidate-57637" "s2-begin" "s2-repair" "s1-insertone" "s2-commit" "s2-invalidate-57638" "s1-display" "s2-invalidate-57637" "s2-revalidate-57638" "s1-display"
 
-# verify that prepared plain modifications wait for shard repair (and then fail to avoid race)
+# verify that prepared plain modifications wait for shard repair
 permutation "s2-invalidate-57637" "s1-prepared-insertone" "s2-begin" "s2-repair" "s1-prepared-insertone" "s2-commit" "s2-invalidate-57638" "s1-display" "s2-invalidate-57637" "s2-revalidate-57638" "s1-display"
 
-# verify that prepared INSERT ... SELECT waits for shard repair  (and then fail to avoid race)
+# verify that prepared INSERT ... SELECT waits for shard repair
 permutation "s2-invalidate-57637" "s1-insertone" "s1-prepared-insertall" "s2-begin" "s2-repair" "s1-prepared-insertall" "s2-commit" "s2-invalidate-57638" "s1-display" "s2-invalidate-57637" "s2-revalidate-57638" "s1-display"
