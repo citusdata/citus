@@ -119,7 +119,7 @@ SELECT count(*) FROM mx_table;
 -- master_add_node
 
 SELECT master_add_node('localhost', 5432);
-SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
+SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 -- master_remove_node
 \c - - - :master_port

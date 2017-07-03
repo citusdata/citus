@@ -112,6 +112,11 @@ extern Oid DistPlacementGroupidIndexId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
 
+/* nodeRole enum oids */
+extern Oid PrimaryNodeRoleId(void);
+extern Oid SecondaryNodeRoleId(void);
+extern Oid UnavailableNodeRoleId(void);
+
 /* user related functions */
 extern Oid CitusExtensionOwner(void);
 extern char * CitusExtensionOwnerName(void);

@@ -72,7 +72,6 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char *relationName = text_to_cstring(relationNameText);
 	uint64 shardId = INVALID_SHARD_ID;
 	uint32 attemptableNodeCount = 0;
-	uint32 liveNodeCount = 0;
 
 	uint32 candidateNodeIndex = 0;
 	List *candidateNodeList = NIL;
@@ -133,12 +132,15 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	/* generate new and unique shardId from sequence */
 	shardId = GetNextShardId();
 
-	/* if enough live nodes, add an extra candidate node as backup */
-	attemptableNodeCount = ShardReplicationFactor;
-	liveNodeCount = WorkerGetLiveNodeCount();
-	if (liveNodeCount > ShardReplicationFactor)
+	/* if enough live groups, add an extra candidate node as backup */
 	{
-		attemptableNodeCount = ShardReplicationFactor + 1;
+		uint32 primaryNodeCount = ActivePrimaryNodeCount();
+
+		attemptableNodeCount = ShardReplicationFactor;
+		if (primaryNodeCount > ShardReplicationFactor)
+		{
+			attemptableNodeCount = ShardReplicationFactor + 1;
+		}
 	}
 
 	/* first retrieve a list of random nodes for shard placements */
@@ -152,7 +154,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 		}
 		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
 		{
-			List *workerNodeList = ActiveWorkerNodeList();
+			List *workerNodeList = ActivePrimaryNodeList();
 			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
 															 candidateNodeIndex);
 		}

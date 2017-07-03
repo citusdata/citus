@@ -481,7 +481,7 @@ INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNIN
 SELECT setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
       setval      
 ------------------
- 3659174697238529
+ 3940649673949185
 (1 row)
 
 ALTER SEQUENCE app_analytics_events_mx_id_seq

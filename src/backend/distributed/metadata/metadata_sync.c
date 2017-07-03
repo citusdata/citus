@@ -217,7 +217,7 @@ MetadataCreateCommands(void)
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
 	List *propagatedTableList = NIL;
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;
@@ -398,6 +398,7 @@ NodeListInsertCommand(List *workerNodeList)
 	StringInfo nodeListInsertCommand = makeStringInfo();
 	int workerCount = list_length(workerNodeList);
 	int processedWorkerNodeCount = 0;
+	Oid primaryRole = PrimaryNodeRoleId();
 
 	/* if there are no workers, return NULL */
 	if (workerCount == 0)
@@ -405,10 +406,18 @@ NodeListInsertCommand(List *workerNodeList)
 		return nodeListInsertCommand->data;
 	}
 
+	if (primaryRole == InvalidOid)
+	{
+		ereport(ERROR, (errmsg("bad metadata, noderole does not exist"),
+						errdetail("you should never see this, please submit "
+								  "a bug report"),
+						errhint("run ALTER EXTENSION citus UPDATE and try again")));
+	}
+
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, isactive) VALUES ");
+					 "noderack, hasmetadata, isactive, noderole) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	foreach(workerNodeCell, workerNodeList)
@@ -417,15 +426,20 @@ NodeListInsertCommand(List *workerNodeList)
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
 
+		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
+		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
+		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
+
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
 						 workerNode->workerPort,
 						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadataString,
-						 isActiveString);
+						 isActiveString,
+						 nodeRoleString);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
@@ -1014,7 +1028,7 @@ SchemaOwnerName(Oid objectId)
 static bool
 HasMetadataWorkers(void)
 {
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
 
 	foreach(workerNodeCell, workerNodeList)

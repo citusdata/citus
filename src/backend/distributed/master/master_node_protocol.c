@@ -399,7 +399,7 @@ master_get_active_worker_nodes(PG_FUNCTION_ARGS)
 		/* switch to memory context appropriate for multiple function calls */
 		oldContext = MemoryContextSwitchTo(functionContext->multi_call_memory_ctx);
 
-		workerNodeList = ActiveWorkerNodeList();
+		workerNodeList = ActivePrimaryNodeList();
 		workerNodeCount = (uint32) list_length(workerNodeList);
 
 		functionContext->user_fctx = workerNodeList;

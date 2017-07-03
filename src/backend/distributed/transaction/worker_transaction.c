@@ -78,7 +78,7 @@ SendCommandToWorkers(TargetWorkerSet targetWorkerSet, char *command)
 void
 SendBareCommandListToWorkers(TargetWorkerSet targetWorkerSet, List *commandList)
 {
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	ListCell *commandCell = NULL;
@@ -128,7 +128,7 @@ SendCommandToWorkersParams(TargetWorkerSet targetWorkerSet, char *command,
 {
 	List *connectionList = NIL;
 	ListCell *connectionCell = NULL;
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 

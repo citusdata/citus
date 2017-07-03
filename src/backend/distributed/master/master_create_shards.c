@@ -163,7 +163,7 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
 
 	/* load and sort the worker node list for deterministic placement */
-	workerNodeList = ActiveWorkerNodeList();
+	workerNodeList = ActivePrimaryNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* make sure we don't process cancel signals until all shards are created */
@@ -382,7 +382,7 @@ CreateReferenceTableShard(Oid distributedTableId)
 	}
 
 	/* load and sort the worker node list for deterministic placement */
-	workerNodeList = ActiveWorkerNodeList();
+	workerNodeList = ActivePrimaryNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/* get the next shard id */
