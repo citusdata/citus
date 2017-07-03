@@ -60,7 +60,7 @@ master_expire_table_cache(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	cacheEntry = DistributedTableCacheEntry(relationId);
-	workerNodeList = ActiveWorkerNodeList();
+	workerNodeList = ActivePrimaryNodeList();
 	shardCount = cacheEntry->shardIntervalArrayLength;
 	shardIntervalArray = cacheEntry->sortedShardIntervalArray;
 

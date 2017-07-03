@@ -127,7 +127,7 @@ RecoverPreparedTransactions(void)
 	 */
 	LockRelationOid(DistTransactionRelationId(), ExclusiveLock);
 
-	workerList = ActiveWorkerNodeList();
+	workerList = ActivePrimaryNodeList();
 
 	foreach(workerNodeCell, workerList)
 	{

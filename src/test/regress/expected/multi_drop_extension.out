@@ -20,15 +20,15 @@ RESET client_min_messages;
 CREATE EXTENSION citus;
 -- re-add the nodes to the cluster
 SELECT master_add_node('localhost', :worker_1_port);
-          master_add_node          
------------------------------------
- (1,1,localhost,57637,default,f,t)
+              master_add_node              
+-------------------------------------------
+ (1,1,localhost,57637,default,f,t,primary)
 (1 row)
 
 SELECT master_add_node('localhost', :worker_2_port);
-          master_add_node          
------------------------------------
- (2,2,localhost,57638,default,f,t)
+              master_add_node              
+-------------------------------------------
+ (2,2,localhost,57638,default,f,t,primary)
 (1 row)
 
 -- verify that a table can be created after the extension has been dropped and recreated

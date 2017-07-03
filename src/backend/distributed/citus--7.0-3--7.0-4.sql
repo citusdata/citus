@@ -22,4 +22,5 @@ CREATE OR REPLACE FUNCTION get_all_active_transactions(OUT database_id oid, OUT 
 	AS 'MODULE_PATHNAME', $$get_all_active_transactions$$;
  COMMENT ON FUNCTION get_all_active_transactions(OUT database_id oid, OUT process_id int, OUT initiator_node_identifier int4, OUT transaction_number int8, OUT transaction_stamp timestamptz)
      IS 'returns distributed transaction ids of active distributed transactions';
+
 RESET search_path;
