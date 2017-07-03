@@ -172,3 +172,6 @@ ERROR:  table "partitioning_test" does not exist
  id     | integer |           | plain   |              | 
  time   | date    |           | plain   |              | 
 
+-- set the colocationid sequence back to 1 to make sure
+-- that this file does not break other tests
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;

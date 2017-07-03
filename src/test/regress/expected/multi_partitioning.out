@@ -186,3 +186,6 @@ ORDER BY
 -- dropping the parent should CASCADE to the children as well
 DROP TABLE partitioning_test;
 \d+ partitioning_test*
+-- set the colocationid sequence back to 1 to make sure
+-- that this file does not break other tests
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
