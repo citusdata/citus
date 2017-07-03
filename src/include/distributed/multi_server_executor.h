@@ -116,6 +116,7 @@ typedef enum
  */
 struct TaskExecution
 {
+	CitusNode type;
 	uint64 jobId;
 	uint32 taskId;
 

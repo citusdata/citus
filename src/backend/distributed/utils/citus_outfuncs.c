@@ -26,6 +26,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
 #include "nodes/plannodes.h"
@@ -51,6 +52,11 @@
 /* Write an integer field (anything written as ":fldname %d") */
 #define WRITE_INT_FIELD(fldname) \
 	appendStringInfo(str, " :" CppAsString(fldname) " %d", node->fldname)
+
+/* Write an 64-bit integer field (anything written as ":fldname %d") */
+#define WRITE_INT64_FIELD(fldname) \
+	appendStringInfo(str, " :" CppAsString(fldname) " " INT64_FORMAT, node->fldname)
+
 
 /* Write an unsigned integer field (anything written as ":fldname %u") */
 #define WRITE_UINT_FIELD(fldname) \
@@ -104,6 +110,27 @@
 #define WRITE_BITMAPSET_FIELD(fldname) \
 	(appendStringInfo(str, " :" CppAsString(fldname) " "), \
 	 _outBitmapset(str, node->fldname))
+
+
+/* Write an integer array (anything written as ":fldname (%d, %d") */
+#define WRITE_INT_ARRAY(fldname, count) \
+	appendStringInfo(str, " :" CppAsString(fldname) " ("); \
+	{ \
+		int i;\
+		for (i = 0; i < count; i++) \
+		{ \
+			if (i > 0) \
+			{ \
+				appendStringInfo(str, ", "); \
+			} \
+			appendStringInfo(str, "%d", node->fldname[i]); \
+		}\
+	}\
+	appendStringInfo(str, ")")
+
+
+/* Write an enum array (anything written as ":fldname (%d, %d") */
+#define WRITE_ENUM_ARRAY(fldname, count) WRITE_INT_ARRAY(fldname, count)
 
 
 #define booltostr(x)  ((x) ? "true" : "false")
@@ -414,6 +441,29 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(insertSelectQuery);
 	WRITE_NODE_FIELD(relationShardList);
+}
+
+
+void
+OutTaskExecution(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(TaskExecution);
+	WRITE_NODE_TYPE("TASKEXECUTION");
+
+	WRITE_UINT64_FIELD(jobId);
+	WRITE_UINT_FIELD(taskId);
+	WRITE_UINT_FIELD(nodeCount);
+
+	WRITE_ENUM_ARRAY(taskStatusArray, node->nodeCount);
+	WRITE_ENUM_ARRAY(transmitStatusArray, node->nodeCount);
+	WRITE_INT_ARRAY(connectionIdArray, node->nodeCount);
+	WRITE_INT_ARRAY(fileDescriptorArray, node->nodeCount);
+
+	WRITE_INT64_FIELD(connectStartTime);
+	WRITE_UINT_FIELD(currentNodeIndex);
+	WRITE_UINT_FIELD(querySourceNodeIndex);
+	WRITE_INT_FIELD(dataFetchTaskIndex);
+	WRITE_UINT_FIELD(failureCount);
 }
 
 

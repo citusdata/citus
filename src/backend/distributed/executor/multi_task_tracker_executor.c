@@ -2711,6 +2711,7 @@ TrackerCleanupResources(HTAB *taskTrackerHash, HTAB *transmitTrackerHash,
 		TaskExecution *taskExecution = task->taskExecution;
 
 		CleanupTaskExecution(taskExecution);
+		task->taskExecution = NULL;
 	}
 
 	/*

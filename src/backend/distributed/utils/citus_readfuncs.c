@@ -16,6 +16,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
 #include "distributed/multi_planner.h"
+#include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
 
@@ -57,6 +58,12 @@ CitusSetTag(Node *node, int tag)
 	token = pg_strtok(&length);		/* skip :fldname */ \
 	token = pg_strtok(&length);		/* get field value */ \
 	local_node->fldname = atoi(token)
+
+/* Read an 64-bit integer field (anything written as ":fldname %d") */
+#define READ_INT64_FIELD(fldname) \
+	token = pg_strtok(&length);		/* skip :fldname */ \
+	token = pg_strtok(&length);		/* get field value */ \
+	local_node->fldname = (int64) strtoll(token, NULL, 10)
 
 /* Read an unsigned integer field (anything written as ":fldname %u") */
 #define READ_UINT_FIELD(fldname) \
@@ -119,6 +126,23 @@ CitusSetTag(Node *node, int tag)
 	(void) token;				/* in case not used elsewhere */ \
 	local_node->fldname = nodeRead(NULL, 0)
 
+ /* Read an integer field (anything written as ":fldname %d") */
+ #define READ_ENUM_ARRAY(fldname, count, enumtype) \
+    token = pg_strtok(&length);		/* skip :fldname */ \
+    token = pg_strtok(&length);      /* skip ( */ \
+    { \
+		int i = 0; \
+		for (i = 0; i < count; i++ ) \
+		{ \
+			token = pg_strtok(&length);		/* get field value */ \
+			local_node->fldname[i] = (enumtype) atoi(token); \
+		} \
+    } \
+	token = pg_strtok(&length);   /* skip ) */ \
+	(void) token
+
+#define READ_INT_ARRAY(fldname, count) READ_ENUM_ARRAY(fldname, count, int32)
+
 /* Routine exit */
 #define READ_DONE() \
 	return;
@@ -146,6 +170,8 @@ static void
 readJobInfo(Job *local_node)
 {
 	READ_TEMP_LOCALS();
+
+	CitusSetTag((Node *) local_node, T_Job);
 
 	READ_UINT64_FIELD(jobId);
 	READ_NODE_FIELD(jobQuery);
@@ -327,6 +353,13 @@ ReadTask(READFUNC_ARGS)
 	READ_NODE_FIELD(relationShardList);
 
 	READ_DONE();
+}
+
+
+READFUNC_RET
+ReadTaskExecution(READFUNC_ARGS)
+{
+	ereport(ERROR, (errmsg("unexpected read request for TaskExecution node")));
 }
 
 
