@@ -31,11 +31,27 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT groupid AS worker_2_group FROM master_add_node('localhost', :worker_2_port) \gset
+-- add a secondary to check we don't attempt to replicate the table to it
+SELECT isactive FROM master_add_node('localhost', 9000, groupid=>:worker_2_group, noderole=>'secondary');
 
 -- remove a node with reference table
 CREATE TABLE remove_node_reference_table(column1 int);
 SELECT create_reference_table('remove_node_reference_table');
+
+-- make sure when we add a secondary we don't attempt to add placements to it
+SELECT isactive FROM master_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
+SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
+-- make sure when we disable a secondary we don't remove any placements
+SELECT master_disable_node('localhost', 9001);
+SELECT isactive FROM pg_dist_node WHERE nodeport = 9001;
+SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
+-- make sure when we activate a secondary we don't add any placements
+SELECT master_activate_node('localhost', 9001);
+SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
+-- make sure when we remove a secondary we don't remove any placements
+SELECT master_remove_node('localhost', 9001);
+SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -544,7 +560,8 @@ SELECT
 FROM
     pg_dist_shard_placement
 WHERE
-    nodeport = :worker_2_port;
+    nodeport = :worker_2_port
+ORDER BY shardid ASC;
     
 \c - - - :master_port     
      

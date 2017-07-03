@@ -71,6 +71,24 @@ SELECT master_get_active_worker_nodes();
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=:worker_2_group;
 
+-- when there is no primary we should get a pretty error
+UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport=:worker_2_port;
+SELECT * FROM cluster_management_test;
+
+-- when there is no node at all in the group we should get a different error
+DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
+SELECT * FROM cluster_management_test;
+
+-- clean-up
+SELECT groupid as new_group FROM master_add_node('localhost', :worker_2_port) \gset
+UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
+
+-- test that you are allowed to remove secondary nodes even if there are placements
+SELECT master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
+SELECT master_remove_node('localhost', :worker_2_port);
+SELECT master_remove_node('localhost', 9990);
+
+-- clean-up
 DROP TABLE cluster_management_test;
 
 -- check that adding/removing nodes are propagated to nodes with hasmetadata=true
@@ -162,3 +180,23 @@ DELETE FROM pg_dist_node;
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+
+-- check that you can't add more than one primary to a group
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
+
+-- check that you can add secondaries and unavailable nodes to a group
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+SELECT master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
+SELECT master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
+-- add_inactive_node also works with secondaries
+SELECT master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
+
+-- check that you can't manually add two primaries to a group
+INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
+  VALUES ('localhost', 5000, :worker_1_group, 'primary');
+UPDATE pg_dist_node SET noderole = 'primary'
+  WHERE groupid = :worker_1_group AND nodeport = 9998;
+
+-- don't remove the secondary and unavailable nodes, check that no commands are sent to
+-- them in any of the remaining tests

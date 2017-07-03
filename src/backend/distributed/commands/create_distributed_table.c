@@ -252,7 +252,7 @@ CreateReferenceTable(Oid relationId)
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
-	workerNodeList = ActiveWorkerNodeList();
+	workerNodeList = ActivePrimaryNodeList();
 	replicationFactor = list_length(workerNodeList);
 
 	/* if there are no workers, error out */
@@ -720,7 +720,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 static void
 EnsureSchemaExistsOnAllNodes(Oid relationId)
 {
-	List *workerNodeList = ActiveWorkerNodeList();
+	List *workerNodeList = ActivePrimaryNodeList();
 	ListCell *workerNodeCell = NULL;
 	StringInfo applySchemaCreationDDL = makeStringInfo();
 

@@ -1,6 +1,6 @@
 # Citus extension
 comment = 'Citus distributed database'
-default_version = '7.0-4'
+default_version = '7.0-5'
 module_pathname = '$libdir/citus'
 relocatable = false
 schema = pg_catalog

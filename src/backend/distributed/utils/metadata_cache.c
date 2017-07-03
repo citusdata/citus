@@ -40,7 +40,9 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
+#include "nodes/makefuncs.h"
 #include "parser/parse_func.h"
+#include "parser/parse_type.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/datum.h"
@@ -110,6 +112,9 @@ typedef struct MetadataCacheData
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
 	Oid extensionOwner;
+	Oid primaryNodeRoleId;
+	Oid secondaryNodeRoleId;
+	Oid unavailableNodeRoleId;
 } MetadataCacheData;
 
 
@@ -422,16 +427,22 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 	DistTableCacheEntry *tableEntry = shardEntry->tableEntry;
 	int shardIndex = shardEntry->shardIndex;
 	ShardInterval *shardInterval = tableEntry->sortedShardIntervalArray[shardIndex];
+	bool groupContainsNodes = false;
 
 	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
 	uint32 groupId = groupShardPlacement->groupId;
-	WorkerNode *workerNode = NodeForGroup(groupId);
+	WorkerNode *workerNode = PrimaryNodeForGroup(groupId, &groupContainsNodes);
 
-	if (workerNode == NULL)
+	if (workerNode == NULL && !groupContainsNodes)
 	{
 		ereport(ERROR, (errmsg("the metadata is inconsistent"),
 						errdetail("there is a placement in group %u but "
 								  "there are no nodes in that group", groupId)));
+	}
+
+	if (workerNode == NULL && groupContainsNodes)
+	{
+		ereport(ERROR, (errmsg("node group %u does not have a primary node", groupId)));
 	}
 
 	/* copy everything into shardPlacement but preserve the header */
@@ -1830,13 +1841,106 @@ CitusExtensionOwnerName(void)
 }
 
 
-/* return the  username of the currently active role */
+/* return the username of the currently active role */
 char *
 CurrentUserName(void)
 {
 	Oid userId = GetUserId();
 
 	return GetUserNameFromId(userId, false);
+}
+
+
+/*
+ * LookupNodeRoleValueId returns the Oid of the "pg_catalog.noderole" type, or InvalidOid
+ * if it does not exist.
+ */
+static Oid
+LookupNodeRoleTypeOid()
+{
+	Value *schemaName = makeString("pg_catalog");
+	Value *typeName = makeString("noderole");
+	List *qualifiedName = list_make2(schemaName, typeName);
+	TypeName *enumTypeName = makeTypeNameFromNameList(qualifiedName);
+
+	Oid nodeRoleTypId;
+
+	/* typenameTypeId but instead of raising an error return InvalidOid */
+	Type tup = LookupTypeName(NULL, enumTypeName, NULL, false);
+	if (tup == NULL)
+	{
+		return InvalidOid;
+	}
+
+	nodeRoleTypId = HeapTupleGetOid(tup);
+	ReleaseSysCache(tup);
+
+	return nodeRoleTypId;
+}
+
+
+/*
+ * LookupNodeRoleValueId returns the Oid of the value in "pg_catalog.noderole" which
+ * matches the provided name, or InvalidOid if the noderole enum doesn't exist yet.
+ */
+static Oid
+LookupNodeRoleValueId(char *valueName)
+{
+	Oid nodeRoleTypId = LookupNodeRoleTypeOid();
+
+	if (nodeRoleTypId == InvalidOid)
+	{
+		return InvalidOid;
+	}
+	else
+	{
+		Datum nodeRoleIdDatum = ObjectIdGetDatum(nodeRoleTypId);
+		Datum valueDatum = CStringGetDatum(valueName);
+
+		Datum valueIdDatum = DirectFunctionCall2(enum_in, valueDatum, nodeRoleIdDatum);
+
+		Oid valueId = DatumGetObjectId(valueIdDatum);
+		return valueId;
+	}
+}
+
+
+/* return the Oid of the 'primary' nodeRole enum value */
+Oid
+PrimaryNodeRoleId(void)
+{
+	if (!MetadataCache.primaryNodeRoleId)
+	{
+		MetadataCache.primaryNodeRoleId = LookupNodeRoleValueId("primary");
+	}
+
+	return MetadataCache.primaryNodeRoleId;
+}
+
+
+/* return the Oid of the 'secodary' nodeRole enum value */
+Oid
+SecondaryNodeRoleId(void)
+{
+	if (!MetadataCache.secondaryNodeRoleId)
+	{
+		MetadataCache.secondaryNodeRoleId = LookupNodeRoleValueId("secondary");
+	}
+
+	return MetadataCache.secondaryNodeRoleId;
+}
+
+
+/* return the Oid of the 'unavailable' nodeRole enum value */
+Oid
+UnavailableNodeRoleId(void)
+{
+	if (!MetadataCache.unavailableNodeRoleId)
+	{
+		MetadataCache.unavailableNodeRoleId = LookupNodeRoleValueId("unavailable");
+	}
+
+	return MetadataCache.unavailableNodeRoleId;
 }
 
 
@@ -2244,6 +2348,7 @@ InitializeWorkerNodeCache(void)
 		strlcpy(workerNode->workerRack, currentNode->workerRack, WORKER_LENGTH);
 		workerNode->hasMetadata = currentNode->hasMetadata;
 		workerNode->isActive = currentNode->isActive;
+		workerNode->nodeRole = currentNode->nodeRole;
 
 		if (handleFound)
 		{

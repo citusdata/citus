@@ -43,6 +43,7 @@ typedef struct WorkerNode
 	char workerRack[WORKER_LENGTH];     /* node's network location */
 	bool hasMetadata;                   /* node gets metadata changes */
 	bool isActive;                      /* node's state */
+	Oid nodeRole;                       /* the node's role in its group */
 } WorkerNode;
 
 
@@ -57,13 +58,14 @@ extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
 													 uint32 placementIndex);
 extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
-extern uint32 WorkerGetLiveNodeCount(void);
-extern List * ActiveWorkerNodeList(void);
+extern uint32 ActivePrimaryNodeCount(void);
+extern List * ActivePrimaryNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
 extern void EnsureCoordinator(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
-extern WorkerNode * NodeForGroup(uint32 groupId);
+extern WorkerNode * PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes);
+extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
