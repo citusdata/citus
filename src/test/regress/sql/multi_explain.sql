@@ -100,6 +100,17 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 
+-- Test zero-shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+
+-- Test zero-shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;

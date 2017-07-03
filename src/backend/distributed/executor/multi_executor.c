@@ -158,8 +158,8 @@ RouterCreateScan(CustomScan *scan)
 
 	isModificationQuery = IsModifyMultiPlan(multiPlan);
 
-	/* check if this is a single shard query */
-	if (list_length(taskList) == 1)
+	/* check whether query has at most one shard */
+	if (list_length(taskList) <= 1)
 	{
 		if (isModificationQuery)
 		{
