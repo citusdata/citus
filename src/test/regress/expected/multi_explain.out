@@ -334,6 +334,21 @@ Custom Scan (Citus Router)
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
+-- Test zero-shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+Custom Scan (Citus Router)
+  Task Count: 0
+  Tasks Shown: All
+-- Test zero-shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+Custom Scan (Citus Router)
+  Task Count: 0
+  Tasks Shown: All
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
