@@ -470,7 +470,7 @@ ReadWorkerNodes()
 	List *workerNodeList = NIL;
 	TupleDesc tupleDescriptor = NULL;
 
-	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessExclusiveLock);
+	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 
 	scanDescriptor = systable_beginscan(pgDistNode,
 										InvalidOid, false,
@@ -488,7 +488,7 @@ ReadWorkerNodes()
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgDistNode, AccessExclusiveLock);
+	heap_close(pgDistNode, NoLock);
 
 	return workerNodeList;
 }
