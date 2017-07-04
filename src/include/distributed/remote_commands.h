@@ -26,6 +26,7 @@ extern bool LogRemoteCommands;
 /* simple helpers */
 extern bool IsResponseOK(struct pg_result *result);
 extern void ForgetResults(MultiConnection *connection);
+extern bool NonblockingForgetResults(MultiConnection *connection);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
 /* report errors & warnings */
@@ -47,6 +48,9 @@ extern int SendRemoteCommandParams(MultiConnection *connection, const char *comm
 extern List * ReadFirstColumnAsText(struct pg_result *queryResult);
 extern struct pg_result * GetRemoteCommandResult(MultiConnection *connection,
 												 bool raiseInterrupts);
+extern bool PutRemoteCopyData(MultiConnection *connection, const char *buffer,
+							  int nbytes);
+extern bool PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg);
 
 
 #endif /* REMOTE_COMMAND_H */

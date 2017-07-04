@@ -1,0 +1,127 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-timeout s1-sleep10000 s1-reset s1-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-reset: 
+    RESET ALL;
+
+step s1-drop: 
+
+    DROP TABLE cancel_table;
+
+
+starting permutation: s1-timeout s1-sleep10000 s1-reset s2-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-reset: 
+    RESET ALL;
+
+step s2-drop: 
+
+    DROP TABLE cancel_table;
+
+
+starting permutation: s1-timeout s1-begin s1-sleep10000 s1-rollback s1-reset s1-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-begin: 
+    BEGIN;
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-rollback: 
+    ROLLBACK;
+
+step s1-reset: 
+    RESET ALL;
+
+step s1-drop: 
+
+    DROP TABLE cancel_table;
+
+
+starting permutation: s1-timeout s1-begin s1-sleep10000 s1-rollback s1-reset s2-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-begin: 
+    BEGIN;
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-rollback: 
+    ROLLBACK;
+
+step s1-reset: 
+    RESET ALL;
+
+step s2-drop: 
+
+    DROP TABLE cancel_table;
+
+
+starting permutation: s1-timeout s1-begin s1-update1 s1-sleep10000 s1-rollback s1-reset s1-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-begin: 
+    BEGIN;
+
+step s1-update1: 
+    UPDATE cancel_table SET data = '' WHERE test_id = 1;
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-rollback: 
+    ROLLBACK;
+
+step s1-reset: 
+    RESET ALL;
+
+step s1-drop: 
+
+    DROP TABLE cancel_table;
+
+
+starting permutation: s1-timeout s1-begin s1-update1 s1-sleep10000 s1-rollback s1-reset s2-drop
+step s1-timeout: 
+    SET statement_timeout = '100ms';
+
+step s1-begin: 
+    BEGIN;
+
+step s1-update1: 
+    UPDATE cancel_table SET data = '' WHERE test_id = 1;
+
+step s1-sleep10000: 
+    SELECT pg_sleep(10000) FROM cancel_table WHERE test_id = 1;
+
+ERROR:  canceling statement due to statement timeout
+step s1-rollback: 
+    ROLLBACK;
+
+step s1-reset: 
+    RESET ALL;
+
+step s2-drop: 
+
+    DROP TABLE cancel_table;
+
