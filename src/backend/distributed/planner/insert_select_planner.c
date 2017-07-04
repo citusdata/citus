@@ -437,12 +437,12 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	uint64 jobId = INVALID_JOB_ID;
 	List *insertShardPlacementList = NULL;
 	List *intersectedPlacementList = NULL;
-	bool routerPlannable = false;
 	bool upsertQuery = false;
 	bool replacePrunedQueryWithDummy = false;
 	bool allReferenceTables = restrictionContext->allReferenceTables;
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
+	DeferredErrorMessage *planningError = NULL;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -489,15 +489,15 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	replacePrunedQueryWithDummy = false;
 
 	/*
-	 * Use router select planner to decide on whether we can push down the query
-	 * or not. If we can, we also rely on the side-effects that all RTEs have been
-	 * updated to point to the relevant nodes and selectPlacementList is determined.
+	 * Use router planner to decide on whether we can push down the query or not.
+	 * If we can, we also rely on the side-effects that all RTEs have been updated
+	 * to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	routerPlannable = RouterSelectQuery(copiedSubquery, copiedRestrictionContext,
-										&selectPlacementList, &selectAnchorShardId,
-										&relationShardList, replacePrunedQueryWithDummy);
+	planningError = PlanRouterQuery(copiedSubquery, copiedRestrictionContext,
+									&selectPlacementList, &selectAnchorShardId,
+									&relationShardList, replacePrunedQueryWithDummy);
 
-	if (!routerPlannable)
+	if (planningError)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "
