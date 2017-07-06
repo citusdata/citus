@@ -100,12 +100,10 @@ RequiresMasterEvaluation(Query *query)
 void
 ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 {
-	CmdType commandType = query->commandType;
 	ListCell *targetEntryCell = NULL;
 	ListCell *rteCell = NULL;
 	ListCell *cteCell = NULL;
 	Node *modifiedNode = NULL;
-	bool insertSelectQuery = InsertSelectIntoDistributedTable(query);
 
 	if (query->jointree && query->jointree->quals)
 	{
@@ -123,16 +121,8 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 			continue;
 		}
 
-		if (commandType == CMD_INSERT && !insertSelectQuery)
-		{
-			modifiedNode = EvaluateNodeIfReferencesFunction((Node *) targetEntry->expr,
-															planState);
-		}
-		else
-		{
-			modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
-													   planState);
-		}
+		modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
+												   planState);
 
 		targetEntry->expr = (Expr *) modifiedNode;
 	}
