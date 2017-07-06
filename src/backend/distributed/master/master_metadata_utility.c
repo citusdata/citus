@@ -642,7 +642,7 @@ NodeHasShardPlacements(char *nodeName, int32 nodePort, bool onlyConsiderActivePl
 	hasFinalizedPlacements = HeapTupleIsValid(heapTuple);
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgPlacement, AccessShareLock);
+	heap_close(pgPlacement, NoLock);
 
 	return hasFinalizedPlacements;
 }
@@ -746,7 +746,7 @@ BuildShardPlacementList(ShardInterval *shardInterval)
 	}
 
 	systable_endscan(scanDescriptor);
-	heap_close(pgPlacement, AccessShareLock);
+	heap_close(pgPlacement, NoLock);
 
 	return shardPlacementList;
 }
@@ -840,7 +840,7 @@ InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 	CitusInvalidateRelcacheByRelid(relationId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistShard, RowExclusiveLock);
+	heap_close(pgDistShard, NoLock);
 }
 
 
@@ -885,7 +885,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistPlacement, RowExclusiveLock);
+	heap_close(pgDistPlacement, NoLock);
 }
 
 
@@ -1026,7 +1026,7 @@ DeletePartitionRow(Oid distributedRelationId)
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
 
-	heap_close(pgDistPartition, RowExclusiveLock);
+	heap_close(pgDistPartition, NoLock);
 }
 
 
@@ -1073,7 +1073,7 @@ DeleteShardRow(uint64 shardId)
 	CitusInvalidateRelcacheByRelid(distributedRelationId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistShard, RowExclusiveLock);
+	heap_close(pgDistShard, NoLock);
 }
 
 
@@ -1125,7 +1125,7 @@ DeleteShardPlacementRow(uint64 placementId)
 	CitusInvalidateRelcacheByShardId(shardId);
 
 	CommandCounterIncrement();
-	heap_close(pgDistPlacement, RowExclusiveLock);
+	heap_close(pgDistPlacement, NoLock);
 }
 
 
