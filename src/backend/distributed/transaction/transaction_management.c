@@ -19,6 +19,7 @@
 
 #include "access/twophase.h"
 #include "access/xact.h"
+#include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/multi_shard_transaction.h"
@@ -73,6 +74,8 @@ BeginCoordinatedTransaction(void)
 	}
 
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
+
+	AssignDistributedTransactionId();
 }
 
 
@@ -168,6 +171,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+
+			UnSetDistributedTransactionId();
 			break;
 		}
 
@@ -204,13 +209,19 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
 			subXactAbortAttempted = false;
+			UnSetDistributedTransactionId();
 			break;
 		}
 
 		case XACT_EVENT_PARALLEL_COMMIT:
 		case XACT_EVENT_PARALLEL_ABORT:
+		{
+			break;
+		}
+
 		case XACT_EVENT_PREPARE:
 		{
+			UnSetDistributedTransactionId();
 			break;
 		}
 
