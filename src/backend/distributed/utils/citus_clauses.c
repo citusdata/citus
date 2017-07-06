@@ -236,76 +236,36 @@ PartiallyEvaluateExpressionMutator(Node *expression, FunctionEvaluationContext *
 static Node *
 EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState)
 {
-	if (IsA(expression, FuncExpr))
+	if (expression == NULL || IsA(expression, Const))
 	{
-		FuncExpr *expr = (FuncExpr *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr,
-											expr->funcresulttype,
-											exprTypmod((Node *) expr),
-											expr->funccollid,
-											planState);
+		return expression;
 	}
 
-	if (IsA(expression, OpExpr) ||
-		IsA(expression, DistinctExpr) ||
-		IsA(expression, NullIfExpr))
+	switch (nodeTag(expression))
 	{
-		/* structural equivalence */
-		OpExpr *expr = (OpExpr *) expression;
+		case T_FuncExpr:
+		case T_OpExpr:
+		case T_DistinctExpr:
+		case T_NullIfExpr:
+		case T_CoerceViaIO:
+		case T_ArrayCoerceExpr:
+		case T_ScalarArrayOpExpr:
+		case T_RowCompareExpr:
+		case T_Param:
+		case T_RelabelType:
+		case T_CoerceToDomain:
+		{
+			return (Node *) citus_evaluate_expr((Expr *) expression,
+												exprType(expression),
+												exprTypmod(expression),
+												exprCollation(expression),
+												planState);
+		}
 
-		return (Node *) citus_evaluate_expr((Expr *) expr,
-											expr->opresulttype, -1,
-											expr->opcollid,
-											planState);
-	}
-
-	if (IsA(expression, CoerceViaIO))
-	{
-		CoerceViaIO *expr = (CoerceViaIO *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr,
-											expr->resulttype, -1,
-											expr->resultcollid,
-											planState);
-	}
-
-	if (IsA(expression, ArrayCoerceExpr))
-	{
-		ArrayCoerceExpr *expr = (ArrayCoerceExpr *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr,
-											expr->resulttype,
-											expr->resulttypmod,
-											expr->resultcollid,
-											planState);
-	}
-
-	if (IsA(expression, ScalarArrayOpExpr))
-	{
-		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid,
-											planState);
-	}
-
-	if (IsA(expression, RowCompareExpr))
-	{
-		RowCompareExpr *expr = (RowCompareExpr *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) expr, BOOLOID, -1, InvalidOid,
-											planState);
-	}
-
-	if (IsA(expression, Param))
-	{
-		Param *param = (Param *) expression;
-
-		return (Node *) citus_evaluate_expr((Expr *) param,
-											param->paramtype,
-											param->paramtypmod,
-											param->paramcollid,
-											planState);
+		default:
+		{
+			break;
+		}
 	}
 
 	return expression;
