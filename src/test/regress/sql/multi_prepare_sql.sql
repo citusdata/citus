@@ -473,6 +473,53 @@ SELECT key, value2 FROM prepare_func_table;
 
 DROP TABLE prepare_func_table;
 
+-- Text columns can give issues when there is an implicit cast from varchar
+CREATE TABLE text_partition_column_table (
+    key text NOT NULL,
+    value int
+);
+SELECT create_distributed_table('text_partition_column_table', 'key');
+
+PREPARE prepared_relabel_insert(varchar) AS
+	INSERT INTO text_partition_column_table VALUES ($1, 1);
+
+EXECUTE prepared_relabel_insert('test');
+EXECUTE prepared_relabel_insert('test');
+EXECUTE prepared_relabel_insert('test');
+EXECUTE prepared_relabel_insert('test');
+EXECUTE prepared_relabel_insert('test');
+EXECUTE prepared_relabel_insert('test');
+
+SELECT key, value FROM text_partition_column_table ORDER BY key;
+
+DROP TABLE text_partition_column_table;
+
+-- Domain type columns can give issues
+CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$');
+SELECT run_command_on_workers($$
+  CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$')
+$$);
+
+CREATE TABLE domain_partition_column_table (
+    key test_key NOT NULL,
+    value int
+);
+SELECT create_distributed_table('domain_partition_column_table', 'key');
+
+PREPARE prepared_coercion_to_domain_insert(text) AS
+	INSERT INTO domain_partition_column_table VALUES ($1, 1);
+
+EXECUTE prepared_coercion_to_domain_insert('test-1');
+EXECUTE prepared_coercion_to_domain_insert('test-2');
+EXECUTE prepared_coercion_to_domain_insert('test-3');
+EXECUTE prepared_coercion_to_domain_insert('test-4');
+EXECUTE prepared_coercion_to_domain_insert('test-5');
+EXECUTE prepared_coercion_to_domain_insert('test-6');
+
+SELECT key, value FROM domain_partition_column_table ORDER BY key;
+
+DROP TABLE domain_partition_column_table;
+
 -- verify placement state updates invalidate shard state
 --
 -- We use a immutable function to check for that. The planner will
