@@ -19,6 +19,7 @@
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "executor/executor.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
@@ -173,6 +174,7 @@ _PG_init(void)
 
 	/* initialize coordinated transaction management */
 	InitializeTransactionManagement();
+	InitializeBackendManagement();
 	InitializeConnectionManagement();
 	InitPlacementConnectionManagement();
 
@@ -197,6 +199,7 @@ void
 StartupCitusBackend(void)
 {
 	InitializeMaintenanceDaemonBackend();
+	InitializeBackendData();
 }
 
 
