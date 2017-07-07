@@ -205,7 +205,7 @@ BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
-ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+ERROR:  cannot establish a new connection for placement 2704, since DML has been executed on a connection that is in use
 CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
 -- after a COPY you can modify multiple shards, since they'll use different connections
@@ -403,7 +403,7 @@ SELECT lab_id FROM researchers WHERE lab_id = 2 AND id = 0;
 (0 rows)
 
 ALTER TABLE researchers ADD COLUMN motto text;
-ERROR:  cannot perform parallel DDL command because multiple placements have been accessed over the same connection
+ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 ROLLBACK;
 -- multi-shard operations can co-exist with DDL in a transactional way
 BEGIN;
@@ -1349,18 +1349,18 @@ JOIN
 USING (shardid)
 ORDER BY
   id;
- id |  shard_name   | nodename  | nodeport 
-----+---------------+-----------+----------
-  1 | users_1200022 | localhost |    57637
-  2 | users_1200025 | localhost |    57638
-  3 | users_1200023 | localhost |    57638
-  4 | users_1200023 | localhost |    57638
-  5 | users_1200022 | localhost |    57637
-  6 | users_1200024 | localhost |    57637
-  7 | users_1200023 | localhost |    57638
-  8 | users_1200022 | localhost |    57637
-  9 | users_1200025 | localhost |    57638
- 10 | users_1200022 | localhost |    57637
+ id |      shard_name      | nodename  | nodeport 
+----+----------------------+-----------+----------
+  1 | public.users_1200022 | localhost |    57637
+  2 | public.users_1200025 | localhost |    57638
+  3 | public.users_1200023 | localhost |    57638
+  4 | public.users_1200023 | localhost |    57638
+  5 | public.users_1200022 | localhost |    57637
+  6 | public.users_1200024 | localhost |    57637
+  7 | public.users_1200023 | localhost |    57638
+  8 | public.users_1200022 | localhost |    57637
+  9 | public.users_1200025 | localhost |    57638
+ 10 | public.users_1200022 | localhost |    57637
 (10 rows)
 
 END;
@@ -1382,7 +1382,7 @@ BEGIN;
 INSERT INTO users VALUES (2, 'burak');
 INSERT INTO users VALUES (3, 'burak');
 \COPY items FROM STDIN WITH CSV
-ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+ERROR:  cannot establish a new connection for placement 2743, since DML has been executed on a connection that is in use
 END;
 -- cannot perform DDL after a co-located table has been read over 1 connection
 BEGIN;
@@ -1400,7 +1400,7 @@ SELECT id FROM users WHERE id = 6;
 
 ALTER TABLE items ADD COLUMN last_update timestamptz;
 NOTICE:  using one-phase commit for distributed DDL commands
-ERROR:  cannot perform parallel DDL command because multiple placements have been accessed over the same connection
+ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 END;
 -- but the other way around is fine
 BEGIN;
@@ -1434,7 +1434,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 
 -- perform a DDL command on the reference table
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on a placement which has been read over multiple connections
+ERROR:  cannot perform DDL on placement 2737, which has been read over multiple connections
 END;
 BEGIN;
 -- establish multiple connections to a node
@@ -1452,7 +1452,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 
 -- perform a DDL command on a co-located reference table
 ALTER TABLE usergroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on a placement if a co-located placement has been read over multiple connections
+ERROR:  cannot perform DDL on placement 2735 since a co-located placement has been read over multiple connections
 END;
 BEGIN;
 -- make a modification over connection 1
