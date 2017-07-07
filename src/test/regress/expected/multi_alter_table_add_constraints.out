@@ -443,7 +443,7 @@ BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
 -- DDL may error out after an INSERT because it might pick the wrong connection
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
-ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+ERROR:  cannot establish a new connection for placement 2327, since DML has been executed on a connection that is in use
 ROLLBACK;
 BEGIN;
 -- Add constraints

@@ -1645,7 +1645,7 @@ BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
-ERROR:  cannot establish new placement connection when DDL has been executed on existing placement connection
+ERROR:  cannot establish a new connection for placement 655, since DDL has been executed on a connection that is in use
 ROLLBACK;
 -- Insert after copy is disallowed when the INSERT INTO ... SELECT  chooses
 -- to use a connection for one shard, while the connection already modified
@@ -1653,7 +1653,7 @@ ROLLBACK;
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-ERROR:  cannot establish new placement connection when DML has been executed on existing placement connection
+ERROR:  cannot establish a new connection for placement 636, since DML has been executed on a connection that is in use
 ROLLBACK;
 -- Insert after copy is currently allowed for single-shard operation.
 -- Both insert and copy are rolled back successfully.
