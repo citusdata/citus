@@ -90,7 +90,7 @@ static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
-static char MostPermissiveVolatileFlag(char left, char right);
+static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 									FromExpr *joinTree);
 static Task * RouterModifyTask(Oid distributedTableId, Query *originalQuery,
@@ -833,6 +833,7 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	char volatileFlag = 0;
 	WalkerState childState = { false, false, false };
 	bool containsDisallowedFunction = false;
+	bool hasVolatileFunction PG_USED_FOR_ASSERTS_ONLY = false;
 
 	if (expression == NULL)
 	{
@@ -883,123 +884,26 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 	 *
 	 * Look through contain_mutable_functions_walker or future PG's equivalent for new
 	 * node types before bumping this version number to fix compilation; e.g. for any
-	 * PostgreSQL after 9.5, see check_functions_in_node.
+	 * PostgreSQL after 9.5, see check_functions_in_node. Review
+	 * MasterIrreducibleExpressionFunctionChecker for any changes in volatility
+	 * permissibility ordering.
 	 *
 	 * Once you've added them to this check, make sure you also evaluate them in the
 	 * executor!
 	 */
-	StaticAssertStmt(PG_VERSION_NUM < 100100, "When porting to a newer PG this section"
-											  " needs to be reviewed.");
-	if (IsA(expression, Aggref))
-	{
-		Aggref *expr = (Aggref *) expression;
 
-		volatileFlag = func_volatile(expr->aggfnoid);
-	}
-	else if (IsA(expression, WindowFunc))
-	{
-		WindowFunc *expr = (WindowFunc *) expression;
+	/* subqueries aren't allowed and should fail before control reaches this point */
+	Assert(!IsA(expression, Query));
 
-		volatileFlag = func_volatile(expr->winfnoid);
-	}
-	else if (IsA(expression, OpExpr))
-	{
-		OpExpr *expr = (OpExpr *) expression;
+	hasVolatileFunction =
+		check_functions_in_node(expression, MasterIrreducibleExpressionFunctionChecker,
+								&volatileFlag);
 
-		set_opfuncid(expr);
-		volatileFlag = func_volatile(expr->opfuncid);
-	}
-	else if (IsA(expression, FuncExpr))
-	{
-		FuncExpr *expr = (FuncExpr *) expression;
+	/* the caller should have already checked for this */
+	Assert(!hasVolatileFunction);
+	Assert(volatileFlag != PROVOLATILE_VOLATILE);
 
-		volatileFlag = func_volatile(expr->funcid);
-	}
-	else if (IsA(expression, DistinctExpr))
-	{
-		/*
-		 * to exercise this, you need to create a custom type for which the '=' operator
-		 * is STABLE/VOLATILE
-		 */
-		DistinctExpr *expr = (DistinctExpr *) expression;
-
-		set_opfuncid((OpExpr *) expr);  /* rely on struct equivalence */
-		volatileFlag = func_volatile(expr->opfuncid);
-	}
-	else if (IsA(expression, NullIfExpr))
-	{
-		/*
-		 * same as above, exercising this requires a STABLE/VOLATILE '=' operator
-		 */
-		NullIfExpr *expr = (NullIfExpr *) expression;
-
-		set_opfuncid((OpExpr *) expr);  /* rely on struct equivalence */
-		volatileFlag = func_volatile(expr->opfuncid);
-	}
-	else if (IsA(expression, ScalarArrayOpExpr))
-	{
-		/*
-		 * to exercise this you need to CREATE OPERATOR with a binary predicate
-		 * and use it within an ANY/ALL clause.
-		 */
-		ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) expression;
-
-		set_sa_opfuncid(expr);
-		volatileFlag = func_volatile(expr->opfuncid);
-	}
-	else if (IsA(expression, CoerceViaIO))
-	{
-		/*
-		 * to exercise this you need to use a type with a STABLE/VOLATILE intype or
-		 * outtype.
-		 */
-		CoerceViaIO *expr = (CoerceViaIO *) expression;
-		Oid iofunc;
-		Oid typioparam;
-		bool typisvarlena;
-
-		/* check the result type's input function */
-		getTypeInputInfo(expr->resulttype,
-						 &iofunc, &typioparam);
-		volatileFlag = MostPermissiveVolatileFlag(volatileFlag, func_volatile(iofunc));
-
-		/* check the input type's output function */
-		getTypeOutputInfo(exprType((Node *) expr->arg),
-						  &iofunc, &typisvarlena);
-		volatileFlag = MostPermissiveVolatileFlag(volatileFlag, func_volatile(iofunc));
-	}
-	else if (IsA(expression, ArrayCoerceExpr))
-	{
-		ArrayCoerceExpr *expr = (ArrayCoerceExpr *) expression;
-
-		if (OidIsValid(expr->elemfuncid))
-		{
-			volatileFlag = func_volatile(expr->elemfuncid);
-		}
-	}
-	else if (IsA(expression, RowCompareExpr))
-	{
-		RowCompareExpr *rcexpr = (RowCompareExpr *) expression;
-		ListCell *opid;
-
-		foreach(opid, rcexpr->opnos)
-		{
-			volatileFlag = MostPermissiveVolatileFlag(volatileFlag,
-													  op_volatile(lfirst_oid(opid)));
-		}
-	}
-	else if (IsA(expression, Query))
-	{
-		/* subqueries aren't allowed and fail before control reaches this point */
-		Assert(false);
-	}
-
-	if (volatileFlag == PROVOLATILE_VOLATILE)
-	{
-		/* the caller should have already checked for this */
-		Assert(false);
-	}
-	else if (volatileFlag == PROVOLATILE_STABLE)
+	if (volatileFlag == PROVOLATILE_STABLE)
 	{
 		containsDisallowedFunction =
 			expression_tree_walker(expression,
@@ -1025,26 +929,31 @@ MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state)
 
 
 /*
- * Return the most-pessimistic volatility flag of the two params.
- *
- * for example: given two flags, if one is stable and one is volatile, an expression
- * involving both is volatile.
+ * MasterIrreducibleExpressionFunctionChecker returns true if a provided function
+ * oid corresponds to a volatile function. It also updates provided context if
+ * the current volatility flag is more permissive than the provided one. It is
+ * only called from check_functions_in_node as checker function.
  */
-char
-MostPermissiveVolatileFlag(char left, char right)
+static bool
+MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
 {
-	if (left == PROVOLATILE_VOLATILE || right == PROVOLATILE_VOLATILE)
+	char volatileFlag = func_volatile(func_id);
+	char *volatileContext = (char *) context;
+
+	if (volatileFlag == PROVOLATILE_VOLATILE || *volatileContext == PROVOLATILE_VOLATILE)
 	{
-		return PROVOLATILE_VOLATILE;
+		*volatileContext = PROVOLATILE_VOLATILE;
 	}
-	else if (left == PROVOLATILE_STABLE || right == PROVOLATILE_STABLE)
+	else if (volatileFlag == PROVOLATILE_STABLE || *volatileContext == PROVOLATILE_STABLE)
 	{
-		return PROVOLATILE_STABLE;
+		*volatileContext = PROVOLATILE_STABLE;
 	}
 	else
 	{
-		return PROVOLATILE_IMMUTABLE;
+		*volatileContext = PROVOLATILE_IMMUTABLE;
 	}
+
+	return (volatileFlag == PROVOLATILE_VOLATILE);
 }
 
 
