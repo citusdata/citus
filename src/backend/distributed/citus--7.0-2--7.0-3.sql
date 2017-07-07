@@ -25,12 +25,23 @@ CREATE INDEX pg_dist_placement_shardid_index
 CREATE UNIQUE INDEX pg_dist_placement_placementid_index
   ON pg_dist_placement USING btree(placementid);
 
+CREATE OR REPLACE FUNCTION citus.find_groupid_for_node(text, int)
+RETURNS int AS $$
+DECLARE
+  groupid int := (SELECT groupid FROM pg_dist_node WHERE nodename = $1 AND nodeport = $2);
+BEGIN
+  IF groupid IS NULL THEN
+    RAISE EXCEPTION 'There is no node at "%:%"', $1, $2;
+  ELSE
+    RETURN groupid;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
 INSERT INTO pg_catalog.pg_dist_placement
-SELECT placementid, shardid, shardstate, shardlength, node.groupid
-FROM pg_dist_shard_placement placement LEFT JOIN pg_dist_node node ON (
-  -- use a LEFT JOIN so if the node is missing for some reason we error out
-  placement.nodename = node.nodename AND placement.nodeport = node.nodeport
-);
+SELECT placementid, shardid, shardstate, shardlength,
+       citus.find_groupid_for_node(placement.nodename, placement.nodeport::int) AS groupid
+FROM pg_dist_shard_placement placement;
 
 DROP TRIGGER dist_placement_cache_invalidate ON pg_catalog.pg_dist_shard_placement;
 CREATE TRIGGER dist_placement_cache_invalidate
@@ -57,19 +68,6 @@ GRANT SELECT ON pg_catalog.pg_dist_shard_placement TO public;
 
 ALTER VIEW pg_catalog.pg_dist_shard_placement
   ALTER placementid SET DEFAULT nextval('pg_dist_placement_placementid_seq');
-
-CREATE OR REPLACE FUNCTION citus.find_groupid_for_node(text, int)
-RETURNS int AS $$
-DECLARE
-  groupid int := (SELECT groupid FROM pg_dist_node WHERE nodename = $1 AND nodeport = $2);
-BEGIN
-  IF groupid IS NULL THEN
-    RAISE EXCEPTION 'There is no node at "%:%"', $1, $2;
-  ELSE
-    RETURN groupid;
-  END IF;
-END;
-$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION citus.pg_dist_shard_placement_trigger_func()
 RETURNS TRIGGER AS $$
