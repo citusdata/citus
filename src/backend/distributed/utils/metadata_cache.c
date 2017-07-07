@@ -2809,7 +2809,7 @@ CachedRelationLookup(const char *relationName, Oid *cachedOid)
 
 		if (*cachedOid == InvalidOid)
 		{
-			ereport(ERROR, (errmsg("cache lookup failed for %s, called to early?",
+			ereport(ERROR, (errmsg("cache lookup failed for %s, called too early?",
 								   relationName)));
 		}
 	}
