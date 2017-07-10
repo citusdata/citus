@@ -1248,8 +1248,13 @@ VacuumTaskList(Oid relationId, VacuumStmt *vacuumStmt)
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(relationId);
 
-	/* lock relation metadata before getting shard list */
-	LockRelationDistributionMetadata(relationId, ShareLock);
+	/*
+	 * We obtain ShareUpdateExclusiveLock here to not conflict with INSERT's
+	 * RowExclusiveLock. However if VACUUM FULL is used, we already obtain
+	 * AccessExclusiveLock before reaching to that point and INSERT's will be
+	 * blocked anyway. This is inline with PostgreSQL's own behaviour.
+	 */
+	LockRelationOid(relationId, ShareUpdateExclusiveLock);
 
 	shardIntervalList = LoadShardIntervalList(relationId);
 
