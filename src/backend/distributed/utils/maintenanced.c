@@ -22,6 +22,7 @@
 
 #include "access/xact.h"
 #include "libpq/pqsignal.h"
+#include "distributed/deadlock.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "postmaster/bgworker.h"
@@ -257,6 +258,22 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * timeout indicates, it's ok to lower it to that value.  Expensive
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
+
+		{
+			Datum foundDeadlock;
+
+			StartTransactionCommand();
+			foundDeadlock = this_machine_kills_deadlocks(NULL);
+			CommitTransactionCommand();
+
+			/*
+			 * Check sooner if we just found a deadlock.
+			 */
+			if (foundDeadlock)
+			{
+				timeout = 100;
+			}
+		}
 
 		/*
 		 * Wait until timeout, or until somebody wakes us up.
