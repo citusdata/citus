@@ -113,8 +113,8 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	 */
 	EnsureTableOwner(distributedTableId);
 
-	/* we plan to add shards: get an exclusive metadata lock */
-	LockRelationDistributionMetadata(distributedTableId, ExclusiveLock);
+	/* we plan to add shards: get an exclusive lock on relation oid */
+	LockRelationOid(distributedTableId, ExclusiveLock);
 
 	relationOwner = TableOwner(distributedTableId);
 
@@ -264,8 +264,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	 */
 	EnsureTableOwner(targetRelationId);
 
-	/* we plan to add shards: get an exclusive metadata lock on the target relation */
-	LockRelationDistributionMetadata(targetRelationId, ExclusiveLock);
+	/* we plan to add shards: get an exclusive lock on target relation oid */
+	LockRelationOid(targetRelationId, ExclusiveLock);
 
 	/* we don't want source table to get dropped before we colocate with it */
 	LockRelationOid(sourceRelationId, AccessShareLock);
@@ -369,8 +369,8 @@ CreateReferenceTableShard(Oid distributedTableId)
 	 */
 	EnsureTableOwner(distributedTableId);
 
-	/* we plan to add shards: get an exclusive metadata lock */
-	LockRelationDistributionMetadata(distributedTableId, ExclusiveLock);
+	/* we plan to add shards: get an exclusive lock on relation oid */
+	LockRelationOid(distributedTableId, ExclusiveLock);
 
 	relationOwner = TableOwner(distributedTableId);
 
