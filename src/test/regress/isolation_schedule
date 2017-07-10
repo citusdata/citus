@@ -7,4 +7,6 @@ test: isolation_cluster_management
 
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 test: isolation_concurrent_dml isolation_data_migration
-test: isolation_drop_shards isolation_copy_placement_vs_modification 
+test: isolation_drop_shards isolation_copy_placement_vs_modification
+
+test: isolation_insert_vs_vacuum
