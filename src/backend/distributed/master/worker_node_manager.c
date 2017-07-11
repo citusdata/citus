@@ -40,6 +40,7 @@ int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size *
 
 
 /* Local functions forward declarations */
+static WorkerNode * WorkerGetNodeWithName(const char *hostname);
 static char * ClientHostAddress(StringInfo remoteHostStringInfo);
 static WorkerNode * FindRandomNodeNotInList(HTAB *WorkerNodesHash,
 											List *currentNodeList);
@@ -276,7 +277,7 @@ ClientHostAddress(StringInfo clientHostStringInfo)
  * WorkerGetNodeWithName finds and returns a node from the membership list that
  * has the given hostname. The function returns null if no such node exists.
  */
-WorkerNode *
+static WorkerNode *
 WorkerGetNodeWithName(const char *hostname)
 {
 	WorkerNode *workerNode = NULL;
