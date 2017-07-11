@@ -2,6 +2,7 @@
 /multi_agg_type_conversion.sql
 /multi_alter_table_statements.sql
 /multi_append_table_to_shard.sql
+/multi_behavioral_analytics_create_table.sql
 /multi_copy.sql
 /multi_create_schema.sql
 /multi_large_shardid.sql
