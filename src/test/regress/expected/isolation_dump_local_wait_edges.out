@@ -1,0 +1,134 @@
+Parsed test spec with 4 sessions
+
+starting permutation: dist11-begin dist13-begin dist11-update dist13-update detector-dump-wait-edges dist11-abort dist13-abort
+step dist11-begin: 
+    BEGIN;
+    SELECT assign_distributed_transaction_id(11, 1, '2017-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step dist13-begin: 
+    BEGIN;
+    SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step dist11-update: 
+    UPDATE local_table SET y = 1 WHERE x = 1;
+
+step dist13-update: 
+    UPDATE local_table SET y = 3 WHERE x = 1;
+ <waiting ...>
+step detector-dump-wait-edges: 
+    SELECT
+        waiting_node_id,
+        waiting_transaction_num,
+        blocking_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting
+    FROM
+        dump_local_wait_edges(13);
+
+waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+
+13             1              11             1              f              
+step dist11-abort: 
+    ABORT;
+
+step dist13-update: <... completed>
+step dist13-abort: 
+    ABORT;
+
+
+starting permutation: local-begin dist13-begin local-update dist13-update detector-dump-wait-edges local-abort dist13-abort
+step local-begin: 
+    BEGIN;
+
+step dist13-begin: 
+    BEGIN;
+    SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step local-update: 
+    UPDATE local_table SET y = 2 WHERE x = 1;
+
+step dist13-update: 
+    UPDATE local_table SET y = 3 WHERE x = 1;
+ <waiting ...>
+step detector-dump-wait-edges: 
+    SELECT
+        waiting_node_id,
+        waiting_transaction_num,
+        blocking_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting
+    FROM
+        dump_local_wait_edges(13);
+
+waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+
+13             1              0                             f              
+step local-abort: 
+    ABORT;
+
+step dist13-update: <... completed>
+step dist13-abort: 
+    ABORT;
+
+
+starting permutation: dist11-begin local-begin dist13-begin dist11-update local-update dist13-update detector-dump-wait-edges dist11-abort local-abort dist13-abort
+step dist11-begin: 
+    BEGIN;
+    SELECT assign_distributed_transaction_id(11, 1, '2017-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step local-begin: 
+    BEGIN;
+
+step dist13-begin: 
+    BEGIN;
+    SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step dist11-update: 
+    UPDATE local_table SET y = 1 WHERE x = 1;
+
+step local-update: 
+    UPDATE local_table SET y = 2 WHERE x = 1;
+ <waiting ...>
+step dist13-update: 
+    UPDATE local_table SET y = 3 WHERE x = 1;
+ <waiting ...>
+step detector-dump-wait-edges: 
+    SELECT
+        waiting_node_id,
+        waiting_transaction_num,
+        blocking_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting
+    FROM
+        dump_local_wait_edges(13);
+
+waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+
+13             1              0                             t              
+0                             11             1              f              
+step dist11-abort: 
+    ABORT;
+
+step local-update: <... completed>
+step local-abort: 
+    ABORT;
+
+step dist13-update: <... completed>
+step dist13-abort: 
+    ABORT;
+

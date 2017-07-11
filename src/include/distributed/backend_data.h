@@ -16,6 +16,8 @@
 #include "datatype/timestamp.h"
 #include "distributed/transaction_identifier.h"
 #include "nodes/pg_list.h"
+#include "storage/lwlock.h"
+#include "storage/proc.h"
 #include "storage/s_lock.h"
 
 
@@ -35,5 +37,6 @@ extern void InitializeBackendManagement(void);
 extern void InitializeBackendData(void);
 extern void UnSetDistributedTransactionId(void);
 extern void AssignDistributedTransactionId(void);
+extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 
 #endif /* BACKEND_DATA_H */
