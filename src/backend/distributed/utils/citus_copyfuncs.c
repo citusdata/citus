@@ -232,6 +232,7 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(replicationModel);
 	COPY_SCALAR_FIELD(insertSelectQuery);
 	COPY_NODE_FIELD(relationShardList);
+	COPY_NODE_FIELD(rowValuesLists);
 }
 
 

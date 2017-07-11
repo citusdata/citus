@@ -187,6 +187,8 @@ typedef struct Task
 
 	bool insertSelectQuery;
 	List *relationShardList;
+
+	List *rowValuesLists;          /* rows to use when building multi-row INSERT */
 } Task;
 
 
