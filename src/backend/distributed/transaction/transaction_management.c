@@ -168,8 +168,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+			break;
 		}
-		break;
 
 		case XACT_EVENT_ABORT:
 		{
@@ -204,14 +204,15 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
 			subXactAbortAttempted = false;
+			break;
 		}
-		break;
 
 		case XACT_EVENT_PARALLEL_COMMIT:
 		case XACT_EVENT_PARALLEL_ABORT:
 		case XACT_EVENT_PREPARE:
-		{ }
-		  break;
+		{
+			break;
+		}
 
 		case XACT_EVENT_PRE_COMMIT:
 		{
@@ -270,8 +271,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * committed. This handles failure at COMMIT/PREPARE time.
 			 */
 			PostCommitMarkFailedShardPlacements(CoordinatedTransactionUses2PC);
+			break;
 		}
-		break;
 
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		case XACT_EVENT_PRE_PREPARE:
@@ -282,8 +283,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 								errmsg("cannot use 2PC in transactions involving "
 									   "multiple servers")));
 			}
+			break;
 		}
-		break;
 	}
 }
 
