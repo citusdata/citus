@@ -501,3 +501,29 @@ CurrentDistributedTransactionNumber(void)
 
 	return MyBackendData->transactionId.transactionNumber;
 }
+
+
+/*
+ * GetBackendDataForProc writes the backend data for the given process to
+ * result. If the process is part of a lock group (parallel query) it
+ * returns the leader data instead.
+ */
+void
+GetBackendDataForProc(PGPROC *proc, BackendData *result)
+{
+	BackendData *backendData = NULL;
+	int pgprocno = proc->pgprocno;
+
+	if (proc->lockGroupLeader != NULL)
+	{
+		pgprocno = proc->lockGroupLeader->pgprocno;
+	}
+
+	backendData = &backendManagementShmemData->backends[pgprocno];
+
+	SpinLockAcquire(&backendData->mutex);
+
+	memcpy(result, backendData, sizeof(BackendData));
+
+	SpinLockRelease(&backendData->mutex);
+}
