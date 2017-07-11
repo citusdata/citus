@@ -190,7 +190,7 @@ CONTEXT:  while executing command on localhost:57638
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 ERROR:  could not modify any active placements
 SET client_min_messages TO DEFAULT;
--- commands with non-constant partition values are unsupported
+-- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
 -- values for other columns are totally fine
@@ -201,10 +201,10 @@ ERROR:  functions used in the WHERE clause of modification queries on distribute
 -- commands with mutable but non-volatile functions(ie: stable func.) in their quals
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::timestamp;
--- commands with multiple rows are unsupported
-INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Multi-row INSERTs to distributed tables are not supported.
+-- commands with multiple rows are supported
+INSERT INTO limit_orders VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
+                                (2038, 'GOOG', 5634, now(), 'buy', random()),
+                                (2039, 'GOOG', 5634, now(), 'buy', random());
 -- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported
 -- INSERT INTO limit_orders SELECT * FROM limit_orders;

@@ -419,6 +419,11 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 				RaiseDeferredError(planningError, ERROR);
 			}
 
+			if (list_length(taskList) > 1)
+			{
+				node->methods = &RouterMultiModifyCustomExecMethods;
+			}
+
 			workerJob->taskList = taskList;
 		}
 
@@ -428,7 +433,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	/* prevent concurrent placement changes */
 	AcquireMetadataLocks(taskList);
 
-	/* assign task placements */
+	/* modify tasks are always assigned using first-replica policy */
 	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
 }
 

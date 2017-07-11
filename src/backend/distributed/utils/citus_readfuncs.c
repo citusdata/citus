@@ -351,6 +351,7 @@ ReadTask(READFUNC_ARGS)
 	READ_CHAR_FIELD(replicationModel);
 	READ_BOOL_FIELD(insertSelectQuery);
 	READ_NODE_FIELD(relationShardList);
+	READ_NODE_FIELD(rowValuesLists);
 
 	READ_DONE();
 }

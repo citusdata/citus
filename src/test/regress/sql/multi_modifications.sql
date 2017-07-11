@@ -132,7 +132,7 @@ INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy
 
 SET client_min_messages TO DEFAULT;
 
--- commands with non-constant partition values are unsupported
+-- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
 
@@ -146,8 +146,10 @@ DELETE FROM limit_orders WHERE id = 246 AND bidder_id = (random() * 1000);
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::timestamp;
 
--- commands with multiple rows are unsupported
-INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
+-- commands with multiple rows are supported
+INSERT INTO limit_orders VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
+                                (2038, 'GOOG', 5634, now(), 'buy', random()),
+                                (2039, 'GOOG', 5634, now(), 'buy', random());
 
 -- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported

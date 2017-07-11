@@ -441,6 +441,7 @@ OutTask(OUTFUNC_ARGS)
 	WRITE_CHAR_FIELD(replicationModel);
 	WRITE_BOOL_FIELD(insertSelectQuery);
 	WRITE_NODE_FIELD(relationShardList);
+	WRITE_NODE_FIELD(rowValuesLists);
 }
 
 
