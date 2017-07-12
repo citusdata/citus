@@ -18,7 +18,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- remove non-existing node
 SELECT master_remove_node('localhost', 55555);
-ERROR:  could not find valid entry for node "localhost:55555"
+ERROR:  node at "localhost:55555" does not exist
 -- remove a node with no reference tables
 -- verify node exist before removal
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -160,7 +160,7 @@ WHERE
 \c - - - :master_port
 -- remove same node twice
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  could not find valid entry for node "localhost:57638"
+ERROR:  node at "localhost:57638" does not exist
 -- re-add the node for next tests
 SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638

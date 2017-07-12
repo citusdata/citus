@@ -209,7 +209,7 @@ ShouldSyncTableMetadata(Oid relationId)
  * (ii)  Queries that create the clustered tables
  * (iii) Queries that populate pg_dist_partition table referenced by (ii)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
- * (v)   Queries that populate pg_dist_shard_placement table referenced by (iv)
+ * (v)   Queries that populate pg_dist_placement table referenced by (iv)
  */
 List *
 MetadataCreateCommands(void)
@@ -346,7 +346,7 @@ GetDistributedTableDDLEvents(Oid relationId)
 	truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
 	commandList = lappend(commandList, truncateTriggerCreateCommand);
 
-	/* commands to insert pg_dist_shard & pg_dist_shard_placement entries */
+	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	shardIntervalList = LoadShardIntervalList(relationId);
 	shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
@@ -370,23 +370,18 @@ GetDistributedTableDDLEvents(Oid relationId)
  *       from the worker itself to prevent dropping any non-distributed tables
  *       with the same name.
  * (iii) Queries that delete all the rows from pg_dist_shard table referenced by (ii)
- * (iv) Queries that delete all the rows from pg_dist_shard_placement table
+ * (iv) Queries that delete all the rows from pg_dist_placement table
  *      referenced by (iii)
  */
 List *
 MetadataDropCommands(void)
 {
 	List *dropSnapshotCommandList = NIL;
-	char *removeTablesCommand = NULL;
-	char *removeNodesCommand = NULL;
 
-	removeNodesCommand = DELETE_ALL_NODES;
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  removeNodesCommand);
+									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
-	removeTablesCommand = REMOVE_ALL_CLUSTERED_TABLES_COMMAND;
-	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  removeTablesCommand);
+	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
 
 	return dropSnapshotCommandList;
 }
@@ -566,9 +561,9 @@ ShardListInsertCommand(List *shardIntervalList)
 			{
 				/* generate the shard placement query without any values yet */
 				appendStringInfo(insertPlacementCommand,
-								 "INSERT INTO pg_dist_shard_placement "
+								 "INSERT INTO pg_dist_placement "
 								 "(shardid, shardstate, shardlength,"
-								 " nodename, nodeport, placementid) "
+								 " groupid, placementid) "
 								 "VALUES ");
 			}
 			else
@@ -577,11 +572,10 @@ ShardListInsertCommand(List *shardIntervalList)
 			}
 
 			appendStringInfo(insertPlacementCommand,
-							 "(%lu, 1, %lu, %s, %d, %lu)",
+							 "(%lu, 1, %lu, %d, %lu)",
 							 shardId,
 							 placement->shardLength,
-							 quote_literal_cstr(placement->nodeName),
-							 placement->nodePort,
+							 placement->groupId,
 							 placement->placementId);
 		}
 	}
@@ -664,7 +658,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	/* create command to delete shard placements */
 	deletePlacementCommand = makeStringInfo();
 	appendStringInfo(deletePlacementCommand,
-					 "DELETE FROM pg_dist_shard_placement WHERE shardid = %lu",
+					 "DELETE FROM pg_dist_placement WHERE shardid = %lu",
 					 shardId);
 
 	commandList = lappend(commandList, deletePlacementCommand->data);
@@ -735,18 +729,18 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 
 
 /*
- * PlacementUpsertCommand creates a SQL command for upserting a pg_dist_shard_placment
+ * PlacementUpsertCommand creates a SQL command for upserting a pg_dist_placment
  * entry with the given properties. In the case of a conflict on placementId, the command
  * updates all properties (excluding the placementId) with the given ones.
  */
 char *
 PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
-					   uint64 shardLength, char *nodeName, uint32 nodePort)
+					   uint64 shardLength, uint32 groupId)
 {
 	StringInfo command = makeStringInfo();
 
 	appendStringInfo(command, UPSERT_PLACEMENT, shardId, shardState, shardLength,
-					 quote_literal_cstr(nodeName), nodePort, placementId);
+					 groupId, placementId);
 
 	return command->data;
 }

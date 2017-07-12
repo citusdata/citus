@@ -1,3 +1,7 @@
+### citus v7.0.0 (unreleased) ###
+
+* Replaces pg_dist_shard_placement metadata table with pg_dist_placement
+
 ### citus v6.2.2 (May 31, 2017) ###
 
 * Fixes a common cause of deadlocks when repairing tables with foreign keys

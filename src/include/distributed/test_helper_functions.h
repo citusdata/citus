@@ -53,9 +53,6 @@ extern Datum distributed_tables_exist(PG_FUNCTION_ARGS);
 extern Datum column_name_to_column(PG_FUNCTION_ARGS);
 extern Datum column_name_to_column_id(PG_FUNCTION_ARGS);
 extern Datum create_monolithic_shard_row(PG_FUNCTION_ARGS);
-extern Datum create_healthy_local_shard_placement_row(PG_FUNCTION_ARGS);
-extern Datum delete_shard_placement_row(PG_FUNCTION_ARGS);
-extern Datum update_shard_placement_row_state(PG_FUNCTION_ARGS);
 extern Datum next_shard_id(PG_FUNCTION_ARGS);
 extern Datum acquire_shared_shard_lock(PG_FUNCTION_ARGS);
 

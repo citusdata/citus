@@ -35,7 +35,8 @@ static const char *CitusNodeTagNamesD[] = {
 	"ShardInterval",
 	"ShardPlacement",
 	"RelationShard",
-	"DeferredErrorMessage"
+	"DeferredErrorMessage",
+	"GroupShardPlacement"
 };
 
 const char **CitusNodeTagNames = CitusNodeTagNamesD;
@@ -388,6 +389,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(RelationShard),
 	DEFINE_NODE_METHODS(Task),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
+	DEFINE_NODE_METHODS(GroupShardPlacement),
 
 	/* nodes with only output support */
 	DEFINE_NODE_METHODS_NO_READ(MultiNode),

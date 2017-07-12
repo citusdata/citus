@@ -46,21 +46,6 @@ CREATE FUNCTION create_monolithic_shard_row(regclass)
 	AS 'citus'
 	LANGUAGE C STRICT;
 
-CREATE FUNCTION create_healthy_local_shard_placement_row(bigint)
-	RETURNS void
-	AS 'citus'
-	LANGUAGE C STRICT;
-
-CREATE FUNCTION delete_shard_placement_row(bigint, text, bigint)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
-
-CREATE FUNCTION update_shard_placement_row_state(bigint, text, bigint, int)
-	RETURNS bool
-	AS 'citus'
-	LANGUAGE C STRICT;
-
 CREATE FUNCTION acquire_shared_shard_lock(bigint)
 	RETURNS void
 	AS 'citus'
@@ -81,7 +66,8 @@ SELECT master_create_distributed_table('events_hash', 'name', 'hash');
 SELECT master_create_worker_shards('events_hash', 4, 2);
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
-UPDATE pg_dist_shard_placement SET shardstate = 0 WHERE nodeport = 57638 AND shardid BETWEEN 540000 AND 540003;
+UPDATE pg_dist_placement SET shardstate = 0 WHERE shardid BETWEEN 540000 AND 540003
+  AND groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port);
 
 -- should see above shard identifiers
 SELECT load_shard_id_array('events_hash');
@@ -137,7 +123,7 @@ SELECT column_name_to_column_id('events_hash', 'ctid');
 SELECT column_name_to_column_id('events_hash', 'non_existent');
 
 -- drop shard rows (must drop placements first)
-DELETE FROM pg_dist_shard_placement
+DELETE FROM pg_dist_placement
 	WHERE shardid BETWEEN 540000 AND 540004;
 DELETE FROM pg_dist_shard
 	WHERE logicalrelid = 'events_hash'::regclass;
@@ -167,25 +153,6 @@ SELECT create_monolithic_shard_row('customers') AS new_shard_id
 \gset
 SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
 WHERE shardid = :new_shard_id;
-
--- add a placement and manually inspect row
-SELECT create_healthy_local_shard_placement_row(:new_shard_id);
-SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- mark it as unhealthy and inspect
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
-SELECT shardstate FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- remove it and verify it is gone
-SELECT delete_shard_placement_row(:new_shard_id, 'localhost', 5432);
-SELECT COUNT(*) FROM pg_dist_shard_placement
-WHERE shardid = :new_shard_id AND nodename = 'localhost' and nodeport = 5432;
-
--- deleting or updating a non-existent row should fail
-SELECT delete_shard_placement_row(:new_shard_id, 'wrong_localhost', 5432);
-SELECT update_shard_placement_row_state(:new_shard_id, 'localhost', 5432, 3);
 
 -- now we'll even test our lock methods...
 

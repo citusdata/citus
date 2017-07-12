@@ -940,7 +940,8 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 		{
 			uint64 shardId = shardEntry->key.shardId;
 			uint64 placementId = placementEntry->key.placementId;
-			ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
+			GroupShardPlacement *shardPlacement =
+				LoadGroupShardPlacement(shardId, placementId);
 
 			/*
 			 * We only set shard state if its current state is FILE_FINALIZED, which

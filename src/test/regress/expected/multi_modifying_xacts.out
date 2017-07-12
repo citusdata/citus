@@ -1,4 +1,5 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1200000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1200000;
 -- ===================================================================
 -- test end-to-end modification functionality
 -- ===================================================================
@@ -205,7 +206,7 @@ BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
-ERROR:  cannot establish a new connection for placement 2704, since DML has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
 CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
 -- after a COPY you can modify multiple shards, since they'll use different connections
@@ -1382,7 +1383,7 @@ BEGIN;
 INSERT INTO users VALUES (2, 'burak');
 INSERT INTO users VALUES (3, 'burak');
 \COPY items FROM STDIN WITH CSV
-ERROR:  cannot establish a new connection for placement 2743, since DML has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 1200042, since DML has been executed on a connection that is in use
 END;
 -- cannot perform DDL after a co-located table has been read over 1 connection
 BEGIN;
@@ -1434,7 +1435,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 
 -- perform a DDL command on the reference table
 ALTER TABLE itemgroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 2737, which has been read over multiple connections
+ERROR:  cannot perform DDL on placement 1200036, which has been read over multiple connections
 END;
 BEGIN;
 -- establish multiple connections to a node
@@ -1452,7 +1453,7 @@ SELECT user_id FROM items JOIN itemgroups ON (item_group = gid) WHERE user_id = 
 
 -- perform a DDL command on a co-located reference table
 ALTER TABLE usergroups ADD COLUMN last_update timestamptz;
-ERROR:  cannot perform DDL on placement 2735 since a co-located placement has been read over multiple connections
+ERROR:  cannot perform DDL on placement 1200034 since a co-located placement has been read over multiple connections
 END;
 BEGIN;
 -- make a modification over connection 1

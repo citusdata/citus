@@ -1,6 +1,6 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1200000;
-
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1200000;
 
 -- ===================================================================
 -- test end-to-end modification functionality

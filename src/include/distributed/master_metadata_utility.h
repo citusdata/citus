@@ -69,14 +69,32 @@ typedef struct ShardInterval
 } ShardInterval;
 
 
-/* In-memory representation of a tuple in pg_dist_shard_placement. */
-typedef struct ShardPlacement
+/* In-memory representation of a tuple in pg_dist_placement. */
+typedef struct GroupShardPlacement
 {
 	CitusNode type;
-	uint64 placementId;       /* sequence that implies this placement creation order */
+	uint64 placementId;     /* sequence that implies this placement creation order */
 	uint64 shardId;
 	uint64 shardLength;
 	RelayFileState shardState;
+	uint32 groupId;
+} GroupShardPlacement;
+
+
+/* A GroupShardPlacement which has had some extra data resolved */
+typedef struct ShardPlacement
+{
+	/*
+	 * careful, the rest of the code assumes this exactly matches GroupShardPlacement
+	 */
+	CitusNode type;
+	uint64 placementId;
+	uint64 shardId;
+	uint64 shardLength;
+	RelayFileState shardState;
+	uint32 groupId;
+
+	/* the rest of the fields aren't from pg_dist_placement */
 	char *nodeName;
 	uint32 nodePort;
 	char partitionMethod;
@@ -97,10 +115,12 @@ extern void CopyShardInterval(ShardInterval *srcInterval, ShardInterval *destInt
 extern void CopyShardPlacement(ShardPlacement *srcPlacement,
 							   ShardPlacement *destPlacement);
 extern uint64 ShardLength(uint64 shardId);
-extern bool NodeHasActiveShardPlacements(char *nodeName, int32 nodePort);
+extern bool NodeHasShardPlacements(char *nodeName, int32 nodePort,
+								   bool onlyLookForActivePlacements);
 extern List * FinalizedShardPlacementList(uint64 shardId);
 extern ShardPlacement * FinalizedShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
+extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, uint32 groupId);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -108,15 +128,14 @@ extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
 extern void DeleteShardRow(uint64 shardId);
 extern void InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									char shardState, uint64 shardLength,
-									char *nodeName, uint32 nodePort);
+									uint32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
 									  char replicationModel);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
-extern uint64 DeleteShardPlacementRow(uint64 shardId, char *workerName, uint32
-									  workerPort);
+extern void DeleteShardPlacementRow(uint64 placementId);
 extern void UpdateColocationGroupReplicationFactor(uint32 colocationId,
 												   int replicationFactor);
 extern void CreateTruncateTrigger(Oid relationId);

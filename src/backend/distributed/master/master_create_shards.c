@@ -322,7 +322,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 				const uint64 shardSize = 0;
 
 				InsertShardPlacementRow(newShardId, INVALID_PLACEMENT_ID, shardState,
-										shardSize, sourceNodeName, sourceNodePort);
+										shardSize, sourcePlacement->groupId);
 			}
 			else
 			{

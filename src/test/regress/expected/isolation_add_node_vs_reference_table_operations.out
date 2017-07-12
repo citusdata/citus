@@ -295,7 +295,9 @@ step s2-commit:
  <waiting ...>
 step s2-commit: <... completed>
 step s1-add-second-worker: <... completed>
-error in steps s2-commit s1-add-second-worker: ERROR:  deadlock detected
+nodename       nodeport       isactive       
+
+localhost      57638          t              
 step s2-print-content: 
 	SELECT 
 		nodeport, success, result 
@@ -307,8 +309,10 @@ step s2-print-content:
 nodeport       success        result         
 
 57637          t              5              
+57638          t              5              
 master_remove_node
 
+               
                
 
 starting permutation: s1-begin s1-add-second-worker s2-insert-to-reference-table s1-commit s2-print-content
