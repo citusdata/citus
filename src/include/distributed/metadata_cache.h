@@ -70,6 +70,8 @@ extern bool IsDistributedTable(Oid relationId);
 extern List * DistributedTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
+extern ShardPlacement * FindShardPlacementOnNode(char *nodeName, int nodePort,
+												 uint64 shardId);
 extern DistTableCacheEntry * DistributedTableCacheEntry(Oid distributedRelationId);
 extern int GetLocalGroupId(void);
 extern List * DistTableOidList(void);

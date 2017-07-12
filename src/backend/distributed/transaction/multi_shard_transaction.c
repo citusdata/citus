@@ -17,6 +17,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
 #include "distributed/shardinterval_utils.h"
@@ -30,25 +31,27 @@
 
 
 /*
- * OpenTransactionsToAllShardPlacements opens connections to all placements
- * using the provided shard identifier list and returns it as a shard ID ->
- * ShardConnections hash. connectionFlags can be used to specify whether
- * the command is FOR_DML or FOR_DDL.
+ * OpenTransactionsForAllTasks opens a connection for each task,
+ * taking into account which shards are read and modified by the task
+ * to select the appopriate connection, or error out if no appropriate
+ * connection can be found. The set of connections is returned as an
+ * anchor shard ID -> ShardConnections hash.
  */
 HTAB *
-OpenTransactionsToAllShardPlacements(List *shardIntervalList, int connectionFlags)
+OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 {
 	HTAB *shardConnectionHash = NULL;
-	ListCell *shardIntervalCell = NULL;
+	ListCell *taskCell = NULL;
 	List *newConnectionList = NIL;
 
 	shardConnectionHash = CreateShardConnectionHash(CurrentMemoryContext);
 
 	/* open connections to shards which don't have connections yet */
-	foreach(shardIntervalCell, shardIntervalList)
+	foreach(taskCell, taskList)
 	{
-		ShardInterval *shardInterval = (ShardInterval *) lfirst(shardIntervalCell);
-		uint64 shardId = shardInterval->shardId;
+		Task *task = (Task *) lfirst(taskCell);
+		ShardPlacementAccessType accessType = PLACEMENT_ACCESS_SELECT;
+		uint64 shardId = task->anchorShardId;
 		ShardConnections *shardConnections = NULL;
 		bool shardConnectionsFound = false;
 		List *shardPlacementList = NIL;
@@ -69,9 +72,24 @@ OpenTransactionsToAllShardPlacements(List *shardIntervalList, int connectionFlag
 								   UINT64_FORMAT, shardId)));
 		}
 
+		if (task->taskType == MODIFY_TASK)
+		{
+			accessType = PLACEMENT_ACCESS_DML;
+		}
+		else
+		{
+			/* can only open connections for DDL and DML commands */
+			Assert(task->taskType == DDL_TASK);
+
+			accessType = PLACEMENT_ACCESS_DDL;
+		}
+
 		foreach(placementCell, shardPlacementList)
 		{
 			ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(placementCell);
+			ShardPlacementAccess placementModification;
+			List *placementAccessList = NIL;
+			List *placementSelectList = NIL;
 			MultiConnection *connection = NULL;
 
 			WorkerNode *workerNode = FindWorkerNode(shardPlacement->nodeName,
@@ -83,9 +101,24 @@ OpenTransactionsToAllShardPlacements(List *shardIntervalList, int connectionFlag
 									   shardPlacement->nodePort)));
 			}
 
-			connection = StartPlacementConnection(connectionFlags,
-												  shardPlacement,
-												  NULL);
+			/* add placement access for modification */
+			placementModification.placement = shardPlacement;
+			placementModification.accessType = accessType;
+
+			placementAccessList = lappend(placementAccessList, &placementModification);
+
+			/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
+			placementSelectList = BuildPlacementSelectList(shardPlacement->nodeName,
+														   shardPlacement->nodePort,
+														   task->relationShardList);
+			placementAccessList = list_concat(placementAccessList, placementSelectList);
+
+			/*
+			 * Find a connection that sees preceding writes and cannot self-deadlock,
+			 * or error out if no such connection exists.
+			 */
+			connection = StartPlacementListConnection(connectionFlags,
+													  placementAccessList, NULL);
 
 			ClaimConnectionExclusively(connection);
 
