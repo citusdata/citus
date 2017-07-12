@@ -2,6 +2,7 @@
 -- MULTI_INSERT_SELECT
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13300000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 13300000;
 -- create co-located tables
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
@@ -1645,7 +1646,7 @@ BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
-ERROR:  cannot establish a new connection for placement 655, since DDL has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 13300024, since DDL has been executed on a connection that is in use
 ROLLBACK;
 -- Insert after copy is disallowed when the INSERT INTO ... SELECT  chooses
 -- to use a connection for one shard, while the connection already modified
@@ -1653,7 +1654,7 @@ ROLLBACK;
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 INSERT INTO raw_events_first SELECT * FROM raw_events_second;
-ERROR:  cannot establish a new connection for placement 636, since DML has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 13300005, since DML has been executed on a connection that is in use
 ROLLBACK;
 -- Insert after copy is currently allowed for single-shard operation.
 -- Both insert and copy are rolled back successfully.
