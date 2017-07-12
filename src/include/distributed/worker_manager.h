@@ -63,6 +63,8 @@ extern List * ActiveWorkerNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
 extern void EnsureCoordinator(void);
+extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
+extern WorkerNode * NodeForGroup(uint32 groupId);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);

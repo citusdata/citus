@@ -48,9 +48,6 @@ PG_FUNCTION_INFO_V1(partition_column_id);
 PG_FUNCTION_INFO_V1(partition_type);
 PG_FUNCTION_INFO_V1(is_distributed_table);
 PG_FUNCTION_INFO_V1(create_monolithic_shard_row);
-PG_FUNCTION_INFO_V1(create_healthy_local_shard_placement_row);
-PG_FUNCTION_INFO_V1(delete_shard_placement_row);
-PG_FUNCTION_INFO_V1(update_shard_placement_row_state);
 PG_FUNCTION_INFO_V1(acquire_shared_shard_lock);
 
 
@@ -238,66 +235,6 @@ create_monolithic_shard_row(PG_FUNCTION_ARGS)
 				   maxInfoText);
 
 	PG_RETURN_INT64(newShardId);
-}
-
-
-/*
- * create_healthy_local_shard_placement_row inserts a row representing a
- * finalized placement for localhost (on the default port) into the backing
- * store.
- */
-Datum
-create_healthy_local_shard_placement_row(PG_FUNCTION_ARGS)
-{
-	int64 shardId = PG_GETARG_INT64(0);
-	int64 shardLength = 0;
-
-	InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, FILE_FINALIZED, shardLength,
-							"localhost", 5432);
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * delete_shard_placement_row removes a shard placement with the specified ID.
- */
-Datum
-delete_shard_placement_row(PG_FUNCTION_ARGS)
-{
-	int64 shardId = PG_GETARG_INT64(0);
-	text *hostName = PG_GETARG_TEXT_P(1);
-	int64 hostPort = PG_GETARG_INT64(2);
-	bool successful = true;
-	char *hostNameString = text_to_cstring(hostName);
-
-	DeleteShardPlacementRow(shardId, hostNameString, hostPort);
-
-	PG_RETURN_BOOL(successful);
-}
-
-
-/*
- * update_shard_placement_row_state sets the state of the placement with the
- * specified ID.
- */
-Datum
-update_shard_placement_row_state(PG_FUNCTION_ARGS)
-{
-	int64 shardId = PG_GETARG_INT64(0);
-	text *hostName = PG_GETARG_TEXT_P(1);
-	int64 hostPort = PG_GETARG_INT64(2);
-	RelayFileState shardState = (RelayFileState) PG_GETARG_INT32(3);
-	bool successful = true;
-	char *hostNameString = text_to_cstring(hostName);
-	uint64 shardLength = 0;
-	uint64 placementId = INVALID_PLACEMENT_ID;
-
-	placementId = DeleteShardPlacementRow(shardId, hostNameString, hostPort);
-	InsertShardPlacementRow(shardId, placementId, shardState, shardLength,
-							hostNameString, hostPort);
-
-	PG_RETURN_BOOL(successful);
 }
 
 

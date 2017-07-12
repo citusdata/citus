@@ -108,8 +108,7 @@ OpenTransactionsForAllTasks(List *taskList, int connectionFlags)
 			placementAccessList = lappend(placementAccessList, &placementModification);
 
 			/* add additional placement accesses for subselects (e.g. INSERT .. SELECT) */
-			placementSelectList = BuildPlacementSelectList(shardPlacement->nodeName,
-														   shardPlacement->nodePort,
+			placementSelectList = BuildPlacementSelectList(shardPlacement->groupId,
 														   task->relationShardList);
 			placementAccessList = list_concat(placementAccessList, placementSelectList);
 

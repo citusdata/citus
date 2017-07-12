@@ -283,6 +283,20 @@ END;
 -- verify interaction of default values, SERIAL, and RETURNING
 \set QUIET on
 
+-- make sure this test always returns the same output no matter which tests have run
+SELECT minimum_value::bigint AS min_value,
+       maximum_value::bigint AS max_value
+  FROM information_schema.sequences
+  WHERE sequence_name = 'app_analytics_events_mx_id_seq' \gset
+SELECT last_value FROM app_analytics_events_mx_id_seq \gset
+ALTER SEQUENCE app_analytics_events_mx_id_seq NO MINVALUE NO MAXVALUE;
+SELECT setval('app_analytics_events_mx_id_seq'::regclass, 3940649673949184);
+
 INSERT INTO app_analytics_events_mx VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
 INSERT INTO app_analytics_events_mx (app_id, name) VALUES (102, 'Wayz') RETURNING id;
 INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNING *;
+
+-- clean up
+SELECT setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
+ALTER SEQUENCE app_analytics_events_mx_id_seq
+  MINVALUE :min_value MAXVALUE :max_value;

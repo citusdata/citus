@@ -1,6 +1,6 @@
-
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 820000;
-
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
 
 -- ===================================================================
 -- test shard repair functionality
@@ -37,7 +37,8 @@ SELECT shardid as newshardid FROM pg_dist_shard WHERE logicalrelid = 'customer_e
 \gset
 
 -- now, update the second placement as unhealthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_2_port;
+UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
+  AND groupid = :worker_2_group;
 
 -- cannot repair a shard after a modification (transaction still open during repair)
 BEGIN;
@@ -62,10 +63,14 @@ INSERT INTO customer_engagements VALUES (4, '04-01-2015', 'fourth event');
 ROLLBACK;
 
 -- add a fake healthy placement for the tests
-INSERT INTO pg_dist_shard_placement (nodename, nodeport, shardid, shardstate, shardlength)
-							 VALUES ('dummyhost', :worker_2_port, :newshardid, 1, 0);
 
-SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'dummyhost', :worker_2_port);
+INSERT INTO pg_dist_placement (groupid, shardid, shardstate, shardlength)
+							 VALUES (:worker_2_group, :newshardid, 1, 0);
+
+SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+
+DELETE FROM pg_dist_placement
+  WHERE groupid = :worker_2_group AND shardid = :newshardid AND shardstate = 1;
 
 -- also try to copy from an inactive placement
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
@@ -74,10 +79,7 @@ SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_2_port, 'lo
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 -- now, update first placement as unhealthy (and raise a notice) so that queries are not routed to there
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :newshardid AND nodeport = :worker_1_port;
-
--- we are done with dummyhost, it is safe to remove it
-DELETE FROM pg_dist_shard_placement WHERE nodename = 'dummyhost';
+UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid AND groupid = :worker_1_group;
 
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
@@ -100,7 +102,7 @@ SELECT shardid as remotenewshardid FROM pg_dist_shard WHERE logicalrelid = 'remo
 \gset
 
 -- now, update the second placement as unhealthy
-UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND nodeport = :worker_2_port;
+UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND groupid = :worker_2_group;
 
 -- oops! we don't support repairing shards backed by foreign tables
 SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);

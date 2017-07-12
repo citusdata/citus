@@ -8,8 +8,8 @@ CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
 
 -- add the nodes to the cluster
-SELECT master_add_node('localhost', :worker_1_port);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
@@ -27,7 +27,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- try to disable a node with no placements see that node is removed
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_disable_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
 
@@ -53,28 +53,30 @@ SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT master_activate_node('localhost', :worker_2_port);
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 
 
 -- mark all placements in the candidate node as inactive
-UPDATE pg_dist_shard_placement SET shardstate=3 WHERE nodeport=:worker_2_port;
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=:worker_2_group;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 
--- try to remove a node with only inactive placements and see that node is removed
+-- try to remove a node with only inactive placements and see that removal still fails
 SELECT master_remove_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
 
 -- clean-up
-SELECT master_add_node('localhost', :worker_2_port);
-UPDATE pg_dist_shard_placement SET shardstate=1 WHERE nodeport=:worker_2_port;
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=:worker_2_group;
+
 DROP TABLE cluster_management_test;
 
 -- check that adding/removing nodes are propagated to nodes with hasmetadata=true
 SELECT master_remove_node('localhost', :worker_2_port);
 UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
@@ -85,7 +87,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 
 -- check that added nodes are not propagated to nodes with hasmetadata=false
 UPDATE pg_dist_node SET hasmetadata=false WHERE nodeport=:worker_1_port;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
@@ -105,7 +107,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 -- check that mixed add/remove node commands work fine inside transaction
 BEGIN;
 SELECT master_remove_node('localhost', :worker_2_port);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_2_port);
 COMMIT;
 
@@ -113,9 +115,9 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 
 UPDATE pg_dist_node SET hasmetadata=true WHERE nodeport=:worker_1_port;
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_2_port);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 COMMIT;
 
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
@@ -125,14 +127,14 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :master_port
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-SELECT master_add_node('localhost', :worker_1_port);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- check that a distributed table can be created after adding a node in a transaction
 
 SELECT master_remove_node('localhost', :worker_2_port);
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 CREATE TABLE temp(col1 text, col2 int);
 SELECT create_distributed_table('temp', 'col1');
 INSERT INTO temp VALUES ('row1', 1);
@@ -155,7 +157,7 @@ DROP TABLE temp;
 \c - - - :worker_1_port
 DELETE FROM pg_dist_partition;
 DELETE FROM pg_dist_shard;
-DELETE FROM pg_dist_shard_placement;
+DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_node;
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

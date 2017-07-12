@@ -620,8 +620,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 
 		if (list_length(relationShardList) > 0)
 		{
-			placementAccessList = BuildPlacementSelectList(taskPlacement->nodeName,
-														   taskPlacement->nodePort,
+			placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
 														   relationShardList);
 		}
 		else
@@ -666,7 +665,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
  * GetPlacementListConnection.
  */
 List *
-BuildPlacementSelectList(char *nodeName, int nodePort, List *relationShardList)
+BuildPlacementSelectList(uint32 groupId, List *relationShardList)
 {
 	ListCell *relationShardCell = NULL;
 	List *placementAccessList = NIL;
@@ -677,12 +676,11 @@ BuildPlacementSelectList(char *nodeName, int nodePort, List *relationShardList)
 		ShardPlacement *placement = NULL;
 		ShardPlacementAccess *placementAccess = NULL;
 
-		placement = FindShardPlacementOnNode(nodeName, nodePort, relationShard->shardId);
+		placement = FindShardPlacementOnGroup(groupId, relationShard->shardId);
 		if (placement == NULL)
 		{
-			ereport(ERROR, (errmsg("no active placement of shard %ld found on node "
-								   "%s:%d",
-								   relationShard->shardId, nodeName, nodePort)));
+			ereport(ERROR, (errmsg("no active placement of shard %ld found on group %d",
+								   relationShard->shardId, groupId)));
 		}
 
 		placementAccess = CreatePlacementAccess(placement, PLACEMENT_ACCESS_SELECT);
@@ -886,8 +884,7 @@ GetModifyConnections(Task *task, bool markCritical, bool noNewTransactions)
 		ShardPlacementAccess *placementModification = NULL;
 
 		/* create placement accesses for placements that appear in a subselect */
-		placementAccessList = BuildPlacementSelectList(taskPlacement->nodeName,
-													   taskPlacement->nodePort,
+		placementAccessList = BuildPlacementSelectList(taskPlacement->groupId,
 													   relationShardList);
 
 		/* create placement access for the placement that we're modifying */

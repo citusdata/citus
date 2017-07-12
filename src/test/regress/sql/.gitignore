@@ -15,4 +15,5 @@
 /worker_copy.sql
 /multi_complex_count_distinct.sql
 /multi_mx_copy_data.sql
+/multi_behavioral_analytics_create_table.sql
 /multi_insert_select_behavioral_analytics_create_table.sql

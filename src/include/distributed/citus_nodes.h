@@ -37,6 +37,8 @@
  * Citus Node Tags
  *
  * These have to be distinct from the ideas used in postgres' nodes.h
+ *
+ * NOTE: This list must match CitusNodeTagNamesD from citus_nodefuncs.c
  */
 #define CITUS_NODE_TAG_START	1200
 typedef enum CitusNodeTag
@@ -58,7 +60,8 @@ typedef enum CitusNodeTag
 	T_ShardInterval,
 	T_ShardPlacement,
 	T_RelationShard,
-	T_DeferredErrorMessage
+	T_DeferredErrorMessage,
+	T_GroupShardPlacement
 } CitusNodeTag;
 
 
