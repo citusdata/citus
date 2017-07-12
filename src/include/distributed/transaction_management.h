@@ -68,6 +68,7 @@ typedef struct TmgmtBackendData
 {
 	Oid databaseId;
 	TmgmtTransactionId transactionId;
+	bool deadlockKilled;
 } TmgmtBackendData;
 
 

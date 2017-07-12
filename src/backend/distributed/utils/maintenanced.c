@@ -249,7 +249,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	{
 		int rc;
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
-		int timeout = 10000; /* wake up at least every so often */
+		int timeout = 1000; /* wake up at least every so often */
 
 		CHECK_FOR_INTERRUPTS();
 

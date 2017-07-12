@@ -79,6 +79,7 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	MyTmgmtBackendData->transactionId.nodeId = PG_GETARG_INT64(0);
 	MyTmgmtBackendData->transactionId.transactionId = PG_GETARG_INT64(1);
 	MyTmgmtBackendData->transactionId.timestamp = PG_GETARG_TIMESTAMPTZ(2);
+	MyTmgmtBackendData->deadlockKilled = false;
 
 	PG_RETURN_VOID();
 }
@@ -93,6 +94,7 @@ UnsetDistributedTransactionId(void)
 		MyTmgmtBackendData->transactionId.nodeId = 0;
 		MyTmgmtBackendData->transactionId.transactionId = 0;
 		MyTmgmtBackendData->transactionId.timestamp = 0;
+		MyTmgmtBackendData->deadlockKilled = false;
 	}
 }
 

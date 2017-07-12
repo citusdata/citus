@@ -43,6 +43,7 @@
 
 #include "access/hash.h"
 #include "distributed/connection_management.h"
+#include "distributed/deadlock.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
@@ -56,6 +57,7 @@ typedef struct LockDepNode
 	TmgmtTransactionId transactionId;
 	List *deps;
 	int initial_pid;
+	bool *deadlocked;
 	bool visited;
 } LockDepNode;
 
@@ -188,6 +190,7 @@ this_machine_kills_deadlocks(PG_FUNCTION_ARGS)
 
 		initialNode = LookupDepNode(lockDepNodeHash, &CurBackendData->transactionId);
 		initialNode->initial_pid = curProc->pid;
+		initialNode->deadlocked = &CurBackendData->deadlockKilled;
 	}
 	LWLockRelease(&TmgmtShmemControl->lock);
 
@@ -265,8 +268,7 @@ this_machine_kills_deadlocks(PG_FUNCTION_ARGS)
 				if (visitNode == curNode)
 				{
 					elog(WARNING, "found deadlock, killing: %d", curNode->initial_pid);
-					kill(curNode->initial_pid, SIGINT);
-					pg_usleep(100000);
+					*curNode->deadlocked = true;
 					kill(curNode->initial_pid, SIGINT);
 					PG_RETURN_BOOL(true);
 				}
@@ -923,4 +925,22 @@ LookupDepNode(HTAB *lockDepNodeHash, TmgmtTransactionId *transactionId)
 	}
 
 	return node;
+}
+
+
+void
+DeadlockLogHook(ErrorData *edata)
+{
+	if (edata->elevel != ERROR ||
+		edata->sqlerrcode != ERRCODE_QUERY_CANCELED)
+	{
+		return;
+	}
+
+	if (MyTmgmtBackendData->deadlockKilled)
+	{
+		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
+		edata->message = "deadlock detected";
+		edata->detail = "Check server log for detail.";
+	}
 }

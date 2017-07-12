@@ -22,6 +22,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/deadlock.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -165,6 +166,8 @@ _PG_init(void)
 	/* register for planner hook */
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
+
+	emit_log_hook = DeadlockLogHook;
 
 	InitializeMaintenanceDaemon();
 
