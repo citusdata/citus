@@ -27,8 +27,7 @@ typedef struct ShardConnections
 } ShardConnections;
 
 
-extern HTAB * OpenTransactionsToAllShardPlacements(List *shardIdList,
-												   int connectionFlags);
+extern HTAB * OpenTransactionsForAllTasks(List *taskList, int connectionFlags);
 extern HTAB * CreateShardConnectionHash(MemoryContext memoryContext);
 extern ShardConnections * GetShardHashConnections(HTAB *connectionHash, int64 shardId,
 												  bool *connectionsFound);

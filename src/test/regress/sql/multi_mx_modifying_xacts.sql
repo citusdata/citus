@@ -150,12 +150,6 @@ INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
 ABORT;
 
--- applies to DDL
-BEGIN;
-INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
-ALTER TABLE labs_mx ADD COLUMN motto text;
-COMMIT;
-
 -- doesn't apply to COPY after modifications
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');

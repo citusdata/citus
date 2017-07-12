@@ -382,7 +382,7 @@ SELECT create_distributed_table('products', 'product_no');
 BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
 
--- Should error out since conflicts with the above single-shard data modification command.
+-- DDL may error out after an INSERT because it might pick the wrong connection
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ROLLBACK;
 
@@ -393,7 +393,6 @@ ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ALTER COLUMN product_no SET NOT NULL;
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 
--- Single shard DML command can't be located in the same transaction with above commands.
 INSERT INTO products VALUES(1,'product_1', 10, 8);
 ROLLBACK;
 
