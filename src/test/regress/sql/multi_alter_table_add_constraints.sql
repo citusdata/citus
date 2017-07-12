@@ -5,7 +5,7 @@
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
-ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1450000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
 
 -- Check "PRIMARY KEY CONSTRAINT"
 CREATE TABLE products (
