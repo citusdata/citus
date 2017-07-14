@@ -309,15 +309,15 @@ CREATE TABLE multi_column_partition_2(
 );
 -- partitioning information
 SELECT generate_partition_information('multi_column_partitioned');
-          generate_partition_information           
----------------------------------------------------
- RANGE (a, ((a + b) + 1), some_function(upper(c)))
+           generate_partition_information            
+-----------------------------------------------------
+ RANGE (a, (((a + b) + 1)), some_function(upper(c)))
 (1 row)
 
 SELECT master_get_table_ddl_events('multi_column_partitioned');
-                                                            master_get_table_ddl_events                                                             
-----------------------------------------------------------------------------------------------------------------------------------------------------
- CREATE TABLE public.multi_column_partitioned (a integer, b integer, c text) PARTITION BY RANGE (a, ((a + b) + 1), public.some_function(upper(c))) 
+                                                             master_get_table_ddl_events                                                              
+------------------------------------------------------------------------------------------------------------------------------------------------------
+ CREATE TABLE public.multi_column_partitioned (a integer, b integer, c text) PARTITION BY RANGE (a, (((a + b) + 1)), public.some_function(upper(c))) 
 (1 row)
 
 SELECT drop_and_recreate_partitioned_table('multi_column_partitioned');
