@@ -34,6 +34,7 @@ extern char * pg_get_serverdef_string(Oid tableRelationId);
 extern char * pg_get_sequencedef_string(Oid sequenceRelid);
 extern Form_pg_sequence pg_get_sequencedef(Oid sequenceRelationId);
 extern char * pg_get_tableschemadef_string(Oid tableRelationId, bool forShardCreation);
+extern bool SupportedRelationKind(Relation relation);
 extern char * pg_get_tablecolumnoptionsdef_string(Oid tableRelationId);
 extern void deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid,
 										  int64 shardid, StringInfo buffer);
@@ -48,5 +49,9 @@ extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 
+/* TODO: THIS SHOULD NOT BE HERE */
+extern void CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
+									   char *colocateWithTableName,
+									   int shardCount, int replicationFactor);
 
 #endif /* CITUS_RULEUTILS_H */

@@ -16,6 +16,7 @@ extern bool PartitionTable(Oid relationId);
 extern bool IsChildTable(Oid relationId);
 extern bool IsParentTable(Oid relationId);
 extern List * PartitionList(Oid parentRelationId);
+extern Oid PartitionParentOid(Oid partitionOid);
 extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
 extern char * GenerateAlterTableAttachPartitionCommand(Oid partitionTableId);
 extern char * GeneratePartitioningInformation(Oid tableId);

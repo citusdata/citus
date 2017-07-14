@@ -31,6 +31,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/reference_table_utils.h"
@@ -251,6 +252,7 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	List *targetTableForeignConstraintCommands = NIL;
 	ListCell *sourceShardCell = NULL;
 	bool includeSequenceDefaults = false;
+	char *alterTableAttachPartitionCommand = NULL;
 
 	/* make sure that tables are hash partitioned */
 	CheckHashPartitionedTable(targetRelationId);
@@ -288,6 +290,13 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 	targetTableDDLEvents = GetTableDDLEvents(targetRelationId, includeSequenceDefaults);
 	targetTableForeignConstraintCommands = GetTableForeignConstraintCommands(
 		targetRelationId);
+
+	if (PartitionTable(targetRelationId))
+	{
+		alterTableAttachPartitionCommand =
+			GenerateAlterTableAttachPartitionCommand(targetRelationId);
+	}
+
 	targetShardStorageType = ShardStorageType(targetRelationId);
 
 	foreach(sourceShardCell, sourceShardIntervalList)
@@ -315,7 +324,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId)
 											 sourceNodePort, sourceShardIndex, newShardId,
 											 targetTableRelationOwner,
 											 targetTableDDLEvents,
-											 targetTableForeignConstraintCommands);
+											 targetTableForeignConstraintCommands,
+											 alterTableAttachPartitionCommand);
 			if (created)
 			{
 				const RelayFileState shardState = FILE_FINALIZED;
