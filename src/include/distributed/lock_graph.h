@@ -54,4 +54,7 @@ typedef struct WaitGraph
 } WaitGraph;
 
 
+extern WaitGraph * BuildGlobalWaitGraph(void);
+
+
 #endif /* LOCK_GRAPH_H */
