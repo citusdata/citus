@@ -164,6 +164,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			 * performed on CreateStmt should be done here too, we simply *fall
 			 * through* to avoid code repetition.
 			 */
+			__attribute__((fallthrough));
 		}
 
 		case T_CreateStmt:
