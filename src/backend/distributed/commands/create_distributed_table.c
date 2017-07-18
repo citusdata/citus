@@ -41,6 +41,7 @@
 #include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
+#include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "executor/executor.h"
@@ -71,7 +72,7 @@ int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
 static void CreateReferenceTable(Oid distributedRelationId);
 static void ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 									  char distributionMethod, char replicationModel,
-									  uint32 colocationId, bool requireEmpty);
+									  uint32 colocationId);
 static char LookupDistributionMethod(Oid distributionMethodOid);
 static Oid SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 									int16 supportFunctionNumber);
@@ -85,6 +86,11 @@ static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 #if (PG_VERSION_NUM >= 100000)
 static bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 #endif
+
+static void EnsureSchemaExistsOnAllNodes(Oid relationId);
+static void EnsureLocalTableEmpty(Oid relationId);
+static void EnsureTableNotDistributed(Oid relationId);
+static void EnsureIsTableId(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -108,8 +114,9 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
-	bool requireEmpty = true;
 
+	EnsureTableNotDistributed(distributedRelationId);
+	EnsureLocalTableEmpty(distributedRelationId);
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
 
@@ -125,7 +132,7 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 
 	ConvertToDistributedTable(distributedRelationId, distributionColumnName,
 							  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-							  INVALID_COLOCATION_ID, requireEmpty);
+							  INVALID_COLOCATION_ID);
 
 	PG_RETURN_VOID();
 }
@@ -182,7 +189,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	/* if distribution method is not hash, just create partition metadata */
 	if (distributionMethod != DISTRIBUTE_BY_HASH)
 	{
-		bool requireEmpty = true;
+		EnsureTableNotDistributed(relationId);
+		EnsureLocalTableEmpty(relationId);
 
 		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
 		{
@@ -193,7 +201,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 		ConvertToDistributedTable(relationId, distributionColumnName,
 								  distributionMethod, REPLICATION_MODEL_COORDINATOR,
-								  INVALID_COLOCATION_ID, requireEmpty);
+								  INVALID_COLOCATION_ID);
 		PG_RETURN_VOID();
 	}
 
@@ -239,7 +247,6 @@ CreateReferenceTable(Oid relationId)
 	List *workerNodeList = NIL;
 	int replicationFactor = 0;
 	char *distributionColumnName = NULL;
-	bool requireEmpty = true;
 	char relationKind = 0;
 
 	EnsureCoordinator();
@@ -262,15 +269,19 @@ CreateReferenceTable(Oid relationId)
 	relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_RELATION)
 	{
-		requireEmpty = false;
+		EnsureTableNotDistributed(relationId);
+	}
+	else
+	{
+		EnsureTableNotDistributed(relationId);
+		EnsureLocalTableEmpty(relationId);
 	}
 
 	colocationId = CreateReferenceTableColocationId();
 
 	/* first, convert the relation into distributed relation */
 	ConvertToDistributedTable(relationId, distributionColumnName,
-							  DISTRIBUTE_BY_NONE, REPLICATION_MODEL_2PC, colocationId,
-							  requireEmpty);
+							  DISTRIBUTE_BY_NONE, REPLICATION_MODEL_2PC, colocationId);
 
 	/* now, create the single shard replicated to all nodes */
 	CreateReferenceTableShard(relationId);
@@ -288,19 +299,17 @@ CreateReferenceTable(Oid relationId)
 /*
  * ConvertToDistributedTable converts the given regular PostgreSQL table into a
  * distributed table. First, it checks if the given table can be distributed,
- * then it creates related tuple in pg_dist_partition. If requireEmpty is true,
- * this function errors out when presented with a relation containing rows.
+ * then it creates related tuple in pg_dist_partition.
  *
  * XXX: We should perform more checks here to see if this table is fit for
  * partitioning. At a minimum, we should validate the following: (i) this node
  * runs as the master node, (ii) table does not make use of the inheritance
- * mechanism, (iii) table does not own columns that are sequences, and (iv)
- * table does not have collated columns.
+ * mechanism and (iii) table does not have collated columns.
  */
 static void
 ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 						  char distributionMethod, char replicationModel,
-						  uint32 colocationId, bool requireEmpty)
+						  uint32 colocationId)
 {
 	Relation relation = NULL;
 	TupleDesc relationDesc = NULL;
@@ -366,17 +375,6 @@ ConvertToDistributedTable(Oid relationId, char *distributionColumnName,
 								  "... AS IDENTITY.")));
 	}
 #endif
-
-	/* check that table is empty if that is required */
-	if (requireEmpty && !LocalTableEmpty(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-						errmsg("cannot distribute relation \"%s\"",
-							   relationName),
-						errdetail("Relation \"%s\" contains data.",
-								  relationName),
-						errhint("Empty your table before distributing it.")));
-	}
 
 	/*
 	 * Distribution column returns NULL for reference tables,
@@ -618,7 +616,7 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	uint32 colocationId = INVALID_COLOCATION_ID;
 	Oid sourceRelationId = InvalidOid;
 	Oid distributionColumnType = InvalidOid;
-	bool requireEmpty = true;
+	bool useExclusiveConnection = false;
 	char relationKind = 0;
 
 	/* get an access lock on the relation to prevent DROP TABLE and ALTER TABLE */
@@ -666,12 +664,26 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 	relationKind = get_rel_relkind(relationId);
 	if (relationKind == RELKIND_RELATION)
 	{
-		requireEmpty = false;
+		EnsureTableNotDistributed(relationId);
+		useExclusiveConnection = IsTransactionBlock() || !LocalTableEmpty(relationId);
+	}
+	else
+	{
+		EnsureTableNotDistributed(relationId);
+		EnsureLocalTableEmpty(relationId);
 	}
 
 	/* create distributed table metadata */
 	ConvertToDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_HASH,
-							  ReplicationModel, colocationId, requireEmpty);
+							  ReplicationModel, colocationId);
+
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
 
 	/* create shards */
 	if (sourceRelationId != InvalidOid)
@@ -681,11 +693,12 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 		CheckDistributionColumnType(sourceRelationId, relationId);
 
 
-		CreateColocatedShards(relationId, sourceRelationId);
+		CreateColocatedShards(relationId, sourceRelationId, useExclusiveConnection);
 	}
 	else
 	{
-		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor);
+		CreateShardsWithRoundRobinPolicy(relationId, shardCount, replicationFactor,
+										 useExclusiveConnection);
 	}
 
 	/* copy over data for regular relations */
@@ -696,6 +709,109 @@ CreateHashDistributedTable(Oid relationId, char *distributionColumnName,
 
 	heap_close(pgDistColocation, NoLock);
 	relation_close(distributedRelation, NoLock);
+}
+
+
+/*
+ * EnsureSchemaExistsOnAllNodes connects to all nodes with citus extension user
+ * and creates the schema of the given relationId. The function errors out if the
+ * command cannot be executed in any of the worker nodes.
+ */
+static void
+EnsureSchemaExistsOnAllNodes(Oid relationId)
+{
+	List *workerNodeList = ActiveWorkerNodeList();
+	ListCell *workerNodeCell = NULL;
+	StringInfo applySchemaCreationDDL = makeStringInfo();
+
+	Oid schemaId = get_rel_namespace(relationId);
+	const char *createSchemaDDL = CreateSchemaDDLCommand(schemaId);
+	uint64 connectionFlag = FORCE_NEW_CONNECTION;
+
+	if (createSchemaDDL == NULL)
+	{
+		return;
+	}
+
+	appendStringInfo(applySchemaCreationDDL, "%s", createSchemaDDL);
+
+	foreach(workerNodeCell, workerNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(workerNodeCell);
+		char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+		MultiConnection *connection =
+			GetNodeUserDatabaseConnection(connectionFlag, nodeName, nodePort, NULL,
+										  NULL);
+
+		ExecuteCriticalRemoteCommand(connection, applySchemaCreationDDL->data);
+	}
+}
+
+
+/*
+ * EnsureLocalTableEmpty errors out if the local table is not empty.
+ */
+static void
+EnsureLocalTableEmpty(Oid relationId)
+{
+	bool localTableEmpty = false;
+	char *relationName = get_rel_name(relationId);
+
+	localTableEmpty = LocalTableEmpty(relationId);
+
+	if (!localTableEmpty)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("cannot distribute relation \"%s\"", relationName),
+						errdetail("Relation \"%s\" contains data.", relationName),
+						errhint("Empty your table before distributing it.")));
+	}
+}
+
+
+/*
+ * EnsureIsTableId errors out if the id is not belong to a regular of foreign table.
+ */
+static void
+EnsureIsTableId(Oid relationId)
+{
+	Relation relation = relation_open(relationId, AccessShareLock);
+	char *relationName = get_rel_name(relationId);
+	char relationKind = 0;
+
+	/* verify target relation is either regular or foreign table */
+	relationKind = relation->rd_rel->relkind;
+	if (relationKind != RELKIND_RELATION && relationKind != RELKIND_FOREIGN_TABLE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("%s is not a regular or foreign table",
+							   relationName)));
+	}
+
+	relation_close(relation, NoLock);
+}
+
+
+/*
+ * EnsureTableNotDistributed errors out if the relationId doesn't belong to regular or foreign table
+ * or the table is distributed.
+ */
+static void
+EnsureTableNotDistributed(Oid relationId)
+{
+	char *relationName = get_rel_name(relationId);
+	bool isDistributedTable = false;
+
+	EnsureIsTableId(relationId);
+	isDistributedTable = IsDistributedTable(relationId);
+
+	if (isDistributedTable)
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+						errmsg("table \"%s\" is already distributed",
+							   relationName)));
+	}
 }
 
 
