@@ -119,15 +119,6 @@ ERROR:  cannot associate an existing sequence with a distributed table
 HINT:  Use a sequence in a distributed table by specifying a serial column type before creating any shards.
 -- an edge case, but it's OK to change an owner to the same distributed table
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
--- verify sequence was created on worker
-\c - - - :worker_1_port
-\ds
-                   List of relations
- Schema |          Name          |   Type   |  Owner   
---------+------------------------+----------+----------
- public | testserialtable_id_seq | sequence | postgres
-(1 row)
-
 -- drop distributed table
 \c - - - :master_port
 DROP TABLE testserialtable;

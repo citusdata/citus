@@ -128,7 +128,7 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schema
 
 -- the distributed table not exists on the worker node
 SELECT count(*) FROM pg_tables WHERE tablename = 'objects_for_xacts2' and schemaname = 'citus_mx_schema_for_xacts';
--- but the shard exists since we do not create shards in a transaction
+-- shard also does not exist since we create shards in a transaction
 SELECT count(*) FROM pg_tables WHERE tablename LIKE 'objects_for_xacts2_%' and schemaname = 'citus_mx_schema_for_xacts';
 
 -- make sure that master_drop_all_shards does not work from the worker nodes

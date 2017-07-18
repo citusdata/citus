@@ -440,8 +440,7 @@ SELECT master_create_distributed_table('customer_worker_copy_append_seq', 'id', 
 \c - - - 57637
 -- Test copy from the worker node
 COPY customer_worker_copy_append_seq FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
-ERROR:  cannot copy to table with serial column from worker
-HINT:  Connect to the master node to COPY to tables which use serial column types.
+ERROR:  relation "public.customer_worker_copy_append_seq_seq_seq" does not exist
 -- Connect back to the master node
 \c - - - 57636
 -- Create customer table for the worker copy with constraint and index
