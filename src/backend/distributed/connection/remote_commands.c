@@ -337,10 +337,11 @@ ExecuteOptionalRemoteCommand(MultiConnection *connection, const char *command,
 
 
 /*
- * SendRemoteCommand is a PQsendQuery wrapper that logs remote commands, and
- * accepts a MultiConnection instead of a plain PGconn.  It makes sure it can
+ * SendRemoteCommandParams is a PQsendQueryParams wrapper that logs remote commands,
+ * and accepts a MultiConnection instead of a plain PGconn. It makes sure it can
  * send commands asynchronously without blocking (at the potential expense of
- * an additional memory allocation).
+ * an additional memory allocation). The command string can only include a single
+ * command since PQsendQueryParams() supports only that.
  */
 int
 SendRemoteCommandParams(MultiConnection *connection, const char *command,
@@ -372,14 +373,33 @@ SendRemoteCommandParams(MultiConnection *connection, const char *command,
 
 /*
  * SendRemoteCommand is a PQsendQuery wrapper that logs remote commands, and
- * accepts a MultiConnection instead of a plain PGconn.  It makes sure it can
+ * accepts a MultiConnection instead of a plain PGconn. It makes sure it can
  * send commands asynchronously without blocking (at the potential expense of
- * an additional memory allocation).
+ * an additional memory allocation). The command string can include multiple
+ * commands since PQsendQuery() supports that.
  */
 int
 SendRemoteCommand(MultiConnection *connection, const char *command)
 {
-	return SendRemoteCommandParams(connection, command, 0, NULL, NULL);
+	PGconn *pgConn = connection->pgConn;
+	int rc = 0;
+
+	LogRemoteCommand(connection, command);
+
+	/*
+	 * Don't try to send command if connection is entirely gone
+	 * (PQisnonblocking() would crash).
+	 */
+	if (!pgConn)
+	{
+		return 0;
+	}
+
+	Assert(PQisnonblocking(pgConn));
+
+	rc = PQsendQuery(pgConn, command);
+
+	return rc;
 }
 
 

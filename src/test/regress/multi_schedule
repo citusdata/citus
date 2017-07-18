@@ -44,7 +44,7 @@ test: multi_insert_select
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
-test: multi_deparse_shard_query
+test: multi_deparse_shard_query multi_distributed_transaction_id
 test: multi_basic_queries multi_complex_expressions 
 test: multi_explain
 test: multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
