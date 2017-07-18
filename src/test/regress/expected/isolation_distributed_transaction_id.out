@@ -1,0 +1,112 @@
+Parsed test spec with 4 sessions
+
+starting permutation: s1-begin s1-assign-transaction-id s4-get-all-transactions s2-begin s2-assign-transaction-id s4-get-all-transactions s3-begin s3-assign-transaction-id s4-get-all-transactions s1-commit s4-get-all-transactions s2-commit s4-get-all-transactions s3-commit s4-get-all-transactions
+step s1-begin: 
+    BEGIN;
+
+step s1-assign-transaction-id: 
+    SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+1              1              Wed Dec 31 16:00:00 2014 PST
+step s2-begin: 
+    BEGIN;
+
+step s2-assign-transaction-id: 
+    SELECT assign_distributed_transaction_id(2, 2, '2015-01-02 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+1              1              Wed Dec 31 16:00:00 2014 PST
+2              2              Thu Jan 01 16:00:00 2015 PST
+step s3-begin: 
+    BEGIN;
+
+step s3-assign-transaction-id: 
+    SELECT assign_distributed_transaction_id(3, 3, '2015-01-03 00:00:00+0');
+
+assign_distributed_transaction_id
+
+               
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+1              1              Wed Dec 31 16:00:00 2014 PST
+2              2              Thu Jan 01 16:00:00 2015 PST
+3              3              Fri Jan 02 16:00:00 2015 PST
+step s1-commit: 
+    COMMIT;
+
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+2              2              Thu Jan 01 16:00:00 2015 PST
+3              3              Fri Jan 02 16:00:00 2015 PST
+step s2-commit: 
+    COMMIT;
+
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+3              3              Fri Jan 02 16:00:00 2015 PST
+step s3-commit: 
+    COMMIT;
+
+step s4-get-all-transactions: 
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_all_active_transactions() ORDER BY 1,2,3;
+
+initiator_node_identifiertransaction_numbertransaction_stamp
+
+
+starting permutation: s1-create-table s1-begin s1-insert s1-get-current-transaction-id s2-get-first-worker-active-transactions
+step s1-create-table: 
+	-- some tests also use distributed table
+	CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
+	SET citus.shard_count TO 4;
+	SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
+
+create_distributed_table
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-insert: 
+	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
+
+step s1-get-current-transaction-id: 
+	SELECT row(initiator_node_identifier, transaction_number) FROM  get_current_transaction_id();
+
+row            
+
+(0,186)        
+step s2-get-first-worker-active-transactions: 
+		SELECT * FROM run_command_on_workers('SELECT row(initiator_node_identifier, transaction_number)
+												FROM	 
+											  get_all_active_transactions();
+											') 
+		WHERE nodeport = 57637;
+;
+
+nodename       nodeport       success        result         
+
+localhost      57637          t              (0,186)        
