@@ -763,7 +763,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
 		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
 		char *nodeUser = CurrentUserName();
 		MultiConnection *connection = NULL;
-		uint32 connectionFlags = FOR_DML;
+		uint32 connectionFlags = FOR_DML | CONNECTION_PER_PLACEMENT;
 		StringInfo copyCommand = NULL;
 		PGresult *result = NULL;
 
