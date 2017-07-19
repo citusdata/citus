@@ -1343,9 +1343,7 @@ INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
 ROLLBACK;
 
--- Insert after copy is disallowed when the INSERT INTO ... SELECT  chooses
--- to use a connection for one shard, while the connection already modified
--- another shard.
+-- Insert after copy is allowed
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 100,100

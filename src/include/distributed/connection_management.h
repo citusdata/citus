@@ -37,7 +37,10 @@ enum MultiConnectionMode
 
 	FOR_DDL = 1 << 2,
 
-	FOR_DML = 1 << 3
+	FOR_DML = 1 << 3,
+
+	/* open a connection per (co-located set of) placement(s) */
+	CONNECTION_PER_PLACEMENT = 1 << 4
 };
 
 

@@ -382,7 +382,7 @@ SELECT create_distributed_table('products', 'product_no');
 BEGIN;
 INSERT INTO products VALUES(1,'product_1', 5);
 
--- DDL may error out after an INSERT because it might pick the wrong connection
+-- DDL should pick the right connections after a single INSERT
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
 ROLLBACK;
 
