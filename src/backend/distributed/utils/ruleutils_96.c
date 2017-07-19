@@ -4448,9 +4448,9 @@ isSimpleNode(Node *node, Node *parentNode, int prettyFlags)
 					return false;
 				}
 				/* else do the same stuff as for T_SubLink et al. */
-				/* FALL THROUGH */
 			}
 
+		/* fallthrough */
 		case T_SubLink:
 		case T_NullTest:
 		case T_BooleanTest:
