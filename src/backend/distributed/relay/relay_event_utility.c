@@ -165,6 +165,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			 * through* to avoid code repetition.
 			 */
 		}
+
 		/* fallthrough */
 		case T_CreateStmt:
 		{
