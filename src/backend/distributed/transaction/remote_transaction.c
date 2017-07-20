@@ -20,6 +20,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
+#include "distributed/transaction_identifier.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
@@ -856,11 +857,27 @@ CheckTransactionHealth(void)
 
 
 /*
- * Assign2PCIdentifier compute the 2PC transaction name to use for a
- * transaction.
+ * Assign2PCIdentifier computes the 2PC transaction name to use for a
+ * transaction. Every prepared transaction should get a new name, i.e. this
+ * function will need to be called again.
  *
- * Every 2PC transaction should get a new name, i.e. this function will need
- * to be called again.
+ * The format of the name is:
+ *
+ * citus_<source group>_<pid>_<distributed transaction number>_<connection number>
+ *
+ * (at most 5+1+10+1+10+20+1+10 = 58 characters, while limit is 64)
+ *
+ * The source group is used to distinguish 2PCs started by different
+ * coordinators. A coordinator will only attempt to recover its own 2PCs.
+ *
+ * The pid is used to distinguish different processes on the coordinator, mainly
+ * to provide some entropy across restarts.
+ *
+ * The distributed transaction number is used to distinguish different
+ * transactions originating from the same node (since restart).
+ *
+ * The connection number is used to distinguish connections made to a node
+ * within the same transaction.
  *
  * NB: we rely on the fact that we don't need to do full escaping on the names
  * generated here.
@@ -868,10 +885,16 @@ CheckTransactionHealth(void)
 static void
 Assign2PCIdentifier(MultiConnection *connection)
 {
-	static uint64 sequence = 0;
+	/* local sequence number used to distinguish different connections */
+	static uint32 connectionNumber = 0;
+
+	/* transaction identifier that is unique across processes */
+	uint64 transactionNumber = CurrentDistributedTransactionNumber();
+
+	/* print all numbers as unsigned to guarantee no minus symbols appear in the name */
 	snprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
-			 "citus_%d_%d_"UINT64_FORMAT, GetLocalGroupId(),
-			 MyProcPid, sequence++);
+			 "citus_%u_%u_"UINT64_FORMAT "_%u", GetLocalGroupId(), MyProcPid,
+			 transactionNumber, connectionNumber++);
 }
 
 
