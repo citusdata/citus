@@ -145,7 +145,7 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
 	}
 
-	distributedTransctionId = GetCurrentDistributedTransctionId();
+	distributedTransctionId = GetCurrentDistributedTransactionId();
 
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
@@ -434,11 +434,11 @@ UnSetDistributedTransactionId(void)
 
 
 /*
- * GetCurrentDistributedTransctionId reads the backend's distributed transaction id and
+ * GetCurrentDistributedTransactionId reads the backend's distributed transaction id and
  * returns a copy of it.
  */
 DistributedTransactionId *
-GetCurrentDistributedTransctionId(void)
+GetCurrentDistributedTransactionId(void)
 {
 	DistributedTransactionId *currentDistributedTransactionId =
 		(DistributedTransactionId *) palloc(sizeof(DistributedTransactionId));
