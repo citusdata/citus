@@ -64,7 +64,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 * and send both in one step. The reason is purely performance, we don't want
 	 * seperate roundtrips for these two statements.
 	 */
-	distributedTransactionId = GetCurrentDistributedTransctionId();
+	distributedTransactionId = GetCurrentDistributedTransactionId();
 	appendStringInfo(beginAndSetDistributedTransactionId,
 					 "SELECT assign_distributed_transaction_id(%d, %ld, '%s')",
 					 distributedTransactionId->initiatorNodeIdentifier,
