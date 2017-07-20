@@ -169,6 +169,27 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
  (1380001,1380001,localhost,57638,default,f,t)
 (1 row)
 
+-- try to disable the node before removing it (this used to crash)
+SELECT master_disable_node('localhost', :worker_2_port);
+ master_disable_node 
+---------------------
+ 
+(1 row)
+
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
+-- re-add the node for the next test
+SELECT master_add_node('localhost', :worker_2_port);
+NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
+                master_add_node                
+-----------------------------------------------
+ (1380002,1380002,localhost,57638,default,f,t)
+(1 row)
+
 -- remove node in a transaction and ROLLBACK
 -- status before master_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -389,7 +410,7 @@ SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                 master_add_node                
 -----------------------------------------------
- (1380002,1380002,localhost,57638,default,f,t)
+ (1380003,1380003,localhost,57638,default,f,t)
 (1 row)
 
 -- test inserting a value then removing a node in a transaction
@@ -518,7 +539,7 @@ SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                 master_add_node                
 -----------------------------------------------
- (1380003,1380003,localhost,57638,default,f,t)
+ (1380004,1380004,localhost,57638,default,f,t)
 (1 row)
 
 -- test executing DDL command then removing a node in a transaction
@@ -643,7 +664,7 @@ SELECT master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "remove_node_reference_table" to the node localhost:57638
                 master_add_node                
 -----------------------------------------------
- (1380004,1380004,localhost,57638,default,f,t)
+ (1380005,1380005,localhost,57638,default,f,t)
 (1 row)
 
 -- test DROP table after removing a node in a transaction
@@ -711,7 +732,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
 SELECT master_add_node('localhost', :worker_2_port);
                 master_add_node                
 -----------------------------------------------
- (1380005,1380005,localhost,57638,default,f,t)
+ (1380006,1380006,localhost,57638,default,f,t)
 (1 row)
 
 -- re-create remove_node_reference_table
@@ -846,7 +867,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 NOTICE:  Replicating reference table "table1" to the node localhost:57638
                 master_add_node                
 -----------------------------------------------
- (1380006,1380006,localhost,57638,default,f,t)
+ (1380007,1380007,localhost,57638,default,f,t)
 (1 row)
 
 -- test with master_disable_node
@@ -963,7 +984,7 @@ NOTICE:  Replicating reference table "remove_node_reference_table" to the node l
 NOTICE:  Replicating reference table "table1" to the node localhost:57638
              master_activate_node              
 -----------------------------------------------
- (1380006,1380006,localhost,57638,default,f,t)
+ (1380007,1380007,localhost,57638,default,f,t)
 (1 row)
 
 -- DROP tables to clean workspace

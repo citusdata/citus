@@ -406,25 +406,29 @@ DeleteAllReferenceTablePlacementsFromNode(char *workerName, uint32 workerPort)
 	referenceTableList = SortList(referenceTableList, CompareOids);
 	foreach(referenceTableCell, referenceTableList)
 	{
+		GroupShardPlacement *placement = NULL;
+		StringInfo deletePlacementCommand = makeStringInfo();
+
 		uint32 workerGroup = GroupForNode(workerName, workerPort);
 
 		Oid referenceTableId = lfirst_oid(referenceTableCell);
 		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
 															   workerGroup);
-		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
+		if (list_length(placements) == 0)
+		{
+			/* this happens if the node was previously disabled */
+			continue;
+		}
 
-		uint64 shardId = placement->shardId;
-		uint64 placementId = placement->placementId;
+		placement = (GroupShardPlacement *) linitial(placements);
 
-		StringInfo deletePlacementCommand = makeStringInfo();
+		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
-		LockShardDistributionMetadata(shardId, ExclusiveLock);
-
-		DeleteShardPlacementRow(placementId);
+		DeleteShardPlacementRow(placement->placementId);
 
 		appendStringInfo(deletePlacementCommand,
 						 "DELETE FROM pg_dist_placement WHERE placementid=%lu",
-						 placementId);
+						 placement->placementId);
 		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
 	}
 }
