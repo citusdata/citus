@@ -487,3 +487,17 @@ AssignDistributedTransactionId(void)
 
 	SpinLockRelease(&MyBackendData->mutex);
 }
+
+
+/*
+ * CurrentDistributedTransactionNumber returns the transaction number of the
+ * current distributed transaction. The caller must make sure a distributed
+ * transaction is in progress.
+ */
+uint64
+CurrentDistributedTransactionNumber(void)
+{
+	Assert(MyBackendData != NULL);
+
+	return MyBackendData->transactionId.transactionNumber;
+}
