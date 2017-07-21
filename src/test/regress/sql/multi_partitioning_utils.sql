@@ -223,7 +223,7 @@ SELECT drop_and_recreate_partitioned_table('multi_column_partitioned');
 -- partitions and their ranges
 ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_1 FOR VALUES FROM (1, 10, '250') TO (1, 20, '250');
 SELECT generate_alter_table_attach_partition_command('multi_column_partition_1');
-ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (UNBOUNDED, UNBOUNDED, UNBOUNDED);
+ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (MAXVALUE, MAXVALUE, MAXVALUE);
 SELECT generate_alter_table_attach_partition_command('multi_column_partition_2');
 SELECT generate_alter_table_detach_partition_command('multi_column_partition_2');
 
