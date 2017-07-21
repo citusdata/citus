@@ -5796,8 +5796,10 @@ get_rule_expr(Node *node, deparse_context *context,
 							Const	   *val;
 
 							appendStringInfoString(buf, sep);
-							if (datum->infinite)
-								appendStringInfoString(buf, "UNBOUNDED");
+							if (datum->kind == PARTITION_RANGE_DATUM_MINVALUE)
+								appendStringInfoString(buf, "MINVALUE");
+							else if (datum->kind == PARTITION_RANGE_DATUM_MAXVALUE)
+								appendStringInfoString(buf, "MAXVALUE");
 							else
 							{
 								val = (Const *) datum->value;
@@ -5816,8 +5818,10 @@ get_rule_expr(Node *node, deparse_context *context,
 							Const	   *val;
 
 							appendStringInfoString(buf, sep);
-							if (datum->infinite)
-								appendStringInfoString(buf, "UNBOUNDED");
+							if (datum->kind == PARTITION_RANGE_DATUM_MINVALUE)
+								appendStringInfoString(buf, "MINVALUE");
+							else if (datum->kind == PARTITION_RANGE_DATUM_MAXVALUE)
+								appendStringInfoString(buf, "MAXVALUE");
 							else
 							{
 								val = (Const *) datum->value;

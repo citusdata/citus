@@ -279,7 +279,7 @@ SELECT generate_alter_table_attach_partition_command('multi_column_partition_1')
  
 (1 row)
 
-ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (UNBOUNDED, UNBOUNDED, UNBOUNDED);
+ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_column_partition_2 FOR VALUES FROM (10, 1000, '2500') TO (MAXVALUE, MAXVALUE, MAXVALUE);
 ERROR:  syntax error at or near "ATTACH"
 LINE 1: ALTER TABLE multi_column_partitioned ATTACH PARTITION multi_...
                                              ^
