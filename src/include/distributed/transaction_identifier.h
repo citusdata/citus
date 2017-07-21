@@ -34,6 +34,7 @@ typedef struct DistributedTransactionId
 } DistributedTransactionId;
 
 
-extern DistributedTransactionId * GetCurrentDistributedTransctionId(void);
+extern DistributedTransactionId * GetCurrentDistributedTransactionId(void);
+extern uint64 CurrentDistributedTransactionNumber(void);
 
 #endif /* TRANSACTION_IDENTIFIER_H */
