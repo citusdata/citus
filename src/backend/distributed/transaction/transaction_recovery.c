@@ -105,7 +105,7 @@ LogTransactionRecord(int groupId, char *transactionName)
 	CommandCounterIncrement();
 
 	/* close relation and invalidate previous cache entry */
-	heap_close(pgDistTransaction, RowExclusiveLock);
+	heap_close(pgDistTransaction, NoLock);
 }
 
 
