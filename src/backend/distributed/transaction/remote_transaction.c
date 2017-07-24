@@ -24,6 +24,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
+#include "storage/lmgr.h"
 #include "utils/hsearch.h"
 
 
@@ -661,6 +662,12 @@ void
 CoordinatedRemoteTransactionsPrepare(void)
 {
 	dlist_iter iter;
+
+	/*
+	 * Lock transaction metadata here to prevent transaction recovery from
+	 * getting inconsistent pending transactions list.
+	 */
+	LockRelationOid(DistTransactionRelationId(), RowExclusiveLock);
 
 	/* issue PREPARE TRANSACTION; to all relevant remote nodes */
 
