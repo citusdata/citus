@@ -1,0 +1,25 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-insert-1 s2-insert s1-finish s2-finish
+create_distributed_table
+
+               
+step s1-insert-1: 
+  BEGIN;
+  INSERT INTO test_locking (a) VALUES (1);
+
+step s2-insert: 
+  BEGIN;
+  INSERT INTO test_locking (a) VALUES (1);
+ <waiting ...>
+step s1-finish: 
+  COMMIT;
+
+step s2-insert: <... completed>
+error in steps s1-finish s2-insert: ERROR:  duplicate key value violates unique constraint "test_locking_a_key_102751"
+step s2-finish: 
+  COMMIT;
+
+restore_isolation_tester_func
+
+               
