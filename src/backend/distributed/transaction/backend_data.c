@@ -92,7 +92,7 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	/* if an id is already assigned, release the lock and error */
-	if (MyBackendData->transactionId.initiatorNodeIdentifier != 0)
+	if (MyBackendData->transactionId.transactionNumber != 0)
 	{
 		SpinLockRelease(&MyBackendData->mutex);
 
