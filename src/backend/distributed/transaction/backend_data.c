@@ -23,7 +23,6 @@
 #include "distributed/transaction_identifier.h"
 #include "nodes/execnodes.h"
 #include "storage/ipc.h"
-#include "storage/lwlock.h"
 #include "storage/proc.h"
 #include "storage/spin.h"
 #include "storage/s_lock.h"
@@ -36,14 +35,6 @@
  */
 typedef struct BackendManagementShmemData
 {
-	int trancheId;
-#if (PG_VERSION_NUM >= 100000)
-	NamedLWLockTranche namedLockTranche;
-#else
-	LWLockTranche lockTranche;
-#endif
-	LWLock lock;
-
 	/*
 	 * We prefer to use an atomic integer over sequences for two
 	 * reasons (i) orders of magnitude performance difference
@@ -236,9 +227,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	/* we're reading all the backend data, take a lock to prevent concurrent additions */
-	LWLockAcquire(AddinShmemInitLock, LW_SHARED);
-
 	for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		BackendData *currentBackend =
@@ -271,8 +259,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 		memset(values, 0, sizeof(values));
 		memset(isNulls, false, sizeof(isNulls));
 	}
-
-	LWLockRelease(AddinShmemInitLock);
 
 	/* clean up and return the tuplestore */
 	tuplestore_donestoring(tupleStore);
@@ -318,38 +304,6 @@ BackendManagementShmemInit(void)
 	if (!alreadyInitialized)
 	{
 		int backendIndex = 0;
-		char *trancheName = "Backend Management Tranche";
-
-#if (PG_VERSION_NUM >= 100000)
-		NamedLWLockTranche *namedLockTranche =
-			&backendManagementShmemData->namedLockTranche;
-
-#else
-		LWLockTranche *lockTranche = &backendManagementShmemData->lockTranche;
-#endif
-
-		/* start by zeroing out all the memory */
-		memset(backendManagementShmemData, 0,
-			   BackendManagementShmemSize());
-
-#if (PG_VERSION_NUM >= 100000)
-		namedLockTranche->trancheId = LWLockNewTrancheId();
-
-		LWLockRegisterTranche(namedLockTranche->trancheId, trancheName);
-		LWLockInitialize(&backendManagementShmemData->lock,
-						 namedLockTranche->trancheId);
-#else
-		backendManagementShmemData->trancheId = LWLockNewTrancheId();
-
-		/* we only need a single lock */
-		lockTranche->array_base = &backendManagementShmemData->lock;
-		lockTranche->array_stride = sizeof(LWLock);
-		lockTranche->name = trancheName;
-
-		LWLockRegisterTranche(backendManagementShmemData->trancheId, lockTranche);
-		LWLockInitialize(&backendManagementShmemData->lock,
-						 backendManagementShmemData->trancheId);
-#endif
 
 		/* start the distributed transaction ids from 1 */
 		pg_atomic_init_u64(&backendManagementShmemData->nextTransactionNumber, 1);
