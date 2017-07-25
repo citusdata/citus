@@ -227,9 +227,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	/* we're reading all the backend data, take a lock to prevent concurrent additions */
-	LWLockAcquire(AddinShmemInitLock, LW_SHARED);
-
 	for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
 		BackendData *currentBackend =
@@ -262,8 +259,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 		memset(values, 0, sizeof(values));
 		memset(isNulls, false, sizeof(isNulls));
 	}
-
-	LWLockRelease(AddinShmemInitLock);
 
 	/* clean up and return the tuplestore */
 	tuplestore_donestoring(tupleStore);
