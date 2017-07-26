@@ -53,6 +53,7 @@ typedef struct WorkerNode
 /* Config variables managed via guc.c */
 extern int MaxWorkerNodesTracked;
 extern char *WorkerListFileName;
+extern char *CurrentCluster;
 
 
 /* Function declarations for finding worker nodes to place shards on */
