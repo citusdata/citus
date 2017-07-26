@@ -17,7 +17,7 @@
 #include "nodes/pg_list.h"
 
 
-/* Worker node name's maximum length */
+/* Worker nodeName's, nodePort's, and nodeCluster's maximum length */
 #define WORKER_LENGTH 256
 
 /* Maximum length of worker port number (represented as string) */
@@ -44,6 +44,7 @@ typedef struct WorkerNode
 	bool hasMetadata;                   /* node gets metadata changes */
 	bool isActive;                      /* node's state */
 	Oid nodeRole;                       /* the node's role in its group */
+	char nodeCluster[NAMEDATALEN];      /* the cluster the node is a part of */
 } WorkerNode;
 
 

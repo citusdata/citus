@@ -281,16 +281,16 @@ SELECT count(1) FROM pg_dist_node;
 SELECT
 	master_add_node('localhost', :worker_1_port),
 	master_add_node('localhost', :worker_2_port);
-              master_add_node              |              master_add_node              
--------------------------------------------+-------------------------------------------
- (8,7,localhost,57637,default,f,t,primary) | (9,8,localhost,57638,default,f,t,primary)
+                  master_add_node                  |                  master_add_node                  
+---------------------------------------------------+---------------------------------------------------
+ (8,7,localhost,57637,default,f,t,primary,default) | (9,8,localhost,57638,default,f,t,primary,default)
 (1 row)
 
 SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole 
---------+---------+-----------+----------+----------+-------------+----------+----------
-      8 |       7 | localhost |    57637 | default  | f           | t        | primary
-      9 |       8 | localhost |    57638 | default  | f           | t        | primary
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster 
+--------+---------+-----------+----------+----------+-------------+----------+----------+-------------
+      8 |       7 | localhost |    57637 | default  | f           | t        | primary  | default
+      9 |       8 | localhost |    57638 | default  | f           | t        | primary  | default
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction

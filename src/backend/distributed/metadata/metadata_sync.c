@@ -426,7 +426,7 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, isactive, noderole) VALUES ");
+					 "noderack, hasmetadata, isactive, noderole, nodecluster) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	foreach(workerNodeCell, workerNodeList)
@@ -440,7 +440,7 @@ NodeListInsertCommand(List *workerNodeList)
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole)",
+						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -448,7 +448,8 @@ NodeListInsertCommand(List *workerNodeList)
 						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadataString,
 						 isActiveString,
-						 nodeRoleString);
+						 nodeRoleString,
+						 quote_literal_cstr(workerNode->nodeCluster));
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)

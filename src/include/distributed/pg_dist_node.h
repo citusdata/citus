@@ -12,30 +12,6 @@
 #define PG_DIST_NODE_H
 
 /* ----------------
- *		pg_dist_node definition.
- * ----------------
- */
-typedef struct FormData_pg_dist_node
-{
-	int nodeid;
-	int groupid;
-#ifdef CATALOG_VARLEN
-	text nodename;
-	int nodeport;
-	bool hasmetadata;
-	bool isactive
-	Oid noderole;
-#endif
-} FormData_pg_dist_node;
-
-/* ----------------
- *      Form_pg_dist_partitions corresponds to a pointer to a tuple with
- *      the format of pg_dist_partitions relation.
- * ----------------
- */
-typedef FormData_pg_dist_node *Form_pg_dist_node;
-
-/* ----------------
  *      compiler constants for pg_dist_node
  * ----------------
  *
@@ -44,7 +20,7 @@ typedef FormData_pg_dist_node *Form_pg_dist_node;
  *  in particular their OUT parameters) must be changed whenever the definition of
  *  pg_dist_node changes.
  */
-#define Natts_pg_dist_node 8
+#define Natts_pg_dist_node 9
 #define Anum_pg_dist_node_nodeid 1
 #define Anum_pg_dist_node_groupid 2
 #define Anum_pg_dist_node_nodename 3
@@ -53,6 +29,7 @@ typedef FormData_pg_dist_node *Form_pg_dist_node;
 #define Anum_pg_dist_node_hasmetadata 6
 #define Anum_pg_dist_node_isactive 7
 #define Anum_pg_dist_node_noderole 8
+#define Anum_pg_dist_node_nodecluster 9
 
 #define GROUPID_SEQUENCE_NAME "pg_dist_groupid_seq"
 #define NODEID_SEQUENCE_NAME "pg_dist_node_nodeid_seq"
