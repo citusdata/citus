@@ -35,6 +35,8 @@ typedef struct BackendData
 
 extern void InitializeBackendManagement(void);
 extern void InitializeBackendData(void);
+extern void LockBackendSharedMemory(LWLockMode lockMode);
+extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
 extern void AssignDistributedTransactionId(void);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
