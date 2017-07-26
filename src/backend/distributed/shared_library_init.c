@@ -670,6 +670,16 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.cluster_name",
+		gettext_noop("Which cluster this node is a part of"),
+		NULL,
+		&CurrentCluster,
+		"default",
+		PGC_SU_BACKEND,
+		0,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_version_checks",
 		gettext_noop("Enables version checks during CREATE/ALTER EXTENSION commands"),

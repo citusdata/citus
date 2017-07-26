@@ -49,6 +49,8 @@
 /* default group size */
 int GroupSize = 1;
 
+/* config variable managed via guc.c */
+char *CurrentCluster = "default";
 
 /* local function forward declarations */
 static Datum ActivateNode(char *nodeName, int nodePort);
@@ -395,7 +397,7 @@ master_initialize_node_metadata(PG_FUNCTION_ARGS)
 
 	/* nodeRole and nodeCluster don't exist when this function is caled */
 	Oid nodeRole = InvalidOid;
-	char *nodeCluster = "default";
+	char *nodeCluster = WORKER_DEFAULT_CLUSTER;
 
 	CheckCitusVersion(ERROR);
 
@@ -556,7 +558,12 @@ ReadWorkerNodes()
 	while (HeapTupleIsValid(heapTuple))
 	{
 		WorkerNode *workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
-		workerNodeList = lappend(workerNodeList, workerNode);
+
+		if (strncmp(workerNode->nodeCluster, CurrentCluster, WORKER_LENGTH) == 0)
+		{
+			/* the coordinator acts as if it never sees nodes not in it's cluster */
+			workerNodeList = lappend(workerNodeList, workerNode);
+		}
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}
