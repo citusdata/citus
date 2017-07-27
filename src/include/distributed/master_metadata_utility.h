@@ -30,6 +30,7 @@
 #define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
+#define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
 #if (PG_VERSION_NUM < 100000)
 static inline void
