@@ -80,10 +80,12 @@ task_tracker_assign_task(PG_FUNCTION_ARGS)
 	}
 
 	/* check that we have enough space in our shared hash for this string */
-	if (taskCallStringLength >= TASK_CALL_STRING_SIZE)
+	if (taskCallStringLength >= MaxTaskStringSize)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("task call string exceeds maximum assignable length")));
+						errmsg("task string length (%d) exceeds maximum assignable "
+							   "size (%d)", taskCallStringLength, MaxTaskStringSize),
+						errhint("Consider increasing citus.max_task_string_size.")));
 	}
 
 	/*
@@ -333,7 +335,7 @@ CreateTask(uint64 jobId, uint32 taskId, char *taskCallString)
 	/* enter the worker task into shared hash and initialize the task */
 	workerTask = WorkerTasksHashEnter(jobId, taskId);
 	workerTask->assignedAt = assignmentTime;
-	strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+	strlcpy(workerTask->taskCallString, taskCallString, MaxTaskStringSize);
 
 	workerTask->taskStatus = TASK_ASSIGNED;
 	workerTask->connectionId = INVALID_CONNECTION_ID;
@@ -370,13 +372,13 @@ UpdateTask(WorkerTask *workerTask, char *taskCallString)
 	}
 	else if (taskStatus == TASK_PERMANENTLY_FAILED)
 	{
-		strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+		strlcpy(workerTask->taskCallString, taskCallString, MaxTaskStringSize);
 		workerTask->failureCount = 0;
 		workerTask->taskStatus = TASK_ASSIGNED;
 	}
 	else
 	{
-		strlcpy(workerTask->taskCallString, taskCallString, TASK_CALL_STRING_SIZE);
+		strlcpy(workerTask->taskCallString, taskCallString, MaxTaskStringSize);
 		workerTask->failureCount = 0;
 	}
 }

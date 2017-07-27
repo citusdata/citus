@@ -72,6 +72,9 @@ typedef enum
  * master node, (b) state initialized by the protocol process at task assignment
  * time, and (c) state internal to the task tracker process that changes as the
  * task make progress.
+ *
+ * Since taskCallString is dynamically sized use WORKER_TASK_SIZE instead of
+ * sizeof(WorkerTask). Use WORKER_TASK_AT to reference an item in WorkerTask array.
  */
 typedef struct WorkerTask
 {
@@ -79,14 +82,18 @@ typedef struct WorkerTask
 	uint32 taskId;     /* task id; part of hash table key */
 	uint32 assignedAt; /* task assignment time in epoch seconds */
 
-	char taskCallString[TASK_CALL_STRING_SIZE]; /* query or function call string */
 	TaskStatus taskStatus;  /* task's current execution status */
 	char databaseName[NAMEDATALEN];   /* name to use for local backend connection */
 	char userName[NAMEDATALEN]; /* user to use for local backend connection */
 	int32 connectionId;     /* connection id to local backend */
 	uint32 failureCount;    /* number of task failures */
+	char taskCallString[FLEXIBLE_ARRAY_MEMBER]; /* query or function call string */
 } WorkerTask;
 
+#define WORKER_TASK_SIZE (offsetof(WorkerTask, taskCallString) + MaxTaskStringSize)
+
+#define WORKER_TASK_AT(workerTasks, index) \
+	((WorkerTask *) (((char *) (workerTasks)) + (index) * WORKER_TASK_SIZE))
 
 /*
  * WorkerTasksControlData contains task tracker state shared between
@@ -112,6 +119,7 @@ typedef struct WorkerTasksSharedStateData
 extern int TaskTrackerDelay;
 extern int MaxTrackedTasksPerNode;
 extern int MaxRunningTasksPerNode;
+extern int MaxTaskStringSize;
 
 /* State shared by the task tracker and task tracker protocol functions */
 extern WorkerTasksSharedStateData *WorkerTasksSharedState;

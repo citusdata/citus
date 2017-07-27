@@ -53,6 +53,7 @@
 int TaskTrackerDelay = 200;       /* process sleep interval in millisecs */
 int MaxRunningTasksPerNode = 16;  /* max number of running tasks */
 int MaxTrackedTasksPerNode = 1024; /* max number of tracked tasks */
+int MaxTaskStringSize = 12288; /* max size of a worker task call string in bytes */
 WorkerTasksSharedStateData *WorkerTasksSharedState; /* shared memory state */
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -390,7 +391,7 @@ TrackerCleanupJobSchemas(void)
 		cleanupTask->assignedAt = HIGH_PRIORITY_TASK_TIME;
 		cleanupTask->taskStatus = TASK_ASSIGNED;
 
-		strlcpy(cleanupTask->taskCallString, JOB_SCHEMA_CLEANUP, TASK_CALL_STRING_SIZE);
+		strlcpy(cleanupTask->taskCallString, JOB_SCHEMA_CLEANUP, MaxTaskStringSize);
 		strlcpy(cleanupTask->databaseName, databaseName, NAMEDATALEN);
 
 		/* zero out all other fields */
@@ -532,7 +533,7 @@ TaskTrackerShmemSize(void)
 
 	size = add_size(size, sizeof(WorkerTasksSharedStateData));
 
-	hashSize = hash_estimate_size(MaxTrackedTasksPerNode, sizeof(WorkerTask));
+	hashSize = hash_estimate_size(MaxTrackedTasksPerNode, WORKER_TASK_SIZE);
 	size = add_size(size, hashSize);
 
 	return size;
@@ -559,7 +560,7 @@ TaskTrackerShmemInit(void)
 	 */
 	memset(&info, 0, sizeof(info));
 	info.keysize = sizeof(uint64) + sizeof(uint32);
-	info.entrysize = sizeof(WorkerTask);
+	info.entrysize = WORKER_TASK_SIZE;
 	info.hash = tag_hash;
 	hashFlags = (HASH_ELEM | HASH_FUNCTION);
 
@@ -662,9 +663,10 @@ SchedulableTaskList(HTAB *WorkerTasksHash)
 
 	for (queueIndex = 0; queueIndex < tasksToScheduleCount; queueIndex++)
 	{
-		WorkerTask *schedulableTask = (WorkerTask *) palloc0(sizeof(WorkerTask));
-		schedulableTask->jobId = schedulableTaskQueue[queueIndex].jobId;
-		schedulableTask->taskId = schedulableTaskQueue[queueIndex].taskId;
+		WorkerTask *schedulableTask = (WorkerTask *) palloc0(WORKER_TASK_SIZE);
+		WorkerTask *queuedTask = WORKER_TASK_AT(schedulableTaskQueue, queueIndex);
+		schedulableTask->jobId = queuedTask->jobId;
+		schedulableTask->taskId = queuedTask->taskId;
 
 		schedulableTaskList = lappend(schedulableTaskList, schedulableTask);
 	}
@@ -698,7 +700,7 @@ SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 	}
 
 	/* allocate an array of tasks for our priority queue */
-	priorityQueue = (WorkerTask *) palloc0(sizeof(WorkerTask) * queueSize);
+	priorityQueue = (WorkerTask *) palloc0(WORKER_TASK_SIZE * queueSize);
 
 	/* copy tasks in the shared hash to the priority queue */
 	hash_seq_init(&status, WorkerTasksHash);
@@ -709,9 +711,11 @@ SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 		if (SchedulableTask(currentTask))
 		{
 			/* tasks in the priority queue only need the first three fields */
-			priorityQueue[queueIndex].jobId = currentTask->jobId;
-			priorityQueue[queueIndex].taskId = currentTask->taskId;
-			priorityQueue[queueIndex].assignedAt = currentTask->assignedAt;
+			WorkerTask *queueTask = WORKER_TASK_AT(priorityQueue, queueIndex);
+
+			queueTask->jobId = currentTask->jobId;
+			queueTask->taskId = currentTask->taskId;
+			queueTask->assignedAt = currentTask->assignedAt;
 
 			queueIndex++;
 		}
@@ -720,7 +724,7 @@ SchedulableTaskPriorityQueue(HTAB *WorkerTasksHash)
 	}
 
 	/* now order elements in the queue according to our sorting criterion */
-	qsort(priorityQueue, queueSize, sizeof(WorkerTask), CompareTasksByTime);
+	qsort(priorityQueue, queueSize, WORKER_TASK_SIZE, CompareTasksByTime);
 
 	return priorityQueue;
 }

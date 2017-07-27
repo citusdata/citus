@@ -692,6 +692,19 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.max_task_string_size",
+		gettext_noop("Sets the maximum size (in bytes) of a worker task call string."),
+		gettext_noop("Active worker tasks' are tracked in a shared hash table "
+					 "on the master node. This configuration value limits the "
+					 "maximum size of an individual worker task, and "
+					 "affects the size of pre-allocated shared memory."),
+		&MaxTaskStringSize,
+		12288, 8192, 65536,
+		PGC_POSTMASTER,
+		0,
+		NULL, NULL, NULL);
+
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
 }
