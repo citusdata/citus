@@ -28,10 +28,10 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to add a node that is already in the cluster
-SELECT * FROM master_add_node('localhost', :worker_1_port);
- nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole 
---------+---------+-----------+----------+----------+-------------+----------+----------
-      1 |       1 | localhost |    57637 | default  | f           | t        | primary
+SELECT nodeid, groupid FROM master_add_node('localhost', :worker_1_port);
+ nodeid | groupid 
+--------+---------
+      1 |       1
 (1 row)
 
 -- get the active nodes
@@ -140,10 +140,10 @@ SELECT master_get_active_worker_nodes();
 SELECT master_disable_node('localhost.noexist', 2345);
 ERROR:  node at "localhost.noexist:2345" does not exist
 -- restore the node for next tests
-SELECT master_activate_node('localhost', :worker_2_port);
-           master_activate_node            
--------------------------------------------
- (3,3,localhost,57638,default,f,t,primary)
+SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
+ isactive 
+----------
+ t
 (1 row)
 
 -- try to remove a node with active placements and see that node removal is failed
@@ -196,10 +196,10 @@ DETAIL:  there is a placement in group 3 but there are no nodes in that group
 SELECT groupid as new_group FROM master_add_node('localhost', :worker_2_port) \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 -- test that you are allowed to remove secondary nodes even if there are placements
-SELECT master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
-              master_add_node               
---------------------------------------------
- (5,4,localhost,9990,default,f,t,secondary)
+SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
+ ?column? 
+----------
+        1
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_port);
@@ -271,10 +271,11 @@ SELECT
                     | 
 (1 row)
 
-SELECT * FROM pg_dist_node ORDER BY nodeid;
- nodeid | groupid | nodename | nodeport | noderack | hasmetadata | isactive | noderole 
---------+---------+----------+----------+----------+-------------+----------+----------
-(0 rows)
+SELECT count(1) FROM pg_dist_node;
+ count 
+-------
+     0
+(1 row)
 
 -- check that adding two nodes in the same transaction works
 SELECT
@@ -442,23 +443,23 @@ SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole =
 ERROR:  group 12 already has a primary node
 -- check that you can add secondaries and unavailable nodes to a group
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
-               master_add_node                
-----------------------------------------------
- (16,12,localhost,9998,default,f,t,secondary)
+SELECT 1 FROM master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
+ ?column? 
+----------
+        1
 (1 row)
 
-SELECT master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
-                master_add_node                 
-------------------------------------------------
- (17,12,localhost,9997,default,f,t,unavailable)
+SELECT 1 FROM master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
+ ?column? 
+----------
+        1
 (1 row)
 
 -- add_inactive_node also works with secondaries
-SELECT master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
-           master_add_inactive_node           
-----------------------------------------------
- (18,14,localhost,9996,default,f,f,secondary)
+SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
+ ?column? 
+----------
+        1
 (1 row)
 
 -- check that you can't manually add two primaries to a group

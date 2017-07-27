@@ -15,7 +15,7 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- try to add a node that is already in the cluster
-SELECT * FROM master_add_node('localhost', :worker_1_port);
+SELECT nodeid, groupid FROM master_add_node('localhost', :worker_1_port);
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
@@ -56,7 +56,7 @@ SELECT master_get_active_worker_nodes();
 SELECT master_disable_node('localhost.noexist', 2345);
 
 -- restore the node for next tests
-SELECT master_activate_node('localhost', :worker_2_port);
+SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port); 
@@ -87,7 +87,7 @@ SELECT groupid as new_group FROM master_add_node('localhost', :worker_2_port) \g
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 
 -- test that you are allowed to remove secondary nodes even if there are placements
-SELECT master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
+SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
 SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', 9990);
 
@@ -117,7 +117,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 SELECT 
 	master_remove_node('localhost', :worker_1_port), 
 	master_remove_node('localhost', :worker_2_port);
-SELECT * FROM pg_dist_node ORDER BY nodeid;
+SELECT count(1) FROM pg_dist_node;
 
 -- check that adding two nodes in the same transaction works
 SELECT
@@ -190,10 +190,10 @@ SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole =
 
 -- check that you can add secondaries and unavailable nodes to a group
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
-SELECT master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
+SELECT 1 FROM master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
+SELECT 1 FROM master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
 -- add_inactive_node also works with secondaries
-SELECT master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
+SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
 
 -- check that you can't manually add two primaries to a group
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
