@@ -86,11 +86,16 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 totalRelationSize = 0;
+	char *tableSizeFunction = PG_TOTAL_RELATION_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
 
-	totalRelationSize = DistributedTableSize(relationId,
-											 PG_TOTAL_RELATION_SIZE_FUNCTION);
+	if (CStoreTable(relationId))
+	{
+		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+	}
+
+	totalRelationSize = DistributedTableSize(relationId, tableSizeFunction);
 
 	PG_RETURN_INT64(totalRelationSize);
 }
@@ -105,10 +110,16 @@ citus_table_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 tableSize = 0;
+	char *tableSizeFunction = PG_TABLE_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
 
-	tableSize = DistributedTableSize(relationId, PG_TABLE_SIZE_FUNCTION);
+	if (CStoreTable(relationId))
+	{
+		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+	}
+
+	tableSize = DistributedTableSize(relationId, tableSizeFunction);
 
 	PG_RETURN_INT64(tableSize);
 }
@@ -123,10 +134,16 @@ citus_relation_size(PG_FUNCTION_ARGS)
 {
 	Oid relationId = PG_GETARG_OID(0);
 	uint64 relationSize = 0;
+	char *tableSizeFunction = PG_RELATION_SIZE_FUNCTION;
 
 	CheckCitusVersion(ERROR);
 
-	relationSize = DistributedTableSize(relationId, PG_RELATION_SIZE_FUNCTION);
+	if (CStoreTable(relationId))
+	{
+		tableSizeFunction = CSTORE_TABLE_SIZE_FUNCTION;
+	}
+
+	relationSize = DistributedTableSize(relationId, tableSizeFunction);
 
 	PG_RETURN_INT64(relationSize);
 }
