@@ -904,6 +904,15 @@ ColocatedTableId(Oid colocationId)
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
+	/*
+	 * We may have a distributed table whose colocation id is INVALID_COLOCATION_ID.
+	 * In this case, we do not want to send that table's id as colocated table id.
+	 */
+	if (colocationId == INVALID_COLOCATION_ID)
+	{
+		return colocatedTableId;
+	}
+
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 

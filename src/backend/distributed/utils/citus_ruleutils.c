@@ -36,6 +36,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
+#include "distributed/master_metadata_utility.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
@@ -59,7 +60,6 @@
 
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
-static bool SupportedRelationKind(Relation relation);
 static const char * convert_aclright_to_string(int aclright);
 
 
@@ -291,7 +291,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	AttrNumber constraintIndex = 0;
 	AttrNumber constraintCount = 0;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
-	bool supportedRelationKind = false;
 
 	/*
 	 * Instead of retrieving values from system catalogs as other functions in
@@ -304,13 +303,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	relation = relation_open(tableRelationId, AccessShareLock);
 	relationName = generate_relation_name(tableRelationId, NIL);
 
-	supportedRelationKind = SupportedRelationKind(relation);
-	if (!supportedRelationKind)
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("%s is not a regular, foreign, or partitioned table",
-							   relationName)));
-	}
+	EnsureRelationKindSupported(tableRelationId);
 
 	initStringInfo(&buffer);
 
@@ -491,25 +484,33 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 
 
 /*
- * SupportedRelationKind returns true if the given relation is supported as a
- * distributed relation.
+ * EnsureRelationKindSupported errors out if the given relation is not supported
+ * as a distributed relation.
  */
-static bool
-SupportedRelationKind(Relation relation)
+void
+EnsureRelationKindSupported(Oid relationId)
 {
-	char relationKind = relation->rd_rel->relkind;
-	bool supportedRelationKind = (relationKind == RELKIND_RELATION || relationKind ==
-								  RELKIND_FOREIGN_TABLE);
-#if (PG_VERSION_NUM >= 100000)
-	supportedRelationKind = supportedRelationKind || relationKind ==
-							RELKIND_PARTITIONED_TABLE;
-#endif
+	char relationKind = get_rel_relkind(relationId);
+	bool supportedRelationKind = false;
 
-	/* Citus doesn't support bare inhereted tables (i.e., not a partition or partitioned table) */
-	supportedRelationKind = supportedRelationKind && !(IsChildTable(relation->rd_id) ||
-													   IsParentTable(relation->rd_id));
+	supportedRelationKind = RegularTable(relationId) ||
+							relationKind == RELKIND_FOREIGN_TABLE;
 
-	return supportedRelationKind;
+	/*
+	 * Citus doesn't support bare inherited tables (i.e., not a partition or
+	 * partitioned table)
+	 */
+	supportedRelationKind = supportedRelationKind && !(IsChildTable(relationId) ||
+													   IsParentTable(relationId));
+
+	if (!supportedRelationKind)
+	{
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
+						errmsg("%s is not a regular, foreign or partitioned table",
+							   relationName)));
+	}
 }
 
 
@@ -523,15 +524,12 @@ char *
 pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 {
 	Relation relation = NULL;
-	char *relationName = NULL;
-	char relationKind = 0;
 	TupleDesc tupleDescriptor = NULL;
 	AttrNumber attributeIndex = 0;
 	List *columnOptionList = NIL;
 	ListCell *columnOptionCell = NULL;
 	bool firstOptionPrinted = false;
 	StringInfoData buffer = { NULL, 0, 0, 0 };
-	bool supportedRelationKind = false;
 
 	/*
 	 * Instead of retrieving values from system catalogs, we open the relation,
@@ -539,22 +537,8 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 	 * This is primarily to maintain symmetry with pg_get_tableschemadef.
 	 */
 	relation = relation_open(tableRelationId, AccessShareLock);
-	relationName = generate_relation_name(tableRelationId, NIL);
 
-	relationKind = relation->rd_rel->relkind;
-	supportedRelationKind = (relationKind == RELKIND_RELATION || relationKind ==
-							 RELKIND_FOREIGN_TABLE);
-#if (PG_VERSION_NUM >= 100000)
-	supportedRelationKind = supportedRelationKind || relationKind ==
-							RELKIND_PARTITIONED_TABLE;
-#endif
-
-	if (!supportedRelationKind)
-	{
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("%s is not a regular or foreign table or partitioned",
-							   relationName)));
-	}
+	EnsureRelationKindSupported(tableRelationId);
 
 	/*
 	 * Iterate over the table's columns. If a particular column is not dropped

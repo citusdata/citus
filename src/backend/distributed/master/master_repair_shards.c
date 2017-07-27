@@ -389,7 +389,7 @@ RecreateTableDDLCommandList(Oid relationId)
 	bool includeSequenceDefaults = false;
 
 	/* build appropriate DROP command based on relation kind */
-	if (relationKind == RELKIND_RELATION)
+	if (RegularTable(relationId))
 	{
 		appendStringInfo(dropCommand, DROP_REGULAR_TABLE_COMMAND,
 						 qualifiedRelationName);
