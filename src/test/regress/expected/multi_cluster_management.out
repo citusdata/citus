@@ -76,10 +76,10 @@ SELECT master_get_active_worker_nodes();
 (1 row)
 
 -- add some shard placements to the cluster
-SELECT master_activate_node('localhost', :worker_2_port);
-           master_activate_node            
--------------------------------------------
- (3,3,localhost,57638,default,f,t,primary)
+SELECT isactive FROM master_activate_node('localhost', :worker_2_port);
+ isactive 
+----------
+ t
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
