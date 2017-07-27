@@ -122,7 +122,7 @@ master_add_node(PG_FUNCTION_ARGS)
 		nodeRecord = ActivateNode(nodeNameString, nodePort);
 	}
 
-	PG_RETURN_CSTRING(nodeRecord);
+	PG_RETURN_DATUM(nodeRecord);
 }
 
 
@@ -150,7 +150,7 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
 								 hasMetadata, isActive, nodeRole, &nodeAlreadyExists);
 
-	PG_RETURN_CSTRING(nodeRecord);
+	PG_RETURN_DATUM(nodeRecord);
 }
 
 
@@ -244,7 +244,7 @@ master_activate_node(PG_FUNCTION_ARGS)
 
 	nodeRecord = ActivateNode(nodeNameString, nodePort);
 
-	PG_RETURN_CSTRING(nodeRecord);
+	PG_RETURN_DATUM(nodeRecord);
 }
 
 
