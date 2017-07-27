@@ -216,7 +216,7 @@ SELECT count(*) FROM mx_table;
 (1 row)
 
 -- master_add_node
-SELECT master_add_node('localhost', 5432);
+SELECT 1 FROM master_add_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
@@ -230,20 +230,20 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 DROP INDEX mx_test_uniq_index;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-SELECT master_add_node('localhost', 5432);
-                   master_add_node                    
-------------------------------------------------------
- (1370000,1370000,localhost,5432,default,f,t,primary)
+SELECT 1 FROM master_add_node('localhost', 5432);
+ ?column? 
+----------
+        1
 (1 row)
 
 \c - - - :worker_1_port
 SELECT master_remove_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
-SELECT * FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
- nodeid  | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole 
----------+---------+-----------+----------+----------+-------------+----------+----------
- 1370000 | 1370000 | localhost |     5432 | default  | f           | t        | primary
+SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
+ count 
+-------
+     1
 (1 row)
 
 \c - - - :master_port
