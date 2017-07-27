@@ -25,9 +25,15 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting;
 
+    SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
+
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
 192            191            f              
+transactionnumberwaitingtransactionnumbers
+
+191                           
+192            191            
 step s1-abort: 
     ABORT;
 
@@ -67,11 +73,18 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting;
 
+    SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
+
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
 196            195            f              
 197            195            f              
 197            196            t              
+transactionnumberwaitingtransactionnumbers
+
+195                           
+196            195            
+197            195,196        
 step s1-abort: 
     ABORT;
 

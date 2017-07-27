@@ -3,6 +3,13 @@ setup
     CREATE TABLE distributed_table (x int primary key, y int);
     SELECT create_distributed_table('distributed_table', 'x');
     INSERT INTO distributed_table VALUES (1,0);
+
+    CREATE OR REPLACE FUNCTION get_adjacency_list_wait_graph(OUT transactionNumber int, OUT waitingTransactionNumbers cstring)
+    RETURNS SETOF RECORD
+    LANGUAGE C STRICT
+    AS 'citus', $$get_adjacency_list_wait_graph$$;
+    COMMENT ON FUNCTION get_adjacency_list_wait_graph(OUT transactionNumber int, OUT waitingTransactionNumbers cstring)
+    IS 'returns flattened wait graph';
 }
 
 teardown
@@ -76,6 +83,8 @@ step "detector-dump-wait-edges"
         waiting_transaction_num,
         blocking_transaction_num,
         blocking_transaction_waiting;
+
+    SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
 }
 
 # Distributed transaction blocked by another distributed transaction
