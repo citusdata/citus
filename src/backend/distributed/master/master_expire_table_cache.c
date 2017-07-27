@@ -183,7 +183,7 @@ DropShardsFromWorker(WorkerNode *workerNode, Oid relationId, List *shardInterval
 		}
 	}
 
-	if (relationKind == RELKIND_RELATION)
+	if (RegularTable(relationId))
 	{
 		appendStringInfo(workerCommand, DROP_REGULAR_TABLE_COMMAND, shardNames->data);
 	}

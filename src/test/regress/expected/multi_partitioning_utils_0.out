@@ -355,9 +355,9 @@ LINE 1: SELECT table_inherited('date_partitioned_table');
                                ^
 -- also these are not supported
 SELECT master_get_table_ddl_events('capitals');
-ERROR:  public.capitals is not a regular, foreign, or partitioned table
+ERROR:  capitals is not a regular, foreign or partitioned table
 SELECT master_get_table_ddl_events('cities');
-ERROR:  public.cities is not a regular, foreign, or partitioned table
+ERROR:  cities is not a regular, foreign or partitioned table
 -- dropping parents frop the partitions
 DROP TABLE date_partitioned_table, multi_column_partitioned, list_partitioned, partition_parent_schema.parent_table, cities, capitals;
 ERROR:  table "date_partitioned_table" does not exist
