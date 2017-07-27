@@ -17,7 +17,7 @@
 #include "catalog/pg_inherits.h"
 #include "catalog/pg_inherits_fn.h"
 #include "distributed/citus_ruleutils.h"
-#include <distributed/multi_partitioning_utils.h>
+#include "distributed/multi_partitioning_utils.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
@@ -156,6 +156,26 @@ IsParentTable(Oid relationId)
 	}
 
 	return tableInherited;
+}
+
+
+/*
+ * Wrapper around get_partition_parent
+ *
+ * Note: Because this function assumes that the relation whose OID is passed
+ * as an argument will have precisely one parent, it should only be called
+ * when it is known that the relation is a partition.
+ */
+Oid
+PartitionParentOid(Oid partitionOid)
+{
+	Oid partitionParentOid = InvalidOid;
+
+#if (PG_VERSION_NUM >= 100000)
+	partitionParentOid = get_partition_parent(partitionOid);
+#endif
+
+	return partitionParentOid;
 }
 
 
