@@ -64,7 +64,8 @@ test: multi_task_assignment_policy multi_cross_shard
 test: multi_utility_statements
 test: multi_dropped_column_aliases
 test: multi_binary_master_copy_format
-test: multi_prepare_sql multi_prepare_plsql
+test: multi_prepare_sql
+test: multi_prepare_plsql
 test: multi_sql_function
 test: multi_view
 
