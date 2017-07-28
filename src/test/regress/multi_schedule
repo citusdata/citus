@@ -248,3 +248,8 @@ test: multi_multiuser
 # changed the table they belonged to during a session
 # --------
 test: multi_cache_invalidation
+
+# ---------
+# multi_task_string_size tests task string size checks
+# ---------
+test: multi_task_string_size
