@@ -1,13 +1,13 @@
 setup
 {
-    CREATE TABLE test_table (test_id integer NOT NULL, data text);
-    SELECT master_create_distributed_table('test_table', 'test_id', 'hash');
-    SELECT master_create_worker_shards('test_table', 4, 2);
+    CREATE TABLE test_concurrent_dml (test_id integer NOT NULL, data text);
+    SELECT master_create_distributed_table('test_concurrent_dml', 'test_id', 'hash');
+    SELECT master_create_worker_shards('test_concurrent_dml', 4, 2);
 }
 
 teardown
 {
-    DROP TABLE IF EXISTS test_table CASCADE;
+    DROP TABLE IF EXISTS test_concurrent_dml CASCADE;
 }
 
 session "s1"
@@ -19,7 +19,7 @@ step "s1-begin"
 
 step "s1-insert"
 {
-    INSERT INTO test_table VALUES(1);
+    INSERT INTO test_concurrent_dml VALUES(1);
 }
 
 step "s1-commit"
@@ -31,7 +31,7 @@ session "s2"
 
 step "s2-update"
 {
-    UPDATE test_table SET data = 'blarg' WHERE test_id = 1;
+    UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
 }
 
 # verify that an in-progress insert blocks concurrent updates
