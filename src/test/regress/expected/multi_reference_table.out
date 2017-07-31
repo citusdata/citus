@@ -1133,12 +1133,8 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
- value_1 | value_2 
----------+---------
-       1 |       1
-       2 |       2
-(2 rows)
-
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 -- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1149,12 +1145,8 @@ FROM
 WHERE
 	colocated_table_test_2.value_2 = reference_table_test.value_2
 RETURNING value_1, value_2;
- value_1 | value_2 
----------+---------
-       1 |       1
-       2 |       2
-(2 rows)
-
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 -- partition column value comes from reference table, goes via coordinator
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1615,7 +1607,7 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
  master_modify_multiple_shards 
 -------------------------------
-                            10
+                             6
 (1 row)
 
 ROLLBACK;
