@@ -1783,15 +1783,38 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 /*
  * ErrorIfDropPartitionColumn checks if any subcommands of the given alter table
- * command is a DROP COLUMN command which drops the partition column. If there is
- * such a subcommand, this function errors out.
+ * command is a DROP COLUMN command which drops the partition column of a distributed
+ * table. If there is such a subcommand, this function errors out.
  */
 static void
 ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 {
+	LOCKMODE lockmode = 0;
+	Oid leftRelationId = InvalidOid;
+	bool isDistributedRelation = false;
 	List *commandList = alterTableStatement->cmds;
 	ListCell *commandCell = NULL;
 
+	/* first check whether a distributed relation is affected */
+	if (alterTableStatement->relation == NULL)
+	{
+		return;
+	}
+
+	lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	leftRelationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(leftRelationId))
+	{
+		return;
+	}
+
+	isDistributedRelation = IsDistributedTable(leftRelationId);
+	if (!isDistributedRelation)
+	{
+		return;
+	}
+
+	/* then check if any of subcommands drop partition column.*/
 	foreach(commandCell, commandList)
 	{
 		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);

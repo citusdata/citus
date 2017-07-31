@@ -758,8 +758,9 @@ ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
 ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
 NOTICE:  constraint "non_existent_contraint" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter SET WITHOUT OIDS;
--- even distribution column can be dropped.
+-- distribution column still cannot be dropped.
 ALTER TABLE lineitem_alter DROP COLUMN l_orderkey;
+ERROR:  cannot execute ALTER TABLE command involving partition column
 -- Even unique indexes on l_partkey (non-partition column) are allowed.
 -- Citus would have prevented that.
 CREATE UNIQUE INDEX unique_lineitem_partkey on lineitem_alter(l_partkey);
