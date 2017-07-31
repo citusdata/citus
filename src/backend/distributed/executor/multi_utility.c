@@ -131,6 +131,9 @@ static void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
+static void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
+static void ErrorIfAlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
+												AlterTableCmd *command);
 static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
@@ -401,8 +404,9 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		/*
 		 * citus.enable_ddl_propagation is disabled, which means that PostgreSQL
 		 * should handle the DDL command on a distributed table directly, without
-		 * Citus intervening. Advanced Citus users use this to implement their own
-		 * DDL propagation. We also use it to avoid re-propagating DDL commands
+		 * Citus intervening. The only exception is partition column drop, in
+		 * which case we error out. Advanced Citus users use this to implement their
+		 * own DDL propagation. We also use it to avoid re-propagating DDL commands
 		 * when changing MX tables on workers. Below, we also make sure that DDL
 		 * commands don't run queries that might get intercepted by Citus and error
 		 * out, specifically we skip validation in foreign keys.
@@ -413,6 +417,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
 			if (alterTableStmt->relkind == OBJECT_TABLE)
 			{
+				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
+
 				/*
 				 * When issuing an ALTER TABLE ... ADD FOREIGN KEY command, the
 				 * the validation step should be skipped on the distributed table.
@@ -1718,37 +1724,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_AlterColumnType:
 			case AT_DropNotNull:
 			{
-				/* error out if the alter table command is on the partition column */
-
-				Var *partitionColumn = NULL;
-				HeapTuple tuple = NULL;
-				char *alterColumnName = command->name;
-
-				LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-				Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
-				if (!OidIsValid(relationId))
-				{
-					continue;
-				}
-
-				partitionColumn = DistPartitionKey(relationId);
-
-				tuple = SearchSysCacheAttName(relationId, alterColumnName);
-				if (HeapTupleIsValid(tuple))
-				{
-					Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(tuple);
-
-					/* reference tables do not have partition column, so allow them */
-					if (partitionColumn != NULL &&
-						targetAttr->attnum == partitionColumn->varattno)
-					{
-						ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
-											   "involving partition column")));
-					}
-
-					ReleaseSysCache(tuple);
-				}
-
+				ErrorIfAlterInvolvesPartitionColumn(alterTableStatement, command);
 				break;
 			}
 
@@ -1801,6 +1777,68 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										  "TYPE subcommands are supported.")));
 			}
 		}
+	}
+}
+
+
+/*
+ * ErrorIfDropPartitionColumn checks if any subcommands of the given alter table
+ * command is a DROP COLUMN command which drops the partition column. If there is
+ * such a subcommand, this function errors out.
+ */
+static void
+ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
+{
+	List *commandList = alterTableStatement->cmds;
+	ListCell *commandCell = NULL;
+
+	foreach(commandCell, commandList)
+	{
+		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+		AlterTableType alterTableType = command->subtype;
+		if (alterTableType == AT_DropColumn)
+		{
+			ErrorIfAlterInvolvesPartitionColumn(alterTableStatement, command);
+		}
+	}
+}
+
+
+/*
+ * ErrorIfAlterInvolvesPartitionColumn checks if the given alter table command
+ * involves relation's partition column. If it does, this function errors out.
+ */
+static void
+ErrorIfAlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
+									AlterTableCmd *command)
+{
+	Var *partitionColumn = NULL;
+	HeapTuple tuple = NULL;
+	char *alterColumnName = command->name;
+
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!OidIsValid(relationId))
+	{
+		return;
+	}
+
+	partitionColumn = DistPartitionKey(relationId);
+
+	tuple = SearchSysCacheAttName(relationId, alterColumnName);
+	if (HeapTupleIsValid(tuple))
+	{
+		Form_pg_attribute targetAttr = (Form_pg_attribute) GETSTRUCT(tuple);
+
+		/* reference tables do not have partition column, so allow them */
+		if (partitionColumn != NULL &&
+			targetAttr->attnum == partitionColumn->varattno)
+		{
+			ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+								   "involving partition column")));
+		}
+
+		ReleaseSysCache(tuple);
 	}
 }
 
