@@ -1,13 +1,13 @@
 setup
 {
-    CREATE TABLE test_table (test_id integer NOT NULL, data int);
-    SELECT master_create_distributed_table('test_table', 'test_id', 'hash');
-    SELECT master_create_worker_shards('test_table', 1, 2);
+    CREATE TABLE test_dml_vs_repair (test_id integer NOT NULL, data int);
+    SELECT master_create_distributed_table('test_dml_vs_repair', 'test_id', 'hash');
+    SELECT master_create_worker_shards('test_dml_vs_repair', 1, 2);
 }
 
 teardown
 {
-    DROP TABLE IF EXISTS test_table CASCADE;
+    DROP TABLE IF EXISTS test_dml_vs_repair CASCADE;
 }
 
 session "s1"
@@ -15,9 +15,9 @@ session "s1"
 setup
 {
     DEALLOCATE all;
-    TRUNCATE test_table;
-    PREPARE insertone AS INSERT INTO test_table VALUES(1, 1);
-    PREPARE insertall AS INSERT INTO test_table SELECT test_id, data+1 FROM test_table;
+    TRUNCATE test_dml_vs_repair;
+    PREPARE insertone AS INSERT INTO test_dml_vs_repair VALUES(1, 1);
+    PREPARE insertall AS INSERT INTO test_dml_vs_repair SELECT test_id, data+1 FROM test_dml_vs_repair;
 }
 
 step "s1-begin"
@@ -27,7 +27,7 @@ step "s1-begin"
 
 step "s1-insertone"
 {
-    INSERT INTO test_table VALUES(1, 1);
+    INSERT INTO test_dml_vs_repair VALUES(1, 1);
 }
 
 step "s1-prepared-insertone"
@@ -37,7 +37,7 @@ step "s1-prepared-insertone"
 
 step "s1-insertall"
 {
-    INSERT INTO test_table SELECT test_id, data+1 FROM test_table;
+    INSERT INTO test_dml_vs_repair SELECT test_id, data+1 FROM test_dml_vs_repair;
 }
 
 step "s1-prepared-insertall"
@@ -47,7 +47,7 @@ step "s1-prepared-insertall"
 
 step "s1-display"
 {
-    SELECT * FROM test_table WHERE test_id = 1;
+    SELECT * FROM test_dml_vs_repair WHERE test_id = 1;
 }
 
 step "s1-commit"
@@ -65,27 +65,27 @@ step "s2-begin"
 
 step "s2-invalidate-57637"
 {
-    UPDATE pg_dist_shard_placement SET shardstate = '3' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass) AND nodeport = 57637;
+    UPDATE pg_dist_shard_placement SET shardstate = '3' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass) AND nodeport = 57637;
 }
 
 step "s2-revalidate-57637"
 {
-    UPDATE pg_dist_shard_placement SET shardstate = '1' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass) AND nodeport = 57637;
+    UPDATE pg_dist_shard_placement SET shardstate = '1' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass) AND nodeport = 57637;
 }
 
 step "s2-invalidate-57638"
 {
-    UPDATE pg_dist_shard_placement SET shardstate = '3' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass) AND nodeport = 57638;
+    UPDATE pg_dist_shard_placement SET shardstate = '3' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass) AND nodeport = 57638;
 }
 
 step "s2-revalidate-57638"
 {
-    UPDATE pg_dist_shard_placement SET shardstate = '1' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass) AND nodeport = 57638;
+    UPDATE pg_dist_shard_placement SET shardstate = '1' WHERE shardid = (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass) AND nodeport = 57638;
 }
 
 step "s2-repair"
 {
-    SELECT master_copy_shard_placement((SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_table'::regclass), 'localhost', 57638, 'localhost', 57637);
+    SELECT master_copy_shard_placement((SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass), 'localhost', 57638, 'localhost', 57637);
 }
 
 step "s2-commit"
