@@ -721,7 +721,7 @@ ShardStorageType(Oid relationId)
 	char shardStorageType = 0;
 
 	char relationType = get_rel_relkind(relationId);
-	if (relationType == RELKIND_RELATION)
+	if (RegularTable(relationId))
 	{
 		shardStorageType = SHARD_STORAGE_TABLE;
 	}

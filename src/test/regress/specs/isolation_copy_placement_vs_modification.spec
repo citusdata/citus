@@ -4,15 +4,15 @@ setup
 {	
 	SET citus.shard_count TO 2;
 	SET citus.shard_replication_factor TO 2;
-	CREATE TABLE test_table (x int, y int);
-	SELECT create_distributed_table('test_table', 'x');
+	CREATE TABLE test_copy_placement_vs_modification (x int, y int);
+	SELECT create_distributed_table('test_copy_placement_vs_modification', 'x');
 	
-	SELECT get_shard_id_for_distribution_column('test_table', 5) INTO selected_shard;
+	SELECT get_shard_id_for_distribution_column('test_copy_placement_vs_modification', 5) INTO selected_shard;
 }
 
 teardown
 {
-	DROP TABLE test_table;
+	DROP TABLE test_copy_placement_vs_modification;
 	DROP TABLE selected_shard;
 }
 
@@ -23,41 +23,41 @@ step "s1-begin"
     BEGIN;
 }
 
-# since test_table has rep > 1 simple select query doesn't hit all placements
+# since test_copy_placement_vs_modification has rep > 1 simple select query doesn't hit all placements
 # hence not all placements are cached 
 step "s1-load-cache"
 {
-	TRUNCATE test_table;
+	TRUNCATE test_copy_placement_vs_modification;
 }
 
 step "s1-insert"
 {
-	INSERT INTO test_table VALUES (5, 10);
+	INSERT INTO test_copy_placement_vs_modification VALUES (5, 10);
 }
 
 step "s1-update"
 {
-	UPDATE test_table SET y = 5 WHERE x = 5;
+	UPDATE test_copy_placement_vs_modification SET y = 5 WHERE x = 5;
 }
 
 step "s1-delete"
 {
-	DELETE FROM test_table WHERE x = 5;
+	DELETE FROM test_copy_placement_vs_modification WHERE x = 5;
 }
 
 step "s1-select"
 {
-	SELECT count(*) FROM test_table WHERE x = 5;
+	SELECT count(*) FROM test_copy_placement_vs_modification WHERE x = 5;
 }
 
 step "s1-ddl"
 {
-	CREATE INDEX test_table_index ON test_table(x);
+	CREATE INDEX test_copy_placement_vs_modification_index ON test_copy_placement_vs_modification(x);
 }
 
 step "s1-copy"
 {
-	COPY test_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_copy_placement_vs_modification FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
 }
 
 step "s1-commit"
@@ -92,7 +92,7 @@ step "s2-print-content"
 	SELECT 
 		nodeport, success, result 
 	FROM 
-		run_command_on_placements('test_table', 'select y from %s WHERE x = 5')
+		run_command_on_placements('test_copy_placement_vs_modification', 'select y from %s WHERE x = 5')
 	WHERE
 		shardid IN (SELECT * FROM selected_shard)
 	ORDER BY
@@ -104,7 +104,7 @@ step "s2-print-index-count"
 	SELECT 
 		nodeport, success, result 
 	FROM 
-		run_command_on_placements('test_table', 'select count(*) from pg_indexes WHERE schemaname || ''.'' || tablename = ''%s''')
+		run_command_on_placements('test_copy_placement_vs_modification', 'select count(*) from pg_indexes WHERE schemaname || ''.'' || tablename = ''%s''')
 	ORDER BY
 		nodeport;
 }
