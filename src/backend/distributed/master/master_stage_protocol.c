@@ -27,6 +27,7 @@
 #if (PG_VERSION_NUM >= 100000)
 #include "catalog/partition.h"
 #endif
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
@@ -344,11 +345,7 @@ CheckDistributedTable(Oid relationId)
 	char *relationName = get_rel_name(relationId);
 
 	/* check that the relationId belongs to a table */
-	char tableType = get_rel_relkind(relationId);
-	if (!(tableType == RELKIND_RELATION || tableType == RELKIND_FOREIGN_TABLE))
-	{
-		ereport(ERROR, (errmsg("relation \"%s\" is not a table", relationName)));
-	}
+	EnsureRelationKindSupported(relationId);
 
 	if (!IsDistributedTable(relationId))
 	{

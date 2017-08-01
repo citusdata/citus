@@ -307,12 +307,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 
 	initStringInfo(&buffer);
 
-	relationKind = relation->rd_rel->relkind;
-#if (PG_VERSION_NUM >= 100000)
-	if (relationKind == RELKIND_RELATION || relationKind == RELKIND_PARTITIONED_TABLE)
-#else
-	if (relationKind == RELKIND_RELATION)
-#endif
+	if (RegularTable(tableRelationId))
 	{
 		appendStringInfoString(&buffer, "CREATE ");
 
@@ -461,6 +456,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 	 * If the relation is a foreign table, append the server name and options to
 	 * the create table statement.
 	 */
+	relationKind = relation->rd_rel->relkind;
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
 		ForeignTable *foreignTable = GetForeignTable(tableRelationId);
