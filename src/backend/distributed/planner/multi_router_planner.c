@@ -300,10 +300,8 @@ ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex)
 	}
 	else
 	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("cannot create shard interval operator expression for "
-							   "distributed relations other than hash, range and append distributed "
-							   "relations")));
+		/* do not add any shard range interval for reference tables */
+		return NIL;
 	}
 
 	/* build the base expression for constraint */
