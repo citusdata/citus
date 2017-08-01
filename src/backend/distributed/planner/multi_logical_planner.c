@@ -997,6 +997,23 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		Expr *targetExpression = targetEntry->expr;
 
 		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
+		Oid relationId = InvalidOid;
+		Var *column = NULL;
+
+		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
+
+		/*
+		 * If the expression belongs to reference table directly returns true,
+		 * since logic of caller function checks whether it can find the necessaary
+		 * data from each node.
+		 */
+		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
+			DISTRIBUTE_BY_NONE)
+		{
+			targetListOnPartitionColumn = true;
+			break;
+		}
+
 		if (isPartitionColumn)
 		{
 			FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
@@ -2722,6 +2739,50 @@ ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 		{
 			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTableEntry);
 		}
+	}
+
+	return walkIsComplete;
+}
+
+
+/* Get the list of relations from the given node. Note that the difference between
+ * this function and ExtractRangeTableRelationWalker is that this one recursively
+ * walk into range table entries if it can.
+ */
+bool
+ExtractRTRelationFromNode(Node *node, List **rangeTableList)
+{
+	bool walkIsComplete = false;
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
+
+		if (rangeTableEntry->rtekind == RTE_RELATION &&
+			rangeTableEntry->relkind != RELKIND_VIEW)
+		{
+			(*rangeTableList) = lappend(*rangeTableList, rangeTableEntry);
+		}
+		else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			walkIsComplete = query_tree_walker(rangeTableEntry->subquery,
+											   ExtractRTRelationFromNode,
+											   rangeTableList, QTW_EXAMINE_RTES);
+		}
+	}
+	else if (IsA(node, Query))
+	{
+		walkIsComplete = query_tree_walker((Query *) node, ExtractRTRelationFromNode,
+										   rangeTableList, QTW_EXAMINE_RTES);
+	}
+	else
+	{
+		walkIsComplete = expression_tree_walker(node, ExtractRTRelationFromNode,
+												rangeTableList);
 	}
 
 	return walkIsComplete;

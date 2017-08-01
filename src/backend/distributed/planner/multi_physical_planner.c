@@ -127,6 +127,8 @@ static Job * BuildJobTreeTaskList(Job *jobTree,
 static List * SubquerySqlTaskList(Job *job,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
+static void ErrorIfUnsupportedJoinReferenceTable(
+	PlannerRestrictionContext *plannerRestrictionContext);
 static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
@@ -195,6 +197,7 @@ static StringInfo MergeTableQueryString(uint32 taskIdIndex, List *targetEntryLis
 static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 											   Query *reduceQuery);
 static uint32 FinalTargetEntryCount(List *targetEntryList);
+static bool ReferenceTableExist(PlannerInfo *plannerInfo, RelOptInfo *relationInfo);
 
 
 /*
@@ -2038,6 +2041,9 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	/* error if shards are not co-partitioned */
 	ErrorIfUnsupportedShardDistribution(subquery);
 
+	/* error if unsupported join on reference tables */
+	ErrorIfUnsupportedJoinReferenceTable(plannerRestrictionContext);
+
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
 
@@ -2061,7 +2067,16 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 		break;
 	}
 
-	Assert(targetCacheEntry != NULL);
+	/*
+	 * That means all table are reference table and we can assign any reference
+	 * table as an anchor one .
+	 */
+	if (targetCacheEntry == NULL)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(rangeTableList);
+		relationId = rangeTableEntry->relid;
+		targetCacheEntry = DistributedTableCacheEntry(relationId);
+	}
 
 	shardCount = targetCacheEntry->shardIntervalArrayLength;
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
@@ -2085,6 +2100,146 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	}
 
 	return sqlTaskList;
+}
+
+
+/*
+ * ErrorIfUnsupportedJoinReferenceTable errors out if there exists a outer join
+ * exist between reference table and distributed tables.
+ */
+static void
+ErrorIfUnsupportedJoinReferenceTable(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	List *joinRestrictionList =
+		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
+	ListCell *joinRestrictionCell = NULL;
+
+	foreach(joinRestrictionCell, joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
+			joinRestrictionCell);
+		JoinType joinType = joinRestriction->joinType;
+		PlannerInfo *plannerInfo = joinRestriction->plannerInfo;
+		RelOptInfo *innerrel = joinRestriction->innerrel;
+		RelOptInfo *outerrel = joinRestriction->outerrel;
+
+		switch (joinType)
+		{
+			case JOIN_SEMI:
+			{
+				if (ReferenceTableExist(plannerInfo, outerrel))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("can not plan query having reference table on"
+										   " the left part of semi join")));
+				}
+			}
+			break;
+
+			case JOIN_ANTI:
+			{
+				if (ReferenceTableExist(plannerInfo, innerrel))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("can not plan query having reference table on"
+										   " the left part of anti join")));
+				}
+			}
+			break;
+
+			case JOIN_LEFT:
+			{
+				if (ReferenceTableExist(plannerInfo, outerrel))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("can not plan query having reference table on"
+										   " the left part of left join")));
+				}
+			}
+			break;
+
+			case JOIN_RIGHT:
+			{
+				if (ReferenceTableExist(plannerInfo, innerrel))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("can not plan query having reference table on"
+										   " the right part of right join")));
+				}
+			}
+			break;
+
+			case JOIN_FULL:
+			{
+				if (ReferenceTableExist(plannerInfo, innerrel) || ReferenceTableExist(
+						plannerInfo, outerrel))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg(
+										"can not plan query having reference table as a"
+										" part of full join")));
+				}
+			}
+			break;
+
+			default:
+			{ }
+			  break;
+		}
+	}
+}
+
+
+/*
+ * ReferenceTableExist check whether the relationInfo has reference table.
+ * Since relation ids of relationInfo indexes to the range table entry list of
+ * query, query is also passed.
+ */
+static bool
+ReferenceTableExist(PlannerInfo *plannerInfo, RelOptInfo *relationInfo)
+{
+	Relids relids = bms_copy(relationInfo->relids);
+	int relationId = -1;
+
+	while ((relationId = bms_first_member(relids)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
+
+		/* relationInfo has this range table entry */
+		if (RTEContainsReferenceTable(rangeTableEntry))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * RTEContainsReferenceTable checks whether there exist a reference table in the
+ * given range table entry.
+ */
+bool
+RTEContainsReferenceTable(RangeTblEntry *rangeTableEntry)
+{
+	List *relationList = NIL;
+	ListCell *relationCell = NULL;
+	ExtractRTRelationFromNode((Node *) rangeTableEntry, &relationList);
+
+	foreach(relationCell, relationList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(relationCell);
+		Oid relationId = rangeTableEntry->relid;
+
+		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
+			DISTRIBUTE_BY_NONE)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -2121,10 +2276,8 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot push down this subquery"),
-							errdetail("Currently range and hash partitioned "
-									  "relations are supported")));
+			/* do not need to handle reference tables */
+			continue;
 		}
 	}
 
@@ -2141,6 +2294,13 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		Oid relationId = lfirst_oid(relationIdCell);
 		bool coPartitionedTables = false;
 		Oid currentRelationId = relationId;
+		char partitionMethod = PartitionMethod(relationId);
+
+		/* do not need to check reference tables */
+		if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
 
 		/* get shard list of first relation and continue for the next relation */
 		if (relationIndex == 0)
@@ -2298,9 +2458,6 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	RestrictInfo *shardRestrictionList = NULL;
 	DeferredErrorMessage *planningError = NULL;
 
-	/* such queries should go through router planner */
-	Assert(!restrictionContext->allReferenceTables);
-
 	/*
 	 * Add the restriction qual parameter value in all baserestrictinfos.
 	 * Note that this has to be done on a copy, as the originals are needed
@@ -2314,6 +2471,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 		List *extendedBaseRestrictInfo = originalBaseRestrictInfo;
 
 		shardOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
+
+		/* means it is a reference table and do not add any shard interval info */
+		if (shardOpExpressions == NIL)
+		{
+			continue;
+		}
 
 		shardRestrictionList = make_simple_restrictinfo((Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
