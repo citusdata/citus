@@ -170,7 +170,8 @@ InitTaskExecution(Task *task, TaskExecStatus initialTaskExecStatus)
 	uint32 nodeCount = list_length(task->taskPlacementList);
 	uint32 nodeIndex = 0;
 
-	TaskExecution *taskExecution = palloc0(sizeof(TaskExecution));
+	TaskExecution *taskExecution = CitusMakeNode(TaskExecution);
+
 	taskExecution->jobId = task->jobId;
 	taskExecution->taskId = task->taskId;
 	taskExecution->nodeCount = nodeCount;
@@ -235,7 +236,7 @@ CleanupTaskExecution(TaskExecution *taskExecution)
 	pfree(taskExecution->taskStatusArray);
 	pfree(taskExecution->connectionIdArray);
 	pfree(taskExecution->fileDescriptorArray);
-	memset(taskExecution, 0, sizeof(TaskExecution));
+	pfree(taskExecution);
 }
 
 
