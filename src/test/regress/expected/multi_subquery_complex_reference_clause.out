@@ -374,3 +374,193 @@ ORDER BY
   user_id
 limit 50;
 ERROR:  can not plan query having reference table as a part of full join
+ -- 
+ -- UNIONs and JOINs with reference tables, shoukld error out
+ --
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT 
+                    *
+                  FROM
+                   (SELECT 
+                      "events"."user_id", "events"."time", 0 AS event
+                    FROM 
+                      events_reference_table as  "events"
+                    WHERE 
+                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                 UNION 
+                 (SELECT 
+                    *
+                  FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 1 AS event
+                     FROM 
+                        events_table as "events"
+                     WHERE 
+                      event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION 
+                 (SELECT 
+                    *
+                  FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 2 AS event
+                     FROM 
+                        events_table as  "events"
+                     WHERE 
+                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                UNION 
+                  (SELECT 
+                      *
+                   FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 3 AS event
+                     FROM 
+                      events_table as "events"
+                     WHERE 
+                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT 
+        "users"."user_id"
+      FROM 
+        users_table as "users"
+      WHERE 
+        value_1 > 50 and value_1 < 70) AS t 
+    ON (t.user_id = q.user_id)) as final_query
+GROUP BY 
+  types
+ORDER BY 
+  types;
+ERROR:  can not plan query having reference table with union
+  -- reference table exist in the subquery of union, should error out 
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT 
+      *, random()
+    FROM
+     (SELECT 
+        "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT 
+            "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
+          FROM (
+                (SELECT 
+                    *
+                 FROM
+                   (SELECT 
+                          "events"."time", 0 AS event, "events"."user_id"
+                    FROM 
+                      events_table as "events"
+                    WHERE 
+                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION 
+                 (SELECT *
+                  FROM
+                    (
+                          SELECT * FROM
+                          (
+                              SELECT 
+                                max("events"."time"),
+                                0 AS event,
+                                "events"."user_id"
+                              FROM 
+                                events_reference_table as  "events", users_table as "users"
+                              WHERE 
+                                events.user_id = users.user_id AND
+                                event_type IN (10, 11, 12, 13, 14, 15)
+                                GROUP BY   "events"."user_id"
+                          ) as events_subquery_5
+                     ) events_subquery_2)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT 
+                        "events"."time", 2 AS event, "events"."user_id"
+                     FROM 
+                        events_table as  "events"
+                     WHERE 
+                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION 
+                 (SELECT *
+                  FROM
+                    (SELECT
+                       "events"."time", 3 AS event, "events"."user_id"
+                     FROM 
+                      events_table as "events"
+                     WHERE 
+                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)
+                 ) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT 
+        "users"."user_id"
+      FROM 
+        users_table as "users"
+      WHERE 
+        value_1 > 50 and value_1 < 70) AS t 
+     ON (t.user_id = q.user_id)) as final_query
+GROUP BY 
+  types
+ORDER BY 
+  types;
+ERROR:  can not plan query having reference table with union
+-- 
+-- Should error out with UNION ALL Queries on reference tables
+--
+SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
+FROM
+  ( SELECT *, random()
+   FROM
+     ( SELECT "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
+      FROM
+        ( SELECT "t1"."user_id", min("t1"."time") AS "time", array_agg(("t1"."event") ORDER BY TIME ASC, event DESC) AS collected_events
+         FROM (
+                 (SELECT *
+                  FROM
+                   (SELECT 
+                      "events"."user_id", "events"."time", 0 AS event
+                    FROM 
+                      events_table as  "events"
+                    WHERE 
+                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1) 
+                UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 1 AS event
+                     FROM 
+                        events_table as "events"
+                     WHERE 
+                        event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 2 AS event
+                     FROM 
+                        events_reference_table as  "events"
+                     WHERE 
+                        event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+               UNION ALL
+                 (SELECT *
+                  FROM
+                    (SELECT 
+                        "events"."user_id", "events"."time", 3 AS event
+                     FROM 
+                        events_table as "events"
+                     WHERE 
+                        event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+         GROUP BY "t1"."user_id") AS t) "q" 
+INNER JOIN
+     (SELECT "users"."user_id"
+      FROM users_table as "users"
+      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+GROUP BY types
+ORDER BY types;
+ERROR:  can not plan query having reference table with union

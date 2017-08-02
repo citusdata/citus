@@ -198,6 +198,7 @@ static StringInfo IntermediateTableQueryString(uint64 jobId, uint32 taskIdIndex,
 											   Query *reduceQuery);
 static uint32 FinalTargetEntryCount(List *targetEntryList);
 static bool ReferenceTableExist(PlannerInfo *plannerInfo, RelOptInfo *relationInfo);
+static void ErrorIfSetOpWithReferenceTable(Query *queryTree);
 
 
 /*
@@ -2044,6 +2045,9 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	/* error if unsupported join on reference tables */
 	ErrorIfUnsupportedJoinReferenceTable(plannerRestrictionContext);
 
+	/* error if reference table exists as a part of any set operation */
+	ErrorIfSetOpWithReferenceTable(subquery);
+
 	/* get list of all range tables in subquery tree */
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
 
@@ -2240,6 +2244,56 @@ RTEContainsReferenceTable(RangeTblEntry *rangeTableEntry)
 	}
 
 	return false;
+}
+
+
+/*
+ * ErrorIfSetOpWithReferenceTable checks whether there exist a reference table
+ * as a part of any set operation.
+ */
+static void
+ErrorIfSetOpWithReferenceTable(Query *queryTree)
+{
+	List *joinTreeTableIndexList = NIL;
+	Index subqueryRteIndex = 0;
+	RangeTblEntry *rangeTableEntry = NULL;
+	Query *subqueryTree = NULL;
+	List *rangeTableList = queryTree->rtable;
+	Node *setOperations = queryTree->setOperations;
+	ExtractRangeTableIndexWalker((Node *) queryTree->jointree, &joinTreeTableIndexList);
+
+	if (setOperations != NULL)
+	{
+		List *rangeTableList = NIL;
+		ListCell *rangeTableCell = NULL;
+		ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
+
+		foreach(rangeTableCell, rangeTableList)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+			Oid relationId = rangeTableEntry->relid;
+			if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg(
+									"can not plan query having reference table with union")));
+			}
+		}
+	}
+
+	if (list_length(joinTreeTableIndexList) < 1)
+	{
+		return;
+	}
+
+	subqueryRteIndex = linitial_int(joinTreeTableIndexList);
+	rangeTableEntry = rt_fetch(subqueryRteIndex, rangeTableList);
+	subqueryTree = rangeTableEntry->subquery;
+
+	if (subqueryTree != NULL)
+	{
+		return ErrorIfSetOpWithReferenceTable(subqueryTree);
+	}
 }
 
 
