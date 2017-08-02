@@ -16,6 +16,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_planner.h"
+#include "distributed/multi_server_executor.h"
 
 static const char *CitusNodeTagNamesD[] = {
 	"MultiNode",
@@ -32,6 +33,7 @@ static const char *CitusNodeTagNamesD[] = {
 	"MapMergeJob",
 	"MultiPlan",
 	"Task",
+	"TaskExecution",
 	"ShardInterval",
 	"ShardPlacement",
 	"RelationShard",
@@ -361,7 +363,7 @@ EqualUnsupportedCitusNode(const struct ExtensibleNode *a,
 	{ \
 		#type, \
 		sizeof(type), \
-		CopyUnsupportedCitusNode, \
+		CopyNode##type, \
 		EqualUnsupportedCitusNode, \
 		Out##type, \
 		Read##type \
@@ -388,6 +390,7 @@ const ExtensibleNodeMethods nodeMethods[] =
 	DEFINE_NODE_METHODS(ShardPlacement),
 	DEFINE_NODE_METHODS(RelationShard),
 	DEFINE_NODE_METHODS(Task),
+	DEFINE_NODE_METHODS(TaskExecution),
 	DEFINE_NODE_METHODS(DeferredErrorMessage),
 	DEFINE_NODE_METHODS(GroupShardPlacement),
 
