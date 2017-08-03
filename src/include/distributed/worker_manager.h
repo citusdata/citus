@@ -30,6 +30,8 @@
 #define WORKER_RACK_TRIES 5
 #define WORKER_DEFAULT_RACK "default"
 
+#define WORKER_DEFAULT_CLUSTER "default"
+
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
  * WorkerNodeHash table.
