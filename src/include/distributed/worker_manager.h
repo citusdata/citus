@@ -65,6 +65,7 @@ extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
+extern WorkerNode * FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort);
 extern List * ReadWorkerNodes(void);
 extern void EnsureCoordinator(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
