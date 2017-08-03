@@ -772,7 +772,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 
 /*
  * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to true.
+ * pg_dist_node to isActive.
  */
 static void
 SetNodeState(char *nodeName, int32 nodePort, bool isActive)
