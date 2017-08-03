@@ -111,6 +111,15 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
+	if (!WorkerNodeIsPrimary(workerNode))
+	{
+		/*
+		 * If this is a secondary node we can't actually sync metadata to it; we assume
+		 * the primary node is receiving metadata.
+		 */
+		PG_RETURN_VOID();
+	}
+
 	/* generate and add the local group id's update query */
 	localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
