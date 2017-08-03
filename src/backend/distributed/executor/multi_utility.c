@@ -148,7 +148,7 @@ static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
-												AlterTableCmd *command);
+										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
 static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
@@ -1727,7 +1727,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
 				{
 					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
-								   "involving partition column")));
+										   "involving partition column")));
 				}
 				break;
 			}
@@ -1828,7 +1828,7 @@ ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement)
 			if (AlterInvolvesPartitionColumn(alterTableStatement, command))
 			{
 				ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
-								   "dropping partition column")));
+									   "dropping partition column")));
 			}
 		}
 	}
@@ -2517,7 +2517,7 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
  */
 static bool
 AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
-									AlterTableCmd *command)
+							 AlterTableCmd *command)
 {
 	bool involvesPartitionColumn = false;
 	Var *partitionColumn = NULL;
