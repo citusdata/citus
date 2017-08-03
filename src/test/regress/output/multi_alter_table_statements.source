@@ -758,11 +758,9 @@ ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
 ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
 NOTICE:  constraint "non_existent_contraint" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter SET WITHOUT OIDS;
--- even distribution column can be dropped however postgresql prevents this.
+-- distribution column still cannot be dropped.
 ALTER TABLE lineitem_alter DROP COLUMN l_orderkey;
-ERROR:  cannot drop table lineitem_alter column l_orderkey because other objects depend on it
-DETAIL:  table lineitem_alter depends on table lineitem_alter column l_orderkey
-HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+ERROR:  cannot execute ALTER TABLE command dropping partition column
 -- Even unique indexes on l_partkey (non-partition column) are allowed.
 -- Citus would have prevented that.
 CREATE UNIQUE INDEX unique_lineitem_partkey on lineitem_alter(l_partkey);
