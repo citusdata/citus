@@ -205,6 +205,10 @@ master_disable_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	workerNode = FindWorkerNode(nodeName, nodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
+	}
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
