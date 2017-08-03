@@ -437,6 +437,9 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
  
 (1 row)
 
+-- check that you can't add a primary to a non-default cluster
+SELECT master_add_node('localhost', 9999, nodecluster => 'olap');
+ERROR:  primaries must be added to the default cluster
 -- check that you can't add more than one primary to a group
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
@@ -471,5 +474,14 @@ UPDATE pg_dist_node SET noderole = 'primary'
   WHERE groupid = :worker_1_group AND nodeport = 9998;
 ERROR:  there cannot be two primary nodes in a group
 CONTEXT:  PL/pgSQL function citus.pg_dist_node_trigger_func() line 18 at RAISE
+-- check that you can't manually add a primary to a non-default cluster
+INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
+  VALUES ('localhost', 5000, 1000, 'primary', 'olap');
+ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
+DETAIL:  Failing row contains (17, 1000, localhost, 5000, default, f, t, primary, olap).
+UPDATE pg_dist_node SET nodecluster = 'olap'
+  WHERE nodeport = :worker_1_port;
+ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
+DETAIL:  Failing row contains (13, 12, localhost, 57637, default, f, t, primary, olap).
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
 -- them in any of the remaining tests
