@@ -60,7 +60,7 @@ static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
 							 Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
 static uint32 CountPrimariesWithMetadata();
 static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
-static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
+static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort, bool raiseError);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static uint32 GetMaxGroupId(void);
@@ -219,7 +219,7 @@ master_disable_node(PG_FUNCTION_ARGS)
 
 	CheckCitusVersion(ERROR);
 
-	workerNode = FindWorkerNode(nodeName, nodePort);
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
@@ -268,7 +268,9 @@ master_activate_node(PG_FUNCTION_ARGS)
 
 
 /*
- * GroupForNode returns the group which a given node belongs to
+ * GroupForNode returns the group which a given node belongs to.
+ *
+ * It only works if the requested node is a part of CurrentCluster.
  */
 uint32
 GroupForNode(char *nodeName, int nodePort)
@@ -350,7 +352,7 @@ static Datum
 ActivateNode(char *nodeName, int nodePort)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, true);
 	CommandId commandId = GetCurrentCommandId(true);
 	LockTupleMode lockTupleMode = LockTupleExclusive;
 	LockWaitPolicy lockWaitPolicy = LockWaitError;
@@ -368,7 +370,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	SetNodeState(nodeName, nodePort, isActive);
 
-	workerNode = FindWorkerNode(nodeName, nodePort);
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
 	if (WorkerNodeIsPrimary(workerNode))
 	{
@@ -532,6 +534,30 @@ FindWorkerNode(char *nodeName, int32 nodePort)
 
 
 /*
+ * FindWorkerNodeAnyCluster returns the workerNode no matter which cluster it is a part
+ * of. FindWorkerNodes, like almost every other function, acts as if nodes in other
+ * clusters do not exist.
+ */
+WorkerNode *
+FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort)
+{
+	WorkerNode *workerNode = NULL;
+
+	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, false);
+	if (heapTuple != NULL)
+	{
+		workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+	}
+
+	heap_close(pgDistNode, NoLock);
+	return workerNode;
+}
+
+
+/*
  * ReadWorkerNodes iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.
@@ -597,7 +623,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	EnsureCoordinator();
 	EnsureSuperUser();
 
-	workerNode = FindWorkerNode(nodeName, nodePort);
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
@@ -708,8 +734,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	 */
 	LockRelationOid(DistNodeRelationId(), ShareRowExclusiveLock);
 
-	/* check if the node already exists in the cluster */
-	workerNode = FindWorkerNode(nodeName, nodePort);
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)
 	{
 		*nodeAlreadyExists = true;
@@ -757,7 +782,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	InsertNodeRow(nextNodeIdInt, nodeName, nodePort, groupId, nodeRack, hasMetadata,
 				  isActive, nodeRole, nodeCluster);
 
-	workerNode = FindWorkerNode(nodeName, nodePort);
+	workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 
 	/* send the delete command to all primary nodes with metadata */
 	nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
@@ -786,7 +811,7 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, true);
 
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
@@ -807,22 +832,27 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 	CommandCounterIncrement();
 
+	workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
+
 	heap_close(pgDistNode, NoLock);
 
 	/* we also update isactive column at worker nodes */
-	workerNode = FindWorkerNode(nodeName, nodePort);
 	nodeStateUpdateCommand = NodeStateUpdateCommand(workerNode->nodeId, isActive);
 	SendCommandToWorkers(WORKERS_WITH_METADATA, nodeStateUpdateCommand);
 }
 
 
 /*
- * GetNodeTuple function returns heap tuple of given nodeName and nodePort. If
- * there are no node tuple with specified nodeName and nodePort, this function
- * errors out.
+ * GetNodeTuple function returns heap tuple of given nodeName and nodePort.
+ *
+ * If there are no node tuples with specified nodeName and nodePort and raiseError is
+ * true, this function errors out. If the node is not found and raiseError is false this
+ * function returns NULL.
+ *
+ * This function may return worker nodes from other clusters.
  */
 static HeapTuple
-GetNodeTuple(char *nodeName, int32 nodePort)
+GetNodeTuple(char *nodeName, int32 nodePort, bool raiseError)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 	const int scanKeyCount = 2;
@@ -843,8 +873,16 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 	heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-							   nodeName, nodePort)));
+		if (raiseError)
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+								   nodeName, nodePort)));
+		}
+
+		systable_endscan(scanDescriptor);
+		heap_close(pgDistNode, NoLock);
+
+		return NULL;
 	}
 
 	nodeTuple = heap_copytuple(heapTuple);

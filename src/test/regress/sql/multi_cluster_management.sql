@@ -198,6 +198,12 @@ SELECT 1 FROM master_add_node('localhost', 9997, groupid => :worker_1_group, nod
 -- add_inactive_node also works with secondaries
 SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
 
+-- check that you can add a seconary to a non-default cluster, and activate it, and remove it
+SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
+SELECT master_activate_node('localhost', 9999);
+SELECT master_disable_node('localhost', 9999);
+SELECT master_remove_node('localhost', 9999);
+
 -- check that you can't manually add two primaries to a group
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
   VALUES ('localhost', 5000, :worker_1_group, 'primary');
