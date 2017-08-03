@@ -3,6 +3,9 @@
 SET search_path = 'pg_catalog';
 
 ALTER TABLE pg_dist_node ADD COLUMN nodecluster name NOT NULL DEFAULT 'default';
+ALTER TABLE pg_dist_node
+  ADD CONSTRAINT primaries_are_only_allowed_in_the_default_cluster
+  CHECK (NOT (nodecluster <> 'default' AND noderole = 'primary'));
 
 DROP FUNCTION master_add_node(text, integer, integer, noderole);
 CREATE FUNCTION master_add_node(nodename text,

@@ -726,16 +726,21 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	}
 
 	/* if nodeRole hasn't been added yet there's a constraint for one-node-per-group */
-	if (nodeRole != InvalidOid)
+	if (nodeRole != InvalidOid && nodeRole == PrimaryNodeRoleId())
 	{
-		if (nodeRole == PrimaryNodeRoleId())
-		{
-			WorkerNode *existingPrimaryNode = PrimaryNodeForGroup(groupId, NULL);
+		WorkerNode *existingPrimaryNode = PrimaryNodeForGroup(groupId, NULL);
 
-			if (existingPrimaryNode != NULL)
-			{
-				ereport(ERROR, (errmsg("group %d already has a primary node", groupId)));
-			}
+		if (existingPrimaryNode != NULL)
+		{
+			ereport(ERROR, (errmsg("group %d already has a primary node", groupId)));
+		}
+	}
+
+	if (nodeRole == PrimaryNodeRoleId())
+	{
+		if (strncmp(nodeCluster, WORKER_DEFAULT_CLUSTER, WORKER_LENGTH) != 0)
+		{
+			ereport(ERROR, (errmsg("primaries must be added to the default cluster")));
 		}
 	}
 

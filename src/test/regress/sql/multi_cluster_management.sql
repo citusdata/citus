@@ -184,6 +184,9 @@ DELETE FROM pg_dist_node;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
+-- check that you can't add a primary to a non-default cluster
+SELECT master_add_node('localhost', 9999, nodecluster => 'olap');
+
 -- check that you can't add more than one primary to a group
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
@@ -200,6 +203,12 @@ INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
   VALUES ('localhost', 5000, :worker_1_group, 'primary');
 UPDATE pg_dist_node SET noderole = 'primary'
   WHERE groupid = :worker_1_group AND nodeport = 9998;
+
+-- check that you can't manually add a primary to a non-default cluster
+INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
+  VALUES ('localhost', 5000, 1000, 'primary', 'olap');
+UPDATE pg_dist_node SET nodecluster = 'olap'
+  WHERE nodeport = :worker_1_port;
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
 -- them in any of the remaining tests
