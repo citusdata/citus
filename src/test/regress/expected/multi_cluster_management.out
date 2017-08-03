@@ -136,6 +136,9 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (1 row)
 
+-- try to disable a node which does not exist and see that an error is thrown
+SELECT master_disable_node('localhost.noexist', 2345);
+ERROR:  node at "localhost.noexist:2345" does not exist
 -- restore the node for next tests
 SELECT master_activate_node('localhost', :worker_2_port);
            master_activate_node            

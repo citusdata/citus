@@ -52,6 +52,9 @@ INSERT INTO test_reference_table VALUES (1, '1');
 SELECT master_disable_node('localhost', :worker_2_port); 
 SELECT master_get_active_worker_nodes();
 
+-- try to disable a node which does not exist and see that an error is thrown
+SELECT master_disable_node('localhost.noexist', 2345);
+
 -- restore the node for next tests
 SELECT master_activate_node('localhost', :worker_2_port);
 
