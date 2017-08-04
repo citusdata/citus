@@ -60,7 +60,7 @@ static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
 							 Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
 static uint32 CountPrimariesWithMetadata();
 static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
-static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort, bool raiseError);
+static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
 static int32 GetNextGroupId(void);
 static uint32 GetMaxGroupId(void);
@@ -352,7 +352,7 @@ static Datum
 ActivateNode(char *nodeName, int nodePort)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, true);
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
 	CommandId commandId = GetCurrentCommandId(true);
 	LockTupleMode lockTupleMode = LockTupleExclusive;
 	LockWaitPolicy lockWaitPolicy = LockWaitError;
@@ -363,6 +363,12 @@ ActivateNode(char *nodeName, int nodePort)
 	WorkerNode *workerNode = NULL;
 	bool isActive = true;
 	Datum nodeRecord = 0;
+
+	if (heapTuple == NULL)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+							   nodeName, nodePort)));
+	}
 
 	heap_lock_tuple(pgDistNode, heapTuple, commandId, lockTupleMode, lockWaitPolicy,
 					followUpdates, &buffer, &heapUpdateFailureData);
@@ -546,7 +552,7 @@ FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort)
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
 
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, false);
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
 	if (heapTuple != NULL)
 	{
 		workerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
@@ -811,7 +817,7 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort, true);
+	HeapTuple heapTuple = GetNodeTuple(nodeName, nodePort);
 
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
@@ -819,6 +825,12 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 
 	char *nodeStateUpdateCommand = NULL;
 	WorkerNode *workerNode = NULL;
+
+	if (heapTuple == NULL)
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+							   nodeName, nodePort)));
+	}
 
 	memset(replace, 0, sizeof(replace));
 	values[Anum_pg_dist_node_isactive - 1] = BoolGetDatum(isActive);
@@ -843,16 +855,13 @@ SetNodeState(char *nodeName, int32 nodePort, bool isActive)
 
 
 /*
- * GetNodeTuple function returns heap tuple of given nodeName and nodePort.
- *
- * If there are no node tuples with specified nodeName and nodePort and raiseError is
- * true, this function errors out. If the node is not found and raiseError is false this
- * function returns NULL.
+ * GetNodeTuple function returns the heap tuple of given nodeName and nodePort. If the
+ * node is not found this function returns NULL.
  *
  * This function may return worker nodes from other clusters.
  */
 static HeapTuple
-GetNodeTuple(char *nodeName, int32 nodePort, bool raiseError)
+GetNodeTuple(char *nodeName, int32 nodePort)
 {
 	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
 	const int scanKeyCount = 2;
@@ -871,21 +880,10 @@ GetNodeTuple(char *nodeName, int32 nodePort, bool raiseError)
 										NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
+	if (HeapTupleIsValid(heapTuple))
 	{
-		if (raiseError)
-		{
-			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-								   nodeName, nodePort)));
-		}
-
-		systable_endscan(scanDescriptor);
-		heap_close(pgDistNode, NoLock);
-
-		return NULL;
+		nodeTuple = heap_copytuple(heapTuple);
 	}
-
-	nodeTuple = heap_copytuple(heapTuple);
 
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistNode, NoLock);
