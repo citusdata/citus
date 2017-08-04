@@ -43,6 +43,7 @@
 #include "nodes/makefuncs.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/datum.h"
@@ -2271,6 +2272,12 @@ HTAB *
 GetWorkerNodeHash(void)
 {
 	InitializeCaches(); /* ensure relevant callbacks are registered */
+
+	/*
+	 * Simulate a SELECT from pg_dist_node, ensure pg_dist_node doesn't change while our
+	 * caller is using WorkerNodeHash.
+	 */
+	LockRelationOid(DistNodeRelationId(), AccessShareLock);
 
 	/*
 	 * We might have some concurrent metadata changes. In order to get the changes,
