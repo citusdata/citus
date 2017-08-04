@@ -210,5 +210,19 @@ INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
 UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 
+-- check that you /can/ add a secondary node to a non-default cluster
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
+
+-- check that super-long cluster names are truncated
+SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'overflow'
+);
+SELECT * FROM pg_dist_node WHERE nodeport=8887;
+
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
 -- them in any of the remaining tests
