@@ -174,8 +174,6 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 
 	ErrorIfNotSuitableToGetSize(relationId);
 
-	LockRelationOid(DistNodeRelationId(), AccessShareLock);
-
 	workerNodeList = ActivePrimaryNodeList();
 
 	foreach(workerNodeCell, workerNodeList)
