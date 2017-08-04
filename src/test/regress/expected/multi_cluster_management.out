@@ -483,5 +483,32 @@ UPDATE pg_dist_node SET nodecluster = 'olap'
   WHERE nodeport = :worker_1_port;
 ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries_are_only_allowed_in_the_default_cluster"
 DETAIL:  Failing row contains (13, 12, localhost, 57637, default, f, t, primary, olap).
+-- check that you /can/ add a secondary node to a non-default cluster
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
+SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
+                  master_add_node                  
+---------------------------------------------------
+ (19,12,localhost,8888,default,f,t,secondary,olap)
+(1 row)
+
+-- check that super-long cluster names are truncated
+SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
+	'overflow'
+);
+                                               master_add_node                                                
+--------------------------------------------------------------------------------------------------------------
+ (20,12,localhost,8887,default,f,t,secondary,thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.)
+(1 row)
+
+SELECT * FROM pg_dist_node WHERE nodeport=8887;
+ nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |                           nodecluster                           
+--------+---------+-----------+----------+----------+-------------+----------+-----------+-----------------------------------------------------------------
+     20 |      12 | localhost |     8887 | default  | f           | t        | secondary | thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.
+(1 row)
+
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
 -- them in any of the remaining tests
