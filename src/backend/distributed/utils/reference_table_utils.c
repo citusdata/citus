@@ -230,7 +230,6 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
 
-	LockRelationOid(DistNodeRelationId(), AccessShareLock);
 	workerNodeList = ActivePrimaryNodeList();
 
 	/*
