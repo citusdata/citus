@@ -110,4 +110,20 @@ SELECT * FROM example WHERE key = 3;
 DELETE FROM example WHERE key = 3 AND value < now() - interval '1 hour';
 SELECT * FROM example WHERE key = 3;
 
+-- test that function evaluation descends into expressions
+CREATE OR REPLACE FUNCTION stable_fn()
+RETURNS timestamptz STABLE
+LANGUAGE plpgsql
+AS $function$
+BEGIN
+	RAISE NOTICE 'stable_fn called';
+	RETURN timestamp '10-10-2000 00:00';
+END;
+$function$;
+
+INSERT INTO example VALUES (44, (ARRAY[stable_fn(),stable_fn()])[1]);
+SELECT * FROM example WHERE key = 44;
+
+DROP FUNCTION stable_fn();
+
 DROP TABLE example;
