@@ -89,13 +89,10 @@ INSERT INTO articles VALUES (49,  9, 'anyone', 2681);
 INSERT INTO articles VALUES (50, 10, 'anjanette', 19519);
 -- insert a single row for the test
 INSERT INTO articles_single_shard VALUES (50, 10, 'anjanette', 19519);
--- zero-shard modifications should fail
+-- zero-shard modifications should succeed
 UPDATE articles SET title = '' WHERE author_id = 1 AND author_id = 2;
-ERROR:  cannot run UPDATE command which targets no shards
-HINT:  Consider using an equality filter on partition column "author_id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
+UPDATE articles SET title = '' WHERE 0 = 1;
 DELETE FROM articles WHERE author_id = 1 AND author_id = 2;
-ERROR:  cannot run DELETE command which targets no shards
-HINT:  Consider using an equality filter on partition column "author_id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 -- single-shard tests
 -- test simple select for a single row
 SELECT * FROM articles WHERE author_id = 10 AND id = 50;

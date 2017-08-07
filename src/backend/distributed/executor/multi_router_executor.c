@@ -73,8 +73,7 @@ bool AllModificationsCommutative = false;
 bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
-static void ReacquireMetadataLocks(List *taskList);
-static void AssignInsertTaskShardId(Query *jobQuery, List *taskList);
+static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
@@ -101,22 +100,12 @@ static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 
 
 /*
- * ReacquireMetadataLocks re-acquires the metadata locks that are normally
- * acquired during planning.
- *
- * If we are executing a prepared statement, then planning might have
- * happened in a separate transaction and advisory locks are no longer
- * held. If a shard is currently being repaired/copied/moved, then
- * obtaining the locks will fail and this function throws an error to
- * prevent executing a stale plan.
- *
- * If we are executing a non-prepared statement or planning happened in
- * the same transaction, then we already have the locks and obtain them
- * again here. Since we always release these locks at the end of the
- * transaction, this is effectively a no-op.
+ * AcquireMetadataLocks acquires metadata locks on each of the anchor
+ * shards in the task list to prevent a shard being modified while it
+ * is being copied.
  */
 static void
-ReacquireMetadataLocks(List *taskList)
+AcquireMetadataLocks(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
@@ -131,28 +120,7 @@ ReacquireMetadataLocks(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		/*
-		 * Only obtain metadata locks for modifications to allow reads to
-		 * proceed during shard copy.
-		 */
-		if (task->taskType == MODIFY_TASK &&
-			!TryLockShardDistributionMetadata(task->anchorShardId, ShareLock))
-		{
-			/*
-			 * We could error out immediately to give quick feedback to the
-			 * client, but this might complicate flow control and our default
-			 * behaviour during shard copy is to block.
-			 *
-			 * Block until the lock becomes available such that the next command
-			 * will likely succeed and use the serialization failure error code
-			 * to signal to the client that it should retry the current command.
-			 */
-			LockShardDistributionMetadata(task->anchorShardId, ShareLock);
-
-			ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-							errmsg("prepared modifications cannot be executed on "
-								   "a shard while it is being copied")));
-		}
+		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
 }
 
@@ -427,75 +395,41 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	if (workerJob->requiresMasterEvaluation)
 	{
 		PlanState *planState = &(scanState->customScanState.ss.ps);
+		EState *executorState = planState->state;
 
 		ExecuteMasterEvaluableFunctions(jobQuery, planState);
 
+		/*
+		 * We've processed parameters in ExecuteMasterEvaluableFunctions and
+		 * don't need to send their values to workers, since they will be
+		 * represented as constants in the deparsed query. To avoid sending
+		 * parameter values, we set the parameter list to NULL.
+		 */
+		executorState->es_param_list_info = NULL;
+
 		if (deferredPruning)
 		{
-			AssignInsertTaskShardId(jobQuery, taskList);
+			DeferredErrorMessage *planningError = NULL;
+
+			/* need to perform shard pruning, rebuild the task list from scratch */
+			taskList = RouterModifyTaskList(jobQuery, &planningError);
+
+			if (planningError != NULL)
+			{
+				RaiseDeferredError(planningError, ERROR);
+			}
+
+			workerJob->taskList = taskList;
 		}
 
 		RebuildQueryStrings(jobQuery, taskList);
 	}
 
-	/*
-	 * If we are executing a prepared statement, then we may not yet have obtained
-	 * the metadata locks in this transaction. To prevent a concurrent shard copy,
-	 * we re-obtain them here or error out if a shard copy has already started.
-	 *
-	 * If a shard copy finishes in between fetching a plan from cache and
-	 * re-acquiring the locks, then we might still run a stale plan, which could
-	 * cause shard placements to diverge. To minimize this window, we take the
-	 * locks as early as possible.
-	 */
-	ReacquireMetadataLocks(taskList);
+	/* prevent concurrent placement changes */
+	AcquireMetadataLocks(taskList);
 
-	/*
-	 * If we deferred shard pruning to the executor, then we still need to assign
-	 * shard placements. We do this after acquiring the metadata locks to ensure
-	 * we can't get stale metadata. At some point, we may want to load all
-	 * placement metadata here.
-	 */
-	if (deferredPruning)
-	{
-		/* modify tasks are always assigned using first-replica policy */
-		workerJob->taskList = FirstReplicaAssignTaskList(taskList);
-	}
-}
-
-
-/*
- * AssignInsertTaskShardId performs shard pruning for an insert and sets
- * anchorShardId accordingly.
- */
-static void
-AssignInsertTaskShardId(Query *jobQuery, List *taskList)
-{
-	ShardInterval *shardInterval = NULL;
-	Task *insertTask = NULL;
-	DeferredErrorMessage *planningError = NULL;
-
-	Assert(jobQuery->commandType == CMD_INSERT);
-
-	/*
-	 * We skipped shard pruning in the planner because the partition
-	 * column contained an expression. Perform shard pruning now.
-	 */
-	shardInterval = FindShardForInsert(jobQuery, &planningError);
-	if (planningError != NULL)
-	{
-		RaiseDeferredError(planningError, ERROR);
-	}
-	else if (shardInterval == NULL)
-	{
-		/* expression could not be evaluated */
-		ereport(ERROR, (errmsg("parameters in the partition column are not "
-							   "allowed")));
-	}
-
-	/* assign a shard ID to the task */
-	insertTask = (Task *) linitial(taskList);
-	insertTask->anchorShardId = shardInterval->shardId;
+	/* assign task placements */
+	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
 }
 
 
@@ -515,9 +449,13 @@ RouterSingleModifyExecScan(CustomScanState *node)
 		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		Task *task = (Task *) linitial(taskList);
 
-		ExecuteSingleModifyTask(scanState, task, hasReturning);
+		if (list_length(taskList) > 0)
+		{
+			Task *task = (Task *) linitial(taskList);
+
+			ExecuteSingleModifyTask(scanState, task, hasReturning);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -574,9 +512,13 @@ RouterSelectExecScan(CustomScanState *node)
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		Task *task = (Task *) linitial(taskList);
 
-		ExecuteSingleSelectTask(scanState, task);
+		if (list_length(taskList) > 0)
+		{
+			Task *task = (Task *) linitial(taskList);
+
+			ExecuteSingleSelectTask(scanState, task);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}

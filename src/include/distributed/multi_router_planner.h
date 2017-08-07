@@ -46,8 +46,7 @@ extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
-extern ShardInterval * FindShardForInsert(Query *query,
-										  DeferredErrorMessage **planningError);
+extern List * RouterModifyTaskList(Query *query, DeferredErrorMessage **planningError);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */
