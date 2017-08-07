@@ -77,13 +77,23 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 
 			UpdateRelationToShardNames((Node *) copiedSubquery, relationShardList);
 		}
+		else if (task->upsertQuery)
+		{
+			RangeTblEntry *rangeTableEntry = NULL;
+
+			/* setting an alias simplifies deparsing of UPSERTs */
+			rangeTableEntry = linitial(query->rtable);
+			if (rangeTableEntry->alias == NULL)
+			{
+				Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
+				rangeTableEntry->alias = alias;
+			}
+		}
 
 		deparse_shard_query(query, relationId, task->anchorShardId,
 							newQueryString);
 
-		ereport(DEBUG4, (errmsg("query before rebuilding: %s",
-								task->queryString)));
-		ereport(DEBUG4, (errmsg("query after rebuilding:  %s",
+		ereport(DEBUG4, (errmsg("distributed statement: %s",
 								newQueryString->data)));
 
 		task->queryString = newQueryString->data;

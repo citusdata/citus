@@ -93,22 +93,30 @@ static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *sta
 static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
 									FromExpr *joinTree);
-static Task * RouterModifyTask(Oid distributedTableId, Query *originalQuery,
-							   ShardInterval *shardInterval);
-static ShardInterval * TargetShardIntervalForModify(Oid distriubtedTableId, Query *query,
-													DeferredErrorMessage **planningError);
+static Job * RouterModifyJob(Query *originalQuery, Query *query,
+							 DeferredErrorMessage **planningError);
+static void ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry);
+static bool CanShardPrune(Oid distributedTableId, Query *query);
+static List * RouterInsertTaskList(Query *query, DistTableCacheEntry *cacheEntry,
+								   DeferredErrorMessage **planningError);
+static List * RouterUpdateOrDeleteTaskList(Query *query, DistTableCacheEntry *cacheEntry,
+										   DeferredErrorMessage **planningError);
+static Job * CreateJob(Query *query);
+static Task * CreateTask(TaskType taskType);
+static ShardInterval * FindShardForInsert(Query *query, DistTableCacheEntry *cacheEntry,
+										  DeferredErrorMessage **planningError);
 static ShardInterval * FindShardForUpdateOrDelete(Query *query,
+												  DistTableCacheEntry *cacheEntry,
 												  DeferredErrorMessage **planningError);
 static List * QueryRestrictList(Query *query, char partitionMethod);
 static Expr * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
-static Task * RouterSelectTask(Query *originalQuery,
-							   RelationRestrictionContext *restrictionContext,
-							   List **placementList);
+static Job * RouterSelectJob(Query *originalQuery,
+							 RelationRestrictionContext *restrictionContext,
+							 bool *queryRoutable);
 static bool RelationPrunesToMultipleShards(List *relationShardList);
 static List * TargetShardIntervalsForSelect(Query *query,
 											RelationRestrictionContext *restrictionContext);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
-static Job * RouterQueryJob(Query *query, Task *task, List *placementList);
 static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
@@ -151,11 +159,7 @@ MultiPlan *
 CreateModifyPlan(Query *originalQuery, Query *query,
 				 PlannerRestrictionContext *plannerRestrictionContext)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(originalQuery);
-	ShardInterval *targetShardInterval = NULL;
-	Task *task = NULL;
 	Job *job = NULL;
-	List *placementList = NIL;
 	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
 
 	multiPlan->operation = query->commandType;
@@ -166,18 +170,14 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 		return multiPlan;
 	}
 
-	targetShardInterval = TargetShardIntervalForModify(distributedTableId, query,
-													   &multiPlan->planningError);
+	job = RouterModifyJob(originalQuery, query, &multiPlan->planningError);
 	if (multiPlan->planningError != NULL)
 	{
 		return multiPlan;
 	}
 
-	task = RouterModifyTask(distributedTableId, originalQuery, targetShardInterval);
-
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
-	job = RouterQueryJob(originalQuery, task, placementList);
 	multiPlan->workerJob = job;
 	multiPlan->masterQuery = NULL;
 	multiPlan->routerExecutable = true;
@@ -204,8 +204,7 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 						   RelationRestrictionContext *restrictionContext)
 {
 	Job *job = NULL;
-	Task *task = NULL;
-	List *placementList = NIL;
+	bool queryRoutable = false;
 	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
 
 	multiPlan->operation = query->commandType;
@@ -217,15 +216,14 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 		return multiPlan;
 	}
 
-	task = RouterSelectTask(originalQuery, restrictionContext, &placementList);
-	if (task == NULL)
+	job = RouterSelectJob(originalQuery, restrictionContext, &queryRoutable);
+	if (!queryRoutable)
 	{
+		/* query cannot be handled by this planner */
 		return NULL;
 	}
 
 	ereport(DEBUG2, (errmsg("Creating router plan")));
-
-	job = RouterQueryJob(originalQuery, task, placementList);
 
 	multiPlan->workerJob = job;
 	multiPlan->masterQuery = NULL;
@@ -1015,83 +1013,151 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 
 
 /*
- * RouterModifyTask builds a Task to represent a modification performed by
+ * RouterModifyJob builds a Job to represent a modification performed by
  * the provided query against the provided shard interval. This task contains
  * shard-extended deparsed SQL to be run during execution.
  */
-static Task *
-RouterModifyTask(Oid distributedTableId, Query *originalQuery,
-				 ShardInterval *shardInterval)
+static Job *
+RouterModifyJob(Query *originalQuery, Query *query, DeferredErrorMessage **planningError)
 {
-	Task *modifyTask = NULL;
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	List *taskList = NIL;
+	Job *job = NULL;
+	bool requiresMasterEvaluation = false;
+	bool deferredPruning = false;
 
-	modifyTask = CitusMakeNode(Task);
-	modifyTask->jobId = INVALID_JOB_ID;
-	modifyTask->taskId = INVALID_TASK_ID;
-	modifyTask->taskType = MODIFY_TASK;
-	modifyTask->queryString = NULL;
-	modifyTask->anchorShardId = INVALID_SHARD_ID;
-	modifyTask->dependedTaskList = NIL;
-	modifyTask->replicationModel = cacheEntry->replicationModel;
-
-	if (originalQuery->onConflict != NULL)
+	if (!CanShardPrune(distributedTableId, query))
 	{
-		RangeTblEntry *rangeTableEntry = NULL;
+		/* there is a non-constant in the partition column, cannot prune yet */
+		taskList = NIL;
+		deferredPruning = true;
 
-		/* set the flag */
-		modifyTask->upsertQuery = true;
-
-		/* setting an alias simplifies deparsing of UPSERTs */
-		rangeTableEntry = linitial(originalQuery->rtable);
-		if (rangeTableEntry->alias == NULL)
+		/* must evaluate the non-constant in the partition column */
+		requiresMasterEvaluation = true;
+	}
+	else
+	{
+		taskList = RouterModifyTaskList(query, planningError);
+		if (*planningError)
 		{
-			Alias *alias = makeAlias(CITUS_TABLE_ALIAS, NIL);
-			rangeTableEntry->alias = alias;
+			return NULL;
 		}
+
+		/* determine whether there are function calls to evaluate */
+		requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 	}
 
-	if (shardInterval != NULL)
+	if (!requiresMasterEvaluation)
 	{
-		uint64 shardId = shardInterval->shardId;
-		StringInfo queryString = makeStringInfo();
-
-		/* grab shared metadata lock to stop concurrent placement additions */
-		LockShardDistributionMetadata(shardId, ShareLock);
-
-		deparse_shard_query(originalQuery, shardInterval->relationId, shardId,
-							queryString);
-		ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
-
-		modifyTask->queryString = queryString->data;
-		modifyTask->anchorShardId = shardId;
+		/* no functions or parameters, build the query strings upfront */
+		RebuildQueryStrings(originalQuery, taskList);
 	}
 
-	return modifyTask;
+	job = CreateJob(originalQuery);
+	job->taskList = taskList;
+	job->requiresMasterEvaluation = requiresMasterEvaluation;
+	job->deferredPruning = deferredPruning;
+
+	return job;
 }
 
 
 /*
- * TargetShardIntervalForModify determines the single shard targeted by a provided
- * modify command. If no matching shards exist, it throws an error. Otherwise, it
- * delegates to FindShardForInsert or FindShardForUpdateOrDelete based on the
- * command type.
+ * CreateJob returns a new Job for the given query.
  */
-static ShardInterval *
-TargetShardIntervalForModify(Oid distributedTableId, Query *query,
-							 DeferredErrorMessage **planningError)
+static Job *
+CreateJob(Query *query)
 {
-	ShardInterval *shardInterval = NULL;
+	Job *job = NULL;
+
+	job = CitusMakeNode(Job);
+	job->jobId = INVALID_JOB_ID;
+	job->jobQuery = query;
+	job->taskList = NIL;
+	job->dependedJobList = NIL;
+	job->subqueryPushdown = false;
+	job->requiresMasterEvaluation = false;
+	job->deferredPruning = false;
+
+	return job;
+}
+
+
+/*
+ * CanShardPrune determines whether a query is ready for shard pruning
+ * by checking whether there is a constant value in the partition column.
+ */
+static bool
+CanShardPrune(Oid distributedTableId, Query *query)
+{
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+	Expr *partitionValueExpr = NULL;
+
+	if (query->commandType != CMD_INSERT)
+	{
+		/* we assume UPDATE/DELETE is always prunable */
+		return true;
+	}
+
+	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	if (partitionColumn == NULL)
+	{
+		/* can always do shard pruning for reference tables */
+		return true;
+	}
+
+	partitionValueExpr = ExtractInsertPartitionValue(query, partitionColumn);
+	if (IsA(partitionValueExpr, Const))
+	{
+		/* can do shard pruning if the partition column is constant */
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * RouterModifyTaskList builds a list of tasks for a given query.
+ */
+List *
+RouterModifyTaskList(Query *query, DeferredErrorMessage **planningError)
+{
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 	CmdType commandType = query->commandType;
-	int shardCount = 0;
+	List *taskList = NIL;
 
-	Assert(commandType != CMD_SELECT);
+	ErrorIfNoShardsExist(cacheEntry);
 
-	/* error out if no shards exist for the table */
-	shardCount = cacheEntry->shardIntervalArrayLength;
+	if (commandType == CMD_INSERT)
+	{
+		taskList = RouterInsertTaskList(query, cacheEntry, planningError);
+	}
+	else
+	{
+		taskList = RouterUpdateOrDeleteTaskList(query, cacheEntry, planningError);
+		if (*planningError)
+		{
+			return NIL;
+		}
+	}
+
+	return taskList;
+}
+
+
+/*
+ * ErrorIfNoShardsExist throws an error if the given table has no shards.
+ */
+static void
+ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry)
+{
+	int shardCount = cacheEntry->shardIntervalArrayLength;
 	if (shardCount == 0)
 	{
+		Oid distributedTableId = cacheEntry->relationId;
 		char *relationName = get_rel_name(distributedTableId);
 
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -1101,17 +1167,110 @@ TargetShardIntervalForModify(Oid distributedTableId, Query *query,
 						errhint("Run master_create_worker_shards to create shards "
 								"and try again.")));
 	}
+}
 
-	if (commandType == CMD_INSERT)
+
+/*
+ * RouterInsertTaskList generates a list of tasks for performing an INSERT on
+ * a distributed table via the router executor.
+ */
+static List *
+RouterInsertTaskList(Query *query, DistTableCacheEntry *cacheEntry,
+					 DeferredErrorMessage **planningError)
+{
+	ShardInterval *shardInterval = NULL;
+	Task *modifyTask = NULL;
+
+	Assert(query->commandType == CMD_INSERT);
+
+	shardInterval = FindShardForInsert(query, cacheEntry, planningError);
+
+	if (*planningError != NULL)
 	{
-		shardInterval = FindShardForInsert(query, planningError);
-	}
-	else
-	{
-		shardInterval = FindShardForUpdateOrDelete(query, planningError);
+		return NIL;
 	}
 
-	return shardInterval;
+	/* an INSERT always routes to exactly one shard */
+	Assert(shardInterval != NULL);
+
+	modifyTask = CreateTask(MODIFY_TASK);
+	modifyTask->anchorShardId = shardInterval->shardId;
+	modifyTask->replicationModel = cacheEntry->replicationModel;
+
+	if (query->onConflict != NULL)
+	{
+		modifyTask->upsertQuery = true;
+	}
+
+	return list_make1(modifyTask);
+}
+
+
+/*
+ * RouterUpdateOrDeleteTaskList returns a list of tasks for executing an UPDATE
+ * or DELETE command on a distributed table via the router executor.
+ */
+static List *
+RouterUpdateOrDeleteTaskList(Query *query, DistTableCacheEntry *cacheEntry,
+							 DeferredErrorMessage **planningError)
+{
+	ShardInterval *shardInterval = NULL;
+	List *taskList = NIL;
+
+	Assert(query->commandType == CMD_UPDATE || query->commandType == CMD_DELETE);
+
+	shardInterval = FindShardForUpdateOrDelete(query, cacheEntry, planningError);
+
+	if (*planningError != NULL)
+	{
+		return NIL;
+	}
+
+	if (shardInterval != NULL)
+	{
+		Task *modifyTask = NULL;
+
+		modifyTask = CreateTask(MODIFY_TASK);
+		modifyTask->anchorShardId = shardInterval->shardId;
+		modifyTask->replicationModel = cacheEntry->replicationModel;
+
+		taskList = lappend(taskList, modifyTask);
+	}
+
+	return taskList;
+}
+
+
+/*
+ * CreateTask returns a new Task with the given type.
+ */
+static Task *
+CreateTask(TaskType taskType)
+{
+	Task *task = NULL;
+
+	task = CitusMakeNode(Task);
+	task->taskType = taskType;
+	task->jobId = INVALID_JOB_ID;
+	task->taskId = INVALID_TASK_ID;
+	task->queryString = NULL;
+	task->anchorShardId = INVALID_SHARD_ID;
+	task->taskPlacementList = NIL;
+	task->dependedTaskList = NIL;
+
+	task->partitionId = 0;
+	task->upstreamTaskId = INVALID_TASK_ID;
+	task->shardInterval = NULL;
+	task->assignmentConstrained = false;
+	task->shardId = INVALID_SHARD_ID;
+	task->taskExecution = NULL;
+	task->upsertQuery = false;
+	task->replicationModel = REPLICATION_MODEL_INVALID;
+
+	task->insertSelectQuery = false;
+	task->relationShardList = NIL;
+
+	return task;
 }
 
 
@@ -1121,45 +1280,42 @@ TargetShardIntervalForModify(Oid distributedTableId, Query *query,
  * evaluated. If the partition column value falls within 0 or multiple
  * (overlapping) shards, the planningError is set.
  */
-ShardInterval *
-FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
+static ShardInterval *
+FindShardForInsert(Query *query, DistTableCacheEntry *cacheEntry,
+				   DeferredErrorMessage **planningError)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = cacheEntry->relationId;
 	char partitionMethod = cacheEntry->partitionMethod;
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = NULL;
 	Expr *partitionValueExpr = NULL;
 	Const *partitionValueConst = NULL;
-	List *shardIntervalList = NIL;
-	List *prunedShardList = NIL;
 	int prunedShardCount = 0;
+	List *prunedShardList = NIL;
 
 	Assert(query->commandType == CMD_INSERT);
 
-	/* reference tables can only have one shard */
+	/* reference tables do not have a partition column, but can only have one shard */
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{
-		int shardCount = 0;
-
-		shardIntervalList = LoadShardIntervalList(distributedTableId);
-		shardCount = list_length(shardIntervalList);
-
+		int shardCount = cacheEntry->shardIntervalArrayLength;
 		if (shardCount != 1)
 		{
 			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
 		}
 
-		return (ShardInterval *) linitial(shardIntervalList);
+		return cacheEntry->sortedShardIntervalArray[0];
 	}
 
 	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-
 	partitionValueExpr = ExtractInsertPartitionValue(query, partitionColumn);
+
+	/* non-constants should have been caught by CanShardPrune */
 	if (!IsA(partitionValueExpr, Const))
 	{
-		/* shard pruning not possible right now */
-		return NULL;
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						errmsg("cannot perform an INSERT with a non-constant in the "
+							   "partition column")));
 	}
 
 	partitionValueConst = (Const *) partitionValueExpr;
@@ -1173,7 +1329,6 @@ FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
 	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE)
 	{
 		Datum partitionValue = partitionValueConst->constvalue;
-		DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
 		ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
 
 		if (shardInterval != NULL)
@@ -1251,10 +1406,10 @@ FindShardForInsert(Query *query, DeferredErrorMessage **planningError)
  * needs to be applied to multiple or no shards.
  */
 static ShardInterval *
-FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
+FindShardForUpdateOrDelete(Query *query, DistTableCacheEntry *cacheEntry,
+						   DeferredErrorMessage **planningError)
 {
-	Oid distributedTableId = ExtractFirstDistributedTableId(query);
-	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	Oid distributedTableId = cacheEntry->relationId;
 	char partitionMethod = cacheEntry->partitionMethod;
 	CmdType commandType = query->commandType;
 	List *restrictClauseList = NIL;
@@ -1268,7 +1423,7 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 	prunedShardList = PruneShards(distributedTableId, tableId, restrictClauseList);
 
 	prunedShardCount = list_length(prunedShardList);
-	if (prunedShardCount != 1)
+	if (prunedShardCount > 1)
 	{
 		char *partitionKeyString = cacheEntry->partitionKeyString;
 		char *partitionColumnName = ColumnNameToColumn(distributedTableId,
@@ -1276,7 +1431,6 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 		StringInfo errorMessage = makeStringInfo();
 		StringInfo errorHint = makeStringInfo();
 		const char *commandName = NULL;
-		const char *targetCountType = NULL;
 
 		if (commandType == CMD_UPDATE)
 		{
@@ -1285,15 +1439,6 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 		else
 		{
 			commandName = "DELETE";
-		}
-
-		if (prunedShardCount == 0)
-		{
-			targetCountType = "no";
-		}
-		else
-		{
-			targetCountType = "multiple";
 		}
 
 		appendStringInfo(errorHint, "Consider using an equality filter on "
@@ -1310,13 +1455,18 @@ FindShardForUpdateOrDelete(Query *query, DeferredErrorMessage **planningError)
 										"all shards satisfying delete criteria.");
 		}
 
-		appendStringInfo(errorMessage, "cannot run %s command which targets %s shards",
-						 commandName, targetCountType);
+		appendStringInfo(errorMessage,
+						 "cannot run %s command which targets multiple shards",
+						 commandName);
 
 		(*planningError) = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 										 errorMessage->data, NULL,
 										 errorHint->data);
 
+		return NULL;
+	}
+	else if (prunedShardCount == 0)
+	{
 		return NULL;
 	}
 
@@ -1404,16 +1554,17 @@ ExtractInsertPartitionValue(Query *query, Var *partitionColumn)
 }
 
 
-/* RouterSelectTask builds a Task to represent a single shard select query */
-static Task *
-RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionContext,
-				 List **placementList)
+/* RouterSelectJob builds a Job to represent a single shard select query */
+static Job *
+RouterSelectJob(Query *originalQuery, RelationRestrictionContext *restrictionContext,
+				bool *returnQueryRoutable)
 {
+	Job *job = NULL;
 	Task *task = NULL;
 	bool queryRoutable = false;
 	StringInfo queryString = makeStringInfo();
-	bool upsertQuery = false;
 	uint64 shardId = INVALID_SHARD_ID;
+	List *placementList = NIL;
 	List *relationShardList = NIL;
 	bool replacePrunedQueryWithDummy = false;
 
@@ -1421,29 +1572,31 @@ RouterSelectTask(Query *originalQuery, RelationRestrictionContext *restrictionCo
 	replacePrunedQueryWithDummy = true;
 
 	queryRoutable = RouterSelectQuery(originalQuery, restrictionContext,
-									  placementList, &shardId, &relationShardList,
+									  &placementList, &shardId, &relationShardList,
 									  replacePrunedQueryWithDummy);
 
 
 	if (!queryRoutable)
 	{
+		*returnQueryRoutable = false;
 		return NULL;
 	}
 
+	job = CreateJob(originalQuery);
+
 	pg_get_query_def(originalQuery, queryString);
 
-	task = CitusMakeNode(Task);
-	task->jobId = INVALID_JOB_ID;
-	task->taskId = INVALID_TASK_ID;
-	task->taskType = ROUTER_TASK;
+	task = CreateTask(ROUTER_TASK);
 	task->queryString = queryString->data;
 	task->anchorShardId = shardId;
-	task->replicationModel = REPLICATION_MODEL_INVALID;
-	task->dependedTaskList = NIL;
-	task->upsertQuery = upsertQuery;
+	task->taskPlacementList = placementList;
 	task->relationShardList = relationShardList;
 
-	return task;
+	job->taskList = list_make1(task);
+
+	*returnQueryRoutable = true;
+
+	return job;
 }
 
 
@@ -1768,67 +1921,6 @@ IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList)
 	}
 
 	return placementList;
-}
-
-
-/*
- * RouterQueryJob creates a Job for the specified query to execute the
- * provided single shard select task.
- */
-static Job *
-RouterQueryJob(Query *query, Task *task, List *placementList)
-{
-	Job *job = NULL;
-	List *taskList = NIL;
-	TaskType taskType = task->taskType;
-	bool requiresMasterEvaluation = false;
-	bool deferredPruning = false;
-
-	if (taskType == MODIFY_TASK)
-	{
-		if (task->anchorShardId != INVALID_SHARD_ID)
-		{
-			/*
-			 * We were able to assign a shard ID. Generate task
-			 * placement list using the first-replica assignment
-			 * policy (modify placements in placement ID order).
-			 */
-			taskList = FirstReplicaAssignTaskList(list_make1(task));
-			requiresMasterEvaluation = RequiresMasterEvaluation(query);
-		}
-		else
-		{
-			/*
-			 * We were unable to assign a shard ID yet, meaning
-			 * the partition column value is an expression.
-			 */
-			taskList = list_make1(task);
-			requiresMasterEvaluation = true;
-			deferredPruning = true;
-		}
-	}
-	else
-	{
-		/*
-		 * For selects we get the placement list during shard
-		 * pruning.
-		 */
-		Assert(placementList != NIL);
-
-		task->taskPlacementList = placementList;
-		taskList = list_make1(task);
-	}
-
-	job = CitusMakeNode(Job);
-	job->dependedJobList = NIL;
-	job->jobId = INVALID_JOB_ID;
-	job->subqueryPushdown = false;
-	job->jobQuery = query;
-	job->taskList = taskList;
-	job->requiresMasterEvaluation = requiresMasterEvaluation;
-	job->deferredPruning = deferredPruning;
-
-	return job;
 }
 
 
