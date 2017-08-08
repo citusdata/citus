@@ -153,12 +153,27 @@ SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+		Oid relationId = relationRestriction->relationId;
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
 		List *targetList = relationPlannerRoot->parse->targetList;
 		List *appendRelList = relationPlannerRoot->append_rel_list;
 		Var *varToBeAdded = NULL;
 		TargetEntry *targetEntryToAdd = NULL;
+
+		/*
+		 * Although it is not the best place to error out when facing with reference
+		 * tables, we decide to error out here. Otherwise, we need to add equality
+		 * for each reference table and it is more complex to implement. In the
+		 * future implementation all checks will be gathered to single point.
+		 */
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot pushdown this query"),
+							errdetail(
+								"Reference tables are not allowed with set operations")));
+		}
 
 		/*
 		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres

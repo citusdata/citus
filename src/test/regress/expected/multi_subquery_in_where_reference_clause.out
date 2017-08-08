@@ -139,6 +139,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		HAVING sum(submit_card_info) > 0
 )
 ORDER BY 1, 2;
-ERROR:  can not plan query having reference table on the left part of left join
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 DROP TABLE events_reference_table;
 DROP TABLE users_reference_table;

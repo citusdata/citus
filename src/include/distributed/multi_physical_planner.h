@@ -286,7 +286,7 @@ extern Const * MakeInt4Constant(Datum constantValue);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
-extern bool RTEContainsReferenceTable(RangeTblEntry *rangeTableEntry);
+extern bool HasReferenceTable(Node *node);
 
 /* function declarations for Task and Task list operations */
 extern bool TasksEqual(const Task *a, const Task *b);

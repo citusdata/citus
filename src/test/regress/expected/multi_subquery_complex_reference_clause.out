@@ -303,7 +303,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY 
     cnt DESC, generated_group_field ASC
   LIMIT 10;
-ERROR:  can not plan query having reference table on the left part of left join
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
   -- RIGHT JOINs used with INNER JOINs should error out since reference table exist in the
 -- right side of the RIGHT JOIN.
 SELECT
@@ -342,7 +343,8 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY 
     cnt DESC, generated_group_field ASC
   LIMIT 10;
-ERROR:  can not plan query having reference table on the left part of left join
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
   -- Outer subquery with reference table
 SELECT "some_users_data".user_id, lastseen
 FROM
@@ -373,7 +375,8 @@ FROM
 ORDER BY 
   user_id
 limit 50;
-ERROR:  can not plan query having reference table as a part of full join
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
  -- 
  -- UNIONs and JOINs with reference tables, shoukld error out
  --
@@ -437,7 +440,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  can not plan query having reference table with union
+ERROR:  cannot push down this subquery 
+DETAIL:  Reference tables are not supported with union operator
   -- reference table exist in the subquery of union, should error out 
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -509,7 +513,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  can not plan query having reference table with union
+ERROR:  cannot push down this subquery
+DETAIL:  Reference tables are not supported with union operator
 -- 
 -- Should error out with UNION ALL Queries on reference tables
 --
@@ -563,4 +568,5 @@ INNER JOIN
       WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
-ERROR:  can not plan query having reference table with union
+ERROR:  cannot push down this subquery
+DETAIL:  Reference tables are not supported with union operator
