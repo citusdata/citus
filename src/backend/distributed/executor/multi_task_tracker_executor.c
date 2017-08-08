@@ -190,7 +190,7 @@ MultiTaskTrackerExecute(Job *job)
 	 * assigning and checking the status of tasks. The second (temporary) hash
 	 * helps us in fetching results data from worker nodes to the master node.
 	 */
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActiveReadableNodeList();
 	taskTrackerCount = (uint32) list_length(workerNodeList);
 
 	taskTrackerHash = TrackerHash(taskTrackerHashName, workerNodeList);
