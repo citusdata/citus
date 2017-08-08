@@ -344,6 +344,47 @@ WorkerNodeIsPrimary(WorkerNode *worker)
 
 
 /*
+ * WorkerNodeIsSecondary returns whether the argument represents a secondary node.
+ */
+bool
+WorkerNodeIsSecondary(WorkerNode *worker)
+{
+	Oid secondaryRole = SecondaryNodeRoleId();
+
+	/* if nodeRole does not yet exist, all nodes are primary nodes */
+	if (secondaryRole == InvalidOid)
+	{
+		return false;
+	}
+
+	return worker->nodeRole == secondaryRole;
+}
+
+
+/*
+ * WorkerNodeIsReadable returns whether we're allowed to send SELECT queries to this
+ * node.
+ */
+bool
+WorkerNodeIsReadable(WorkerNode *workerNode)
+{
+	if (ReadFromSecondaries == USE_SECONDARY_NODES_NEVER &&
+		WorkerNodeIsPrimary(workerNode))
+	{
+		return true;
+	}
+
+	if (ReadFromSecondaries == USE_SECONDARY_NODES_ALWAYS &&
+		WorkerNodeIsSecondary(workerNode))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * PrimaryNodeForGroup returns the (unique) primary in the specified group.
  *
  * If there are any nodes in the requested group and groupContainsNodes is not NULL

@@ -309,6 +309,19 @@ ActivePrimaryNodeCount(void)
 
 
 /*
+ * ActiveReadableNodeCount returns the number of groups with a node we can read from.
+ */
+uint32
+ActiveReadableNodeCount(void)
+{
+	List *workerNodeList = ActiveReadableNodeList();
+	uint32 liveWorkerCount = list_length(workerNodeList);
+
+	return liveWorkerCount;
+}
+
+
+/*
  * ActivePrimaryNodeList returns a list of all the active primary nodes in workerNodeHash
  */
 List *
@@ -318,6 +331,8 @@ ActivePrimaryNodeList(void)
 	WorkerNode *workerNode = NULL;
 	HTAB *workerNodeHash = GetWorkerNodeHash();
 	HASH_SEQ_STATUS status;
+
+	EnsureModificationsCanRun();
 
 	hash_seq_init(&status, workerNodeHash);
 
@@ -329,6 +344,42 @@ ActivePrimaryNodeList(void)
 			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
 			workerNodeList = lappend(workerNodeList, workerNodeCopy);
 		}
+	}
+
+	return workerNodeList;
+}
+
+
+/*
+ * ActiveReadableNodeList returns a list of all nodes in workerNodeHash we can read from.
+ */
+List *
+ActiveReadableNodeList(void)
+{
+	List *workerNodeList = NIL;
+	WorkerNode *workerNode = NULL;
+	HTAB *workerNodeHash = GetWorkerNodeHash();
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		WorkerNode *workerNodeCopy;
+
+		if (!workerNode->isActive)
+		{
+			continue;
+		}
+
+		if (!WorkerNodeIsReadable(workerNode))
+		{
+			continue;
+		}
+
+		workerNodeCopy = palloc0(sizeof(WorkerNode));
+		memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
+		workerNodeList = lappend(workerNodeList, workerNodeCopy);
 	}
 
 	return workerNodeList;

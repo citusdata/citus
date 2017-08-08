@@ -71,7 +71,9 @@ JobExecutorType(MultiPlan *multiPlan)
 												 " queries on the workers.")));
 	}
 
-	workerNodeList = ActivePrimaryNodeList();
+	Assert(multiPlan->operation == CMD_SELECT);
+
+	workerNodeList = ActiveReadableNodeList();
 	workerNodeCount = list_length(workerNodeList);
 	taskCount = list_length(job->taskList);
 	tasksPerNode = taskCount / ((double) workerNodeCount);

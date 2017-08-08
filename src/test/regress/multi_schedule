@@ -23,6 +23,8 @@ test: multi_table_ddl
 test: multi_name_lengths
 test: multi_metadata_access
 
+test: multi_read_from_secondaries
+
 # ----------
 # The following distributed tests depend on creating a partitioned table and
 # uploading data to it.
