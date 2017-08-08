@@ -10,7 +10,7 @@ SELECT create_reference_table('reference_table_test');
 
 -- see that partkey is NULL
 SELECT
-	partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+	partmethod, (partkey IS NULL) as partkeyisnull, repmodel
 FROM
 	pg_dist_partition
 WHERE

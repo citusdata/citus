@@ -12,14 +12,14 @@ NOTICE:  Copying data from local table...
 
 -- see that partkey is NULL
 SELECT
-	partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+	partmethod, (partkey IS NULL) as partkeyisnull, repmodel
 FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
- n          | t             |            1 | t
+ partmethod | partkeyisnull | repmodel 
+------------+---------------+----------
+ n          | t             | t
 (1 row)
 
 -- now see that shard min/max values are NULL
