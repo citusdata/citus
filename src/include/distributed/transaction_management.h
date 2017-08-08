@@ -10,6 +10,7 @@
 #define TRANSACTION_MANAGMENT_H
 
 #include "lib/ilist.h"
+#include "nodes/pg_list.h"
 
 /* describes what kind of modifications have occurred in the current transaction */
 typedef enum
