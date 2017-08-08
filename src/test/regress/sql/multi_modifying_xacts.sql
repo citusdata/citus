@@ -92,7 +92,7 @@ EXCEPTION
     WHEN not_null_violation THEN
         RAISE NOTICE 'caught not_null_violation';
 END $$;
-COMMIT;
+ROLLBACK;
 \set VERBOSITY default
 
 

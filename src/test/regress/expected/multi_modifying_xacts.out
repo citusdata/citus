@@ -119,7 +119,7 @@ EXCEPTION
         RAISE NOTICE 'caught not_null_violation';
 END $$;
 NOTICE:  caught not_null_violation
-COMMIT;
+ROLLBACK;
 \set VERBOSITY default
 -- should be valid to edit labs after researchers...
 BEGIN;

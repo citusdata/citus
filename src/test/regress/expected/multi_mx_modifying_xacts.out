@@ -100,18 +100,18 @@ EXCEPTION
         RAISE NOTICE 'caught not_null_violation';
 END $$;
 COMMIT;
--- but rollback should not
+-- rollback should also work
 BEGIN;
 INSERT INTO researchers_mx VALUES (7, 4, 'Jim Gray');
 SAVEPOINT hire_engelbart;
 INSERT INTO researchers_mx VALUES (8, 4, 'Douglas Engelbart');
 ROLLBACK TO hire_engelbart;
 COMMIT;
-ERROR:  cannot ROLLBACK TO SAVEPOINT in transactions which modify distributed tables
 SELECT name FROM researchers_mx WHERE lab_id = 4;
- name 
-------
-(0 rows)
+   name   
+----------
+ Jim Gray
+(1 row)
 
 BEGIN;
 DO $$
