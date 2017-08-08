@@ -82,7 +82,7 @@ MultiRealTimeExecute(Job *job)
 	const char *workerHashName = "Worker node hash";
 	WaitInfo *waitInfo = MultiClientCreateWaitInfo(list_length(taskList));
 
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActiveReadableNodeList();
 	workerHash = WorkerHash(workerHashName, workerNodeList);
 
 	/* initialize task execution structures for remote execution */

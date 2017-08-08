@@ -91,7 +91,7 @@ dump_global_wait_edges(PG_FUNCTION_ARGS)
 WaitGraph *
 BuildGlobalWaitGraph(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	List *connectionList = NIL;

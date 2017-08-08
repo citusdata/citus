@@ -1617,7 +1617,7 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 	}
 	else if (replacePrunedQueryWithDummy)
 	{
-		List *workerNodeList = ActivePrimaryNodeList();
+		List *workerNodeList = ActiveReadableNodeList();
 		if (workerNodeList != NIL)
 		{
 			WorkerNode *workerNode = (WorkerNode *) linitial(workerNodeList);
