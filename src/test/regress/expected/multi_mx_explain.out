@@ -335,8 +335,8 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_mx_1220052
-              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052
+        ->  Update on lineitem_mx_1220052 lineitem_mx
+              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
 -- Test delete
@@ -348,8 +348,8 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_mx_1220052
-              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052
+        ->  Delete on lineitem_mx_1220052 lineitem_mx
+              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
 -- Test single-shard SELECT

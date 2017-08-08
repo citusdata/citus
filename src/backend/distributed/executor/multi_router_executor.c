@@ -412,7 +412,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 			DeferredErrorMessage *planningError = NULL;
 
 			/* need to perform shard pruning, rebuild the task list from scratch */
-			taskList = RouterModifyTaskList(jobQuery, &planningError);
+			taskList = RouterInsertTaskList(jobQuery, &planningError);
 
 			if (planningError != NULL)
 			{
