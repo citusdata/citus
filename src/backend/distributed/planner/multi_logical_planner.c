@@ -85,6 +85,8 @@ static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiPlanTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
+static bool HasUnsupportedReferenceTableJoin(
+	PlannerRestrictionContext *plannerRestrictionContext);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
@@ -94,6 +96,8 @@ static bool HasOuterJoin(Query *queryTree);
 static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
 static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
+static bool RelationInfoHasReferenceTable(PlannerInfo *plannerInfo,
+										  RelOptInfo *relationInfo);
 static void ValidateClauseList(List *clauseList);
 static void ValidateSubqueryPushdownClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
@@ -188,7 +192,6 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	{
 		originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 														boundParams);
-
 		multiQueryNode = MultiSubqueryPlanTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
 	}
@@ -539,6 +542,13 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 							 "one another relation using distribution keys and "
 							 "equality operator.", NULL);
 	}
+	else if (HasUnsupportedReferenceTableJoin(plannerRestrictionContext))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "There exist a reference table in the outer part of the outer join",
+							 NULL);
+	}
 
 	/*
 	 * We first extract all the queries that appear in the original query. Later,
@@ -871,12 +881,46 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 	{
 		SetOperationStmt *setOperation =
 			(SetOperationStmt *) lfirst(setOperationStatmentCell);
+		Node *leftArg = setOperation->larg;
+		Node *rightArg = setOperation->rarg;
+		int leftArgRTI = 0;
+		int rightArgRTI = 0;
 
 		if (setOperation->op != SETOP_UNION)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot push down this subquery",
 								 "Intersect and Except are currently unsupported", NULL);
+		}
+
+		if (IsA(leftArg, RangeTblRef))
+		{
+			Node *leftArgSubquery = NULL;
+			leftArgRTI = ((RangeTblRef *) leftArg)->rtindex;
+			leftArgSubquery = (Node *) rt_fetch(leftArgRTI,
+												subqueryTree->rtable)->subquery;
+			if (HasReferenceTable(leftArgSubquery))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot push down this subquery ",
+									 "Reference tables are not supported with union"
+									 " operator", NULL);
+			}
+		}
+
+		if (IsA(rightArg, RangeTblRef))
+		{
+			Node *rightArgSubquery = NULL;
+			rightArgRTI = ((RangeTblRef *) rightArg)->rtindex;
+			rightArgSubquery = (Node *) rt_fetch(rightArgRTI,
+												 subqueryTree->rtable)->subquery;
+			if (HasReferenceTable(rightArgSubquery))
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "cannot push down this subquery",
+									 "Reference tables are not supported with union"
+									 " operator", NULL);
+			}
 		}
 	}
 
@@ -982,7 +1026,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 
 /*
  * TargetListOnPartitionColumn checks if at least one target list entry is on
- * partition column.
+ * partition column or the table is a reference table.
  */
 static bool
 TargetListOnPartitionColumn(Query *query, List *targetEntryList)
@@ -1003,9 +1047,9 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
 
 		/*
-		 * If the expression belongs to reference table directly returns true,
-		 * since logic of caller function checks whether it can find the necessaary
-		 * data from each node.
+		 * If the expression belongs to reference table directly returns true.
+		 * We can assume that target list entry always on partition column of
+		 * reference tables.
 		 */
 		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
 			DISTRIBUTE_BY_NONE)
@@ -1377,6 +1421,149 @@ MultiPlanTree(Query *queryTree)
 	currentTopNode = (MultiNode *) extendedOpNode;
 
 	return currentTopNode;
+}
+
+
+/*
+ * HasUnsupportedReferenceTableJoin returns true if there exists a outer join
+ * exist between reference table and distributed tables which does not obey the
+ * rules :
+ * - Reference tables can not be located in the outer part of the semi join (or
+ * the inner part of the anti join). Otherwise, we may have duplicate results.
+ * Although getting duplicate results is not possible by checking the equality
+ * on the column of the reference table and partition column of distributed table,
+ * we still keep these checks. Because, using the reference table in the outer
+ * part of the semi join is not very common.
+ * - Reference tables can not be located in the outer part of the left join and
+ * inner part of the right join. Otherwise we will definitely have duplicate rows.
+ * Beside, reference tables can not be used with full outer joins because of the
+ * same reason.
+ */
+static bool
+HasUnsupportedReferenceTableJoin(PlannerRestrictionContext *plannerRestrictionContext)
+{
+	List *joinRestrictionList =
+		plannerRestrictionContext->joinRestrictionContext->joinRestrictionList;
+	ListCell *joinRestrictionCell = NULL;
+
+	foreach(joinRestrictionCell, joinRestrictionList)
+	{
+		JoinRestriction *joinRestriction = (JoinRestriction *) lfirst(
+			joinRestrictionCell);
+		JoinType joinType = joinRestriction->joinType;
+		PlannerInfo *plannerInfo = joinRestriction->plannerInfo;
+		RelOptInfo *innerrel = joinRestriction->innerrel;
+		RelOptInfo *outerrel = joinRestriction->outerrel;
+
+		switch (joinType)
+		{
+			case JOIN_SEMI:
+			{
+				if (RelationInfoHasReferenceTable(plannerInfo, outerrel))
+				{
+					return true;
+				}
+			}
+			break;
+
+			case JOIN_ANTI:
+			{
+				if (RelationInfoHasReferenceTable(plannerInfo, innerrel))
+				{
+					return true;
+				}
+			}
+			break;
+
+			case JOIN_LEFT:
+			{
+				if (RelationInfoHasReferenceTable(plannerInfo, outerrel))
+				{
+					return true;
+				}
+			}
+			break;
+
+			case JOIN_RIGHT:
+			{
+				if (RelationInfoHasReferenceTable(plannerInfo, innerrel))
+				{
+					return true;
+				}
+			}
+			break;
+
+			case JOIN_FULL:
+			{
+				if (RelationInfoHasReferenceTable(plannerInfo, innerrel) ||
+					RelationInfoHasReferenceTable(
+						plannerInfo, outerrel))
+				{
+					return true;
+				}
+			}
+			break;
+
+			default:
+			{ }
+			  break;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ReferenceTableExist check whether the relationInfo has reference table.
+ * Since relation ids of relationInfo indexes to the range table entry list of
+ * planner info, planner info is also passed.
+ */
+static bool
+RelationInfoHasReferenceTable(PlannerInfo *plannerInfo, RelOptInfo *relationInfo)
+{
+	Relids relids = bms_copy(relationInfo->relids);
+	int relationId = -1;
+
+	while ((relationId = bms_first_member(relids)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
+
+		/* relationInfo has this range table entry */
+		if (HasReferenceTable((Node *) rangeTableEntry))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * HasReferenceTable checks whether there exist a reference table in the
+ * given node.
+ */
+bool
+HasReferenceTable(Node *node)
+{
+	List *relationList = NIL;
+	ListCell *relationCell = NULL;
+	ExtractRangeTableRelationWalkerInRTE(node, &relationList);
+
+	foreach(relationCell, relationList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(relationCell);
+		Oid relationId = rangeTableEntry->relid;
+
+		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
+			DISTRIBUTE_BY_NONE)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -2745,44 +2932,41 @@ ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 }
 
 
-/* Get the list of relations from the given node. Note that the difference between
- * this function and ExtractRangeTableRelationWalker is that this one recursively
+/*
+ * ExtractRangeTableRelationWalkerInRTE obtains the list of relations from the
+ * given node. Note that the difference between this function and
+ * ExtractRangeTableRelationWalker is that this one recursively
  * walk into range table entries if it can.
  */
 bool
-ExtractRTRelationFromNode(Node *node, List **rangeTableList)
+ExtractRangeTableRelationWalkerInRTE(Node *node, List **rangeTableRelationList)
 {
 	bool walkIsComplete = false;
+
 	if (node == NULL)
 	{
-		return false;
+		return walkIsComplete;
 	}
-
-	if (IsA(node, RangeTblEntry))
+	else if (IsA(node, RangeTblEntry))
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
+		List *rangeTableList = NIL;
+		rangeTableList = lappend(rangeTableList, rangeTableEntry);
 
-		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			rangeTableEntry->relkind != RELKIND_VIEW)
+		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			(*rangeTableList) = lappend(*rangeTableList, rangeTableEntry);
+			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTableEntry);
 		}
-		else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		else
 		{
-			walkIsComplete = query_tree_walker(rangeTableEntry->subquery,
-											   ExtractRTRelationFromNode,
-											   rangeTableList, QTW_EXAMINE_RTES);
+			walkIsComplete = range_table_walker(rangeTableList,
+												ExtractRangeTableRelationWalkerInRTE,
+												rangeTableRelationList, 0);
 		}
-	}
-	else if (IsA(node, Query))
-	{
-		walkIsComplete = query_tree_walker((Query *) node, ExtractRTRelationFromNode,
-										   rangeTableList, QTW_EXAMINE_RTES);
 	}
 	else
 	{
-		walkIsComplete = expression_tree_walker(node, ExtractRTRelationFromNode,
-												rangeTableList);
+		walkIsComplete = ExtractRangeTableRelationWalker(node, rangeTableRelationList);
 	}
 
 	return walkIsComplete;

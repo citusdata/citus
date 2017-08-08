@@ -206,7 +206,7 @@ extern List * TableEntryList(List *rangeTableList);
 extern List * UsedTableEntryList(Query *query);
 extern bool ExtractRangeTableRelationWalker(Node *node, List **rangeTableList);
 extern bool ExtractRangeTableEntryWalker(Node *node, List **rangeTableList);
-extern bool ExtractRTRelationFromNode(Node *node, List **rangeTableList);
+extern bool ExtractRangeTableRelationWalkerInRTE(Node *node, List **rangeTableList);
 extern List * pull_var_clause_default(Node *node);
 extern bool OperatorImplementsEquality(Oid opno);
 
