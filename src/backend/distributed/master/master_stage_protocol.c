@@ -482,6 +482,12 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	List *claimedConnectionList = NIL;
 	ListCell *connectionCell = NULL;
 	ListCell *shardPlacementCell = NULL;
+	int connectionFlags = FOR_DDL;
+
+	if (useExclusiveConnection)
+	{
+		connectionFlags |= CONNECTION_PER_PLACEMENT;
+	}
 
 	BeginOrContinueCoordinatedTransaction();
 
@@ -498,7 +504,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 			shardIndex = ShardIndex(shardInterval);
 		}
 
-		connection = GetPlacementConnection(FOR_DDL, shardPlacement,
+		connection = GetPlacementConnection(connectionFlags, shardPlacement,
 											placementOwner);
 		if (useExclusiveConnection)
 		{
