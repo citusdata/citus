@@ -2291,12 +2291,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
 	List *relationShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
-	bool routerPlannable = false;
 	bool replacePrunedQueryWithDummy = false;
 	RelationRestrictionContext *copiedRestrictionContext =
 		CopyRelationRestrictionContext(restrictionContext);
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
+	DeferredErrorMessage *planningError = NULL;
 
 	/* such queries should go through router planner */
 	Assert(!restrictionContext->allReferenceTables);
@@ -2330,12 +2330,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	routerPlannable = RouterSelectQuery(taskQuery, copiedRestrictionContext,
-										&selectPlacementList, &selectAnchorShardId,
-										&relationShardList, replacePrunedQueryWithDummy);
+	planningError = PlanRouterQuery(taskQuery, copiedRestrictionContext,
+									&selectPlacementList, &selectAnchorShardId,
+									&relationShardList, replacePrunedQueryWithDummy);
 
 	/* we don't expect to this this error but keeping it as a precaution for future changes */
-	if (!routerPlannable)
+	if (planningError)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "

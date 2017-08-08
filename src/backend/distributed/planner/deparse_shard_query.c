@@ -90,11 +90,25 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 			}
 		}
 
-		deparse_shard_query(query, relationId, task->anchorShardId,
-							newQueryString);
+		/*
+		 * For INSERT queries, we only have one relation to update, so we can
+		 * use deparse_shard_query(). For UPDATE and DELETE queries, we may have
+		 * subqueries and joins, so we use relation shard list to update shard
+		 * names and call pg_get_query_def() directly.
+		 */
+		if (query->commandType == CMD_INSERT)
+		{
+			deparse_shard_query(query, relationId, task->anchorShardId, newQueryString);
+		}
+		else
+		{
+			List *relationShardList = task->relationShardList;
+			UpdateRelationToShardNames((Node *) query, relationShardList);
 
-		ereport(DEBUG4, (errmsg("distributed statement: %s",
-								newQueryString->data)));
+			pg_get_query_def(query, newQueryString);
+		}
+
+		ereport(DEBUG4, (errmsg("distributed statement: %s", newQueryString->data)));
 
 		task->queryString = newQueryString->data;
 	}

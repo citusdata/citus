@@ -31,12 +31,16 @@ extern MultiPlan * CreateRouterPlan(Query *originalQuery, Query *query,
 extern MultiPlan * CreateModifyPlan(Query *originalQuery, Query *query,
 									PlannerRestrictionContext *
 									plannerRestrictionContext);
-extern bool RouterSelectQuery(Query *originalQuery,
-							  RelationRestrictionContext *restrictionContext,
-							  List **placementList, uint64 *anchorShardId,
-							  List **relationShardList, bool replacePrunedQueryWithDummy);
+extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
+											  RelationRestrictionContext *
+											  restrictionContext,
+											  List **placementList, uint64 *anchorShardId,
+											  List **relationShardList, bool
+											  replacePrunedQueryWithDummy);
+extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
-extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree);
+extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree,
+												   bool multiShardQuery);
 extern List * ShardIntervalOpExpressions(ShardInterval *shardInterval, Index rteIndex);
 extern RelationRestrictionContext * CopyRelationRestrictionContext(
 	RelationRestrictionContext *oldContext);
@@ -46,7 +50,6 @@ extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
-extern List * RouterModifyTaskList(Query *query, DeferredErrorMessage **planningError);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */
