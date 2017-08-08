@@ -77,5 +77,8 @@ extern void CoordinatedTransactionUse2PC(void);
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
 
+/* other functions */
+extern List * ActiveSubXacts(void);
+
 
 #endif /*  TRANSACTION_MANAGMENT_H */

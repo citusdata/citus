@@ -61,7 +61,6 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
-static void SendActiveSubXacts(void);
 
 
 /*
@@ -80,9 +79,6 @@ BeginCoordinatedTransaction(void)
 	CurrentCoordinatedTransactionState = COORD_TRANS_STARTED;
 
 	AssignDistributedTransactionId();
-
-	SendActiveSubXacts();
-	activeSubXacts = NIL;
 }
 
 
@@ -305,39 +301,30 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 	{
 		case SUBXACT_EVENT_START_SUB:
 		{
+			PushSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointBegin(subId);
-			}
-			else
-			{
-				PushSubXact(subId);
 			}
 			break;
 		}
 
 		case SUBXACT_EVENT_COMMIT_SUB:
 		{
+			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRelease(subId);
-			}
-			else
-			{
-				PopSubXact(subId);
 			}
 			break;
 		}
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
+			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
 				CoordinatedRemoteTransactionsSavepointRollback(subId);
-			}
-			else
-			{
-				PopSubXact(subId);
 			}
 			break;
 		}
@@ -406,12 +393,9 @@ PopSubXact(SubTransactionId subId)
 }
 
 
-/*
- * SendActiveSubXacts sends active sub-transactions to remote nodes in temporal
- * order.
- */
-static void
-SendActiveSubXacts(void)
+/* ActiveSubXacts returns list of active sub-transactions in temporal order. */
+List *
+ActiveSubXacts(void)
 {
 	ListCell *subIdCell = NULL;
 	List *activeSubXactsReversed = NIL;
@@ -422,12 +406,9 @@ SendActiveSubXacts(void)
 	 */
 	foreach(subIdCell, activeSubXacts)
 	{
-		activeSubXactsReversed = lcons_int(lfirst_int(subIdCell),
-										   activeSubXactsReversed);
+		SubTransactionId subId = lfirst_int(subIdCell);
+		activeSubXactsReversed = lcons_int(subId, activeSubXactsReversed);
 	}
 
-	foreach(subIdCell, activeSubXactsReversed)
-	{
-		CoordinatedRemoteTransactionsSavepointBegin(lfirst_int(subIdCell));
-	}
+	return activeSubXactsReversed;
 }

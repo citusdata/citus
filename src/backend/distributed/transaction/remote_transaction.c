@@ -26,6 +26,8 @@
 #include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
 
+static void RemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId
+											subId);
 static void RemoteSubTransactionCommand(MultiConnection *connection, StringInfo command);
 static void CheckTransactionHealth(void);
 static void Assign2PCIdentifier(MultiConnection *connection);
@@ -111,6 +113,19 @@ FinishRemoteTransactionBegin(struct MultiConnection *connection)
 	if (!transaction->transactionFailed)
 	{
 		Assert(PQtransactionStatus(connection->pgConn) == PQTRANS_INTRANS);
+	}
+
+	if (!transaction->transactionFailed)
+	{
+		/* send list of queued savepoints for this transaction */
+		ListCell *subIdCell = NULL;
+		List *activeSubXacts = ActiveSubXacts();
+
+		foreach(subIdCell, activeSubXacts)
+		{
+			SubTransactionId subId = lfirst_int(subIdCell);
+			RemoteTransactionSavepointBegin(connection, subId);
+		}
 	}
 }
 
@@ -882,6 +897,15 @@ CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 }
 
 
+static void
+RemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
+{
+	StringInfo command = makeStringInfo();
+	appendStringInfo(command, "SAVEPOINT savepoint_%u", subId);
+	RemoteSubTransactionCommand(connection, command);
+}
+
+
 /*
  * RemoteSubTransactionCommand sends the given command to the given connection
  * and waits for completion. If the command fails, current transaction is marked
@@ -891,6 +915,12 @@ static void
 RemoteSubTransactionCommand(MultiConnection *connection, StringInfo command)
 {
 	PGresult *result = NULL;
+
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+	if (transaction->transactionFailed)
+	{
+		return;
+	}
 
 	if (!SendRemoteCommand(connection, command->data))
 	{
