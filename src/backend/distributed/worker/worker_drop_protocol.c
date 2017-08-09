@@ -62,12 +62,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	/* first check the relation type */
 	distributedRelation = relation_open(relationId, AccessShareLock);
 	relationKind = distributedRelation->rd_rel->relkind;
-	if (relationKind != RELKIND_RELATION && relationKind != RELKIND_FOREIGN_TABLE)
-	{
-		char *relationName = generate_relation_name(relationId, NIL);
-		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
-						errmsg("%s is not a regular or foreign table", relationName)));
-	}
+	EnsureRelationKindSupported(relationId);
 
 	/* close the relation since we do not need anymore */
 	relation_close(distributedRelation, AccessShareLock);

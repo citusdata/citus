@@ -451,8 +451,8 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 					}
 				}
 #if (PG_VERSION_NUM >= 100000)
-				else if (command->subtype == AT_AttachPartition || command->subtype ==
-						 AT_DetachPartition)
+				else if (command->subtype == AT_AttachPartition ||
+						 command->subtype == AT_DetachPartition)
 				{
 					PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
 
@@ -469,9 +469,8 @@ RelayEventExtendNamesForInterShardCommands(Node *parseTree, uint64 leftShardId,
 				SetSchemaNameIfNotExist(relationSchemaName, rightShardSchemaName);
 
 				/*
-				 * We will not append shard id to referencing table name or
-				 * constraint name. They will be handled when we drop into
-				 * RelayEventExtendNames.
+				 * We will not append shard id to left shard name. This will be
+				 * handled when we drop into RelayEventExtendNames.
 				 */
 				AppendShardIdToName(referencedTableName, rightShardId);
 			}
@@ -622,6 +621,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 	{
 		snprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
+
 	/*
 	 * Otherwise, we need to truncate the name further to accommodate
 	 * a sufficient hash value. The resulting name will avoid collision

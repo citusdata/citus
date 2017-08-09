@@ -42,6 +42,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -108,6 +109,8 @@ static void VerifyTransmitStmt(CopyStmt *copyStatement);
 /* Local functions forward declarations for processing distributed table commands */
 static Node * ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag,
 							  bool *commandMustRunAsOwner);
+static void ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement);
+static void ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement);
 static List * PlanIndexStmt(IndexStmt *createIndexStatement,
 							const char *createIndexCommand);
 static List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
@@ -154,8 +157,8 @@ static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
-static List * ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
-								 const char *commandString);
+static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
+									const char *commandString);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
 										 void *arg);
 static void CheckCopyPermissions(CopyStmt *copyStatement);
@@ -467,6 +470,29 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 							params, dest, completionTag);
 #endif
 
+
+	/*
+	 * We only process CREATE TABLE ... PARTITION OF commands in the function below
+	 * to handle the case when user creates a table as a partition of distributed table.
+	 */
+	if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStatement = (CreateStmt *) parsetree;
+
+		ProcessCreateTableStmtPartitionOf(createStatement);
+	}
+
+	/*
+	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
+	 * and distribute the partition if necessary.
+	 */
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
+
+		ProcessAlterTableStmtAttachPartition(alterTableStatement);
+	}
+
 	/* don't run post-process code for local commands */
 	if (ddlJobs != NIL)
 	{
@@ -777,6 +803,135 @@ ProcessCopyStmt(CopyStmt *copyStatement, char *completionTag, bool *commandMustR
 
 
 /*
+ * ProcessCreateTableStmtPartitionOf takes CreateStmt object as a parameter but
+ * it only processes CREATE TABLE ... PARTITION OF statements and it checks if
+ * user creates the table as a partition of a distributed table. In that case,
+ * it distributes partition as well. Since the table itself is a partition,
+ * CreateDistributedTable will attach it to its parent table automatically after
+ * distributing it.
+ *
+ * This function does nothing if PostgreSQL's version is less then 10 and given
+ * CreateStmt is not a CREATE TABLE ... PARTITION OF command.
+ */
+static void
+ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
+{
+#if (PG_VERSION_NUM >= 100000)
+	if (createStatement->inhRelations != NIL && createStatement->partbound != NULL)
+	{
+		RangeVar *parentRelation = linitial(createStatement->inhRelations);
+		bool parentMissingOk = false;
+		Oid parentRelationId = RangeVarGetRelid(parentRelation, NoLock,
+												parentMissingOk);
+
+		/* a partition can only inherit from single parent table */
+		Assert(list_length(createStatement->inhRelations) == 1);
+
+		Assert(parentRelationId != InvalidOid);
+
+		/*
+		 * If a partition is being created and if its parent is a distributed
+		 * table, we will distribute this table as well.
+		 */
+		if (IsDistributedTable(parentRelationId))
+		{
+			bool missingOk = false;
+			Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock,
+											  missingOk);
+			Var *parentDistributionColumn = DistPartitionKey(parentRelationId);
+			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
+			char *parentRelationName = get_rel_name(parentRelationId);
+			bool viaDeprecatedAPI = false;
+
+			CreateDistributedTable(relationId, parentDistributionColumn,
+								   parentDistributionMethod, parentRelationName,
+								   viaDeprecatedAPI);
+		}
+	}
+#endif
+}
+
+
+/*
+ * ProcessAlterTableStmtAttachPartition takes AlterTableStmt object as parameter
+ * but it only processes into ALTER TABLE ... ATTACH PARTITION commands and
+ * distributes the partition if necessary. There are four cases to consider;
+ *
+ * Parent is not distributed, partition is not distributed: We do not need to
+ * do anything in this case.
+ *
+ * Parent is not distributed, partition is distributed: This can happen if
+ * user first distributes a table and tries to attach it to a non-distributed
+ * table. Non-distributed tables cannot have distributed partitions, thus we
+ * simply error out in this case.
+ *
+ * Parent is distributed, partition is not distributed: We should distribute
+ * the table and attach it to its parent in workers. CreateDistributedTable
+ * perform both of these operations. Thus, we will not propagate ALTER TABLE
+ * ... ATTACH PARTITION command to workers.
+ *
+ * Parent is distributed, partition is distributed: Partition is already
+ * distributed, we only need to attach it to its parent in workers. Attaching
+ * operation will be performed via propagating this ALTER TABLE ... ATTACH
+ * PARTITION command to workers.
+ *
+ * This function does nothing if PostgreSQL's version is less then 10 and given
+ * CreateStmt is not a ALTER TABLE ... ATTACH PARTITION OF command.
+ */
+static void
+ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
+{
+#if (PG_VERSION_NUM >= 100000)
+	List *commandList = alterTableStatement->cmds;
+	ListCell *commandCell = NULL;
+
+	foreach(commandCell, commandList)
+	{
+		AlterTableCmd *alterTableCommand = (AlterTableCmd *) lfirst(commandCell);
+
+		if (alterTableCommand->subtype == AT_AttachPartition)
+		{
+			Oid relationId = AlterTableLookupRelation(alterTableStatement, NoLock);
+			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
+			bool partitionMissingOk = false;
+			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, NoLock,
+													   partitionMissingOk);
+
+			/*
+			 * If user first distributes the table then tries to attach it to non
+			 * distributed table, we error out.
+			 */
+			if (!IsDistributedTable(relationId) &&
+				IsDistributedTable(partitionRelationId))
+			{
+				char *parentRelationName = get_rel_name(partitionRelationId);
+
+				ereport(ERROR, (errmsg("non-distributed tables cannot have "
+									   "distributed partitions"),
+								errhint("Distribute the partitioned table \"%s\" "
+										"instead", parentRelationName)));
+			}
+
+			/* if parent of this table is distributed, distribute this table too */
+			if (IsDistributedTable(relationId) &&
+				!IsDistributedTable(partitionRelationId))
+			{
+				Var *distributionColumn = DistPartitionKey(relationId);
+				char distributionMethod = DISTRIBUTE_BY_HASH;
+				char *relationName = get_rel_name(relationId);
+				bool viaDeprecatedAPI = false;
+
+				CreateDistributedTable(partitionRelationId, distributionColumn,
+									   distributionMethod, relationName,
+									   viaDeprecatedAPI);
+			}
+		}
+	}
+#endif
+}
+
+
+/*
  * PlanIndexStmt determines whether a given CREATE INDEX statement involves
  * a distributed table. If so (and if the statement does not use unsupported
  * options), it modifies the input statement to ensure proper execution against
@@ -1041,6 +1196,42 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 				constraint->skip_validation = true;
 			}
 		}
+#if (PG_VERSION_NUM >= 100000)
+		else if (alterTableType == AT_AttachPartition)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+			/*
+			 * We only support ALTER TABLE ATTACH PARTITION, if it is only subcommand of
+			 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
+			 */
+			Assert(list_length(commandList) <= 1);
+
+			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+
+			/*
+			 * Do not generate tasks if relation is distributed and the partition
+			 * is not distributed. Because, we'll manually convert the partition into
+			 * distributed table and co-locate with its parent.
+			 */
+			if (!IsDistributedTable(rightRelationId))
+			{
+				return NIL;
+			}
+		}
+		else if (alterTableType == AT_DetachPartition)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+
+			/*
+			 * We only support ALTER TABLE DETACH PARTITION, if it is only subcommand of
+			 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
+			 */
+			Assert(list_length(commandList) <= 1);
+
+			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+		}
+#endif
 	}
 
 	ddlJob = palloc0(sizeof(DDLJob));
@@ -1051,8 +1242,8 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	if (rightRelationId)
 	{
 		/* if foreign key related, use specialized task list function ... */
-		ddlJob->taskList = ForeignKeyTaskList(leftRelationId, rightRelationId,
-											  alterTableCommand);
+		ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
+												 alterTableCommand);
 	}
 	else
 	{
@@ -1759,6 +1950,54 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+#if (PG_VERSION_NUM >= 100000)
+			case AT_AttachPartition:
+			{
+				Oid relationId = AlterTableLookupRelation(alterTableStatement,
+														  NoLock);
+				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+				bool missingOK = false;
+				Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name,
+														   NoLock, missingOK);
+
+				/* we only allow partitioning commands if they are only subcommand */
+				if (commandList->length > 1)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot execute ATTACH PARTITION command "
+										   "with other subcommands"),
+									errhint("You can issue each subcommand "
+											"separately.")));
+				}
+
+				if (IsDistributedTable(partitionRelationId) &&
+					!TablesColocated(relationId, partitionRelationId))
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("distributed tables cannot have "
+										   "non-colocated distributed tables as a "
+										   "partition ")));
+				}
+
+				break;
+			}
+
+			case AT_DetachPartition:
+			{
+				/* we only allow partitioning commands if they are only subcommand */
+				if (commandList->length > 1)
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("cannot execute DETACH PARTITION command "
+										   "with other subcommands"),
+									errhint("You can issue each subcommand "
+											"separately.")));
+				}
+
+				break;
+			}
+
+#endif
 			case AT_SetNotNull:
 			case AT_DropConstraint:
 			case AT_EnableTrigAll:
@@ -1776,9 +2015,10 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("alter table command is currently unsupported"),
-								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL,"
-										  " SET|DROP DEFAULT, ADD|DROP CONSTRAINT and "
-										  "TYPE subcommands are supported.")));
+								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
+										  "SET|DROP DEFAULT, ADD|DROP CONSTRAINT, "
+										  "ATTACH|DETACH PARTITION and TYPE subcommands "
+										  "are supported.")));
 			}
 		}
 	}
@@ -2786,16 +3026,17 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 
 
 /*
- * ForeignKeyTaskList builds a list of tasks to execute a foreign key command on a
- * shards of given list of distributed table.
+ * InterShardDDLTaskList builds a list of tasks to execute a inter shard DDL command on a
+ * shards of given list of distributed table. At the moment this function is used to run
+ * foreign key and partitioning command on worker node.
  *
- * leftRelationId is the relation id of actual distributed table which given foreign key
- * command is applied. rightRelationId is the relation id of distributed table which
- * foreign key refers to.
+ * leftRelationId is the relation id of actual distributed table which given command is
+ * applied. rightRelationId is the relation id of distributed table which given command
+ * refers to.
  */
 static List *
-ForeignKeyTaskList(Oid leftRelationId, Oid rightRelationId,
-				   const char *commandString)
+InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
+					  const char *commandString)
 {
 	List *taskList = NIL;
 
