@@ -80,6 +80,5 @@ extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 
-extern void LockMetadataSnapshot(LOCKMODE lockMode);
 
 #endif /* RESOURCE_LOCK_H */
