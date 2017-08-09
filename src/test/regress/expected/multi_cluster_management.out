@@ -537,3 +537,24 @@ SELECT * FROM pg_dist_node WHERE nodeport=8887;
 
 -- don't remove the secondary and unavailable nodes, check that no commands are sent to
 -- them in any of the remaining tests
+-- master_add_secondary_node lets you skip looking up the groupid
+SELECT master_add_secondary_node('localhost', 9995, 'localhost', :worker_1_port);
+              master_add_secondary_node               
+------------------------------------------------------
+ (22,12,localhost,9995,default,f,t,secondary,default)
+(1 row)
+
+SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', primaryport => :worker_2_port);
+              master_add_secondary_node               
+------------------------------------------------------
+ (23,14,localhost,9994,default,f,t,secondary,default)
+(1 row)
+
+SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
+ERROR:  node at "localhost:2000" does not exist
+SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
+                  master_add_secondary_node                  
+-------------------------------------------------------------
+ (24,12,localhost,9992,default,f,t,secondary,second-cluster)
+(1 row)
+

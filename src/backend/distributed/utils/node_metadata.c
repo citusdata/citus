@@ -75,6 +75,7 @@ static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapT
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(master_add_node);
 PG_FUNCTION_INFO_V1(master_add_inactive_node);
+PG_FUNCTION_INFO_V1(master_add_secondary_node);
 PG_FUNCTION_INFO_V1(master_remove_node);
 PG_FUNCTION_INFO_V1(master_disable_node);
 PG_FUNCTION_INFO_V1(master_activate_node);
@@ -156,6 +157,41 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 	char *nodeRack = WORKER_DEFAULT_RACK;
 	bool hasMetadata = false;
 	bool isActive = false;
+	bool nodeAlreadyExists = false;
+	Datum nodeRecord;
+
+	CheckCitusVersion(ERROR);
+
+	nodeRecord = AddNodeMetadata(nodeNameString, nodePort, groupId, nodeRack,
+								 hasMetadata, isActive, nodeRole, nodeClusterString,
+								 &nodeAlreadyExists);
+
+	PG_RETURN_DATUM(nodeRecord);
+}
+
+
+/*
+ * master_add_secondary_node adds a new secondary node to the cluster. It accepts as
+ * arguments the primary node it should share a group with.
+ */
+Datum
+master_add_secondary_node(PG_FUNCTION_ARGS)
+{
+	text *nodeName = PG_GETARG_TEXT_P(0);
+	int32 nodePort = PG_GETARG_INT32(1);
+	char *nodeNameString = text_to_cstring(nodeName);
+
+	text *primaryName = PG_GETARG_TEXT_P(2);
+	int32 primaryPort = PG_GETARG_INT32(3);
+	char *primaryNameString = text_to_cstring(primaryName);
+	int32 groupId = GroupForNode(primaryNameString, primaryPort);
+
+	Oid nodeRole = SecondaryNodeRoleId();
+	Name nodeClusterName = PG_GETARG_NAME(4);
+	char *nodeClusterString = NameStr(*nodeClusterName);
+	char *nodeRack = WORKER_DEFAULT_RACK;
+	bool hasMetadata = false;
+	bool isActive = true;
 	bool nodeAlreadyExists = false;
 	Datum nodeRecord;
 
