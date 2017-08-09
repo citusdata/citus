@@ -44,6 +44,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -93,6 +94,12 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
+
+	/* don't allow the table to be dropped */
+	LockRelationOid(relationId, AccessShareLock);
+
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/*
 	 * We check whether the table is a foreign table or not. If it is, we set
