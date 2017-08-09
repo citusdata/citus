@@ -62,6 +62,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
@@ -74,6 +75,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 #include "utils/memutils.h"
 
 
@@ -288,6 +290,8 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	DestReceiver *dest = NULL;
 
 	Relation distributedRelation = NULL;
+	Relation copiedDistributedRelation = NULL;
+	Form_pg_class copiedDistributedRelationTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;
 	uint32 columnCount = 0;
 	Datum *columnValues = NULL;
@@ -350,17 +354,52 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
+	/*
+	 * BeginCopyFrom opens all partitions of given partitioned table with relation_open
+	 * and it expects its caller to close those relations. We do not have direct access
+	 * to opened relations, thus we are changing relkind of partitioned tables so that
+	 * Postgres will treat those tables as regular relations and will not open its
+	 * partitions.
+	 *
+	 * We will make this change on copied version of distributed relation to not change
+	 * anything in relcache.
+	 */
+	if (PartitionedTable(tableId))
+	{
+		copiedDistributedRelation = (Relation) palloc0(sizeof(RelationData));
+		copiedDistributedRelationTuple = (Form_pg_class) palloc(CLASS_TUPLE_SIZE);
+
+		/*
+		 * There is no need to deep copy everything. We will just deep copy of the fields
+		 * we will change.
+		 */
+		memcpy(copiedDistributedRelation, distributedRelation, sizeof(RelationData));
+		memcpy(copiedDistributedRelationTuple, distributedRelation->rd_rel,
+			   CLASS_TUPLE_SIZE);
+
+		copiedDistributedRelationTuple->relkind = RELKIND_RELATION;
+		copiedDistributedRelation->rd_rel = copiedDistributedRelationTuple;
+	}
+	else
+	{
+		/*
+		 * If we are not dealing with partitioned table, copiedDistributedRelation is same
+		 * as distributedRelation.
+		 */
+		copiedDistributedRelation = distributedRelation;
+	}
+
 	/* initialize copy state to read from COPY data source */
 #if (PG_VERSION_NUM >= 100000)
 	copyState = BeginCopyFrom(NULL,
-							  distributedRelation,
+							  copiedDistributedRelation,
 							  copyStatement->filename,
 							  copyStatement->is_program,
 							  NULL,
 							  copyStatement->attlist,
 							  copyStatement->options);
 #else
-	copyState = BeginCopyFrom(distributedRelation,
+	copyState = BeginCopyFrom(copiedDistributedRelation,
 							  copyStatement->filename,
 							  copyStatement->is_program,
 							  copyStatement->attlist,

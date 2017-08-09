@@ -690,7 +690,7 @@ LocalTableSize(Oid relationId)
 	Datum relationIdDatum = ObjectIdGetDatum(relationId);
 
 	relationType = get_rel_relkind(relationId);
-	if (relationType == RELKIND_RELATION)
+	if (RegularTable(relationId))
 	{
 		Datum tableSizeDatum = DirectFunctionCall1(pg_table_size, relationIdDatum);
 

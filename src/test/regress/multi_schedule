@@ -23,11 +23,6 @@ test: multi_table_ddl
 test: multi_name_lengths
 test: multi_metadata_access
 
-# ---
-# Tests for partitioning support
-# ---
-test: multi_partitioning_utils
-
 # ----------
 # The following distributed tests depend on creating a partitioned table and
 # uploading data to it.
@@ -40,6 +35,12 @@ test: multi_load_data
 test: multi_behavioral_analytics_create_table
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries
 test: multi_insert_select
+
+# ---
+# Tests for partitioning support
+# ---
+test: multi_partitioning_utils
+test: multi_partitioning
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
