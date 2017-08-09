@@ -469,20 +469,7 @@ PrunableExpressionsWalker(Node *node, ClauseWalkerContext *context)
 			 */
 			foreach(opCell, boolExpr->args)
 			{
-				PendingPruningInstance *instance =
-					palloc0(sizeof(PendingPruningInstance));
-
-				instance->instance = context->currentPruningInstance;
-				instance->continueAt = lfirst(opCell);
-
-				/*
-				 * Signal that this instance is not to be used for pruning on
-				 * its own.  Once the pending instance is processed, it'll be
-				 * used.
-				 */
-				instance->instance->isPartial = true;
-
-				context->pendingInstances = lappend(context->pendingInstances, instance);
+				AddNewConjuction(context, lfirst(opCell));
 			}
 
 			return false;
