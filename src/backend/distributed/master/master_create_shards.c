@@ -162,6 +162,9 @@ CreateShardsWithRoundRobinPolicy(Oid distributedTableId, int32 shardCount,
 	/* calculate the split of the hash space */
 	hashTokenIncrement = HASH_TOKEN_COUNT / shardCount;
 
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
 	/* load and sort the worker node list for deterministic placement */
 	workerNodeList = ActivePrimaryNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
