@@ -89,10 +89,13 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	/* append queued savepoints for this transaction */
 	activeSubXacts = ActiveSubXacts();
+	transaction->lastUnfailedSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
 	{
+		SubTransactionId subId = lfirst_int(subIdCell);
 		appendStringInfo(beginAndSetDistributedTransactionId,
-						 "SAVEPOINT savepoint_%u", lfirst_int(subIdCell));
+						 "SAVEPOINT savepoint_%u;", subId);
+		transaction->lastUnfailedSubXact = subId;
 	}
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))
@@ -877,6 +880,11 @@ RemoteTransactionsSavepointBegin(SubTransactionId subId)
 		}
 
 		FinishRemoteTransactionSavepointBegin(connection, subId);
+
+		if (!transaction->transactionFailed)
+		{
+			transaction->lastUnfailedSubXact = subId;
+		}
 	}
 }
 
@@ -936,6 +944,13 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (transaction->lastUnfailedSubXact <= subId &&
+			transaction->transactionFailed)
+		{
+			ForgetResults(connection);
+			transaction->transactionFailed = false;
+		}
+
 		if (transaction->transactionFailed)
 		{
 			continue;

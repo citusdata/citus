@@ -61,6 +61,8 @@ typedef struct RemoteTransaction
 	/* failed in current transaction */
 	bool transactionFailed;
 
+	SubTransactionId lastUnfailedSubXact;
+
 	/* 2PC transaction name currently associated with connection */
 	char preparedName[NAMEDATALEN];
 } RemoteTransaction;

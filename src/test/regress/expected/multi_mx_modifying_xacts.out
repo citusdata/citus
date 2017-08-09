@@ -123,7 +123,6 @@ EXCEPTION
 END $$;
 NOTICE:  caught not_null_violation
 COMMIT;
-ERROR:  could not make changes to shard 1220100 on any node
 \set VERBOSITY default
 -- should be valid to edit labs_mx after researchers_mx...
 BEGIN;
