@@ -2392,7 +2392,7 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 
 	subqueryTask = CreateBasicTask(jobId, taskId, SQL_TASK, queryString->data);
 	subqueryTask->dependedTaskList = NULL;
-	subqueryTask->anchorShardId = selectAnchorShardId;
+	subqueryTask->anchorShardId = shardInterval->shardId;
 	subqueryTask->taskPlacementList = selectPlacementList;
 	subqueryTask->upsertQuery = false;
 	subqueryTask->relationShardList = relationShardList;
