@@ -107,8 +107,8 @@ extern void CoordinatedRemoteTransactionsCommit(void);
 extern void CoordinatedRemoteTransactionsAbort(void);
 
 /* remote savepoint commands */
-extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);
-extern void CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId);
-extern void CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId);
+extern void RemoteTransactionsSavepointBegin(SubTransactionId subId);
+extern void RemoteTransactionsSavepointRelease(SubTransactionId subId);
+extern void RemoteTransactionsSavepointRollback(SubTransactionId subId);
 
 #endif /* REMOTE_TRANSACTION_H */

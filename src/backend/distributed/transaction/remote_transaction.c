@@ -26,9 +26,20 @@
 #include "distributed/worker_manager.h"
 #include "utils/hsearch.h"
 
-static void RemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId
-											subId);
-static void RemoteSubTransactionCommand(MultiConnection *connection, StringInfo command);
+
+static void StartRemoteTransactionSavepointBegin(MultiConnection *connection,
+												 SubTransactionId subId);
+static void FinishRemoteTransactionSavepointBegin(MultiConnection *connection,
+												  SubTransactionId subId);
+static void StartRemoteTransactionSavepointRelease(MultiConnection *connection,
+												   SubTransactionId subId);
+static void FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
+													SubTransactionId subId);
+static void StartRemoteTransactionSavepointRollback(MultiConnection *connection,
+													SubTransactionId subId);
+static void FinishRemoteTransactionSavepointRollback(MultiConnection *connection,
+													 SubTransactionId subId);
+
 static void CheckTransactionHealth(void);
 static void Assign2PCIdentifier(MultiConnection *connection);
 static void WarnAboutLeakedPreparedTransaction(MultiConnection *connection, bool commit);
@@ -46,6 +57,8 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
 	DistributedTransactionId *distributedTransactionId = NULL;
+	ListCell *subIdCell = NULL;
+	List *activeSubXacts = NIL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_INVALID);
 
@@ -69,11 +82,18 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 */
 	distributedTransactionId = GetCurrentDistributedTransactionId();
 	appendStringInfo(beginAndSetDistributedTransactionId,
-					 "SELECT assign_distributed_transaction_id(%d, %ld, '%s')",
+					 "SELECT assign_distributed_transaction_id(%d, %ld, '%s');",
 					 distributedTransactionId->initiatorNodeIdentifier,
 					 distributedTransactionId->transactionNumber,
 					 timestamptz_to_str(distributedTransactionId->timestamp));
 
+	/* append queued savepoints for this transaction */
+	activeSubXacts = ActiveSubXacts();
+	foreach(subIdCell, activeSubXacts)
+	{
+		appendStringInfo(beginAndSetDistributedTransactionId,
+						 "SAVEPOINT savepoint_%u", lfirst_int(subIdCell));
+	}
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))
 	{
@@ -113,19 +133,6 @@ FinishRemoteTransactionBegin(struct MultiConnection *connection)
 	if (!transaction->transactionFailed)
 	{
 		Assert(PQtransactionStatus(connection->pgConn) == PQTRANS_INTRANS);
-	}
-
-	if (!transaction->transactionFailed)
-	{
-		/* send list of queued savepoints for this transaction */
-		ListCell *subIdCell = NULL;
-		List *activeSubXacts = ActiveSubXacts();
-
-		foreach(subIdCell, activeSubXacts)
-		{
-			SubTransactionId subId = lfirst_int(subIdCell);
-			RemoteTransactionSavepointBegin(connection, subId);
-		}
 	}
 }
 
@@ -835,86 +842,129 @@ CoordinatedRemoteTransactionsAbort(void)
 
 
 /*
- * CoordinatedRemoteTransactionsSavepointBegin sends the SAVEPOINT command for
- * the given sub-transaction id to all connections participating in the current
- * transaction.
+ * RemoteTransactionsSavepointBegin sends the SAVEPOINT command for the given
+ * sub-transaction id to all connections participating in the current transaction.
  */
 void
-CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId)
+RemoteTransactionsSavepointBegin(SubTransactionId subId)
 {
 	dlist_iter iter;
 
+	/* asynchronously send SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		StringInfo command = makeStringInfo();
-		appendStringInfo(command, "SAVEPOINT savepoint_%u", subId);
-		RemoteSubTransactionCommand(connection, command);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		StartRemoteTransactionSavepointBegin(connection, subId);
+	}
+
+	/* and wait for the results */
+	dlist_foreach(iter, &InProgressTransactions)
+	{
+		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
+													  iter.cur);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		FinishRemoteTransactionSavepointBegin(connection, subId);
 	}
 }
 
 
 /*
- * CoordinatedRemoteTransactionsSavepointRelease sends the RELEASE SAVEPOINT
- * command for the given sub-transaction id to all connections participating in
- * the current transaction.
+ * RemoteTransactionsSavepointRelease sends the RELEASE SAVEPOINT command for the
+ * given sub-transaction id to all connections participating in the current transaction.
  */
 void
-CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId)
+RemoteTransactionsSavepointRelease(SubTransactionId subId)
 {
 	dlist_iter iter;
 
+	/* asynchronously send SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		StringInfo command = makeStringInfo();
-		appendStringInfo(command, "RELEASE SAVEPOINT savepoint_%u", subId);
-		RemoteSubTransactionCommand(connection, command);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		StartRemoteTransactionSavepointRelease(connection, subId);
+	}
+
+	/* and wait for the results */
+	dlist_foreach(iter, &InProgressTransactions)
+	{
+		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
+													  iter.cur);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		FinishRemoteTransactionSavepointRelease(connection, subId);
 	}
 }
 
 
 /*
- * CoordinatedRemoteTransactionsSavepointRollback sends the ROLLBACK TO SAVEPOINT
- * command for the given sub-transaction id to all connections participating in
- * the current transaction.
+ * RemoteTransactionsSavepointRollback sends the ROLLBACK TO SAVEPOINT command for the
+ * given sub-transaction id to all connections participating in the current transaction.
  */
 void
-CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
+RemoteTransactionsSavepointRollback(SubTransactionId subId)
 {
 	dlist_iter iter;
 
+	/* asynchronously send SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
-		StringInfo command = makeStringInfo();
-		appendStringInfo(command, "ROLLBACK TO SAVEPOINT savepoint_%u", subId);
-		RemoteSubTransactionCommand(connection, command);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		StartRemoteTransactionSavepointRollback(connection, subId);
+	}
+
+	/* and wait for the results */
+	dlist_foreach(iter, &InProgressTransactions)
+	{
+		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
+													  iter.cur);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+
+		if (transaction->transactionFailed)
+		{
+			continue;
+		}
+
+		FinishRemoteTransactionSavepointRollback(connection, subId);
 	}
 }
 
 
 static void
-RemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
+StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
 {
-	StringInfo command = makeStringInfo();
-	appendStringInfo(command, "SAVEPOINT savepoint_%u", subId);
-	RemoteSubTransactionCommand(connection, command);
-}
-
-
-/*
- * RemoteSubTransactionCommand sends the given command to the given connection
- * and waits for completion. If the command fails, current transaction is marked
- * as failed.
- */
-static void
-RemoteSubTransactionCommand(MultiConnection *connection, StringInfo command)
-{
-	PGresult *result = NULL;
+	StringInfo savepointCommand = makeStringInfo();
 
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 	if (transaction->transactionFailed)
@@ -922,13 +972,93 @@ RemoteSubTransactionCommand(MultiConnection *connection, StringInfo command)
 		return;
 	}
 
-	if (!SendRemoteCommand(connection, command->data))
+	appendStringInfo(savepointCommand, "SAVEPOINT savepoint_%u", subId);
+	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
 		ReportConnectionError(connection, WARNING);
 		MarkRemoteTransactionFailed(connection, true);
 	}
+}
 
-	result = GetRemoteCommandResult(connection, true);
+
+static void
+FinishRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
+{
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, WARNING);
+		MarkRemoteTransactionFailed(connection, true);
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+}
+
+
+static void
+StartRemoteTransactionSavepointRelease(MultiConnection *connection,
+									   SubTransactionId subId)
+{
+	StringInfo savepointCommand = makeStringInfo();
+
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+	if (transaction->transactionFailed)
+	{
+		return;
+	}
+
+	appendStringInfo(savepointCommand, "RELEASE SAVEPOINT savepoint_%u", subId);
+	if (!SendRemoteCommand(connection, savepointCommand->data))
+	{
+		ReportConnectionError(connection, WARNING);
+		MarkRemoteTransactionFailed(connection, true);
+	}
+}
+
+
+static void
+FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
+										SubTransactionId subId)
+{
+	PGresult *result = GetRemoteCommandResult(connection, true);
+	if (!IsResponseOK(result))
+	{
+		ReportResultError(connection, result, WARNING);
+		MarkRemoteTransactionFailed(connection, true);
+	}
+
+	PQclear(result);
+	ForgetResults(connection);
+}
+
+
+static void
+StartRemoteTransactionSavepointRollback(MultiConnection *connection,
+										SubTransactionId subId)
+{
+	StringInfo savepointCommand = makeStringInfo();
+
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+	if (transaction->transactionFailed)
+	{
+		return;
+	}
+
+	appendStringInfo(savepointCommand, "ROLLBACK TO SAVEPOINT savepoint_%u", subId);
+	if (!SendRemoteCommand(connection, savepointCommand->data))
+	{
+		ReportConnectionError(connection, WARNING);
+		MarkRemoteTransactionFailed(connection, true);
+	}
+}
+
+
+static void
+FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransactionId
+										 subId)
+{
+	PGresult *result = GetRemoteCommandResult(connection, true);
 	if (!IsResponseOK(result))
 	{
 		ReportResultError(connection, result, WARNING);

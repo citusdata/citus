@@ -304,7 +304,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			PushSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
-				CoordinatedRemoteTransactionsSavepointBegin(subId);
+				RemoteTransactionsSavepointBegin(subId);
 			}
 			break;
 		}
@@ -314,7 +314,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
-				CoordinatedRemoteTransactionsSavepointRelease(subId);
+				RemoteTransactionsSavepointRelease(subId);
 			}
 			break;
 		}
@@ -324,7 +324,7 @@ CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 			PopSubXact(subId);
 			if (InCoordinatedTransaction())
 			{
-				CoordinatedRemoteTransactionsSavepointRollback(subId);
+				RemoteTransactionsSavepointRollback(subId);
 			}
 			break;
 		}
