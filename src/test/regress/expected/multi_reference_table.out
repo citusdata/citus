@@ -1122,8 +1122,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- now, insert into the hash partitioned table and use reference 
--- tables in the SELECT queries
+-- not pushable due to lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 

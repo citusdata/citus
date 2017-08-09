@@ -10,11 +10,78 @@ ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
 SET citus.enable_router_execution TO FALSE;
 
-CREATE TABLE events_reference_table as SELECT * FROM events_table;
-CREATE TABLE users_reference_table as SELECT * FROM users_table;
+CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
+SELECT create_distributed_table('user_buy_test_table', 'user_id');
+INSERT INTO user_buy_test_table VALUES(1,2,1);
+INSERT INTO user_buy_test_table VALUES(2,3,4);
+INSERT INTO user_buy_test_table VALUES(3,4,2);
+INSERT INTO user_buy_test_table VALUES(7,5,2);
 
-SELECT create_reference_table('events_reference_table');
-SELECT create_reference_table('users_reference_table');
+CREATE TABLE users_return_test_table(user_id int, item_id int, buy_count int);
+SELECT create_distributed_table('users_return_test_table', 'user_id');
+INSERT INTO users_return_test_table VALUES(4,1,1);
+INSERT INTO users_return_test_table VALUES(1,3,1);
+INSERT INTO users_return_test_table VALUES(3,2,2);
+
+CREATE TABLE users_ref_test_table(id int, it_name varchar(25), k_no int);
+SELECT create_reference_table('users_ref_test_table');
+INSERT INTO users_ref_test_table VALUES(1,'User_1',45);
+INSERT INTO users_ref_test_table VALUES(2,'User_2',46);
+INSERT INTO users_ref_test_table VALUES(3,'User_3',47);
+INSERT INTO users_ref_test_table VALUES(4,'User_4',48);
+INSERT INTO users_ref_test_table VALUES(5,'User_5',49);
+INSERT INTO users_ref_test_table VALUES(6,'User_6',50);
+
+-- Simple Join test with reference table
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN users_ref_test_table
+  ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
+
+-- Should work, reference table at the inner side is allowed
+SELECT count(*) FROM
+  (SELECT random(), k_no FROM user_buy_test_table LEFT JOIN users_ref_test_table
+  ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1 WHERE k_no = 47;
+
+-- Should not work, no equality between partition column and reference table
+SELECT * FROM
+  (SELECT random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
+  ON user_buy_test_table.item_id = users_ref_test_table.id) subquery_1;
+
+-- Should not work, no equality between partition column and reference table
+SELECT * FROM
+  (SELECT random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
+  ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_1;
+
+-- Shouldn't work, reference table at the outer side is not allowed
+SELECT * FROM
+  (SELECT random() FROM users_ref_test_table LEFT JOIN user_buy_test_table
+  ON users_ref_test_table.id = user_buy_test_table.user_id) subquery_1;
+
+-- Should work, reference table at the inner side is allowed
+SELECT count(*) FROM
+  (SELECT random() FROM users_ref_test_table RIGHT JOIN user_buy_test_table
+  ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
+
+-- Shouldn't work, reference table at the outer side is not allowed
+SELECT * FROM
+  (SELECT random() FROM user_buy_test_table RIGHT JOIN users_ref_test_table
+  ON user_buy_test_table.user_id = users_ref_test_table.id) subquery_1;
+
+-- Should pass since reference table locates in the inner part of each left join
+SELECT count(*) FROM
+  (SELECT tt1.user_id, random() FROM user_buy_test_table AS tt1 JOIN users_return_test_table as tt2
+    ON tt1.user_id = tt2.user_id) subquery_1
+  LEFT JOIN
+  (SELECT tt1.user_id, random() FROM user_buy_test_table as tt1 LEFT JOIN users_ref_test_table as ref
+   ON tt1.user_id = ref.id) subquery_2 ON subquery_1.user_id = subquery_2.user_id;
+
+  -- Should not pass since reference table locates in the outer part of right join
+SELECT * FROM
+  (SELECT tt1.user_id, random() FROM user_buy_test_table AS tt1 JOIN users_return_test_table as tt2
+    ON tt1.user_id = tt2.user_id) subquery_1
+  RIGHT JOIN
+  (SELECT tt1.user_id, random() FROM user_buy_test_table as tt1 JOIN users_ref_test_table as ref
+   ON tt1.user_id = ref.id) subquery_2 ON subquery_1.user_id = subquery_2.user_id;
 
 -- LATERAL JOINs used with INNER JOINs with reference tables
 SET citus.subquery_pushdown to ON;
@@ -501,3 +568,7 @@ INNER JOIN
       WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
+
+DROP TABLE user_buy_test_table;
+DROP TABLE users_ref_test_table;
+DROP TABLE users_return_test_table;
