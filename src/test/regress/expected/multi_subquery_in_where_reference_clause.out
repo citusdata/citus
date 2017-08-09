@@ -28,6 +28,89 @@ LIMIT 5;
       63
 (4 rows)
 
+-- subqueries in WHERE with IN operator
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  value_2 IN  
+          (SELECT 
+              value_2 
+           FROM 
+              events_reference_table  
+           WHERE 
+              users_table.user_id = events_reference_table.user_id
+          )
+GROUP BY user_id
+ORDER BY user_id
+LIMIT 3;
+ user_id 
+---------
+       0
+       1
+       2
+(3 rows)
+
+-- subqueries in WHERE with NOT EXISTS operator, should work since
+-- reference table in the inner part of the join
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  NOT EXISTS  
+      (SELECT 
+          value_2 
+       FROM 
+          events_reference_table  
+       WHERE 
+          users_table.user_id = events_reference_table.user_id
+      )
+GROUP BY user_id
+ORDER BY user_id
+LIMIT 3;
+ user_id 
+---------
+(0 rows)
+
+-- subqueries in WHERE with NOT EXISTS operator, should not work
+-- there is a reference table in the outer part of the join
+SELECT 
+  user_id
+FROM 
+  users_reference_table
+WHERE 
+  NOT EXISTS  
+      (SELECT 
+          value_2 
+       FROM 
+          events_table  
+       WHERE 
+          users_reference_table.user_id = events_table.user_id
+      )
+LIMIT 3;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
+-- subqueries in WHERE with IN operator without equality
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  value_2 IN  
+          (SELECT 
+              value_2 
+           FROM 
+              events_reference_table  
+           WHERE 
+              users_table.user_id > events_reference_table.user_id
+          )
+GROUP BY user_id
+ORDER BY user_id
+LIMIT 3;
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- have reference table without any equality, should error out 
 SELECT 
   user_id
@@ -141,5 +224,3 @@ SELECT user_id, value_2 FROM users_table WHERE
 ORDER BY 1, 2;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
-DROP TABLE events_reference_table;
-DROP TABLE users_reference_table;

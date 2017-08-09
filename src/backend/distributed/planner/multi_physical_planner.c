@@ -2111,7 +2111,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 {
 	Oid firstTableRelationId = InvalidOid;
 	List *relationIdList = RelationIdList(query);
-	List *distributedRelationIdList = NIL;
+	List *nonReferenceRelations = NIL;
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
@@ -2121,18 +2121,17 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
 		char partitionMethod = PartitionMethod(relationId);
-
 		if (partitionMethod == DISTRIBUTE_BY_RANGE)
 		{
 			rangeDistributedRelationCount++;
-			distributedRelationIdList = lappend_oid(distributedRelationIdList,
-													relationId);
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
 		}
 		else if (partitionMethod == DISTRIBUTE_BY_HASH)
 		{
 			hashDistributedRelationCount++;
-			distributedRelationIdList = lappend_oid(distributedRelationIdList,
-													relationId);
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
 		}
 		else if (partitionMethod == DISTRIBUTE_BY_NONE)
 		{
@@ -2142,7 +2141,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot pushdown this subquery"),
+							errmsg("cannot push down this subquery"),
 							errdetail("Currently append partitioned relations "
 									  "are not supported")));
 		}
@@ -2156,7 +2155,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 								  "partitioned relations are unsupported")));
 	}
 
-	foreach(relationIdCell, distributedRelationIdList)
+	foreach(relationIdCell, nonReferenceRelations)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
 		bool coPartitionedTables = false;

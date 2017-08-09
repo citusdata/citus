@@ -124,7 +124,8 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 
 /*
  * SafeToPushdownUnionSubquery returns true if all the relations are returns
- * partition keys in the same ordinal position.
+ * partition keys in the same ordinal position and there is no reference table
+ * exists.
  *
  * Note that the function expects (and asserts) the input query to be a top
  * level union query defined by TopLevelUnionQuery().
