@@ -71,6 +71,29 @@
 #include "catalog/pg_proc.h"
 #include "optimizer/planmain.h"
 
+/* intermediate value for INSERT processing */
+typedef struct InsertValues
+{
+	Expr *partitionValueExpr; /* partition value provided in INSERT row */
+	List *rowValues;          /* full values list of INSERT row, possibly NIL */
+	int64 shardId;            /* target shard for this row, possibly invalid */
+	Index listIndex;          /* index to make our sorting stable */
+} InsertValues;
+
+
+/*
+ * A ModifyRoute encapsulates the the information needed to route modifications
+ * to the appropriate shard. For a single-shard modification, only one route
+ * is needed, but in the case of e.g. a multi-row INSERT, lists of these values
+ * will help divide the rows by their destination shards, permitting later
+ * shard-and-row-specific extension of the original SQL.
+ */
+typedef struct ModifyRoute
+{
+	int64 shardId;        /* identifier of target shard */
+	List *rowValuesLists; /* for multi-row INSERTs, list of rows to be inserted */
+} ModifyRoute;
+
 
 typedef struct WalkerState
 {
@@ -99,9 +122,6 @@ static void ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry);
 static bool CanShardPrune(Oid distributedTableId, Query *query);
 static Job * CreateJob(Query *query);
 static Task * CreateTask(TaskType taskType);
-static ShardInterval * FindShardForInsert(Query *query, DistTableCacheEntry *cacheEntry,
-										  DeferredErrorMessage **planningError);
-static Expr * ExtractInsertPartitionValue(Query *query, Var *partitionColumn);
 static Job * RouterJob(Query *originalQuery,
 					   RelationRestrictionContext *restrictionContext,
 					   DeferredErrorMessage **planningError);
@@ -110,6 +130,9 @@ static List * TargetShardIntervalsForRouter(Query *query,
 											RelationRestrictionContext *restrictionContext,
 											bool *multiShardQuery);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
+static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
+static List * GroupInsertValuesByShardId(List *insertValuesList);
+static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
@@ -120,6 +143,8 @@ static bool SelectsFromDistributedTable(List *rangeTableList);
 #if (PG_VERSION_NUM >= 100000)
 static List * get_all_actual_clauses(List *restrictinfo_list);
 #endif
+static int CompareInsertValuesByShardId(const void *leftElement,
+										const void *rightElement);
 
 
 /*
@@ -471,7 +496,6 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 	bool isCoordinator = IsCoordinator();
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
-	bool hasValuesScan = false;
 	uint32 queryTableCount = 0;
 	bool specifiesPartitionValue = false;
 	ListCell *setTargetCell = NULL;
@@ -555,7 +579,7 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES)
 		{
-			hasValuesScan = true;
+			/* do nothing, this type is supported */
 		}
 		else
 		{
@@ -624,24 +648,6 @@ ModifyQuerySupported(Query *queryTree, bool multiShardQuery)
 								 "Joins are not supported in distributed "
 								 "modifications.", NULL);
 		}
-	}
-
-	/* reject queries which involve multi-row inserts */
-	if (hasValuesScan)
-	{
-		/*
-		 * NB: If you remove this check you must also change the checks further in this
-		 * method and ensure that VOLATILE function calls aren't allowed in INSERT
-		 * statements. Currently they're allowed but the function call is replaced
-		 * with a constant, and if you're inserting multiple rows at once the function
-		 * should return a different value for each row.
-		 */
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot perform distributed planning for the given"
-							 " modification",
-							 "Multi-row INSERTs to distributed tables are not "
-							 "supported.",
-							 NULL);
 	}
 
 	if (commandType == CMD_INSERT || commandType == CMD_UPDATE ||
@@ -1143,7 +1149,8 @@ CanShardPrune(Oid distributedTableId, Query *query)
 {
 	uint32 rangeTableId = 1;
 	Var *partitionColumn = NULL;
-	Expr *partitionValueExpr = NULL;
+	List *insertValuesList = NIL;
+	ListCell *insertValuesCell = NULL;
 
 	if (query->commandType != CMD_INSERT)
 	{
@@ -1158,14 +1165,19 @@ CanShardPrune(Oid distributedTableId, Query *query)
 		return true;
 	}
 
-	partitionValueExpr = ExtractInsertPartitionValue(query, partitionColumn);
-	if (IsA(partitionValueExpr, Const))
+	/* get full list of partition values and ensure they are all Consts */
+	insertValuesList = ExtractInsertValuesList(query, partitionColumn);
+	foreach(insertValuesCell, insertValuesList)
 	{
-		/* can do shard pruning if the partition column is constant */
-		return true;
+		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
+		if (!IsA(insertValues->partitionValueExpr, Const))
+		{
+			/* can't do shard pruning if the partition column is not constant */
+			return false;
+		}
 	}
 
-	return false;
+	return true;
 }
 
 
@@ -1198,8 +1210,9 @@ ErrorIfNoShardsExist(DistTableCacheEntry *cacheEntry)
 List *
 RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 {
-	ShardInterval *shardInterval = NULL;
-	Task *modifyTask = NULL;
+	List *insertTaskList = NIL;
+	List *modifyRouteList = NIL;
+	ListCell *modifyRouteCell = NULL;
 
 	Oid distributedTableId = ExtractFirstDistributedTableId(query);
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
@@ -1208,26 +1221,30 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
-	shardInterval = FindShardForInsert(query, cacheEntry, planningError);
-
+	modifyRouteList = BuildRoutesForInsert(query, planningError);
 	if (*planningError != NULL)
 	{
 		return NIL;
 	}
 
-	/* an INSERT always routes to exactly one shard */
-	Assert(shardInterval != NULL);
-
-	modifyTask = CreateTask(MODIFY_TASK);
-	modifyTask->anchorShardId = shardInterval->shardId;
-	modifyTask->replicationModel = cacheEntry->replicationModel;
-
-	if (query->onConflict != NULL)
+	foreach(modifyRouteCell, modifyRouteList)
 	{
-		modifyTask->upsertQuery = true;
+		ModifyRoute *modifyRoute = (ModifyRoute *) lfirst(modifyRouteCell);
+
+		Task *modifyTask = CreateTask(MODIFY_TASK);
+		modifyTask->anchorShardId = modifyRoute->shardId;
+		modifyTask->replicationModel = cacheEntry->replicationModel;
+		modifyTask->rowValuesLists = modifyRoute->rowValuesLists;
+
+		if (query->onConflict != NULL)
+		{
+			modifyTask->upsertQuery = true;
+		}
+
+		insertTaskList = lappend(insertTaskList, modifyTask);
 	}
 
-	return list_make1(modifyTask);
+	return insertTaskList;
 }
 
 
@@ -1265,132 +1282,6 @@ CreateTask(TaskType taskType)
 
 
 /*
- * FindShardForInsert returns the shard interval for an INSERT query or NULL if
- * the partition column value is defined as an expression that still needs to be
- * evaluated. If the partition column value falls within 0 or multiple
- * (overlapping) shards, the planningError is set.
- */
-static ShardInterval *
-FindShardForInsert(Query *query, DistTableCacheEntry *cacheEntry,
-				   DeferredErrorMessage **planningError)
-{
-	Oid distributedTableId = cacheEntry->relationId;
-	char partitionMethod = cacheEntry->partitionMethod;
-	uint32 rangeTableId = 1;
-	Var *partitionColumn = NULL;
-	Expr *partitionValueExpr = NULL;
-	Const *partitionValueConst = NULL;
-	int prunedShardCount = 0;
-	List *prunedShardList = NIL;
-
-	Assert(query->commandType == CMD_INSERT);
-
-	/* reference tables do not have a partition column, but can only have one shard */
-	if (partitionMethod == DISTRIBUTE_BY_NONE)
-	{
-		int shardCount = cacheEntry->shardIntervalArrayLength;
-		if (shardCount != 1)
-		{
-			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
-		}
-
-		return cacheEntry->sortedShardIntervalArray[0];
-	}
-
-	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
-	partitionValueExpr = ExtractInsertPartitionValue(query, partitionColumn);
-
-	/* non-constants should have been caught by CanShardPrune */
-	if (!IsA(partitionValueExpr, Const))
-	{
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						errmsg("cannot perform an INSERT with a non-constant in the "
-							   "partition column")));
-	}
-
-	partitionValueConst = (Const *) partitionValueExpr;
-	if (partitionValueConst->constisnull)
-	{
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						errmsg("cannot perform an INSERT with NULL in the partition "
-							   "column")));
-	}
-
-	if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod == DISTRIBUTE_BY_RANGE)
-	{
-		Datum partitionValue = partitionValueConst->constvalue;
-		ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
-
-		if (shardInterval != NULL)
-		{
-			prunedShardList = list_make1(shardInterval);
-		}
-	}
-	else
-	{
-		List *restrictClauseList = NIL;
-		Index tableId = 1;
-		OpExpr *equalityExpr = MakeOpExpression(partitionColumn, BTEqualStrategyNumber);
-		Node *rightOp = get_rightop((Expr *) equalityExpr);
-		Const *rightConst = (Const *) rightOp;
-
-		Assert(IsA(rightOp, Const));
-
-		rightConst->constvalue = partitionValueConst->constvalue;
-		rightConst->constisnull = partitionValueConst->constisnull;
-		rightConst->constbyval = partitionValueConst->constbyval;
-
-		restrictClauseList = list_make1(equalityExpr);
-
-		prunedShardList = PruneShards(distributedTableId, tableId, restrictClauseList);
-	}
-
-	prunedShardCount = list_length(prunedShardList);
-	if (prunedShardCount != 1)
-	{
-		char *partitionKeyString = cacheEntry->partitionKeyString;
-		char *partitionColumnName = ColumnNameToColumn(distributedTableId,
-													   partitionKeyString);
-		StringInfo errorMessage = makeStringInfo();
-		StringInfo errorHint = makeStringInfo();
-		const char *targetCountType = NULL;
-
-		if (prunedShardCount == 0)
-		{
-			targetCountType = "no";
-		}
-		else
-		{
-			targetCountType = "multiple";
-		}
-
-		if (prunedShardCount == 0)
-		{
-			appendStringInfo(errorHint, "Make sure you have created a shard which "
-										"can receive this partition column value.");
-		}
-		else
-		{
-			appendStringInfo(errorHint, "Make sure the value for partition column "
-										"\"%s\" falls into a single shard.",
-							 partitionColumnName);
-		}
-
-		appendStringInfo(errorMessage, "cannot run INSERT command which targets %s "
-									   "shards", targetCountType);
-
-		(*planningError) = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-										 errorMessage->data, NULL,
-										 errorHint->data);
-
-		return NULL;
-	}
-
-	return (ShardInterval *) linitial(prunedShardList);
-}
-
-
-/*
  * ExtractFirstDistributedTableId takes a given query, and finds the relationId
  * for the first distributed table in that query. If the function cannot find a
  * distributed table, it returns InvalidOid.
@@ -1417,27 +1308,6 @@ ExtractFirstDistributedTableId(Query *query)
 	}
 
 	return distributedTableId;
-}
-
-
-/*
- * ExtractPartitionValue extracts the partition column value from a the target
- * of an INSERT command. If a partition value is missing altogether or is
- * NULL, this function throws an error.
- */
-static Expr *
-ExtractInsertPartitionValue(Query *query, Var *partitionColumn)
-{
-	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,
-												partitionColumn->varattno);
-	if (targetEntry == NULL)
-	{
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						errmsg("cannot perform an INSERT without a partition column "
-							   "value")));
-	}
-
-	return targetEntry->expr;
 }
 
 
@@ -1958,6 +1828,167 @@ WorkersContainingAllShards(List *prunedShardIntervalsList)
 
 
 /*
+ * BuildRoutesForInsert returns a list of ModifyRoute objects for an INSERT
+ * query or an empty list if the partition column value is defined as an ex-
+ * pression that still needs to be evaluated. If any partition column value
+ * falls within 0 or multiple (overlapping) shards, the planning error is set.
+ *
+ * Multi-row INSERTs are handled by grouping their rows by target shard. These
+ * groups are returned in ascending order by shard id, ready for later deparse
+ * to shard-specific SQL.
+ */
+static List *
+BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
+{
+	Oid distributedTableId = ExtractFirstDistributedTableId(query);
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedTableId);
+	char partitionMethod = cacheEntry->partitionMethod;
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+	List *insertValuesList = NIL;
+	List *modifyRouteList = NIL;
+	ListCell *insertValuesCell = NULL;
+
+	Assert(query->commandType == CMD_INSERT);
+
+	/* reference tables can only have one shard */
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		int shardCount = 0;
+		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
+		ShardInterval *shardInterval = NULL;
+		ModifyRoute *modifyRoute = NULL;
+
+		shardCount = list_length(shardIntervalList);
+		if (shardCount != 1)
+		{
+			ereport(ERROR, (errmsg("reference table cannot have %d shards", shardCount)));
+		}
+
+		shardInterval = linitial(shardIntervalList);
+		modifyRoute = palloc(sizeof(ModifyRoute));
+
+		modifyRoute->shardId = shardInterval->shardId;
+		modifyRoute->rowValuesLists = NIL;
+
+		modifyRouteList = lappend(modifyRouteList, modifyRoute);
+
+		return modifyRouteList;
+	}
+
+	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+
+	/* get full list of insert values and iterate over them to prune */
+	insertValuesList = ExtractInsertValuesList(query, partitionColumn);
+
+	foreach(insertValuesCell, insertValuesList)
+	{
+		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
+		Const *partitionValueConst = NULL;
+		List *prunedShardList = NIL;
+		int prunedShardCount = 0;
+		ShardInterval *targetShard = NULL;
+
+		if (!IsA(insertValues->partitionValueExpr, Const))
+		{
+			/* shard pruning not possible right now */
+			return NIL;
+		}
+
+		partitionValueConst = (Const *) insertValues->partitionValueExpr;
+		if (partitionValueConst->constisnull)
+		{
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+							errmsg("cannot perform an INSERT with NULL in the partition "
+								   "column")));
+		}
+
+		if (partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
+			DISTRIBUTE_BY_RANGE)
+		{
+			Datum partitionValue = partitionValueConst->constvalue;
+			DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(
+				distributedTableId);
+			ShardInterval *shardInterval = FindShardInterval(partitionValue, cacheEntry);
+
+			if (shardInterval != NULL)
+			{
+				prunedShardList = list_make1(shardInterval);
+			}
+		}
+		else
+		{
+			List *restrictClauseList = NIL;
+			Index tableId = 1;
+			OpExpr *equalityExpr = MakeOpExpression(partitionColumn,
+													BTEqualStrategyNumber);
+			Node *rightOp = get_rightop((Expr *) equalityExpr);
+			Const *rightConst = (Const *) rightOp;
+
+			Assert(IsA(rightOp, Const));
+
+			rightConst->constvalue = partitionValueConst->constvalue;
+			rightConst->constisnull = partitionValueConst->constisnull;
+			rightConst->constbyval = partitionValueConst->constbyval;
+
+			restrictClauseList = list_make1(equalityExpr);
+
+			prunedShardList = PruneShards(distributedTableId, tableId,
+										  restrictClauseList);
+		}
+
+		prunedShardCount = list_length(prunedShardList);
+		if (prunedShardCount != 1)
+		{
+			char *partitionKeyString = cacheEntry->partitionKeyString;
+			char *partitionColumnName = ColumnNameToColumn(distributedTableId,
+														   partitionKeyString);
+			StringInfo errorMessage = makeStringInfo();
+			StringInfo errorHint = makeStringInfo();
+			const char *targetCountType = NULL;
+
+			if (prunedShardCount == 0)
+			{
+				targetCountType = "no";
+			}
+			else
+			{
+				targetCountType = "multiple";
+			}
+
+			if (prunedShardCount == 0)
+			{
+				appendStringInfo(errorHint, "Make sure you have created a shard which "
+											"can receive this partition column value.");
+			}
+			else
+			{
+				appendStringInfo(errorHint, "Make sure the value for partition column "
+											"\"%s\" falls into a single shard.",
+								 partitionColumnName);
+			}
+
+			appendStringInfo(errorMessage, "cannot run INSERT command which targets %s "
+										   "shards", targetCountType);
+
+			(*planningError) = DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+											 errorMessage->data, NULL,
+											 errorHint->data);
+
+			return NIL;
+		}
+
+		targetShard = (ShardInterval *) linitial(prunedShardList);
+		insertValues->shardId = targetShard->shardId;
+	}
+
+	modifyRouteList = GroupInsertValuesByShardId(insertValuesList);
+
+	return modifyRouteList;
+}
+
+
+/*
  * IntersectPlacementList performs placement pruning based on matching on
  * nodeName:nodePort fields of shard placement data. We start pruning from all
  * placements of the first relation's shard. Then for each relation's shard, we
@@ -1990,6 +2021,132 @@ IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList)
 	}
 
 	return placementList;
+}
+
+
+/*
+ * GroupInsertValuesByShardId takes care of grouping the rows from a multi-row
+ * INSERT by target shard. At this point, all pruning has taken place and we
+ * need only to build sets of rows for each destination. This is done by a
+ * simple sort (by shard identifier) and gather step. The sort has the side-
+ * effect of getting things in ascending order to avoid unnecessary deadlocks
+ * during Task execution.
+ */
+static List *
+GroupInsertValuesByShardId(List *insertValuesList)
+{
+	ModifyRoute *route = NULL;
+	ListCell *insertValuesCell = NULL;
+	List *modifyRouteList = NIL;
+
+	insertValuesList = SortList(insertValuesList, CompareInsertValuesByShardId);
+	foreach(insertValuesCell, insertValuesList)
+	{
+		InsertValues *insertValues = (InsertValues *) lfirst(insertValuesCell);
+		int64 shardId = insertValues->shardId;
+		bool foundSameShardId = false;
+
+		if (route != NULL)
+		{
+			if (route->shardId == shardId)
+			{
+				foundSameShardId = true;
+			}
+			else
+			{
+				/* new shard id seen; current aggregation done; add to list */
+				modifyRouteList = lappend(modifyRouteList, route);
+			}
+		}
+
+		if (foundSameShardId)
+		{
+			/*
+			 * Our current value has the same shard id as our aggregate object,
+			 * so append the rowValues.
+			 */
+			route->rowValuesLists = lappend(route->rowValuesLists,
+											insertValues->rowValues);
+		}
+		else
+		{
+			/* we encountered a new shard id; build a new aggregate object */
+			route = (ModifyRoute *) palloc(sizeof(ModifyRoute));
+			route->shardId = insertValues->shardId;
+			route->rowValuesLists = list_make1(insertValues->rowValues);
+		}
+	}
+
+	/* left holding one final aggregate object; add to list */
+	modifyRouteList = lappend(modifyRouteList, route);
+
+	return modifyRouteList;
+}
+
+
+/*
+ * ExtractInsertValuesList extracts the partition column value for an INSERT
+ * command and returns it within an InsertValues struct. For single-row INSERTs
+ * this is simply a value extracted from the target list, but multi-row INSERTs
+ * will generate a List of InsertValues, each with full row values in addition
+ * to the partition value. If a partition value is NULL or missing altogether,
+ * this function errors.
+ */
+static List *
+ExtractInsertValuesList(Query *query, Var *partitionColumn)
+{
+	List *insertValuesList = NIL;
+	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,
+												partitionColumn->varattno);
+
+	if (targetEntry == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						errmsg("cannot perform an INSERT without a partition column "
+							   "value")));
+	}
+
+	/*
+	 * We've got a multi-row INSERT. PostgreSQL internally represents such
+	 * commands by linking Vars in the target list to lists of values within
+	 * a special VALUES range table entry. By extracting the right positional
+	 * expression from each list within that RTE, we will extract the partition
+	 * values for each row within the multi-row INSERT.
+	 */
+	if (IsA(targetEntry->expr, Var))
+	{
+		Var *partitionVar = (Var *) targetEntry->expr;
+		RangeTblEntry *referencedRTE = NULL;
+		ListCell *valuesListCell = NULL;
+		Index ivIndex = 0;
+
+		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
+		foreach(valuesListCell, referencedRTE->values_lists)
+		{
+			InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
+			insertValues->rowValues = (List *) lfirst(valuesListCell);
+			insertValues->partitionValueExpr = list_nth(insertValues->rowValues,
+														(partitionVar->varattno - 1));
+			insertValues->shardId = INVALID_SHARD_ID;
+			insertValues->listIndex = ivIndex;
+
+			insertValuesList = lappend(insertValuesList, insertValues);
+			ivIndex++;
+		}
+	}
+
+	/* nothing's been found yet; this is a simple single-row INSERT */
+	if (insertValuesList == NIL)
+	{
+		InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
+		insertValues->rowValues = NIL;
+		insertValues->partitionValueExpr = targetEntry->expr;
+		insertValues->shardId = INVALID_SHARD_ID;
+
+		insertValuesList = lappend(insertValuesList, insertValues);
+	}
+
+	return insertValuesList;
 }
 
 
@@ -2170,3 +2327,44 @@ get_all_actual_clauses(List *restrictinfo_list)
 
 
 #endif
+
+
+/*
+ * CompareInsertValuesByShardId does what it says in the name. Used for sorting
+ * InsertValues objects by their shard.
+ */
+static int
+CompareInsertValuesByShardId(const void *leftElement, const void *rightElement)
+{
+	InsertValues *leftValue = *((InsertValues **) leftElement);
+	InsertValues *rightValue = *((InsertValues **) rightElement);
+	int64 leftShardId = leftValue->shardId;
+	int64 rightShardId = rightValue->shardId;
+	Index leftIndex = leftValue->listIndex;
+	Index rightIndex = rightValue->listIndex;
+
+	if (leftShardId > rightShardId)
+	{
+		return 1;
+	}
+	else if (leftShardId < rightShardId)
+	{
+		return -1;
+	}
+	else
+	{
+		/* shard identifiers are the same, list index is secondary sort key */
+		if (leftIndex > rightIndex)
+		{
+			return 1;
+		}
+		else if (leftIndex < rightIndex)
+		{
+			return -1;
+		}
+		else
+		{
+			return 0;
+		}
+	}
+}

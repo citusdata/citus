@@ -26,11 +26,15 @@
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
+#include "parser/parsetree.h"
 #include "storage/lock.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 
-
+static RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query,
+														 Oid distributedTableId);
+static void UpdateTaskQueryString(Query *query, Oid distributedTableId,
+								  RangeTblEntry *valuesRTE, Task *task);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 
 
@@ -43,11 +47,12 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 {
 	ListCell *taskCell = NULL;
 	Oid relationId = ((RangeTblEntry *) linitial(originalQuery->rtable))->relid;
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery,
+																 relationId);
 
 	foreach(taskCell, taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
-		StringInfo newQueryString = makeStringInfo();
 		Query *query = originalQuery;
 
 		if (task->insertSelectQuery)
@@ -90,28 +95,105 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 			}
 		}
 
-		/*
-		 * For INSERT queries, we only have one relation to update, so we can
-		 * use deparse_shard_query(). For UPDATE and DELETE queries, we may have
-		 * subqueries and joins, so we use relation shard list to update shard
-		 * names and call pg_get_query_def() directly.
-		 */
-		if (query->commandType == CMD_INSERT)
-		{
-			deparse_shard_query(query, relationId, task->anchorShardId, newQueryString);
-		}
-		else
-		{
-			List *relationShardList = task->relationShardList;
-			UpdateRelationToShardNames((Node *) query, relationShardList);
+		ereport(DEBUG4, (errmsg("query before rebuilding: %s", task->queryString)));
 
-			pg_get_query_def(query, newQueryString);
-		}
+		UpdateTaskQueryString(query, relationId, valuesRTE, task);
 
-		ereport(DEBUG4, (errmsg("distributed statement: %s", newQueryString->data)));
-
-		task->queryString = newQueryString->data;
+		ereport(DEBUG4, (errmsg("query after rebuilding:  %s", task->queryString)));
 	}
+}
+
+
+/*
+ * ExtractDistributedInsertValuesRTE does precisely that. If the provided
+ * query is not an INSERT, or if the table is a reference table, or if the
+ * INSERT does not have a VALUES RTE (i.e. it is not a multi-row INSERT), this
+ * function returns NULL. If all those conditions are met, an RTE representing
+ * the multiple values of a multi-row INSERT is returned.
+ */
+static RangeTblEntry *
+ExtractDistributedInsertValuesRTE(Query *query, Oid distributedTableId)
+{
+	RangeTblEntry *valuesRTE = NULL;
+	uint32 rangeTableId = 1;
+	Var *partitionColumn = NULL;
+	TargetEntry *targetEntry = NULL;
+
+	if (query->commandType != CMD_INSERT)
+	{
+		return NULL;
+	}
+
+	partitionColumn = PartitionColumn(distributedTableId, rangeTableId);
+	if (partitionColumn == NULL)
+	{
+		return NULL;
+	}
+
+	targetEntry = get_tle_by_resno(query->targetList, partitionColumn->varattno);
+	Assert(targetEntry != NULL);
+
+	if (IsA(targetEntry->expr, Var))
+	{
+		Var *partitionVar = (Var *) targetEntry->expr;
+
+		valuesRTE = rt_fetch(partitionVar->varno, query->rtable);
+		if (valuesRTE->rtekind != RTE_VALUES)
+		{
+			return NULL;
+		}
+	}
+
+	return valuesRTE;
+}
+
+
+/*
+ * UpdateTaskQueryString updates the query string stored within the provided
+ * Task. If the Task has row values from a multi-row INSERT, those are injected
+ * into the provided query (using the provided valuesRTE, which must belong to
+ * the query) before deparse occurs (the query's full VALUES list will be
+ * restored before this function returns).
+ */
+static void
+UpdateTaskQueryString(Query *query, Oid distributedTableId, RangeTblEntry *valuesRTE,
+					  Task *task)
+{
+	StringInfo queryString = makeStringInfo();
+	List *oldValuesLists = NIL;
+
+	if (valuesRTE != NULL)
+	{
+		Assert(valuesRTE->rtekind == RTE_VALUES);
+
+		oldValuesLists = valuesRTE->values_lists;
+		valuesRTE->values_lists = task->rowValuesLists;
+	}
+
+	/*
+	 * For INSERT queries, we only have one relation to update, so we can
+	 * use deparse_shard_query(). For UPDATE and DELETE queries, we may have
+	 * subqueries and joins, so we use relation shard list to update shard
+	 * names and call pg_get_query_def() directly.
+	 */
+	if (query->commandType == CMD_INSERT)
+	{
+		deparse_shard_query(query, distributedTableId, task->anchorShardId, queryString);
+	}
+	else
+	{
+		List *relationShardList = task->relationShardList;
+		UpdateRelationToShardNames((Node *) query, relationShardList);
+
+		pg_get_query_def(query, queryString);
+	}
+
+	if (valuesRTE != NULL)
+	{
+		valuesRTE->values_lists = oldValuesLists;
+	}
+
+	task->queryString = queryString->data;
 }
 
 

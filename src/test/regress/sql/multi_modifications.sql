@@ -132,7 +132,7 @@ INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy
 
 SET client_min_messages TO DEFAULT;
 
--- commands with non-constant partition values are unsupported
+-- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
 
@@ -146,8 +146,26 @@ DELETE FROM limit_orders WHERE id = 246 AND bidder_id = (random() * 1000);
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::timestamp;
 
--- commands with multiple rows are unsupported
-INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
+-- multi-row inserts are supported
+INSERT INTO limit_orders VALUES (12037, 'GOOG', 5634, '2001-04-16 03:37:28', 'buy', 0.50),
+                                (12038, 'GOOG', 5634, '2001-04-17 03:37:28', 'buy', 2.50),
+                                (12039, 'GOOG', 5634, '2001-04-18 03:37:28', 'buy', 1.50);
+
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 12037 AND 12039;
+
+-- even those with functions
+INSERT INTO limit_orders VALUES (22037, 'GOOG', 5634, now(), 'buy', 0.50),
+                                (22038, 'GOOG', 5634, now(), 'buy', 2.50),
+                                (22039, 'GOOG', 5634, now(), 'buy', 1.50);
+
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 22037 AND 22039;
+
+-- even those with functions in their partition columns
+INSERT INTO limit_orders VALUES (random() * 10 + 70000, 'GOOG', 5634, now(), 'buy', 0.50),
+                                (random() * 10 + 80000, 'GOOG', 5634, now(), 'buy', 2.50),
+                                (random() * 10 + 80090, 'GOOG', 5634, now(), 'buy', 1.50);
+
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 70000 AND 90000;
 
 -- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported

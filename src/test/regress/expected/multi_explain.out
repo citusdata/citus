@@ -299,14 +299,14 @@ Limit
                                                   Filter: (l_quantity < 5.0)
 -- Test insert
 EXPLAIN (COSTS FALSE)
-	INSERT INTO lineitem VALUES(1,0);
+	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
 Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57638 dbname=regression
         ->  Insert on lineitem_290000
-              ->  Result
+              ->  Values Scan on "*VALUES*"
 -- Test update
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem

@@ -1657,6 +1657,12 @@ BEGIN;
 INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
 ROLLBACK;
+-- Similarly, multi-row INSERTs will take part in transactions and reuse connections...
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+INSERT INTO raw_events_first (user_id, value_1) VALUES (105, 105), (106, 106);
+ROLLBACK;
 -- selecting from views works
 CREATE VIEW test_view AS SELECT * FROM raw_events_first;
 INSERT INTO raw_events_first (user_id, time, value_1, value_2, value_3, value_4) VALUES
