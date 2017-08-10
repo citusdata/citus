@@ -31,6 +31,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -929,6 +930,9 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 /*
  * ColocatedTableId returns an arbitrary table which belongs to given colocation
  * group. If there is not such a colocation group, it returns invalid oid.
+ *
+ * This function also takes an AccessShareLock on the co-colocated table to
+ * guarantee that the table isn't dropped for the remainder of the transaction.
  */
 Oid
 ColocatedTableId(Oid colocationId)
@@ -955,7 +959,7 @@ ColocatedTableId(Oid colocationId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 
-	/* prevent DELETE statements */
+	/* do not allow any tables to be dropped while we read from pg_dist_partition */
 	pgDistPartition = heap_open(DistPartitionRelationId(), ShareLock);
 	tupleDescriptor = RelationGetDescr(pgDistPartition);
 	scanDescriptor = systable_beginscan(pgDistPartition,
@@ -967,6 +971,9 @@ ColocatedTableId(Oid colocationId)
 	{
 		colocatedTableId = heap_getattr(heapTuple, Anum_pg_dist_partition_logicalrelid,
 										tupleDescriptor, &isNull);
+
+		/* make sure the table isn't dropped for the remainder of the transaction */
+		LockRelationOid(colocatedTableId, AccessShareLock);
 	}
 
 	systable_endscan(scanDescriptor);
