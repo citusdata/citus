@@ -436,9 +436,8 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 	if (workerNode == NULL && !groupContainsNodes)
 	{
-		ereport(ERROR, (errmsg("the metadata is inconsistent"),
-						errdetail("there is a placement in group %u but "
-								  "there are no nodes in that group", groupId)));
+		ereport(ERROR, (errmsg("there is a shard placement in node group %u but "
+							   "there are no nodes in that group", groupId)));
 	}
 
 	if (workerNode == NULL && groupContainsNodes)
