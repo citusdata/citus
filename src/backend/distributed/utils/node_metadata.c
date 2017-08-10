@@ -352,14 +352,12 @@ WorkerNodeIsPrimary(WorkerNode *worker)
 WorkerNode *
 PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes)
 {
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		uint32 workerNodeGroupId = workerNode->groupId;
 		if (workerNodeGroupId != groupId)
 		{
@@ -373,7 +371,6 @@ PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes)
 
 		if (WorkerNodeIsPrimary(workerNode))
 		{
-			hash_seq_term(&status);
 			return workerNode;
 		}
 	}
@@ -551,20 +548,21 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 WorkerNode *
 FindWorkerNode(char *nodeName, int32 nodePort)
 {
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	bool handleFound = false;
-	void *hashKey = NULL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	WorkerNode *searchedNode = (WorkerNode *) palloc0(sizeof(WorkerNode));
-	strlcpy(searchedNode->workerName, nodeName, WORKER_LENGTH);
-	searchedNode->workerPort = nodePort;
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
+	{
+		WorkerNode *currentNode = (WorkerNode *) lfirst(currentCell);
 
-	hashKey = (void *) searchedNode;
-	workerNode = (WorkerNode *) hash_search(workerNodeHash, hashKey,
-											HASH_FIND, &handleFound);
+		if (strncmp(currentNode->workerName, nodeName, WORKER_LENGTH) == 0 &&
+			currentNode->workerPort == nodePort)
+		{
+			return currentNode;
+		}
+	}
 
-	return workerNode;
+	return NULL;
 }
 
 
@@ -721,15 +719,12 @@ static uint32
 CountPrimariesWithMetadata()
 {
 	uint32 primariesWithMetadata = 0;
-	WorkerNode *workerNode = NULL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		if (workerNode->hasMetadata && WorkerNodeIsPrimary(workerNode))
 		{
 			primariesWithMetadata++;
@@ -1012,14 +1007,12 @@ static uint32
 GetMaxGroupId()
 {
 	uint32 maxGroupId = 0;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		uint32 workerNodeGroupId = workerNode->groupId;
 
 		if (workerNodeGroupId > maxGroupId)

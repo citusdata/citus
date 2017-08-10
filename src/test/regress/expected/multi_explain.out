@@ -52,7 +52,7 @@ Sort
                     Node: host=localhost port=57637 dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
-                          ->  Seq Scan on lineitem_290001 lineitem
+                          ->  Seq Scan on lineitem_290000 lineitem
 -- Test JSON format
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT l_quantity, count(*) count_quantity FROM lineitem
@@ -98,7 +98,7 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Node Type": "Seq Scan",
                                   "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
-                                  "Relation Name": "lineitem_290001",
+                                  "Relation Name": "lineitem_290000",
                                   "Alias": "lineitem"
                                 }
                               ]
@@ -175,7 +175,7 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                                   <Node-Type>Seq Scan</Node-Type>
                                   <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
-                                  <Relation-Name>lineitem_290001</Relation-Name>
+                                  <Relation-Name>lineitem_290000</Relation-Name>
                                   <Alias>lineitem</Alias>
                                 </Plan>
                               </Plans>
@@ -240,7 +240,7 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                             - Node Type: "Seq Scan"
                               Parent Relationship: "Outer"
                               Parallel Aware: false
-                              Relation Name: "lineitem_290001"
+                              Relation Name: "lineitem_290000"
                               Alias: "lineitem"
 
 -- Test Text format
@@ -258,7 +258,7 @@ Sort
                     Node: host=localhost port=57637 dbname=regression
                     ->  HashAggregate
                           Group Key: l_quantity
-                          ->  Seq Scan on lineitem_290001 lineitem
+                          ->  Seq Scan on lineitem_290000 lineitem
 -- Test verbose
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
@@ -272,7 +272,7 @@ Aggregate
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity)
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test join
 EXPLAIN (COSTS FALSE)
@@ -295,7 +295,7 @@ Limit
                                       ->  Index Scan using orders_pkey_290008 on orders_290008 orders
                                       ->  Sort
                                             Sort Key: lineitem.l_orderkey
-                                            ->  Seq Scan on lineitem_290001 lineitem
+                                            ->  Seq Scan on lineitem_290000 lineitem
                                                   Filter: (l_quantity < 5.0)
 -- Test insert
 EXPLAIN (COSTS FALSE)
@@ -304,7 +304,7 @@ Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=57637 dbname=regression
         ->  Insert on lineitem_290000
               ->  Values Scan on "*VALUES*"
 -- Test update
@@ -316,7 +316,7 @@ Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=57637 dbname=regression
         ->  Update on lineitem_290000 lineitem
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
@@ -329,7 +329,7 @@ Custom Scan (Citus Router)
   Task Count: 1
   Tasks Shown: All
   ->  Task
-        Node: host=localhost port=57638 dbname=regression
+        Node: host=localhost port=57637 dbname=regression
         ->  Delete on lineitem_290000 lineitem
               ->  Index Scan using lineitem_pkey_290000 on lineitem_290000 lineitem
                     Index Cond: (l_orderkey = 1)
@@ -374,7 +374,7 @@ Custom Scan (Citus Real-Time)
   Tasks Shown: One of 8
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Seq Scan on lineitem_290001 lineitem
+        ->  Seq Scan on lineitem_290000 lineitem
 -- Test having
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem
@@ -390,7 +390,7 @@ Aggregate
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
                     Output: sum(l_quantity), sum(l_quantity), count(l_quantity), sum(l_quantity)
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Test having without aggregate
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
@@ -410,7 +410,7 @@ HashAggregate
               ->  HashAggregate
                     Output: l_quantity, l_quantity
                     Group Key: lineitem.l_quantity
-                    ->  Seq Scan on public.lineitem_290001 lineitem
+                    ->  Seq Scan on public.lineitem_290000 lineitem
                           Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
 -- Subquery pushdown tests with explain
 EXPLAIN (COSTS OFF)
@@ -453,7 +453,7 @@ Aggregate
                                       Join Filter: ((NULL::user_composite_type) = events.composite_id)
                                       ->  Result
                                             One-Time Filter: false
-                                      ->  Seq Scan on events_1400027 events
+                                      ->  Seq Scan on events_1400026 events
                                             Filter: ((event_type)::text = ANY ('{click,submit,pay}'::text[]))
 -- Union and left join subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -544,20 +544,20 @@ HashAggregate
                                                                           Join Filter: ((NULL::user_composite_type) = events.composite_id)
                                                                           ->  Result
                                                                                 One-Time Filter: false
-                                                                          ->  Seq Scan on events_1400027 events
+                                                                          ->  Seq Scan on events_1400026 events
                                                                                 Filter: ((event_type)::text = 'click'::text)
                                                                     ->  Nested Loop
                                                                           Join Filter: ((NULL::user_composite_type) = events_1.composite_id)
                                                                           ->  Result
                                                                                 One-Time Filter: false
-                                                                          ->  Seq Scan on events_1400027 events_1
+                                                                          ->  Seq Scan on events_1400026 events_1
                                                                                 Filter: ((event_type)::text = 'submit'::text)
                                                   ->  Hash
                                                         ->  Subquery Scan on subquery_2
                                                               ->  Unique
                                                                     ->  Sort
                                                                           Sort Key: ((events_2.composite_id).tenant_id), ((events_2.composite_id).user_id)
-                                                                          ->  Seq Scan on events_1400027 events_2
+                                                                          ->  Seq Scan on events_1400026 events_2
                                                                                 Filter: ((composite_id >= '(1,-9223372036854775808)'::user_composite_type) AND (composite_id <= '(1,9223372036854775807)'::user_composite_type) AND ((event_type)::text = 'pay'::text))
 -- Union, left join and having subquery pushdown
 EXPLAIN (COSTS OFF)
@@ -709,7 +709,7 @@ Limit
                                                   ->  Limit
                                                         ->  Sort
                                                               Sort Key: events.event_time DESC
-                                                              ->  Seq Scan on events_1400027 events
+                                                              ->  Seq Scan on events_1400026 events
                                                                     Filter: (composite_id = users.composite_id)
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
@@ -722,22 +722,22 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290005 lineitem
+                    ->  Seq Scan on lineitem_290004 lineitem
                           Filter: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290004 lineitem
+                    ->  Seq Scan on lineitem_290005 lineitem
                           Filter: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290007 lineitem
+                    ->  Seq Scan on lineitem_290006 lineitem
                           Filter: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290006 lineitem
+                    ->  Seq Scan on lineitem_290007 lineitem
                           Filter: (l_orderkey > 9030)
 SELECT true AS valid FROM explain_xml($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
@@ -757,7 +757,7 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290005 lineitem
+                    ->  Seq Scan on lineitem_290004 lineitem
                           Filter: (l_orderkey > 9030)
 -- Test re-partition join
 SET citus.large_table_shard_count TO 1;
@@ -938,7 +938,7 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290001 lineitem
+                    ->  Seq Scan on lineitem_290000 lineitem
 -- ensure EXPLAIN EXECUTE doesn't crash
 PREPARE task_tracker_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;
@@ -950,7 +950,7 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290005 lineitem
+                    ->  Seq Scan on lineitem_290004 lineitem
                           Filter: (l_orderkey > 9030)
 SET citus.task_executor_type TO 'real-time';
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
@@ -972,7 +972,7 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_290005 lineitem
+                    ->  Seq Scan on lineitem_290004 lineitem
                           Filter: (l_orderkey > 9030)
 -- EXPLAIN EXECUTE of parametrized prepared statements is broken, but
 -- at least make sure to fail without crashing

@@ -421,11 +421,11 @@ LIMIT
         5;
  shardid | nodeport 
 ---------+----------
-  560141 |    57637
-  560140 |    57638
-  560139 |    57637
-  560138 |    57638
-  560137 |    57637
+  560141 |    57638
+  560140 |    57637
+  560139 |    57638
+  560138 |    57637
+  560137 |    57638
 (5 rows)
 
 -- Ensure that copy from worker node of table with serial column fails
@@ -699,13 +699,13 @@ SELECT master_create_distributed_table('composite_partition_column_table', 'comp
 \COPY composite_partition_column_table FROM STDIN WITH (FORMAT 'csv');
 WARNING:  function min(number_pack) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 WARNING:  function min(number_pack) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 WARNING:  could not get statistics for shard public.composite_partition_column_table_560164
 DETAIL:  Setting shard statistics to NULL
-ERROR:  failure on connection marked as essential: localhost:57637
+ERROR:  failure on connection marked as essential: localhost:57638
 -- Test copy on append distributed tables do not create shards on removed workers
 CREATE TABLE numbers_append (a int, b int);
 SELECT master_create_distributed_table('numbers_append', 'a', 'append');
@@ -730,10 +730,10 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
-  560165 | localhost |    57637
   560165 | localhost |    57638
-  560166 | localhost |    57638
+  560165 | localhost |    57637
   560166 | localhost |    57637
+  560166 | localhost |    57638
 (4 rows)
 
 -- disable the first node
@@ -755,10 +755,10 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
-  560165 | localhost |    57637
   560165 | localhost |    57638
-  560166 | localhost |    57638
+  560165 | localhost |    57637
   560166 | localhost |    57637
+  560166 | localhost |    57638
   560167 | localhost |    57638
   560168 | localhost |    57638
 (6 rows)
@@ -781,10 +781,10 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
-  560165 | localhost |    57637
   560165 | localhost |    57638
-  560166 | localhost |    57638
+  560165 | localhost |    57637
   560166 | localhost |    57637
+  560166 | localhost |    57638
   560167 | localhost |    57638
   560168 | localhost |    57638
   560169 | localhost |    57637

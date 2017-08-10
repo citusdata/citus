@@ -23,8 +23,8 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
 --------------------------------
- (localhost,57638)
  (localhost,57637)
+ (localhost,57638)
 (2 rows)
 
 -- try to add a node that is already in the cluster
@@ -38,8 +38,8 @@ SELECT nodeid, groupid FROM master_add_node('localhost', :worker_1_port);
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
 --------------------------------
- (localhost,57638)
  (localhost,57637)
+ (localhost,57638)
 (2 rows)
 
 -- try to remove a node (with no placements)
@@ -115,8 +115,8 @@ ERROR:  you cannot remove the primary node of a node group which has shard place
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
 --------------------------------
- (localhost,57638)
  (localhost,57637)
+ (localhost,57638)
 (2 rows)
 
 -- insert a row so that master_disable_node() exercises closing connections
@@ -171,8 +171,8 @@ ERROR:  you cannot remove the primary node of a node group which has shard place
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes 
 --------------------------------
- (localhost,57638)
  (localhost,57637)
+ (localhost,57638)
 (2 rows)
 
 -- clean-up
