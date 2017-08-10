@@ -77,6 +77,7 @@ typedef struct InsertValues
 	Expr *partitionValueExpr; /* partition value provided in INSERT row */
 	List *rowValues;          /* full values list of INSERT row, possibly NIL */
 	int64 shardId;            /* target shard for this row, possibly invalid */
+	Index listIndex;          /* index to make our sorting stable */
 } InsertValues;
 
 
@@ -2117,6 +2118,7 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 		Var *partitionVar = (Var *) targetEntry->expr;
 		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
+		Index ivIndex = 0;
 
 		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
 		foreach(valuesListCell, referencedRTE->values_lists)
@@ -2126,8 +2128,10 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 			insertValues->partitionValueExpr = list_nth(insertValues->rowValues,
 														(partitionVar->varattno - 1));
 			insertValues->shardId = INVALID_SHARD_ID;
+			insertValues->listIndex = ivIndex;
 
 			insertValuesList = lappend(insertValuesList, insertValues);
+			ivIndex++;
 		}
 	}
 
@@ -2336,8 +2340,9 @@ CompareInsertValuesByShardId(const void *leftElement, const void *rightElement)
 	InsertValues *rightValue = *((InsertValues **) rightElement);
 	int64 leftShardId = leftValue->shardId;
 	int64 rightShardId = rightValue->shardId;
+	Index leftIndex = leftValue->listIndex;
+	Index rightIndex = rightValue->listIndex;
 
-	/* we compare 64-bit integers, instead of casting their difference to int */
 	if (leftShardId > rightShardId)
 	{
 		return 1;
@@ -2348,6 +2353,18 @@ CompareInsertValuesByShardId(const void *leftElement, const void *rightElement)
 	}
 	else
 	{
-		return 0;
+		/* shard identifiers are the same, list index is secondary sort key */
+		if (leftIndex > rightIndex)
+		{
+			return 1;
+		}
+		else if (leftIndex < rightIndex)
+		{
+			return -1;
+		}
+		else
+		{
+			return 0;
+		}
 	}
 }

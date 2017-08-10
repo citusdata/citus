@@ -66,7 +66,7 @@ static CustomExecMethods RouterSingleModifyCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-/* not static to enable swapping in multi-modify logic during router execution */
+/* not static to enable reference by multi-modify logic in router execution */
 CustomExecMethods RouterMultiModifyCustomExecMethods = {
 	.CustomName = "RouterMultiModifyScan",
 	.BeginCustomScan = CitusModifyBeginScan,
