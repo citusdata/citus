@@ -991,8 +991,12 @@ StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransaction
 
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
-		ReportConnectionError(connection, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (!transaction->transactionFailed)
+		{
+			ReportConnectionError(connection, WARNING);
+			MarkRemoteTransactionFailed(connection, true);
+		}
 	}
 }
 
@@ -1008,8 +1012,12 @@ FinishRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactio
 	PGresult *result = GetRemoteCommandResult(connection, true);
 	if (!IsResponseOK(result))
 	{
-		ReportResultError(connection, result, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (!transaction->transactionFailed)
+		{
+			ReportResultError(connection, result, WARNING);
+			MarkRemoteTransactionFailed(connection, true);
+		}
 	}
 
 	PQclear(result);
@@ -1030,8 +1038,12 @@ StartRemoteTransactionSavepointRelease(MultiConnection *connection,
 
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
-		ReportConnectionError(connection, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (!transaction->transactionFailed)
+		{
+			ReportConnectionError(connection, WARNING);
+			MarkRemoteTransactionFailed(connection, true);
+		}
 	}
 }
 
@@ -1048,8 +1060,12 @@ FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
 	PGresult *result = GetRemoteCommandResult(connection, true);
 	if (!IsResponseOK(result))
 	{
-		ReportResultError(connection, result, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		RemoteTransaction *transaction = &connection->remoteTransaction;
+		if (!transaction->transactionFailed)
+		{
+			ReportResultError(connection, result, WARNING);
+			MarkRemoteTransactionFailed(connection, true);
+		}
 	}
 
 	PQclear(result);
