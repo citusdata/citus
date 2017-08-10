@@ -311,14 +311,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	/* we need to calculate these variables before creating distributed metadata */
 	localTableEmpty = LocalTableEmpty(relationId);
 	colocatedTableId = ColocatedTableId(colocationId);
-	if (colocatedTableId != InvalidOid)
-	{
-		/*
-		 * We take lock on colocatedTableId, because we want to ensure that colocated
-		 * table is not dropped until we create all colocated shards.
-		 */
-		colocatedRelation = relation_open(colocatedTableId, AccessShareLock);
-	}
 
 	/* create an entry for distributed table in pg_dist_partition */
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
@@ -530,6 +522,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 		Relation pgDistColocation = heap_open(DistColocationRelationId(), ExclusiveLock);
 
 		Oid distributionColumnType = distributionColumn->vartype;
+		bool createdColocationGroup = false;
 
 		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
 		{
@@ -541,11 +534,14 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 			{
 				colocationId = CreateColocationGroup(ShardCount, ShardReplicationFactor,
 													 distributionColumnType);
+				createdColocationGroup = true;
 			}
 		}
 		else if (pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) == 0)
 		{
 			colocationId = GetNextColocationId();
+
+			createdColocationGroup = true;
 		}
 		else
 		{
@@ -558,7 +554,22 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 			colocationId = TableColocationId(sourceRelationId);
 		}
 
-		heap_close(pgDistColocation, NoLock);
+		/*
+		 * If we created a new colocation group then we need to keep the lock to
+		 * prevent a concurrent create_distributed_table call from creating another
+		 * colocation group with the same parameters. If we're using an existing
+		 * colocation group then other transactions will use the same one.
+		 */
+		if (createdColocationGroup)
+		{
+			/* keep the exclusive lock */
+			heap_close(pgDistColocation, NoLock);
+		}
+		else
+		{
+			/* release the exclusive lock */
+			heap_close(pgDistColocation, ExclusiveLock);
+		}
 	}
 
 	return colocationId;
