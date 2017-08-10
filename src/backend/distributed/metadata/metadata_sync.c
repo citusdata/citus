@@ -227,7 +227,8 @@ MetadataCreateCommands(void)
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
 	List *propagatedTableList = NIL;
-	List *workerNodeList = ReadWorkerNodes();
+	bool includeNodesFromOtherClusters = true;
+	List *workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;

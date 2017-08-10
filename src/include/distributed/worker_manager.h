@@ -66,7 +66,7 @@ extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNodeList(void);
 extern WorkerNode * FindWorkerNode(char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeAnyCluster(char *nodeName, int32 nodePort);
-extern List * ReadWorkerNodes(void);
+extern List * ReadWorkerNodes(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
 extern uint32 GroupForNode(char *nodeName, int32 nodePorT);
 extern WorkerNode * PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes);
