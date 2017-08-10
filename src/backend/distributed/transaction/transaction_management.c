@@ -384,10 +384,7 @@ static void
 PopSubXact(SubTransactionId subId)
 {
 	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
-	while (linitial_int(activeSubXacts) != subId)
-	{
-		activeSubXacts = list_delete_first(activeSubXacts);
-	}
+	Assert(linitial_int(activeSubXacts) == subId);
 	activeSubXacts = list_delete_first(activeSubXacts);
 	MemoryContextSwitchTo(old_context);
 }
