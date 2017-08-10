@@ -17,6 +17,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
@@ -52,6 +53,7 @@ static void DeleteColocationGroup(uint32 colocationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
+PG_FUNCTION_INFO_V1(get_colocated_shard_array);
 
 
 /*
@@ -88,6 +90,43 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * get_colocated_shards_array returns array of shards ids which are co-located with given
+ * shard.
+ */
+Datum
+get_colocated_shard_array(PG_FUNCTION_ARGS)
+{
+	uint32 shardId = PG_GETARG_UINT32(0);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+	ArrayType *colocatedShardsArrayType = NULL;
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+	ListCell *colocatedShardCell = NULL;
+	int colocatedShardCount = list_length(colocatedShardList);
+	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
+	Oid arrayTypeId = OIDOID;
+	int colocatedShardIndex = 0;
+
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShardInterval = (ShardInterval *) lfirst(
+			colocatedShardCell);
+		uint64 colocatedShardId = colocatedShardInterval->shardId;
+
+		Datum colocatedShardDatum = Int64GetDatum(colocatedShardId);
+
+		colocatedShardsDatumArray[colocatedShardIndex] = colocatedShardDatum;
+		colocatedShardIndex++;
+	}
+
+	colocatedShardsArrayType = DatumArrayToArrayType(colocatedShardsDatumArray,
+													 colocatedShardCount, arrayTypeId);
+
+	PG_RETURN_ARRAYTYPE_P(colocatedShardsArrayType);
 }
 
 

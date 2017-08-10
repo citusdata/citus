@@ -17,7 +17,6 @@
 #include <string.h>
 
 #include "distributed/listutils.h"
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 
