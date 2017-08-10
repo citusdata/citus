@@ -61,7 +61,14 @@ typedef struct RemoteTransaction
 	/* failed in current transaction */
 	bool transactionFailed;
 
-	SubTransactionId lastUnfailedSubXact;
+	/*
+	 * Id of last savepoint that began successfully. Since savepoint ids are
+	 * sequentially increasing, rolling back to any savepoint with id equal to
+	 * or less than this id recovers the transaction from failures.
+	 */
+	SubTransactionId lastSuccessfulSubXact;
+
+	/* waiting for the result of a recovering ROLLBACK TO SAVEPOINT command */
 	bool transactionRecovering;
 
 	/* 2PC transaction name currently associated with connection */

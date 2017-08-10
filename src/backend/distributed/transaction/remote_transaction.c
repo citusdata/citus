@@ -89,13 +89,13 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	/* append in-progress savepoints for this transaction */
 	activeSubXacts = ActiveSubXacts();
-	transaction->lastUnfailedSubXact = TopSubTransactionId;
+	transaction->lastSuccessfulSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
 	{
 		SubTransactionId subId = lfirst_int(subIdCell);
 		appendStringInfo(beginAndSetDistributedTransactionId,
 						 "SAVEPOINT savepoint_%u;", subId);
-		transaction->lastUnfailedSubXact = subId;
+		transaction->lastSuccessfulSubXact = subId;
 	}
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))
@@ -883,7 +883,7 @@ RemoteTransactionsSavepointBegin(SubTransactionId subId)
 
 		if (!transaction->transactionFailed)
 		{
-			transaction->lastUnfailedSubXact = subId;
+			transaction->lastSuccessfulSubXact = subId;
 		}
 	}
 }
@@ -946,7 +946,7 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 		RemoteTransaction *transaction = &connection->remoteTransaction;
 		if (transaction->transactionFailed)
 		{
-			if (transaction->lastUnfailedSubXact <= subId)
+			if (transaction->lastSuccessfulSubXact <= subId)
 			{
 				transaction->transactionRecovering = true;
 
