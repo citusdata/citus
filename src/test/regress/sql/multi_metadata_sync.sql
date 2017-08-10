@@ -75,6 +75,9 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 SELECT stop_metadata_sync_to_node('localhost', 8888);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 
+-- Add a node to another cluster to make sure it's also synced
+SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
+
 -- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
