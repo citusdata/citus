@@ -2309,6 +2309,7 @@ InitializeWorkerNodeCache(void)
 	HASHCTL info;
 	int hashFlags = 0;
 	long maxTableSize = (long) MaxWorkerNodesTracked;
+	bool includeNodesFromOtherClusters = false;
 
 	InitializeCaches();
 
@@ -2331,7 +2332,7 @@ InitializeWorkerNodeCache(void)
 								 &info, hashFlags);
 
 	/* read the list from pg_dist_node */
-	workerNodeList = ReadWorkerNodes();
+	workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
 
 	/* iterate over the worker node list */
 	foreach(workerNodeCell, workerNodeList)
