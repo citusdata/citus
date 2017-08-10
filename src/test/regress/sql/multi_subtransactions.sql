@@ -54,3 +54,52 @@ ROLLBACK TO SAVEPOINT s2;
 COMMIT;
 
 SELECT * FROM artists WHERE id=5;
+
+-- Multiple sub-transaction activity before first query
+BEGIN;
+SAVEPOINT s0;
+SAVEPOINT s1;
+SAVEPOINT s2;
+SAVEPOINT s3;
+ROLLBACK TO SAVEPOINT s2;
+RELEASE SAVEPOINT s1;
+INSERT INTO artists VALUES (6, 'John J. Audubon');
+ROLLBACK TO SAVEPOINT s0;
+INSERT INTO artists VALUES (6, 'Emily Carr');
+COMMIT;
+
+SELECT * FROM artists WHERE id=6;
+
+-- Release after rollback
+BEGIN;
+SAVEPOINT s1;
+ROLLBACK TO s1;
+RELEASE SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, 'John J. Audubon');
+ROLLBACK TO s2;
+RELEASE SAVEPOINT s2;
+COMMIT;
+
+SELECT * FROM artists WHERE id=7;
+
+-- Recover from errors
+\set VERBOSITY terse
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, NULL);
+ROLLBACK TO SAVEPOINT s1;
+COMMIT;
+
+-- Don't recover from errors
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, NULL);
+SAVEPOINT s3;
+ROLLBACK TO SAVEPOINT s3;
+COMMIT;
+
+-- Clean-up
+DROP TABLE artists;

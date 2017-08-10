@@ -68,3 +68,59 @@ SELECT * FROM artists WHERE id=5;
   5 | Jacob Kahn
 (1 row)
 
+-- Multiple sub-transaction activity before first query
+BEGIN;
+SAVEPOINT s0;
+SAVEPOINT s1;
+SAVEPOINT s2;
+SAVEPOINT s3;
+ROLLBACK TO SAVEPOINT s2;
+RELEASE SAVEPOINT s1;
+INSERT INTO artists VALUES (6, 'John J. Audubon');
+ROLLBACK TO SAVEPOINT s0;
+INSERT INTO artists VALUES (6, 'Emily Carr');
+COMMIT;
+SELECT * FROM artists WHERE id=6;
+ id |    name    
+----+------------
+  6 | Emily Carr
+(1 row)
+
+-- Release after rollback
+BEGIN;
+SAVEPOINT s1;
+ROLLBACK TO s1;
+RELEASE SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, 'John J. Audubon');
+ROLLBACK TO s2;
+RELEASE SAVEPOINT s2;
+COMMIT;
+SELECT * FROM artists WHERE id=7;
+ id | name 
+----+------
+(0 rows)
+
+-- Recover from errors
+\set VERBOSITY terse
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, NULL);
+ERROR:  null value in column "name" violates not-null constraint
+ROLLBACK TO SAVEPOINT s1;
+COMMIT;
+-- Don't recover from errors
+BEGIN;
+SAVEPOINT s1;
+SAVEPOINT s2;
+INSERT INTO artists VALUES (7, NULL);
+ERROR:  null value in column "name" violates not-null constraint
+SAVEPOINT s3;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK TO SAVEPOINT s3;
+ERROR:  no such savepoint
+COMMIT;
+-- Clean-up
+DROP TABLE artists;
+
