@@ -57,11 +57,6 @@ CREATE FUNCTION shards_colocated(bigint, bigint)
     AS 'citus'
     LANGUAGE C STRICT;
 
-CREATE FUNCTION get_colocated_shard_array(bigint)
-    RETURNS BIGINT[]
-    AS 'citus'
-    LANGUAGE C STRICT;
-
 CREATE FUNCTION find_shard_interval_index(bigint)
     RETURNS int
     AS 'citus'

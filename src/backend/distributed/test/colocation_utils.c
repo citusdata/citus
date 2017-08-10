@@ -15,6 +15,7 @@
 
 #include "catalog/pg_type.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 
@@ -24,7 +25,6 @@ PG_FUNCTION_INFO_V1(get_table_colocation_id);
 PG_FUNCTION_INFO_V1(tables_colocated);
 PG_FUNCTION_INFO_V1(shards_colocated);
 PG_FUNCTION_INFO_V1(get_colocated_table_array);
-PG_FUNCTION_INFO_V1(get_colocated_shard_array);
 PG_FUNCTION_INFO_V1(find_shard_interval_index);
 
 
@@ -105,43 +105,6 @@ get_colocated_table_array(PG_FUNCTION_ARGS)
 													 colocatedTableCount, arrayTypeId);
 
 	PG_RETURN_ARRAYTYPE_P(colocatedTablesArrayType);
-}
-
-
-/*
- * get_colocated_shards_array returns array of shards ids which are co-located with given
- * shard.
- */
-Datum
-get_colocated_shard_array(PG_FUNCTION_ARGS)
-{
-	uint32 shardId = PG_GETARG_UINT32(0);
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-
-	ArrayType *colocatedShardsArrayType = NULL;
-	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
-	ListCell *colocatedShardCell = NULL;
-	int colocatedShardCount = list_length(colocatedShardList);
-	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
-	Oid arrayTypeId = OIDOID;
-	int colocatedShardIndex = 0;
-
-	foreach(colocatedShardCell, colocatedShardList)
-	{
-		ShardInterval *colocatedShardInterval = (ShardInterval *) lfirst(
-			colocatedShardCell);
-		uint64 colocatedShardId = colocatedShardInterval->shardId;
-
-		Datum colocatedShardDatum = Int64GetDatum(colocatedShardId);
-
-		colocatedShardsDatumArray[colocatedShardIndex] = colocatedShardDatum;
-		colocatedShardIndex++;
-	}
-
-	colocatedShardsArrayType = DatumArrayToArrayType(colocatedShardsDatumArray,
-													 colocatedShardCount, arrayTypeId);
-
-	PG_RETURN_ARRAYTYPE_P(colocatedShardsArrayType);
 }
 
 

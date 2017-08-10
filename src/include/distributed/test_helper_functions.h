@@ -28,8 +28,6 @@
 
 
 /* function declarations for generic test functions */
-extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
-										 Oid datumTypeId);
 extern void SetConnectionStatus(PGconn *connection, ConnStatusType status);
 
 /* fake FDW for use in tests */
