@@ -16,7 +16,7 @@ SELECT master_create_distributed_table('upsert_test', 'part_key', 'hash');
 SELECT master_create_worker_shards('upsert_test', '4', '2');
 
 -- do a regular insert
-INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1);
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2);
 
 -- observe that there is a conflict and the following query does nothing
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING;
@@ -33,6 +33,21 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1)
 
 -- see the results
 SELECT * FROM upsert_test;
+
+-- do a multi-row DO NOTHING insert
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2)
+ON CONFLICT DO NOTHING;
+
+-- do a multi-row DO UPDATE insert
+INSERT INTO upsert_test (part_key, other_col) VALUES (1, 10), (2, 20), (3, 30)
+ON CONFLICT (part_key) DO
+UPDATE SET other_col = EXCLUDED.other_col WHERE upsert_test.part_key != 1;
+
+-- see the results
+SELECT * FROM upsert_test ORDER BY part_key ASC;
+
+DELETE FROM upsert_test WHERE part_key = 2;
+DELETE FROM upsert_test WHERE part_key = 3;
 
 -- use a WHERE clause, so that SET doesn't have an affect
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT (part_key)
