@@ -87,7 +87,7 @@ EXPLAIN (COSTS FALSE)
 
 -- Test insert
 EXPLAIN (COSTS FALSE)
-	INSERT INTO lineitem VALUES(1,0);
+	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
 
 -- Test update
 EXPLAIN (COSTS FALSE)

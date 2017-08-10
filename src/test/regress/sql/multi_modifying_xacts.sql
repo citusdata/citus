@@ -32,13 +32,22 @@ INSERT INTO researchers VALUES (2, 1, 'Niklaus Wirth');
 INSERT INTO researchers VALUES (3, 2, 'Tony Hoare');
 INSERT INTO researchers VALUES (4, 2, 'Kenneth Iverson');
 
--- replace a researcher, reusing their id
+-- replace a researcher, reusing their id in a multi-row INSERT
 BEGIN;
 DELETE FROM researchers WHERE lab_id = 1 AND id = 2;
-INSERT INTO researchers VALUES (2, 1, 'John Backus');
+INSERT INTO researchers VALUES (2, 1, 'John Backus'), (12, 1, 'Frances E. Allen');
 COMMIT;
 
-SELECT name FROM researchers WHERE lab_id = 1 AND id = 2;
+SELECT name FROM researchers WHERE lab_id = 1 AND id % 10 = 2;
+
+-- and the other way around
+BEGIN;
+INSERT INTO researchers VALUES (14, 2, 'Alan Kay'), (15, 2, 'Barbara Liskov');
+DELETE FROM researchers WHERE id = 14 AND lab_id = 2;
+ROLLBACK;
+
+-- should have rolled everything back
+SELECT * FROM researchers WHERE id = 15 AND lab_id = 2;
 
 -- abort a modification
 BEGIN;
@@ -166,6 +175,15 @@ COMMIT;
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+\copy researchers from stdin delimiter ','
+3,1,Duth Knonald
+10,6,Lesport Lampie
+\.
+ROLLBACK;
+
+-- but it is allowed after a multi-row insert
+BEGIN;
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
 3,1,Duth Knonald
 10,6,Lesport Lampie
