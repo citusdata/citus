@@ -18,6 +18,7 @@
 
 #include "access/stratnum.h"
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_join_order.h"

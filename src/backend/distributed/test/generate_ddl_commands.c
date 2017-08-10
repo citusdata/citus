@@ -17,6 +17,7 @@
 #include <stddef.h>
 
 #include "catalog/pg_type.h"
+#include "distributed/listutils.h"
 #include "distributed/master_protocol.h"
 #include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "lib/stringinfo.h"
