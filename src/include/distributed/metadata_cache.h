@@ -84,8 +84,8 @@ extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
 bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 
-/* access WorkerNodeHash */
-extern HTAB * GetWorkerNodeHash(void);
+/* access WorkerNodeList */
+extern List * GetWorkerNodeList(void);
 
 /* relation oids */
 extern Oid DistColocationRelationId(void);

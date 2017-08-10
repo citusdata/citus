@@ -378,7 +378,7 @@ LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
                                                          ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ERROR:  column "null_column" contains null values
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
 -- Verify that we error out on non-column RENAME statements

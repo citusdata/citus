@@ -34,11 +34,14 @@
 
 /*
  * In memory representation of pg_dist_node table elements. The elements are hold in
- * WorkerNodeHash table.
+ * WorkerNodeList table.
+ *
+ * InitializeWorkerNodeCache assumes that a shallow copy is sufficient to make this
+ * struct usable in a new memory context, if you add any pointers change that function!
  */
 typedef struct WorkerNode
 {
-	uint32 nodeId;                      /* node's unique id, key of the hash table */
+	uint32 nodeId;                      /* node's unique id */
 	uint32 workerPort;                  /* node's port */
 	char workerName[WORKER_LENGTH];     /* node's name */
 	uint32 groupId;                     /* node's groupId; same for the nodes that are in the same group */

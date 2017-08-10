@@ -274,24 +274,20 @@ ClientHostAddress(StringInfo clientHostStringInfo)
 static WorkerNode *
 WorkerGetNodeWithName(const char *hostname)
 {
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		int nameCompare = strncmp(workerNode->workerName, hostname, WORKER_LENGTH);
 		if (nameCompare == 0)
 		{
-			/* we need to terminate the scan since we break */
-			hash_seq_term(&status);
-			break;
+			return workerNode;
 		}
 	}
 
-	return workerNode;
+	return NULL;
 }
 
 
@@ -314,24 +310,22 @@ ActivePrimaryNodeCount(void)
 List *
 ActivePrimaryNodeList(void)
 {
-	List *workerNodeList = NIL;
-	WorkerNode *workerNode = NULL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	HASH_SEQ_STATUS status;
+	List *activeWorkerNodeList = NIL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		if (workerNode->isActive && WorkerNodeIsPrimary(workerNode))
 		{
 			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
 			memcpy(workerNodeCopy, workerNode, sizeof(WorkerNode));
-			workerNodeList = lappend(workerNodeList, workerNodeCopy);
+			activeWorkerNodeList = lappend(activeWorkerNodeList, workerNodeCopy);
 		}
 	}
 
-	return workerNodeList;
+	return activeWorkerNodeList;
 }
 
 
@@ -343,15 +337,13 @@ ActivePrimaryNodeList(void)
 static List *
 PrimaryNodesNotInList(List *currentList)
 {
-	List *workerNodeList = NIL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
+	List *primaryNodeList = NIL;
+	List *workerNodeList = GetWorkerNodeList();
 
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
+	ListCell *currentCell = NULL;
+	foreach(currentCell, workerNodeList)
 	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(currentCell);
 		if (ListMember(currentList, workerNode))
 		{
 			continue;
@@ -359,11 +351,11 @@ PrimaryNodesNotInList(List *currentList)
 
 		if (WorkerNodeIsPrimary(workerNode))
 		{
-			workerNodeList = lappend(workerNodeList, workerNode);
+			primaryNodeList = lappend(primaryNodeList, workerNode);
 		}
 	}
 
-	return workerNodeList;
+	return primaryNodeList;
 }
 
 
