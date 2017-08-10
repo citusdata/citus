@@ -16,7 +16,6 @@
 
 #include <stddef.h>
 
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "executor/tuptable.h"
 #include "foreign/fdwapi.h"
 #include "nodes/execnodes.h"

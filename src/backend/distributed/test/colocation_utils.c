@@ -17,7 +17,6 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 
 
 /* declarations for dynamic loading */
