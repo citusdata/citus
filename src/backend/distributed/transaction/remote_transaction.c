@@ -87,7 +87,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 					 distributedTransactionId->transactionNumber,
 					 timestamptz_to_str(distributedTransactionId->timestamp));
 
-	/* append queued savepoints for this transaction */
+	/* append in-progress savepoints for this transaction */
 	activeSubXacts = ActiveSubXacts();
 	transaction->lastUnfailedSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
@@ -944,18 +944,24 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (transaction->lastUnfailedSubXact <= subId &&
-			transaction->transactionFailed)
-		{
-			ForgetResults(connection);
-			transaction->transactionFailed = false;
-		}
-
 		if (transaction->transactionFailed)
 		{
-			continue;
-		}
+			if (transaction->lastUnfailedSubXact <= subId)
+			{
+				transaction->transactionRecovering = true;
 
+				/*
+				 * Clear the results of the failed query so we can send the ROLLBACK
+				 * TO SAVEPOINT command for a savepoint that can recover the transaction
+				 * from failure.
+				 */
+				ForgetResults(connection);
+			}
+			else
+			{
+				continue;
+			}
+		}
 		StartRemoteTransactionSavepointRollback(connection, subId);
 	}
 
@@ -965,8 +971,7 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
-
-		if (transaction->transactionFailed)
+		if (transaction->transactionFailed && !transaction->transactionRecovering)
 		{
 			continue;
 		}
@@ -1053,14 +1058,8 @@ StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 										SubTransactionId subId)
 {
 	StringInfo savepointCommand = makeStringInfo();
-
-	RemoteTransaction *transaction = &connection->remoteTransaction;
-	if (transaction->transactionFailed)
-	{
-		return;
-	}
-
 	appendStringInfo(savepointCommand, "ROLLBACK TO SAVEPOINT savepoint_%u", subId);
+
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
 		ReportConnectionError(connection, WARNING);
@@ -1073,11 +1072,20 @@ static void
 FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransactionId
 										 subId)
 {
+	RemoteTransaction *transaction = &connection->remoteTransaction;
+
 	PGresult *result = GetRemoteCommandResult(connection, true);
 	if (!IsResponseOK(result))
 	{
 		ReportResultError(connection, result, WARNING);
 		MarkRemoteTransactionFailed(connection, true);
+	}
+
+	/* ROLLBACK TO SAVEPOINT succeeded, check if it recovers the transaction */
+	else if (transaction->transactionFailed && transaction->transactionRecovering)
+	{
+		transaction->transactionFailed = false;
+		transaction->transactionRecovering = false;
 	}
 
 	PQclear(result);
