@@ -28,7 +28,6 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/resource_lock.h"
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"

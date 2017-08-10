@@ -16,7 +16,6 @@
 #include "catalog/pg_type.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_sync.h"
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "utils/array.h"
 #include "utils/builtins.h"
 

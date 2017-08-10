@@ -24,7 +24,6 @@
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/resource_lock.h"
-#include "distributed/test_helper_functions.h" /* IWYU pragma: keep */
 #include "distributed/shard_pruning.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
