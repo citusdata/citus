@@ -873,7 +873,6 @@ RemoteTransactionsSavepointBegin(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
-
 		if (transaction->transactionFailed)
 		{
 			continue;
@@ -898,7 +897,7 @@ RemoteTransactionsSavepointRelease(SubTransactionId subId)
 {
 	dlist_iter iter;
 
-	/* asynchronously send SAVEPOINT */
+	/* asynchronously send RELEASE SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
@@ -918,7 +917,6 @@ RemoteTransactionsSavepointRelease(SubTransactionId subId)
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
 													  iter.cur);
 		RemoteTransaction *transaction = &connection->remoteTransaction;
-
 		if (transaction->transactionFailed)
 		{
 			continue;
@@ -938,7 +936,7 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 {
 	dlist_iter iter;
 
-	/* asynchronously send SAVEPOINT */
+	/* asynchronously send ROLLBACK TO SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
 	{
 		MultiConnection *connection = dlist_container(MultiConnection, transactionNode,
@@ -981,18 +979,16 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 }
 
 
+/*
+ * StartRemoteTransactionSavepointBegin initiates SAVEPOINT command for the given
+ * subtransaction id in a non-blocking manner.
+ */
 static void
 StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
 {
 	StringInfo savepointCommand = makeStringInfo();
-
-	RemoteTransaction *transaction = &connection->remoteTransaction;
-	if (transaction->transactionFailed)
-	{
-		return;
-	}
-
 	appendStringInfo(savepointCommand, "SAVEPOINT savepoint_%u", subId);
+
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
 		ReportConnectionError(connection, WARNING);
@@ -1001,6 +997,11 @@ StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransaction
 }
 
 
+/*
+ * FinishRemoteTransactionSavepointBegin finishes the work
+ * StartRemoteTransactionSavepointBegin initiated. It blocks if necessary (i.e.
+ * if PQisBusy() would return true).
+ */
 static void
 FinishRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
 {
@@ -1016,19 +1017,17 @@ FinishRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactio
 }
 
 
+/*
+ * StartRemoteTransactionSavepointRelease initiates RELEASE SAVEPOINT command for
+ * the given subtransaction id in a non-blocking manner.
+ */
 static void
 StartRemoteTransactionSavepointRelease(MultiConnection *connection,
 									   SubTransactionId subId)
 {
 	StringInfo savepointCommand = makeStringInfo();
-
-	RemoteTransaction *transaction = &connection->remoteTransaction;
-	if (transaction->transactionFailed)
-	{
-		return;
-	}
-
 	appendStringInfo(savepointCommand, "RELEASE SAVEPOINT savepoint_%u", subId);
+
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
 		ReportConnectionError(connection, WARNING);
@@ -1037,6 +1036,11 @@ StartRemoteTransactionSavepointRelease(MultiConnection *connection,
 }
 
 
+/*
+ * FinishRemoteTransactionSavepointRelease finishes the work
+ * StartRemoteTransactionSavepointRelease initiated. It blocks if necessary (i.e.
+ * if PQisBusy() would return true).
+ */
 static void
 FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
 										SubTransactionId subId)
@@ -1053,6 +1057,10 @@ FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
 }
 
 
+/*
+ * StartRemoteTransactionSavepointRollback initiates ROLLBACK TO SAVEPOINT command
+ * for the given subtransaction id in a non-blocking manner.
+ */
 static void
 StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 										SubTransactionId subId)
@@ -1068,6 +1076,12 @@ StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 }
 
 
+/*
+ * FinishRemoteTransactionSavepointRollback finishes the work
+ * StartRemoteTransactionSavepointRollback initiated. It blocks if necessary (i.e.
+ * if PQisBusy() would return true). It also recovers the transaction from failure
+ * if transaction is recovering and the rollback command succeeds.
+ */
 static void
 FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransactionId
 										 subId)
@@ -1082,7 +1096,7 @@ FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransac
 	}
 
 	/* ROLLBACK TO SAVEPOINT succeeded, check if it recovers the transaction */
-	else if (transaction->transactionFailed && transaction->transactionRecovering)
+	else if (transaction->transactionRecovering)
 	{
 		transaction->transactionFailed = false;
 		transaction->transactionRecovering = false;
