@@ -123,4 +123,3 @@ ERROR:  no such savepoint
 COMMIT;
 -- Clean-up
 DROP TABLE artists;
-
