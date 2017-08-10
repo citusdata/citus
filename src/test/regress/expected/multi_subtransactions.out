@@ -121,5 +121,55 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 ROLLBACK TO SAVEPOINT s3;
 ERROR:  no such savepoint
 COMMIT;
+-- ===================================================================
+-- Tests for replication factor > 1
+-- ===================================================================
+CREATE TABLE researchers (
+	id bigint NOT NULL,
+    lab_id int NOT NULL,
+	name text NOT NULL
+);
+SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
+ master_create_distributed_table 
+---------------------------------
+ 
+(1 row)
+
+SELECT master_create_worker_shards('researchers', 2, 2);
+ master_create_worker_shards 
+-----------------------------
+ 
+(1 row)
+
+-- Basic rollback and release
+BEGIN;
+INSERT INTO researchers VALUES (7, 4, 'Jim Gray');
+SAVEPOINT hire_engelbart;
+INSERT INTO researchers VALUES (8, 4, 'Douglas Engelbart');
+ROLLBACK TO hire_engelbart;
+RELEASE SAVEPOINT hire_engelbart;
+COMMIT;
+SELECT * FROM researchers WHERE id in (7, 8);
+ id | lab_id |   name   
+----+--------+----------
+  7 |      4 | Jim Gray
+(1 row)
+
+-- Recover from failure on one of nodes
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (11, 11, 'Whitfield Diffie');
+INSERT INTO researchers VALUES (NULL, 10, 'Edsger Dijkstra');
+ERROR:  null value in column "id" violates not-null constraint
+ROLLBACK TO SAVEPOINT s1;
+INSERT INTO researchers VALUES (12, 10, 'Edsger Dijkstra');
+COMMIT;
+SELECT * FROM researchers WHERE lab_id=10;
+ id | lab_id |      name       
+----+--------+-----------------
+ 12 |     10 | Edsger Dijkstra
+(1 row)
+
 -- Clean-up
 DROP TABLE artists;
+DROP TABLE researchers;
