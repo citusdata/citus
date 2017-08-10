@@ -190,8 +190,7 @@ ERROR:  node group 3 does not have a primary node
 -- when there is no node at all in the group we should get a different error
 DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
-ERROR:  the metadata is inconsistent
-DETAIL:  there is a placement in group 3 but there are no nodes in that group
+ERROR:  there is a shard placement in node group 3 but there are no nodes in that group
 -- clean-up
 SELECT groupid as new_group FROM master_add_node('localhost', :worker_2_port) \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
