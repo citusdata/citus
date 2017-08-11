@@ -228,6 +228,7 @@ typedef struct MultiPlan
 	Job *workerJob;
 	Query *masterQuery;
 	bool routerExecutable;
+	List *relationIdList;
 
 	/* INSERT ... SELECT via coordinator only */
 	Query *insertSelectSubquery;
