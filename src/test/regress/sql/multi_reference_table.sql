@@ -707,8 +707,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 
--- now, insert into the hash partitioned table and use reference 
--- tables in the SELECT queries
+-- not pushable due to lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 

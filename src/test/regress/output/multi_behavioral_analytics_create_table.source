@@ -421,3 +421,19 @@ SET citus.shard_max_size TO "1MB";
 \copy lineitem_subquery FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 \copy orders_subquery FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \copy orders_subquery FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+CREATE TABLE events_reference_table (like events_table including all);
+SELECT create_reference_table('events_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO events_reference_table SELECT * FROM events_table;
+CREATE TABLE users_reference_table (like users_table including all);
+SELECT create_reference_table('users_reference_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO users_reference_table SELECT * FROM users_table;
