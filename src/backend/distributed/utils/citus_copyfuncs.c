@@ -107,6 +107,7 @@ CopyNodeMultiPlan(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(workerJob);
 	COPY_NODE_FIELD(masterQuery);
 	COPY_SCALAR_FIELD(routerExecutable);
+	COPY_NODE_FIELD(relationIdList);
 
 	COPY_NODE_FIELD(insertSelectSubquery);
 	COPY_NODE_FIELD(insertTargetList);
