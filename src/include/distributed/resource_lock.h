@@ -80,5 +80,8 @@ extern void LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMode);
 
+/* Lock partitions of partitioned table */
+extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
+extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
 
 #endif /* RESOURCE_LOCK_H */
