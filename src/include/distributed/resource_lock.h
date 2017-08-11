@@ -84,4 +84,7 @@ extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMod
 extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
 extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
 
+/* Lock parent table's colocated shard resource */
+extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);
+
 #endif /* RESOURCE_LOCK_H */

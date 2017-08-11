@@ -321,9 +321,9 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 
 
 /*
- * LockParentShardResourceIfPartition checks whether given shard belongs to a
- * partition. If it is, LockParentShardResourceIfPartition acquires a shard
- * resource lock on the colocated shard of the parent table.
+ * LockParentShardResourceIfPartition checks whether the given shard belongs
+ * to a partition. If it does, LockParentShardResourceIfPartition acquires a
+ * shard resource lock on the colocated shard of the parent table.
  */
 void
 LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode)
