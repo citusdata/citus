@@ -136,12 +136,10 @@ SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (1 row)
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
 COMMIT;
 -- have the same test on the other worker node
 \c - - - :worker_2_port
@@ -159,12 +157,10 @@ SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (4 rows)
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
 COMMIT;
 -- switch back to the worker node
 \c - - - :worker_1_port
@@ -175,7 +171,7 @@ INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 SELECT count(*) FROM researchers_mx WHERE lab_id = 6;
  count 
 -------
-     0
+     2
 (1 row)
 
 ABORT;
