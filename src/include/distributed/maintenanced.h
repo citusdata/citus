@@ -12,6 +12,9 @@
 #ifndef MAINTENANCED_H
 #define MAINTENANCED_H
 
+/* config variable for */
+extern double DistributedDeadlockDetectionTimeoutFactor;
+
 extern void InitializeMaintenanceDaemon(void);
 extern void InitializeMaintenanceDaemonBackend(void);
 

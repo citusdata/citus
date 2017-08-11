@@ -22,6 +22,7 @@
 
 #include "access/xact.h"
 #include "libpq/pqsignal.h"
+#include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "postmaster/bgworker.h"
@@ -72,6 +73,8 @@ typedef struct MaintenanceDaemonDBData
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
 
+/* config variable for distributed deadlock detection timeout */
+double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
@@ -248,7 +251,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	{
 		int rc;
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
-		int timeout = 10000; /* wake up at least every so often */
+		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
+		bool foundDeadlock = false;
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -258,13 +262,40 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
+		/* the config value -1 disables the distributed deadlock detection  */
+		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
+		{
+			StartTransactionCommand();
+			foundDeadlock = CheckForDistributedDeadlocks();
+			CommitTransactionCommand();
+
+			/*
+			 * If we find any deadlocks, run the distributed deadlock detection
+			 * more often since it is quite possible that there are other
+			 * deadlocks need to be resolved.
+			 *
+			 * Thus, we use 1/20 of the calculated value. With the default
+			 * values (i.e., deadlock_timeout 1 seconds,
+			 * citus.distributed_deadlock_detection_factor 2), we'd be able to cancel
+			 * ~10 distributed deadlocks per second.
+			 */
+			timeout =
+				DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
+
+			if (foundDeadlock)
+			{
+				timeout = timeout / 20.0;
+			}
+		}
+
 		/*
-		 * Wait until timeout, or until somebody wakes us up.
+		 * Wait until timeout, or until somebody wakes us up. Also cast the timeout to
+		 * integer where we've calculated it using double for not losing the precision.
 		 */
 #if (PG_VERSION_NUM >= 100000)
-		rc = WaitLatch(MyLatch, latchFlags, timeout, PG_WAIT_EXTENSION);
+		rc = WaitLatch(MyLatch, latchFlags, (long) timeout, PG_WAIT_EXTENSION);
 #else
-		rc = WaitLatch(MyLatch, latchFlags, timeout);
+		rc = WaitLatch(MyLatch, latchFlags, (long) timeout);
 #endif
 
 		/* emergency bailout if postmaster has died */
