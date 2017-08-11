@@ -298,6 +298,11 @@ AcquireExecutorMultiShardLocks(List *taskList)
 			lockMode = ExclusiveLock;
 		}
 
+		/*
+		 * If we are dealing with a partition we are also taking locks on parent table
+		 * to prevent deadlocks on concurrent operations on a partition and its parent.
+		 */
+		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
 		LockShardResource(task->anchorShardId, lockMode);
 
 		/*
