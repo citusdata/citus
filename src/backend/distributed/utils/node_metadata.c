@@ -1065,13 +1065,13 @@ ParseWorkerNodeFileAndRename()
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}
 
-	FreeFile(workerFileStream);
-	free(workerFilePath);
-
 	/* rename the file, marking that it is not used anymore */
 	appendStringInfo(renamedWorkerFilePath, "%s", workerFilePath);
 	appendStringInfo(renamedWorkerFilePath, ".obsolete");
 	rename(workerFilePath, renamedWorkerFilePath->data);
+
+	FreeFile(workerFileStream);
+	free(workerFilePath);
 
 	return workerNodeList;
 }
