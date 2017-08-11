@@ -1,0 +1,182 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-create-distributed s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-create-distributed: 
+	CREATE TABLE test_create_distributed_table (test_id integer NOT NULL, data text);
+	SELECT create_distributed_table('test_create_distributed_table', 'test_id');
+
+create_distributed_table
+
+               
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-insert s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-insert: 
+	INSERT INTO restore_table VALUES (1,'hello');
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-modify-multiple s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-modify-multiple: 
+	SELECT master_modify_multiple_shards($$UPDATE restore_table SET data = 'world'$$);
+
+master_modify_multiple_shards
+
+0              
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-ddl s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-ddl: 
+	ALTER TABLE restore_table ADD COLUMN x int;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-copy s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-copy: 
+	COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-drop s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-drop: 
+	DROP TABLE restore_table;
+
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-add-node s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-add-node: 
+	SELECT 1 FROM master_add_inactive_node('localhost', 9999);
+
+?column?       
+
+1              
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
+
+starting permutation: s1-begin s1-remove-node s2-create-restore s1-commit
+create_distributed_table
+
+               
+step s1-begin: 
+	BEGIN;
+
+step s1-remove-node: 
+	SELECT master_remove_node('localhost', 9999);
+
+master_remove_node
+
+               
+step s2-create-restore: 
+	SELECT 1 FROM citus_create_restore_point('citus-test');
+ <waiting ...>
+step s1-commit: 
+	COMMIT;
+
+step s2-create-restore: <... completed>
+?column?       
+
+1              
