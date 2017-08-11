@@ -33,7 +33,7 @@ check_distributed_deadlocks
 t              
 step s2-update-1: <... completed>
 step s1-update-2: <... completed>
-error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -74,7 +74,7 @@ check_distributed_deadlocks
 t              
 step s2-update-1-rep-2: <... completed>
 step s1-update-2-rep-2: <... completed>
-error in steps deadlock-checker-call s2-update-1-rep-2 s1-update-2-rep-2: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-1-rep-2 s1-update-2-rep-2: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -121,7 +121,7 @@ check_distributed_deadlocks
 t              
 step s2-update-1: <... completed>
 step s1-update-2: <... completed>
-error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-1 s1-update-2: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -162,7 +162,7 @@ check_distributed_deadlocks
 t              
 step s1-update-2: <... completed>
 step s2-upsert-select-all: <... completed>
-error in steps deadlock-checker-call s1-update-2 s2-upsert-select-all: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s1-update-2 s2-upsert-select-all: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -203,7 +203,7 @@ check_distributed_deadlocks
 t              
 step s1-update-2: <... completed>
 step s2-ddl: <... completed>
-error in steps deadlock-checker-call s1-update-2 s2-ddl: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s1-update-2 s2-ddl: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -238,7 +238,7 @@ check_distributed_deadlocks
 t              
 step s2-insert-dist-10: <... completed>
 step s1-insert-local-10: <... completed>
-error in steps deadlock-checker-call s2-insert-dist-10 s1-insert-local-10: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-insert-dist-10 s1-insert-local-10: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -273,7 +273,7 @@ check_distributed_deadlocks
 t              
 step s2-insert-ref-11: <... completed>
 step s1-insert-ref-10: <... completed>
-error in steps deadlock-checker-call s2-insert-ref-11 s1-insert-ref-10: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-insert-ref-11 s1-insert-ref-10: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -314,7 +314,7 @@ check_distributed_deadlocks
 t              
 step s2-update-1: <... completed>
 step s1-insert-ref-10: <... completed>
-error in steps deadlock-checker-call s2-update-1 s1-insert-ref-10: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-1 s1-insert-ref-10: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -364,7 +364,7 @@ check_distributed_deadlocks
 t              
 step s2-update-3: <... completed>
 step s3-update-1: <... completed>
-error in steps deadlock-checker-call s2-update-3 s3-update-1: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-3 s3-update-1: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s3-finish: 
   COMMIT;
 
@@ -418,7 +418,7 @@ check_distributed_deadlocks
 t              
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
-error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s3-finish: 
   COMMIT;
 
@@ -475,7 +475,7 @@ check_distributed_deadlocks
 t              
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
-error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s3-finish: 
   COMMIT;
 
@@ -534,7 +534,7 @@ check_distributed_deadlocks
 t              
 step s2-update-3: <... completed>
 step s3-update-2: <... completed>
-error in steps deadlock-checker-call s2-update-3 s3-update-2: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-3 s3-update-2: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s3-finish: 
   COMMIT;
 
@@ -591,7 +591,7 @@ check_distributed_deadlocks
 t              
 step s4-update-1: <... completed>
 step s1-update-4: <... completed>
-error in steps deadlock-checker-call s4-update-1 s1-update-4: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s4-update-1 s1-update-4: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -609,7 +609,7 @@ check_distributed_deadlocks
 t              
 step s3-update-2: <... completed>
 step s2-update-3: <... completed>
-error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s3-update-2 s2-update-3: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s2-finish: 
   COMMIT;
 
@@ -680,7 +680,7 @@ check_distributed_deadlocks
 t              
 step s1-update-5: <... completed>
 step s5-update-1: <... completed>
-error in steps deadlock-checker-call s1-update-5 s5-update-1: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s1-update-5 s5-update-1: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s1-finish: 
   COMMIT;
 
@@ -765,7 +765,7 @@ check_distributed_deadlocks
 t              
 step s2-update-2: <... completed>
 step s3-update-3: <... completed>
-error in steps deadlock-checker-call s2-update-2 s3-update-3: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s2-update-2 s3-update-3: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s6-finish: 
   COMMIT;
 
@@ -851,7 +851,7 @@ check_distributed_deadlocks
 t              
 step s5-update-6: <... completed>
 step s6-update-5: <... completed>
-error in steps deadlock-checker-call s5-update-6 s6-update-5: ERROR:  distributed deadlock detected and to resolve the deadlock this transaction is cancelled
+error in steps deadlock-checker-call s5-update-6 s6-update-5: ERROR:  canceling the transaction since it has involved in a distributed deadlock
 step s5-finish: 
   COMMIT;
 
