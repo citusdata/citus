@@ -362,6 +362,12 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 			continue;
 		}
 
+		/* we're only interested in transactions started on this node */
+		if (!currentTransactionId->transactionOriginator)
+		{
+			continue;
+		}
+
 		/* at the point we should only have transactions initiated by this node */
 		Assert(currentTransactionId->initiatorNodeIdentifier == GetLocalGroupId());
 
@@ -419,15 +425,18 @@ BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph)
 		WaitEdge *edge = &waitGraph->edges[edgeIndex];
 		TransactionNode *waitingTransaction = NULL;
 		TransactionNode *blockingTransaction = NULL;
+		bool transactionOriginator = false;
 
 		DistributedTransactionId waitingId = {
 			edge->waitingNodeId,
+			transactionOriginator,
 			edge->waitingTransactionNum,
 			edge->waitingTransactionStamp
 		};
 
 		DistributedTransactionId blockingId = {
 			edge->blockingNodeId,
+			transactionOriginator,
 			edge->blockingTransactionNum,
 			edge->blockingTransactionStamp
 		};
