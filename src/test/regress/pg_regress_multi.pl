@@ -226,6 +226,7 @@ push(@pgOptions, '-c', "listen_addresses='${host}'");
 push(@pgOptions, '-c', "unix_socket_directories=");
 push(@pgOptions, '-c', "fsync=off");
 push(@pgOptions, '-c', "shared_preload_libraries=citus");
+push(@pgOptions, '-c', "wal_level=logical");
 
 # Citus options set for the tests
 push(@pgOptions, '-c', "citus.shard_max_size=300kB");

@@ -70,6 +70,7 @@ typedef struct RemoteTransaction
 extern void StartRemoteTransactionBegin(struct MultiConnection *connection);
 extern void FinishRemoteTransactionBegin(struct MultiConnection *connection);
 extern void RemoteTransactionBegin(struct MultiConnection *connection);
+extern void RemoteTransactionListBegin(List *connectionList);
 
 extern void StartRemoteTransactionPrepare(struct MultiConnection *connection);
 extern void FinishRemoteTransactionPrepare(struct MultiConnection *connection);
