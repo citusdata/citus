@@ -57,6 +57,7 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void multi_log_hook(ErrorData *edata);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static void WarningForEnableDeadlockPrevention(bool newval, void *extra);
@@ -175,6 +176,9 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 
+	/* register hook for error messages */
+	emit_log_hook = multi_log_hook;
+
 	InitializeMaintenanceDaemon();
 
 	/* organize that task tracker is started once server is up */
@@ -191,6 +195,27 @@ _PG_init(void)
 	{
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
+	}
+}
+
+
+/*
+ * multi_log_hook intercepts postgres log commands. We use this to override
+ * postgres error messages when they're not specific enough for the users.
+ */
+static void
+multi_log_hook(ErrorData *edata)
+{
+	/*
+	 * Show the user a meaningful error message when a backend is cancelled
+	 * by the distributed deadlock detection.
+	 */
+	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
+		MyBackendGotCancelledDueToDeadlock())
+	{
+		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
+		edata->message = "canceling the transaction since it has "
+						 "involved in a distributed deadlock";
 	}
 }
 
