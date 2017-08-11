@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
@@ -359,6 +360,17 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		0,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.log_distributed_deadlock_detection",
+		gettext_noop("Log distributed deadlock detection related processing in "
+					 "the server log"),
+		NULL,
+		&LogDistributedDeadlockDetection,
+		false,
+		PGC_SIGHUP,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
