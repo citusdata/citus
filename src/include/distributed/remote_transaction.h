@@ -68,6 +68,9 @@ typedef struct RemoteTransaction
 	 */
 	SubTransactionId lastSuccessfulSubXact;
 
+	/* Id of last savepoint queued before first query of transaction */
+	SubTransactionId lastQueuedSubXact;
+
 	/* waiting for the result of a recovering ROLLBACK TO SAVEPOINT command */
 	bool transactionRecovering;
 

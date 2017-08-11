@@ -90,12 +90,13 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	/* append in-progress savepoints for this transaction */
 	activeSubXacts = ActiveSubXacts();
 	transaction->lastSuccessfulSubXact = TopSubTransactionId;
+	transaction->lastQueuedSubXact = TopSubTransactionId;
 	foreach(subIdCell, activeSubXacts)
 	{
 		SubTransactionId subId = lfirst_int(subIdCell);
 		appendStringInfo(beginAndSetDistributedTransactionId,
 						 "SAVEPOINT savepoint_%u;", subId);
-		transaction->lastSuccessfulSubXact = subId;
+		transaction->lastQueuedSubXact = subId;
 	}
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))
@@ -128,6 +129,7 @@ FinishRemoteTransactionBegin(struct MultiConnection *connection)
 	else
 	{
 		transaction->transactionState = REMOTE_TRANS_STARTED;
+		transaction->lastSuccessfulSubXact = transaction->lastQueuedSubXact;
 	}
 
 	PQclear(result);
