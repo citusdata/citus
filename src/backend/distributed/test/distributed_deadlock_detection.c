@@ -26,9 +26,6 @@
 #include "utils/timestamp.h"
 
 
-static char * WaitsForToString(List *waitsFor);
-
-
 PG_FUNCTION_INFO_V1(get_adjacency_list_wait_graph);
 
 
@@ -113,32 +110,4 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 	tuplestore_donestoring(tupleStore);
 
 	PG_RETURN_VOID();
-}
-
-
-/*
- * WaitsForToString is only intended for testing and debugging. It gets a
- * waitsForList and returns the list of transaction nodes' transactionNumber
- * in a string.
- */
-static char *
-WaitsForToString(List *waitsFor)
-{
-	StringInfo transactionIdStr = makeStringInfo();
-	ListCell *waitsForCell = NULL;
-
-	foreach(waitsForCell, waitsFor)
-	{
-		TransactionNode *waitingNode = (TransactionNode *) lfirst(waitsForCell);
-
-		if (transactionIdStr->len != 0)
-		{
-			appendStringInfoString(transactionIdStr, ",");
-		}
-
-		appendStringInfo(transactionIdStr, "%ld",
-						 waitingNode->transactionId.transactionNumber);
-	}
-
-	return transactionIdStr->data;
 }
