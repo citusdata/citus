@@ -112,6 +112,7 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	MyBackendData->transactionId.initiatorNodeIdentifier = PG_GETARG_INT32(0);
 	MyBackendData->transactionId.transactionNumber = PG_GETARG_INT64(1);
 	MyBackendData->transactionId.timestamp = PG_GETARG_TIMESTAMPTZ(2);
+	MyBackendData->transactionId.transactionOriginator = false;
 
 	SpinLockRelease(&MyBackendData->mutex);
 
@@ -413,6 +414,7 @@ InitializeBackendData(void)
 
 	MyBackendData->databaseId = MyDatabaseId;
 	MyBackendData->transactionId.initiatorNodeIdentifier = 0;
+	MyBackendData->transactionId.transactionOriginator = false;
 	MyBackendData->transactionId.transactionNumber = 0;
 	MyBackendData->transactionId.timestamp = 0;
 
@@ -436,6 +438,7 @@ UnSetDistributedTransactionId(void)
 
 		MyBackendData->databaseId = 0;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
+		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
 		MyBackendData->transactionId.timestamp = 0;
 
@@ -487,6 +490,8 @@ GetCurrentDistributedTransactionId(void)
 
 	currentDistributedTransactionId->initiatorNodeIdentifier =
 		MyBackendData->transactionId.initiatorNodeIdentifier;
+	currentDistributedTransactionId->transactionOriginator =
+		MyBackendData->transactionId.transactionOriginator;
 	currentDistributedTransactionId->transactionNumber =
 		MyBackendData->transactionId.transactionNumber;
 	currentDistributedTransactionId->timestamp =
@@ -521,6 +526,7 @@ AssignDistributedTransactionId(void)
 	MyBackendData->databaseId = MyDatabaseId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
+	MyBackendData->transactionId.transactionOriginator = true;
 	MyBackendData->transactionId.transactionNumber =
 		nextTransactionNumber;
 	MyBackendData->transactionId.timestamp = currentTimestamp;

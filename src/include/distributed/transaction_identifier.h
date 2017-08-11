@@ -21,6 +21,10 @@
  *
  *  -  initiatorNodeIdentifier: A unique identifier of the node that initiated
  *     the distributed transaction
+ *  -  transactionOriginator: Set to true only for the transactions initialized on
+ *     the coordinator. This is only useful for MX in order to distinguish the transaction
+ *     that started the distributed transaction on the coordinator where we could
+ *     have the same transactions' worker queries on the same node
  *  -  transactionNumber: A locally unique identifier assigned for the distributed
  *     transaction on the node that initiated the distributed transaction
  *  -  timestamp: The current timestamp of distributed transaction initiation
@@ -29,6 +33,7 @@
 typedef struct DistributedTransactionId
 {
 	int initiatorNodeIdentifier;
+	bool transactionOriginator;
 	uint64 transactionNumber;
 	TimestampTz timestamp;
 } DistributedTransactionId;
