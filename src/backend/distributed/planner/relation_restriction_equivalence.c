@@ -67,7 +67,6 @@ static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 													 RelationRestrictionContext *
 													 restrictionContext);
-static uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 static List * GenerateAttributeEquivalencesForRelationRestrictions(
 	RelationRestrictionContext *restrictionContext);
 static AttributeEquivalenceClass * AttributeEquivalenceClassForEquivalenceClass(
@@ -125,7 +124,8 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
 
 /*
  * SafeToPushdownUnionSubquery returns true if all the relations are returns
- * partition keys in the same ordinal position.
+ * partition keys in the same ordinal position and there is no reference table
+ * exists.
  *
  * Note that the function expects (and asserts) the input query to be a top
  * level union query defined by TopLevelUnionQuery().
@@ -154,12 +154,27 @@ SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+		Oid relationId = relationRestriction->relationId;
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
 		List *targetList = relationPlannerRoot->parse->targetList;
 		List *appendRelList = relationPlannerRoot->append_rel_list;
 		Var *varToBeAdded = NULL;
 		TargetEntry *targetEntryToAdd = NULL;
+
+		/*
+		 * Although it is not the best place to error out when facing with reference
+		 * tables, we decide to error out here. Otherwise, we need to add equality
+		 * for each reference table and it is more complex to implement. In the
+		 * future implementation all checks will be gathered to single point.
+		 */
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot pushdown this query"),
+							errdetail(
+								"Reference tables are not allowed with set operations")));
+		}
 
 		/*
 		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
@@ -314,10 +329,9 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
  * joined on their partition keys.
  *
  * The function returns true if all relations are joined on their partition keys.
- * Otherwise, the function returns false. Since reference tables do not have partition
- * keys, we skip processing them. Also, if the query includes only a single non-reference
- * distributed relation, the function returns true since it doesn't make sense to check
- * for partition key equality in that case.
+ * Otherwise, the function returns false. In order to support reference tables
+ * with subqueries, equality between attributes of reference tables and partition
+ * key of distributed tables are also considered.
  *
  * In order to do that, we invented a new equivalence class namely:
  * AttributeEquivalenceClass. In very simple words, a AttributeEquivalenceClass is
@@ -350,24 +364,15 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 	List *relationRestrictionAttributeEquivalenceList = NIL;
 	List *joinRestrictionAttributeEquivalenceList = NIL;
 	List *allAttributeEquivalenceList = NIL;
-	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
+
 	uint32 totalRelationCount = list_length(restrictionContext->relationRestrictionList);
-	uint32 nonReferenceRelationCount = totalRelationCount - referenceRelationCount;
 
 	/*
-	 * If the query includes a single relation which is not a reference table,
-	 * we should not check the partition column equality.
-	 * Consider two example cases:
-	 *   (i)   The query includes only a single colocated relation
-	 *   (ii)  A colocated relation is joined with a (or multiple) reference
-	 *         table(s) where colocated relation is not joined on the partition key
-	 *
-	 * For the above two cases, we don't need to execute the partition column equality
-	 * algorithm. The reason is that the essence of this function is to ensure that the
-	 * tasks that are going to be created should not need data from other tasks. In both
-	 * cases mentioned above, the necessary data per task would be on available.
+	 * If the query includes only one relation, we should not check the partition
+	 * column equality. Single table should not need to fetch data from other nodes
+	 * except it's own node(s).
 	 */
-	if (nonReferenceRelationCount <= 1)
+	if (totalRelationCount == 1)
 	{
 		return true;
 	}
@@ -429,39 +434,13 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 			(RelationRestriction *) lfirst(relationRestrictionCell);
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
 
-		if (DistPartitionKey(relationRestriction->relationId) &&
-			!bms_is_member(rteIdentity, commonRteIdentities))
+		if (!bms_is_member(rteIdentity, commonRteIdentities))
 		{
 			return false;
 		}
 	}
 
 	return true;
-}
-
-
-/*
- * ReferenceRelationCount iterates over the relations and returns the reference table
- * relation count.
- */
-static uint32
-ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
-{
-	ListCell *relationRestrictionCell = NULL;
-	uint32 referenceRelationCount = 0;
-
-	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
-	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(relationRestrictionCell);
-
-		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
-		{
-			referenceRelationCount++;
-		}
-	}
-
-	return referenceRelationCount;
 }
 
 
@@ -642,7 +621,7 @@ GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
 
 /*
  * GenerateCommonEquivalence gets a list of unrelated AttributeEquiavalanceClass
- * whose all members are partition keys.
+ * whose all members are partition keys or a column of reference table.
  *
  * With the equivalence classes, the function follows the algorithm
  * outlined below:
@@ -1092,9 +1071,6 @@ AddUnionSetOperationsToAttributeEquivalenceClass(AttributeEquivalenceClass **
  * class using the rteIdentity provided by the rangeTableEntry. Note that
  * rteIdentities are only assigned to RTE_RELATIONs and this function asserts
  * the input rte to be an RTE_RELATION.
- *
- * Note that this function only adds partition keys to the attributeEquivalanceClass.
- * This implies that there wouldn't be any columns for reference tables.
  */
 static void
 AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
@@ -1103,19 +1079,13 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
 										  Var *varToBeAdded)
 {
 	AttributeEquivalenceClassMember *attributeEqMember = NULL;
-	Oid relationId = InvalidOid;
-	Var *relationPartitionKey = NULL;
+	Oid relationId = rangeTableEntry->relid;
+	Var *relationPartitionKey = DistPartitionKey(relationId);
 
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
-	relationId = rangeTableEntry->relid;
-	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
-	{
-		return;
-	}
-
-	relationPartitionKey = DistPartitionKey(relationId);
-	if (relationPartitionKey->varattno != varToBeAdded->varattno)
+	if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
+		relationPartitionKey->varattno != varToBeAdded->varattno)
 	{
 		return;
 	}

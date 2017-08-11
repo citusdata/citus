@@ -740,6 +740,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->joinType = jointype;
 	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
+	joinRestriction->innerrel = innerrel;
+	joinRestriction->outerrel = outerrel;
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);
