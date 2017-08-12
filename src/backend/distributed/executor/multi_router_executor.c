@@ -70,6 +70,8 @@
 
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
 bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
@@ -79,8 +81,7 @@ static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
-static List * GetModifyConnections(Task *task, bool markCritical,
-								   bool startedInTransaction);
+static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
@@ -680,8 +681,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 
 	char *queryString = task->queryString;
 	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
-	bool startedInTransaction =
-		InCoordinatedTransaction() && XactModificationLevel == XACT_MODIFICATION_DATA;
 
 	/*
 	 * Modifications for reference tables are always done using 2PC. First
@@ -711,9 +710,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	 * establish the connection, mark as critical (when modifying reference
 	 * table) and start a transaction (when in a transaction).
 	 */
-	connectionList = GetModifyConnections(task,
-										  taskRequiresTwoPhaseCommit,
-										  startedInTransaction);
+	connectionList = GetModifyConnections(task, taskRequiresTwoPhaseCommit);
 
 	/* prevent replicas of the same shard from diverging */
 	AcquireExecutorShardLock(task, operation);
@@ -809,12 +806,10 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
  * modify commands on the placements in tasPlacementList.  If necessary remote
  * transactions are started.
  *
- * If markCritical is true remote transactions are marked as critical. If
- * noNewTransactions is true, this function errors out if there's no
- * transaction in progress.
+ * If markCritical is true remote transactions are marked as critical.
  */
 static List *
-GetModifyConnections(Task *task, bool markCritical, bool noNewTransactions)
+GetModifyConnections(Task *task, bool markCritical)
 {
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
@@ -844,22 +839,17 @@ GetModifyConnections(Task *task, bool markCritical, bool noNewTransactions)
 													 NULL);
 
 		/*
-		 * If already in a transaction, disallow expanding set of remote
-		 * transactions. That prevents some forms of distributed deadlocks.
+		 * If we're expanding the set nodes that participate in the distributed
+		 * transaction, conform to MultiShardCommitProtocol.
 		 */
-		if (noNewTransactions)
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
+			InCoordinatedTransaction() &&
+			XactModificationLevel == XACT_MODIFICATION_DATA)
 		{
 			RemoteTransaction *transaction = &multiConnection->remoteTransaction;
-
-			if (EnableDeadlockPrevention &&
-				transaction->transactionState == REMOTE_TRANS_INVALID)
+			if (transaction->transactionState == REMOTE_TRANS_INVALID)
 			{
-				ereport(ERROR, (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
-								errmsg("no transaction participant matches %s:%d",
-									   taskPlacement->nodeName, taskPlacement->nodePort),
-								errdetail("Transactions which modify distributed tables "
-										  "may only target nodes affected by the "
-										  "modification command which began the transaction.")));
+				CoordinatedTransactionUse2PC();
 			}
 		}
 

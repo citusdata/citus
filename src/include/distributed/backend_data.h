@@ -29,6 +29,7 @@ typedef struct BackendData
 {
 	Oid databaseId;
 	slock_t mutex;
+	bool cancelledDueToDeadlock;
 	DistributedTransactionId transactionId;
 } BackendData;
 
@@ -40,5 +41,7 @@ extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
 extern void AssignDistributedTransactionId(void);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
+extern void CancelTransactionDueToDeadlock(PGPROC *proc);
+extern bool MyBackendGotCancelledDueToDeadlock(void);
 
 #endif /* BACKEND_DATA_H */
