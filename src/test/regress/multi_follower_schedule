@@ -1,0 +1,4 @@
+test: multi_follower_sanity_check
+test: multi_follower_select_statements
+test: multi_follower_configure_followers
+test: multi_follower_task_tracker
