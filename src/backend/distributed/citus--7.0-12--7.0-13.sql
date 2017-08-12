@@ -44,3 +44,4 @@ COMMENT ON FUNCTION citus_drop_trigger()
     IS 'perform checks and actions at the end of DROP actions';
     
 RESET search_path;
+

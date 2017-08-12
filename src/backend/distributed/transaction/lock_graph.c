@@ -56,10 +56,8 @@ static void AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc,
 static void AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 						PROCStack *remaining);
 static WaitEdge * AllocWaitEdge(WaitGraph *waitGraph);
-static bool IsProcessWaitingForLock(PGPROC *proc);
 static bool IsSameLockGroup(PGPROC *leftProc, PGPROC *rightProc);
 static bool IsConflictingLockMask(int holdMask, int conflictMask);
-static bool IsInDistributedTransaction(BackendData *backendData);
 
 
 PG_FUNCTION_INFO_V1(dump_local_wait_edges);
@@ -710,7 +708,7 @@ AllocWaitEdge(WaitGraph *waitGraph)
 /*
  * IsProcessWaitingForLock returns whether a given process is waiting for a lock.
  */
-static bool
+bool
 IsProcessWaitingForLock(PGPROC *proc)
 {
 	return proc->waitStatus == STATUS_WAITING;
@@ -750,7 +748,7 @@ IsConflictingLockMask(int holdMask, int conflictMask)
  * IsInDistributedTransaction returns whether the given backend is in a
  * distributed transaction.
  */
-static bool
+bool
 IsInDistributedTransaction(BackendData *backendData)
 {
 	return backendData->transactionId.transactionNumber != 0;

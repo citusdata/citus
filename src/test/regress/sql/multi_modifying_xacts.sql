@@ -113,15 +113,14 @@ COMMIT;
 
 SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id;
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 COMMIT;
 
--- unless we disable deadlock prevention
+--  we should be able to expand the transaction participants
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
 ABORT;
@@ -703,13 +702,11 @@ COMMIT;
 
 -- it is allowed when turning off deadlock prevention
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO reference_modifying_xacts VALUES (10, 10);
 ABORT;
 
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO hash_modifying_xacts VALUES (2, 2);
 ABORT;

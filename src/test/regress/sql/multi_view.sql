@@ -375,6 +375,8 @@ SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et
 
 RESET citus.subquery_pushdown;
 
+VACUUM ANALYZE users_table;
+
 -- explain tests
 EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
 

@@ -26,10 +26,21 @@ typedef struct TransactionNode
 
 	/* list of TransactionNode that this distributed transaction is waiting for */
 	List *waitsFor;
+
+	/* backend that is on the initiator node */
+	PGPROC *initiatorProc;
+
+	bool transactionVisited;
 } TransactionNode;
 
 
-HTAB * BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph);
+/* GUC, determining whether debug messages for deadlock detection sent to LOG */
+extern bool LogDistributedDeadlockDetection;
+
+
+extern bool CheckForDistributedDeadlocks(void);
+extern HTAB * BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph);
+extern char * WaitsForToString(List *waitsFor);
 
 
 #endif /* DISTRIBUTED_DEADLOCK_DETECTION_H */

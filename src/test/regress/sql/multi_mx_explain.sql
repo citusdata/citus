@@ -127,6 +127,9 @@ EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem_mx
 	WHERE l_orderkey = 1 AND l_partkey = 0;
 
+-- make the outputs more consistent
+VACUUM ANALYZE lineitem_mx;
+
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5;
