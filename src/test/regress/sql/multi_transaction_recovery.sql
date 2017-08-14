@@ -56,12 +56,13 @@ SELECT recover_prepared_transactions();
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
 
--- Committed DDL commands should write 4 transaction recovery records
+-- Aborted DDL commands should not write transaction recovery records
 BEGIN;
 ALTER TABLE test_recovery ADD COLUMN y text;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
 
+-- Committed DDL commands should write 4 transaction recovery records
 ALTER TABLE test_recovery ADD COLUMN y text;
 
 SELECT count(*) FROM pg_dist_transaction;
@@ -80,12 +81,13 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
 
--- Committed INSERT..SELECT should write 4 transaction recovery records
+-- Aborted INSERT..SELECT should not write transaction recovery records
 BEGIN;
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
 
+-- Committed INSERT..SELECT should write 4 transaction recovery records
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 
 SELECT count(*) FROM pg_dist_transaction;
