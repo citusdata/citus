@@ -156,7 +156,6 @@ static bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
-static void ShowNoticeIfNotUsing2PC(void);
 static List * DDLTaskList(Oid relationId, const char *commandString);
 static List * CreateIndexTaskList(Oid relationId, IndexStmt *indexStmt);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
@@ -167,9 +166,6 @@ static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid ol
 static void CheckCopyPermissions(CopyStmt *copyStatement);
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
 static void PostProcessUtility(Node *parsetree);
-
-
-static bool warnedUserAbout2PC = false;
 
 
 /*
@@ -2876,8 +2872,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	if (!ddlJob->concurrentIndexCmd)
 	{
-		ShowNoticeIfNotUsing2PC();
-
 		if (shouldSyncMetadata)
 		{
 			SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
@@ -2915,25 +2909,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 							 "invalid index, then retry the original command.")));
 		}
 		PG_END_TRY();
-	}
-}
-
-
-/*
- * ShowNoticeIfNotUsing2PC shows a notice message about using 2PC by setting
- * citus.multi_shard_commit_protocol to 2PC. The notice message is shown only once in a
- * session
- */
-static void
-ShowNoticeIfNotUsing2PC(void)
-{
-	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC && !warnedUserAbout2PC)
-	{
-		ereport(NOTICE, (errmsg("using one-phase commit for distributed DDL commands"),
-						 errhint("You can enable two-phase commit for extra safety with: "
-								 "SET citus.multi_shard_commit_protocol TO '2pc'")));
-
-		warnedUserAbout2PC = true;
 	}
 }
 
