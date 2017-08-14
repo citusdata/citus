@@ -660,6 +660,157 @@ INSERT INTO multi_column_partitioning_10_max_20_min VALUES(19, -19);
 INSERT INTO multi_column_partitioning VALUES(20, -20);
 
 -- see data is loaded to multi-column partitioned table
-SELECT * FROM multi_column_partitioning;
+SELECT * FROM multi_column_partitioning ORDER BY 1, 2;
 
-DROP TABLE IF EXISTS partitioning_test_2012, partitioning_test_2013, partitioned_events_table, partitioned_users_table, list_partitioned_events_table, multi_column_partitioning;
+--
+-- Tests for locks on partitioned tables
+--
+CREATE TABLE partitioning_locks(id int, ref_id int, time date) PARTITION BY RANGE (time);
+
+-- create its partitions
+CREATE TABLE partitioning_locks_2009 PARTITION OF partitioning_locks FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+CREATE TABLE partitioning_locks_2010 PARTITION OF partitioning_locks FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+
+-- distribute partitioned table
+SELECT create_distributed_table('partitioning_locks', 'id');
+
+-- test locks on router SELECT
+BEGIN;
+SELECT * FROM partitioning_locks WHERE id = 1 ORDER BY 1, 2;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on real-time SELECT
+BEGIN;
+SELECT * FROM partitioning_locks ORDER BY 1, 2;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on task-tracker SELECT
+SET citus.task_executor_type TO 'task-tracker';
+BEGIN;
+SELECT * FROM partitioning_locks AS pl1 JOIN partitioning_locks AS pl2 ON pl1.id = pl2.ref_id ORDER BY 1, 2;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+SET citus.task_executor_type TO 'real-time';
+
+-- test locks on INSERT
+BEGIN;
+INSERT INTO partitioning_locks VALUES(1, 1, '2009-01-01');
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on UPDATE
+BEGIN;
+UPDATE partitioning_locks SET time = '2009-02-01' WHERE id = 1;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on DELETE
+BEGIN;
+DELETE FROM partitioning_locks WHERE id = 1;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on INSERT/SELECT
+CREATE TABLE partitioning_locks_for_select(id int, ref_id int, time date);
+SELECT create_distributed_table('partitioning_locks_for_select', 'id');
+BEGIN;
+INSERT INTO partitioning_locks SELECT * FROM partitioning_locks_for_select;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on coordinator INSERT/SELECT
+BEGIN;
+INSERT INTO partitioning_locks SELECT * FROM partitioning_locks_for_select LIMIT 5;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on master_modify_multiple_shards
+BEGIN;
+SELECT master_modify_multiple_shards('UPDATE partitioning_locks SET time = ''2009-03-01''');
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on DDL
+BEGIN;
+ALTER TABLE partitioning_locks ADD COLUMN new_column int;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test locks on TRUNCATE
+BEGIN;
+TRUNCATE partitioning_locks;
+SELECT relation::regclass, locktype, mode FROM pg_locks WHERE relation::regclass::text LIKE 'partitioning_locks%' AND pid = pg_backend_pid() ORDER BY 1, 2, 3;
+COMMIT;
+
+-- test shard resource locks with master_modify_multiple_shards
+BEGIN;
+SELECT master_modify_multiple_shards('UPDATE partitioning_locks_2009 SET time = ''2009-03-01''');
+
+-- see the locks on parent table
+SELECT
+    logicalrelid,
+    locktype,
+    mode
+FROM
+    pg_locks AS l JOIN pg_dist_shard AS s
+ON
+    l.objid = s.shardid
+WHERE
+    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
+    pid = pg_backend_pid()
+ORDER BY
+    1, 2, 3;
+COMMIT;
+
+-- test shard resource locks with TRUNCATE
+BEGIN;
+TRUNCATE partitioning_locks_2009;
+
+-- see the locks on parent table
+SELECT
+    logicalrelid,
+    locktype,
+    mode
+FROM
+    pg_locks AS l JOIN pg_dist_shard AS s
+ON
+    l.objid = s.shardid
+WHERE
+    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
+    pid = pg_backend_pid()
+ORDER BY
+    1, 2, 3;
+COMMIT;
+
+-- test shard resource locks with INSERT/SELECT
+BEGIN;
+INSERT INTO partitioning_locks_2009 SELECT * FROM partitioning_locks WHERE time >= '2009-01-01' AND time < '2010-01-01';
+
+-- see the locks on parent table
+SELECT
+    logicalrelid,
+    locktype,
+    mode
+FROM
+    pg_locks AS l JOIN pg_dist_shard AS s
+ON
+    l.objid = s.shardid
+WHERE
+    logicalrelid IN ('partitioning_locks', 'partitioning_locks_2009', 'partitioning_locks_2010') AND
+    pid = pg_backend_pid()
+ORDER BY
+    1, 2, 3;
+COMMIT;
+
+DROP TABLE
+IF EXISTS
+    partitioning_test_2012,
+    partitioning_test_2013,
+    partitioned_events_table,
+    partitioned_users_table,
+    list_partitioned_events_table,
+    multi_column_partitioning,
+    partitioning_locks,
+    partitioning_locks_for_select;
