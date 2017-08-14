@@ -888,13 +888,16 @@ CoordinatedRemoteTransactionsAbort(void)
 
 
 /*
- * RemoteTransactionsSavepointBegin sends the SAVEPOINT command for the given
- * sub-transaction id to all connections participating in the current transaction.
+ * CoordinatedRemoteTransactionsSavepointBegin sends the SAVEPOINT command for
+ * the given sub-transaction id to all connections participating in the current
+ * transaction.
  */
 void
-RemoteTransactionsSavepointBegin(SubTransactionId subId)
+CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId)
 {
 	dlist_iter iter;
+	const bool raiseInterrupts = true;
+	List *connectionList = NIL;
 
 	/* asynchronously send SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -908,7 +911,10 @@ RemoteTransactionsSavepointBegin(SubTransactionId subId)
 		}
 
 		StartRemoteTransactionSavepointBegin(connection, subId);
+		connectionList = lappend(connectionList, connection);
 	}
+
+	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* and wait for the results */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -932,13 +938,16 @@ RemoteTransactionsSavepointBegin(SubTransactionId subId)
 
 
 /*
- * RemoteTransactionsSavepointRelease sends the RELEASE SAVEPOINT command for the
- * given sub-transaction id to all connections participating in the current transaction.
+ * CoordinatedRemoteTransactionsSavepointRelease sends the RELEASE SAVEPOINT
+ * command for the given sub-transaction id to all connections participating in
+ * the current transaction.
  */
 void
-RemoteTransactionsSavepointRelease(SubTransactionId subId)
+CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId)
 {
 	dlist_iter iter;
+	const bool raiseInterrupts = false;
+	List *connectionList = NIL;
 
 	/* asynchronously send RELEASE SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -952,7 +961,10 @@ RemoteTransactionsSavepointRelease(SubTransactionId subId)
 		}
 
 		StartRemoteTransactionSavepointRelease(connection, subId);
+		connectionList = lappend(connectionList, connection);
 	}
+
+	WaitForAllConnections(connectionList, raiseInterrupts);
 
 	/* and wait for the results */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -971,13 +983,16 @@ RemoteTransactionsSavepointRelease(SubTransactionId subId)
 
 
 /*
- * RemoteTransactionsSavepointRollback sends the ROLLBACK TO SAVEPOINT command for the
- * given sub-transaction id to all connections participating in the current transaction.
+ * CoordinatedRemoteTransactionsSavepointRollback sends the ROLLBACK TO SAVEPOINT
+ * command for the given sub-transaction id to all connections participating in
+ * the current transaction.
  */
 void
-RemoteTransactionsSavepointRollback(SubTransactionId subId)
+CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId)
 {
 	dlist_iter iter;
+	const bool dontRaiseInterrupts = false;
+	List *connectionList = NIL;
 
 	/* asynchronously send ROLLBACK TO SAVEPOINT */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -1004,7 +1019,10 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 			}
 		}
 		StartRemoteTransactionSavepointRollback(connection, subId);
+		connectionList = lappend(connectionList, connection);
 	}
+
+	WaitForAllConnections(connectionList, dontRaiseInterrupts);
 
 	/* and wait for the results */
 	dlist_foreach(iter, &InProgressTransactions)
@@ -1029,17 +1047,14 @@ RemoteTransactionsSavepointRollback(SubTransactionId subId)
 static void
 StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
 {
+	const bool raiseErrors = true;
 	StringInfo savepointCommand = makeStringInfo();
 	appendStringInfo(savepointCommand, "SAVEPOINT savepoint_%u", subId);
 
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
-		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (!transaction->transactionFailed)
-		{
-			ReportConnectionError(connection, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-		}
+		ReportConnectionError(connection, WARNING);
+		MarkRemoteTransactionFailed(connection, raiseErrors);
 	}
 }
 
@@ -1052,15 +1067,12 @@ StartRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransaction
 static void
 FinishRemoteTransactionSavepointBegin(MultiConnection *connection, SubTransactionId subId)
 {
-	PGresult *result = GetRemoteCommandResult(connection, true);
+	const bool raiseErrors = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
 	if (!IsResponseOK(result))
 	{
-		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (!transaction->transactionFailed)
-		{
-			ReportResultError(connection, result, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-		}
+		ReportResultError(connection, result, WARNING);
+		MarkRemoteTransactionFailed(connection, raiseErrors);
 	}
 
 	PQclear(result);
@@ -1076,17 +1088,14 @@ static void
 StartRemoteTransactionSavepointRelease(MultiConnection *connection,
 									   SubTransactionId subId)
 {
+	const bool raiseErrors = true;
 	StringInfo savepointCommand = makeStringInfo();
 	appendStringInfo(savepointCommand, "RELEASE SAVEPOINT savepoint_%u", subId);
 
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
-		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (!transaction->transactionFailed)
-		{
-			ReportConnectionError(connection, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-		}
+		ReportConnectionError(connection, WARNING);
+		MarkRemoteTransactionFailed(connection, raiseErrors);
 	}
 }
 
@@ -1100,15 +1109,12 @@ static void
 FinishRemoteTransactionSavepointRelease(MultiConnection *connection,
 										SubTransactionId subId)
 {
-	PGresult *result = GetRemoteCommandResult(connection, true);
+	const bool raiseErrors = true;
+	PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
 	if (!IsResponseOK(result))
 	{
-		RemoteTransaction *transaction = &connection->remoteTransaction;
-		if (!transaction->transactionFailed)
-		{
-			ReportResultError(connection, result, WARNING);
-			MarkRemoteTransactionFailed(connection, true);
-		}
+		ReportResultError(connection, result, WARNING);
+		MarkRemoteTransactionFailed(connection, raiseErrors);
 	}
 
 	PQclear(result);
@@ -1124,13 +1130,14 @@ static void
 StartRemoteTransactionSavepointRollback(MultiConnection *connection,
 										SubTransactionId subId)
 {
+	const bool dontRaiseErrors = false;
 	StringInfo savepointCommand = makeStringInfo();
 	appendStringInfo(savepointCommand, "ROLLBACK TO SAVEPOINT savepoint_%u", subId);
 
 	if (!SendRemoteCommand(connection, savepointCommand->data))
 	{
 		ReportConnectionError(connection, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		MarkRemoteTransactionFailed(connection, dontRaiseErrors);
 	}
 }
 
@@ -1145,13 +1152,14 @@ static void
 FinishRemoteTransactionSavepointRollback(MultiConnection *connection, SubTransactionId
 										 subId)
 {
+	const bool dontRaiseErrors = false;
 	RemoteTransaction *transaction = &connection->remoteTransaction;
 
-	PGresult *result = GetRemoteCommandResult(connection, true);
+	PGresult *result = GetRemoteCommandResult(connection, dontRaiseErrors);
 	if (!IsResponseOK(result))
 	{
 		ReportResultError(connection, result, WARNING);
-		MarkRemoteTransactionFailed(connection, true);
+		MarkRemoteTransactionFailed(connection, dontRaiseErrors);
 	}
 
 	/* ROLLBACK TO SAVEPOINT succeeded, check if it recovers the transaction */
