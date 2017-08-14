@@ -107,7 +107,7 @@ COMMIT;
 
 CREATE TABLE researchers (
 	id bigint NOT NULL,
-    lab_id int NOT NULL,
+  lab_id int NOT NULL,
 	name text NOT NULL
 );
 
@@ -152,6 +152,46 @@ SAVEPOINT s1;
 INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
 RELEASE SAVEPOINT s1;
 SAVEPOINT s2;
+COMMIT;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
+-- Implicit savepoints via pl/pgsql exceptions
+BEGIN;
+DO $$
+BEGIN
+	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+EXCEPTION
+    WHEN not_null_violation THEN
+        RAISE NOTICE 'caught not_null_violation';
+END $$;
+COMMIT;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
+BEGIN;
+DO $$
+BEGIN
+	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  RAISE EXCEPTION plpgsql_error;
+EXCEPTION
+    WHEN plpgsql_error THEN
+        RAISE NOTICE 'caught manual plpgsql_error';
+END $$;
+COMMIT;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
+BEGIN;
+DO $$
+BEGIN
+	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+EXCEPTION
+    WHEN not_null_violation THEN
+        RAISE EXCEPTION not_null_violation; -- rethrow it
+END $$;
 COMMIT;
 
 SELECT * FROM researchers WHERE lab_id=10;
