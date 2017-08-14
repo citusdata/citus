@@ -3152,20 +3152,43 @@ get_update_query_def(Query *query, deparse_context *context)
 	 * Start the query with UPDATE relname SET
 	 */
 	rte = rt_fetch(query->resultRelation, query->rtable);
-	Assert(rte->rtekind == RTE_RELATION);
+
 	if (PRETTY_INDENT(context))
 	{
 		appendStringInfoChar(buf, ' ');
 		context->indentLevel += PRETTYINDENT_STD;
 	}
-	appendStringInfo(buf, "UPDATE %s%s",
-					 only_marker(rte),
-					 generate_relation_or_shard_name(rte->relid,
-													 context->distrelid,
-													 context->shardid, NIL));
-	if (rte->alias != NULL)
-		appendStringInfo(buf, " %s",
-						 quote_identifier(rte->alias->aliasname));
+
+	/* if it's a shard, do differently */
+	if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		char *fragmentSchemaName = NULL;
+		char *fragmentTableName = NULL;
+
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
+
+		/* use schema and table name from the remote alias */
+		appendStringInfo(buf, "UPDATE %s%s",
+						 only_marker(rte),
+						 generate_fragment_name(fragmentSchemaName, fragmentTableName));
+
+		if(rte->eref != NULL)
+			appendStringInfo(buf, " %s",
+					quote_identifier(rte->eref->aliasname));
+	}
+	else
+	{
+		appendStringInfo(buf, "UPDATE %s%s",
+						 only_marker(rte),
+						 generate_relation_or_shard_name(rte->relid,
+														 context->distrelid,
+														 context->shardid, NIL));
+
+		if (rte->alias != NULL)
+			appendStringInfo(buf, " %s",
+							 quote_identifier(rte->alias->aliasname));
+	}
+
 	appendStringInfoString(buf, " SET ");
 
 	/* Deparse targetlist */
@@ -3349,20 +3372,42 @@ get_delete_query_def(Query *query, deparse_context *context)
 	 * Start the query with DELETE FROM relname
 	 */
 	rte = rt_fetch(query->resultRelation, query->rtable);
-	Assert(rte->rtekind == RTE_RELATION);
+
 	if (PRETTY_INDENT(context))
 	{
 		appendStringInfoChar(buf, ' ');
 		context->indentLevel += PRETTYINDENT_STD;
 	}
-	appendStringInfo(buf, "DELETE FROM %s%s",
-					 only_marker(rte),
-					 generate_relation_or_shard_name(rte->relid,
-													 context->distrelid,
-													 context->shardid, NIL));
-	if (rte->alias != NULL)
-		appendStringInfo(buf, " %s",
-						 quote_identifier(rte->alias->aliasname));
+
+	/* if it's a shard, do differently */
+	if (GetRangeTblKind(rte) == CITUS_RTE_SHARD)
+	{
+		char *fragmentSchemaName = NULL;
+		char *fragmentTableName = NULL;
+
+		ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
+
+		/* use schema and table name from the remote alias */
+		appendStringInfo(buf, "DELETE FROM %s%s",
+						 only_marker(rte),
+						 generate_fragment_name(fragmentSchemaName, fragmentTableName));
+
+		if(rte->eref != NULL)
+			appendStringInfo(buf, " %s",
+					quote_identifier(rte->eref->aliasname));
+	}
+	else
+	{
+		appendStringInfo(buf, "DELETE FROM %s%s",
+						 only_marker(rte),
+						 generate_relation_or_shard_name(rte->relid,
+														 context->distrelid,
+														 context->shardid, NIL));
+
+		if (rte->alias != NULL)
+			appendStringInfo(buf, " %s",
+							 quote_identifier(rte->alias->aliasname));
+	}
 
 	/* Add the USING clause if given */
 	get_from_clause(query, " USING ", context);
@@ -6577,7 +6622,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 
 					ExtractRangeTblExtraData(rte, NULL, &fragmentSchemaName, &fragmentTableName, NULL);
 
-					/* Use schema and table name from the remote alias */
+					/* use schema and table name from the remote alias */
 					appendStringInfoString(buf,
 										   generate_fragment_name(fragmentSchemaName,
 																  fragmentTableName));

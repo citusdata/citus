@@ -48,10 +48,6 @@ CREATE FUNCTION shards_colocated(bigint, bigint)
     RETURNS bool
     AS 'citus'
     LANGUAGE C STRICT;
-CREATE FUNCTION get_colocated_shard_array(bigint)
-    RETURNS BIGINT[]
-    AS 'citus'
-    LANGUAGE C STRICT;
 CREATE FUNCTION find_shard_interval_index(bigint)
     RETURNS int
     AS 'citus'
@@ -436,11 +432,12 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
+            3 |         32 |                 2 |                     23
             4 |          2 |                 2 |                     23
             5 |          2 |                 1 |                     23
             6 |          2 |                 2 |                     25
             7 |          4 |                 2 |                     23
-(4 rows)
+(5 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000 
@@ -471,7 +468,8 @@ DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-(0 rows)
+            4 |          2 |                 2 |                     23
+(1 row)
 
 -- create dropped colocation group again
 SET citus.shard_count = 2;
@@ -558,18 +556,24 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
+            3 |         32 |                 2 |                     23
+            4 |          2 |                 2 |                     23
             5 |          2 |                 1 |                     23
             6 |          2 |                 2 |                     25
             7 |          4 |                 2 |                     23
-            8 |          2 |                 2 |                     23
-           12 |          3 |                 2 |                     23
-(5 rows)
+           11 |          3 |                 2 |                     23
+(6 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
            logicalrelid           | colocationid 
 ----------------------------------+--------------
+ table1_groupe                    |            4
+ table2_groupe                    |            4
+ table3_groupe                    |            4
+ schema_collocation.table4_groupe |            4
+ table4_groupe                    |            4
  table1_groupb                    |            5
  table2_groupb                    |            5
  table1_groupc                    |            6
@@ -577,16 +581,11 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table1_groupd                    |            7
  table2_groupd                    |            7
  table3_groupd                    |            7
- table1_groupe                    |            8
- table2_groupe                    |            8
- table3_groupe                    |            8
- schema_collocation.table4_groupe |            8
- table4_groupe                    |            8
- table1_group_none_1              |            9
- table2_group_none_1              |            9
- table1_group_none_2              |           10
- table1_group_none_3              |           11
- table1_group_default             |           12
+ table1_group_none_1              |            8
+ table2_group_none_1              |            8
+ table1_group_none_2              |            9
+ table1_group_none_3              |           10
+ table1_group_default             |           11
 (17 rows)
 
 -- check failing colocate_with options
@@ -651,12 +650,12 @@ SELECT * FROM pg_dist_colocation
     ORDER BY colocationid;
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
+            3 |         32 |                 2 |                     23
+            4 |          2 |                 2 |                     23
             5 |          2 |                 1 |                     23
             6 |          2 |                 2 |                     25
             7 |          4 |                 2 |                     23
-            8 |          2 |                 2 |                     23
-           12 |          3 |                 2 |                     23
-           13 |          1 |                 2 |                      0
+           11 |          3 |                 2 |                     23
 (6 rows)
 
 -- cross check with internal colocation API
@@ -919,8 +918,7 @@ SELECT * FROM pg_dist_colocation
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
             5 |          2 |                 2 |                     23
-            6 |          1 |                 2 |                      0
-(5 rows)
+(4 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -936,11 +934,9 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table1_groupe     |            5
  table2_groupe     |            5
  table3_groupe     |            5
- table1_groupf     |            6
- table2_groupf     |            6
- table1_group_none |            7
- table2_group_none |            8
-(13 rows)
+ table1_group_none |            6
+ table2_group_none |            7
+(11 rows)
 
 -- move the all tables in colocation group 5 to colocation group 7
 SELECT mark_tables_colocated('table1_group_none', ARRAY['table1_groupE', 'table2_groupE', 'table3_groupE']);
@@ -965,8 +961,7 @@ SELECT * FROM pg_dist_colocation
             2 |          2 |                 1 |                     23
             3 |          2 |                 2 |                     25
             4 |          4 |                 2 |                     23
-            6 |          1 |                 2 |                      0
-(4 rows)
+(3 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -979,14 +974,12 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
  table2_groupc     |            3
  table1_groupd     |            4
  table2_groupd     |            4
- table1_groupf     |            6
- table2_groupf     |            6
- table1_groupe     |            7
- table2_groupe     |            7
- table3_groupe     |            7
- table1_group_none |            7
- table2_group_none |            7
-(13 rows)
+ table1_groupe     |            6
+ table2_groupe     |            6
+ table3_groupe     |            6
+ table1_group_none |            6
+ table2_group_none |            6
+(11 rows)
 
 -- try to colocate different replication models
 CREATE TABLE table1_groupG ( id int );

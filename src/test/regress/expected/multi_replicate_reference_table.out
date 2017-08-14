@@ -23,10 +23,10 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
      0
 (1 row)
 
-SELECT master_add_node('localhost', :worker_2_port);
-                    master_add_node                    
--------------------------------------------------------
- (1370000,1370000,localhost,57638,default,f,t,primary)
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column? 
+----------
+        1
 (1 row)
 
 -- verify node is added
@@ -69,7 +69,7 @@ SELECT create_reference_table('replicate_reference_table_unhealthy');
 (1 row)
 
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ERROR:  could not find any healthy placement for shard 1370000
 -- verify node is not added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -117,14 +117,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 1 |                      0
+      1370000 |          1 |                 1 |                      0
 (1 row)
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_valid" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370002,1370002,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 -- status after master_add_node
@@ -147,7 +147,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 2 |                      0
+      1370000 |          1 |                 2 |                      0
 (1 row)
 
 -- test add same node twice
@@ -171,13 +171,13 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 2 |                      0
+      1370000 |          1 |                 2 |                      0
 (1 row)
 
-SELECT master_add_node('localhost', :worker_2_port);
-                    master_add_node                    
--------------------------------------------------------
- (1370002,1370002,localhost,57638,default,f,t,primary)
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column? 
+----------
+        1
 (1 row)
 
 -- status after master_add_node
@@ -200,7 +200,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370001 |          1 |                 2 |                      0
+      1370000 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_valid;
@@ -237,15 +237,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370002 |          1 |                 1 |                      0
+      1370001 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_rollback" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370003,1370003,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 ROLLBACK;
@@ -268,7 +268,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370002 |          1 |                 1 |                      0
+      1370001 |          1 |                 1 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_rollback;
@@ -299,15 +299,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370003 |          1 |                 1 |                      0
+      1370001 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_commit" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370004,1370004,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 COMMIT;
@@ -331,7 +331,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370003 |          1 |                 2 |                      0
+      1370001 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_commit;
@@ -381,7 +381,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 1 |                      0
+      1370002 |          1 |                 1 |                      0
 (1 row)
 
 SELECT
@@ -393,16 +393,16 @@ WHERE
 ORDER BY logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
- replicate_reference_table_reference_one | n          |      1370004 | t
- replicate_reference_table_hash          | h          |      1370005 | c
+ replicate_reference_table_reference_one | n          |      1370002 | t
+ replicate_reference_table_hash          | h          |      1360004 | c
 (2 rows)
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_reference_one" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370005,1370005,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
@@ -443,7 +443,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_reference_one'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370004 |          1 |                 2 |                      0
+      1370002 |          1 |                 2 |                      0
 (1 row)
 
 SELECT
@@ -456,9 +456,9 @@ ORDER BY
 	logicalrelid;
               logicalrelid               | partmethod | colocationid | repmodel 
 -----------------------------------------+------------+--------------+----------
- replicate_reference_table_reference_one | n          |      1370004 | t
- replicate_reference_table_hash          | n          |      1370004 | t
- replicate_reference_table_reference_two | n          |      1370004 | t
+ replicate_reference_table_reference_one | n          |      1370002 | t
+ replicate_reference_table_hash          | n          |      1370002 | t
+ replicate_reference_table_reference_two | n          |      1370002 | t
 (3 rows)
 
 DROP TABLE replicate_reference_table_reference_one;
@@ -480,7 +480,7 @@ SELECT create_reference_table('replicate_reference_table_insert');
 
 BEGIN;
 INSERT INTO replicate_reference_table_insert VALUES(1);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_insert" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
@@ -495,7 +495,7 @@ SELECT create_reference_table('replicate_reference_table_copy');
 
 BEGIN;
 COPY replicate_reference_table_copy FROM STDIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_copy" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
@@ -512,7 +512,7 @@ BEGIN;
 ALTER TABLE replicate_reference_table_ddl ADD column2 int;
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_ddl" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;
@@ -544,15 +544,15 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370009 |          1 |                 1 |                      0
+      1370003 |          1 |                 1 |                      0
 (1 row)
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_drop" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370009,1370009,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 DROP TABLE replicate_reference_table_drop;
@@ -607,14 +607,14 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370010 |          1 |                 1 |                      0
+      1370004 |          1 |                 1 |                      0
 (1 row)
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "table1" to the node localhost:57638
-                    master_add_node                    
--------------------------------------------------------
- (1370010,1370010,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 -- status after master_add_node
@@ -637,7 +637,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
  colocationid | shardcount | replicationfactor | distributioncolumntype 
 --------------+------------+-------------------+------------------------
-      1370010 |          1 |                 2 |                      0
+      1370004 |          1 |                 2 |                      0
 (1 row)
 
 DROP TABLE replicate_reference_table_schema.table1;
@@ -656,10 +656,10 @@ SELECT create_reference_table('initially_not_replicated_reference_table');
  
 (1 row)
 
-SELECT master_add_inactive_node('localhost', :worker_2_port);
-               master_add_inactive_node                
--------------------------------------------------------
- (1370011,1370011,localhost,57638,default,f,f,primary)
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
+ ?column? 
+----------
+        1
 (1 row)
 
 -- we should see only one shard placements
@@ -681,11 +681,11 @@ ORDER BY 1,4,5;
 (1 row)
 
 -- we should see the two shard placements after activation
-SELECT master_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "initially_not_replicated_reference_table" to the node localhost:57638
-                 master_activate_node                  
--------------------------------------------------------
- (1370011,1370011,localhost,57638,default,f,t,primary)
+ ?column? 
+----------
+        1
 (1 row)
 
 SELECT
@@ -707,10 +707,10 @@ ORDER BY 1,4,5;
 (2 rows)
 
 -- this should have no effect
-SELECT master_add_node('localhost', :worker_2_port);
-                    master_add_node                    
--------------------------------------------------------
- (1370011,1370011,localhost,57638,default,f,t,primary)
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column? 
+----------
+        1
 (1 row)
 
 -- drop unnecassary tables

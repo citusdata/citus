@@ -12,14 +12,14 @@ NOTICE:  Copying data from local table...
 
 -- see that partkey is NULL
 SELECT
-	partmethod, (partkey IS NULL) as partkeyisnull, colocationid, repmodel
+	partmethod, (partkey IS NULL) as partkeyisnull, repmodel
 FROM
 	pg_dist_partition
 WHERE
 	logicalrelid = 'reference_table_test'::regclass;
- partmethod | partkeyisnull | colocationid | repmodel 
-------------+---------------+--------------+----------
- n          | t             |            1 | t
+ partmethod | partkeyisnull | repmodel 
+------------+---------------+----------
+ n          | t             | t
 (1 row)
 
 -- now see that shard min/max values are NULL
@@ -1122,8 +1122,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- now, insert into the hash partitioned table and use reference 
--- tables in the SELECT queries
+-- not pushable due to lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 
@@ -1133,12 +1132,8 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
- value_1 | value_2 
----------+---------
-       1 |       1
-       2 |       2
-(2 rows)
-
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 -- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1149,12 +1144,8 @@ FROM
 WHERE
 	colocated_table_test_2.value_2 = reference_table_test.value_2
 RETURNING value_1, value_2;
- value_1 | value_2 
----------+---------
-       1 |       1
-       2 |       2
-(2 rows)
-
+ERROR:  cannot perform distributed planning for the given modification
+DETAIL:  Select query cannot be pushed down to the worker.
 -- partition column value comes from reference table, goes via coordinator
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1393,7 +1384,7 @@ ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
 ERROR:  renaming distributed tables is currently unsupported
 ALTER TABLE reference_table_ddl SET WITH OIDS;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- now test reference tables against some helper UDFs that Citus provides
 -- cannot delete / drop shards from a reference table
 SELECT master_apply_delete_command('DELETE FROM reference_table_ddl');
@@ -1615,7 +1606,7 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
  master_modify_multiple_shards 
 -------------------------------
-                            10
+                             6
 (1 row)
 
 ROLLBACK;

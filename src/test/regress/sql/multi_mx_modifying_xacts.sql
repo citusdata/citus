@@ -118,7 +118,7 @@ COMMIT;
 
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');
@@ -134,7 +134,7 @@ COMMIT;
 
 SELECT * FROM researchers_mx, labs_mx WHERE labs_mx.id = researchers_mx.lab_id;
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs_mx VALUES (6, 'Bell labs_mx');
 INSERT INTO researchers_mx VALUES (9, 6, 'Leslie Lamport');

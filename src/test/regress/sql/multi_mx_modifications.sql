@@ -76,8 +76,10 @@ DELETE FROM limit_orders_mx WHERE id = 246 AND bidder_id = (random() * 1000);
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders_mx WHERE id = 246 AND placed_at = current_timestamp::timestamp;
 
--- commands with multiple rows are unsupported
-INSERT INTO limit_orders_mx VALUES (DEFAULT), (DEFAULT);
+-- commands with multiple rows are supported
+INSERT INTO limit_orders_mx VALUES (2037, 'GOOG', 5634, now(), 'buy', random()),
+                                   (2038, 'GOOG', 5634, now(), 'buy', random()),
+                                   (2039, 'GOOG', 5634, now(), 'buy', random());
 
 -- connect back to the other node
 \c - - - :worker_1_port

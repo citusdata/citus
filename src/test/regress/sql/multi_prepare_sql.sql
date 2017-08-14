@@ -245,6 +245,17 @@ EXECUTE prepared_double_parameter_insert(4, 40);
 EXECUTE prepared_double_parameter_insert(5, 50);
 EXECUTE prepared_double_parameter_insert(6, 60);
 
+PREPARE prepared_multi_insert(int, int) AS
+	INSERT INTO prepare_table (key, value) VALUES ($1, $2), ($1 + 1, $2 + 10);
+
+-- execute 6 times to trigger prepared statement usage
+EXECUTE prepared_multi_insert( 7,  70);
+EXECUTE prepared_multi_insert( 9,  90);
+EXECUTE prepared_multi_insert(11, 110);
+EXECUTE prepared_multi_insert(13, 130);
+EXECUTE prepared_multi_insert(15, 150);
+EXECUTE prepared_multi_insert(17, 170);
+
 PREPARE prepared_non_partition_parameter_insert(int) AS
 	INSERT INTO prepare_table (key, value) VALUES (0, $1);
 
@@ -258,6 +269,8 @@ EXECUTE prepared_non_partition_parameter_insert(60);
 
 -- check inserted values
 SELECT * FROM prepare_table ORDER BY key, value;
+
+SELECT master_modify_multiple_shards('DELETE FROM prepare_table WHERE value >= 70');
 
 -- check router executor select
 PREPARE prepared_router_partition_column_select(int) AS

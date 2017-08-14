@@ -21,7 +21,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 -- verify there is no node with nodeport = :worker_2_port before adding the node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- verify node is added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -45,7 +45,7 @@ CREATE TABLE replicate_reference_table_unhealthy(column1 int);
 SELECT create_reference_table('replicate_reference_table_unhealthy');
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- verify node is not added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -80,7 +80,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- status after master_add_node
 SELECT
@@ -115,7 +115,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- status after master_add_node
 SELECT
@@ -157,7 +157,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 -- status after master_add_node
@@ -198,7 +198,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 COMMIT;
 
 -- status after master_add_node
@@ -260,7 +260,7 @@ WHERE
 ORDER BY logicalrelid;
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT upgrade_to_reference_table('replicate_reference_table_hash');
 SELECT create_reference_table('replicate_reference_table_reference_two');
 COMMIT;
@@ -304,7 +304,7 @@ SELECT create_reference_table('replicate_reference_table_insert');
 
 BEGIN;
 INSERT INTO replicate_reference_table_insert VALUES(1);
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 DROP TABLE replicate_reference_table_insert;
@@ -322,7 +322,7 @@ COPY replicate_reference_table_copy FROM STDIN;
 4
 5
 \.
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 DROP TABLE replicate_reference_table_copy;
@@ -334,7 +334,7 @@ SELECT create_reference_table('replicate_reference_table_ddl');
 
 BEGIN;
 ALTER TABLE replicate_reference_table_ddl ADD column2 int;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 DROP TABLE replicate_reference_table_ddl;
@@ -360,7 +360,7 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
 
 BEGIN;
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 DROP TABLE replicate_reference_table_drop;
 COMMIT;
 
@@ -396,7 +396,7 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- status after master_add_node
 SELECT
@@ -422,7 +422,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 CREATE TABLE initially_not_replicated_reference_table (key int);
 SELECT create_reference_table('initially_not_replicated_reference_table');
 
-SELECT master_add_inactive_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
 
 -- we should see only one shard placements
 SELECT
@@ -439,7 +439,7 @@ WHERE
 ORDER BY 1,4,5;
 
 -- we should see the two shard placements after activation
-SELECT master_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
@@ -455,7 +455,7 @@ WHERE
 ORDER BY 1,4,5;
 
 -- this should have no effect
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;

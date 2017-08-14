@@ -1343,9 +1343,7 @@ INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
 ROLLBACK;
 
--- Insert after copy is disallowed when the INSERT INTO ... SELECT  chooses
--- to use a connection for one shard, while the connection already modified
--- another shard.
+-- Insert after copy is allowed
 BEGIN;
 COPY raw_events_second (user_id, value_1) FROM STDIN DELIMITER ',';
 100,100
@@ -1375,6 +1373,15 @@ INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100
 COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
 103,103
 \.
+ROLLBACK;
+
+-- Similarly, multi-row INSERTs will take part in transactions and reuse connections...
+BEGIN;
+INSERT INTO raw_events_first SELECT * FROM raw_events_second WHERE user_id = 100;
+COPY raw_events_first (user_id, value_1) FROM STDIN DELIMITER ',';
+104,104
+\.
+INSERT INTO raw_events_first (user_id, value_1) VALUES (105, 105), (106, 106);
 ROLLBACK;
 
 -- selecting from views works

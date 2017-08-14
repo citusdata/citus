@@ -67,10 +67,52 @@ SELECT count(*) FROM orders_hash_partitioned
 SELECT count(*) FROM
        (SELECT o_orderkey FROM orders_hash_partitioned WHERE o_orderkey = 1) AS orderkeys;
 
--- Check that we don't support pruning for ANY (array expression) and give
--- a notice message when used with the partition column
-SELECT count(*) FROM orders_hash_partitioned
-	WHERE o_orderkey = ANY ('{1,2,3}');
+SET client_min_messages TO DEFAULT;
+
+-- Check that we support runing for ANY/IN with literal.
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY ('{1,2,3}');
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (1,2,3);
+
+-- Check whether we can deal with null arrays
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (NULL);
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY (NULL);
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey IN (NULL) OR TRUE;
+
+SELECT count(*) FROM lineitem_hash_part
+	WHERE l_orderkey = ANY (NULL) OR TRUE;	
+
+-- Check whether we support IN/ANY in subquery
+SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem_hash_part);
+SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderkey FROM lineitem_hash_part);
+
+-- Check whether we support IN/ANY in subquery with append and range distributed table 
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey = ANY ('{1,2,3}');
+
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey IN (1,2,3);
+
+SELECT count(*) FROM lineitem
+	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey = ANY ('{1,2,3}');
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey IN (1,2,3);
+
+SELECT count(*) FROM lineitem_range
+	WHERE l_orderkey = ANY(NULL) OR TRUE;	
+
+SET client_min_messages TO DEBUG2;
 
 -- Check that we don't show the message if the operator is not
 -- equality operator

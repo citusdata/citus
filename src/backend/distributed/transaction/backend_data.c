@@ -19,6 +19,7 @@
 #include "datatype/timestamp.h"
 #include "distributed/backend_data.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/transaction_identifier.h"
 #include "nodes/execnodes.h"
@@ -89,6 +90,12 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("backend is not ready for distributed transactions")));
 	}
 
+	/*
+	 * Note that we don't need to lock shared memory (i.e., LockBackendSharedMemory()) here
+	 * since this function is executed after AssignDistributedTransactionId() issued on the
+	 * initiator node, which already takes the required lock to enforce the consistency.
+	 */
+
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	/* if an id is already assigned, release the lock and error */
@@ -105,6 +112,7 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	MyBackendData->transactionId.initiatorNodeIdentifier = PG_GETARG_INT32(0);
 	MyBackendData->transactionId.transactionNumber = PG_GETARG_INT64(1);
 	MyBackendData->transactionId.timestamp = PG_GETARG_TIMESTAMPTZ(2);
+	MyBackendData->transactionId.transactionOriginator = false;
 
 	SpinLockRelease(&MyBackendData->mutex);
 
@@ -236,8 +244,8 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	/* we're reading all the backend data, take a lock to prevent concurrent additions */
-	LWLockAcquire(AddinShmemInitLock, LW_SHARED);
+	/* we're reading all distributed transactions, prevent new backends */
+	LockBackendSharedMemory(LW_SHARED);
 
 	for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 	{
@@ -272,7 +280,7 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 		memset(isNulls, false, sizeof(isNulls));
 	}
 
-	LWLockRelease(AddinShmemInitLock);
+	UnlockBackendSharedMemory();
 
 	/* clean up and return the tuplestore */
 	tuplestore_donestoring(tupleStore);
@@ -400,14 +408,19 @@ InitializeBackendData(void)
 
 	Assert(MyBackendData);
 
+	LockBackendSharedMemory(LW_EXCLUSIVE);
+
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->databaseId = MyDatabaseId;
 	MyBackendData->transactionId.initiatorNodeIdentifier = 0;
+	MyBackendData->transactionId.transactionOriginator = false;
 	MyBackendData->transactionId.transactionNumber = 0;
 	MyBackendData->transactionId.timestamp = 0;
 
 	SpinLockRelease(&MyBackendData->mutex);
+
+	UnlockBackendSharedMemory();
 }
 
 
@@ -425,11 +438,41 @@ UnSetDistributedTransactionId(void)
 
 		MyBackendData->databaseId = 0;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
+		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
 		MyBackendData->transactionId.timestamp = 0;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
+}
+
+
+/*
+ * LockBackendSharedMemory is a simple wrapper around LWLockAcquire on the
+ * shared memory lock.
+ *
+ * We use the backend shared memory lock for preventing new backends to be part
+ * of a new distributed transaction or an existing backend to leave a distributed
+ * transaction while we're reading the all backends' data.
+ *
+ * The primary goal is to provide consistent view of the current distributed
+ * transactions while doing the deadlock detection.
+ */
+void
+LockBackendSharedMemory(LWLockMode lockMode)
+{
+	LWLockAcquire(&backendManagementShmemData->lock, lockMode);
+}
+
+
+/*
+ * UnlockBackendSharedMemory is a simple wrapper around LWLockRelease on the
+ * shared memory lock.
+ */
+void
+UnlockBackendSharedMemory(void)
+{
+	LWLockRelease(&backendManagementShmemData->lock);
 }
 
 
@@ -447,6 +490,8 @@ GetCurrentDistributedTransactionId(void)
 
 	currentDistributedTransactionId->initiatorNodeIdentifier =
 		MyBackendData->transactionId.initiatorNodeIdentifier;
+	currentDistributedTransactionId->transactionOriginator =
+		MyBackendData->transactionId.transactionOriginator;
 	currentDistributedTransactionId->transactionNumber =
 		MyBackendData->transactionId.transactionNumber;
 	currentDistributedTransactionId->timestamp =
@@ -481,6 +526,7 @@ AssignDistributedTransactionId(void)
 	MyBackendData->databaseId = MyDatabaseId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
+	MyBackendData->transactionId.transactionOriginator = true;
 	MyBackendData->transactionId.transactionNumber =
 		nextTransactionNumber;
 	MyBackendData->transactionId.timestamp = currentTimestamp;
@@ -526,4 +572,71 @@ GetBackendDataForProc(PGPROC *proc, BackendData *result)
 	memcpy(result, backendData, sizeof(BackendData));
 
 	SpinLockRelease(&backendData->mutex);
+}
+
+
+/*
+ * CancelTransactionDueToDeadlock cancels the input proc and also marks the backend
+ * data with this information.
+ */
+void
+CancelTransactionDueToDeadlock(PGPROC *proc)
+{
+	BackendData *backendData = &backendManagementShmemData->backends[proc->pgprocno];
+
+	/* backend might not have used citus yet and thus not initialized backend data */
+	if (!backendData)
+	{
+		return;
+	}
+
+	SpinLockAcquire(&backendData->mutex);
+
+	/* send a SIGINT only if the process is still in a distributed transaction */
+	if (backendData->transactionId.transactionNumber != 0)
+	{
+		backendData->cancelledDueToDeadlock = true;
+		SpinLockRelease(&backendData->mutex);
+
+		if (kill(proc->pid, SIGINT) != 0)
+		{
+			ereport(WARNING,
+					(errmsg("attempted to cancel this backend (pid: %d) to resolve a "
+							"distributed deadlock but the backend could not "
+							"be cancelled", proc->pid)));
+		}
+	}
+	else
+	{
+		SpinLockRelease(&backendData->mutex);
+	}
+}
+
+
+/*
+ * MyBackendGotCancelledDueToDeadlock returns whether the current distributed
+ * transaction was cancelled due to a deadlock. If the backend is not in a
+ * distributed transaction, the function returns false.
+ */
+bool
+MyBackendGotCancelledDueToDeadlock(void)
+{
+	bool cancelledDueToDeadlock = false;
+
+	/* backend might not have used citus yet and thus not initialized backend data */
+	if (!MyBackendData)
+	{
+		return false;
+	}
+
+	SpinLockAcquire(&MyBackendData->mutex);
+
+	if (IsInDistributedTransaction(MyBackendData))
+	{
+		cancelledDueToDeadlock = MyBackendData->cancelledDueToDeadlock;
+	}
+
+	SpinLockRelease(&MyBackendData->mutex);
+
+	return cancelledDueToDeadlock;
 }

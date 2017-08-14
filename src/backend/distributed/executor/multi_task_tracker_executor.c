@@ -27,6 +27,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -162,6 +163,13 @@ MultiTaskTrackerExecute(Job *job)
 	const char *taskTrackerHashName = "Task Tracker Hash";
 	const char *transmitTrackerHashName = "Transmit Tracker Hash";
 	List *jobIdList = NIL;
+
+	if (ReadFromSecondaries == USE_SECONDARY_NODES_ALWAYS)
+	{
+		ereport(ERROR, (errmsg("task tracker queries are not allowed while "
+							   "citus.use_secondary_nodes is 'always'"),
+						errhint("try setting citus.task_executor_type TO 'real-time'")));
+	}
 
 	/*
 	 * We walk over the task tree, and create a task execution struct for each

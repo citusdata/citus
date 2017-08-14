@@ -257,10 +257,8 @@ SELECT * FROM articles_hash WHERE author_id <= 1;
 (5 rows)
 
 SELECT * FROM articles_hash WHERE author_id IN (1, 3); 
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572
@@ -2071,10 +2069,6 @@ SELECT * FROM mv_articles_hash_empty;
 
 CREATE MATERIALIZED VIEW mv_articles_hash_data AS
 	SELECT * FROM articles_hash WHERE author_id in (1,2);
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
-NOTICE:  cannot use shard pruning with ANY/ALL (array expression)
-HINT:  Consider rewriting the expression with OR/AND clauses.
 SELECT * FROM mv_articles_hash_data;
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------

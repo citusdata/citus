@@ -32,6 +32,7 @@ typedef struct FunctionEvaluationContext
 
 
 /* private function declarations */
+static void EvaluateValuesListsItems(List *valuesLists, PlanState *planState);
 static Node * EvaluateNodeIfReferencesFunction(Node *expression, PlanState *planState);
 static Node * PartiallyEvaluateExpressionMutator(Node *expression,
 												 FunctionEvaluationContext *context);
@@ -63,14 +64,19 @@ RequiresMasterEvaluation(Query *query)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
 
-		if (rte->rtekind != RTE_SUBQUERY)
+		if (rte->rtekind == RTE_SUBQUERY)
 		{
-			continue;
+			if (RequiresMasterEvaluation(rte->subquery))
+			{
+				return true;
+			}
 		}
-
-		if (RequiresMasterEvaluation(rte->subquery))
+		else if (rte->rtekind == RTE_VALUES)
 		{
-			return true;
+			if (contain_mutable_functions((Node *) rte->values_lists))
+			{
+				return true;
+			}
 		}
 	}
 
@@ -100,12 +106,10 @@ RequiresMasterEvaluation(Query *query)
 void
 ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 {
-	CmdType commandType = query->commandType;
 	ListCell *targetEntryCell = NULL;
 	ListCell *rteCell = NULL;
 	ListCell *cteCell = NULL;
 	Node *modifiedNode = NULL;
-	bool insertSelectQuery = InsertSelectIntoDistributedTable(query);
 
 	if (query->jointree && query->jointree->quals)
 	{
@@ -123,16 +127,8 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 			continue;
 		}
 
-		if (commandType == CMD_INSERT && !insertSelectQuery)
-		{
-			modifiedNode = EvaluateNodeIfReferencesFunction((Node *) targetEntry->expr,
-															planState);
-		}
-		else
-		{
-			modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
-													   planState);
-		}
+		modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
+												   planState);
 
 		targetEntry->expr = (Expr *) modifiedNode;
 	}
@@ -141,12 +137,14 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
 
-		if (rte->rtekind != RTE_SUBQUERY)
+		if (rte->rtekind == RTE_SUBQUERY)
 		{
-			continue;
+			ExecuteMasterEvaluableFunctions(rte->subquery, planState);
 		}
-
-		ExecuteMasterEvaluableFunctions(rte->subquery, planState);
+		else if (rte->rtekind == RTE_VALUES)
+		{
+			EvaluateValuesListsItems(rte->values_lists, planState);
+		}
 	}
 
 	foreach(cteCell, query->cteList)
@@ -154,6 +152,35 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 		CommonTableExpr *expr = (CommonTableExpr *) lfirst(cteCell);
 
 		ExecuteMasterEvaluableFunctions((Query *) expr->ctequery, planState);
+	}
+}
+
+
+/*
+ * EvaluateValuesListsItems siply does the work of walking over each expression
+ * in each value list contained in a multi-row INSERT's VALUES RTE. Basically
+ * a nested for loop to perform an in-place replacement of expressions with
+ * their ultimate values, should evaluation be necessary.
+ */
+static void
+EvaluateValuesListsItems(List *valuesLists, PlanState *planState)
+{
+	ListCell *exprListCell = NULL;
+
+	foreach(exprListCell, valuesLists)
+	{
+		List *exprList = (List *) lfirst(exprListCell);
+		ListCell *exprCell = NULL;
+
+		foreach(exprCell, exprList)
+		{
+			Expr *expr = (Expr *) lfirst(exprCell);
+			Node *modifiedNode = NULL;
+
+			modifiedNode = PartiallyEvaluateExpression((Node *) expr, planState);
+
+			exprCell->data.ptr_value = (void *) modifiedNode;
+		}
 	}
 }
 

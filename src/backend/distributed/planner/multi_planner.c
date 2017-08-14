@@ -22,6 +22,7 @@
 #include "distributed/multi_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
@@ -31,6 +32,7 @@
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
 
@@ -68,7 +70,8 @@ static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *origin
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
 										   plannerRestrictionContext);
-static void AssignRTEIdentities(Query *queryTree);
+static void AdjustParseTree(Query *parse, bool assignRTEIdentities,
+							bool setPartitionedTablesInherited);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static PlannedStmt * FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
@@ -91,6 +94,8 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
 	Query *originalQuery = NULL;
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	bool assignRTEIdentities = false;
+	bool setPartitionedTablesInherited = false;
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the
@@ -99,8 +104,10 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	if (needsDistributedPlanning)
 	{
 		originalQuery = copyObject(parse);
+		assignRTEIdentities = true;
+		setPartitionedTablesInherited = false;
 
-		AssignRTEIdentities(parse);
+		AdjustParseTree(parse, assignRTEIdentities, setPartitionedTablesInherited);
 	}
 
 	/* create a restriction context and put it at the end if context list */
@@ -128,6 +135,14 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 	PG_END_TRY();
 
+	if (needsDistributedPlanning)
+	{
+		assignRTEIdentities = false;
+		setPartitionedTablesInherited = true;
+
+		AdjustParseTree(parse, assignRTEIdentities, setPartitionedTablesInherited);
+	}
+
 	/* remove the context from the context list */
 	PopPlannerRestrictionContext();
 
@@ -152,19 +167,18 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
- * AssignRTEIdentities assigns unique identities to the
- * RTE_RELATIONs in the given query.
+ * AdjustParseTree function modifies query tree by adding RTE identities to the
+ * RTE_RELATIONs and changing inh flag and relkind of partitioned tables. We
+ * perform these operations to ensure PostgreSQL's standard planner behaves as
+ * we need.
  *
- * To be able to track individual RTEs through postgres' query
- * planning, we need to be able to figure out whether an RTE is
- * actually a copy of another, rather than a different one. We
- * simply number the RTEs starting from 1.
- *
- * Note that we're only interested in RTE_RELATIONs and thus assigning
- * identifiers to those RTEs only.
+ * Please note that, we want to avoid modifying query tree as much as possible
+ * because if PostgreSQL changes the way it uses modified fields, that may break
+ * our logic.
  */
 static void
-AssignRTEIdentities(Query *queryTree)
+AdjustParseTree(Query *queryTree, bool assignRTEIdentities,
+				bool setPartitionedTablesInherited)
 {
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
@@ -177,12 +191,42 @@ AssignRTEIdentities(Query *queryTree)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
-		if (rangeTableEntry->rtekind != RTE_RELATION)
+		/*
+		 * To be able to track individual RTEs through PostgreSQL's query
+		 * planning, we need to be able to figure out whether an RTE is
+		 * actually a copy of another, rather than a different one. We
+		 * simply number the RTEs starting from 1.
+		 *
+		 * Note that we're only interested in RTE_RELATIONs and thus assigning
+		 * identifiers to those RTEs only.
+		 */
+		if (assignRTEIdentities && rangeTableEntry->rtekind == RTE_RELATION)
 		{
-			continue;
+			AssignRTEIdentity(rangeTableEntry, rteIdentifier++);
 		}
 
-		AssignRTEIdentity(rangeTableEntry, rteIdentifier++);
+		/*
+		 * We want Postgres to behave partitioned tables as regular relations
+		 * (i.e. we do not want to expand them to their partitions). To do this
+		 * we set each distributed partitioned table's inh flag to appropriate
+		 * value before and after dropping to the standart_planner.
+		 */
+		if (IsDistributedTable(rangeTableEntry->relid) &&
+			PartitionedTable(rangeTableEntry->relid))
+		{
+			rangeTableEntry->inh = setPartitionedTablesInherited;
+
+#if (PG_VERSION_NUM >= 100000)
+			if (setPartitionedTablesInherited)
+			{
+				rangeTableEntry->relkind = RELKIND_PARTITIONED_TABLE;
+			}
+			else
+			{
+				rangeTableEntry->relkind = RELKIND_RELATION;
+			}
+#endif
+		}
 	}
 }
 
@@ -278,6 +322,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 	if (IsModifyCommand(query))
 	{
+		EnsureModificationsCanRun();
+
 		if (InsertSelectIntoDistributedTable(originalQuery))
 		{
 			distributedPlan =
@@ -476,6 +522,8 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 			break;
 		}
 	}
+
+	multiPlan->relationIdList = localPlan->relationOids;
 
 	multiPlanData = (Node *) multiPlan;
 
@@ -694,6 +742,8 @@ multi_join_restriction_hook(PlannerInfo *root,
 	joinRestriction->joinType = jointype;
 	joinRestriction->joinRestrictInfoList = restrictInfoList;
 	joinRestriction->plannerInfo = root;
+	joinRestriction->innerrel = innerrel;
+	joinRestriction->outerrel = outerrel;
 
 	joinRestrictionContext->joinRestrictionList =
 		lappend(joinRestrictionContext->joinRestrictionList, joinRestriction);

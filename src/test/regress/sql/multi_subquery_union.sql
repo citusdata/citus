@@ -17,12 +17,32 @@ FROM (
 ORDER BY 2 DESC,1
 LIMIT 5;
 
+-- a very simple union query with reference table
+SELECT user_id, counter
+FROM (
+    SELECT user_id, value_2 % 10 AS counter FROM events_table WHERE event_type IN (1, 2, 3, 4, 5) 
+      UNION 
+    SELECT user_id, value_2 % 10 AS counter FROM events_reference_table WHERE event_type IN (5, 6, 7, 8, 9, 10) 
+) user_id 
+ORDER BY 2 DESC,1
+LIMIT 5;
+
 -- the same query with union all
 SELECT user_id, counter
 FROM (
     SELECT user_id, value_2 % 10 AS counter FROM events_table WHERE event_type IN (1, 2, 3, 4, 5) 
       UNION ALL
     SELECT user_id, value_2 % 10 AS counter FROM events_table WHERE event_type IN (5, 6, 7, 8, 9, 10) 
+) user_id 
+ORDER BY 2 DESC,1
+LIMIT 5;
+
+-- the same query with union all and reference table
+SELECT user_id, counter
+FROM (
+    SELECT user_id, value_2 % 10 AS counter FROM events_table WHERE event_type IN (1, 2, 3, 4, 5) 
+      UNION ALL
+    SELECT user_id, value_2 % 10 AS counter FROM events_reference_table WHERE event_type IN (5, 6, 7, 8, 9, 10) 
 ) user_id 
 ORDER BY 2 DESC,1
 LIMIT 5;
@@ -102,6 +122,21 @@ FROM (
 ) user_id 
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
 
+-- similar query this time more subqueries with reference table and target list contains a resjunk entry
+SELECT sum(counter) 
+FROM (
+    SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 20 GROUP BY user_id HAVING sum(value_2) > 500
+      UNION 
+    SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 40 and value_1 < 60 GROUP BY user_id HAVING sum(value_2) > 500
+      UNION
+    SELECT user_id, sum(value_2) AS counter FROM users_reference_table where value_1 < 60 and value_1 < 80 GROUP BY user_id HAVING sum(value_2) > 500
+        UNION
+    SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 80 and value_1 < 100 GROUP BY user_id HAVING sum(value_2) > 500
+        UNION
+    SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 100 and value_1 < 120 GROUP BY user_id HAVING sum(value_2) > 500
+) user_id 
+GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
+
 -- similar query as above, with UNION ALL
 SELECT sum(counter) 
 FROM (
@@ -134,6 +169,49 @@ FROM (
               user_id, sum(value_2) AS counter
             FROM 
               events_table
+            GROUP BY 
+              user_id) user_id_1
+         GROUP BY 
+          user_id)
+      UNION
+        (SELECT 
+            user_id, sum(counter)
+         FROM
+           (SELECT 
+              user_id, sum(value_2) AS counter
+            FROM 
+              users_table
+            GROUP BY 
+              user_id
+          UNION 
+            SELECT 
+              user_id, sum(value_2) AS counter          
+            FROM 
+              events_table
+            GROUP BY 
+              user_id) user_id_2
+         GROUP BY 
+            user_id)) AS ftop 
+ORDER BY 2 DESC, 1 DESC 
+LIMIT 5;
+
+-- unions within unions with reference table
+SELECT *
+FROM (
+        ( SELECT user_id,
+                 sum(counter)
+         FROM
+           (SELECT 
+              user_id, sum(value_2) AS counter
+            FROM 
+              users_table
+            GROUP BY 
+              user_id
+          UNION 
+            SELECT 
+              user_id, sum(value_2) AS counter
+            FROM 
+              events_reference_table
             GROUP BY 
               user_id) user_id_1
          GROUP BY 
@@ -375,6 +453,16 @@ FROM
   (SELECT user_id FROM users_table)
     UNION ALL
   (SELECT user_id FROM events_table)
+) b;
+
+-- some UNION ALL queries that are going to be pulled up with reference table
+SELECT 
+  count(*)
+FROM 
+(
+  (SELECT user_id FROM users_table)
+    UNION ALL
+  (SELECT user_id FROM events_reference_table)
 ) b;
 
 -- similar query without top level agg
@@ -724,3 +812,6 @@ GROUP BY types
 ORDER BY types;
 
 SET citus.enable_router_execution TO true;
+
+DROP TABLE events_reference_table;
+DROP TABLE users_reference_table;

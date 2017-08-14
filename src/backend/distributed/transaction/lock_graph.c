@@ -56,10 +56,8 @@ static void AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc,
 static void AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 						PROCStack *remaining);
 static WaitEdge * AllocWaitEdge(WaitGraph *waitGraph);
-static bool IsProcessWaitingForLock(PGPROC *proc);
 static bool IsSameLockGroup(PGPROC *leftProc, PGPROC *rightProc);
 static bool IsConflictingLockMask(int holdMask, int conflictMask);
-static bool IsInDistributedTransaction(BackendData *backendData);
 
 
 PG_FUNCTION_INFO_V1(dump_local_wait_edges);
@@ -91,7 +89,7 @@ dump_global_wait_edges(PG_FUNCTION_ARGS)
 WaitGraph *
 BuildGlobalWaitGraph(void)
 {
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 	ListCell *workerNodeCell = NULL;
 	char *nodeUser = CitusExtensionOwnerName();
 	List *connectionList = NIL;
@@ -503,11 +501,16 @@ BuildWaitGraphForSourceNode(int sourceNodeId)
 /*
  * LockLockData takes locks the shared lock data structure, which prevents
  * concurrent lock acquisitions/releases.
+ *
+ * The function also acquires lock on the backend shared memory to prevent
+ * new backends to start.
  */
 static void
 LockLockData(void)
 {
 	int partitionNum = 0;
+
+	LockBackendSharedMemory(LW_SHARED);
 
 	for (partitionNum = 0; partitionNum < NUM_LOCK_PARTITIONS; partitionNum++)
 	{
@@ -520,6 +523,9 @@ LockLockData(void)
  * UnlockLockData unlocks the locks on the shared lock data structure in reverse
  * order since LWLockRelease searches the given lock from the end of the
  * held_lwlocks array.
+ *
+ * The function also releases the shared memory lock to allow new backends to
+ * start.
  */
 static void
 UnlockLockData(void)
@@ -530,6 +536,8 @@ UnlockLockData(void)
 	{
 		LWLockRelease(LockHashPartitionLockByIndex(partitionNum));
 	}
+
+	UnlockBackendSharedMemory();
 }
 
 
@@ -700,7 +708,7 @@ AllocWaitEdge(WaitGraph *waitGraph)
 /*
  * IsProcessWaitingForLock returns whether a given process is waiting for a lock.
  */
-static bool
+bool
 IsProcessWaitingForLock(PGPROC *proc)
 {
 	return proc->waitStatus == STATUS_WAITING;
@@ -740,7 +748,7 @@ IsConflictingLockMask(int holdMask, int conflictMask)
  * IsInDistributedTransaction returns whether the given backend is in a
  * distributed transaction.
  */
-static bool
+bool
 IsInDistributedTransaction(BackendData *backendData)
 {
 	return backendData->transactionId.transactionNumber != 0;

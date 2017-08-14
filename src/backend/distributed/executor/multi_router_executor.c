@@ -34,6 +34,7 @@
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
@@ -70,18 +71,18 @@
 
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
+
+/* we've deprecated this flag, keeping here for some time not to break existing users */
 bool EnableDeadlockPrevention = true;
 
 /* functions needed during run phase */
-static void ReacquireMetadataLocks(List *taskList);
-static void AssignInsertTaskShardId(Query *jobQuery, List *taskList);
+static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
-static List * GetModifyConnections(Task *task, bool markCritical,
-								   bool startedInTransaction);
+static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
 static int64 ExecuteModifyTasks(List *taskList, bool expectResults,
@@ -98,25 +99,16 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 							 bool failOnError, int64 *rows);
 static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 							   int64 *rows);
+static LOCKMODE LockModeForModifyTask(Task *task);
 
 
 /*
- * ReacquireMetadataLocks re-acquires the metadata locks that are normally
- * acquired during planning.
- *
- * If we are executing a prepared statement, then planning might have
- * happened in a separate transaction and advisory locks are no longer
- * held. If a shard is currently being repaired/copied/moved, then
- * obtaining the locks will fail and this function throws an error to
- * prevent executing a stale plan.
- *
- * If we are executing a non-prepared statement or planning happened in
- * the same transaction, then we already have the locks and obtain them
- * again here. Since we always release these locks at the end of the
- * transaction, this is effectively a no-op.
+ * AcquireMetadataLocks acquires metadata locks on each of the anchor
+ * shards in the task list to prevent a shard being modified while it
+ * is being copied.
  */
 static void
-ReacquireMetadataLocks(List *taskList)
+AcquireMetadataLocks(List *taskList)
 {
 	ListCell *taskCell = NULL;
 
@@ -131,28 +123,7 @@ ReacquireMetadataLocks(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 
-		/*
-		 * Only obtain metadata locks for modifications to allow reads to
-		 * proceed during shard copy.
-		 */
-		if (task->taskType == MODIFY_TASK &&
-			!TryLockShardDistributionMetadata(task->anchorShardId, ShareLock))
-		{
-			/*
-			 * We could error out immediately to give quick feedback to the
-			 * client, but this might complicate flow control and our default
-			 * behaviour during shard copy is to block.
-			 *
-			 * Block until the lock becomes available such that the next command
-			 * will likely succeed and use the serialization failure error code
-			 * to signal to the client that it should retry the current command.
-			 */
-			LockShardDistributionMetadata(task->anchorShardId, ShareLock);
-
-			ereport(ERROR, (errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-							errmsg("prepared modifications cannot be executed on "
-								   "a shard while it is being copied")));
-		}
+		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
 }
 
@@ -327,6 +298,11 @@ AcquireExecutorMultiShardLocks(List *taskList)
 			lockMode = ExclusiveLock;
 		}
 
+		/*
+		 * If we are dealing with a partition we are also taking locks on parent table
+		 * to prevent deadlocks on concurrent operations on a partition and its parent.
+		 */
+		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
 		LockShardResource(task->anchorShardId, lockMode);
 
 		/*
@@ -427,75 +403,52 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	if (workerJob->requiresMasterEvaluation)
 	{
 		PlanState *planState = &(scanState->customScanState.ss.ps);
+		EState *executorState = planState->state;
 
 		ExecuteMasterEvaluableFunctions(jobQuery, planState);
 
+		/*
+		 * We've processed parameters in ExecuteMasterEvaluableFunctions and
+		 * don't need to send their values to workers, since they will be
+		 * represented as constants in the deparsed query. To avoid sending
+		 * parameter values, we set the parameter list to NULL.
+		 */
+		executorState->es_param_list_info = NULL;
+
 		if (deferredPruning)
 		{
-			AssignInsertTaskShardId(jobQuery, taskList);
+			DeferredErrorMessage *planningError = NULL;
+
+			/* need to perform shard pruning, rebuild the task list from scratch */
+			taskList = RouterInsertTaskList(jobQuery, &planningError);
+
+			if (planningError != NULL)
+			{
+				RaiseDeferredError(planningError, ERROR);
+			}
+
+			if (list_length(taskList) > 1)
+			{
+				node->methods = &RouterMultiModifyCustomExecMethods;
+			}
+
+			workerJob->taskList = taskList;
 		}
 
 		RebuildQueryStrings(jobQuery, taskList);
 	}
 
-	/*
-	 * If we are executing a prepared statement, then we may not yet have obtained
-	 * the metadata locks in this transaction. To prevent a concurrent shard copy,
-	 * we re-obtain them here or error out if a shard copy has already started.
-	 *
-	 * If a shard copy finishes in between fetching a plan from cache and
-	 * re-acquiring the locks, then we might still run a stale plan, which could
-	 * cause shard placements to diverge. To minimize this window, we take the
-	 * locks as early as possible.
-	 */
-	ReacquireMetadataLocks(taskList);
+	/* prevent concurrent placement changes */
+	AcquireMetadataLocks(taskList);
 
 	/*
-	 * If we deferred shard pruning to the executor, then we still need to assign
-	 * shard placements. We do this after acquiring the metadata locks to ensure
-	 * we can't get stale metadata. At some point, we may want to load all
-	 * placement metadata here.
+	 * We are taking locks on partitions of partitioned tables. These locks are
+	 * necessary for locking tables that appear in the SELECT part of the query.
 	 */
-	if (deferredPruning)
-	{
-		/* modify tasks are always assigned using first-replica policy */
-		workerJob->taskList = FirstReplicaAssignTaskList(taskList);
-	}
-}
+	LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
 
-
-/*
- * AssignInsertTaskShardId performs shard pruning for an insert and sets
- * anchorShardId accordingly.
- */
-static void
-AssignInsertTaskShardId(Query *jobQuery, List *taskList)
-{
-	ShardInterval *shardInterval = NULL;
-	Task *insertTask = NULL;
-	DeferredErrorMessage *planningError = NULL;
-
-	Assert(jobQuery->commandType == CMD_INSERT);
-
-	/*
-	 * We skipped shard pruning in the planner because the partition
-	 * column contained an expression. Perform shard pruning now.
-	 */
-	shardInterval = FindShardForInsert(jobQuery, &planningError);
-	if (planningError != NULL)
-	{
-		RaiseDeferredError(planningError, ERROR);
-	}
-	else if (shardInterval == NULL)
-	{
-		/* expression could not be evaluated */
-		ereport(ERROR, (errmsg("parameters in the partition column are not "
-							   "allowed")));
-	}
-
-	/* assign a shard ID to the task */
-	insertTask = (Task *) linitial(taskList);
-	insertTask->anchorShardId = shardInterval->shardId;
+	/* modify tasks are always assigned using first-replica policy */
+	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
 }
 
 
@@ -515,9 +468,13 @@ RouterSingleModifyExecScan(CustomScanState *node)
 		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		Task *task = (Task *) linitial(taskList);
 
-		ExecuteSingleModifyTask(scanState, task, hasReturning);
+		if (list_length(taskList) > 0)
+		{
+			Task *task = (Task *) linitial(taskList);
+
+			ExecuteSingleModifyTask(scanState, task, hasReturning);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -574,9 +531,16 @@ RouterSelectExecScan(CustomScanState *node)
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		Task *task = (Task *) linitial(taskList);
 
-		ExecuteSingleSelectTask(scanState, task);
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+
+		if (list_length(taskList) > 0)
+		{
+			Task *task = (Task *) linitial(taskList);
+
+			ExecuteSingleSelectTask(scanState, task);
+		}
 
 		scanState->finishedRemoteScan = true;
 	}
@@ -733,8 +697,9 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 
 	char *queryString = task->queryString;
 	bool taskRequiresTwoPhaseCommit = (task->replicationModel == REPLICATION_MODEL_2PC);
-	bool startedInTransaction =
-		InCoordinatedTransaction() && XactModificationLevel == XACT_MODIFICATION_DATA;
+
+	ShardInterval *shardInterval = LoadShardInterval(task->anchorShardId);
+	Oid relationId = shardInterval->relationId;
 
 	/*
 	 * Modifications for reference tables are always done using 2PC. First
@@ -764,9 +729,18 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	 * establish the connection, mark as critical (when modifying reference
 	 * table) and start a transaction (when in a transaction).
 	 */
-	connectionList = GetModifyConnections(task,
-										  taskRequiresTwoPhaseCommit,
-										  startedInTransaction);
+	connectionList = GetModifyConnections(task, taskRequiresTwoPhaseCommit);
+
+	/*
+	 * If we are dealing with a partitioned table, we also need to lock its
+	 * partitions.
+	 */
+	if (PartitionedTable(relationId))
+	{
+		LOCKMODE lockMode = LockModeForModifyTask(task);
+
+		LockPartitionRelations(relationId, lockMode);
+	}
 
 	/* prevent replicas of the same shard from diverging */
 	AcquireExecutorShardLock(task, operation);
@@ -862,12 +836,10 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
  * modify commands on the placements in tasPlacementList.  If necessary remote
  * transactions are started.
  *
- * If markCritical is true remote transactions are marked as critical. If
- * noNewTransactions is true, this function errors out if there's no
- * transaction in progress.
+ * If markCritical is true remote transactions are marked as critical.
  */
 static List *
-GetModifyConnections(Task *task, bool markCritical, bool noNewTransactions)
+GetModifyConnections(Task *task, bool markCritical)
 {
 	List *taskPlacementList = task->taskPlacementList;
 	ListCell *taskPlacementCell = NULL;
@@ -897,22 +869,17 @@ GetModifyConnections(Task *task, bool markCritical, bool noNewTransactions)
 													 NULL);
 
 		/*
-		 * If already in a transaction, disallow expanding set of remote
-		 * transactions. That prevents some forms of distributed deadlocks.
+		 * If we're expanding the set nodes that participate in the distributed
+		 * transaction, conform to MultiShardCommitProtocol.
 		 */
-		if (noNewTransactions)
+		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC &&
+			InCoordinatedTransaction() &&
+			XactModificationLevel == XACT_MODIFICATION_DATA)
 		{
 			RemoteTransaction *transaction = &multiConnection->remoteTransaction;
-
-			if (EnableDeadlockPrevention &&
-				transaction->transactionState == REMOTE_TRANS_INVALID)
+			if (transaction->transactionState == REMOTE_TRANS_INVALID)
 			{
-				ereport(ERROR, (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
-								errmsg("no transaction participant matches %s:%d",
-									   taskPlacement->nodeName, taskPlacement->nodePort),
-								errdetail("Transactions which modify distributed tables "
-										  "may only target nodes affected by the "
-										  "modification command which began the transaction.")));
+				CoordinatedTransactionUse2PC();
 			}
 		}
 
@@ -1010,6 +977,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	int64 totalAffectedTupleCount = 0;
 	ListCell *taskCell = NULL;
 	Task *firstTask = NULL;
+	ShardInterval *firstShardInterval = NULL;
 	int connectionFlags = 0;
 	List *affectedTupleCountList = NIL;
 	HTAB *shardConnectionHash = NULL;
@@ -1021,12 +989,24 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		return 0;
 	}
 
+	/*
+	 * In multi shard modification, we expect that all tasks operates on the
+	 * same relation, so it is enough to acquire a lock on the first task's
+	 * anchor relation's partitions.
+	 */
+	firstTask = (Task *) linitial(taskList);
+	firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
+	if (PartitionedTable(firstShardInterval->relationId))
+	{
+		LOCKMODE lockMode = LockModeForModifyTask(firstTask);
+
+		LockPartitionRelations(firstShardInterval->relationId, lockMode);
+	}
+
 	/* ensure that there are no concurrent modifications on the same shards */
 	AcquireExecutorMultiShardLocks(taskList);
 
 	BeginOrContinueCoordinatedTransaction();
-
-	firstTask = (Task *) linitial(taskList);
 
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
 		firstTask->replicationModel == REPLICATION_MODEL_2PC)
@@ -1526,4 +1506,30 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 	}
 
 	return gotResponse && !commandFailed;
+}
+
+
+/*
+ * LockModeForRouterModifyTask returns appropriate LOCKMODE for given router
+ * modify task.
+ */
+static LOCKMODE
+LockModeForModifyTask(Task *task)
+{
+	LOCKMODE lockMode = NoLock;
+	if (task->taskType == DDL_TASK)
+	{
+		lockMode = AccessExclusiveLock;
+	}
+	else if (task->taskType == MODIFY_TASK)
+	{
+		lockMode = RowExclusiveLock;
+	}
+	else
+	{
+		/* we do not allow any other task type in these code path */
+		Assert(false);
+	}
+
+	return lockMode;
 }

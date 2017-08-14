@@ -30,7 +30,7 @@ DETAIL:  Where clause includes a column other than partition column
 -- Check that free-form deletes are not supported.
 DELETE FROM customer_delete_protocol WHERE c_custkey > 100;
 ERROR:  cannot run DELETE command which targets multiple shards
-HINT:  Consider using an equality filter on partition column "c_custkey" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards(). You can also use master_apply_delete_command() to drop all shards satisfying delete criteria.
+HINT:  Consider using an equality filter on partition column "c_custkey" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
 -- Check that we delete a shard if and only if all rows in the shard satisfy the condition.
 SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol 
                                            WHERE c_custkey > 6500');

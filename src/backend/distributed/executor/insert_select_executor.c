@@ -14,8 +14,10 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_planner.h"
+#include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "executor/executor.h"
 #include "nodes/execnodes.h"
@@ -59,6 +61,16 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 		Oid targetRelationId = multiPlan->targetRelationId;
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
+
+		/*
+		 * If we are dealing with partitioned table, we also need to lock its
+		 * partitions. Here we only lock targetRelation, we acquire necessary
+		 * locks on selected tables during execution of those select queries.
+		 */
+		if (PartitionedTable(targetRelationId))
+		{
+			LockPartitionRelations(targetRelationId, RowExclusiveLock);
+		}
 
 		ExecuteSelectIntoRelation(targetRelationId, insertTargetList, selectQuery,
 								  executorState);

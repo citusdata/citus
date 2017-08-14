@@ -87,7 +87,7 @@ EXPLAIN (COSTS FALSE)
 
 -- Test insert
 EXPLAIN (COSTS FALSE)
-	INSERT INTO lineitem VALUES(1,0);
+	INSERT INTO lineitem VALUES (1,0), (2, 0), (3, 0), (4, 0);
 
 -- Test update
 EXPLAIN (COSTS FALSE)
@@ -99,6 +99,17 @@ EXPLAIN (COSTS FALSE)
 EXPLAIN (COSTS FALSE)
 	DELETE FROM lineitem
 	WHERE l_orderkey = 1 AND l_partkey = 0;
+
+-- Test zero-shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
+
+-- Test zero-shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem
+	WHERE l_orderkey = 1 AND l_orderkey = 0;
 
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)

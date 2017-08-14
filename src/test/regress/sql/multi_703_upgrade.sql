@@ -15,7 +15,8 @@ INSERT INTO pg_dist_shard_placement
 ALTER EXTENSION citus UPDATE TO '7.0-3';
 
 -- if you add a matching worker the upgrade should succeed
-SELECT master_add_node('localhost', :worker_1_port);
+INSERT INTO pg_dist_node (nodename, nodeport, groupid)
+  VALUES ('localhost', :worker_1_port, 1);
 ALTER EXTENSION citus UPDATE TO '7.0-3';
 
 SELECT * FROM pg_dist_placement;

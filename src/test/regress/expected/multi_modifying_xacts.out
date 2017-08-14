@@ -45,16 +45,28 @@ INSERT INTO researchers VALUES (1, 1, 'Donald Knuth');
 INSERT INTO researchers VALUES (2, 1, 'Niklaus Wirth');
 INSERT INTO researchers VALUES (3, 2, 'Tony Hoare');
 INSERT INTO researchers VALUES (4, 2, 'Kenneth Iverson');
--- replace a researcher, reusing their id
+-- replace a researcher, reusing their id in a multi-row INSERT
 BEGIN;
 DELETE FROM researchers WHERE lab_id = 1 AND id = 2;
-INSERT INTO researchers VALUES (2, 1, 'John Backus');
+INSERT INTO researchers VALUES (2, 1, 'John Backus'), (12, 1, 'Frances E. Allen');
 COMMIT;
-SELECT name FROM researchers WHERE lab_id = 1 AND id = 2;
-    name     
--------------
+SELECT name FROM researchers WHERE lab_id = 1 AND id % 10 = 2;
+       name       
+------------------
  John Backus
-(1 row)
+ Frances E. Allen
+(2 rows)
+
+-- and the other way around
+BEGIN;
+INSERT INTO researchers VALUES (14, 2, 'Alan Kay'), (15, 2, 'Barbara Liskov');
+DELETE FROM researchers WHERE id = 14 AND lab_id = 2;
+ROLLBACK;
+-- should have rolled everything back
+SELECT * FROM researchers WHERE id = 15 AND lab_id = 2;
+ id | lab_id | name 
+----+--------+------
+(0 rows)
 
 -- abort a modification
 BEGIN;
@@ -132,18 +144,18 @@ SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id;
   8 |      5 | Douglas Engelbart |  5 | Los Alamos
 (1 row)
 
--- but not the other way around (would require expanding xact participants)...
+-- and the other way around is also allowed
 BEGIN;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
-ERROR:  no transaction participant matches localhost:57638
-DETAIL:  Transactions which modify distributed tables may only target nodes affected by the modification command which began the transaction.
 COMMIT;
--- unless we disable deadlock prevention
+--  we should be able to expand the transaction participants
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO labs VALUES (6, 'Bell Labs');
 INSERT INTO researchers VALUES (9, 6, 'Leslie Lamport');
+ERROR:  duplicate key value violates unique constraint "avoid_name_confusion_idx_1200001"
+DETAIL:  Key (lab_id, name)=(6, Leslie Lamport) already exists.
+CONTEXT:  while executing command on localhost:57638
 ABORT;
 -- SELECTs may occur after a modification: First check that selecting
 -- from the modified node works.
@@ -152,7 +164,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
  count 
 -------
-     0
+     1
 (1 row)
 
 ABORT;
@@ -168,7 +180,7 @@ INSERT INTO labs VALUES (6, 'Bell Labs');
 SELECT count(*) FROM researchers WHERE lab_id = 6;
  count 
 -------
-     0
+     1
 (1 row)
 
 ABORT;
@@ -191,9 +203,10 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.labs'::
 (2 rows)
 
 SELECT * FROM labs WHERE id = 6;
- id | name 
-----+------
-(0 rows)
+ id |   name    
+----+-----------
+  6 | Bell Labs
+(1 row)
 
 -- COPY can happen after single row INSERT
 BEGIN;
@@ -207,6 +220,11 @@ INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
 ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
 CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
+ROLLBACK;
+-- but it is allowed after a multi-row insert
+BEGIN;
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
+\copy researchers from stdin delimiter ','
 ROLLBACK;
 -- after a COPY you can modify multiple shards, since they'll use different connections
 BEGIN;
@@ -254,9 +272,10 @@ DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
 COMMIT;
 -- verify rollback
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id | name 
-----+--------+------
-(0 rows)
+ id | lab_id |      name      
+----+--------+----------------
+  9 |      6 | Leslie Lamport
+(1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
@@ -281,9 +300,10 @@ DETAIL:  Key (lab_id, name)=(6,  'Bjarne Stroustrup') already exists.
 COMMIT;
 -- verify rollback
 SELECT * FROM researchers WHERE lab_id = 6;
- id | lab_id | name 
-----+--------+------
-(0 rows)
+ id | lab_id |      name      
+----+--------+----------------
+  9 |      6 | Leslie Lamport
+(1 row)
 
 SELECT count(*) FROM pg_dist_transaction;
  count 
@@ -299,9 +319,10 @@ COMMIT;
 SELECT * FROM researchers WHERE lab_id = 6;
  id | lab_id |         name         
 ----+--------+----------------------
+  9 |      6 | Leslie Lamport
  17 |      6 |  'Bjarne Stroustrup'
  18 |      6 |  'Dennis Ritchie'
-(2 rows)
+(3 rows)
 
 -- verify 2pc
 SELECT count(*) FROM pg_dist_transaction;
@@ -358,9 +379,10 @@ ERROR:  could not commit transaction on any active node
 SELECT * FROM researchers WHERE lab_id = 6;
  id | lab_id |         name         
 ----+--------+----------------------
+  9 |      6 | Leslie Lamport
  17 |      6 |  'Bjarne Stroustrup'
  18 |      6 |  'Dennis Ritchie'
-(2 rows)
+(3 rows)
 
 -- cleanup triggers and the function
 SELECT * from run_command_on_placements('researchers', 'drop trigger reject_large_researcher_id on %s')
@@ -411,7 +433,7 @@ ALTER TABLE labs ADD COLUMN motto text;
 SELECT master_modify_multiple_shards('DELETE FROM labs');
  master_modify_multiple_shards 
 -------------------------------
-                             7
+                             8
 (1 row)
 
 ALTER TABLE labs ADD COLUMN score float;
@@ -891,16 +913,13 @@ SELECT create_distributed_table('hash_modifying_xacts', 'key');
 BEGIN;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO reference_modifying_xacts VALUES (10, 10);
-ERROR:  no transaction participant matches localhost:57638
 COMMIT;
 -- it is allowed when turning off deadlock prevention
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO reference_modifying_xacts VALUES (10, 10);
 ABORT;
 BEGIN;
-SET citus.enable_deadlock_prevention TO off;
 INSERT INTO hash_modifying_xacts VALUES (1, 1);
 INSERT INTO hash_modifying_xacts VALUES (2, 2);
 ABORT;

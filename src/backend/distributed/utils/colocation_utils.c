@@ -17,6 +17,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_type.h"
 #include "commands/sequence.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
@@ -30,6 +31,7 @@
 #include "distributed/shardinterval_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -52,6 +54,7 @@ static void DeleteColocationGroup(uint32 colocationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(mark_tables_colocated);
+PG_FUNCTION_INFO_V1(get_colocated_shard_array);
 
 
 /*
@@ -88,6 +91,43 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * get_colocated_shards_array returns array of shards ids which are co-located with given
+ * shard.
+ */
+Datum
+get_colocated_shard_array(PG_FUNCTION_ARGS)
+{
+	uint32 shardId = PG_GETARG_UINT32(0);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+	ArrayType *colocatedShardsArrayType = NULL;
+	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
+	ListCell *colocatedShardCell = NULL;
+	int colocatedShardCount = list_length(colocatedShardList);
+	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
+	Oid arrayTypeId = OIDOID;
+	int colocatedShardIndex = 0;
+
+	foreach(colocatedShardCell, colocatedShardList)
+	{
+		ShardInterval *colocatedShardInterval = (ShardInterval *) lfirst(
+			colocatedShardCell);
+		uint64 colocatedShardId = colocatedShardInterval->shardId;
+
+		Datum colocatedShardDatum = Int64GetDatum(colocatedShardId);
+
+		colocatedShardsDatumArray[colocatedShardIndex] = colocatedShardDatum;
+		colocatedShardIndex++;
+	}
+
+	colocatedShardsArrayType = DatumArrayToArrayType(colocatedShardsDatumArray,
+													 colocatedShardCount, arrayTypeId);
+
+	PG_RETURN_ARRAYTYPE_P(colocatedShardsArrayType);
 }
 
 
@@ -890,6 +930,9 @@ ColocatedShardIntervalList(ShardInterval *shardInterval)
 /*
  * ColocatedTableId returns an arbitrary table which belongs to given colocation
  * group. If there is not such a colocation group, it returns invalid oid.
+ *
+ * This function also takes an AccessShareLock on the co-colocated table to
+ * guarantee that the table isn't dropped for the remainder of the transaction.
  */
 Oid
 ColocatedTableId(Oid colocationId)
@@ -916,7 +959,7 @@ ColocatedTableId(Oid colocationId)
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
 				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
 
-	/* prevent DELETE statements */
+	/* do not allow any tables to be dropped while we read from pg_dist_partition */
 	pgDistPartition = heap_open(DistPartitionRelationId(), ShareLock);
 	tupleDescriptor = RelationGetDescr(pgDistPartition);
 	scanDescriptor = systable_beginscan(pgDistPartition,
@@ -928,6 +971,9 @@ ColocatedTableId(Oid colocationId)
 	{
 		colocatedTableId = heap_getattr(heapTuple, Anum_pg_dist_partition_logicalrelid,
 										tupleDescriptor, &isNull);
+
+		/* make sure the table isn't dropped for the remainder of the transaction */
+		LockRelationOid(colocatedTableId, AccessShareLock);
 	}
 
 	systable_endscan(scanDescriptor);

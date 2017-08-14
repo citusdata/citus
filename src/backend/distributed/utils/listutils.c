@@ -13,6 +13,7 @@
 #include "c.h"
 #include "port.h"
 
+#include "utils/lsyscache.h"
 #include "distributed/listutils.h"
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
@@ -80,4 +81,24 @@ PointerArrayFromList(List *pointerList)
 	}
 
 	return pointerArray;
+}
+
+
+/*
+ * DatumArrayToArrayType converts the provided Datum array (of the specified
+ * length and type) into an ArrayType suitable for returning from a UDF.
+ */
+ArrayType *
+DatumArrayToArrayType(Datum *datumArray, int datumCount, Oid datumTypeId)
+{
+	ArrayType *arrayObject = NULL;
+	int16 typeLength = 0;
+	bool typeByValue = false;
+	char typeAlignment = 0;
+
+	get_typlenbyvalalign(datumTypeId, &typeLength, &typeByValue, &typeAlignment);
+	arrayObject = construct_array(datumArray, datumCount, datumTypeId,
+								  typeLength, typeByValue, typeAlignment);
+
+	return arrayObject;
 }

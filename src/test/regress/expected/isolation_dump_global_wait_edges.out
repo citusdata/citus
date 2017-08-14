@@ -29,11 +29,11 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-192            191            f              
+304            303            f              
 transactionnumberwaitingtransactionnumbers
 
-191                           
-192            191            
+303                           
+304            303            
 step s1-abort: 
     ABORT;
 
@@ -77,14 +77,14 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-196            195            f              
-197            195            f              
-197            196            t              
+308            307            f              
+309            307            f              
+309            308            t              
 transactionnumberwaitingtransactionnumbers
 
-195                           
-196            195            
-197            195,196        
+307                           
+308            307            
+309            307,308        
 step s1-abort: 
     ABORT;
 

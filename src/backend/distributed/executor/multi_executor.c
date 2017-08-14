@@ -25,6 +25,7 @@
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
+#include "distributed/resource_lock.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
@@ -66,7 +67,8 @@ static CustomExecMethods RouterSingleModifyCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods RouterMultiModifyCustomExecMethods = {
+/* not static to enable reference by multi-modify logic in router execution */
+CustomExecMethods RouterMultiModifyCustomExecMethods = {
 	.CustomName = "RouterMultiModifyScan",
 	.BeginCustomScan = CitusModifyBeginScan,
 	.ExecCustomScan = RouterMultiModifyExecScan,
@@ -158,8 +160,8 @@ RouterCreateScan(CustomScan *scan)
 
 	isModificationQuery = IsModifyMultiPlan(multiPlan);
 
-	/* check if this is a single shard query */
-	if (list_length(taskList) == 1)
+	/* check whether query has at most one shard */
+	if (list_length(taskList) <= 1)
 	{
 		if (isModificationQuery)
 		{
@@ -246,6 +248,9 @@ RealTimeExecScan(CustomScanState *node)
 	{
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
+
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
 		MultiRealTimeExecute(workerJob);
@@ -443,6 +448,9 @@ TaskTrackerExecScan(CustomScanState *node)
 	{
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
+
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
 		MultiTaskTrackerExecute(workerJob);

@@ -335,8 +335,8 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_mx_1220052
-              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052
+        ->  Update on lineitem_mx_1220052 lineitem_mx
+              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
 -- Test delete
@@ -348,10 +348,12 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_mx_1220052
-              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052
+        ->  Delete on lineitem_mx_1220052 lineitem_mx
+              ->  Index Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
                     Index Cond: (l_orderkey = 1)
                     Filter: (l_partkey = 0)
+-- make the outputs more consistent
+VACUUM ANALYZE lineitem_mx;
 -- Test single-shard SELECT
 EXPLAIN (COSTS FALSE)
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5;
@@ -360,10 +362,8 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Bitmap Heap Scan on lineitem_mx_1220055 lineitem_mx
-              Recheck Cond: (l_orderkey = 5)
-              ->  Bitmap Index Scan on lineitem_mx_pkey_1220055
-                    Index Cond: (l_orderkey = 5)
+        ->  Index Scan using lineitem_mx_pkey_1220055 on lineitem_mx_1220055 lineitem_mx
+              Index Cond: (l_orderkey = 5)
 SELECT true AS valid FROM explain_xml($$
 	SELECT l_quantity FROM lineitem_mx WHERE l_orderkey = 5$$);
 t
@@ -391,68 +391,68 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220052 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220053 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220053 on lineitem_mx_1220053 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220054 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220054 on lineitem_mx_1220054 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220055 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220055 on lineitem_mx_1220055 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220056 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220056 on lineitem_mx_1220056 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220057 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220057 on lineitem_mx_1220057 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220058 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220058 on lineitem_mx_1220058 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220059 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220059 on lineitem_mx_1220059 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220060 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220060 on lineitem_mx_1220060 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220061 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220061 on lineitem_mx_1220061 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220062 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220062 on lineitem_mx_1220062 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220063 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220063 on lineitem_mx_1220063 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220064 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220064 on lineitem_mx_1220064 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
@@ -461,13 +461,13 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220066 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220066 on lineitem_mx_1220066 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
         ->  Task
               Node: host=localhost port=57638 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220067 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220067 on lineitem_mx_1220067 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
 SELECT true AS valid FROM explain_xml($$
 	SELECT avg(l_linenumber) FROM lineitem_mx WHERE l_orderkey > 9030$$);
 t
@@ -486,8 +486,8 @@ Aggregate
         ->  Task
               Node: host=localhost port=57637 dbname=regression
               ->  Aggregate
-                    ->  Seq Scan on lineitem_mx_1220052 lineitem_mx
-                          Filter: (l_orderkey > 9030)
+                    ->  Index Only Scan using lineitem_mx_pkey_1220052 on lineitem_mx_1220052 lineitem_mx
+                          Index Cond: (l_orderkey > 9030)
 -- Test re-partition join
 SET citus.large_table_shard_count TO 1;
 EXPLAIN (COSTS FALSE)

@@ -190,7 +190,7 @@ CONTEXT:  while executing command on localhost:57638
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
 ERROR:  could not modify any active placements
 SET client_min_messages TO DEFAULT;
--- commands with non-constant partition values are unsupported
+-- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
 								 'sell', 0.58);
 -- values for other columns are totally fine
@@ -201,10 +201,36 @@ ERROR:  functions used in the WHERE clause of modification queries on distribute
 -- commands with mutable but non-volatile functions(ie: stable func.) in their quals
 -- (the cast to timestamp is because the timestamp_eq_timestamptz operator is stable)
 DELETE FROM limit_orders WHERE id = 246 AND placed_at = current_timestamp::timestamp;
--- commands with multiple rows are unsupported
-INSERT INTO limit_orders VALUES (DEFAULT), (DEFAULT);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Multi-row INSERTs to distributed tables are not supported.
+-- multi-row inserts are supported
+INSERT INTO limit_orders VALUES (12037, 'GOOG', 5634, '2001-04-16 03:37:28', 'buy', 0.50),
+                                (12038, 'GOOG', 5634, '2001-04-17 03:37:28', 'buy', 2.50),
+                                (12039, 'GOOG', 5634, '2001-04-18 03:37:28', 'buy', 1.50);
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 12037 AND 12039;
+ count 
+-------
+     3
+(1 row)
+
+-- even those with functions
+INSERT INTO limit_orders VALUES (22037, 'GOOG', 5634, now(), 'buy', 0.50),
+                                (22038, 'GOOG', 5634, now(), 'buy', 2.50),
+                                (22039, 'GOOG', 5634, now(), 'buy', 1.50);
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 22037 AND 22039;
+ count 
+-------
+     3
+(1 row)
+
+-- even those with functions in their partition columns
+INSERT INTO limit_orders VALUES (random() * 10 + 70000, 'GOOG', 5634, now(), 'buy', 0.50),
+                                (random() * 10 + 80000, 'GOOG', 5634, now(), 'buy', 2.50),
+                                (random() * 10 + 80090, 'GOOG', 5634, now(), 'buy', 1.50);
+SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 70000 AND 90000;
+ count 
+-------
+     3
+(1 row)
+
 -- Who says that? :)
 -- INSERT ... SELECT ... FROM commands are unsupported
 -- INSERT INTO limit_orders SELECT * FROM limit_orders;
@@ -657,3 +683,430 @@ INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *
 (1 row)
 
 DROP TABLE app_analytics_events;
+-- test UPDATE with subqueries
+CREATE TABLE raw_table (id bigint, value bigint);
+CREATE TABLE summary_table (
+	id bigint,
+	min_value numeric,
+	average_value numeric,
+	count int,
+	uniques int);
+SELECT create_distributed_table('raw_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SELECT create_distributed_table('summary_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO raw_table VALUES (1, 100);
+INSERT INTO raw_table VALUES (1, 200);
+INSERT INTO raw_table VALUES (1, 200);
+INSERT INTO raw_table VALUES (1, 300);
+INSERT INTO raw_table VALUES (2, 400);
+INSERT INTO raw_table VALUES (2, 500);
+INSERT INTO summary_table VALUES (1);
+INSERT INTO summary_table VALUES (2);
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value | average_value | count | uniques 
+----+-----------+---------------+-------+---------
+  1 |           |               |       |        
+  2 |           |               |       |        
+(2 rows)
+
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |           | 200.0000000000000000 |       |        
+  2 |           |                      |       |        
+(2 rows)
+
+-- try different syntax
+UPDATE summary_table SET (min_value, average_value) =
+	(SELECT min(value), avg(value) FROM raw_table WHERE id = 2)
+WHERE id = 2;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |           | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+UPDATE summary_table SET min_value = 100
+	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value > 100) AND id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- indeed, we don't need filter on UPDATE explicitly if SELECT already prunes to one shard
+UPDATE summary_table SET uniques = 2
+	WHERE id IN (SELECT id FROM raw_table WHERE id = 1 and value IN (100, 200));
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |       |       2
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- use inner results for non-partition column
+UPDATE summary_table SET uniques = NULL
+	WHERE min_value IN (SELECT value FROM raw_table WHERE id = 1) AND id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- these should not update anything
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1 AND id = 4;
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1 AND id = 4;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- update with NULL value
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND id = 4
+	) average_query
+WHERE id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 |                      |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- unsupported multi-shard updates
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table) average_query;
+ERROR:  cannot run UPDATE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
+UPDATE summary_table SET average_value = average_value + 1 WHERE id =
+  (SELECT id FROM raw_table WHERE value > 100);
+ERROR:  cannot run UPDATE command which targets multiple shards
+HINT:  Consider using an equality filter on partition column "id" to target a single shard. If you'd like to run a multi-shard operation, use master_modify_multiple_shards().
+-- test complex queries
+UPDATE summary_table
+SET
+       uniques = metrics.expensive_uniques,
+       count = metrics.total_count
+FROM
+		(SELECT
+			id,
+			count(DISTINCT (CASE WHEN value > 100 then value end)) AS expensive_uniques,
+			count(value) AS total_count
+        FROM raw_table
+        WHERE id = 1
+        GROUP BY id) metrics
+WHERE
+   summary_table.id = metrics.id AND
+   summary_table.id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 |                      |     4 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- test joins
+UPDATE summary_table SET count = count + 1 FROM raw_table
+	WHERE raw_table.id = summary_table.id AND summary_table.id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 |                      |     5 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- test with prepared statements
+PREPARE prepared_update_with_subquery(int, int) AS
+	UPDATE summary_table SET count = count + $1 FROM raw_table
+		WHERE raw_table.id = summary_table.id AND summary_table.id = $2;
+-- execute 6 times to trigger prepared statement usage
+EXECUTE prepared_update_with_subquery(10, 1);
+EXECUTE prepared_update_with_subquery(10, 1);
+EXECUTE prepared_update_with_subquery(10, 1);
+EXECUTE prepared_update_with_subquery(10, 1);
+EXECUTE prepared_update_with_subquery(10, 1);
+EXECUTE prepared_update_with_subquery(10, 1);
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 |                      |    65 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- test with reference tables
+CREATE TABLE reference_raw_table (id bigint, value bigint);
+CREATE TABLE reference_summary_table (
+	id bigint,
+	min_value numeric,
+	average_value numeric,
+	count int,
+	uniques int);
+SELECT create_reference_table('reference_raw_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+SELECT create_reference_table('reference_summary_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO reference_raw_table VALUES (1, 100);
+INSERT INTO reference_raw_table VALUES (1, 200);
+INSERT INTO reference_raw_table VALUES (1, 200);
+INSERT INTO reference_raw_table VALUES (1, 300);
+INSERT INTO reference_raw_table VALUES (2, 400);
+INSERT INTO reference_raw_table VALUES (2, 500);
+INSERT INTO reference_summary_table VALUES (1);
+INSERT INTO reference_summary_table VALUES (2);
+SELECT * FROM reference_summary_table ORDER BY id;
+ id | min_value | average_value | count | uniques 
+----+-----------+---------------+-------+---------
+  1 |           |               |       |        
+  2 |           |               |       |        
+(2 rows)
+
+UPDATE reference_summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM reference_raw_table WHERE id = 1
+	) average_query
+WHERE id = 1;
+UPDATE reference_summary_table SET (min_value, average_value) =
+	(SELECT min(value), avg(value) FROM reference_raw_table WHERE id = 2)
+WHERE id = 2;
+SELECT * FROM reference_summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |           | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |       |        
+(2 rows)
+
+-- no need partition colum equalities on reference tables
+UPDATE reference_summary_table SET (count) =
+	(SELECT id AS inner_id FROM reference_raw_table WHERE value = 500)
+WHERE min_value = 400;
+SELECT * FROM reference_summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |           | 200.0000000000000000 |       |        
+  2 |       400 | 450.0000000000000000 |     2 |        
+(2 rows)
+
+-- can read from a reference table and update a distributed table
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM reference_raw_table WHERE id = 1
+	) average_query
+WHERE id = 1;
+-- cannot read from a distributed table and update a reference table
+UPDATE reference_summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1
+	) average_query
+WHERE id = 1;
+ERROR:  cannot perform select on a distributed table and modify a reference table
+UPDATE reference_summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 1 AND  id = 2
+	) average_query
+WHERE id = 1;
+ERROR:  cannot perform select on a distributed table and modify a reference table
+-- test master_modify_multiple_shards() with subqueries and expect to fail
+SELECT master_modify_multiple_shards('
+	UPDATE summary_table SET average_value = average_query.average FROM (
+		SELECT avg(value) AS average FROM raw_table WHERE id = 1
+		) average_query
+	WHERE id = 1');
+ERROR:  cannot perform distributed planning for the given modifications
+DETAIL:  Subqueries are not supported in distributed modifications.
+-- test connection API via using COPY
+-- COPY on SELECT part
+BEGIN;
+\COPY raw_table FROM STDIN WITH CSV
+INSERT INTO summary_table VALUES (3);
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 3
+	) average_query
+WHERE id = 3;
+COMMIT;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |    65 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+  3 |           | 150.0000000000000000 |       |        
+(3 rows)
+
+-- COPY on UPDATE part
+BEGIN;
+INSERT INTO raw_table VALUES (4, 100);
+INSERT INTO raw_table VALUES (4, 200);
+\COPY summary_table FROM STDIN WITH CSV
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 4
+	) average_query
+WHERE id = 4;
+COMMIT;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |    65 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+(4 rows)
+
+-- COPY on both part
+BEGIN;
+\COPY raw_table FROM STDIN WITH CSV
+\COPY summary_table FROM STDIN WITH CSV
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM raw_table WHERE id = 5
+	) average_query
+WHERE id = 5;
+COMMIT;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |    65 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+(5 rows)
+
+-- COPY on reference tables
+BEGIN;
+\COPY reference_raw_table FROM STDIN WITH CSV
+\COPY summary_table FROM STDIN WITH CSV
+UPDATE summary_table SET average_value = average_query.average FROM (
+	SELECT avg(value) AS average FROM reference_raw_table WHERE id = 6
+	) average_query
+WHERE id = 6;
+COMMIT;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  1 |       100 | 200.0000000000000000 |    65 |       2
+  2 |       400 | 450.0000000000000000 |       |        
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+  6 |           | 150.0000000000000000 |       |        
+(6 rows)
+
+-- test DELETE queries
+SELECT * FROM raw_table ORDER BY id, value;
+ id | value 
+----+-------
+  1 |   100
+  1 |   200
+  1 |   200
+  1 |   300
+  2 |   400
+  2 |   500
+  3 |   100
+  3 |   200
+  4 |   100
+  4 |   200
+  5 |   100
+  5 |   200
+(12 rows)
+
+DELETE FROM summary_table
+  WHERE min_value IN (SELECT value FROM raw_table WHERE id = 1) AND id = 1;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  2 |       400 | 450.0000000000000000 |       |        
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+  6 |           | 150.0000000000000000 |       |        
+(5 rows)
+
+-- test with different syntax
+DELETE FROM summary_table USING raw_table
+  WHERE summary_table.id = raw_table.id AND raw_table.id = 2;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+  6 |           | 150.0000000000000000 |       |        
+(4 rows)
+
+-- cannot read from a distributed table and delete from a reference table
+DELETE FROM reference_summary_table USING raw_table
+  WHERE reference_summary_table.id = raw_table.id AND raw_table.id = 3;
+ERROR:  cannot perform select on a distributed table and modify a reference table
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+  6 |           | 150.0000000000000000 |       |        
+(4 rows)
+
+-- test connection API via using COPY with DELETEs
+BEGIN;
+\COPY summary_table FROM STDIN WITH CSV
+DELETE FROM summary_table USING raw_table
+  WHERE summary_table.id = raw_table.id AND raw_table.id = 1;
+DELETE FROM summary_table USING reference_raw_table
+  WHERE summary_table.id = reference_raw_table.id AND reference_raw_table.id = 2;
+COMMIT;
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value |    average_value     | count | uniques 
+----+-----------+----------------------+-------+---------
+  3 |           | 150.0000000000000000 |       |        
+  4 |           | 150.0000000000000000 |       |        
+  5 |           | 150.0000000000000000 |       |        
+  6 |           | 150.0000000000000000 |       |        
+(4 rows)
+
+-- test DELETEs with prepared statements
+PREPARE prepared_delete_with_join(int) AS
+	DELETE FROM summary_table USING raw_table
+  		WHERE summary_table.id = raw_table.id AND raw_table.id = $1;
+INSERT INTO raw_table VALUES (6, 100);
+-- execute 6 times to trigger prepared statement usage
+EXECUTE prepared_delete_with_join(1);
+EXECUTE prepared_delete_with_join(2);
+EXECUTE prepared_delete_with_join(3);
+EXECUTE prepared_delete_with_join(4);
+EXECUTE prepared_delete_with_join(5);
+EXECUTE prepared_delete_with_join(6);
+SELECT * FROM summary_table ORDER BY id;
+ id | min_value | average_value | count | uniques 
+----+-----------+---------------+-------+---------
+(0 rows)
+
+DROP TABLE raw_table;
+DROP TABLE summary_table;
+DROP TABLE reference_raw_table;
+DROP TABLE reference_summary_table;

@@ -24,6 +24,10 @@
 #include "commands/tablecmds.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#if (PG_VERSION_NUM >= 100000)
+#include "catalog/partition.h"
+#endif
+#include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
@@ -31,6 +35,7 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/placement_connection.h"
@@ -39,6 +44,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
+#include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/inval.h"
@@ -88,6 +94,12 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
+
+	/* don't allow the table to be dropped */
+	LockRelationOid(relationId, AccessShareLock);
+
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/*
 	 * We check whether the table is a foreign table or not. If it is, we set
@@ -340,11 +352,7 @@ CheckDistributedTable(Oid relationId)
 	char *relationName = get_rel_name(relationId);
 
 	/* check that the relationId belongs to a table */
-	char tableType = get_rel_relkind(relationId);
-	if (!(tableType == RELKIND_RELATION || tableType == RELKIND_FOREIGN_TABLE))
-	{
-		ereport(ERROR, (errmsg("relation \"%s\" is not a table", relationName)));
-	}
+	EnsureRelationKindSupported(relationId);
 
 	if (!IsDistributedTable(relationId))
 	{
@@ -368,6 +376,7 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	int placementsCreated = 0;
 	int attemptNumber = 0;
 	List *foreignConstraintCommandList = GetTableForeignConstraintCommands(relationId);
+	char *alterTableAttachPartitionCommand = NULL;
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(relationId, includeSequenceDefaults);
 	uint32 connectionFlag = FOR_DDL;
@@ -402,7 +411,8 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 		}
 
 		WorkerCreateShard(relationId, shardIndex, shardId, ddlCommandList,
-						  foreignConstraintCommandList, connection);
+						  foreignConstraintCommandList, alterTableAttachPartitionCommand,
+						  connection);
 
 		InsertShardPlacementRow(shardId, INVALID_PLACEMENT_ID, shardState, shardSize,
 								nodeGroupId);
@@ -482,6 +492,20 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	List *claimedConnectionList = NIL;
 	ListCell *connectionCell = NULL;
 	ListCell *shardPlacementCell = NULL;
+	int connectionFlags = FOR_DDL;
+	char *alterTableAttachPartitionCommand = NULL;
+
+	if (useExclusiveConnection)
+	{
+		connectionFlags |= CONNECTION_PER_PLACEMENT;
+	}
+
+
+	if (PartitionTable(distributedRelationId))
+	{
+		alterTableAttachPartitionCommand =
+			GenerateAlterTableAttachPartitionCommand(distributedRelationId);
+	}
 
 	BeginOrContinueCoordinatedTransaction();
 
@@ -498,7 +522,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 			shardIndex = ShardIndex(shardInterval);
 		}
 
-		connection = GetPlacementConnection(FOR_DDL, shardPlacement,
+		connection = GetPlacementConnection(connectionFlags, shardPlacement,
 											placementOwner);
 		if (useExclusiveConnection)
 		{
@@ -511,7 +535,7 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 
 		WorkerCreateShard(distributedRelationId, shardIndex, shardId,
 						  ddlCommandList, foreignConstraintCommandList,
-						  connection);
+						  alterTableAttachPartitionCommand, connection);
 	}
 
 	/*
@@ -534,7 +558,8 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
  */
 void
 WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlCommandList,
-				  List *foreignConstraintCommandList, MultiConnection *connection)
+				  List *foreignConstraintCommandList,
+				  char *alterTableAttachPartitionCommand, MultiConnection *connection)
 {
 	Oid schemaId = get_rel_namespace(relationId);
 	char *schemaName = get_namespace_name(schemaId);
@@ -611,6 +636,40 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 
 
 		ExecuteCriticalRemoteCommand(connection, applyForeignConstraintCommand->data);
+	}
+
+	/*
+	 * If the shard is created for a partition, send the command to create the
+	 * partitioning hierarcy on the shard.
+	 */
+	if (alterTableAttachPartitionCommand != NULL)
+	{
+		Oid parentRelationId = PartitionParentOid(relationId);
+		uint64 correspondingParentShardId = InvalidOid;
+		StringInfo applyAttachPartitionCommand = makeStringInfo();
+
+		Oid parentSchemaId = InvalidOid;
+		char *parentSchemaName = NULL;
+		char *escapedParentSchemaName = NULL;
+		char *escapedCommand = NULL;
+
+		Assert(PartitionTable(relationId));
+
+		parentSchemaId = get_rel_namespace(parentRelationId);
+		parentSchemaName = get_namespace_name(parentSchemaId);
+		escapedParentSchemaName = quote_literal_cstr(parentSchemaName);
+		escapedCommand = quote_literal_cstr(alterTableAttachPartitionCommand);
+
+		correspondingParentShardId = ColocatedShardIdInRelation(parentRelationId,
+																shardIndex);
+
+		appendStringInfo(applyAttachPartitionCommand,
+						 WORKER_APPLY_INTER_SHARD_DDL_COMMAND, correspondingParentShardId,
+						 escapedParentSchemaName, shardId, escapedSchemaName,
+						 escapedCommand);
+
+
+		ExecuteCriticalRemoteCommand(connection, applyAttachPartitionCommand->data);
 	}
 }
 

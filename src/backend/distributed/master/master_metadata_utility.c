@@ -158,7 +158,6 @@ static uint64
 DistributedTableSize(Oid relationId, char *sizeQuery)
 {
 	Relation relation = NULL;
-	Relation pgDistNode = NULL;
 	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
 	uint64 totalRelationSize = 0;
@@ -175,9 +174,7 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 
 	ErrorIfNotSuitableToGetSize(relationId);
 
-	pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
-
-	workerNodeList = ActivePrimaryNodeList();
+	workerNodeList = ActiveReadableNodeList();
 
 	foreach(workerNodeCell, workerNodeList)
 	{
@@ -187,7 +184,6 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 		totalRelationSize += relationSizeOnNode;
 	}
 
-	heap_close(pgDistNode, NoLock);
 	heap_close(relation, AccessShareLock);
 
 	return totalRelationSize;

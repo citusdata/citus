@@ -23,9 +23,11 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
 #include "distributed/connection_management.h"
+#include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_copy.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
@@ -56,8 +58,12 @@ static char *CitusVersion = CITUS_VERSION;
 
 void _PG_init(void);
 
+static void multi_log_hook(ErrorData *edata);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
+static void WarningForEnableDeadlockPrevention(bool newval, void *extra);
+static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
+											  GucSource source);
 static void NormalizeWorkerListPath(void);
 
 
@@ -86,6 +92,12 @@ static const struct config_enum_entry shard_placement_policy_options[] = {
 	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
 	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
 	{ "random", SHARD_PLACEMENT_RANDOM, false },
+	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry use_secondary_nodes_options[] = {
+	{ "never", USE_SECONDARY_NODES_NEVER, false },
+	{ "always", USE_SECONDARY_NODES_ALWAYS, false },
 	{ NULL, 0, false }
 };
 
@@ -167,6 +179,9 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 
+	/* register hook for error messages */
+	emit_log_hook = multi_log_hook;
+
 	InitializeMaintenanceDaemon();
 
 	/* organize that task tracker is started once server is up */
@@ -183,6 +198,27 @@ _PG_init(void)
 	{
 		SetConfigOption("allow_system_table_mods", "true", PGC_POSTMASTER,
 						PGC_S_OVERRIDE);
+	}
+}
+
+
+/*
+ * multi_log_hook intercepts postgres log commands. We use this to override
+ * postgres error messages when they're not specific enough for the users.
+ */
+static void
+multi_log_hook(ErrorData *edata)
+{
+	/*
+	 * Show the user a meaningful error message when a backend is cancelled
+	 * by the distributed deadlock detection.
+	 */
+	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
+		MyBackendGotCancelledDueToDeadlock())
+	{
+		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
+		edata->message = "canceling the transaction since it has "
+						 "involved in a distributed deadlock";
 	}
 }
 
@@ -327,6 +363,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.log_distributed_deadlock_detection",
+		gettext_noop("Log distributed deadlock detection related processing in "
+					 "the server log"),
+		NULL,
+		&LogDistributedDeadlockDetection,
+		false,
+		PGC_SIGHUP,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
 		gettext_noop("Enables Explain for distributed queries."),
 		gettext_noop("When enabled, the Explain command shows remote and local "
@@ -361,6 +408,19 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomRealVariable(
+		"citus.distributed_deadlock_detection_factor",
+		gettext_noop("Sets the time to wait before checking for distributed "
+					 "deadlocks. Postgres' deadlock_timeout setting is "
+					 "multiplied with the value. If the value is set to"
+					 "1000, distributed deadlock detection is disabled."),
+		NULL,
+		&DistributedDeadlockDetectionTimeoutFactor,
+		2.0, -1.0, 1000.0,
+		PGC_SIGHUP,
+		0,
+		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
 		gettext_noop("Prevents transactions from expanding to multiple nodes"),
@@ -372,7 +432,7 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
+		NULL, WarningForEnableDeadlockPrevention, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_ddl_propagation",
@@ -651,6 +711,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
+		"citus.use_secondary_nodes",
+		gettext_noop("Sets the policy to use when choosing nodes for SELECT queries."),
+		NULL,
+		&ReadFromSecondaries,
+		USE_SECONDARY_NODES_NEVER, use_secondary_nodes_options,
+		PGC_SU_BACKEND,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
 		"citus.multi_task_query_log_level",
 		gettext_noop("Sets the level of multi task query execution log messages"),
 		NULL,
@@ -667,6 +737,16 @@ RegisterCitusConfigVariables(void)
 		&CitusVersion,
 		CITUS_VERSION,
 		PGC_INTERNAL,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.cluster_name",
+		gettext_noop("Which cluster this node is a part of"),
+		NULL,
+		&CurrentCluster,
+		"default",
+		PGC_SU_BACKEND,
 		0,
 		NULL, NULL, NULL);
 
@@ -707,6 +787,39 @@ RegisterCitusConfigVariables(void)
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
+}
+
+
+/*
+ * Inform the users about the deprecated flag.
+ */
+static void
+WarningForEnableDeadlockPrevention(bool newval, void *extra)
+{
+	ereport(WARNING, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+					  errmsg("citus.enable_deadlock_prevention is deprecated and it has "
+							 "no effect. The flag will be removed in the next release.")));
+}
+
+
+/*
+ * We don't want to allow values less than 1.0. However, we define -1 as the value to disable
+ * distributed deadlock checking. Here we enforce our special constraint.
+ */
+static bool
+ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra, GucSource source)
+{
+	if (*newval <= 1.0 && *newval != -1.0)
+	{
+		ereport(WARNING, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						  errmsg(
+							  "citus.distributed_deadlock_detection_factor cannot be less than 1. "
+							  "To disable distributed deadlock detection set the value to -1.")));
+
+		return false;
+	}
+
+	return true;
 }
 
 

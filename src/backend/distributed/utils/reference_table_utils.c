@@ -28,6 +28,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "storage/lmgr.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
@@ -226,10 +227,13 @@ ReplicateSingleShardTableToAllWorkers(Oid relationId)
 static void
 ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 {
-	/* we do not use pgDistNode, we only obtain a lock on it to prevent modifications */
-	Relation pgDistNode = heap_open(DistNodeRelationId(), AccessShareLock);
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = NULL;
 	ListCell *workerNodeCell = NULL;
+
+	/* prevent concurrent pg_dist_node changes */
+	LockRelationOid(DistNodeRelationId(), RowShareLock);
+
+	workerNodeList = ActivePrimaryNodeList();
 
 	/*
 	 * We will iterate over all worker nodes and if healthy placement is not exist at
@@ -245,8 +249,6 @@ ReplicateShardToAllWorkers(ShardInterval *shardInterval)
 
 		ReplicateShardToNode(shardInterval, nodeName, nodePort);
 	}
-
-	heap_close(pgDistNode, NoLock);
 }
 
 

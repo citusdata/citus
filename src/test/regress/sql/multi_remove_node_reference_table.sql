@@ -47,7 +47,7 @@ SELECT master_disable_node('localhost', 9001);
 SELECT isactive FROM pg_dist_node WHERE nodeport = 9001;
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 -- make sure when we activate a secondary we don't add any placements
-SELECT master_activate_node('localhost', 9001);
+SELECT 1 FROM master_activate_node('localhost', 9001);
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 -- make sure when we remove a secondary we don't remove any placements
 SELECT master_remove_node('localhost', 9001);
@@ -119,14 +119,14 @@ WHERE
 SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- try to disable the node before removing it (this used to crash)
 SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for the next test
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- remove node in a transaction and ROLLBACK
 
@@ -261,7 +261,7 @@ WHERE
 \c - - - :master_port
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- test inserting a value then removing a node in a transaction
 
@@ -336,7 +336,7 @@ SELECT * FROM remove_node_reference_table;
 \c - - - :master_port
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 
 -- test executing DDL command then removing a node in a transaction
@@ -410,7 +410,7 @@ WHERE
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 
 -- test DROP table after removing a node in a transaction
@@ -450,7 +450,7 @@ WHERE
 SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- re-create remove_node_reference_table
 CREATE TABLE remove_node_reference_table(column1 int);
@@ -527,7 +527,7 @@ WHERE
 \c - - - :master_port     
      
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 
 -- test with master_disable_node
@@ -598,7 +598,7 @@ WHERE
 \c - - - :master_port
 
 -- re-add the node for next tests
-SELECT master_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 
 
 -- DROP tables to clean workspace

@@ -17,11 +17,13 @@
 #include "c.h"
 #include "miscadmin.h"
 
+#include "distributed/colocation_utils.h"
 #include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_router_executor.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_planner.h"
+#include "distributed/multi_router_executor.h"
 #include "distributed/relay_utility.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
@@ -319,15 +321,66 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 
 
 /*
- * LockMetadataSnapshot acquires a lock needed to serialize changes to pg_dist_node
- * and all other metadata changes. Operations that modify pg_dist_node should acquire
- * AccessExclusiveLock. All other metadata changes should acquire AccessShareLock. Any locks
- * acquired using this method are released at transaction end.
+ * LockParentShardResourceIfPartition checks whether the given shard belongs
+ * to a partition. If it does, LockParentShardResourceIfPartition acquires a
+ * shard resource lock on the colocated shard of the parent table.
  */
 void
-LockMetadataSnapshot(LOCKMODE lockMode)
+LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode)
 {
-	Assert(lockMode == AccessExclusiveLock || lockMode == AccessShareLock);
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid relationId = shardInterval->relationId;
 
-	(void) LockRelationOid(DistNodeRelationId(), lockMode);
+	if (PartitionTable(relationId))
+	{
+		int shardIndex = ShardIndex(shardInterval);
+		Oid parentRelationId = PartitionParentOid(relationId);
+		uint64 parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
+
+		LockShardResource(parentShardId, lockMode);
+	}
+}
+
+
+/*
+ * LockPartitionsInRelationList iterates over given list and acquires locks on
+ * partitions of each partitioned table. It does nothing for non-partitioned tables.
+ */
+void
+LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode)
+{
+	ListCell *relationIdCell = NULL;
+
+	foreach(relationIdCell, relationIdList)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+		if (PartitionedTable(relationId))
+		{
+			LockPartitionRelations(relationId, lockmode);
+		}
+	}
+}
+
+
+/*
+ * LockPartitionRelations acquires relation lock on all partitions of given
+ * partitioned relation. This function expects that given relation is a
+ * partitioned relation.
+ */
+void
+LockPartitionRelations(Oid relationId, LOCKMODE lockMode)
+{
+	/*
+	 * PartitionList function generates partition list in the same order
+	 * as PostgreSQL. Therefore we do not need to sort it before acquiring
+	 * locks.
+	 */
+	List *partitionList = PartitionList(relationId);
+	ListCell *partitionCell = NULL;
+
+	foreach(partitionCell, partitionList)
+	{
+		Oid partitionRelationId = lfirst_oid(partitionCell);
+		LockRelationOid(partitionRelationId, lockMode);
+	}
 }

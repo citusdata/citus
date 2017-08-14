@@ -1863,7 +1863,7 @@ BuildMapMergeJob(Query *jobQuery, List *dependedJobList, Var *partitionKey,
 static uint32
 HashPartitionCount(void)
 {
-	uint32 groupCount = ActivePrimaryNodeCount();
+	uint32 groupCount = ActiveReadableNodeCount();
 	double maxReduceTasksPerNode = MaxRunningTasksPerNode / 2.0;
 
 	uint32 partitionCount = (uint32) rint(groupCount * maxReduceTasksPerNode);
@@ -2061,7 +2061,16 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 		break;
 	}
 
-	Assert(targetCacheEntry != NULL);
+	/*
+	 * That means all tables are reference tables and we can pick any any of them
+	 * as an anchor table.
+	 */
+	if (targetCacheEntry == NULL)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(rangeTableList);
+		relationId = rangeTableEntry->relid;
+		targetCacheEntry = DistributedTableCacheEntry(relationId);
+	}
 
 	shardCount = targetCacheEntry->shardIntervalArrayLength;
 	for (shardOffset = 0; shardOffset < shardCount; shardOffset++)
@@ -2102,6 +2111,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 {
 	Oid firstTableRelationId = InvalidOid;
 	List *relationIdList = RelationIdList(query);
+	List *nonReferenceRelations = NIL;
 	ListCell *relationIdCell = NULL;
 	uint32 relationIndex = 0;
 	uint32 rangeDistributedRelationCount = 0;
@@ -2114,17 +2124,26 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		if (partitionMethod == DISTRIBUTE_BY_RANGE)
 		{
 			rangeDistributedRelationCount++;
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
 		}
 		else if (partitionMethod == DISTRIBUTE_BY_HASH)
 		{
 			hashDistributedRelationCount++;
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
+		}
+		else if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			/* do not need to handle reference tables */
+			continue;
 		}
 		else
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot push down this subquery"),
-							errdetail("Currently range and hash partitioned "
-									  "relations are supported")));
+							errdetail("Currently append partitioned relations "
+									  "are not supported")));
 		}
 	}
 
@@ -2136,7 +2155,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 								  "partitioned relations are unsupported")));
 	}
 
-	foreach(relationIdCell, relationIdList)
+	foreach(relationIdCell, nonReferenceRelations)
 	{
 		Oid relationId = lfirst_oid(relationIdCell);
 		bool coPartitionedTables = false;
@@ -2291,15 +2310,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	uint64 selectAnchorShardId = INVALID_SHARD_ID;
 	List *relationShardList = NIL;
 	uint64 jobId = INVALID_JOB_ID;
-	bool routerPlannable = false;
 	bool replacePrunedQueryWithDummy = false;
 	RelationRestrictionContext *copiedRestrictionContext =
 		CopyRelationRestrictionContext(restrictionContext);
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
-
-	/* such queries should go through router planner */
-	Assert(!restrictionContext->allReferenceTables);
+	DeferredErrorMessage *planningError = NULL;
 
 	/*
 	 * Add the restriction qual parameter value in all baserestrictinfos.
@@ -2314,6 +2330,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 		List *extendedBaseRestrictInfo = originalBaseRestrictInfo;
 
 		shardOpExpressions = ShardIntervalOpExpressions(shardInterval, rteIndex);
+
+		/* means it is a reference table and do not add any shard interval info */
+		if (shardOpExpressions == NIL)
+		{
+			continue;
+		}
 
 		shardRestrictionList = make_simple_restrictinfo((Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
@@ -2330,12 +2352,12 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	 * or not. If we can, we also rely on the side-effects that all RTEs have been
 	 * updated to point to the relevant nodes and selectPlacementList is determined.
 	 */
-	routerPlannable = RouterSelectQuery(taskQuery, copiedRestrictionContext,
-										&selectPlacementList, &selectAnchorShardId,
-										&relationShardList, replacePrunedQueryWithDummy);
+	planningError = PlanRouterQuery(taskQuery, copiedRestrictionContext,
+									&selectPlacementList, &selectAnchorShardId,
+									&relationShardList, replacePrunedQueryWithDummy);
 
 	/* we don't expect to this this error but keeping it as a precaution for future changes */
-	if (!routerPlannable)
+	if (planningError)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot perform distributed planning for the given "
@@ -2369,7 +2391,7 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 
 	subqueryTask = CreateBasicTask(jobId, taskId, SQL_TASK, queryString->data);
 	subqueryTask->dependedTaskList = NULL;
-	subqueryTask->anchorShardId = selectAnchorShardId;
+	subqueryTask->anchorShardId = shardInterval->shardId;
 	subqueryTask->taskPlacementList = selectPlacementList;
 	subqueryTask->upsertQuery = false;
 	subqueryTask->relationShardList = relationShardList;
@@ -4791,7 +4813,7 @@ GreedyAssignTaskList(List *taskList)
 	uint32 taskCount = list_length(taskList);
 
 	/* get the worker node list and sort the list */
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
 
 	/*
@@ -5223,7 +5245,7 @@ AssignDualHashTaskList(List *taskList)
 	 * if subsequent jobs have a small number of tasks, we won't allocate the
 	 * tasks to the same worker repeatedly.
 	 */
-	List *workerNodeList = ActivePrimaryNodeList();
+	List *workerNodeList = ActiveReadableNodeList();
 	uint32 workerNodeCount = (uint32) list_length(workerNodeList);
 	uint32 beginningNodeIndex = jobId % workerNodeCount;
 

@@ -29,6 +29,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distribution_column.h"
+#include "distributed/listutils.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -86,6 +87,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	EnsureSuperUser();
+	EnsureModificationsCanRun();
 	CheckCitusVersion(ERROR);
 
 	PreventTransactionChain(true, "start_metadata_sync_to_node");
@@ -110,6 +112,15 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	}
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+
+	if (!WorkerNodeIsPrimary(workerNode))
+	{
+		/*
+		 * If this is a secondary node we can't actually sync metadata to it; we assume
+		 * the primary node is receiving metadata.
+		 */
+		PG_RETURN_VOID();
+	}
 
 	/* generate and add the local group id's update query */
 	localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
@@ -217,10 +228,14 @@ MetadataCreateCommands(void)
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = DistributedTableList();
 	List *propagatedTableList = NIL;
-	List *workerNodeList = ActivePrimaryNodeList();
+	bool includeNodesFromOtherClusters = true;
+	List *workerNodeList = ReadWorkerNodes(includeNodesFromOtherClusters);
 	ListCell *distributedTableCell = NULL;
 	char *nodeListInsertCommand = NULL;
 	bool includeSequenceDefaults = true;
+
+	/* make sure we have deterministic output for our tests */
+	SortList(workerNodeList, CompareWorkerNodes);
 
 	/* generate insert command for pg_dist_node table */
 	nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
@@ -417,7 +432,7 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, isactive, noderole) VALUES ");
+					 "noderack, hasmetadata, isactive, noderole, nodecluster) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	foreach(workerNodeCell, workerNodeList)
@@ -431,7 +446,7 @@ NodeListInsertCommand(List *workerNodeList)
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole)",
+						 "(%d, %d, %s, %d, %s, %s, %s, '%s'::noderole, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -439,7 +454,8 @@ NodeListInsertCommand(List *workerNodeList)
 						 quote_literal_cstr(workerNode->workerRack),
 						 hasMetadataString,
 						 isActiveString,
-						 nodeRoleString);
+						 nodeRoleString,
+						 quote_literal_cstr(workerNode->nodeCluster));
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
