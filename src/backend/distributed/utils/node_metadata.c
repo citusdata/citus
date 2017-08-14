@@ -1367,13 +1367,13 @@ ParseWorkerNodeFileAndRename()
 		workerNodeList = lappend(workerNodeList, workerNode);
 	}
 
-	FreeFile(workerFileStream);
-	free(workerFilePath);
-
 	/* rename the file, marking that it is not used anymore */
 	appendStringInfo(renamedWorkerFilePath, "%s", workerFilePath);
 	appendStringInfo(renamedWorkerFilePath, ".obsolete");
 	rename(workerFilePath, renamedWorkerFilePath->data);
+
+	FreeFile(workerFileStream);
+	free(workerFilePath);
 
 	return workerNodeList;
 }
@@ -1424,7 +1424,17 @@ TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple)
 	{
 		Name nodeClusterName = DatumGetName(nodeCluster);
 		char *nodeClusterString = NameStr(*nodeClusterName);
-		strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
+
+		/*
+		 * nodeClusterString can be null if nodecluster column is not present.
+		 * In the case of extension creation/upgrade, master_initialize_node_metadata
+		 * function is called before the nodecluster column is added to pg_dist_node
+		 * table.
+		 */
+		if (nodeClusterString != NULL)
+		{
+			strlcpy(workerNode->nodeCluster, nodeClusterString, NAMEDATALEN);
+		}
 	}
 
 	return workerNode;
