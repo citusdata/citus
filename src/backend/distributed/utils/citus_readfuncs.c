@@ -205,6 +205,7 @@ ReadMultiPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(workerJob);
 	READ_NODE_FIELD(masterQuery);
 	READ_BOOL_FIELD(routerExecutable);
+	READ_NODE_FIELD(relationIdList);
 
 	READ_NODE_FIELD(insertSelectSubquery);
 	READ_NODE_FIELD(insertTargetList);

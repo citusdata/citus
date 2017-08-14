@@ -523,6 +523,8 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 		}
 	}
 
+	multiPlan->relationIdList = localPlan->relationOids;
+
 	multiPlanData = (Node *) multiPlan;
 
 	customScan->custom_private = list_make1(multiPlanData);

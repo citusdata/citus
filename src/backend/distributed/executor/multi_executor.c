@@ -25,6 +25,7 @@
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
+#include "distributed/resource_lock.h"
 #include "distributed/worker_protocol.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
@@ -248,6 +249,9 @@ RealTimeExecScan(CustomScanState *node)
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
 
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+
 		PrepareMasterJobDirectory(workerJob);
 		MultiRealTimeExecute(workerJob);
 
@@ -444,6 +448,9 @@ TaskTrackerExecScan(CustomScanState *node)
 	{
 		MultiPlan *multiPlan = scanState->multiPlan;
 		Job *workerJob = multiPlan->workerJob;
+
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
 		MultiTaskTrackerExecute(workerJob);
