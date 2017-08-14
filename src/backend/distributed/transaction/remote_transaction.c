@@ -946,7 +946,7 @@ void
 CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId)
 {
 	dlist_iter iter;
-	const bool raiseInterrupts = false;
+	const bool raiseInterrupts = true;
 	List *connectionList = NIL;
 
 	/* asynchronously send RELEASE SAVEPOINT */
