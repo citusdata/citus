@@ -170,6 +170,38 @@ SELECT * FROM researchers WHERE lab_id=10;
  12 |     10 | Edsger Dijkstra
 (1 row)
 
+-- Don't recover, but rollback
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+ERROR:  null value in column "id" violates not-null constraint
+RELEASE SAVEPOINT s1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SAVEPOINT s2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK;
+SELECT * FROM researchers WHERE lab_id=10;
+ id | lab_id |      name       
+----+--------+-----------------
+ 12 |     10 | Edsger Dijkstra
+(1 row)
+
+-- Don't recover, and commit
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+ERROR:  null value in column "id" violates not-null constraint
+RELEASE SAVEPOINT s1;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+SAVEPOINT s2;
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+SELECT * FROM researchers WHERE lab_id=10;
+ id | lab_id |      name       
+----+--------+-----------------
+ 12 |     10 | Edsger Dijkstra
+(1 row)
+
 -- Clean-up
 DROP TABLE artists;
 DROP TABLE researchers;

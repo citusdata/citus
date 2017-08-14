@@ -136,6 +136,26 @@ COMMIT;
 
 SELECT * FROM researchers WHERE lab_id=10;
 
+-- Don't recover, but rollback
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+RELEASE SAVEPOINT s1;
+SAVEPOINT s2;
+ROLLBACK;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
+-- Don't recover, and commit
+BEGIN;
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+RELEASE SAVEPOINT s1;
+SAVEPOINT s2;
+COMMIT;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
 -- Clean-up
 DROP TABLE artists;
 DROP TABLE researchers;
