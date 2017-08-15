@@ -125,9 +125,9 @@ COMMIT;
 -- Tests for replication factor > 1
 -- ===================================================================
 CREATE TABLE researchers (
-	id bigint NOT NULL,
+  id bigint NOT NULL,
   lab_id int NOT NULL,
-	name text NOT NULL
+  name text NOT NULL
 );
 SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
  master_create_distributed_table 
@@ -143,31 +143,31 @@ SELECT master_create_worker_shards('researchers', 2, 2);
 
 -- Basic rollback and release
 BEGIN;
-INSERT INTO researchers VALUES (7, 4, 'Jim Gray');
-SAVEPOINT hire_engelbart;
-INSERT INTO researchers VALUES (8, 4, 'Douglas Engelbart');
-ROLLBACK TO hire_engelbart;
-RELEASE SAVEPOINT hire_engelbart;
+INSERT INTO researchers VALUES (7, 4, 'Jan Plaza');
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
+ROLLBACK TO s1;
+RELEASE SAVEPOINT s1;
 COMMIT;
 SELECT * FROM researchers WHERE id in (7, 8);
- id | lab_id |   name   
-----+--------+----------
-  7 |      4 | Jim Gray
+ id | lab_id |   name    
+----+--------+-----------
+  7 |      4 | Jan Plaza
 (1 row)
 
 -- Recover from failure on one of nodes
 BEGIN;
 SAVEPOINT s1;
-INSERT INTO researchers VALUES (11, 11, 'Whitfield Diffie');
-INSERT INTO researchers VALUES (NULL, 10, 'Edsger Dijkstra');
+INSERT INTO researchers VALUES (11, 11, 'Dana Scott');
+INSERT INTO researchers VALUES (NULL, 10, 'Stephen Kleene');
 ERROR:  null value in column "id" violates not-null constraint
 ROLLBACK TO SAVEPOINT s1;
-INSERT INTO researchers VALUES (12, 10, 'Edsger Dijkstra');
+INSERT INTO researchers VALUES (12, 10, 'Stephen Kleene');
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
 
 -- Don't recover, but rollback
@@ -181,9 +181,9 @@ SAVEPOINT s2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
 
 -- Don't recover, and commit
@@ -197,16 +197,16 @@ SAVEPOINT s2;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
 
 -- Implicit savepoints via pl/pgsql exceptions
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
 EXCEPTION
     WHEN not_null_violation THEN
@@ -215,15 +215,15 @@ END $$;
 NOTICE:  caught not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
 
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   RAISE EXCEPTION plpgsql_error;
 EXCEPTION
     WHEN plpgsql_error THEN
@@ -232,15 +232,15 @@ END $$;
 NOTICE:  caught manual plpgsql_error
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
 
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
 EXCEPTION
     WHEN not_null_violation THEN
@@ -249,10 +249,28 @@ END $$;
 ERROR:  not_null_violation
 COMMIT;
 SELECT * FROM researchers WHERE lab_id=10;
- id | lab_id |      name       
-----+--------+-----------------
- 12 |     10 | Edsger Dijkstra
+ id | lab_id |      name      
+----+--------+----------------
+ 12 |     10 | Stephen Kleene
 (1 row)
+
+-- Insert something after catching error.
+BEGIN;
+DO $$
+BEGIN
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
+  INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+EXCEPTION
+    WHEN not_null_violation THEN
+        INSERT INTO researchers VALUES (32, 10, 'Raymond Smullyan');
+END $$;
+COMMIT;
+SELECT * FROM researchers WHERE lab_id=10;
+ id | lab_id |       name       
+----+--------+------------------
+ 12 |     10 | Stephen Kleene
+ 32 |     10 | Raymond Smullyan
+(2 rows)
 
 -- Clean-up
 DROP TABLE artists;

@@ -106,9 +106,9 @@ COMMIT;
 -- ===================================================================
 
 CREATE TABLE researchers (
-	id bigint NOT NULL,
+  id bigint NOT NULL,
   lab_id int NOT NULL,
-	name text NOT NULL
+  name text NOT NULL
 );
 
 SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
@@ -116,11 +116,11 @@ SELECT master_create_worker_shards('researchers', 2, 2);
 
 -- Basic rollback and release
 BEGIN;
-INSERT INTO researchers VALUES (7, 4, 'Jim Gray');
-SAVEPOINT hire_engelbart;
-INSERT INTO researchers VALUES (8, 4, 'Douglas Engelbart');
-ROLLBACK TO hire_engelbart;
-RELEASE SAVEPOINT hire_engelbart;
+INSERT INTO researchers VALUES (7, 4, 'Jan Plaza');
+SAVEPOINT s1;
+INSERT INTO researchers VALUES (8, 4, 'Alonzo Church');
+ROLLBACK TO s1;
+RELEASE SAVEPOINT s1;
 COMMIT;
 
 SELECT * FROM researchers WHERE id in (7, 8);
@@ -128,10 +128,10 @@ SELECT * FROM researchers WHERE id in (7, 8);
 -- Recover from failure on one of nodes
 BEGIN;
 SAVEPOINT s1;
-INSERT INTO researchers VALUES (11, 11, 'Whitfield Diffie');
-INSERT INTO researchers VALUES (NULL, 10, 'Edsger Dijkstra');
+INSERT INTO researchers VALUES (11, 11, 'Dana Scott');
+INSERT INTO researchers VALUES (NULL, 10, 'Stephen Kleene');
 ROLLBACK TO SAVEPOINT s1;
-INSERT INTO researchers VALUES (12, 10, 'Edsger Dijkstra');
+INSERT INTO researchers VALUES (12, 10, 'Stephen Kleene');
 COMMIT;
 
 SELECT * FROM researchers WHERE lab_id=10;
@@ -160,7 +160,7 @@ SELECT * FROM researchers WHERE lab_id=10;
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
 EXCEPTION
     WHEN not_null_violation THEN
@@ -173,7 +173,7 @@ SELECT * FROM researchers WHERE lab_id=10;
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   RAISE EXCEPTION plpgsql_error;
 EXCEPTION
     WHEN plpgsql_error THEN
@@ -186,11 +186,25 @@ SELECT * FROM researchers WHERE lab_id=10;
 BEGIN;
 DO $$
 BEGIN
-	INSERT INTO researchers VALUES (15, 10, 'Eric S. Raymond');
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
   INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
 EXCEPTION
     WHEN not_null_violation THEN
         RAISE EXCEPTION not_null_violation; -- rethrow it
+END $$;
+COMMIT;
+
+SELECT * FROM researchers WHERE lab_id=10;
+
+-- Insert something after catching error.
+BEGIN;
+DO $$
+BEGIN
+  INSERT INTO researchers VALUES (15, 10, 'Melvin Fitting');
+  INSERT INTO researchers VALUES (NULL, 10, 'Raymond Smullyan');
+EXCEPTION
+    WHEN not_null_violation THEN
+        INSERT INTO researchers VALUES (32, 10, 'Raymond Smullyan');
 END $$;
 COMMIT;
 
