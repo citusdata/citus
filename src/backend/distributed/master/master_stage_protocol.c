@@ -483,6 +483,7 @@ void
 CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
+	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(distributedRelationId);
 	char *placementOwner = TableOwner(distributedRelationId);
 	bool includeSequenceDefaults = false;
 	List *ddlCommandList = GetTableDDLEvents(distributedRelationId,
@@ -508,6 +509,12 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 	}
 
 	BeginOrContinueCoordinatedTransaction();
+
+	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC ||
+		cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
+	{
+		CoordinatedTransactionUse2PC();
+	}
 
 	foreach(shardPlacementCell, shardPlacements)
 	{
