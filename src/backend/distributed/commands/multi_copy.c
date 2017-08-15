@@ -244,6 +244,7 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 	uint32 connectionFlags = FOR_DML;
 
 	masterConnection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+	MarkRemoteTransactionCritical(masterConnection);
 	ClaimConnectionExclusively(masterConnection);
 
 	RemoteTransactionBeginIfNecessary(masterConnection);
