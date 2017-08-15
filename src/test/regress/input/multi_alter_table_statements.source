@@ -214,7 +214,7 @@ SAVEPOINT my_savepoint;
 CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
 ROLLBACK;
 
--- but that actually rolling back to it is not
+-- and also rolling back to it is also allowed
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SAVEPOINT my_savepoint;
@@ -223,6 +223,7 @@ ROLLBACK TO my_savepoint;
 COMMIT;
 
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
+DROP INDEX temp_index_2;
 
 -- Add column on only one worker...
 \c - - - :worker_2_port

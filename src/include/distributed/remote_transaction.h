@@ -61,6 +61,19 @@ typedef struct RemoteTransaction
 	/* failed in current transaction */
 	bool transactionFailed;
 
+	/*
+	 * Id of last savepoint that successfully began before transaction failure.
+	 * Since savepoint ids are assigned incrementally, rolling back to any savepoint
+	 * with id equal to or less than this id recovers the transaction from failures.
+	 */
+	SubTransactionId lastSuccessfulSubXact;
+
+	/* Id of last savepoint queued before first query of transaction */
+	SubTransactionId lastQueuedSubXact;
+
+	/* waiting for the result of a recovering ROLLBACK TO SAVEPOINT command */
+	bool transactionRecovering;
+
 	/* 2PC transaction name currently associated with connection */
 	char preparedName[NAMEDATALEN];
 } RemoteTransaction;
@@ -106,5 +119,10 @@ extern void ResetRemoteTransaction(struct MultiConnection *connection);
 extern void CoordinatedRemoteTransactionsPrepare(void);
 extern void CoordinatedRemoteTransactionsCommit(void);
 extern void CoordinatedRemoteTransactionsAbort(void);
+
+/* remote savepoint commands */
+extern void CoordinatedRemoteTransactionsSavepointBegin(SubTransactionId subId);
+extern void CoordinatedRemoteTransactionsSavepointRelease(SubTransactionId subId);
+extern void CoordinatedRemoteTransactionsSavepointRollback(SubTransactionId subId);
 
 #endif /* REMOTE_TRANSACTION_H */

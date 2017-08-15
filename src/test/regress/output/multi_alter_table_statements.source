@@ -505,19 +505,20 @@ CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SAVEPOINT my_savepoint;
 CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
 ROLLBACK;
--- but that actually rolling back to it is not
+-- and also rolling back to it is also allowed
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SAVEPOINT my_savepoint;
 CREATE INDEX temp_index_3 ON lineitem_alter(l_partkey);
 ROLLBACK TO my_savepoint;
 COMMIT;
-ERROR:  cannot ROLLBACK TO SAVEPOINT in transactions which modify distributed tables
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
- indexname | tablename 
------------+-----------
-(0 rows)
+  indexname   |   tablename    
+--------------+----------------
+ temp_index_2 | lineitem_alter
+(1 row)
 
+DROP INDEX temp_index_2;
 -- Add column on only one worker...
 \c - - - :worker_2_port
 ALTER TABLE lineitem_alter_220000 ADD COLUMN first integer;
