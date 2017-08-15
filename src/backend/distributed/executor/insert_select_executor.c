@@ -102,8 +102,6 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
 
 	CitusCopyDestReceiver *copyDest = NULL;
 
-	BeginOrContinueCoordinatedTransaction();
-
 	partitionMethod = PartitionMethod(targetRelationId);
 	if (partitionMethod == DISTRIBUTE_BY_NONE)
 	{

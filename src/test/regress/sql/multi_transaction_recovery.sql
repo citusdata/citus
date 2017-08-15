@@ -40,9 +40,21 @@ SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
 SET citus.multi_shard_commit_protocol TO '2pc';
 
+-- create_distributed_table should add 2 recovery records (1 connection per node)
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
+SELECT count(*) FROM pg_dist_transaction;
+
+-- create_reference_table should add another 2 recovery records
+CREATE TABLE test_recovery_ref (x text);
+SELECT create_reference_table('test_recovery_ref');
+SELECT count(*) FROM pg_dist_transaction;
+
+SELECT recover_prepared_transactions();
+
+-- plain INSERT does not use 2PC
 INSERT INTO test_recovery VALUES ('hello');
+SELECT count(*) FROM pg_dist_transaction;
 
 -- Committed DDL commands should write 4 transaction recovery records
 BEGIN;
@@ -78,7 +90,21 @@ INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 
 SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
-SELECT count(*) FROM pg_dist_transaction;
 
-\c - - - :master_port
+-- Committed INSERT..SELECT via coordinator should write 4 transaction recovery records
+INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- Committed COPY should write 4 transaction records
+COPY test_recovery (x) FROM STDIN CSV;
+hello-0
+hello-1
+\.
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
