@@ -468,7 +468,11 @@ HINT:  Consider using hash partitioning.
 \c - - - 57637
 -- Test copy from the worker node
 COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
+-- Make sure we don't use 2PC when connecting to master, even if requested
+BEGIN;
+SET LOCAL citus.multi_shard_commit_protocol TO '2pc';
 COPY customer_worker_copy_append FROM '@abs_srcdir@/data/customer.2.data' with (delimiter '|', master_host 'localhost', master_port 57636);
+COMMIT;
 -- Test if there is no relation to copy data with the worker copy
 COPY lineitem_copy_none FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', master_host 'localhost', master_port 57636);
 WARNING:  relation "lineitem_copy_none" does not exist

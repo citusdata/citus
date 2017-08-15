@@ -151,10 +151,6 @@ CitusCopyFrom(CopyStmt *copyStatement, char *completionTag)
 	bool isCopyFromWorker = false;
 
 	BeginOrContinueCoordinatedTransaction();
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-	{
-		CoordinatedTransactionUse2PC();
-	}
 
 	/* disallow COPY to/from file or program except for superusers */
 	if (copyStatement->filename != NULL && !superuser())
@@ -244,6 +240,7 @@ CopyFromWorkerNode(CopyStmt *copyStatement, char *completionTag)
 	uint32 connectionFlags = FOR_DML;
 
 	masterConnection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+	MarkRemoteTransactionCritical(masterConnection);
 	ClaimConnectionExclusively(masterConnection);
 
 	RemoteTransactionBeginIfNecessary(masterConnection);
@@ -1834,7 +1831,10 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	/* keep the table metadata to avoid looking it up for every tuple */
 	copyDest->tableMetadata = cacheEntry;
 
-	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC)
+	BeginOrContinueCoordinatedTransaction();
+
+	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
+		MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
 		CoordinatedTransactionUse2PC();
 	}
