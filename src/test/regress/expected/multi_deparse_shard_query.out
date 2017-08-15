@@ -410,8 +410,6 @@ INFO:  query: INSERT INTO public.raw_events_1 (tenant_id, value_4, value_6, valu
 
 -- test dropped table as well
 ALTER TABLE raw_events_1 DROP COLUMN value_5;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT deparse_shard_query_test('
 INSERT INTO raw_events_1(tenant_id, value_7, value_4)
 SELECT

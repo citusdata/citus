@@ -64,8 +64,6 @@ SELECT master_create_empty_shard('index_test_append');
 --
 -- Verify that we can create different types of indexes
 CREATE INDEX lineitem_orderkey_index ON lineitem (l_orderkey);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX lineitem_partkey_desc_index ON lineitem (l_partkey DESC);
 CREATE INDEX lineitem_partial_index ON lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
@@ -210,8 +208,6 @@ ERROR:  cannot drop multiple distributed objects in a single command
 HINT:  Try dropping each object in a separate DROP command.
 -- Verify that we can succesfully drop indexes
 DROP INDEX lineitem_orderkey_index;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;

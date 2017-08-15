@@ -38,8 +38,6 @@ SELECT * FROM example;
 
 -- non-immutable functions inside CASE/COALESCE aren't allowed
 ALTER TABLE example DROP value;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE example ADD value timestamp;
 -- this is allowed because there are no mutable funcs in the CASE
 UPDATE example SET value = (CASE WHEN value > timestamp '12-12-1991' THEN timestamp '12-12-1991' ELSE value + interval '1 hour' END) WHERE key = 1;

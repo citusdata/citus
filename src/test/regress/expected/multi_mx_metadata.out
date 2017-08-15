@@ -1,12 +1,15 @@
 -- Test creation of mx tables and metadata syncing
--- get rid of the previously created entries in pg_dist_transaction
--- for the sake of getting consistent results in this test file
-SELECT recover_prepared_transactions();
- recover_prepared_transactions 
--------------------------------
-                             0
+-- Temporarily disable automatic 2PC recovery
+ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
 (1 row)
 
+-- get rid of the previously created entries in pg_dist_transaction
+-- for the sake of getting consistent results in this test file
+TRUNCATE pg_dist_transaction;
 CREATE TABLE distributed_mx_table (
     key text primary key,
     value jsonb
@@ -25,7 +28,7 @@ SELECT create_distributed_table('distributed_mx_table', 'key');
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
-     5
+     2
 (1 row)
 
 -- Confirm that the metadata transactions have been committed
@@ -39,7 +42,7 @@ SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
-     3
+     0
 (1 row)
 
 \c - - - :worker_1_port
@@ -267,7 +270,7 @@ SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
-     3
+     0
 (1 row)
 
 -- Confirm that transactions were correctly rolled forward
@@ -282,5 +285,14 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
  count 
 -------
      1
+(1 row)
+
+-- Resume ordinary recovery
+\c - - - :master_port
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
 (1 row)
 

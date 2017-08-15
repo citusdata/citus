@@ -9,6 +9,10 @@ SELECT create_distributed_table('test_recovery', 'x');
 
 \c - - - :worker_1_port
 
+-- Disable auto-recovery for the initial tests
+ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
+SELECT pg_reload_conf();
+
 SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- Ensure pg_dist_transaction is empty for test
@@ -68,7 +72,14 @@ world-1
 \.
 
 SELECT count(*) FROM pg_dist_transaction;
-SELECT recover_prepared_transactions();
+
+-- Test whether auto-recovery runs
+ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.2);
+SELECT count(*) FROM pg_dist_transaction;
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+SELECT pg_reload_conf();
 
 DROP TABLE table_should_commit;
 

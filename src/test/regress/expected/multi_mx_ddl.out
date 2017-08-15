@@ -14,8 +14,6 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 
 -- CREATE INDEX
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX CONCURRENTLY ddl_test_concurrent_index ON mx_ddl_table(value);
 -- ADD COLUMN
 ALTER TABLE mx_ddl_table ADD COLUMN version INTEGER;
@@ -143,8 +141,6 @@ INSERT INTO mx_ddl_table VALUES (38, 78);
 \c - - - :master_port
 -- SET DATA TYPE
 ALTER TABLE mx_ddl_table ALTER COLUMN version SET DATA TYPE double precision;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO mx_ddl_table VALUES (78, 83, 2.1);
 \c - - - :worker_1_port
 SELECT * FROM mx_ddl_table ORDER BY key;
@@ -167,8 +163,6 @@ SELECT * FROM mx_ddl_table ORDER BY key;
 \c - - - :master_port
 -- DROP INDEX
 DROP INDEX ddl_test_index;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP INDEX CONCURRENTLY ddl_test_concurrent_index;
 -- DROP DEFAULT
 ALTER TABLE mx_ddl_table ALTER COLUMN version DROP DEFAULT;
@@ -249,8 +243,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ddl_table_1
 SET client_min_messages TO debug2;
 CREATE INDEX ddl_test_index ON mx_ddl_table(value);
 DEBUG:  building index "ddl_test_index" on table "mx_ddl_table"
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 RESET client_min_messages;
 DROP INDEX ddl_test_index;
 -- show that sequences owned by mx tables result in unique values
@@ -279,6 +271,4 @@ SELECT :worker_1_lastval = :worker_2_lastval;
 
 -- the type of sequences can't be changed
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE mx_sequence ALTER value TYPE INT;
