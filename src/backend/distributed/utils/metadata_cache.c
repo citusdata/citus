@@ -2348,9 +2348,15 @@ GetWorkerNodeHash(void)
 
 	/*
 	 * Simulate a SELECT from pg_dist_node, ensure pg_dist_node doesn't change while our
-	 * caller is using WorkerNodeHash.
+	 * caller is using GetWorkerNodeHash.
 	 */
 	LockRelationOid(DistNodeRelationId(), AccessShareLock);
+
+	/* make sure that citus extension still exists */
+	if (!CitusHasBeenLoaded())
+	{
+		ereport(ERROR, (errmsg("citus extension has been dropped")));
+	}
 
 	/*
 	 * We might have some concurrent metadata changes. In order to get the changes,
