@@ -159,6 +159,7 @@ test: multi_repartition_udt
 test: multi_repartitioned_subquery_udf
 test: multi_modifying_xacts
 test: multi_transaction_recovery
+test: multi_subtransactions
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY

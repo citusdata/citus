@@ -82,7 +82,7 @@ EXCEPTION
 END $$;
 COMMIT;
 
--- but rollback should not
+-- rollback should also work
 BEGIN;
 INSERT INTO researchers VALUES (7, 4, 'Jim Gray');
 SAVEPOINT hire_engelbart;
@@ -1108,4 +1108,4 @@ SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 2;
 SELECT * FROM users JOIN usergroups ON (user_group = gid) WHERE id = 4;
 END;
 
-DROP TABLE items, users, itemgroups, usergroups;
+DROP TABLE items, users, itemgroups, usergroups, researchers, labs;

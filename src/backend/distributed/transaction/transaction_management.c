@@ -27,6 +27,7 @@
 #include "distributed/placement_connection.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
+#include "utils/memutils.h"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -41,8 +42,8 @@ XactModificationType XactModificationLevel = XACT_MODIFICATION_NONE;
 /* list of connections that are part of the current coordinated transaction */
 dlist_head InProgressTransactions = DLIST_STATIC_INIT(InProgressTransactions);
 
-
-static bool subXactAbortAttempted = false;
+/* stack of active sub-transactions */
+static List *activeSubXacts = NIL;
 
 /*
  * Should this coordinated transaction use 2PC? Set by
@@ -58,6 +59,8 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 
 /* remaining functions */
 static void AdjustMaxPreparedTransactions(void);
+static void PushSubXact(SubTransactionId subId);
+static void PopSubXact(SubTransactionId subId);
 
 
 /*
@@ -166,7 +169,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 				AfterXactConnectionHandling(true);
 			}
 
-			Assert(!subXactAbortAttempted);
 			CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
@@ -208,7 +210,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
-			subXactAbortAttempted = false;
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -227,18 +228,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PRE_COMMIT:
 		{
-			if (subXactAbortAttempted)
-			{
-				subXactAbortAttempted = false;
-
-				if (XactModificationLevel != XACT_MODIFICATION_NONE)
-				{
-					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-									errmsg("cannot ROLLBACK TO SAVEPOINT in transactions "
-										   "which modify distributed tables")));
-				}
-			}
-
 			/* nothing further to do if there's no managed remote xacts */
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_NONE)
 			{
@@ -308,9 +297,43 @@ static void
 CoordinatedSubTransactionCallback(SubXactEvent event, SubTransactionId subId,
 								  SubTransactionId parentSubid, void *arg)
 {
-	if (event == SUBXACT_EVENT_ABORT_SUB)
+	switch (event)
 	{
-		subXactAbortAttempted = true;
+		case SUBXACT_EVENT_START_SUB:
+		{
+			PushSubXact(subId);
+			if (InCoordinatedTransaction())
+			{
+				CoordinatedRemoteTransactionsSavepointBegin(subId);
+			}
+			break;
+		}
+
+		case SUBXACT_EVENT_COMMIT_SUB:
+		{
+			PopSubXact(subId);
+			if (InCoordinatedTransaction())
+			{
+				CoordinatedRemoteTransactionsSavepointRelease(subId);
+			}
+			break;
+		}
+
+		case SUBXACT_EVENT_ABORT_SUB:
+		{
+			PopSubXact(subId);
+			if (InCoordinatedTransaction())
+			{
+				CoordinatedRemoteTransactionsSavepointRollback(subId);
+			}
+			break;
+		}
+
+		case SUBXACT_EVENT_PRE_COMMIT_SUB:
+		{
+			/* nothing to do */
+			break;
+		}
 	}
 }
 
@@ -343,4 +366,46 @@ AdjustMaxPreparedTransactions(void)
 					  errdetail("max_prepared_transactions is now set to %s",
 								newvalue)));
 	}
+}
+
+
+/* PushSubXact pushes subId to the stack of active sub-transactions. */
+static void
+PushSubXact(SubTransactionId subId)
+{
+	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+	activeSubXacts = lcons_int(subId, activeSubXacts);
+	MemoryContextSwitchTo(old_context);
+}
+
+
+/* PopSubXact pops subId from the stack of active sub-transactions. */
+static void
+PopSubXact(SubTransactionId subId)
+{
+	MemoryContext old_context = MemoryContextSwitchTo(CurTransactionContext);
+	Assert(linitial_int(activeSubXacts) == subId);
+	activeSubXacts = list_delete_first(activeSubXacts);
+	MemoryContextSwitchTo(old_context);
+}
+
+
+/* ActiveSubXacts returns list of active sub-transactions in temporal order. */
+List *
+ActiveSubXacts(void)
+{
+	ListCell *subIdCell = NULL;
+	List *activeSubXactsReversed = NIL;
+
+	/*
+	 * activeSubXacts is in reversed temporal order, so we reverse it to get it
+	 * in temporal order.
+	 */
+	foreach(subIdCell, activeSubXacts)
+	{
+		SubTransactionId subId = lfirst_int(subIdCell);
+		activeSubXactsReversed = lcons_int(subId, activeSubXactsReversed);
+	}
+
+	return activeSubXactsReversed;
 }

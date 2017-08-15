@@ -88,7 +88,7 @@ EXCEPTION
 END $$;
 COMMIT;
 
--- but rollback should not
+-- rollback should also work
 BEGIN;
 INSERT INTO researchers_mx VALUES (7, 4, 'Jim Gray');
 SAVEPOINT hire_engelbart;
