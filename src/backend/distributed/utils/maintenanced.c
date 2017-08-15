@@ -266,7 +266,16 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
 			StartTransactionCommand();
-			foundDeadlock = CheckForDistributedDeadlocks();
+
+			/*
+			 * We don't want to run the deadlock checks if there exists
+			 * any version mistmatch.
+			 */
+			if (CheckCitusVersion(DEBUG1))
+			{
+				foundDeadlock = CheckForDistributedDeadlocks();
+			}
+
 			CommitTransactionCommand();
 
 			/*
