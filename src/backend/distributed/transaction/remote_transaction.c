@@ -773,7 +773,8 @@ CoordinatedRemoteTransactionsCommit(void)
 		if (transaction->transactionState == REMOTE_TRANS_INVALID ||
 			transaction->transactionState == REMOTE_TRANS_1PC_COMMITTING ||
 			transaction->transactionState == REMOTE_TRANS_2PC_COMMITTING ||
-			transaction->transactionState == REMOTE_TRANS_COMMITTED)
+			transaction->transactionState == REMOTE_TRANS_COMMITTED ||
+			transaction->transactionState == REMOTE_TRANS_ABORTED)
 		{
 			continue;
 		}
