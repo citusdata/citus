@@ -364,11 +364,21 @@ BackendManagementShmemInit(void)
 
 		/*
 		 * We need to init per backend's spinlock before any backend
-		 * starts its execution.
+		 * starts its execution. We also reset all the memory.
 		 */
 		for (backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
 		{
-			SpinLockInit(&backendManagementShmemData->backends[backendIndex].mutex);
+			BackendData currentBackendData =
+				backendManagementShmemData->backends[backendIndex];
+
+			SpinLockInit(&currentBackendData.mutex);
+
+			currentBackendData.databaseId = InvalidOid;
+			currentBackendData.cancelledDueToDeadlock = false;
+			currentBackendData.transactionId.initiatorNodeIdentifier = 0;
+			currentBackendData.transactionId.transactionNumber = 0;
+			currentBackendData.transactionId.transactionOriginator = false;
+			currentBackendData.transactionId.timestamp = 0;
 		}
 	}
 
