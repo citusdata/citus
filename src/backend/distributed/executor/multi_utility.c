@@ -336,6 +336,17 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		ErrorIfUnsupportedTruncateStmt((TruncateStmt *) parsetree);
 	}
 
+	/* prevent any operation on pg_dist_node while dropping the extension */
+	if (IsA(parsetree, DropStmt))
+	{
+		DropStmt *dropStatement = (DropStmt *) parsetree;
+
+		if (dropStatement->removeType == OBJECT_EXTENSION)
+		{
+			LockRelationOid(DistNodeRelationId(), AccessExclusiveLock);
+		}
+	}
+
 	/* only generate worker DDLJobs if propagation is enabled */
 	if (EnableDDLPropagation)
 	{
