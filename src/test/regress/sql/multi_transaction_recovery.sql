@@ -90,7 +90,21 @@ INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 
 SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
-SELECT count(*) FROM pg_dist_transaction;
 
-\c - - - :master_port
+-- Committed INSERT..SELECT via coordinator should write 4 transaction recovery records
+INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+-- Committed COPY should write 4 transaction records
+COPY test_recovery (x) FROM STDIN CSV;
+hello-0
+hello-1
+\.
+
+SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;

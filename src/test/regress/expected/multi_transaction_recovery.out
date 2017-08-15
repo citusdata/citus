@@ -196,11 +196,33 @@ SELECT recover_prepared_transactions();
                              0
 (1 row)
 
+-- Committed INSERT..SELECT via coordinator should write 4 transaction recovery records
+INSERT INTO test_recovery (x) SELECT 'hello-'||s FROM generate_series(1,100) s;
 SELECT count(*) FROM pg_dist_transaction;
  count 
 -------
-     0
+     4
 (1 row)
 
-\c - - - :master_port
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+-- Committed COPY should write 4 transaction records
+COPY test_recovery (x) FROM STDIN CSV;
+SELECT count(*) FROM pg_dist_transaction;
+ count 
+-------
+     4
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions 
+-------------------------------
+                             0
+(1 row)
+
+DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
