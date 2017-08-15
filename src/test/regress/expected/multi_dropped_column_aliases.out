@@ -15,8 +15,6 @@ SELECT * FROM customer LIMIT 2;
 (2 rows)
 
 ALTER TABLE customer ADD COLUMN new_column1 INTEGER;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE customer ADD COLUMN new_column2 INTEGER;
 SELECT count(*) FROM customer;
  count 

@@ -76,8 +76,6 @@ COPY users_table FROM '@abs_srcdir@/data/users_table.data' WITH CSV;
 COPY events_table FROM '@abs_srcdir@/data/events_table.data' WITH CSV;
 -- create indexes for
 CREATE INDEX is_index1 ON users_table(user_id);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX is_index2 ON events_table(user_id);
 CREATE INDEX is_index3 ON users_table(value_1);
 CREATE INDEX is_index4 ON events_table(event_type);

@@ -50,8 +50,6 @@ SELECT citus_total_relation_size('customer_copy_hash');
 (1 row)
 
 CREATE INDEX index_1 on customer_copy_hash(c_custkey);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 VACUUM (FULL) customer_copy_hash;
 -- Tests on distributed table with index.
 SELECT citus_table_size('customer_copy_hash');

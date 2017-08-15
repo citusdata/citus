@@ -269,8 +269,6 @@ SELECT create_distributed_table('lineitem_mx', 'l_orderkey');
 (1 row)
 
 CREATE INDEX lineitem_mx_time_index ON lineitem_mx (l_shipdate);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE TABLE orders_mx (
     o_orderkey bigint not null,
     o_custkey integer not null,

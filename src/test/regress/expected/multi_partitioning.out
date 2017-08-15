@@ -157,8 +157,6 @@ SELECT create_distributed_table('partitioning_test_2013', 'id');
 INSERT INTO partitioning_test_2013 VALUES (7, '2013-06-06');
 INSERT INTO partitioning_test_2013 VALUES (8, '2013-07-07');
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2013 FOR VALUES FROM ('2013-01-01') TO ('2014-01-01');
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- see the data is loaded to shards
 SELECT * FROM partitioning_test ORDER BY 1;
  id |    time    

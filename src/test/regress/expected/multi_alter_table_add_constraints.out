@@ -24,8 +24,6 @@ ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(name);
 ERROR:  cannot create constraint on "products"
 DETAIL:  Distributed relations cannot have UNIQUE, EXCLUDE, or PRIMARY KEY constraints that do not include the partition column (with an equality operator if EXCLUDE).
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO products VALUES(1, 'product_1', 1);
 -- Should error out, since we are trying to add a new row having a value on p_key column
 -- conflicting with the existing row.
@@ -469,8 +467,6 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products
 BEGIN;
 -- Add constraints (which will be rollbacked)
 ALTER TABLE products ADD CONSTRAINT unn_pno UNIQUE(product_no);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE products ADD CONSTRAINT check_price CHECK(price > discounted_price);
 ALTER TABLE products ADD CONSTRAINT p_key_product PRIMARY KEY(product_no);
 ROLLBACK;
@@ -533,8 +529,6 @@ SELECT create_distributed_table('alter_add_prim_key', 'x');
 
 CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
 ALTER TABLE alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT (run_command_on_workers($$
     SELECT  
         kc.constraint_name 

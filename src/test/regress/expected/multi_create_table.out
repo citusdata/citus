@@ -32,8 +32,6 @@ HINT:  Consider using hash partitioning.
 (1 row)
 
 CREATE INDEX lineitem_time_index ON lineitem (l_shipdate);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE TABLE orders (
 	o_orderkey bigint not null,
 	o_custkey integer not null,
@@ -498,8 +496,6 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 CREATE INDEX data_load_test_idx ON data_load_test (col2);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP TABLE data_load_test;
 END;
 -- popping in and out of existence in the same transaction works
@@ -651,8 +647,6 @@ SELECT create_distributed_table('rollback_table','id');
 
 \copy rollback_table from stdin delimiter ','
 CREATE INDEX rollback_index ON rollback_table(id);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 COMMIT;
 -- Check the table is created 
 SELECT count(*) FROM rollback_table;

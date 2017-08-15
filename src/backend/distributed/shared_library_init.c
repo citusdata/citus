@@ -467,7 +467,7 @@ RegisterCitusConfigVariables(void)
 					 "determines how often recovery should run, "
 					 "use -1 to disable."),
 		&Recover2PCInterval,
-		60000, -1, 7*24*3600*1000,
+		60000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);
@@ -689,7 +689,7 @@ RegisterCitusConfigVariables(void)
 					 "and this is the default. However, changing to 1pc may give small "
 					 "performance benefits."),
 		&MultiShardCommitProtocol,
-		COMMIT_PROTOCOL_1PC,
+		COMMIT_PROTOCOL_2PC,
 		multi_shard_commit_protocol_options,
 		PGC_USERSET,
 		0,
