@@ -617,12 +617,26 @@ IsCitusDropExtensionStmt(DropStmt *dropStatement)
 	{
 		foreach(objectListCell, objectList)
 		{
-			List *objectNames = (List *) lfirst(objectListCell);
-			ListCell *objectName = NULL;
+			Node *objectNode = (Node *) lfirst(objectListCell);
 
-			foreach(objectName, objectNames)
+			if (IsA(objectNode, List))
 			{
-				Value *extensionName = (Value *) lfirst(objectName);
+				List *objectNames = (List *) objectNode;
+				ListCell *objectName = NULL;
+
+				foreach(objectName, objectNames)
+				{
+					Value *extensionName = (Value *) lfirst(objectName);
+
+					if (strcmp(strVal(extensionName), "citus") == 0)
+					{
+						return true;
+					}
+				}
+			}
+			else
+			{
+				Value *extensionName = (Value *) objectNode;
 
 				if (strcmp(strVal(extensionName), "citus") == 0)
 				{
