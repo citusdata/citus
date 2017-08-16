@@ -31,11 +31,13 @@
 #include "citus_version.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_type.h"
+#include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/prepare.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
+#include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -452,6 +454,19 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 								" nodes"),
 						 errhint("Connect to worker nodes directly to manually create all"
 								 " necessary users and roles.")));
+	}
+
+	/*
+	 * Make sure that on DROP DATABASE we terminate the background deamon
+	 * associated with it.
+	 */
+	if (IsA(parsetree, DropdbStmt))
+	{
+		DropdbStmt *dropDbStatement = (DropdbStmt *) parsetree;
+		char *dbname = dropDbStatement->dbname;
+		Oid databaseOid = get_database_oid(dbname, false);
+
+		StopMaintenanceDaemon(databaseOid);
 	}
 
 	/* set user if needed and go ahead and run local utility using standard hook */

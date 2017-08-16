@@ -15,6 +15,7 @@
 /* config variable for */
 extern double DistributedDeadlockDetectionTimeoutFactor;
 
+extern void StopMaintenanceDaemon(Oid databaseId);
 extern void InitializeMaintenanceDaemon(void);
 extern void InitializeMaintenanceDaemonBackend(void);
 
