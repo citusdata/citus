@@ -42,6 +42,13 @@ SELECT 1 FROM master_add_node('localhost', :follower_worker_2_port,
 -- now that we've added secondaries this should work
 SELECT * FROM the_table;
 
+SELECT
+  node_name, node_port
+FROM
+  master_get_active_worker_nodes()
+ORDER BY
+  node_name, node_port;
+
 -- okay, now let's play with nodecluster. If we change the cluster of our follower node
 -- queries should stat failing again, since there are no worker nodes in the new cluster
 
