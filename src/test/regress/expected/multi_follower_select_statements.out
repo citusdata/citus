@@ -64,6 +64,18 @@ SELECT * FROM the_table;
  1 | 2
 (2 rows)
 
+SELECT
+  node_name, node_port
+FROM
+  master_get_active_worker_nodes()
+ORDER BY
+  node_name, node_port;
+ node_name | node_port 
+-----------+-----------
+ localhost |      9071
+ localhost |      9072
+(2 rows)
+
 -- okay, now let's play with nodecluster. If we change the cluster of our follower node
 -- queries should stat failing again, since there are no worker nodes in the new cluster
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
