@@ -2976,6 +2976,11 @@ NeedsDistributedPlanning(Query *queryTree)
 
 	if (hasLocalRelation && hasDistributedRelation)
 	{
+		if (InsertSelectIntoLocalTable(queryTree))
+		{
+			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+								   "local table")));
+		}
 		ereport(ERROR, (errmsg("cannot plan queries which include both local and "
 							   "distributed relations")));
 	}
