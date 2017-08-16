@@ -13,11 +13,16 @@ env:
     - secure: degV+qb2xHiea7E2dGk/WLvmYjq4ZsBn6ZPko+YhRcNm2GRXRaU3FqMBIecPtsEEFYaL5GwCQq/CgBf9aQxgDQ+t2CrmtGTtI9AGAbVBl//amNeJOoLe6QvrDpSQX5pUxwDLCng8cvoQK7ZxGlNCzDKiu4Ep4DUWgQVpauJkQ9nHjtSMZvUqCoI9h1lBy9Mxh7YFfHPW2PAXCqpV4VlNiIYF84UKdX3MXKLy9Yt0JBSNTWLZFp/fFw2qNwzFvN94rF3ZvFSD7Wp6CIhT6R5/6k6Zx8YQIrjWhgm6OVy1osUA8X7W79h2ISPqKqMNVJkjJ+N8S4xuQU0kfejnQ74Ie/uJiHCmbW5W2TjpL1aU3FQpPsGwR8h0rSeHhJAJzd8Ma+z8vvnnQHDyvetPBB0WgA/VMQCu8uEutyfYw2hDmB2+l2dDwkViaI7R95bReAGrpd5uNqklAXuR7yOeArz0ZZpHV0aZHGcNBxznMaZExSVZ5DVPW38UPn7Kgse8BnOWeLgnA1hJVp6CmBCtu+hKYt+atBPgRbM8IUINnKKZf/Sk6HeJIJZs662jD8/X93vFi0ZtyV2jEKJpouWw8j4vrGGsaDzTEUcyJgDqZj7tPJptM2L5B3BcFJmkGj2HO3N+LGDarJrVBBSiEjhTgx4NnLiKZnUbMx547mCRg2akk2w=
     # During pull request builds (not push builds), use custom-built PostgreSQL
     - USE_CUSTOM_PG="${TRAVIS_PULL_REQUEST_SHA}"
-  matrix:
-    - PGVERSION=9.6
-    - PGVERSION=10
+matrix:
+  fast_finish: true
+  include:
+    - env: PGVERSION=9.6
+    - env: PGVERSION=10
+    - env: PGVERSION=11
+  allow_failures:
+    - env: PGVERSION=11
 before_install:
-  - git clone -b v0.6.4 --depth 1 https://github.com/citusdata/tools.git
+  - git clone -b v0.7.1 --depth 1 https://github.com/citusdata/tools.git
   - sudo make -C tools install
   - setup_apt
   - curl https://install.citusdata.com/community/deb.sh | sudo bash
@@ -27,7 +32,12 @@ install:
   - install_pg
   - install_custom_pg
   # download and install HLL manually, as custom builds won't satisfy deps
-  - apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1" && sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
+  # only install if performing non-11 build
+  - |
+    if [ "${PGVERSION}" != "11" ]; then
+      apt-get download "postgresql-${PGVERSION}-hll=2.10.2.citus-1"
+      sudo dpkg --force-confold --force-confdef --force-all -i *hll*.deb
+    fi
 before_script: citus_indent --quiet --check
 script: CFLAGS=-Werror pg_travis_multi_test check
 after_success:
