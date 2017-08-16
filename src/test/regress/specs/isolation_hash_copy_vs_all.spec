@@ -28,10 +28,10 @@ step "s1-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s1-select-count" { SELECT COUNT(*) FROM hash_copy; }
 step "s1-insert" { INSERT INTO hash_copy VALUES(0, 'k', 0); }
+step "s1-insert-select" { INSERT INTO hash_copy SELECT * FROM hash_copy; }
 step "s1-update" { UPDATE hash_copy SET data = 'l' WHERE id = 0; }
 step "s1-delete" { DELETE FROM hash_copy WHERE id = 1; }
 step "s1-truncate" { TRUNCATE hash_copy; }
@@ -59,9 +59,9 @@ step "s2-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM hash_copy AS t1 JOIN hash_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s2-insert" { INSERT INTO hash_copy VALUES(0, 'k', 0); }
+step "s2-insert-select" { INSERT INTO hash_copy SELECT * FROM hash_copy; }
 step "s2-update" { UPDATE hash_copy SET data = 'l' WHERE id = 0; }
 step "s2-delete" { DELETE FROM hash_copy WHERE id = 1; }
 step "s2-truncate" { TRUNCATE hash_copy; }
@@ -75,7 +75,6 @@ step "s2-ddl-rename-column" { ALTER TABLE hash_copy RENAME data TO new_data; }
 step "s2-table-size" { SELECT citus_total_relation_size('hash_copy'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM hash_copy;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('hash_copy'::regclass, 'public', 'hash_copy'); }
-step "s2-create-non-distributed-table" { CREATE TABLE hash_copy(id integer, data text, int_data int); COPY hash_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('hash_copy', 'id'); }
 
 # permutations - COPY vs COPY
@@ -86,6 +85,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-router-select" "s1-commit" 
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-truncate" "s1-commit" "s1-select-count"
@@ -105,6 +105,7 @@ permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-copy" "s1-commit" 
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-copy" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-copy" "s1-commit" "s1-select-count"

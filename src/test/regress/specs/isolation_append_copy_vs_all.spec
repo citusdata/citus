@@ -28,10 +28,10 @@ step "s1-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s1-select-count" { SELECT COUNT(*) FROM append_copy; }
 step "s1-insert" { INSERT INTO append_copy VALUES(0, 'k', 0); }
+step "s1-insert-select" { INSERT INTO append_copy SELECT * FROM append_copy; }
 step "s1-update" { UPDATE append_copy SET data = 'l' WHERE id = 0; }
 step "s1-delete" { DELETE FROM append_copy WHERE id = 1; }
 step "s1-truncate" { TRUNCATE append_copy; }
@@ -46,8 +46,8 @@ step "s1-table-size" { SELECT citus_total_relation_size('append_copy'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM append_copy;'); }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM append_copy WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('append_copy'::regclass, 'public', 'append_copy'); }
-step "s1-create-non-distributed-table" { CREATE TABLE append_copy(id integer, data text, int_data int); COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
-step "s1-distribute-table" { SELECT create_distributed_table('append_copy', 'id'); }
+step "s1-create-non-distributed-table" { CREATE TABLE append_copy(id integer, data text, int_data int); }
+step "s1-distribute-table" { SELECT create_distributed_table('append_copy', 'id', 'append'); }
 step "s1-commit" { COMMIT; }
 
 # session 2
@@ -60,9 +60,9 @@ step "s2-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s2-insert" { INSERT INTO append_copy VALUES(0, 'k', 0); }
+step "s2-insert-select" { INSERT INTO append_copy SELECT * FROM append_copy; }
 step "s2-update" { UPDATE append_copy SET data = 'l' WHERE id = 0; }
 step "s2-delete" { DELETE FROM append_copy WHERE id = 1; }
 step "s2-truncate" { TRUNCATE append_copy; }
@@ -77,8 +77,7 @@ step "s2-table-size" { SELECT citus_total_relation_size('append_copy'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM append_copy;'); }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM append_copy WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('append_copy'::regclass, 'public', 'append_copy'); }
-step "s2-create-non-distributed-table" { CREATE TABLE append_copy(id integer, data text, int_data int); COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
-step "s2-distribute-table" { SELECT create_distributed_table('append_copy', 'id'); }
+step "s2-distribute-table" { SELECT create_distributed_table('append_copy', 'id', 'append'); }
 
 # permutations - COPY vs COPY
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-copy" "s1-commit" "s1-select-count"
@@ -88,6 +87,7 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-router-select" "s1-commit" 
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-copy" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-truncate" "s1-commit" "s1-select-count"
@@ -101,13 +101,14 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-table-size" "s1-commit" "s1
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-master-apply-delete-command" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-master-drop-all-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-copy" "s2-distribute-table" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-copy" "s2-distribute-table" "s1-commit" "s1-select-count"
 
 # permutations - COPY second
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-copy" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-copy" "s1-commit" "s1-select-count"
@@ -120,4 +121,4 @@ permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-copy" "s1-commit" "s1
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-apply-delete-command" "s2-copy" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-drop-all-shards" "s2-copy" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-copy" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-copy" "s1-commit" "s1-select-count"

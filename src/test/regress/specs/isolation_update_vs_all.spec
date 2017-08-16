@@ -56,9 +56,7 @@ step "s2-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_data; }
 step "s2-table-size" { SELECT citus_total_relation_size('update_hash'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
-step "s2-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
-step "s2-select" { SELECT * FROM update_hash ORDER BY id, data; }
 step "s2-commit" { COMMIT; }
 
 # permutations - UPDATE vs UPDATE

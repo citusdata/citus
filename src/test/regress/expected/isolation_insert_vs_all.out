@@ -14,6 +14,20 @@ count
 
 7              
 
+starting permutation: s1-initialize s1-begin s1-insert s2-insert-select s1-commit s1-select-count
+create_distributed_table
+
+               
+step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-insert: INSERT INTO insert_hash VALUES(7, 'k');
+step s2-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
+step s1-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM insert_hash;
+count          
+
+11             
+
 starting permutation: s1-initialize s1-begin s1-insert s2-update s1-commit s1-select-count
 create_distributed_table
 
@@ -196,6 +210,20 @@ step s2-distribute-table: <... completed>
 create_distributed_table
 
                
+step s1-select-count: SELECT COUNT(*) FROM insert_hash;
+count          
+
+11             
+
+starting permutation: s1-initialize s1-begin s1-insert-select s2-insert s1-commit s1-select-count
+create_distributed_table
+
+               
+step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-insert-select: INSERT INTO insert_hash SELECT * FROM insert_hash;
+step s2-insert: INSERT INTO insert_hash VALUES(7, 'k');
+step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 count          
 

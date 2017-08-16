@@ -21,6 +21,7 @@ session "s1"
 step "s1-initialize" { COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-insert" { INSERT INTO insert_hash VALUES(7, 'k'); }
+step "s1-insert-select" { INSERT INTO insert_hash SELECT * FROM insert_hash; }
 step "s1-update" { UPDATE insert_hash SET data = 'l' WHERE id = 4; }
 step "s1-delete" { DELETE FROM insert_hash WHERE id = 4; }
 step "s1-truncate" { TRUNCATE insert_hash; }
@@ -40,6 +41,7 @@ step "s1-commit" { COMMIT; }
 # session 2
 session "s2"
 step "s2-insert" { INSERT INTO insert_hash VALUES(7, 'k'); }
+step "s2-insert-select" { INSERT INTO insert_hash SELECT * FROM insert_hash; }
 step "s2-update" { UPDATE insert_hash SET data = 'l' WHERE id = 4; }
 step "s2-delete" { DELETE FROM insert_hash WHERE id = 4; }
 step "s2-truncate" { TRUNCATE insert_hash; }
@@ -52,14 +54,13 @@ step "s2-ddl-drop-column" { ALTER TABLE insert_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE insert_hash RENAME data TO new_data; }
 step "s2-table-size" { SELECT citus_total_relation_size('insert_hash'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM insert_hash;'); }
-step "s2-create-non-distributed-table" { CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('insert_hash', 'id'); }
-step "s2-select" { SELECT * FROM insert_hash ORDER BY id, data; }
 
 # permutations - INSERT vs INSERT
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-insert" "s1-commit" "s1-select-count"
 
 # permutations - INSERT first
+permutation "s1-initialize" "s1-begin" "s1-insert" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-truncate" "s1-commit" "s1-select-count"
@@ -74,6 +75,7 @@ permutation "s1-initialize" "s1-begin" "s1-insert" "s2-master-modify-multiple-sh
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-insert" "s2-distribute-table" "s1-commit" "s1-select-count"
 
 # permutations - INSERT second
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-insert" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-insert" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-insert" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-insert" "s1-commit" "s1-select-count"

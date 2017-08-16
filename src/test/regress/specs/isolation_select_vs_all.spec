@@ -26,10 +26,10 @@ step "s1-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s1-select-count" { SELECT COUNT(*) FROM select_append; }
 step "s1-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
+step "s1-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }
 step "s1-update" { UPDATE select_append SET data = 'l' WHERE id = 0; }
 step "s1-delete" { DELETE FROM select_append WHERE id = 1; }
 step "s1-truncate" { TRUNCATE select_append; }
@@ -43,8 +43,8 @@ step "s1-table-size" { SELECT citus_total_relation_size('select_append'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM select_append;'); }
 step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT master_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
-step "s1-create-non-distributed-table" { CREATE TABLE select_append(id integer, data text, int_data int); COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
-step "s1-distribute-table" { SELECT create_distributed_table('select_append', 'id'); }
+step "s1-create-non-distributed-table" { CREATE TABLE select_append(id integer, data text, int_data int); }
+step "s1-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
 step "s1-commit" { COMMIT; }
 
 # session 2
@@ -55,9 +55,9 @@ step "s2-task-tracker-select"
 {
 	SET citus.task_executor_type TO "task-tracker";
 	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
-	SET citus.task_executor_type TO "real-time";
 }
 step "s2-insert" { INSERT INTO select_append VALUES(0, 'k', 0); }
+step "s2-insert-select" { INSERT INTO select_append SELECT * FROM select_append; }
 step "s2-update" { UPDATE select_append SET data = 'l' WHERE id = 0; }
 step "s2-delete" { DELETE FROM select_append WHERE id = 1; }
 step "s2-truncate" { TRUNCATE select_append; }
@@ -72,8 +72,7 @@ step "s2-table-size" { SELECT citus_total_relation_size('select_append'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM select_append;'); }
 step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT master_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
-step "s2-create-non-distributed-table" { CREATE TABLE select_append(id integer, data text, int_data int); COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV; }
-step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id'); }
+step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
 
 # permutations - SELECT vs SELECT
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-router-select" "s1-commit" "s1-select-count"
@@ -88,6 +87,7 @@ permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-task-tracker
 
 # permutations - router SELECT first
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -101,10 +101,11 @@ permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-table-size" "s1-co
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-master-apply-delete-command" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-master-drop-all-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-router-select" "s2-distribute-table" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-router-select" "s2-distribute-table" "s1-commit" "s1-select-count"
 
 # permutations - router SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-router-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-router-select" "s1-commit" "s1-select-count"
@@ -117,10 +118,11 @@ permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-router-select" "s1-co
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-apply-delete-command" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-drop-all-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-router-select" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-router-select" "s1-commit" "s1-select-count"
 
 # permutations - real-time SELECT first
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -132,10 +134,11 @@ permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-ddl-add-column"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-real-time-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-table-size" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-real-time-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-real-time-select" "s2-distribute-table" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-real-time-select" "s2-distribute-table" "s1-commit" "s1-select-count"
 
 # permutations - real-time SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-real-time-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-real-time-select" "s1-commit" "s1-select-count"
@@ -146,10 +149,11 @@ permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-real-time-select"
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-ddl-drop-column" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-real-time-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-real-time-select" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-real-time-select" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-real-time-select" "s1-commit" "s1-select-count"
 
 # permutations - task-tracker SELECT first
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-insert" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-insert-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-update" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-delete" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-truncate" "s1-commit" "s1-select-count"
@@ -161,10 +165,11 @@ permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-ddl-add-colu
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-task-tracker-select" "s2-ddl-drop-column" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-table-size" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-task-tracker-select" "s2-distribute-table" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-task-tracker-select" "s2-distribute-table" "s1-commit" "s1-select-count"
 
 # permutations - task-tracker SELECT second
 permutation "s1-initialize" "s1-begin" "s1-insert" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s1-insert-select" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-update" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-delete" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-truncate" "s2-task-tracker-select" "s1-commit" "s1-select-count"
@@ -175,4 +180,4 @@ permutation "s1-initialize" "s1-begin" "s1-ddl-add-column" "s2-task-tracker-sele
 permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-ddl-drop-column" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-task-tracker-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-task-tracker-select" "s1-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-distribute-table" "s2-task-tracker-select" "s1-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-task-tracker-select" "s1-commit" "s1-select-count"
