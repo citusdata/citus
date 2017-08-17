@@ -2694,8 +2694,18 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	 */
 	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
 	{
-		memset(&MetadataCache, 0, sizeof(MetadataCache));
+		ClearMetadataOIDCache();
 	}
+}
+
+
+/*
+ * ClearMetadataOIDCache resets all the cached OIDs and the extensionLoaded flag.
+ */
+void
+ClearMetadataOIDCache(void)
+{
+	memset(&MetadataCache, 0, sizeof(MetadataCache));
 }
 
 
