@@ -78,7 +78,7 @@ restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-create-index s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -94,11 +94,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-update s2-ddl-drop-index s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-update s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -115,11 +120,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s1-update s2-ddl-create-index-concurrently s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-update s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -133,11 +143,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-add-column s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -153,11 +168,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-update s2-ddl-drop-column s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-update s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -169,6 +189,58 @@ step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
 step s2-ddl-drop-column: ALTER TABLE update_hash DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM update_hash;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-update s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
+step s2-ddl-rename-column: ALTER TABLE update_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM update_hash;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-update s2-table-size s1-commit s2-commit s1-select-count
+create_distributed_table
+
+               
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
+step s2-table-size: SELECT citus_total_relation_size('update_hash');
+citus_total_relation_size
+
+57344          
+step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
@@ -285,7 +357,7 @@ restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-update s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-update s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -301,11 +373,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-update s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-update s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -322,11 +399,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,0)
+(localhost,57638,t,0)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-update s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-update s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -342,11 +424,16 @@ step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 restore_isolation_tester_func
 
                
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-update s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-update s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -358,6 +445,59 @@ step s1-ddl-drop-column: ALTER TABLE update_hash DROP new_column;
 step s2-update: UPDATE update_hash SET data = 'l' WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-update: <... completed>
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM update_hash;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-update s1-commit s2-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE update_hash RENAME data TO new_column;
+step s2-update: UPDATE update_hash SET data = 'l' WHERE id = 4; <waiting ...>
+step s1-commit: COMMIT;
+step s2-update: <... completed>
+error in steps s1-commit s2-update: ERROR:  column "data" of relation "update_hash" does not exist
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM update_hash;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-update s1-commit s2-commit s1-select-count
+create_distributed_table
+
+               
+step s1-initialize: COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-table-size: SELECT citus_total_relation_size('update_hash');
+citus_total_relation_size
+
+57344          
+step s2-update: UPDATE update_hash SET data = 'l' WHERE id = 4;
+step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count          

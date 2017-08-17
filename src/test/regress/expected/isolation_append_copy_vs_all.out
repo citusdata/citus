@@ -38,7 +38,7 @@ create_distributed_table
 step s1-initialize: COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-copy: COPY append_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
-step s2-real-time-select: SELECT * FROM append_copy ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM append_copy ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -61,7 +61,7 @@ step s1-begin: BEGIN;
 step s1-copy: COPY append_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -160,7 +160,7 @@ step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM append_copy;
 ERROR:  relation "append_copy" does not exist
 
-starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -174,8 +174,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''append_copy%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-copy s2-ddl-drop-index s1-commit s1-select-count
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-copy s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -190,8 +195,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''append_copy%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index-concurrently s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-copy s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -205,8 +215,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''append_copy%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-copy s2-ddl-add-column s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-begin s1-copy s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -220,8 +235,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-copy-additional-column s2-ddl-drop-column s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-copy-additional-column s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -236,6 +256,31 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-copy s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-copy: COPY append_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
+step s2-ddl-rename-column: ALTER TABLE append_copy RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s1-select-count: SELECT COUNT(*) FROM append_copy;
+count          
+
+10             
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-copy s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -349,7 +394,7 @@ create_distributed_table
                
 step s1-initialize: COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM append_copy ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM append_copy ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -372,7 +417,7 @@ step s1-initialize: COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM append_copy AS t1 JOIN append_copy AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -473,7 +518,7 @@ error in steps s1-commit s2-copy: ERROR:  relation "append_copy" does not exist
 step s1-select-count: SELECT COUNT(*) FROM append_copy;
 ERROR:  relation "append_copy" does not exist
 
-starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-copy s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-copy s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -487,8 +532,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''append_copy%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-copy s1-commit s1-select-count
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-copy s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -503,8 +553,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''append_copy%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-copy s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-copy s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -519,8 +574,13 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-copy s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-copy s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -535,6 +595,31 @@ step s1-select-count: SELECT COUNT(*) FROM append_copy;
 count          
 
 10             
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-copy s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY append_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE append_copy RENAME data TO new_column;
+step s2-copy: COPY append_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s1-commit: COMMIT;
+step s2-copy: <... completed>
+step s1-select-count: SELECT COUNT(*) FROM append_copy;
+count          
+
+10             
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''append_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-copy s1-commit s1-select-count
 create_distributed_table
