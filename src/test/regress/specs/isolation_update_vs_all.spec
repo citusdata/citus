@@ -33,12 +33,14 @@ step "s1-ddl-create-index" { CREATE INDEX update_hash_index ON update_hash(id); 
 step "s1-ddl-drop-index" { DROP INDEX update_hash_index; }
 step "s1-ddl-add-column" { ALTER TABLE update_hash ADD new_column int DEFAULT 0; }
 step "s1-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
-step "s1-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_data; }
+step "s1-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('update_hash'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
 step "s1-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM update_hash; }
+step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%'''); }
+step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-commit" { COMMIT; }
 
 # session 2
@@ -53,7 +55,7 @@ step "s2-ddl-drop-index" { DROP INDEX update_hash_index; }
 step "s2-ddl-create-index-concurrently" { CREATE INDEX CONCURRENTLY update_hash_index ON update_hash(id); }
 step "s2-ddl-add-column" { ALTER TABLE update_hash ADD new_column int DEFAULT 0; }
 step "s2-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
-step "s2-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_data; }
+step "s2-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('update_hash'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
 step "s2-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
@@ -66,12 +68,13 @@ permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-update" "s1-co
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-delete" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-update" "s2-ddl-drop-index" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-update" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-update" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count"
-#permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-update" "s2-ddl-drop-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s1-update" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-update" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-master-modify-multiple-shards" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-update" "s2-distribute-table" "s1-commit" "s2-commit" "s1-select-count"
 
@@ -79,10 +82,11 @@ permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begi
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-delete" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-ddl-drop-index" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-drop-column" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
-#permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-update" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-ddl-drop-index" "s2-update" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-update" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-drop-column" "s2-update" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-update" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-update" "s1-commit" "s2-commit" "s1-select-count"
