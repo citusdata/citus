@@ -212,8 +212,13 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 						   HASH_FIND, NULL);
 	if (!myDbData)
 	{
-		/* should never happen */
-		ereport(ERROR, (errmsg("got lost finding myself")));
+		/*
+		 * When the database crashes, background workers are restarted, but
+		 * the state in shared memory is lost. In that case, we exit and
+		 * wait for a session to call InitializeMaintenanceDaemonBackend
+		 * to properly add it to the hash.
+		 */
+		proc_exit(0);
 	}
 	LWLockRelease(&MaintenanceDaemonControl->lock);
 
