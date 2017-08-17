@@ -257,11 +257,14 @@ if ($followercluster)
 # to make sure that we always get consistent test outputs. If we don't  manually
 # (i.e., calling a UDF) detect the deadlocks, some sessions that do not participate
 # in the deadlock may interleave with the deadlock detection, which results in non-
-# consistent test outputs. 
+# consistent test outputs.
+# since we have CREATE/DROP distributed tables very frequently, we also set
+# shard_count to 4 to speed up the tests.
 if($isolationtester)
 {
    push(@pgOptions, '-c', "citus.log_distributed_deadlock_detection=on");
    push(@pgOptions, '-c', "citus.distributed_deadlock_detection_factor=-1");
+   push(@pgOptions, '-c', "citus.shard_count=4");
 }
 
 # Add externally added options last, so they overwrite the default ones above
