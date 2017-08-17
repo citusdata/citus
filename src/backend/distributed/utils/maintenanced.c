@@ -267,6 +267,15 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		CHECK_FOR_INTERRUPTS();
 
 		/*
+		 * XXX: We clear the metadata cache before every iteration because otherwise
+		 * it might contain stale OIDs. It appears that in some cases invalidation
+		 * messages for a DROP EXTENSION may arrive during deadlock detection and
+		 * this causes us to cache a stale pg_dist_node OID. We'd actually expect
+		 * all invalidations to arrive after obtaining a lock in LockCitusExtension.
+		 */
+		ClearMetadataOIDCache();
+
+		/*
 		 * Perform Work.  If a specific task needs to be called sooner than
 		 * timeout indicates, it's ok to lower it to that value.  Expensive
 		 * tasks should do their own time math about whether to re-run checks.
