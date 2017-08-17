@@ -101,6 +101,7 @@ struct DropRelationCallbackState
 
 /* Local functions forward declarations for deciding when to perform processing/checks */
 static bool IsCitusExtensionStmt(Node *parsetree);
+static bool IsCitusDropExtensionStmt(DropStmt *dropStatement);
 
 /* Local functions forward declarations for Transmit statement */
 static bool IsTransmitStmt(Node *parsetree);
@@ -334,6 +335,25 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	if (IsA(parsetree, TruncateStmt))
 	{
 		ErrorIfUnsupportedTruncateStmt((TruncateStmt *) parsetree);
+	}
+
+	if (IsA(parsetree, DropStmt))
+	{
+		DropStmt *dropStatement = (DropStmt *) parsetree;
+		bool dropCitus = IsCitusDropExtensionStmt(dropStatement);
+
+		/*
+		 * We need to take a lock on pg_dist_node while dropping the
+		 * citus extension. Otherwise, deadlock between dropping
+		 * extension and deadlock detection daemon may occur. We take
+		 * the lock here because standard process utility does not take
+		 * locks on dependent tables of an extension in a deterministic
+		 * manner.
+		 */
+		if (dropCitus)
+		{
+			LockRelationOid(DistNodeRelationId(), AccessExclusiveLock);
+		}
 	}
 
 	/* only generate worker DDLJobs if propagation is enabled */
@@ -580,6 +600,53 @@ IsCitusExtensionStmt(Node *parsetree)
 	}
 
 	return (strcmp(extensionName, "citus") == 0);
+}
+
+
+/*
+ * IsCitusDropExtensionStmt returns true if citus is referenced as an element
+ * of drop extension statement, false otherwise.
+ */
+static bool
+IsCitusDropExtensionStmt(DropStmt *dropStatement)
+{
+	List *objectList = dropStatement->objects;
+	ListCell *objectListCell = NULL;
+
+	if (dropStatement->removeType == OBJECT_EXTENSION)
+	{
+		foreach(objectListCell, objectList)
+		{
+			Node *objectNode = (Node *) lfirst(objectListCell);
+
+			if (IsA(objectNode, List))
+			{
+				List *objectNames = (List *) objectNode;
+				ListCell *objectName = NULL;
+
+				foreach(objectName, objectNames)
+				{
+					Value *extensionName = (Value *) lfirst(objectName);
+
+					if (strcmp(strVal(extensionName), "citus") == 0)
+					{
+						return true;
+					}
+				}
+			}
+			else
+			{
+				Value *extensionName = (Value *) objectNode;
+
+				if (strcmp(strVal(extensionName), "citus") == 0)
+				{
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
 }
 
 
