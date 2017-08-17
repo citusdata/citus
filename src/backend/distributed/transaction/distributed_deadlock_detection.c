@@ -152,8 +152,12 @@ CheckForDistributedDeadlocks(void)
 			TransactionNode *youngestTransaction = transactionNode;
 			ListCell *participantTransactionCell = NULL;
 
-			/* there should be at least two transactions to get into a deadlock */
-			Assert(list_length(deadlockPath) > 1);
+			/*
+			 * There should generally be at least two transactions to get into a
+			 * deadlock. However, in case Citus gets into a self-deadlock, we may
+			 * find a deadlock with a single transaction.
+			 */
+			Assert(list_length(deadlockPath) >= 1);
 
 			LogDistributedDeadlockDebugMessage("Distributed deadlock found among the "
 											   "following distributed transactions:");
