@@ -262,15 +262,47 @@ BEGIN
 END;
 $$;
 
+-- see that the deamon started
 SELECT datname,
     datname = current_database(),
     usename = (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
 FROM test.maintenance_worker();
 
--- Test that database with active worker can be dropped. That'll
--- require killing the maintenance worker.
+-- Test that database with active worker can be dropped.
 \c regression
-SELECT datname,
-    pg_terminate_backend(pid)
-FROM test.maintenance_worker('another');
+
+CREATE SCHEMA test_deamon;
+
+-- we create a similar function on the regression database
+-- note that this function checks for the existence of the daemon
+-- when not found, returns true else tries for 5 times and 
+-- returns false
+CREATE OR REPLACE FUNCTION test_deamon.maintenance_deamon_died(p_dbname text)
+    RETURNS boolean
+    LANGUAGE plpgsql
+AS $$
+DECLARE
+   activity record;
+BEGIN
+    PERFORM pg_stat_clear_snapshot();
+    LOOP
+        SELECT * INTO activity FROM pg_stat_activity
+        WHERE application_name = 'Citus Maintenance Daemon' AND datname = p_dbname;
+        IF activity.pid IS NULL THEN
+            RETURN true;
+        ELSE
+            RETURN false;
+        END IF;
+    END LOOP;
+END;
+$$;
+
+-- drop the database and see that the deamon is dead
 DROP DATABASE another;
+SELECT 
+    *
+FROM 
+    test_deamon.maintenance_deamon_died('another');
+
+-- we don't need the schema and the function anymore
+DROP SCHEMA test_deamon CASCADE;
