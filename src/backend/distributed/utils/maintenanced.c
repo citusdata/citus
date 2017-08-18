@@ -21,6 +21,8 @@
 #include "pgstat.h"
 
 #include "access/xact.h"
+#include "catalog/pg_extension.h"
+#include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
@@ -29,6 +31,7 @@
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "storage/latch.h"
+#include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
 
@@ -85,6 +88,8 @@ static void MaintenanceDaemonSigHupHandler(SIGNAL_ARGS);
 static size_t MaintenanceDaemonShmemSize(void);
 static void MaintenanceDaemonShmemInit(void);
 static void MaintenanceDaemonErrorContext(void *arg);
+static bool LockCitusExtension(void);
+
 
 /*
  * InitializeMaintenanceDaemon, called at server start, is responsible for
@@ -262,6 +267,15 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		CHECK_FOR_INTERRUPTS();
 
 		/*
+		 * XXX: We clear the metadata cache before every iteration because otherwise
+		 * it might contain stale OIDs. It appears that in some cases invalidation
+		 * messages for a DROP EXTENSION may arrive during deadlock detection and
+		 * this causes us to cache a stale pg_dist_node OID. We'd actually expect
+		 * all invalidations to arrive after obtaining a lock in LockCitusExtension.
+		 */
+		ClearMetadataOIDCache();
+
+		/*
 		 * Perform Work.  If a specific task needs to be called sooner than
 		 * timeout indicates, it's ok to lower it to that value.  Expensive
 		 * tasks should do their own time math about whether to re-run checks.
@@ -272,11 +286,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		{
 			StartTransactionCommand();
 
-			/*
-			 * We don't want to run the deadlock checks if there exists
-			 * any version mistmatch.
-			 */
-			if (CheckCitusVersion(DEBUG1))
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping deadlock detection")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 			{
 				foundDeadlock = CheckForDistributedDeadlocks();
 			}
@@ -471,4 +486,36 @@ MaintenanceDaemonErrorContext(void *arg)
 	MaintenanceDaemonDBData *myDbData = (MaintenanceDaemonDBData *) arg;
 	errcontext("Citus maintenance daemon for database %u user %u",
 			   myDbData->databaseOid, myDbData->userOid);
+}
+
+
+/*
+ * LockCitusExtension acquires a lock on the Citus extension or returns
+ * false if the extension does not exist or is being dropped.
+ */
+static bool
+LockCitusExtension(void)
+{
+	Oid recheckExtensionOid = InvalidOid;
+
+	Oid extensionOid = get_extension_oid("citus", true);
+	if (extensionOid == InvalidOid)
+	{
+		/* citus extension does not exist */
+		return false;
+	}
+
+	LockDatabaseObject(ExtensionRelationId, extensionOid, 0, AccessShareLock);
+
+	/*
+	 * The extension may have been dropped and possibly recreated prior to
+	 * obtaining a lock. Check whether we still get the expected OID.
+	 */
+	recheckExtensionOid = get_extension_oid("citus", true);
+	if (recheckExtensionOid != extensionOid)
+	{
+		return false;
+	}
+
+	return true;
 }
