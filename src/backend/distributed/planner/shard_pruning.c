@@ -216,11 +216,18 @@ List *
 PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList)
 {
 	DistTableCacheEntry *cacheEntry = DistributedTableCacheEntry(relationId);
+	int shardCount = cacheEntry->shardIntervalArrayLength;
 	char partitionMethod = cacheEntry->partitionMethod;
 	ClauseWalkerContext context = { 0 };
 	ListCell *pruneCell;
 	List *prunedList = NIL;
 	bool foundRestriction = false;
+
+	/* there are no shards to return */
+	if (shardCount == 0)
+	{
+		return NIL;
+	}
 
 	/* always return empty result if WHERE clause is of the form: false (AND ..) */
 	if (ContainsFalseClause(whereClauseList))
