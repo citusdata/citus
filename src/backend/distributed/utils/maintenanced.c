@@ -24,9 +24,11 @@
 #include "catalog/pg_extension.h"
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
+#include "catalog/namespace.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
+#include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
@@ -73,6 +75,7 @@ typedef struct MaintenanceDaemonDBData
 	/* information: which user to use */
 	Oid userOid;
 	bool daemonStarted;
+	pid_t workerPid;
 	Latch *latch; /* pointer to the background worker's latch */
 } MaintenanceDaemonDBData;
 
@@ -170,6 +173,7 @@ InitializeMaintenanceDaemonBackend(void)
 		}
 
 		dbData->daemonStarted = true;
+		dbData->workerPid = 0;
 		LWLockRelease(&MaintenanceDaemonControl->lock);
 
 		WaitForBackgroundWorkerStartup(handle, &pid);
@@ -225,10 +229,18 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 */
 		proc_exit(0);
 	}
-	LWLockRelease(&MaintenanceDaemonControl->lock);
 
+	/* from this point, DROP DATABASE will attempt to kill the worker */
+	myDbData->workerPid = MyProcPid;
+
+	/* wire up signals */
+	pqsignal(SIGTERM, die);
+	pqsignal(SIGHUP, MaintenanceDaemonSigHupHandler);
+	BackgroundWorkerUnblockSignals();
 
 	myDbData->latch = MyLatch;
+
+	LWLockRelease(&MaintenanceDaemonControl->lock);
 
 	/*
 	 * Setup error context so log messages can be properly attributed. Some of
@@ -242,10 +254,6 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	errorCallback.previous = error_context_stack;
 	error_context_stack = &errorCallback;
 
-	/* wire up signals */
-	pqsignal(SIGTERM, die);
-	pqsignal(SIGHUP, MaintenanceDaemonSigHupHandler);
-	BackgroundWorkerUnblockSignals();
 
 	elog(LOG, "starting maintenance daemon on database %u user %u",
 		 databaseOid, myDbData->userOid);
@@ -286,6 +294,14 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		{
 			StartTransactionCommand();
 
+			/*
+			 * We skip the deadlock detection if citus extension
+			 * is not accessible.
+			 *
+			 * Similarly, we skip to run the deadlock checks if
+			 * there exists any version mismatch or the extension
+			 * is not fully created yet.
+			 */
 			if (!LockCitusExtension())
 			{
 				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
@@ -518,4 +534,34 @@ LockCitusExtension(void)
 	}
 
 	return true;
+}
+
+
+/*
+ * StopMaintenanceDaemon stops the maintenance daemon for the
+ * given database and removes it from the maintenance daemon
+ * control hash.
+ */
+void
+StopMaintenanceDaemon(Oid databaseId)
+{
+	bool found = false;
+	MaintenanceDaemonDBData *dbData = NULL;
+	pid_t workerPid = 0;
+
+	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
+
+	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonControl->dbHash,
+													 &databaseId, HASH_REMOVE, &found);
+	if (found)
+	{
+		workerPid = dbData->workerPid;
+	}
+
+	LWLockRelease(&MaintenanceDaemonControl->lock);
+
+	if (workerPid > 0)
+	{
+		kill(workerPid, SIGTERM);
+	}
 }
