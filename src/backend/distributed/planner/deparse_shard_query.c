@@ -82,11 +82,15 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 
 			UpdateRelationToShardNames((Node *) copiedSubquery, relationShardList);
 		}
-		else if (task->upsertQuery)
+		else if (task->upsertQuery || valuesRTE != NULL)
 		{
 			RangeTblEntry *rangeTableEntry = NULL;
 
-			/* setting an alias simplifies deparsing of UPSERTs */
+			/*
+			 * Always an alias in UPSERTs and multi-row INSERTs to avoid
+			 * deparsing issues (e.g. RETURNING might reference the original
+			 * table name, which has been replaced by a shard name).
+			 */
 			rangeTableEntry = linitial(query->rtable);
 			if (rangeTableEntry->alias == NULL)
 			{

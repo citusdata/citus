@@ -305,7 +305,7 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Insert on lineitem_290000
+        ->  Insert on lineitem_290000 citus_table_alias
               ->  Values Scan on "*VALUES*"
 -- Test update
 EXPLAIN (COSTS FALSE)
