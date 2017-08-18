@@ -206,6 +206,22 @@ SELECT create_distributed_table('data_load_test', 'col1');
 SELECT * FROM data_load_test ORDER BY col1;
 DROP TABLE data_load_test;
 
+-- test queries on distributed tables with no shards
+CREATE TABLE no_shard_test (col1 int, col2 text);
+SELECT create_distributed_table('no_shard_test', 'col1', 'append');
+SELECT * FROM no_shard_test WHERE col1 > 1;
+DROP TABLE no_shard_test;
+
+CREATE TABLE no_shard_test (col1 int, col2 text);
+SELECT create_distributed_table('no_shard_test', 'col1', 'range');
+SELECT * FROM no_shard_test WHERE col1 > 1;
+DROP TABLE no_shard_test;
+
+CREATE TABLE no_shard_test (col1 int, col2 text);
+SELECT master_create_distributed_table('no_shard_test', 'col1', 'hash');
+SELECT * FROM no_shard_test WHERE col1 > 1;
+DROP TABLE no_shard_test;
+
 -- ensure writes in the same transaction as create_distributed_table are visible
 BEGIN;
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
