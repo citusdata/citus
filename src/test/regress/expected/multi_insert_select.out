@@ -2401,21 +2401,35 @@ SELECT user_id, value_4 FROM test_view ORDER BY user_id, value_4;
 -- Drop the view now, because the column we are about to drop depends on it
 DROP VIEW test_view;
 -- Make sure we handle dropped columns correctly
-TRUNCATE raw_events_first;
-ALTER TABLE raw_events_first DROP COLUMN value_1;
-INSERT INTO raw_events_first (user_id, value_4)
+CREATE TABLE drop_col_table (col1 text, col2 text, col3 text);
+SELECT create_distributed_table('drop_col_table', 'col2');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE drop_col_table DROP COLUMN col1;
+INSERT INTO drop_col_table (col3, col2)
 SELECT value_4, user_id FROM raw_events_second LIMIT 5;
-SELECT user_id, value_4 FROM raw_events_first ORDER BY user_id;
- user_id | value_4 
----------+---------
-       3 |       1
-       6 |       2
-       9 |       3
-      12 |       4
-      15 |       5
+SELECT * FROM drop_col_table ORDER BY col2, col3;
+ col2 | col3 
+------+------
+ 1    | 3
+ 2    | 6
+ 3    | 9
+ 4    | 12
+ 5    | 15
 (5 rows)
 
+-- make sure the tuple went to the right shard
+SELECT * FROM drop_col_table WHERE col2 = '1';
+ col2 | col3 
+------+------
+ 1    | 3
+(1 row)
+
 RESET client_min_messages;
+DROP TABLE drop_col_table;
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE raw_events_first CASCADE;
