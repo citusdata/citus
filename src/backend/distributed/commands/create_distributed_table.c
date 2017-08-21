@@ -1149,6 +1149,8 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	List *columnNameList = NIL;
 	Relation distributedRelation = NULL;
 	TupleDesc tupleDescriptor = NULL;
+	Var *partitionColumn = NULL;
+	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
 	bool stopOnFailure = true;
 
 	EState *estate = NULL;
@@ -1189,6 +1191,13 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 	slot = MakeSingleTupleTableSlot(tupleDescriptor);
 	columnNameList = TupleDescColumnNameList(tupleDescriptor);
 
+	/* determine the partition column in the tuple descriptor */
+	partitionColumn = PartitionColumn(distributedRelationId, 0);
+	if (partitionColumn != NULL)
+	{
+		partitionColumnIndex = partitionColumn->varattno - 1;
+	}
+
 	/* initialise per-tuple memory context */
 	estate = CreateExecutorState();
 	econtext = GetPerTupleExprContext(estate);
@@ -1196,8 +1205,9 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 	copyDest =
 		(DestReceiver *) CreateCitusCopyDestReceiver(distributedRelationId,
-													 columnNameList, estate,
-													 stopOnFailure);
+													 columnNameList,
+													 partitionColumnIndex,
+													 estate, stopOnFailure);
 
 	/* initialise state for writing to shards, we'll open connections on demand */
 	copyDest->rStartup(copyDest, 0, tupleDescriptor);
