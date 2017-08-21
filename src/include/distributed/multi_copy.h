@@ -20,6 +20,9 @@
 #include "tcop/dest.h"
 
 
+#define INVALID_PARTITION_COLUMN_INDEX -1
+
+
 /*
  * A smaller version of copy.c's CopyStateData, trimmed to the elements
  * necessary to copy out results. While it'd be a bit nicer to share code,
@@ -90,6 +93,7 @@ typedef struct CitusCopyDestReceiver
 /* function declarations for copying into a distributed table */
 extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
+														   int partitionColumnIndex,
 														   EState *executorState,
 														   bool stopOnFailure);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
