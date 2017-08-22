@@ -221,16 +221,23 @@ INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
 CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
--- but it is allowed after a multi-row insert
+-- COPY cannot be performed after a multi-row INSERT that uses one connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
+ERROR:  cannot establish a new connection for placement 1200003, since DML has been executed on a connection that is in use
+CONTEXT:  COPY researchers, line 2: "10,6,Lesport Lampie"
 ROLLBACK;
 -- after a COPY you can modify multiple shards, since they'll use different connections
 BEGIN;
 \copy researchers from stdin delimiter ','
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+ROLLBACK;
+-- after a COPY you can perform a multi-row INSERT
+BEGIN;
+\copy researchers from stdin delimiter ','
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 ROLLBACK;
 -- COPY can happen before single row INSERT
 BEGIN;

@@ -59,11 +59,10 @@ step s1-multi-insert:
 
 step s2-multi-insert-overlap: 
     INSERT INTO test_concurrent_dml VALUES (1), (4);
- <waiting ...>
+
 step s1-commit: 
     COMMIT;
 
-step s2-multi-insert-overlap: <... completed>
 
 starting permutation: s1-begin s2-begin s1-multi-insert s2-multi-insert s1-commit s2-commit
 master_create_worker_shards
