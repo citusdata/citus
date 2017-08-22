@@ -80,7 +80,7 @@ static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
-									bool expectResults);
+									bool multipleTasks, bool expectResults);
 static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
@@ -427,11 +427,6 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 				RaiseDeferredError(planningError, ERROR);
 			}
 
-			if (list_length(taskList) > 1)
-			{
-				node->methods = &RouterMultiModifyCustomExecMethods;
-			}
-
 			workerJob->taskList = taskList;
 		}
 
@@ -453,11 +448,11 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 
 
 /*
- * RouterSingleModifyExecScan executes a single modification query on a
- * distributed plan and returns results if there is any.
+ * RouterSequentialModifyExecScan executes 0 or more modifications on a
+ * distributed table sequentially and returns results if there are any.
  */
 TupleTableSlot *
-RouterSingleModifyExecScan(CustomScanState *node)
+RouterSequentialModifyExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
@@ -468,12 +463,25 @@ RouterSingleModifyExecScan(CustomScanState *node)
 		bool hasReturning = multiPlan->hasReturning;
 		Job *workerJob = multiPlan->workerJob;
 		List *taskList = workerJob->taskList;
+		ListCell *taskCell = NULL;
+		bool multipleTasks = list_length(taskList) > 1;
 
-		if (list_length(taskList) > 0)
+		/*
+		 * We could naturally handle function-based transactions (i.e. those using
+		 * PL/pgSQL or similar) by checking the type of queryDesc->dest, but some
+		 * customers already use functions that touch multiple shards from within
+		 * a function, so we'll ignore functions for now.
+		 */
+		if (IsTransactionBlock() || multipleTasks)
 		{
-			Task *task = (Task *) linitial(taskList);
+			BeginOrContinueCoordinatedTransaction();
+		}
 
-			ExecuteSingleModifyTask(scanState, task, hasReturning);
+		foreach(taskCell, taskList)
+		{
+			Task *task = (Task *) lfirst(taskCell);
+
+			ExecuteSingleModifyTask(scanState, task, multipleTasks, hasReturning);
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -682,7 +690,8 @@ CreatePlacementAccess(ShardPlacement *placement, ShardPlacementAccessType access
  * framework), or errors out (failed on all placements).
  */
 static void
-ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResults)
+ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTasks,
+						bool expectResults)
 {
 	CmdType operation = scanState->multiPlan->operation;
 	EState *executorState = scanState->customScanState.ss.ps.state;
@@ -711,17 +720,6 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	{
 		BeginOrContinueCoordinatedTransaction();
 		CoordinatedTransactionUse2PC();
-	}
-
-	/*
-	 * We could naturally handle function-based transactions (i.e. those using
-	 * PL/pgSQL or similar) by checking the type of queryDesc->dest, but some
-	 * customers already use functions that touch multiple shards from within
-	 * a function, so we'll ignore functions for now.
-	 */
-	if (IsTransactionBlock())
-	{
-		BeginOrContinueCoordinatedTransaction();
 	}
 
 	/*
@@ -775,6 +773,15 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 		/* if we're running a 2PC, the query should fail on error */
 		failOnError = taskRequiresTwoPhaseCommit;
 
+		if (multipleTasks && expectResults)
+		{
+			/*
+			 * If we have multiple tasks and one fails, we cannot clear
+			 * the tuple store and start over. Error out instead.
+			 */
+			failOnError = true;
+		}
+
 		/*
 		 * If caller is interested, store query results the first time
 		 * through. The output of the query's execution on other shards is
@@ -822,7 +829,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool expectResult
 	/* if some placements failed, ensure future statements don't access them */
 	MarkFailedShardPlacements();
 
-	executorState->es_processed = affectedTupleCount;
+	executorState->es_processed += affectedTupleCount;
 
 	if (IsTransactionBlock())
 	{
