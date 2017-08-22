@@ -781,6 +781,26 @@ SELECT create_distributed_table('tt1','id');
 DROP TABLE tt1;
 END;
 
+-- Test dropping a column in front of the partition column
+CREATE TABLE drop_copy_test_table (col1 int, col2 int, col3 int, col4 int);
+SELECT create_distributed_table('drop_copy_test_table','col3');
+
+ALTER TABLE drop_copy_test_table drop column col1;
+COPY drop_copy_test_table (col2,col3,col4) from STDIN with CSV;
+,1,
+,2,
+\.
+SELECT * FROM drop_copy_test_table WHERE col3 = 1;
+
+ALTER TABLE drop_copy_test_table drop column col4;
+COPY drop_copy_test_table (col2,col3) from STDIN with CSV;
+,1
+,2
+\.
+SELECT * FROM drop_copy_test_table WHERE col3 = 1;
+
+DROP TABLE drop_copy_test_table;
+
 -- There should be no "tt1" shard on the worker nodes
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'tt1%';
