@@ -519,6 +519,34 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	}
 
+	/* keep track of transaction-scoped temporary tables */
+	if (IsA(parsetree, CreateStmt))
+	{
+		CreateStmt *createStatement = (CreateStmt *) parsetree;
+
+		if (createStatement->oncommit == ONCOMMIT_DROP)
+		{
+			bool missingOK = false;
+			Oid relationId = RangeVarGetRelid(createStatement->relation, NoLock,
+											  missingOK);
+
+			RegisterTemporaryTable(relationId);
+		}
+	}
+	else if (IsA(parsetree, CreateTableAsStmt))
+	{
+		CreateTableAsStmt *createTableAsStmt = (CreateTableAsStmt *) parsetree;
+		IntoClause *into = createTableAsStmt->into;
+
+		if (into->onCommit == ONCOMMIT_DROP)
+		{
+			bool missingOK = false;
+			Oid relationId = RangeVarGetRelid(into->rel, NoLock, missingOK);
+
+			RegisterTemporaryTable(relationId);
+		}
+	}
+
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
 	{

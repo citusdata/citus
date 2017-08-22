@@ -7496,7 +7496,13 @@ generate_relation_or_shard_name(Oid relid, Oid distrelid, int64 shardid,
 		if (shardid > 0)
 		{
 			Oid schemaOid = get_rel_namespace(relid);
-			char *schemaName = get_namespace_name(schemaOid);
+			char *schemaName = NULL;
+
+			char relpersistence = get_rel_persistence(relid);
+			if (relpersistence != RELPERSISTENCE_TEMP)
+			{
+				schemaName = get_namespace_name(schemaOid);
+			}
 
 			AppendShardIdToName(&relname, shardid);
 
@@ -7562,6 +7568,10 @@ generate_relation_name(Oid relid, List *namespaces)
 	/* Otherwise, qualify the name if not visible in search path */
 	if (!need_qual)
 		need_qual = !RelationIsVisible(relid);
+
+	/* temporary tables should never be qualified */
+	if (reltup->relpersistence == RELPERSISTENCE_TEMP)
+		need_qual = false;
 
 	if (need_qual)
 		nspname = get_namespace_name(reltup->relnamespace);

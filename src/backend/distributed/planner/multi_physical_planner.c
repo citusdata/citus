@@ -3978,6 +3978,7 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 
 		Oid relationId = rangeTableEntry->relid;
 		char *relationName = get_rel_name(relationId);
+		char relationPersistence = get_rel_persistence(relationId);
 
 		/*
 		 * If the table is not in the default namespace (public), we include it in
@@ -3985,7 +3986,8 @@ FragmentAlias(RangeTblEntry *rangeTableEntry, RangeTableFragment *fragment)
 		 */
 		Oid schemaId = get_rel_namespace(relationId);
 		schemaName = get_namespace_name(schemaId);
-		if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
+		if (strncmp(schemaName, "public", NAMEDATALEN) == 0 ||
+			relationPersistence == RELPERSISTENCE_TEMP)
 		{
 			schemaName = NULL;
 		}

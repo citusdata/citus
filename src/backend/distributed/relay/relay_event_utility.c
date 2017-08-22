@@ -174,7 +174,10 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			char **relationSchemaName = &(createStmt->relation->schemaname);
 
 			/* prefix with schema name if it is not added already */
-			SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+			if (createStmt->relation->relpersistence != RELPERSISTENCE_TEMP)
+			{
+				SetSchemaNameIfNotExist(relationSchemaName, schemaName);
+			}
 
 			AppendShardIdToName(relationName, shardId);
 			break;

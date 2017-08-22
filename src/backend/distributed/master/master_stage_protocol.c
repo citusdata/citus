@@ -573,6 +573,13 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 	char *escapedSchemaName = quote_literal_cstr(schemaName);
 	ListCell *ddlCommandCell = NULL;
 	ListCell *foreignConstraintCommandCell = NULL;
+	bool temporaryTable = false;
+
+	char tablePersistence = get_rel_persistence(relationId);
+	if (tablePersistence == RELPERSISTENCE_TEMP)
+	{
+		temporaryTable = true;
+	}
 
 	foreach(ddlCommandCell, ddlCommandList)
 	{
@@ -580,7 +587,7 @@ WorkerCreateShard(Oid relationId, int shardIndex, uint64 shardId, List *ddlComma
 		char *escapedDDLCommand = quote_literal_cstr(ddlCommand);
 		StringInfo applyDDLCommand = makeStringInfo();
 
-		if (strcmp(schemaName, "public") != 0)
+		if (strcmp(schemaName, "public") != 0 && !temporaryTable)
 		{
 			appendStringInfo(applyDDLCommand, WORKER_APPLY_SHARD_DDL_COMMAND, shardId,
 							 escapedSchemaName, escapedDDLCommand);

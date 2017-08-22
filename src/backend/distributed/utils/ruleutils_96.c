@@ -7280,6 +7280,10 @@ generate_relation_name(Oid relid, List *namespaces)
 	if (!need_qual)
 		need_qual = !RelationIsVisible(relid);
 
+	/* temporary tables should never be qualified */
+	if (reltup->relpersistence == RELPERSISTENCE_TEMP)
+		need_qual = false;
+
 	if (need_qual)
 		nspname = get_namespace_name(reltup->relnamespace);
 	else

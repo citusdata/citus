@@ -1062,13 +1062,24 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
 
 	char *schemaName = copyStatement->relation->schemaname;
 	char *relationName = copyStatement->relation->relname;
+	Oid tableId = InvalidOid;
+	char tablePersistence = 0;
 
 	char *shardName = pstrdup(relationName);
 	char *shardQualifiedName = NULL;
 
 	AppendShardIdToName(&shardName, shardId);
 
-	shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
+	tableId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
+	tablePersistence = get_rel_persistence(tableId);
+	if (tablePersistence != RELPERSISTENCE_TEMP)
+	{
+		shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
+	}
+	else
+	{
+		shardQualifiedName = (char *) quote_identifier(shardName);
+	}
 
 	appendStringInfo(command, "COPY %s ", shardQualifiedName);
 

@@ -496,6 +496,7 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 	char tableType = 0;
+	char tablePersistence = 0;
 	char *tableSchemaDef = NULL;
 	char *tableColumnOptionsDef = NULL;
 	char *createSchemaCommand = NULL;
@@ -525,12 +526,16 @@ GetTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 		tableDDLEventList = lappend(tableDDLEventList, serverDef);
 	}
 
-	/* create schema if the table is not in the default namespace (public) */
-	schemaId = get_rel_namespace(relationId);
-	createSchemaCommand = CreateSchemaDDLCommand(schemaId);
-	if (createSchemaCommand != NULL)
+	/* create schema if the table is not temporary */
+	tablePersistence = get_rel_persistence(relationId);
+	if (tablePersistence != RELPERSISTENCE_TEMP)
 	{
-		tableDDLEventList = lappend(tableDDLEventList, createSchemaCommand);
+		schemaId = get_rel_namespace(relationId);
+		createSchemaCommand = CreateSchemaDDLCommand(schemaId);
+		if (createSchemaCommand != NULL)
+		{
+			tableDDLEventList = lappend(tableDDLEventList, createSchemaCommand);
+		}
 	}
 
 	/* fetch table schema and column option definitions */

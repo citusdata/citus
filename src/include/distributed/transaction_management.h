@@ -80,6 +80,8 @@ extern void InitializeTransactionManagement(void);
 
 /* other functions */
 extern List * ActiveSubXacts(void);
+extern void RegisterTemporaryTable(Oid relationId);
+extern bool KnownTemporaryTable(Oid relationId);
 
 
 #endif /*  TRANSACTION_MANAGMENT_H */

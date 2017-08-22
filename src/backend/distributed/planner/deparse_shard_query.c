@@ -174,6 +174,7 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	Oid schemaId = InvalidOid;
 	char *relationName = NULL;
 	char *schemaName = NULL;
+	char relationPersistence = 0;
 	bool replaceRteWithNullValues = false;
 	ListCell *relationShardCell = NULL;
 	RelationShard *relationShard = NULL;
@@ -236,8 +237,12 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	relationName = get_rel_name(relationId);
 	AppendShardIdToName(&relationName, shardId);
 
-	schemaId = get_rel_namespace(relationId);
-	schemaName = get_namespace_name(schemaId);
+	relationPersistence = get_rel_persistence(relationId);
+	if (relationPersistence != RELPERSISTENCE_TEMP)
+	{
+		schemaId = get_rel_namespace(relationId);
+		schemaName = get_namespace_name(schemaId);
+	}
 
 	ModifyRangeTblExtraData(newRte, CITUS_RTE_SHARD, schemaName, relationName, NIL);
 

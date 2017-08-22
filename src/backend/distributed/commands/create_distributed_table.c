@@ -28,6 +28,7 @@
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -44,6 +45,7 @@
 #include "distributed/pg_dist_partition.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/remote_commands.h"
+#include "distributed/transaction_management.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "executor/executor.h"
@@ -294,6 +296,13 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	bool localTableEmpty = false;
 
 	Relation colocatedRelation = NULL;
+
+	char relationPersistence = get_rel_persistence(relationId);
+	if (relationPersistence == RELPERSISTENCE_TEMP && !KnownTemporaryTable(relationId))
+	{
+		ereport(ERROR, (errmsg("can only distribute temporary tables with "
+							   "ON COMMIT DROP")));
+	}
 
 	replicationModel = AppropriateReplicationModel(distributionMethod, viaDeprecatedAPI);
 
@@ -800,9 +809,17 @@ EnsureSchemaExistsOnAllNodes(Oid relationId)
 	StringInfo applySchemaCreationDDL = makeStringInfo();
 
 	Oid schemaId = get_rel_namespace(relationId);
-	const char *createSchemaDDL = CreateSchemaDDLCommand(schemaId);
+	const char *createSchemaDDL = NULL;
 	uint64 connectionFlag = FORCE_NEW_CONNECTION;
 
+	char tablePersistence = get_rel_persistence(relationId);
+	if (tablePersistence == RELPERSISTENCE_TEMP)
+	{
+		/* cannot create temporary table schemas */
+		return;
+	}
+
+	createSchemaDDL = CreateSchemaDDLCommand(schemaId);
 	if (createSchemaDDL == NULL)
 	{
 		return;

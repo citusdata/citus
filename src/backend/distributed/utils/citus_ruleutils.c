@@ -315,6 +315,10 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		{
 			appendStringInfoString(&buffer, "UNLOGGED ");
 		}
+		else if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP)
+		{
+			appendStringInfoString(&buffer, "TEMPORARY ");
+		}
 
 		appendStringInfo(&buffer, "TABLE %s (", relationName);
 	}
@@ -473,6 +477,13 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 		appendStringInfo(&buffer, " PARTITION BY %s ", partitioningInformation);
 	}
 #endif
+
+	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP)
+	{
+		/* we always drop temporary tables at the end of the transaction */
+		appendStringInfoString(&buffer, " ON COMMIT DROP");
+	}
+
 	relation_close(relation, AccessShareLock);
 
 	return (buffer.data);
