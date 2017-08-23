@@ -7,13 +7,6 @@ test: isolation_create_table_vs_add_remove_node
 # that come later can be parallelized
 test: isolation_cluster_management
 
-test: isolation_hash_copy_vs_all
-test: isolation_append_copy_vs_all
-test: isolation_range_copy_vs_all
-test: isolation_select_vs_all
-test: isolation_insert_vs_all
-test: isolation_update_vs_all
-
 test: isolation_dml_vs_repair isolation_copy_placement_vs_copy_placement
 
 test: isolation_concurrent_dml isolation_data_migration
@@ -29,3 +22,18 @@ test: isolation_distributed_deadlock_detection
 # creating a restore point briefly blocks all
 # writes, run this test serially.
 test: isolation_create_restore_point
+
+test: isolation_hash_copy_vs_all
+test: isolation_append_copy_vs_all
+test: isolation_range_copy_vs_all
+test: isolation_reference_copy_vs_all
+test: isolation_partitioned_copy_vs_all
+test: isolation_select_vs_all
+test: isolation_insert_vs_all
+test: isolation_insert_select_vs_all
+test: isolation_upsert_vs_all
+test: isolation_update_vs_all
+test: isolation_delete_vs_all
+test: isolation_truncate_vs_all
+test: isolation_drop_vs_all
+test: isolation_ddl_vs_all

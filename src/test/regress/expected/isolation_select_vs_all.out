@@ -30,7 +30,7 @@ step s1-router-select: SELECT * FROM select_append WHERE id = 1;
 id             data           int_data       
 
 1               b             1              
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -56,7 +56,7 @@ id             data           int_data
 1               b             1              
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -77,7 +77,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -101,7 +101,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -109,7 +109,7 @@ id             data           int_data
 2               c             2              
 3               d             3              
 4               e             4              
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -129,7 +129,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -139,7 +139,7 @@ id             data           int_data
 4               e             4              
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -162,7 +162,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -189,7 +189,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -198,7 +198,7 @@ id             data           int_data       id             data           int_d
 2               c             2              2               c             2              
 3               d             3              3               d             3              
 4               e             4              4               e             4              
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -220,7 +220,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -231,7 +231,7 @@ id             data           int_data       id             data           int_d
 4               e             4              4               e             4              
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -348,7 +348,7 @@ step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -364,8 +364,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-router-select s2-ddl-drop-index s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-router-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -383,8 +388,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index-concurrently s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -400,8 +410,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-add-column s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -418,8 +433,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-router-select s2-ddl-drop-column s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-router-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -437,6 +457,34 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-router-select: SELECT * FROM select_append WHERE id = 1;
+id             data           int_data       
+
+1               b             1              
+step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -629,7 +677,7 @@ error in steps s1-commit s2-router-select: ERROR:  relation "select_append" does
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-router-select s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-router-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -645,8 +693,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-router-select s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-router-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -664,8 +717,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-router-select s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -682,8 +740,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-router-select s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -701,6 +764,34 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-router-select s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
+step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
+step s1-commit: COMMIT;
+step s2-router-select: <... completed>
+id             new_column     int_data       
+
+1               b             1              
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-router-select s1-commit s1-select-count
 create_distributed_table
@@ -800,7 +891,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -821,7 +912,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -842,7 +933,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -863,7 +954,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -884,7 +975,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -906,7 +997,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -920,13 +1011,13 @@ step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -940,15 +1031,20 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-real-time-select s2-ddl-drop-index s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-real-time-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -963,14 +1059,19 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -984,14 +1085,19 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-add-column s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1006,15 +1112,20 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-real-time-select s2-ddl-drop-column s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-real-time-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       new_column     
 
 0               a             0              0              
@@ -1029,6 +1140,38 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
+id             data           int_data       
+
+0               a             0              
+1               b             1              
+2               c             2              
+3               d             3              
+4               e             4              
+step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -1036,7 +1179,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1060,7 +1203,7 @@ create_distributed_table
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1085,7 +1228,7 @@ create_distributed_table
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
-step s1-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 step s2-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
@@ -1105,7 +1248,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO select_append VALUES(0, 'k', 0);
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1126,7 +1269,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO select_append SELECT * FROM select_append;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1147,7 +1290,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE select_append SET data = 'l' WHERE id = 0;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1168,7 +1311,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM select_append WHERE id = 1;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1189,7 +1332,7 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE select_append;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data; <waiting ...>
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
 id             data           int_data       
@@ -1206,21 +1349,21 @@ create_distributed_table
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE select_append;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data; <waiting ...>
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
 error in steps s1-commit s2-real-time-select: ERROR:  relation "select_append" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-real-time-select s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-real-time-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1233,8 +1376,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-real-time-select s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-real-time-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1242,7 +1390,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-ddl-drop-index: DROP INDEX select_append_index;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data; <waiting ...>
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
 id             data           int_data       
@@ -1256,15 +1404,20 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-real-time-select s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data; <waiting ...>
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
 id             data           int_data       new_column     
@@ -1278,8 +1431,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-real-time-select s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -1287,7 +1445,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-ddl-drop-column: ALTER TABLE select_append DROP new_column;
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data; <waiting ...>
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
 id             data           int_data       
@@ -1301,6 +1459,38 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-real-time-select s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
+step s1-commit: COMMIT;
+step s2-real-time-select: <... completed>
+id             new_column     int_data       
+
+0               a             0              
+1               b             1              
+2               c             2              
+3               d             3              
+4               e             4              
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-real-time-select s1-commit s1-select-count
 create_distributed_table
@@ -1312,7 +1502,7 @@ step s1-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
 
 32768          
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1336,7 +1526,7 @@ step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DEL
 master_modify_multiple_shards
 
 5              
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 0               a             0              
@@ -1361,7 +1551,7 @@ step s1-distribute-table: SELECT create_distributed_table('select_append', 'id',
 create_distributed_table
 
                
-step s2-real-time-select: SELECT * FROM select_append ORDER BY id, data;
+step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
 id             data           int_data       
 
 step s1-commit: COMMIT;
@@ -1378,7 +1568,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1402,7 +1592,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1426,7 +1616,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1450,7 +1640,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1474,7 +1664,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1499,7 +1689,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1514,7 +1704,7 @@ step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-create-index s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1522,7 +1712,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1537,8 +1727,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-task-tracker-select s2-ddl-drop-index s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-task-tracker-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1547,7 +1742,7 @@ step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1563,8 +1758,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-create-index-concurrently s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1572,7 +1772,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1587,8 +1787,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-add-column s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -1596,7 +1801,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1612,8 +1817,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-task-tracker-select s2-ddl-drop-column s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-task-tracker-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -1622,7 +1832,7 @@ step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       new_column     id             data           int_data       new_column     
 
@@ -1638,6 +1848,41 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-task-tracker-select: 
+	SET citus.task_executor_type TO "task-tracker";
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+
+id             data           int_data       id             data           int_data       
+
+0               a             0              0               a             0              
+1               b             1              1               b             1              
+2               c             2              2               c             2              
+3               d             3              3               d             3              
+4               e             4              4               e             4              
+step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-task-tracker-select s2-table-size s1-commit s1-select-count
 create_distributed_table
@@ -1647,7 +1892,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1674,7 +1919,7 @@ step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2,
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1702,7 +1947,7 @@ step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, dat
 step s1-begin: BEGIN;
 step s1-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1725,7 +1970,7 @@ step s1-begin: BEGIN;
 step s1-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1749,7 +1994,7 @@ step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1773,7 +2018,7 @@ step s1-begin: BEGIN;
 step s1-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1797,7 +2042,7 @@ step s1-begin: BEGIN;
 step s1-delete: DELETE FROM select_append WHERE id = 1;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1821,7 +2066,7 @@ step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE select_append;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-task-tracker-select: <... completed>
@@ -1841,7 +2086,7 @@ step s1-begin: BEGIN;
 step s1-drop: DROP TABLE select_append;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-task-tracker-select: <... completed>
@@ -1849,7 +2094,7 @@ error in steps s1-commit s2-task-tracker-select: ERROR:  relation "select_append
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 
-starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-task-tracker-select s1-commit s1-select-count
+starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-task-tracker-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1858,7 +2103,7 @@ step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1872,8 +2117,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-task-tracker-select s1-commit s1-select-count
+(localhost,57637,t,1)
+(localhost,57638,t,1)
+
+starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-task-tracker-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 
                
@@ -1883,7 +2133,7 @@ step s1-begin: BEGIN;
 step s1-ddl-drop-index: DROP INDEX select_append_index;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-task-tracker-select: <... completed>
@@ -1898,8 +2148,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-task-tracker-select s1-commit s1-select-count
+(localhost,57637,t,0)
+(localhost,57638,t,0)
+
+starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -1908,7 +2163,7 @@ step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-task-tracker-select: <... completed>
@@ -1923,8 +2178,13 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-task-tracker-select s1-commit s1-select-count
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+
+starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
 
                
@@ -1934,7 +2194,7 @@ step s1-begin: BEGIN;
 step s1-ddl-drop-column: ALTER TABLE select_append DROP new_column;
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-task-tracker-select: <... completed>
@@ -1949,6 +2209,41 @@ step s1-select-count: SELECT COUNT(*) FROM select_append;
 count          
 
 5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+
+starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-task-tracker-select s1-commit s1-select-count s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
+step s2-task-tracker-select: 
+	SET citus.task_executor_type TO "task-tracker";
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
+ <waiting ...>
+step s1-commit: COMMIT;
+step s2-task-tracker-select: <... completed>
+id             new_column     int_data       id             new_column     int_data       
+
+0               a             0              0               a             0              
+1               b             1              1               b             1              
+2               c             2              2               c             2              
+3               d             3              3               d             3              
+4               e             4              4               e             4              
+step s1-select-count: SELECT COUNT(*) FROM select_append;
+count          
+
+5              
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-task-tracker-select s1-commit s1-select-count
 create_distributed_table
@@ -1962,7 +2257,7 @@ citus_total_relation_size
 32768          
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -1989,7 +2284,7 @@ master_modify_multiple_shards
 5              
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
@@ -2017,7 +2312,7 @@ create_distributed_table
                
 step s2-task-tracker-select: 
 	SET citus.task_executor_type TO "task-tracker";
-	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY t1.id, t1.data, t2.id;
+	SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
 id             data           int_data       id             data           int_data       
 
