@@ -49,7 +49,8 @@ why we ask this as well as instructions for how to proceed, see the
 
   sudo apt-get install -y postgresql-server-dev-9.6 postgresql-9.6 \
                           libedit-dev libselinux1-dev libxslt-dev  \
-                          libpam0g-dev git flex make
+                          libpam0g-dev git flex make libssl-dev    \
+                          libkrb5-dev
   ```
 
 2. Get, build, and test the code
