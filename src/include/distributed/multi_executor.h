@@ -28,8 +28,6 @@ typedef struct CitusScanState
 } CitusScanState;
 
 
-extern CustomExecMethods RouterMultiModifyCustomExecMethods;
-
 extern Node * RealTimeCreateScan(CustomScan *scan);
 extern Node * TaskTrackerCreateScan(CustomScan *scan);
 extern Node * RouterCreateScan(CustomScan *scan);

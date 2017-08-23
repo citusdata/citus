@@ -58,17 +58,16 @@ static CustomExecMethods TaskTrackerCustomExecMethods = {
 	.ExplainCustomScan = CitusExplainScan
 };
 
-static CustomExecMethods RouterSingleModifyCustomExecMethods = {
-	.CustomName = "RouterSingleModifyScan",
+static CustomExecMethods RouterSequentialModifyCustomExecMethods = {
+	.CustomName = "RouterSequentialModifyScan",
 	.BeginCustomScan = CitusModifyBeginScan,
-	.ExecCustomScan = RouterSingleModifyExecScan,
+	.ExecCustomScan = RouterSequentialModifyExecScan,
 	.EndCustomScan = CitusEndScan,
 	.ReScanCustomScan = CitusReScan,
 	.ExplainCustomScan = CitusExplainScan
 };
 
-/* not static to enable reference by multi-modify logic in router execution */
-CustomExecMethods RouterMultiModifyCustomExecMethods = {
+static CustomExecMethods RouterMultiModifyCustomExecMethods = {
 	.CustomName = "RouterMultiModifyScan",
 	.BeginCustomScan = CitusModifyBeginScan,
 	.ExecCustomScan = RouterMultiModifyExecScan,
@@ -100,6 +99,7 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 static void PrepareMasterJobDirectory(Job *workerJob);
 static void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 static Relation StubRelation(TupleDesc tupleDescriptor);
+static bool IsMultiRowInsert(Query *query);
 
 
 /*
@@ -165,7 +165,7 @@ RouterCreateScan(CustomScan *scan)
 	{
 		if (isModificationQuery)
 		{
-			scanState->customScanState.methods = &RouterSingleModifyCustomExecMethods;
+			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
 		}
 		else
 		{
@@ -175,10 +175,56 @@ RouterCreateScan(CustomScan *scan)
 	else
 	{
 		Assert(isModificationQuery);
-		scanState->customScanState.methods = &RouterMultiModifyCustomExecMethods;
+
+		if (IsMultiRowInsert(workerJob->jobQuery))
+		{
+			/*
+			 * Multi-row INSERT is executed sequentially instead of using
+			 * parallel connections.
+			 */
+			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
+		}
+		else
+		{
+			scanState->customScanState.methods = &RouterMultiModifyCustomExecMethods;
+		}
 	}
 
 	return (Node *) scanState;
+}
+
+
+/*
+ * IsMultiRowInsert returns whether the given query is a multi-row INSERT.
+ *
+ * It does this by determining whether the query is an INSERT that has an
+ * RTE_VALUES. Single-row INSERTs will have their RTE_VALUES optimised away
+ * in transformInsertStmt, and instead use the target list.
+ */
+static bool
+IsMultiRowInsert(Query *query)
+{
+	ListCell *rteCell = NULL;
+	bool hasValuesRTE = false;
+
+	CmdType commandType = query->commandType;
+	if (commandType != CMD_INSERT)
+	{
+		return false;
+	}
+
+	foreach(rteCell, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
+
+		if (rte->rtekind == RTE_VALUES)
+		{
+			hasValuesRTE = true;
+			break;
+		}
+	}
+
+	return hasValuesRTE;
 }
 
 

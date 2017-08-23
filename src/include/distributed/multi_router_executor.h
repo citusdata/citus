@@ -36,7 +36,7 @@ extern bool AllModificationsCommutative;
 extern bool EnableDeadlockPrevention;
 
 extern void CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags);
-extern TupleTableSlot * RouterSingleModifyExecScan(CustomScanState *node);
+extern TupleTableSlot * RouterSequentialModifyExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterSelectExecScan(CustomScanState *node);
 extern TupleTableSlot * RouterMultiModifyExecScan(CustomScanState *node);
 

@@ -180,7 +180,7 @@ INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
 \.
 ROLLBACK;
 
--- but it is allowed after a multi-row insert
+-- COPY cannot be performed after a multi-row INSERT that uses one connection
 BEGIN;
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 \copy researchers from stdin delimiter ','
@@ -197,6 +197,15 @@ BEGIN;
 \.
 INSERT INTO researchers VALUES (2, 1, 'Knuth Donald');
 INSERT INTO researchers VALUES (10, 6, 'Lamport Leslie');
+ROLLBACK;
+
+-- after a COPY you can perform a multi-row INSERT
+BEGIN;
+\copy researchers from stdin delimiter ','
+3,1,Duth Knonald
+10,6,Lesport Lampie
+\.
+INSERT INTO researchers VALUES (2, 1, 'Knuth Donald'), (10, 6, 'Lamport Leslie');
 ROLLBACK;
 
 -- COPY can happen before single row INSERT
