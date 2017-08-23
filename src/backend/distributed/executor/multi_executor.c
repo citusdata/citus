@@ -22,6 +22,7 @@
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_planner.h"
 #include "distributed/multi_router_executor.h"
+#include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_utility.h"
@@ -204,27 +205,7 @@ RouterCreateScan(CustomScan *scan)
 static bool
 IsMultiRowInsert(Query *query)
 {
-	ListCell *rteCell = NULL;
-	bool hasValuesRTE = false;
-
-	CmdType commandType = query->commandType;
-	if (commandType != CMD_INSERT)
-	{
-		return false;
-	}
-
-	foreach(rteCell, query->rtable)
-	{
-		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
-
-		if (rte->rtekind == RTE_VALUES)
-		{
-			hasValuesRTE = true;
-			break;
-		}
-	}
-
-	return hasValuesRTE;
+	return ExtractDistributedInsertValuesRTE(query) != NULL;
 }
 
 
