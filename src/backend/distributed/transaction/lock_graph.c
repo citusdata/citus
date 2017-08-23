@@ -134,7 +134,7 @@ BuildGlobalWaitGraph(void)
 		querySent = SendRemoteCommand(connection, command);
 		if (querySent == 0)
 		{
-			ReportConnectionError(connection, ERROR);
+			ReportConnectionError(connection, WARNING);
 		}
 	}
 
@@ -151,7 +151,8 @@ BuildGlobalWaitGraph(void)
 		result = GetRemoteCommandResult(connection, raiseInterrupts);
 		if (!IsResponseOK(result))
 		{
-			ReportResultError(connection, result, ERROR);
+			ReportResultError(connection, result, WARNING);
+			continue;
 		}
 
 		rowCount = PQntuples(result);
@@ -159,8 +160,9 @@ BuildGlobalWaitGraph(void)
 
 		if (colCount != 9)
 		{
-			ereport(ERROR, (errmsg("unexpected number of columns from "
-								   "dump_local_wait_edges")));
+			ereport(WARNING, (errmsg("unexpected number of columns from "
+									 "dump_local_wait_edges")));
+			continue;
 		}
 
 		for (rowIndex = 0; rowIndex < rowCount; rowIndex++)
