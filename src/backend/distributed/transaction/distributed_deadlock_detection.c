@@ -50,7 +50,7 @@ static void BuildDeadlockPathList(QueuedTransactionNode *cycledTransactionNode,
 								  TransactionNode **transactionNodeStack,
 								  List **deadlockPath);
 static void ResetVisitedFields(HTAB *adjacencyList);
-static void AssociateDistributedTransactionWithBackendProc(TransactionNode *
+static bool AssociateDistributedTransactionWithBackendProc(TransactionNode *
 														   transactionNode);
 static TransactionNode * GetOrCreateTransactionNode(HTAB *adjacencyList,
 													DistributedTransactionId *
@@ -149,7 +149,7 @@ CheckForDistributedDeadlocks(void)
 														&deadlockPath);
 		if (deadlockFound)
 		{
-			TransactionNode *youngestTransaction = transactionNode;
+			TransactionNode *youngestAliveTransaction = NULL;
 			ListCell *participantTransactionCell = NULL;
 
 			/*
@@ -175,32 +175,43 @@ CheckForDistributedDeadlocks(void)
 			{
 				TransactionNode *currentNode =
 					(TransactionNode *) lfirst(participantTransactionCell);
-
-				TimestampTz youngestTimestamp =
-					youngestTransaction->transactionId.timestamp;
-				TimestampTz currentTimestamp = currentNode->transactionId.timestamp;
-
-				AssociateDistributedTransactionWithBackendProc(currentNode);
+				bool transactionAssociatedWithProc =
+					AssociateDistributedTransactionWithBackendProc(currentNode);
+				TimestampTz youngestTimestamp = 0;
+				TimestampTz currentTimestamp = 0;
 
 				LogTransactionNode(currentNode);
 
-				if (currentNode->transactionId.initiatorNodeIdentifier ==
-					GetLocalGroupId() &&
-					timestamptz_cmp_internal(currentTimestamp, youngestTimestamp) == 1)
+				/* we couldn't find the backend process originated the transaction */
+				if (!transactionAssociatedWithProc)
 				{
-					youngestTransaction = currentNode;
+					continue;
+				}
+
+				if (youngestAliveTransaction == NULL)
+				{
+					youngestAliveTransaction = currentNode;
+					continue;
+				}
+
+				youngestTimestamp = youngestAliveTransaction->transactionId.timestamp;
+				currentTimestamp = currentNode->transactionId.timestamp;
+				if (timestamptz_cmp_internal(currentTimestamp, youngestTimestamp) == 1)
+				{
+					youngestAliveTransaction = currentNode;
 				}
 			}
 
-			/* we should find the backend */
-			Assert(youngestTransaction->initiatorProc != NULL);
+			/* we found the deadlock and its associated proc exists */
+			if (youngestAliveTransaction)
+			{
+				CancelTransactionDueToDeadlock(youngestAliveTransaction->initiatorProc);
+				LogCancellingBackend(youngestAliveTransaction);
 
-			CancelTransactionDueToDeadlock(youngestTransaction->initiatorProc);
-			LogCancellingBackend(youngestTransaction);
+				hash_seq_term(&status);
 
-			hash_seq_term(&status);
-
-			return true;
+				return true;
+			}
 		}
 	}
 
@@ -349,8 +360,11 @@ ResetVisitedFields(HTAB *adjacencyList)
  *
  * The function goes over all the backends, checks for the backend with
  * the same transaction number as the given transaction node.
+ *
+ * If the transaction cannot be associated with a backend process, the function
+ * returns false. Otherwise, the function returns true.
  */
-static void
+static bool
 AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 {
 	int backendIndex = 0;
@@ -394,8 +408,10 @@ AssociateDistributedTransactionWithBackendProc(TransactionNode *transactionNode)
 
 		transactionNode->initiatorProc = currentProc;
 
-		break;
+		return true;
 	}
+
+	return false;
 }
 
 
