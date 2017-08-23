@@ -153,10 +153,11 @@ INSERT INTO limit_orders VALUES (12037, 'GOOG', 5634, '2001-04-16 03:37:28', 'bu
 
 SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 12037 AND 12039;
 
--- even those with functions
+-- even those with functions and returning
 INSERT INTO limit_orders VALUES (22037, 'GOOG', 5634, now(), 'buy', 0.50),
                                 (22038, 'GOOG', 5634, now(), 'buy', 2.50),
-                                (22039, 'GOOG', 5634, now(), 'buy', 1.50);
+                                (22039, 'GOOG', 5634, now(), 'buy', 1.50)
+RETURNING id;
 
 SELECT COUNT(*) FROM limit_orders WHERE id BETWEEN 22037 AND 22039;
 
