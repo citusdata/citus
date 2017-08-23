@@ -1,0 +1,6 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-initialize s1-begin s1-copy s2-copy s1-commit s1-select-count
+setup failed: ERROR:  syntax error at or near "PARTITION"
+LINE 3: ...itioned_copy(id integer, data text, int_data int) PARTITION ...
+                                                             ^

@@ -1,0 +1,787 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ddl-create-index s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index: <... completed>
+error in steps s1-commit s2-ddl-create-index: ERROR:  duplicate key value violates unique constraint "pg_class_relname_nsp_index"
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-ddl-create-index-concurrently s1-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index-concurrently: <... completed>
+error in steps s1-commit s2-ddl-create-index-concurrently: ERROR:  relation "ddl_hash_index" already exists
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ddl-add-column s1-commit s2-commit s1-show-indexes s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-add-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ddl-rename-column s1-commit s2-commit s1-show-indexes s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-create-index s1-commit s2-commit s1-show-columns s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-ddl-create-index-concurrently s1-commit s1-show-columns s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index-concurrently: <... completed>
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-add-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-add-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-ddl-rename-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-create-index s1-commit s2-commit s1-show-columns s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-ddl-create-index-concurrently s1-commit s1-show-columns s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index-concurrently: <... completed>
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-add-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-add-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-ddl-rename-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+error in steps s1-commit s2-ddl-rename-column: ERROR:  column "data" does not exist
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-table-size s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-table-size: SELECT citus_total_relation_size('ddl_hash');
+citus_total_relation_size
+
+57344          
+step s1-commit: COMMIT;
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-master-modify-multiple-shards s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-master-modify-multiple-shards: <... completed>
+master_modify_multiple_shards
+
+5              
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-create-index s2-distribute-table s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s2-distribute-table: SELECT create_distributed_table('ddl_hash', 'id'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-distribute-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,4)
+(localhost,57638,t,4)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-table-size s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-table-size: SELECT citus_total_relation_size('ddl_hash'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-table-size: <... completed>
+citus_total_relation_size
+
+57344          
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-master-modify-multiple-shards s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-master-modify-multiple-shards: <... completed>
+master_modify_multiple_shards
+
+5              
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-add-column s2-distribute-table s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_1 int DEFAULT 0;
+step s2-distribute-table: SELECT create_distributed_table('ddl_hash', 'id'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-distribute-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-table-size s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-table-size: SELECT citus_total_relation_size('ddl_hash'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-table-size: <... completed>
+citus_total_relation_size
+
+57344          
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-master-modify-multiple-shards s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-master-modify-multiple-shards: <... completed>
+master_modify_multiple_shards
+
+5              
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-distribute-table s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s2-distribute-table: SELECT create_distributed_table('ddl_hash', 'id'); <waiting ...>
+step s1-commit: COMMIT;
+step s2-distribute-table: <... completed>
+create_distributed_table
+
+               
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-create-index s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-table-size: SELECT citus_total_relation_size('ddl_hash');
+citus_total_relation_size
+
+57344          
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
+step s1-commit: COMMIT;
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-create-index s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;');
+master_modify_multiple_shards
+
+5              
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index: <... completed>
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-create-index s1-commit s2-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-distribute-table: SELECT create_distributed_table('ddl_hash', 'id');
+create_distributed_table
+
+               
+step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index: <... completed>
+step s2-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,4)
+(localhost,57638,t,4)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s1-table-size s2-ddl-create-index-concurrently s1-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-table-size: SELECT citus_total_relation_size('ddl_hash');
+citus_total_relation_size
+
+57344          
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id);
+step s1-commit: COMMIT;
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-ddl-create-index-concurrently s1-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;');
+master_modify_multiple_shards
+
+5              
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index-concurrently: <... completed>
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,2)
+(localhost,57638,t,2)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s1-distribute-table s2-ddl-create-index-concurrently s1-commit s1-show-indexes
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s1-distribute-table: SELECT create_distributed_table('ddl_hash', 'id');
+create_distributed_table
+
+               
+step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-create-index-concurrently: <... completed>
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+run_command_on_workers
+
+(localhost,57637,t,4)
+(localhost,57638,t,4)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-add-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-table-size: SELECT citus_total_relation_size('ddl_hash');
+citus_total_relation_size
+
+57344          
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0;
+step s1-commit: COMMIT;
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-add-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;');
+master_modify_multiple_shards
+
+5              
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-add-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-add-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-distribute-table: SELECT create_distributed_table('ddl_hash', 'id');
+create_distributed_table
+
+               
+step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-add-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,"")
+(localhost,57638,t,"")
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-ddl-rename-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-table-size: SELECT citus_total_relation_size('ddl_hash');
+citus_total_relation_size
+
+57344          
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
+step s1-commit: COMMIT;
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-shards s2-ddl-rename-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM ddl_hash;');
+master_modify_multiple_shards
+
+5              
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
+
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-ddl-rename-column s1-commit s2-commit s1-show-columns
+create_distributed_table
+
+               
+step s1-drop: DROP TABLE ddl_hash;
+step s1-create-non-distributed-table: CREATE TABLE ddl_hash(id integer, data text); COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY ddl_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-distribute-table: SELECT create_distributed_table('ddl_hash', 'id');
+create_distributed_table
+
+               
+step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
+step s1-commit: COMMIT;
+step s2-ddl-rename-column: <... completed>
+step s2-commit: COMMIT;
+step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
+run_command_on_workers
+
+(localhost,57637,t,new_column)
+(localhost,57638,t,new_column)
+restore_isolation_tester_func
+
+               
