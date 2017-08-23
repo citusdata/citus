@@ -74,7 +74,11 @@ step "detector-dump-wait-edges"
         blocking_transaction_num,
         blocking_transaction_waiting
     FROM
-        dump_local_wait_edges(13);
+        dump_local_wait_edges()
+    ORDER BY
+        waiting_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
 }
 
 # Distributed transaction blocked by another distributed transaction

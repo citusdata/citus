@@ -48,7 +48,7 @@ static int64 ParseIntField(PGresult *result, int rowIndex, int colIndex);
 static bool ParseBoolField(PGresult *result, int rowIndex, int colIndex);
 static TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
-static WaitGraph * BuildWaitGraphForSourceNode(int sourceNodeId);
+static WaitGraph * BuildLocalWaitGraph(void);
 static void LockLockData(void);
 static void UnlockLockData(void);
 static void AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc,
@@ -99,7 +99,7 @@ BuildGlobalWaitGraph(void)
 	ListCell *connectionCell = NULL;
 	int localNodeId = GetLocalGroupId();
 
-	WaitGraph *waitGraph = BuildWaitGraphForSourceNode(localNodeId);
+	WaitGraph *waitGraph = BuildLocalWaitGraph();
 
 	/* open connections in parallel */
 	foreach(workerNodeCell, workerNodeList)
@@ -129,14 +129,9 @@ BuildGlobalWaitGraph(void)
 	{
 		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
 		int querySent = false;
-		char *command = NULL;
-		const char *params[1];
+		const char *command = "SELECT * FROM dump_local_wait_edges()";
 
-		params[0] = psprintf("%d", GetLocalGroupId());
-		command = "SELECT * FROM dump_local_wait_edges($1)";
-
-		querySent = SendRemoteCommandParams(connection, command, 1,
-											NULL, params);
+		querySent = SendRemoteCommand(connection, command);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, ERROR);
@@ -277,9 +272,7 @@ ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 Datum
 dump_local_wait_edges(PG_FUNCTION_ARGS)
 {
-	int32 sourceNodeId = PG_GETARG_INT32(0);
-
-	WaitGraph *waitGraph = BuildWaitGraphForSourceNode(sourceNodeId);
+	WaitGraph *waitGraph = BuildLocalWaitGraph();
 	ReturnWaitGraph(waitGraph, fcinfo);
 
 	return (Datum) 0;
@@ -387,11 +380,11 @@ ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 
 
 /*
- * BuildWaitGraphForSourceNode builds a wait graph for distributed transactions
- * that originate from the given source node.
+ * BuildLocalWaitGraph builds a wait graph for distributed transactions
+ * that originate from the local node.
  */
 static WaitGraph *
-BuildWaitGraphForSourceNode(int sourceNodeId)
+BuildLocalWaitGraph(void)
 {
 	WaitGraph *waitGraph = NULL;
 	int curBackend = 0;
@@ -417,7 +410,7 @@ BuildWaitGraphForSourceNode(int sourceNodeId)
 
 	/*
 	 * Build lock-graph.  We do so by first finding all procs which we are
-	 * interested in (originating on our source system, and blocked).  Once
+	 * interested in (in a distributed transaction, and blocked).  Once
 	 * those are collected, do depth first search over all procs blocking
 	 * those.
 	 */
@@ -437,12 +430,11 @@ BuildWaitGraphForSourceNode(int sourceNodeId)
 		GetBackendDataForProc(currentProc, &currentBackendData);
 
 		/*
-		 * Only start searching from distributed transactions originating on the source
-		 * node. Other deadlocks may exist, but the source node can only resolve those
-		 * that involve its own transactions.
+		 * Only start searching from distributed transactions, since we only
+		 * care about distributed transactions for the purpose of distributed
+		 * deadlock detection.
 		 */
-		if (sourceNodeId != currentBackendData.transactionId.initiatorNodeIdentifier ||
-			!IsInDistributedTransaction(&currentBackendData))
+		if (!IsInDistributedTransaction(&currentBackendData))
 		{
 			continue;
 		}

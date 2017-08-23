@@ -29,7 +29,11 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting
     FROM
-        dump_local_wait_edges(13);
+        dump_local_wait_edges()
+    ORDER BY
+        waiting_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
 
 waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
 
@@ -67,7 +71,11 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting
     FROM
-        dump_local_wait_edges(13);
+        dump_local_wait_edges()
+    ORDER BY
+        waiting_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
 
 waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
 
@@ -115,12 +123,16 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting
     FROM
-        dump_local_wait_edges(13);
+        dump_local_wait_edges()
+    ORDER BY
+        waiting_node_id,
+        blocking_transaction_num,
+        blocking_transaction_waiting;
 
 waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
 
-13             1              0                             t              
 0                             11             1              f              
+13             1              0                             t              
 step dist11-abort: 
     ABORT;
 
