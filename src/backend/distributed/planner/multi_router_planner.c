@@ -133,6 +133,7 @@ static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
+static int GetTargetListEntryIndexByResno(List *targetList, int resno);
 static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
@@ -1080,10 +1081,35 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	Job *job = NULL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
+	bool isMultiRowInsert = false;
 
-	if (!CanShardPrune(distributedTableId, query))
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery);
+	if (valuesRTE != NULL)
 	{
-		/* there is a non-constant in the partition column, cannot prune yet */
+		/*
+		 * We expand the values_lists to contain all default expressions
+		 * from the target list. By doing this early on, in the original
+		 * query, we can later evaluate default expressions for each
+		 * individual row and then perform shard pruning.
+		 */
+		valuesRTE->values_lists = ExpandValuesLists(originalQuery->targetList,
+													valuesRTE->values_lists);
+
+		isMultiRowInsert = true;
+	}
+
+	if (isMultiRowInsert || !CanShardPrune(distributedTableId, query))
+	{
+		/*
+		 * If there is a non-constant (e.g. parameter, function call) in the partition
+		 * column of the INSERT then we defer shard pruning until the executor where
+		 * these values are known.
+		 *
+		 * XXX: We also defer pruning for multi-row INSERTs because of some current
+		 * limitations with the way multi-row INSERTs are handled. Most notably, we
+		 * don't evaluate functions in task->rowValuesList. Therefore we need to
+		 * perform function evaluation before we can run RouterInsertTaskList.
+		 */
 		taskList = NIL;
 		deferredPruning = true;
 
@@ -2031,6 +2057,50 @@ ExtractDistributedInsertValuesRTE(Query *query)
 
 
 /*
+ * ExpandValuesLists expands VALUES lists by building new lists
+ * that include expressions from the target list for columns
+ * with a default expression.
+ */
+List *
+ExpandValuesLists(List *targetList, List *valuesLists)
+{
+	ListCell *valuesListCell = NULL;
+	List *expandedValuesLists = NIL;
+	ListCell *targetEntryCell = NULL;
+
+	foreach(valuesListCell, valuesLists)
+	{
+		List *valuesList = (List *) lfirst(valuesListCell);
+		List *expandedValuesList = NIL;
+
+		foreach(targetEntryCell, targetList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			Expr *targetExpr = targetEntry->expr;
+
+			if (IsA(targetExpr, Var))
+			{
+				/* expression from the VALUES section */
+				Var *targetListVar = (Var *) targetExpr;
+				targetExpr = list_nth(valuesList, targetListVar->varattno - 1);
+			}
+			else
+			{
+				/* copy the column's default expression */
+				targetExpr = copyObject(targetExpr);
+			}
+
+			expandedValuesList = lappend(expandedValuesList, targetExpr);
+		}
+
+		expandedValuesLists = lappend(expandedValuesLists, expandedValuesList);
+	}
+
+	return expandedValuesLists;
+}
+
+
+/*
  * IntersectPlacementList performs placement pruning based on matching on
  * nodeName:nodePort fields of shard placement data. We start pruning from all
  * placements of the first relation's shard. Then for each relation's shard, we
@@ -2138,10 +2208,11 @@ static List *
 ExtractInsertValuesList(Query *query, Var *partitionColumn)
 {
 	List *insertValuesList = NIL;
-	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,
-												partitionColumn->varattno);
+	RangeTblEntry *valuesRTE = NULL;
 
-	if (targetEntry == NULL)
+	int partitionColumnIndex = GetTargetListEntryIndexByResno(query->targetList,
+															  partitionColumn->varattno);
+	if (partitionColumnIndex == -1)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 						errmsg("cannot perform an INSERT without a partition column "
@@ -2150,25 +2221,20 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 
 	/*
 	 * We've got a multi-row INSERT. PostgreSQL internally represents such
-	 * commands by linking Vars in the target list to lists of values within
-	 * a special VALUES range table entry. By extracting the right positional
-	 * expression from each list within that RTE, we will extract the partition
-	 * values for each row within the multi-row INSERT.
+	 * commands with a special VALUES range table entry.
 	 */
-	if (IsA(targetEntry->expr, Var))
+	valuesRTE = ExtractDistributedInsertValuesRTE(query);
+	if (valuesRTE != NULL)
 	{
-		Var *partitionVar = (Var *) targetEntry->expr;
-		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
 		Index ivIndex = 0;
 
-		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
-		foreach(valuesListCell, referencedRTE->values_lists)
+		foreach(valuesListCell, valuesRTE->values_lists)
 		{
 			InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
 			insertValues->rowValues = (List *) lfirst(valuesListCell);
 			insertValues->partitionValueExpr = list_nth(insertValues->rowValues,
-														(partitionVar->varattno - 1));
+														partitionColumnIndex);
 			insertValues->shardId = INVALID_SHARD_ID;
 			insertValues->listIndex = ivIndex;
 
@@ -2180,15 +2246,45 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 	/* nothing's been found yet; this is a simple single-row INSERT */
 	if (insertValuesList == NIL)
 	{
+		TargetEntry *partitionColumnTargetEntry = list_nth(query->targetList,
+														   partitionColumnIndex);
+
 		InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
 		insertValues->rowValues = NIL;
-		insertValues->partitionValueExpr = targetEntry->expr;
+		insertValues->partitionValueExpr = partitionColumnTargetEntry->expr;
 		insertValues->shardId = INVALID_SHARD_ID;
 
 		insertValuesList = lappend(insertValuesList, insertValues);
 	}
 
 	return insertValuesList;
+}
+
+
+/*
+ * GetTargetListEntryIndexByResno is the equivalent of get_tle_by_resno
+ * but returns the index in the target list instead of the TargetEntry
+ * itself, or -1 if it cannot be found.
+ */
+static int
+GetTargetListEntryIndexByResno(List *targetList, int resno)
+{
+	ListCell *targetEntryCell = NULL;
+	int targetEntryIndex = 0;
+
+	foreach(targetEntryCell, targetList)
+	{
+		TargetEntry *tle = (TargetEntry *) lfirst(targetEntryCell);
+
+		if (tle->resno == resno)
+		{
+			return targetEntryIndex;
+		}
+
+		targetEntryIndex++;
+	}
+
+	return -1;
 }
 
 
