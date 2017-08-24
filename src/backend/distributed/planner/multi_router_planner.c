@@ -1854,6 +1854,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	{
 		int shardCount = 0;
 		List *shardIntervalList = LoadShardIntervalList(distributedTableId);
+		RangeTblEntry *valuesRTE = NULL;
 		ShardInterval *shardInterval = NULL;
 		ModifyRoute *modifyRoute = NULL;
 
@@ -1867,7 +1868,17 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		modifyRoute = palloc(sizeof(ModifyRoute));
 
 		modifyRoute->shardId = shardInterval->shardId;
-		modifyRoute->rowValuesLists = NIL;
+
+		valuesRTE = ExtractDistributedInsertValuesRTE(query);
+		if (valuesRTE != NULL)
+		{
+			/* add the values list for a multi-row INSERT */
+			modifyRoute->rowValuesLists = valuesRTE->values_lists;
+		}
+		else
+		{
+			modifyRoute->rowValuesLists = NIL;
+		}
 
 		modifyRouteList = lappend(modifyRouteList, modifyRoute);
 
@@ -1983,6 +1994,39 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 	modifyRouteList = GroupInsertValuesByShardId(insertValuesList);
 
 	return modifyRouteList;
+}
+
+
+/*
+ * ExtractDistributedInsertValuesRTE does precisely that. If the provided
+ * query is not an INSERT, or if the INSERT does not have a VALUES RTE
+ * (i.e. it is not a multi-row INSERT), this function returns NULL.
+ * If all those conditions are met, an RTE representing the multiple values
+ * of a multi-row INSERT is returned.
+ */
+RangeTblEntry *
+ExtractDistributedInsertValuesRTE(Query *query)
+{
+	ListCell *rteCell = NULL;
+	RangeTblEntry *valuesRTE = NULL;
+
+	if (query->commandType != CMD_INSERT)
+	{
+		return NULL;
+	}
+
+	foreach(rteCell, query->rtable)
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
+
+		if (rte->rtekind == RTE_VALUES)
+		{
+			valuesRTE = rte;
+			break;
+		}
+	}
+
+	return valuesRTE;
 }
 
 
