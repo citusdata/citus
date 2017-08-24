@@ -588,9 +588,7 @@ SELECT create_reference_table('reference_summary_table');
 INSERT INTO reference_raw_table VALUES (1, 100);
 INSERT INTO reference_raw_table VALUES (1, 200);
 INSERT INTO reference_raw_table VALUES (1, 200);
-INSERT INTO reference_raw_table VALUES (1, 300);
-INSERT INTO reference_raw_table VALUES (2, 400);
-INSERT INTO reference_raw_table VALUES (2, 500);
+INSERT INTO reference_raw_table VALUES (1,300), (2, 400), (2,500) RETURNING *;
 
 INSERT INTO reference_summary_table VALUES (1);
 INSERT INTO reference_summary_table VALUES (2);
