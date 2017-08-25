@@ -130,6 +130,7 @@ static List * TargetShardIntervalsForRouter(Query *query,
 											RelationRestrictionContext *restrictionContext,
 											bool *multiShardQuery);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
+static void NormalizeInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
@@ -1219,6 +1220,8 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 
 	Assert(query->commandType == CMD_INSERT);
 
+	NormalizeInsertTargetList(query);
+
 	modifyRouteList = BuildRoutesForInsert(query, planningError);
 	if (*planningError != NULL)
 	{
@@ -1243,6 +1246,75 @@ RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError)
 	}
 
 	return insertTaskList;
+}
+
+
+/*
+ * NormalizeInsertTargetList ensures all elements of multi-row INSERT target
+ * lists are Vars. In multi-row INSERTs, most target list entries contain a Var
+ * expression pointing to a position within the values_lists field of a VALUES
+ * RTE, but non-NULL DEFAULT columns are handled differently. Instead of adding
+ * the DEFAULT to each row, a single expression encoding the DEFAULT appears
+ * in the target list. For consistency, we move these expressions into values
+ * lists and replace them with an appropriately constructed Var.
+ */
+static void
+NormalizeInsertTargetList(Query *query)
+{
+	Index valuesVarno = 0;
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(query, &valuesVarno);
+	Index highValuesAttno = 0;
+	ListCell *targetEntryCell = NULL;
+
+	/* single-row INSERT: exit */
+	if (valuesRTE == NULL)
+	{
+		return;
+	}
+
+	/* get the number of columns in each row of the values RTE */
+	highValuesAttno = list_length(valuesRTE->coltypes);
+
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		ListCell *valuesListCell = NULL;
+		Node *targetExprNode = (Node *) targetEntry->expr;
+		Oid targetType = InvalidOid;
+		int32 targetTypmod = -1;
+		Oid targetColl = InvalidOid;
+		Var *syntheticVar = NULL;
+
+		if (IsA(targetExprNode, Var))
+		{
+			continue;
+		}
+
+		/* we're going to add a constructed Var: get a new attno for it */
+		highValuesAttno++;
+
+		targetType = exprType(targetExprNode);
+		targetTypmod = exprTypmod(targetExprNode);
+		targetColl = exprCollation(targetExprNode);
+
+		valuesRTE->coltypes = lappend_oid(valuesRTE->coltypes, targetType);
+		valuesRTE->coltypmods = lappend_int(valuesRTE->coltypmods, targetTypmod);
+		valuesRTE->colcollations = lappend_oid(valuesRTE->colcollations, targetColl);
+
+		/* add the original expression to each values list */
+		foreach(valuesListCell, valuesRTE->values_lists)
+		{
+			List *valuesList = lfirst(valuesListCell);
+			valuesList = lappend(valuesList, targetExprNode);
+
+			valuesListCell->data.ptr_value = (void *) valuesList;
+		}
+
+		/* and replace the original expression with a var referencing those lists */
+		syntheticVar = makeVar(valuesVarno, highValuesAttno, targetType, targetTypmod,
+							   targetColl, 0);
+		targetEntry->expr = (Expr *) syntheticVar;
+	}
 }
 
 
@@ -1857,6 +1929,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		RangeTblEntry *valuesRTE = NULL;
 		ShardInterval *shardInterval = NULL;
 		ModifyRoute *modifyRoute = NULL;
+		Index varno = 0;
 
 		shardCount = list_length(shardIntervalList);
 		if (shardCount != 1)
@@ -1869,7 +1942,7 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 		modifyRoute->shardId = shardInterval->shardId;
 
-		valuesRTE = ExtractDistributedInsertValuesRTE(query);
+		valuesRTE = ExtractDistributedInsertValuesRTE(query, &varno);
 		if (valuesRTE != NULL)
 		{
 			/* add the values list for a multi-row INSERT */
@@ -2005,10 +2078,11 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
  * of a multi-row INSERT is returned.
  */
 RangeTblEntry *
-ExtractDistributedInsertValuesRTE(Query *query)
+ExtractDistributedInsertValuesRTE(Query *query, Index *varno)
 {
 	ListCell *rteCell = NULL;
 	RangeTblEntry *valuesRTE = NULL;
+	Index currVarno = 0;
 
 	if (query->commandType != CMD_INSERT)
 	{
@@ -2018,10 +2092,12 @@ ExtractDistributedInsertValuesRTE(Query *query)
 	foreach(rteCell, query->rtable)
 	{
 		RangeTblEntry *rte = (RangeTblEntry *) lfirst(rteCell);
+		currVarno++;
 
 		if (rte->rtekind == RTE_VALUES)
 		{
 			valuesRTE = rte;
+			*varno = currVarno;
 			break;
 		}
 	}

@@ -46,7 +46,8 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 {
 	ListCell *taskCell = NULL;
 	Oid relationId = ((RangeTblEntry *) linitial(originalQuery->rtable))->relid;
-	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery);
+	Index varno = 0;
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery, &varno);
 
 	foreach(taskCell, taskList)
 	{
