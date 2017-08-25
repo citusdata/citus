@@ -130,10 +130,10 @@ static List * TargetShardIntervalsForRouter(Query *query,
 											RelationRestrictionContext *restrictionContext,
 											bool *multiShardQuery);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
+static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
-static int GetTargetListEntryIndexByResno(List *targetList, int resno);
 static bool MultiRouterPlannableQuery(Query *query,
 									  RelationRestrictionContext *restrictionContext);
 static DeferredErrorMessage * ErrorIfQueryHasModifyingCTE(Query *queryTree);
@@ -1081,21 +1081,12 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	Job *job = NULL;
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
-	bool isMultiRowInsert = false;
 
-	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(originalQuery);
-	if (valuesRTE != NULL)
+	bool isMultiRowInsert = IsMultiRowInsert(query);
+	if (isMultiRowInsert)
 	{
-		/*
-		 * We expand the values_lists to contain all default expressions
-		 * from the target list. By doing this early on, in the original
-		 * query, we can later evaluate default expressions for each
-		 * individual row and then perform shard pruning.
-		 */
-		valuesRTE->values_lists = ExpandValuesLists(originalQuery->targetList,
-													valuesRTE->values_lists);
-
-		isMultiRowInsert = true;
+		/* add default expressions to RTE_VALUES in multi-row INSERTs */
+		NormalizeMultiRowInsertTargetList(originalQuery);
 	}
 
 	if (isMultiRowInsert || !CanShardPrune(distributedTableId, query))
@@ -2024,6 +2015,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 
 /*
+ * IsMultiRowInsert returns whether the given query is a multi-row INSERT.
+ *
+ * It does this by determining whether the query is an INSERT that has an
+ * RTE_VALUES. Single-row INSERTs will have their RTE_VALUES optimised away
+ * in transformInsertStmt, and instead use the target list.
+ */
+bool
+IsMultiRowInsert(Query *query)
+{
+	return ExtractDistributedInsertValuesRTE(query) != NULL;
+}
+
+
+/*
  * ExtractDistributedInsertValuesRTE does precisely that. If the provided
  * query is not an INSERT, or if the INSERT does not have a VALUES RTE
  * (i.e. it is not a multi-row INSERT), this function returns NULL.
@@ -2057,23 +2062,34 @@ ExtractDistributedInsertValuesRTE(Query *query)
 
 
 /*
- * ExpandValuesLists expands VALUES lists by building new lists
- * that include expressions from the target list for columns
- * with a default expression.
+ * NormalizeMultiRowInsertTargetList ensures all elements of multi-row INSERT target
+ * lists are Vars. In multi-row INSERTs, most target list entries contain a Var
+ * expression pointing to a position within the values_lists field of a VALUES
+ * RTE, but non-NULL default columns are handled differently. Instead of adding
+ * the default expression to each row, a single expression encoding the DEFAULT
+ * appears in the target list. For consistency, we move these expressions into
+ * values lists and replace them with an appropriately constructed Var.
  */
-List *
-ExpandValuesLists(List *targetList, List *valuesLists)
+static void
+NormalizeMultiRowInsertTargetList(Query *query)
 {
 	ListCell *valuesListCell = NULL;
-	List *expandedValuesLists = NIL;
 	ListCell *targetEntryCell = NULL;
+	int targetEntryNo = 0;
 
-	foreach(valuesListCell, valuesLists)
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(query);
+	if (valuesRTE == NULL)
+	{
+		return;
+	}
+
+	foreach(valuesListCell, valuesRTE->values_lists)
 	{
 		List *valuesList = (List *) lfirst(valuesListCell);
+		Expr **valuesArray = (Expr **) PointerArrayFromList(valuesList);
 		List *expandedValuesList = NIL;
 
-		foreach(targetEntryCell, targetList)
+		foreach(targetEntryCell, query->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 			Expr *targetExpr = targetEntry->expr;
@@ -2082,7 +2098,7 @@ ExpandValuesLists(List *targetList, List *valuesLists)
 			{
 				/* expression from the VALUES section */
 				Var *targetListVar = (Var *) targetExpr;
-				targetExpr = list_nth(valuesList, targetListVar->varattno - 1);
+				targetExpr = valuesArray[targetListVar->varattno - 1];
 			}
 			else
 			{
@@ -2093,10 +2109,53 @@ ExpandValuesLists(List *targetList, List *valuesLists)
 			expandedValuesList = lappend(expandedValuesList, targetExpr);
 		}
 
-		expandedValuesLists = lappend(expandedValuesLists, expandedValuesList);
+		valuesListCell->data.ptr_value = (void *) expandedValuesList;
 	}
 
-	return expandedValuesLists;
+#if (PG_VERSION_NUM >= 100000)
+
+	/* reset coltypes, coltypmods, colcollations and rebuild them below */
+	valuesRTE->coltypes = NIL;
+	valuesRTE->coltypmods = NIL;
+	valuesRTE->colcollations = NIL;
+#endif
+
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		Node *targetExprNode = (Node *) targetEntry->expr;
+		Oid targetType = InvalidOid;
+		int32 targetTypmod = -1;
+		Oid targetColl = InvalidOid;
+		Var *syntheticVar = NULL;
+
+		/* RTE_VALUES comes 2nd, after destination table */
+		Index valuesVarno = 2;
+
+		targetEntryNo++;
+
+		targetType = exprType(targetExprNode);
+		targetTypmod = exprTypmod(targetExprNode);
+		targetColl = exprCollation(targetExprNode);
+
+#if (PG_VERSION_NUM >= 100000)
+		valuesRTE->coltypes = lappend_oid(valuesRTE->coltypes, targetType);
+		valuesRTE->coltypmods = lappend_int(valuesRTE->coltypmods, targetTypmod);
+		valuesRTE->colcollations = lappend_oid(valuesRTE->colcollations, targetColl);
+#endif
+
+		if (IsA(targetExprNode, Var))
+		{
+			Var *targetVar = (Var *) targetExprNode;
+			targetVar->varattno = targetEntryNo;
+			continue;
+		}
+
+		/* replace the original expression with a Var referencing values_lists */
+		syntheticVar = makeVar(valuesVarno, targetEntryNo, targetType, targetTypmod,
+							   targetColl, 0);
+		targetEntry->expr = (Expr *) syntheticVar;
+	}
 }
 
 
@@ -2208,11 +2267,10 @@ static List *
 ExtractInsertValuesList(Query *query, Var *partitionColumn)
 {
 	List *insertValuesList = NIL;
-	RangeTblEntry *valuesRTE = NULL;
+	TargetEntry *targetEntry = get_tle_by_resno(query->targetList,
+												partitionColumn->varattno);
 
-	int partitionColumnIndex = GetTargetListEntryIndexByResno(query->targetList,
-															  partitionColumn->varattno);
-	if (partitionColumnIndex == -1)
+	if (targetEntry == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 						errmsg("cannot perform an INSERT without a partition column "
@@ -2221,20 +2279,25 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 
 	/*
 	 * We've got a multi-row INSERT. PostgreSQL internally represents such
-	 * commands with a special VALUES range table entry.
+	 * commands by linking Vars in the target list to lists of values within
+	 * a special VALUES range table entry. By extracting the right positional
+	 * expression from each list within that RTE, we will extract the partition
+	 * values for each row within the multi-row INSERT.
 	 */
-	valuesRTE = ExtractDistributedInsertValuesRTE(query);
-	if (valuesRTE != NULL)
+	if (IsA(targetEntry->expr, Var))
 	{
+		Var *partitionVar = (Var *) targetEntry->expr;
+		RangeTblEntry *referencedRTE = NULL;
 		ListCell *valuesListCell = NULL;
 		Index ivIndex = 0;
 
-		foreach(valuesListCell, valuesRTE->values_lists)
+		referencedRTE = rt_fetch(partitionVar->varno, query->rtable);
+		foreach(valuesListCell, referencedRTE->values_lists)
 		{
 			InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
 			insertValues->rowValues = (List *) lfirst(valuesListCell);
 			insertValues->partitionValueExpr = list_nth(insertValues->rowValues,
-														partitionColumnIndex);
+														(partitionVar->varattno - 1));
 			insertValues->shardId = INVALID_SHARD_ID;
 			insertValues->listIndex = ivIndex;
 
@@ -2246,45 +2309,15 @@ ExtractInsertValuesList(Query *query, Var *partitionColumn)
 	/* nothing's been found yet; this is a simple single-row INSERT */
 	if (insertValuesList == NIL)
 	{
-		TargetEntry *partitionColumnTargetEntry = list_nth(query->targetList,
-														   partitionColumnIndex);
-
 		InsertValues *insertValues = (InsertValues *) palloc(sizeof(InsertValues));
 		insertValues->rowValues = NIL;
-		insertValues->partitionValueExpr = partitionColumnTargetEntry->expr;
+		insertValues->partitionValueExpr = targetEntry->expr;
 		insertValues->shardId = INVALID_SHARD_ID;
 
 		insertValuesList = lappend(insertValuesList, insertValues);
 	}
 
 	return insertValuesList;
-}
-
-
-/*
- * GetTargetListEntryIndexByResno is the equivalent of get_tle_by_resno
- * but returns the index in the target list instead of the TargetEntry
- * itself, or -1 if it cannot be found.
- */
-static int
-GetTargetListEntryIndexByResno(List *targetList, int resno)
-{
-	ListCell *targetEntryCell = NULL;
-	int targetEntryIndex = 0;
-
-	foreach(targetEntryCell, targetList)
-	{
-		TargetEntry *tle = (TargetEntry *) lfirst(targetEntryCell);
-
-		if (tle->resno == resno)
-		{
-			return targetEntryIndex;
-		}
-
-		targetEntryIndex++;
-	}
-
-	return -1;
 }
 
 
