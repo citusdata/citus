@@ -49,7 +49,7 @@ extern Oid ExtractFirstDistributedTableId(Query *query);
 extern RangeTblEntry * ExtractSelectRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractInsertRangeTableEntry(Query *query);
 extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
-extern List * ExpandValuesLists(List *targetList, List *valuesLists);
+extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
 

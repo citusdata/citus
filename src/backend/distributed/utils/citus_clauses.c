@@ -110,12 +110,27 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 	ListCell *rteCell = NULL;
 	ListCell *cteCell = NULL;
 	Node *modifiedNode = NULL;
-	bool isMultiRowInsert = false;
 
 	if (query->jointree && query->jointree->quals)
 	{
 		query->jointree->quals = PartiallyEvaluateExpression(query->jointree->quals,
 															 planState);
+	}
+
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+
+		/* performance optimization for the most common cases */
+		if (IsA(targetEntry->expr, Const) || IsA(targetEntry->expr, Var))
+		{
+			continue;
+		}
+
+		modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
+												   planState);
+
+		targetEntry->expr = (Expr *) modifiedNode;
 	}
 
 	foreach(rteCell, query->rtable)
@@ -129,34 +144,6 @@ ExecuteMasterEvaluableFunctions(Query *query, PlanState *planState)
 		else if (rte->rtekind == RTE_VALUES)
 		{
 			EvaluateValuesListsItems(rte->values_lists, planState);
-			isMultiRowInsert = (query->commandType == CMD_INSERT);
-		}
-	}
-
-	/*
-	 * For multi-row INSERTs, functions are evaluated by expanding the
-	 * values_lists with the default expressions in the target list and
-	 * performing function evaluation on the values_lists. Expressions
-	 * in the target list should not be evaluated since they serve only
-	 * as templates and evaluating them would cause unexpected results
-	 * (e.g. sequences being called one more time).
-	 */
-	if (!isMultiRowInsert)
-	{
-		foreach(targetEntryCell, query->targetList)
-		{
-			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
-			/* performance optimization for the most common cases */
-			if (IsA(targetEntry->expr, Const) || IsA(targetEntry->expr, Var))
-			{
-				continue;
-			}
-
-			modifiedNode = PartiallyEvaluateExpression((Node *) targetEntry->expr,
-													   planState);
-
-			targetEntry->expr = (Expr *) modifiedNode;
 		}
 	}
 
