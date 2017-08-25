@@ -690,6 +690,182 @@ INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *
   3 |    103 | Mynt
 (1 row)
 
+-- Test multi-row insert with serial in the partition column
+INSERT INTO app_analytics_events (app_id, name)
+VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
+ id | app_id | name 
+----+--------+------
+  5 |    105 | Mynt
+  4 |    104 | Wayz
+(2 rows)
+
+INSERT INTO app_analytics_events (id, name)
+VALUES (DEFAULT, 'Foo'), (300, 'Wah') RETURNING *;
+ id  | app_id | name 
+-----+--------+------
+   6 |        | Foo
+ 300 |        | Wah
+(2 rows)
+
+PREPARE prep(varchar) AS
+INSERT INTO app_analytics_events (id, name)
+VALUES (DEFAULT, $1 || '.1'), (400 , $1 || '.2') RETURNING *;
+EXECUTE prep('version-1');
+ id  | app_id |    name     
+-----+--------+-------------
+   7 |        | version-1.1
+ 400 |        | version-1.2
+(2 rows)
+
+EXECUTE prep('version-2');
+ id  | app_id |    name     
+-----+--------+-------------
+   8 |        | version-2.1
+ 400 |        | version-2.2
+(2 rows)
+
+EXECUTE prep('version-3');
+ id  | app_id |    name     
+-----+--------+-------------
+ 400 |        | version-3.2
+   9 |        | version-3.1
+(2 rows)
+
+EXECUTE prep('version-4');
+ id  | app_id |    name     
+-----+--------+-------------
+  10 |        | version-4.1
+ 400 |        | version-4.2
+(2 rows)
+
+EXECUTE prep('version-5');
+ id  | app_id |    name     
+-----+--------+-------------
+ 400 |        | version-5.2
+  11 |        | version-5.1
+(2 rows)
+
+EXECUTE prep('version-6');
+ id  | app_id |    name     
+-----+--------+-------------
+ 400 |        | version-6.2
+  12 |        | version-6.1
+(2 rows)
+
+SELECT * FROM app_analytics_events ORDER BY id, name;
+ id  | app_id |      name       
+-----+--------+-----------------
+   1 |    101 | Fauxkemon Geaux
+   2 |    102 | Wayz
+   3 |    103 | Mynt
+   4 |    104 | Wayz
+   5 |    105 | Mynt
+   6 |        | Foo
+   7 |        | version-1.1
+   8 |        | version-2.1
+   9 |        | version-3.1
+  10 |        | version-4.1
+  11 |        | version-5.1
+  12 |        | version-6.1
+ 300 |        | Wah
+ 400 |        | version-1.2
+ 400 |        | version-2.2
+ 400 |        | version-3.2
+ 400 |        | version-4.2
+ 400 |        | version-5.2
+ 400 |        | version-6.2
+(19 rows)
+
+TRUNCATE app_analytics_events;
+-- Test multi-row insert with a dropped column
+ALTER TABLE app_analytics_events DROP COLUMN app_id;
+INSERT INTO app_analytics_events (name)
+VALUES ('Wayz'), ('Mynt') RETURNING *;
+ id | name 
+----+------
+ 14 | Mynt
+ 13 | Wayz
+(2 rows)
+
+SELECT * FROM app_analytics_events ORDER BY id;
+ id | name 
+----+------
+ 13 | Wayz
+ 14 | Mynt
+(2 rows)
+
+DROP TABLE app_analytics_events;
+-- Test multi-row insert with a dropped column before the partition column
+CREATE TABLE app_analytics_events (id int default 3, app_id integer, name text);
+SELECT create_distributed_table('app_analytics_events', 'name');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE app_analytics_events DROP COLUMN app_id;
+INSERT INTO app_analytics_events (name)
+VALUES ('Wayz'), ('Mynt') RETURNING *;
+ id | name 
+----+------
+  3 | Mynt
+  3 | Wayz
+(2 rows)
+
+SELECT * FROM app_analytics_events WHERE name = 'Wayz';
+ id | name 
+----+------
+  3 | Wayz
+(1 row)
+
+DROP TABLE app_analytics_events;
+-- Test multi-row insert with serial in a reference table
+CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
+SELECT create_reference_table('app_analytics_events');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO app_analytics_events (app_id, name)
+VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
+ id | app_id | name 
+----+--------+------
+  1 |    104 | Wayz
+  2 |    105 | Mynt
+(2 rows)
+
+SELECT * FROM app_analytics_events ORDER BY id;
+ id | app_id | name 
+----+--------+------
+  1 |    104 | Wayz
+  2 |    105 | Mynt
+(2 rows)
+
+DROP TABLE app_analytics_events;
+-- Test multi-row insert with serial in a non-partition column
+CREATE TABLE app_analytics_events (id int, app_id serial, name text);
+SELECT create_distributed_table('app_analytics_events', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO app_analytics_events (id, name)
+VALUES (99, 'Wayz'), (98, 'Mynt') RETURNING name, app_id;
+ name | app_id 
+------+--------
+ Mynt |      2
+ Wayz |      1
+(2 rows)
+
+SELECT * FROM app_analytics_events ORDER BY id;
+ id | app_id | name 
+----+--------+------
+ 98 |      2 | Mynt
+ 99 |      1 | Wayz
+(2 rows)
+
 DROP TABLE app_analytics_events;
 -- test UPDATE with subqueries
 CREATE TABLE raw_table (id bigint, value bigint);

@@ -130,6 +130,7 @@ static List * TargetShardIntervalsForRouter(Query *query,
 											RelationRestrictionContext *restrictionContext,
 											bool *multiShardQuery);
 static List * WorkersContainingAllShards(List *prunedShardIntervalsList);
+static void NormalizeMultiRowInsertTargetList(Query *query);
 static List * BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError);
 static List * GroupInsertValuesByShardId(List *insertValuesList);
 static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
@@ -1081,9 +1082,25 @@ RouterInsertJob(Query *originalQuery, Query *query, DeferredErrorMessage **plann
 	bool requiresMasterEvaluation = false;
 	bool deferredPruning = false;
 
-	if (!CanShardPrune(distributedTableId, query))
+	bool isMultiRowInsert = IsMultiRowInsert(query);
+	if (isMultiRowInsert)
 	{
-		/* there is a non-constant in the partition column, cannot prune yet */
+		/* add default expressions to RTE_VALUES in multi-row INSERTs */
+		NormalizeMultiRowInsertTargetList(originalQuery);
+	}
+
+	if (isMultiRowInsert || !CanShardPrune(distributedTableId, query))
+	{
+		/*
+		 * If there is a non-constant (e.g. parameter, function call) in the partition
+		 * column of the INSERT then we defer shard pruning until the executor where
+		 * these values are known.
+		 *
+		 * XXX: We also defer pruning for multi-row INSERTs because of some current
+		 * limitations with the way multi-row INSERTs are handled. Most notably, we
+		 * don't evaluate functions in task->rowValuesList. Therefore we need to
+		 * perform function evaluation before we can run RouterInsertTaskList.
+		 */
 		taskList = NIL;
 		deferredPruning = true;
 
@@ -1998,6 +2015,20 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 
 
 /*
+ * IsMultiRowInsert returns whether the given query is a multi-row INSERT.
+ *
+ * It does this by determining whether the query is an INSERT that has an
+ * RTE_VALUES. Single-row INSERTs will have their RTE_VALUES optimised away
+ * in transformInsertStmt, and instead use the target list.
+ */
+bool
+IsMultiRowInsert(Query *query)
+{
+	return ExtractDistributedInsertValuesRTE(query) != NULL;
+}
+
+
+/*
  * ExtractDistributedInsertValuesRTE does precisely that. If the provided
  * query is not an INSERT, or if the INSERT does not have a VALUES RTE
  * (i.e. it is not a multi-row INSERT), this function returns NULL.
@@ -2027,6 +2058,104 @@ ExtractDistributedInsertValuesRTE(Query *query)
 	}
 
 	return valuesRTE;
+}
+
+
+/*
+ * NormalizeMultiRowInsertTargetList ensures all elements of multi-row INSERT target
+ * lists are Vars. In multi-row INSERTs, most target list entries contain a Var
+ * expression pointing to a position within the values_lists field of a VALUES
+ * RTE, but non-NULL default columns are handled differently. Instead of adding
+ * the default expression to each row, a single expression encoding the DEFAULT
+ * appears in the target list. For consistency, we move these expressions into
+ * values lists and replace them with an appropriately constructed Var.
+ */
+static void
+NormalizeMultiRowInsertTargetList(Query *query)
+{
+	ListCell *valuesListCell = NULL;
+	ListCell *targetEntryCell = NULL;
+	int targetEntryNo = 0;
+
+	RangeTblEntry *valuesRTE = ExtractDistributedInsertValuesRTE(query);
+	if (valuesRTE == NULL)
+	{
+		return;
+	}
+
+	foreach(valuesListCell, valuesRTE->values_lists)
+	{
+		List *valuesList = (List *) lfirst(valuesListCell);
+		Expr **valuesArray = (Expr **) PointerArrayFromList(valuesList);
+		List *expandedValuesList = NIL;
+
+		foreach(targetEntryCell, query->targetList)
+		{
+			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			Expr *targetExpr = targetEntry->expr;
+
+			if (IsA(targetExpr, Var))
+			{
+				/* expression from the VALUES section */
+				Var *targetListVar = (Var *) targetExpr;
+				targetExpr = valuesArray[targetListVar->varattno - 1];
+			}
+			else
+			{
+				/* copy the column's default expression */
+				targetExpr = copyObject(targetExpr);
+			}
+
+			expandedValuesList = lappend(expandedValuesList, targetExpr);
+		}
+
+		valuesListCell->data.ptr_value = (void *) expandedValuesList;
+	}
+
+#if (PG_VERSION_NUM >= 100000)
+
+	/* reset coltypes, coltypmods, colcollations and rebuild them below */
+	valuesRTE->coltypes = NIL;
+	valuesRTE->coltypmods = NIL;
+	valuesRTE->colcollations = NIL;
+#endif
+
+	foreach(targetEntryCell, query->targetList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		Node *targetExprNode = (Node *) targetEntry->expr;
+		Oid targetType = InvalidOid;
+		int32 targetTypmod = -1;
+		Oid targetColl = InvalidOid;
+		Var *syntheticVar = NULL;
+
+		/* RTE_VALUES comes 2nd, after destination table */
+		Index valuesVarno = 2;
+
+		targetEntryNo++;
+
+		targetType = exprType(targetExprNode);
+		targetTypmod = exprTypmod(targetExprNode);
+		targetColl = exprCollation(targetExprNode);
+
+#if (PG_VERSION_NUM >= 100000)
+		valuesRTE->coltypes = lappend_oid(valuesRTE->coltypes, targetType);
+		valuesRTE->coltypmods = lappend_int(valuesRTE->coltypmods, targetTypmod);
+		valuesRTE->colcollations = lappend_oid(valuesRTE->colcollations, targetColl);
+#endif
+
+		if (IsA(targetExprNode, Var))
+		{
+			Var *targetVar = (Var *) targetExprNode;
+			targetVar->varattno = targetEntryNo;
+			continue;
+		}
+
+		/* replace the original expression with a Var referencing values_lists */
+		syntheticVar = makeVar(valuesVarno, targetEntryNo, targetType, targetTypmod,
+							   targetColl, 0);
+		targetEntry->expr = (Expr *) syntheticVar;
+	}
 }
 
 

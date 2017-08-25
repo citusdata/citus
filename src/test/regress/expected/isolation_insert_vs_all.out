@@ -687,15 +687,14 @@ create_distributed_table
 step s1-initialize: COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
-WARNING:  INSERT has more target columns than expressions
 step s1-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm');
-ERROR:  could not modify any active placements
-step s2-ddl-drop-column: ALTER TABLE insert_hash DROP new_column;
+step s2-ddl-drop-column: ALTER TABLE insert_hash DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
+step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 count          
 
-5              
+8              
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 
@@ -897,13 +896,11 @@ step s1-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE insert_hash ADD new_column int DEFAULT 0;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm'); <waiting ...>
 step s1-commit: COMMIT;
-WARNING:  INSERT has more target columns than expressions
 step s2-insert-multi-row: <... completed>
-error in steps s1-commit s2-insert-multi-row: ERROR:  could not modify any active placements
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 count          
 
-5              
+8              
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
 

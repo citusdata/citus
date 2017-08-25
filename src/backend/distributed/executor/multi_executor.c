@@ -100,7 +100,6 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 static void PrepareMasterJobDirectory(Job *workerJob);
 static void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 static Relation StubRelation(TupleDesc tupleDescriptor);
-static bool IsMultiRowInsert(Query *query);
 
 
 /*
@@ -192,20 +191,6 @@ RouterCreateScan(CustomScan *scan)
 	}
 
 	return (Node *) scanState;
-}
-
-
-/*
- * IsMultiRowInsert returns whether the given query is a multi-row INSERT.
- *
- * It does this by determining whether the query is an INSERT that has an
- * RTE_VALUES. Single-row INSERTs will have their RTE_VALUES optimised away
- * in transformInsertStmt, and instead use the target list.
- */
-static bool
-IsMultiRowInsert(Query *query)
-{
-	return ExtractDistributedInsertValuesRTE(query) != NULL;
 }
 
 
