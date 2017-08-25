@@ -205,7 +205,9 @@ RouterCreateScan(CustomScan *scan)
 static bool
 IsMultiRowInsert(Query *query)
 {
-	return ExtractDistributedInsertValuesRTE(query) != NULL;
+	Index varno = 0;
+
+	return ExtractDistributedInsertValuesRTE(query, &varno) != NULL;
 }
 
 
