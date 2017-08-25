@@ -447,6 +447,65 @@ INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURN
 INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;
 INSERT INTO app_analytics_events (app_id, name) VALUES (103, 'Mynt') RETURNING *;
 
+-- Test multi-row insert with serial in the partition column
+INSERT INTO app_analytics_events (app_id, name)
+VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
+
+INSERT INTO app_analytics_events (id, name)
+VALUES (DEFAULT, 'Foo'), (300, 'Wah') RETURNING *;
+
+PREPARE prep(varchar) AS
+INSERT INTO app_analytics_events (id, name)
+VALUES (DEFAULT, $1 || '.1'), (400 , $1 || '.2') RETURNING *;
+
+EXECUTE prep('version-1');
+EXECUTE prep('version-2');
+EXECUTE prep('version-3');
+EXECUTE prep('version-4');
+EXECUTE prep('version-5');
+EXECUTE prep('version-6');
+
+SELECT * FROM app_analytics_events ORDER BY id, name;
+TRUNCATE app_analytics_events;
+
+-- Test multi-row insert with a dropped column
+ALTER TABLE app_analytics_events DROP COLUMN app_id;
+INSERT INTO app_analytics_events (name)
+VALUES ('Wayz'), ('Mynt') RETURNING *;
+
+SELECT * FROM app_analytics_events ORDER BY id;
+DROP TABLE app_analytics_events;
+
+-- Test multi-row insert with a dropped column before the partition column
+CREATE TABLE app_analytics_events (id int default 3, app_id integer, name text);
+SELECT create_distributed_table('app_analytics_events', 'name');
+
+ALTER TABLE app_analytics_events DROP COLUMN app_id;
+
+INSERT INTO app_analytics_events (name)
+VALUES ('Wayz'), ('Mynt') RETURNING *;
+
+SELECT * FROM app_analytics_events WHERE name = 'Wayz';
+DROP TABLE app_analytics_events;
+
+-- Test multi-row insert with serial in a reference table
+CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
+SELECT create_reference_table('app_analytics_events');
+
+INSERT INTO app_analytics_events (app_id, name)
+VALUES (104, 'Wayz'), (105, 'Mynt') RETURNING *;
+
+SELECT * FROM app_analytics_events ORDER BY id;
+DROP TABLE app_analytics_events;
+
+-- Test multi-row insert with serial in a non-partition column
+CREATE TABLE app_analytics_events (id int, app_id serial, name text);
+SELECT create_distributed_table('app_analytics_events', 'id');
+
+INSERT INTO app_analytics_events (id, name)
+VALUES (99, 'Wayz'), (98, 'Mynt') RETURNING name, app_id;
+
+SELECT * FROM app_analytics_events ORDER BY id;
 DROP TABLE app_analytics_events;
 
 -- test UPDATE with subqueries
