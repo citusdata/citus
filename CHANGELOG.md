@@ -1,6 +1,64 @@
-### citus v7.0.0 (unreleased) ###
+### citus v7.0.0 (August 28, 2017) ###
 
-* Replaces pg_dist_shard_placement metadata table with pg_dist_placement
+* Adds support for PostgreSQL 10
+
+* Drops support for PostgreSQL 9.5
+
+* Adds support for multi-row `INSERT`
+
+* Adds support for router `UPDATE` and `DELETE` queries with subqueries
+
+* Adds infrastructure for distributed deadlock detection
+
+* Deprecates `enable_deadlock_prevention` flag
+
+* Adds support for partitioned tables
+
+* Adds support for creating `UNLOGGED` tables
+
+* Adds support for `SAVEPOINT`
+
+* Adds UDF `citus_create_restore_point` for taking distributed snapshots
+
+* Adds support for evaluating non-pushable `INSERT ... SELECT` queries
+
+* Adds support for subquery pushdown on reference tables
+
+* Adds shard pruning support for `IN` and `ANY`
+
+* Adds support for `UPDATE` and `DELETE` commands that prune down to 0 shard
+
+* Enhances transaction support by relaxing some transaction restrictions
+
+* Fixes a bug causing crash if distributed table has no shards
+
+* Fixes a bug causing crash when removing inactive node
+
+* Fixes a bug causing failure during `COPY` on tables with dropped columns
+
+* Fixes a bug causing failure during `DROP EXTENSION`
+
+* Fixes a bug preventing executing `VACUUM` and `INSERT` concurrently
+
+* Fixes a bug in prepared `INSERT` statements containing an implicit cast
+
+* Fixes several issues related to statement cancellations and connections
+
+* Fixes several 2PC related issues
+
+* Removes an unnecessary dependency causing warning messages in pg_dump
+
+* Adds internal infrastructure for follower clusters
+
+* Adds internal infrastructure for progress tracking
+
+* Implements various performance improvements
+
+* Adds internal infrastructures and tests to improve development process
+
+* Addresses various race conditions and deadlocks
+
+* Improves and standardizes error messages
 
 ### citus v6.2.3 (July 13, 2017) ###
 
