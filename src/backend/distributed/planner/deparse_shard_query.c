@@ -20,6 +20,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"

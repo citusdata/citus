@@ -37,6 +37,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/master_metadata_utility.h"
+#include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"

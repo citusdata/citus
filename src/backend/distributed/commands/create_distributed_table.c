@@ -46,6 +46,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"

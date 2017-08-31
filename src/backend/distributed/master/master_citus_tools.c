@@ -23,6 +23,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 
