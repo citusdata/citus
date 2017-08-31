@@ -333,7 +333,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults)
 
 	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
 	{
-		Form_pg_attribute attributeForm = tupleDescriptor->attrs[attributeIndex];
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 
 		/*
 		 * We disregard the inherited attributes (i.e., attinhcount > 0) here. The
@@ -545,7 +545,7 @@ pg_get_tablecolumnoptionsdef_string(Oid tableRelationId)
 
 	for (attributeIndex = 0; attributeIndex < tupleDescriptor->natts; attributeIndex++)
 	{
-		Form_pg_attribute attributeForm = tupleDescriptor->attrs[attributeIndex];
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, attributeIndex);
 		char *attributeName = NameStr(attributeForm->attname);
 		char defaultStorageType = get_typstorage(attributeForm->atttypid);
 

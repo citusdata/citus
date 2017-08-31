@@ -108,10 +108,10 @@ master_run_on_worker(PG_FUNCTION_ARGS)
 	 * Check to make sure we have correct tuple descriptor
 	 */
 	if (tupleDescriptor->natts != 4 ||
-		tupleDescriptor->attrs[0]->atttypid != TEXTOID ||
-		tupleDescriptor->attrs[1]->atttypid != INT4OID ||
-		tupleDescriptor->attrs[2]->atttypid != BOOLOID ||
-		tupleDescriptor->attrs[3]->atttypid != TEXTOID)
+		TupleDescAttr(tupleDescriptor, 0)->atttypid != TEXTOID ||
+		TupleDescAttr(tupleDescriptor, 1)->atttypid != INT4OID ||
+		TupleDescAttr(tupleDescriptor, 2)->atttypid != BOOLOID ||
+		TupleDescAttr(tupleDescriptor, 3)->atttypid != TEXTOID)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),

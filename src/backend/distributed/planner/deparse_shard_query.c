@@ -262,7 +262,8 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		FormData_pg_attribute *attributeForm = tupleDescriptor->attrs[columnIndex];
+		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
+															 columnIndex);
 		TargetEntry *targetEntry = NULL;
 		StringInfo resname = NULL;
 		Const *constValue = NULL;
