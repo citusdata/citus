@@ -69,6 +69,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"

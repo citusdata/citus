@@ -38,6 +38,7 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"

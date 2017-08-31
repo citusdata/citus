@@ -56,6 +56,7 @@
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
