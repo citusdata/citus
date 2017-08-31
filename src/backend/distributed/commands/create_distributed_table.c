@@ -1284,7 +1284,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 
 	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped)
@@ -1311,7 +1311,7 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 
 	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
 	{
-		Form_pg_attribute attributeForm = relationDesc->attrs[attributeIndex];
+		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
 
 		if (attributeForm->attidentity != '\0')
 		{

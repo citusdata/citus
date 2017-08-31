@@ -334,7 +334,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	/* build the list of column names for remote COPY statements */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped)
@@ -892,7 +892,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 
 	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescription->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 		Oid typeId = InvalidOid;
 		char typeCategory = '\0';
 		bool typePreferred = false;
@@ -1231,7 +1231,7 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *currentOutputFunction = &columnOutputFunctions[columnIndex];
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(rowDescriptor, columnIndex);
 		Oid columnTypeId = currentColumn->atttypid;
 		Oid outputFunctionId = InvalidOid;
 		bool typeVariableLength = false;
@@ -1282,7 +1282,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	}
 	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(rowDescriptor, columnIndex);
 		Datum value = valueArray[columnIndex];
 		bool isNull = isNullArray[columnIndex];
 		bool lastColumn = false;
@@ -1357,7 +1357,7 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 
 	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
 		if (!currentColumn->attisdropped)
 		{
