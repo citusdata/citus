@@ -9,9 +9,9 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 710000;
 
--- print major version to make version-specific tests clear
+-- print whether we're using version > 9 to make version-specific tests clear
 SHOW server_version \gset
-SELECT substring(:'server_version', '\d+') AS major_version;
+SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
 
 
 BEGIN;
