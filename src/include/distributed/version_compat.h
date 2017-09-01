@@ -21,4 +21,13 @@
 
 #endif
 
+#if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 110000)
+
+#include "access/hash.h"
+
+/* PostgreSQL 11 splits hash procs into "standard" and "extended" */
+#define HASHSTANDARD_PROC HASHPROC
+
+#endif
+
 #endif   /* VERSION_COMPAT_H */
