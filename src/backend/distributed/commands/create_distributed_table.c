@@ -636,7 +636,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
 	{
 		Oid hashSupportFunction = SupportFunctionForColumn(distributionColumn,
-														   HASH_AM_OID, HASHPROC);
+														   HASH_AM_OID,
+														   HASHSTANDARD_PROC);
 		if (hashSupportFunction == InvalidOid)
 		{
 			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),

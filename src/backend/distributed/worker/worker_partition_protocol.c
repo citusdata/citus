@@ -35,6 +35,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "mb/pg_wchar.h"
 #include "storage/lmgr.h"
@@ -191,7 +192,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/* use column's type information to get the hashing function */
-	hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID, HASHPROC);
+	hashFunction = GetFunctionInfo(partitionColumnType, HASH_AM_OID, HASHSTANDARD_PROC);
 
 	/* create hash partition context object */
 	partitionContext = palloc0(sizeof(HashPartitionContext));
