@@ -155,7 +155,8 @@ static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column
 /* Local functions forward declarations for limit clauses */
 static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode,
 							   bool groupedByPartitionColumn);
-static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode);
+static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode,
+								   bool groupedByPartitionColumn);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByAverage(List *sortClauseList, List *targetList);
@@ -1924,7 +1925,8 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode, bool groupedByPartitionCol
 	/* if we can push down the limit, also set related fields */
 	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode,
 														groupedByPartitionColumn);
-	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode);
+	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode,
+																groupedByPartitionColumn);
 
 	return workerExtendedOpNode;
 }
@@ -3296,7 +3298,7 @@ GroupedByPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
 		Oid relationId = tableNode->relationId;
 		char partitionMethod = 0;
 
-		if (relationId == SUBQUERY_RELATION_ID)
+		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
 		{
 			continue;
 		}
@@ -3305,11 +3307,10 @@ GroupedByPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
 		if (partitionMethod == DISTRIBUTE_BY_RANGE ||
 			partitionMethod == DISTRIBUTE_BY_HASH)
 		{
-			Var *tablePartitionColumn = tableNode->partitionColumn;
 			bool groupedByTablePartitionColumn =
 				GroupedByColumn(opNode->groupClauseList,
 								opNode->targetList,
-								tablePartitionColumn);
+								tableNode->partitionColumn);
 			if (groupedByTablePartitionColumn)
 			{
 				groupedByPartitionColumn = true;
@@ -3330,7 +3331,7 @@ GroupedByPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
  * the function returns null.
  */
 static List *
-WorkerSortClauseList(MultiExtendedOp *originalOpNode)
+WorkerSortClauseList(MultiExtendedOp *originalOpNode, bool groupedByPartitionColumn)
 {
 	List *workerSortClauseList = NIL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3351,7 +3352,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode)
 	 * in different task results. By ordering on the group by clause, we ensure
 	 * that query results are consistent.
 	 */
-	if (groupClauseList == NIL)
+	if (groupClauseList == NIL || groupedByPartitionColumn)
 	{
 		workerSortClauseList = originalOpNode->sortClauseList;
 	}
