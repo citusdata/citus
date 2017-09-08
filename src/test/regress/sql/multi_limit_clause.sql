@@ -59,4 +59,42 @@ SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity, l_discount LIMIT 1;
 
+
+-- We can push down LIMIT clause when we group by partition column of a hash
+-- partitioned table.
+CREATE TABLE lineitem_temp (LIKE lineitem);
+SELECT create_distributed_table('lineitem_temp', 'l_orderkey');
+INSERT INTO lineitem_temp SELECT * FROM lineitem;
+
+SELECT
+	l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_temp
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+SELECT
+	l_orderkey
+	FROM lineitem_temp
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey
+	LIMIT 10;
+
+-- Don't push down if not grouped by partition column.
+SELECT
+	max(l_orderkey)
+	FROM lineitem_temp
+	GROUP BY l_linestatus
+	ORDER BY 1 DESC
+	LIMIT 2;
+
+-- Push down if grouped by multiple columns one of which is partition column.
+SELECT
+	l_linestatus, l_orderkey, max(l_shipdate)
+	FROM lineitem_temp
+	GROUP BY l_linestatus, l_orderkey
+	ORDER BY 3 DESC, 1, 2
+	LIMIT 5;
+
 SET client_min_messages TO NOTICE;
+DROP TABLE lineitem_temp;

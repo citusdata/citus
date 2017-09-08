@@ -109,12 +109,13 @@ static void RemoveUnaryNode(MultiUnaryNode *unaryNode);
 static void PullUpUnaryNode(MultiUnaryNode *unaryNode);
 static void ParentSetNewChild(MultiNode *parentNode, MultiNode *oldChildNode,
 							  MultiNode *newChildNode);
+static bool GroupedByPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode);
 
 /* Local functions forward declarations for aggregate expressions */
 static void ApplyExtendedOpNodes(MultiExtendedOp *originalNode,
 								 MultiExtendedOp *masterNode,
 								 MultiExtendedOp *workerNode);
-static void TransformSubqueryNode(MultiTable *subqueryNode);
+static void TransformSubqueryNode(MultiTable *subqueryNode, List *tableNodeList);
 static MultiExtendedOp * MasterExtendedOpNode(MultiExtendedOp *originalOpNode);
 static Node * MasterAggregateMutator(Node *originalNode,
 									 MasterAggregateWalkerContext *walkerContext);
@@ -123,7 +124,8 @@ static Expr * MasterAggregateExpression(Aggref *originalAggregate,
 static Expr * MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 									  AttrNumber *columnId);
 static Expr * AddTypeConversion(Node *originalAggregate, Node *newExpression);
-static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode);
+static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
+											  bool groupedByPartitionColumn);
 static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
@@ -151,8 +153,10 @@ static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 
 /* Local functions forward declarations for limit clauses */
-static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode);
-static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode);
+static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode,
+							   bool groupedByPartitionColumn);
+static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode,
+								   bool groupedByPartitionColumn);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByAverage(List *sortClauseList, List *targetList);
@@ -177,6 +181,7 @@ void
 MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 {
 	bool hasOrderByHllType = false;
+	bool groupedByPartitionColumn = false;
 	List *selectNodeList = NIL;
 	List *projectNodeList = NIL;
 	List *collectNodeList = NIL;
@@ -251,19 +256,21 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
+	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	groupedByPartitionColumn = GroupedByPartitionColumn(tableNodeList, extendedOpNode);
+
 	masterExtendedOpNode = MasterExtendedOpNode(extendedOpNode);
-	workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode);
+	workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode, groupedByPartitionColumn);
 
 	ApplyExtendedOpNodes(extendedOpNode, masterExtendedOpNode, workerExtendedOpNode);
 
-	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
 	foreach(tableNodeCell, tableNodeList)
 	{
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
 			ErrorIfContainsUnsupportedAggregate((MultiNode *) tableNode);
-			TransformSubqueryNode(tableNode);
+			TransformSubqueryNode(tableNode, tableNodeList);
 		}
 	}
 
@@ -1150,14 +1157,17 @@ ApplyExtendedOpNodes(MultiExtendedOp *originalNode, MultiExtendedOp *masterNode,
  * operator node.
  */
 static void
-TransformSubqueryNode(MultiTable *subqueryNode)
+TransformSubqueryNode(MultiTable *subqueryNode, List *tableNodeList)
 {
 	MultiExtendedOp *extendedOpNode =
 		(MultiExtendedOp *) ChildNode((MultiUnaryNode *) subqueryNode);
 	MultiNode *collectNode = ChildNode((MultiUnaryNode *) extendedOpNode);
 	MultiNode *collectChildNode = ChildNode((MultiUnaryNode *) collectNode);
+	bool groupedByPartitionColumn = GroupedByPartitionColumn(tableNodeList,
+															 extendedOpNode);
 	MultiExtendedOp *masterExtendedOpNode = MasterExtendedOpNode(extendedOpNode);
-	MultiExtendedOp *workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode);
+	MultiExtendedOp *workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode,
+																 groupedByPartitionColumn);
 	MultiPartition *partitionNode = CitusMakeNode(MultiPartition);
 	List *groupClauseList = extendedOpNode->groupClauseList;
 	List *targetEntryList = extendedOpNode->targetList;
@@ -1759,7 +1769,7 @@ AddTypeConversion(Node *originalAggregate, Node *newExpression)
  * list of worker extended operator.
  */
 static MultiExtendedOp *
-WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
+WorkerExtendedOpNode(MultiExtendedOp *originalOpNode, bool groupedByPartitionColumn)
 {
 	MultiExtendedOp *workerExtendedOpNode = NULL;
 	MultiNode *parentNode = ParentNode((MultiNode *) originalOpNode);
@@ -1913,8 +1923,10 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 	workerExtendedOpNode->groupClauseList = groupClauseList;
 
 	/* if we can push down the limit, also set related fields */
-	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode);
-	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode);
+	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode,
+														groupedByPartitionColumn);
+	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode,
+																groupedByPartitionColumn);
 
 	return workerExtendedOpNode;
 }
@@ -3160,9 +3172,11 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
  * If they can, the function returns the limit count.
  *
  * The limit push-down decision tree is as follows:
- *                                 group by?
- *                              1/           \0
- *                          order by?         (exact pd)
+ *                                         group by?
+ *                                       1/         \0
+ *                       group by partition column?   (exact pd)
+ *                              0/         \1
+ *                          order by?        (exact pd)
  *                       1/           \0
  *           has order by agg?          (no pd)
  *            1/           \0
@@ -3177,7 +3191,7 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
  * returns null.
  */
 static Node *
-WorkerLimitCount(MultiExtendedOp *originalOpNode)
+WorkerLimitCount(MultiExtendedOp *originalOpNode, bool groupedByPartitionColumn)
 {
 	Node *workerLimitNode = NULL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3203,11 +3217,12 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 		   IsA(originalOpNode->limitOffset, Const));
 
 	/*
-	 * If we don't have group by clauses, or if we have order by clauses without
-	 * aggregates, we can push down the original limit. Else if we have order by
-	 * clauses with commutative aggregates, we can push down approximate limits.
+	 * If we don't have group by clauses, or we have group by partition column,
+	 * or if we have order by clauses without aggregates, we can push down the
+	 * original limit. Else if we have order by clauses with commutative aggregates,
+	 * we can push down approximate limits.
 	 */
-	if (groupClauseList == NIL)
+	if (groupClauseList == NIL || groupedByPartitionColumn)
 	{
 		canPushDownLimit = true;
 	}
@@ -3268,6 +3283,47 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 
 
 /*
+ * GroupedByPartitionColumn checks if the given op node contains a group by clause
+ * that is on a partition column of the given list of tables.
+ */
+static bool
+GroupedByPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
+{
+	bool groupedByPartitionColumn = false;
+	ListCell *tableNodeCell = NULL;
+
+	foreach(tableNodeCell, tableNodeList)
+	{
+		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
+		Oid relationId = tableNode->relationId;
+		char partitionMethod = 0;
+
+		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
+		{
+			continue;
+		}
+
+		partitionMethod = PartitionMethod(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_RANGE ||
+			partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			bool groupedByTablePartitionColumn =
+				GroupedByColumn(opNode->groupClauseList,
+								opNode->targetList,
+								tableNode->partitionColumn);
+			if (groupedByTablePartitionColumn)
+			{
+				groupedByPartitionColumn = true;
+				break;
+			}
+		}
+	}
+
+	return groupedByPartitionColumn;
+}
+
+
+/*
  * WorkerSortClauseList first checks if the given extended node contains a limit
  * that can be pushed down. If it does, the function then checks if we need to
  * add any sorting and grouping clauses to the sort list we push down for the
@@ -3275,7 +3331,7 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
  * the function returns null.
  */
 static List *
-WorkerSortClauseList(MultiExtendedOp *originalOpNode)
+WorkerSortClauseList(MultiExtendedOp *originalOpNode, bool groupedByPartitionColumn)
 {
 	List *workerSortClauseList = NIL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3296,7 +3352,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode)
 	 * in different task results. By ordering on the group by clause, we ensure
 	 * that query results are consistent.
 	 */
-	if (groupClauseList == NIL)
+	if (groupClauseList == NIL || groupedByPartitionColumn)
 	{
 		workerSortClauseList = originalOpNode->sortClauseList;
 	}
