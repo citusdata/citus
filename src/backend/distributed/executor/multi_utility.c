@@ -3111,7 +3111,9 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
  *
  * This code is heavily borrowed from RangeVarCallbackForDropRelation() in
  * commands/tablecmds.c in Postgres source. We need this to ensure the right
- * order of locking while dealing with DROP INDEX statments.
+ * order of locking while dealing with DROP INDEX statments. Because we are
+ * exclusively using this callback for INDEX processing, the PARTITION-related
+ * logic from PostgreSQL's similar callback has been omitted as unneeded.
  */
 static void
 RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, void *arg)
