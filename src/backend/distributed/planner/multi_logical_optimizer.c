@@ -109,12 +109,14 @@ static void RemoveUnaryNode(MultiUnaryNode *unaryNode);
 static void PullUpUnaryNode(MultiUnaryNode *unaryNode);
 static void ParentSetNewChild(MultiNode *parentNode, MultiNode *oldChildNode,
 							  MultiNode *newChildNode);
+static bool GroupedByDistinctPartitionColumn(List *tableNodeList,
+											 MultiExtendedOp *opNode);
 
 /* Local functions forward declarations for aggregate expressions */
 static void ApplyExtendedOpNodes(MultiExtendedOp *originalNode,
 								 MultiExtendedOp *masterNode,
 								 MultiExtendedOp *workerNode);
-static void TransformSubqueryNode(MultiTable *subqueryNode);
+static void TransformSubqueryNode(MultiTable *subqueryNode, List *tableNodeList);
 static MultiExtendedOp * MasterExtendedOpNode(MultiExtendedOp *originalOpNode);
 static Node * MasterAggregateMutator(Node *originalNode,
 									 MasterAggregateWalkerContext *walkerContext);
@@ -123,7 +125,8 @@ static Expr * MasterAggregateExpression(Aggref *originalAggregate,
 static Expr * MasterAverageExpression(Oid sumAggregateType, Oid countAggregateType,
 									  AttrNumber *columnId);
 static Expr * AddTypeConversion(Node *originalAggregate, Node *newExpression);
-static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode);
+static MultiExtendedOp * WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
+											  bool groupedByDistinctPartitionColumn);
 static bool WorkerAggregateWalker(Node *node,
 								  WorkerAggregateWalkerContext *walkerContext);
 static List * WorkerAggregateExpressionList(Aggref *originalAggregate,
@@ -177,6 +180,7 @@ void
 MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 {
 	bool hasOrderByHllType = false;
+	bool groupedByDistinctPartitionColumn = false;
 	List *selectNodeList = NIL;
 	List *projectNodeList = NIL;
 	List *collectNodeList = NIL;
@@ -251,19 +255,23 @@ MultiLogicalPlanOptimize(MultiTreeRoot *multiLogicalPlan)
 	extendedOpNodeList = FindNodesOfType(logicalPlanNode, T_MultiExtendedOp);
 	extendedOpNode = (MultiExtendedOp *) linitial(extendedOpNodeList);
 
+	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
+	groupedByDistinctPartitionColumn = GroupedByDistinctPartitionColumn(tableNodeList,
+																		extendedOpNode);
+
 	masterExtendedOpNode = MasterExtendedOpNode(extendedOpNode);
-	workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode);
+	workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode,
+												groupedByDistinctPartitionColumn);
 
 	ApplyExtendedOpNodes(extendedOpNode, masterExtendedOpNode, workerExtendedOpNode);
 
-	tableNodeList = FindNodesOfType(logicalPlanNode, T_MultiTable);
 	foreach(tableNodeCell, tableNodeList)
 	{
 		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
 		if (tableNode->relationId == SUBQUERY_RELATION_ID)
 		{
 			ErrorIfContainsUnsupportedAggregate((MultiNode *) tableNode);
-			TransformSubqueryNode(tableNode);
+			TransformSubqueryNode(tableNode, tableNodeList);
 		}
 	}
 
@@ -1150,14 +1158,17 @@ ApplyExtendedOpNodes(MultiExtendedOp *originalNode, MultiExtendedOp *masterNode,
  * operator node.
  */
 static void
-TransformSubqueryNode(MultiTable *subqueryNode)
+TransformSubqueryNode(MultiTable *subqueryNode, List *tableNodeList)
 {
 	MultiExtendedOp *extendedOpNode =
 		(MultiExtendedOp *) ChildNode((MultiUnaryNode *) subqueryNode);
 	MultiNode *collectNode = ChildNode((MultiUnaryNode *) extendedOpNode);
 	MultiNode *collectChildNode = ChildNode((MultiUnaryNode *) collectNode);
+	bool groupedByDistinctPartitionColumn =
+		GroupedByDistinctPartitionColumn(tableNodeList, extendedOpNode);
 	MultiExtendedOp *masterExtendedOpNode = MasterExtendedOpNode(extendedOpNode);
-	MultiExtendedOp *workerExtendedOpNode = WorkerExtendedOpNode(extendedOpNode);
+	MultiExtendedOp *workerExtendedOpNode =
+		WorkerExtendedOpNode(extendedOpNode, groupedByDistinctPartitionColumn);
 	MultiPartition *partitionNode = CitusMakeNode(MultiPartition);
 	List *groupClauseList = extendedOpNode->groupClauseList;
 	List *targetEntryList = extendedOpNode->targetList;
@@ -1759,7 +1770,8 @@ AddTypeConversion(Node *originalAggregate, Node *newExpression)
  * list of worker extended operator.
  */
 static MultiExtendedOp *
-WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
+WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
+					 bool groupedByDistinctPartitionColumn)
 {
 	MultiExtendedOp *workerExtendedOpNode = NULL;
 	MultiNode *parentNode = ParentNode((MultiNode *) originalOpNode);
@@ -1915,6 +1927,16 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode)
 	/* if we can push down the limit, also set related fields */
 	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode);
 	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode);
+
+	/*
+	 * If grouped by a partition column whose values are distinct across shards,
+	 * we can push down the having qualifier.
+	 */
+	if (havingQual != NULL && groupedByDistinctPartitionColumn)
+	{
+		ereport(DEBUG1, (errmsg("pushing down HAVING")));
+		workerExtendedOpNode->havingQual = originalOpNode->havingQual;
+	}
 
 	return workerExtendedOpNode;
 }
@@ -2274,6 +2296,47 @@ TypeOid(Oid schemaId, const char *typeName)
 							  ObjectIdGetDatum(schemaId));
 
 	return typeOid;
+}
+
+
+/*
+ * GroupedByDistinctPartitionColumn returns true if the query is grouped by the
+ * partition column of a table which has distinct partition values across shards.
+ */
+static bool
+GroupedByDistinctPartitionColumn(List *tableNodeList, MultiExtendedOp *opNode)
+{
+	bool groupedByDistinctPartitionColumn = false;
+	ListCell *tableNodeCell = NULL;
+
+	foreach(tableNodeCell, tableNodeList)
+	{
+		MultiTable *tableNode = (MultiTable *) lfirst(tableNodeCell);
+		Oid relationId = tableNode->relationId;
+		char partitionMethod = 0;
+
+		if (relationId == SUBQUERY_RELATION_ID || !IsDistributedTable(relationId))
+		{
+			continue;
+		}
+
+		partitionMethod = PartitionMethod(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_RANGE ||
+			partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			bool groupedByTablePartitionColumn =
+				GroupedByColumn(opNode->groupClauseList,
+								opNode->targetList,
+								tableNode->partitionColumn);
+			if (groupedByTablePartitionColumn)
+			{
+				groupedByDistinctPartitionColumn = true;
+				break;
+			}
+		}
+	}
+
+	return groupedByDistinctPartitionColumn;
 }
 
 
