@@ -154,8 +154,10 @@ static bool TablePartitioningSupportsDistinct(List *tableNodeList,
 static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column);
 
 /* Local functions forward declarations for limit clauses */
-static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode);
-static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode);
+static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode,
+							   bool groupedByDistinctPartitionColumn);
+static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode,
+								   bool groupedByDistinctPartitionColumn);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByAverage(List *sortClauseList, List *targetList);
@@ -1925,8 +1927,10 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	workerExtendedOpNode->groupClauseList = groupClauseList;
 
 	/* if we can push down the limit, also set related fields */
-	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode);
-	workerExtendedOpNode->sortClauseList = WorkerSortClauseList(originalOpNode);
+	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode,
+														groupedByDistinctPartitionColumn);
+	workerExtendedOpNode->sortClauseList =
+		WorkerSortClauseList(originalOpNode, groupedByDistinctPartitionColumn);
 
 	/*
 	 * If grouped by a partition column whose values are shards have disjoint sets
@@ -3221,9 +3225,11 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
  * If they can, the function returns the limit count.
  *
  * The limit push-down decision tree is as follows:
- *                                 group by?
- *                              1/           \0
- *                          order by?         (exact pd)
+ *                                         group by?
+ *                                       1/         \0
+ *                       group by partition column?   (exact pd)
+ *                              0/         \1
+ *                          order by?        (exact pd)
  *                       1/           \0
  *           has order by agg?          (no pd)
  *            1/           \0
@@ -3238,7 +3244,8 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
  * returns null.
  */
 static Node *
-WorkerLimitCount(MultiExtendedOp *originalOpNode)
+WorkerLimitCount(MultiExtendedOp *originalOpNode,
+				 bool groupedByDistinctPartitionColumn)
 {
 	Node *workerLimitNode = NULL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3264,11 +3271,12 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
 		   IsA(originalOpNode->limitOffset, Const));
 
 	/*
-	 * If we don't have group by clauses, or if we have order by clauses without
-	 * aggregates, we can push down the original limit. Else if we have order by
-	 * clauses with commutative aggregates, we can push down approximate limits.
+	 * If we don't have group by clauses, or we have group by partition column,
+	 * or if we have order by clauses without aggregates, we can push down the
+	 * original limit. Else if we have order by clauses with commutative aggregates,
+	 * we can push down approximate limits.
 	 */
-	if (groupClauseList == NIL)
+	if (groupClauseList == NIL || groupedByDistinctPartitionColumn)
 	{
 		canPushDownLimit = true;
 	}
@@ -3336,7 +3344,8 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode)
  * the function returns null.
  */
 static List *
-WorkerSortClauseList(MultiExtendedOp *originalOpNode)
+WorkerSortClauseList(MultiExtendedOp *originalOpNode,
+					 bool groupedByDistinctPartitionColumn)
 {
 	List *workerSortClauseList = NIL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3357,7 +3366,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode)
 	 * in different task results. By ordering on the group by clause, we ensure
 	 * that query results are consistent.
 	 */
-	if (groupClauseList == NIL)
+	if (groupClauseList == NIL || groupedByDistinctPartitionColumn)
 	{
 		workerSortClauseList = originalOpNode->sortClauseList;
 	}

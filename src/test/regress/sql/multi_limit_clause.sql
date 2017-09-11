@@ -3,6 +3,10 @@
 --
 
 
+CREATE TABLE lineitem_hash (LIKE lineitem);
+SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
+INSERT INTO lineitem_hash SELECT * FROM lineitem;
+
 -- Display debug messages on limit clause push down.
 
 SET client_min_messages TO DEBUG1;
@@ -59,4 +63,45 @@ SELECT l_quantity, l_discount, avg(l_partkey) FROM lineitem
 	GROUP BY l_quantity, l_discount
 	ORDER BY l_quantity, l_discount LIMIT 1;
 
+
+-- We can push down LIMIT clause when we group by partition column of a hash
+-- partitioned table.
+SELECT l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC LIMIT 5;
+
+SELECT l_orderkey
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 5;
+
+-- Don't push down if not grouped by partition column.
+SELECT max(l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_linestatus
+	ORDER BY 1 DESC LIMIT 2;
+
+-- Don't push down if table is distributed by append
+SELECT l_orderkey, max(l_shipdate)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 LIMIT 5;
+
+-- Push down if grouped by multiple columns one of which is partition column.
+SELECT
+	l_linestatus, l_orderkey, max(l_shipdate)
+	FROM lineitem_hash
+	GROUP BY l_linestatus, l_orderkey
+	ORDER BY 3 DESC, 1, 2 LIMIT 5;
+
+-- Don't push down if grouped by multiple columns none of which is partition column.
+SELECT
+	l_linestatus, l_shipmode, max(l_shipdate)
+	FROM lineitem_hash
+	GROUP BY l_linestatus, l_shipmode
+	ORDER BY 3 DESC, 1, 2 LIMIT 5;
+
+
 SET client_min_messages TO NOTICE;
+DROP TABLE lineitem_hash;

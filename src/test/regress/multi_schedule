@@ -57,9 +57,9 @@ test: multi_subquery_union multi_subquery_in_where_clause multi_subquery_misc
 test: multi_reference_table
 test: multi_outer_join_reference
 test: multi_single_relation_subquery
-test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause multi_limit_clause_approximate
+test: multi_agg_distinct multi_agg_approximate_distinct multi_limit_clause_approximate
 test: multi_average_expression multi_working_columns multi_having_pushdown
-test: multi_array_agg
+test: multi_array_agg multi_limit_clause
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_partition_pruning
 test: multi_join_pruning multi_hash_pruning
