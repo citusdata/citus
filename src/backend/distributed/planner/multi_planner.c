@@ -467,7 +467,14 @@ GetMultiPlan(CustomScan *customScan)
 
 	node = CheckNodeCopyAndSerialization(node);
 
-	multiPlan = (MultiPlan *) node;
+	/*
+	 * When using prepared statements the same plan gets reused across
+	 * multiple statements and transactions. We make several modifications
+	 * to the MultiPlan during execution such as assigning task placements
+	 * and evaluating functions and parameters. These changes should not
+	 * persist, so we always work on a copy.
+	 */
+	multiPlan = (MultiPlan *) copyObject(node);
 
 	return multiPlan;
 }
