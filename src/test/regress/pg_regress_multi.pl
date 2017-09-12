@@ -183,7 +183,7 @@ exec $valgrindPath \\
     --quiet \\
     --suppressions=${postgresSrcdir}/src/tools/valgrind.supp \\
     --trace-children=yes --track-origins=yes --read-var-info=no \\
-    --leak-check=no \\
+    --leak-check=yes \\
     --error-markers=VALGRINDERROR-BEGIN,VALGRINDERROR-END \\
     --log-file=$valgrindLogFile \\
     $bindir/postgres.orig \\
