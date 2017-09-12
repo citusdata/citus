@@ -998,6 +998,42 @@ SELECT key, value FROM domain_partition_column_table ORDER BY key;
 (6 rows)
 
 DROP TABLE domain_partition_column_table;
+-- verify we re-evaluate volatile functions every time
+CREATE TABLE http_request (
+  site_id INT,
+  ingest_time TIMESTAMPTZ DEFAULT now(),
+  url TEXT,
+  request_country TEXT,
+  ip_address TEXT,
+  status_code INT,
+  response_time_msec INT
+);
+SELECT create_distributed_table('http_request', 'site_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+PREPARE FOO AS INSERT INTO http_request (
+  site_id, ingest_time, url, request_country,
+  ip_address, status_code, response_time_msec
+) VALUES (
+  1, clock_timestamp(), 'http://example.com/path', 'USA',
+  inet '88.250.10.123', 200, 10
+);
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+EXECUTE foo;
+SELECT count(distinct ingest_time) FROM http_request WHERE site_id = 1;
+ count 
+-------
+     6
+(1 row)
+
+DROP TABLE http_request;
 -- verify placement state updates invalidate shard state
 --
 -- We use a immutable function to check for that. The planner will
