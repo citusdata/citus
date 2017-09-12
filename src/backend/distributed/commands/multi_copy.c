@@ -2010,6 +2010,14 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 	copyDest->tuplesSent++;
 
+	/*
+	 * Release per tuple memory allocated in this function. If we're writing
+	 * the results of an INSERT ... SELECT then the SELECT execution will use
+	 * its own executor state and reset the per tuple expression context
+	 * separately.
+	 */
+	ResetPerTupleExprContext(executorState);
+
 	return true;
 }
 
