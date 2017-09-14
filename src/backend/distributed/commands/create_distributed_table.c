@@ -237,6 +237,14 @@ create_reference_table(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
+
+	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
