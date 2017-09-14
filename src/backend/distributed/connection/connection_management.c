@@ -269,42 +269,6 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 
 
 /*
- * Return MultiConnection associated with the libpq connection.
- *
- * Note that this is comparatively expensive. Should only be used for
- * backward-compatibility purposes.
- */
-MultiConnection *
-GetConnectionFromPGconn(struct pg_conn *pqConn)
-{
-	HASH_SEQ_STATUS status;
-	ConnectionHashEntry *entry;
-
-	hash_seq_init(&status, ConnectionHash);
-	while ((entry = (ConnectionHashEntry *) hash_seq_search(&status)) != 0)
-	{
-		dlist_head *connections = entry->connections;
-		dlist_iter iter;
-
-		/* check connection cache for a connection that's not already in use */
-		dlist_foreach(iter, connections)
-		{
-			MultiConnection *connection =
-				dlist_container(MultiConnection, connectionNode, iter.cur);
-
-			if (connection->pgConn == pqConn)
-			{
-				hash_seq_term(&status);
-				return connection;
-			}
-		}
-	}
-
-	return NULL;
-}
-
-
-/*
  * CloseNodeConnectionsAfterTransaction sets the sessionLifespan flag of the connections
  * to a particular node as false. This is mainly used when a worker leaves the cluster.
  */
@@ -372,31 +336,6 @@ CloseConnection(MultiConnection *connection)
 	else
 	{
 		ereport(ERROR, (errmsg("closing untracked connection")));
-	}
-}
-
-
-/*
- * Close a previously established connection.
- *
- * This function closes the MultiConnection associatated with the libpq
- * connection.
- *
- * Note that this is comparatively expensive. Should only be used for
- * backward-compatibility purposes.
- */
-void
-CloseConnectionByPGconn(PGconn *pqConn)
-{
-	MultiConnection *connection = GetConnectionFromPGconn(pqConn);
-
-	if (connection)
-	{
-		CloseConnection(connection);
-	}
-	else
-	{
-		ereport(WARNING, (errmsg("could not find connection to close")));
 	}
 }
 
