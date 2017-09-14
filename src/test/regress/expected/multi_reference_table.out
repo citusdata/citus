@@ -1122,7 +1122,7 @@ WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 DEBUG:  only reference tables may be queried when targeting a reference table with distributed INSERT ... SELECT
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
--- not pushable due to lack of equality between partition column and column of reference table
+-- safe to push down even lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 
@@ -1132,9 +1132,13 @@ FROM
 WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
--- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
+ value_1 | value_2 
+---------+---------
+       1 |       1
+       2 |       2
+(2 rows)
+
+-- similar query with the above, this time partition key but without equality 
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 
@@ -1142,10 +1146,13 @@ SELECT
 FROM
 	colocated_table_test_2, reference_table_test
 WHERE
-	colocated_table_test_2.value_2 = reference_table_test.value_2
+	colocated_table_test_2.value_1 > reference_table_test.value_2
 RETURNING value_1, value_2;
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+ value_1 | value_2 
+---------+---------
+       2 |       1
+(1 row)
+
 -- partition column value comes from reference table, goes via coordinator
 INSERT INTO
 	colocated_table_test (value_1, value_2)
@@ -1606,7 +1613,7 @@ INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 SELECT master_modify_multiple_shards('DELETE FROM colocated_table_test');
  master_modify_multiple_shards 
 -------------------------------
-                             6
+                             9
 (1 row)
 
 ROLLBACK;

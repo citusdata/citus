@@ -356,6 +356,7 @@ SET citus.shard_max_size TO "1MB";
 
 CREATE TABLE events_reference_table (like events_table including all);
 SELECT create_reference_table('events_reference_table');
+CREATE INDEX events_ref_val2 on events_reference_table(value_2);   
 INSERT INTO events_reference_table SELECT * FROM events_table;
 
 CREATE TABLE users_reference_table (like users_table including all);
