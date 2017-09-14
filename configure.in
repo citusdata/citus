@@ -140,6 +140,25 @@ if test "$enable_coverage" = yes; then
     CITUS_CFLAGS="$CITUS_CFLAGS -fprofile-arcs -ftest-coverage"
 fi
 
+#
+# libcurl
+#
+PGAC_ARG_BOOL(with, libcurl, yes,
+              [do not use libcurl for anonymous statistics report])
+
+if test "$with_libcurl" = yes; then
+  AC_CHECK_LIB(curl, curl_global_init, [],
+              [AC_MSG_ERROR([libcurl not found
+If you have libcurl already installed, see config.log for details on the
+failure. It is possible the compiler isn't looking in the proper directory.
+Use --without-libcurl to disable anonymous statistics collection.])])
+  AC_CHECK_HEADER(curl/curl.h, [], [AC_MSG_ERROR([libcurl header not found
+If you have libcurl already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-libcurl to disable anonymous statistics collection.])])
+  CITUS_CFLAGS="$CITUS_CFLAGS -DHAVE_LIBCURL"
+fi
+
 AC_SUBST(CITUS_CFLAGS, "$CITUS_CFLAGS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
