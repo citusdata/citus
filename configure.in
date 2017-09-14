@@ -160,6 +160,7 @@ Use --without-libcurl to disable anonymous statistics collection.])])
 fi
 
 AC_SUBST(CITUS_CFLAGS, "$CITUS_CFLAGS")
+AC_SUBST(CITUS_LDFLAGS, "$LIBS")
 AC_SUBST(POSTGRES_SRCDIR, "$POSTGRES_SRCDIR")
 AC_SUBST(POSTGRES_BUILDDIR, "$POSTGRES_BUILDDIR")
 
