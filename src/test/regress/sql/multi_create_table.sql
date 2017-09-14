@@ -482,5 +482,41 @@ END;
 
 SELECT count(*) FROM tt1;
 
+
+-- the goal of the following test is to make sure that
+-- both create_reference_table and create_distributed_table
+-- calls creates the schemas without leading to any deadlocks
+
+-- first create reference table, then hash distributed table
+BEGIN;
+
+CREATE SCHEMA sc;
+CREATE TABLE sc.ref(a int);
+insert into sc.ref SELECT s FROM generate_series(0, 100) s;
+SELECT create_reference_table('sc.ref');
+
+CREATE TABLE sc.hash(a int);
+insert into sc.hash SELECT s FROM generate_series(0, 100) s;
+SELECT create_distributed_table('sc.hash', 'a');
+
+COMMIT;
+
+
+-- first create hash distributed table, then reference table
+BEGIN;
+
+CREATE SCHEMA sc2;
+CREATE TABLE sc2.hash(a int);
+insert into sc2.hash SELECT s FROM generate_series(0, 100) s;
+SELECT create_distributed_table('sc2.hash', 'a');
+
+CREATE TABLE sc2.ref(a int);
+insert into sc2.ref SELECT s FROM generate_series(0, 100) s;
+SELECT create_reference_table('sc2.ref');
+
+COMMIT;
+
 DROP TABLE tt1;
 DROP TABLE tt2;
+DROP SCHEMA sc CASCADE;
+DROP SCHEMA sc2 CASCADE;
