@@ -28,6 +28,7 @@ void
 CallHome(void)
 {
 	elog(NOTICE, "Calling home.");
+	SendGETRequest("");
 }
 
 
