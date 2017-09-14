@@ -14,7 +14,9 @@
 #if HAVE_LIBCURL == 0
 
 /* if we don't have libcurl, CallHome is no-op. */
-void CallHome(void) {}
+void
+CallHome(void) { }
+
 
 #else
 
@@ -27,6 +29,7 @@ CallHome(void)
 {
 	elog(NOTICE, "Calling home.");
 }
+
 
 static bool
 SendGETRequest(const char *url)
@@ -50,7 +53,9 @@ SendGETRequest(const char *url)
 	}
 
 	curl_global_cleanup();
-	
+
 	return requestSent;
 }
+
+
 #endif
