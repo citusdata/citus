@@ -707,7 +707,7 @@ FROM
 WHERE
 	colocated_table_test.value_1 = reference_table_test.value_1;
 
--- not pushable due to lack of equality between partition column and column of reference table
+-- safe to push down even lack of equality between partition column and column of reference table
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 
@@ -718,7 +718,7 @@ WHERE
 	colocated_table_test_2.value_4 = reference_table_test.value_4
 RETURNING value_1, value_2;
 
--- some more complex queries (Note that there are more complex queries in multi_insert_select.sql)
+-- similar query with the above, this time partition key but without equality 
 INSERT INTO
 	colocated_table_test (value_1, value_2)
 SELECT 
@@ -726,7 +726,7 @@ SELECT
 FROM
 	colocated_table_test_2, reference_table_test
 WHERE
-	colocated_table_test_2.value_2 = reference_table_test.value_2
+	colocated_table_test_2.value_1 > reference_table_test.value_2
 RETURNING value_1, value_2;
 
 -- partition column value comes from reference table, goes via coordinator
