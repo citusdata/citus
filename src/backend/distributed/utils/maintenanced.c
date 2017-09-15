@@ -276,8 +276,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
-		bool isCoordinator = false;
-	
+		time_t current_time = time(NULL);
+		double since_last_call_home = difftime(current_time, last_call_home);
+
 		CHECK_FOR_INTERRUPTS();
 
 		/*
@@ -295,23 +296,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
-		StartTransactionCommand();
-		isCoordinator = IsCoordinator();
-		CommitTransactionCommand();
-		
-		elog(WARNING, "isCoordinator: %d", isCoordinator);
-		if (isCoordinator)
+		if (last_call_home == 0 || since_last_call_home >= 60.0)
 		{
-			time_t current_time = time(NULL);
-			double since_last_call_home = difftime(current_time, last_call_home);
-			if (last_call_home == 0 ||
-				since_last_call_home >= 60.0)
-			{
-				CallHome();
-				last_call_home = current_time;
-			}
+			CallHome();
+			last_call_home = current_time;
 		}
- 
+
 		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
