@@ -27,7 +27,6 @@ static bool SendGETRequest(const char *url);
 void
 CallHome(void)
 {
-	elog(NOTICE, "Calling home.");
 	SendGETRequest("http://localhost:5000/collect_stats");
 }
 
