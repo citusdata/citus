@@ -1105,12 +1105,14 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 
 		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
 
-		/* if the expression belongs to reference table directly returns false */
+		/*
+		 * If the expression belongs to a reference table continue searching for
+		 * other partition keys.
+		 */
 		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
 			DISTRIBUTE_BY_NONE)
 		{
-			targetListOnPartitionColumn = false;
-			break;
+			continue;
 		}
 
 		if (isPartitionColumn)

@@ -932,6 +932,14 @@ SELECT foo.user_id FROM
   GROUP BY r.user_id
 ) as foo;
 
+-- supported since the group by contains at least one distributed table
+SELECT foo.user_id FROM
+(
+  SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
+  GROUP BY r.user_id, m.user_id
+) as foo
+ORDER BY 1 LIMIT 3;
+
 -- not supported since distinct is on the reference table column
 SELECT foo.user_id FROM
 (
@@ -943,6 +951,13 @@ SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
+
+-- supported since the distinct on contains at least one distributed table
+SELECT foo.user_id FROM
+(
+  SELECT DISTINCT ON(r.user_id, m.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
+) as foo
+ORDER BY 1 LIMIT 3;
 
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
