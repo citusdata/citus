@@ -2160,18 +2160,6 @@ GROUP BY
 ORDER BY 
   types;
 
--- not supported due to window functions
-SELECT   user_id, 
-         some_vals 
-FROM     ( 
-                  SELECT   * , 
-                           Row_number() over (PARTITION BY "user_id" ORDER BY "user_id") AS "some_vals",
-                           Random() 
-                  FROM     users_table 
-                 ) user_id 
-ORDER BY 1, 
-         2 limit 10;
-
 -- not supported due to non relation rte
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM

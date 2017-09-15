@@ -83,7 +83,7 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree
 																outerMostQueryHasLimit);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
-static bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
+static bool WindowPartitionOnDistributionColumn(Query *query);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiPlanTree(Query *queryTree);
@@ -447,6 +447,7 @@ MultiSubqueryPlanTree(Query *originalQuery, Query *queryTree,
  *   - Only a single RTE_RELATION exists, which means only a single table
  *     name is specified on the whole query
  *   - No sublinks exists in the subquery
+ *   - No window functions in the subquery
  *
  * Note that the caller should still call DeferErrorIfUnsupportedSubqueryRepartition()
  * to ensure that Citus supports the subquery. Also, this function is designed to run
@@ -462,6 +463,12 @@ SingleRelationRepartitionSubquery(Query *queryTree)
 
 	/* we don't support subqueries in WHERE */
 	if (queryTree->hasSubLinks)
+	{
+		return false;
+	}
+
+	/* we don't support window functions */
+	if (queryTree->hasWindowFuncs)
 	{
 		return false;
 	}
@@ -782,6 +789,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
+	StringInfo errorInfo = NULL;
 	DeferredErrorMessage *deferredError = NULL;
 
 	deferredError = DeferErrorIfUnsupportedTableCombination(subqueryTree);
@@ -794,12 +802,6 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "Subqueries without relations are unsupported";
-	}
-
-	if (subqueryTree->hasWindowFuncs)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Window functions are currently unsupported";
 	}
 
 	if (subqueryTree->limitOffset)
@@ -869,6 +871,17 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 			errorDetail = "Group by list without partition column is currently "
 						  "unsupported";
 		}
+	}
+
+	/*
+	 * We support window functions when the window function
+	 * is partitioned on distribution column.
+	 */
+	if (subqueryTree->windowClause && !SafeToPushdownWindowFunction(subqueryTree,
+																	&errorInfo))
+	{
+		errorDetail = (char *) errorInfo->data;
+		preconditionsSatisfied = false;
 	}
 
 	/* we don't support aggregates without group by */
@@ -1084,10 +1097,90 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 
 
 /*
+ * SafeToPushdownWindowFunction checks if the query with window function is supported.
+ * It returns the result accordingly and modifies the error detail.
+ */
+bool
+SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail)
+{
+	ListCell *windowClauseCell = NULL;
+	List *windowClauseList = query->windowClause;
+
+	/*
+	 * We need to check each window clause separately if there is a partition by clause
+	 * and if it is partitioned on the distribution column.
+	 */
+	foreach(windowClauseCell, windowClauseList)
+	{
+		WindowClause *windowClause = lfirst(windowClauseCell);
+
+		if (!windowClause->partitionClause)
+		{
+			*errorDetail = makeStringInfo();
+			appendStringInfoString(*errorDetail,
+								   "Window functions without PARTITION BY on distribution "
+								   "column is currently unsupported");
+			return false;
+		}
+	}
+
+	if (!WindowPartitionOnDistributionColumn(query))
+	{
+		*errorDetail = makeStringInfo();
+		appendStringInfoString(*errorDetail,
+							   "Window functions with PARTITION BY list missing distribution "
+							   "column is currently unsupported");
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * WindowPartitionOnDistributionColumn checks if the given subquery has one
+ * or more window functions and at least one of them is not partitioned by
+ * distribution column. The function returns false if your window function does not
+ * have a partition by clause or it does not include the distribution column.
+ *
+ * Please note that if the query does not have a window function, the function
+ * returns true.
+ */
+static bool
+WindowPartitionOnDistributionColumn(Query *query)
+{
+	List *windowClauseList = query->windowClause;
+	ListCell *windowClauseCell = NULL;
+
+	foreach(windowClauseCell, windowClauseList)
+	{
+		WindowClause *windowClause = lfirst(windowClauseCell);
+		List *groupTargetEntryList = NIL;
+		bool partitionOnDistributionColumn = false;
+		List *partitionClauseList = windowClause->partitionClause;
+		List *targetEntryList = query->targetList;
+
+		groupTargetEntryList =
+			GroupTargetEntryList(partitionClauseList, targetEntryList);
+
+		partitionOnDistributionColumn =
+			TargetListOnPartitionColumn(query, groupTargetEntryList);
+
+		if (!partitionOnDistributionColumn)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
  * TargetListOnPartitionColumn checks if at least one target list entry is on
  * partition column.
  */
-static bool
+bool
 TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 {
 	bool targetListOnPartitionColumn = false;

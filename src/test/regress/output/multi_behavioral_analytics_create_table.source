@@ -51,9 +51,22 @@ SELECT create_distributed_table('agg_results_fourth', 'user_id');
  
 (1 row)
 
+CREATE TABLE users_ref_test_table(id int, it_name varchar(25), k_no int);
+SELECT create_reference_table('users_ref_test_table');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+INSERT INTO users_ref_test_table VALUES(1,'User_1',45);
+INSERT INTO users_ref_test_table VALUES(2,'User_2',46);
+INSERT INTO users_ref_test_table VALUES(3,'User_3',47);
+INSERT INTO users_ref_test_table VALUES(4,'User_4',48);
+INSERT INTO users_ref_test_table VALUES(5,'User_5',49);
+INSERT INTO users_ref_test_table VALUES(6,'User_6',50);
 COPY users_table FROM '@abs_srcdir@/data/users_table.data' WITH CSV;
 COPY events_table FROM '@abs_srcdir@/data/events_table.data' WITH CSV;
--- create indexes for 
+-- create indexes for
 CREATE INDEX is_index1 ON users_table(user_id);
 NOTICE:  using one-phase commit for distributed DDL commands
 HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
@@ -187,10 +200,10 @@ SELECT run_command_on_master_and_workers($f$
 	    LEFTARG = user_composite_type,
 	    RIGHTARG = user_composite_type,
 	    PROCEDURE = equal_user_composite_type_function,
-		commutator = =, 
-		RESTRICT = eqsel, 
-		JOIN = eqjoinsel, 
-		merges, 
+		commutator = =,
+		RESTRICT = eqsel,
+		JOIN = eqjoinsel,
+		merges,
 		hashes
 	);
 $f$);
@@ -261,7 +274,7 @@ SELECT run_command_on_master_and_workers($f$
 	OPERATOR 3 = (user_composite_type, user_composite_type),
 	OPERATOR 4 >= (user_composite_type, user_composite_type),
 	OPERATOR 5 > (user_composite_type, user_composite_type),
-	
+
 	FUNCTION 1 cmp_user_composite_type_function(user_composite_type, user_composite_type);
 $f$);
  run_command_on_master_and_workers 
@@ -270,7 +283,7 @@ $f$);
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
-	
+
 	CREATE OPERATOR CLASS cats_2_op_fam_class
 	DEFAULT FOR TYPE user_composite_type USING HASH AS
 	OPERATOR 1 = (user_composite_type, user_composite_type),
@@ -428,7 +441,7 @@ SELECT create_reference_table('events_reference_table');
  
 (1 row)
 
-CREATE INDEX events_ref_val2 on events_reference_table(value_2);   
+CREATE INDEX events_ref_val2 on events_reference_table(value_2);
 INSERT INTO events_reference_table SELECT * FROM events_table;
 CREATE TABLE users_reference_table (like users_table including all);
 SELECT create_reference_table('users_reference_table');
