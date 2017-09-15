@@ -11,6 +11,7 @@
 
 #include <float.h>
 #include <limits.h>
+#include <time.h>
 
 #include "catalog/pg_type.h"
 
@@ -26,6 +27,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/statistics_collection.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -37,6 +39,7 @@
 
 
 static List *plannerRestrictionContextList = NIL;
+static clock_t last_call_home = 0;
 
 /* create custom scan methods for separate executors */
 static CustomScanMethods RealTimeCustomScanMethods = {
@@ -96,6 +99,14 @@ multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	bool assignRTEIdentities = false;
 	bool setPartitionedTablesInherited = false;
+
+	clock_t current_clock = clock();
+	if (last_call_home == 0 ||
+		current_clock - last_call_home >= 60 * CLOCKS_PER_SEC)
+	{
+		CallHome();
+		last_call_home = current_clock;
+	}
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the

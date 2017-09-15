@@ -28,7 +28,7 @@ void
 CallHome(void)
 {
 	elog(NOTICE, "Calling home.");
-	SendGETRequest("");
+	SendGETRequest("http://localhost:5000/collect_stats");
 }
 
 
@@ -41,7 +41,7 @@ SendGETRequest(const char *url)
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	curl = curl_easy_init();
-	if (!curl)
+	if (curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 		curlCode = curl_easy_perform(curl);
