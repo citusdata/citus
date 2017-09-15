@@ -1015,8 +1015,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
                raw_events_second
         WHERE  raw_events_first.user_id = raw_events_second.user_id
         GROUP  BY raw_events_second.value_3) AS foo;
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
-DETAIL:  The data type of the target table's partition column should exactly match the data type of the corresponding simple column reference in the subquery.
+DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot push down this subquery
 DETAIL:  Group by list without partition column is currently unsupported
@@ -1133,9 +1132,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-DEBUG:  cannot perform distributed INSERT INTO ... SELECT because the partition columns in the source table and subquery do not match
-DETAIL:  Subquery contains an expression that is not a simple column reference in the same position as the target table's partition column.
-HINT:  Ensure the target table's partition column has a corresponding simple column reference to a distributed table's partition column in the subquery.
+DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
@@ -1164,8 +1161,10 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_1
         HAVING SUM(raw_events_second.value_4) > 10) AS foo2 ) as f2
 ON (f.id = f2.id);
-ERROR:  cannot perform distributed planning for the given modification
-DETAIL:  Select query cannot be pushed down to the worker.
+DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- cannot pushdown the query since the JOIN is not equi JOIN
 INSERT INTO agg_events
             (user_id, value_4_agg)

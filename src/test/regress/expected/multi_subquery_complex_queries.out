@@ -2381,19 +2381,6 @@ ORDER BY
   types;
 ERROR:  cannot push down this subquery
 DETAIL:  Offset clause is currently unsupported
--- not supported due to window functions
-SELECT   user_id, 
-         some_vals 
-FROM     ( 
-                  SELECT   * , 
-                           Row_number() over (PARTITION BY "user_id" ORDER BY "user_id") AS "some_vals",
-                           Random() 
-                  FROM     users_table 
-                 ) user_id 
-ORDER BY 1, 
-         2 limit 10;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without group by clause are not supported yet
 -- not supported due to non relation rte
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
