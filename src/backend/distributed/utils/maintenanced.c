@@ -16,6 +16,7 @@
 
 #include "postgres.h"
 
+#include <time.h>
 
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -27,7 +28,9 @@
 #include "catalog/namespace.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/statistics_collection.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
@@ -81,6 +84,8 @@ typedef struct MaintenanceDaemonDBData
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
+
+static time_t last_call_home = 0;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
@@ -271,7 +276,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
-
+		bool isCoordinator = false;
+	
 		CHECK_FOR_INTERRUPTS();
 
 		/*
@@ -289,6 +295,23 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
+		StartTransactionCommand();
+		isCoordinator = IsCoordinator();
+		CommitTransactionCommand();
+		
+		elog(WARNING, "isCoordinator: %d", isCoordinator);
+		if (isCoordinator)
+		{
+			time_t current_time = time(NULL);
+			double since_last_call_home = difftime(current_time, last_call_home);
+			if (last_call_home == 0 ||
+				since_last_call_home >= 60.0)
+			{
+				CallHome();
+				last_call_home = current_time;
+			}
+		}
+ 
 		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
