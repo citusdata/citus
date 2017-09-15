@@ -1166,6 +1166,20 @@ SELECT foo.user_id FROM
 ) as foo;
 ERROR:  cannot push down this subquery
 DETAIL:  Group by list without partition column is currently unsupported
+-- supported since the group by contains at least one distributed table
+SELECT foo.user_id FROM
+(
+  SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
+  GROUP BY r.user_id, m.user_id
+) as foo
+ORDER BY 1 LIMIT 3;
+ user_id 
+---------
+       0
+       1
+       2
+(3 rows)
+
 -- not supported since distinct is on the reference table column
 SELECT foo.user_id FROM
 (
@@ -1180,6 +1194,19 @@ SELECT foo.user_id FROM
 ) as foo;
 ERROR:  cannot push down this subquery
 DETAIL:  Distinct on columns without partition column is currently unsupported
+-- supported since the distinct on contains at least one distributed table
+SELECT foo.user_id FROM
+(
+  SELECT DISTINCT ON(r.user_id, m.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
+) as foo
+ORDER BY 1 LIMIT 3;
+ user_id 
+---------
+       0
+       1
+       2
+(3 rows)
+
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;
