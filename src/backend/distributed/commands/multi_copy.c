@@ -1205,17 +1205,8 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 	}
 	else
 	{
-		/* probably a connection problem, get the message from the connection */
-		char *lastNewlineIndex = NULL;
-
-		remoteMessage = PQerrorMessage(connection->pgConn);
-		lastNewlineIndex = strrchr(remoteMessage, '\n');
-
-		/* trim trailing newline, if any */
-		if (lastNewlineIndex != NULL)
-		{
-			*lastNewlineIndex = '\0';
-		}
+		/* trim the trailing characters */
+		remoteMessage = pchomp(PQerrorMessage(connection->pgConn));
 
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("failed to complete COPY on %s:%d", connection->hostname,
