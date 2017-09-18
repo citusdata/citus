@@ -307,7 +307,7 @@ MultiClientSendQuery(int32 connectionId, const char *query)
 	querySent = PQsendQuery(connection->pgConn, query);
 	if (querySent == 0)
 	{
-		char *errorMessage = PQerrorMessage(connection->pgConn);
+		char *errorMessage = pchomp(PQerrorMessage(connection->pgConn));
 		ereport(WARNING, (errmsg("could not send remote query \"%s\"", query),
 						  errdetail("Client error: %s", errorMessage)));
 
