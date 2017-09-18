@@ -20,19 +20,98 @@ CallHome(void) { }
 
 #else
 
-#include <curl/curl.h>
+#include "postgres.h"
 
-static bool SendGETRequest(const char *url);
+#include <curl/curl.h>
+#include <sys/utsname.h>
+
+#include "citus_version.h"
+#include "distributed/metadata_cache.h"
+#include "distributed/worker_manager.h"
+#include "lib/stringinfo.h"
+
+static uint64_t NextPow2(uint64_t n);
+static uint64_t ClusterSize(List *distributedTableList);
+static bool SendHttpPostRequest(const char *url, const char *postFields);
 
 void
 CallHome(void)
 {
-	SendGETRequest("http://localhost:5000/collect_stats");
+	List *distributedTables = DistributedTableList();
+	uint64_t roundedDistTableCount = NextPow2(list_length(distributedTables));
+	uint64_t roundedClusterSize = NextPow2(ClusterSize(distributedTables));
+	uint32_t workerNodeCount = ActivePrimaryNodeCount();
+	struct utsname unameData;
+	StringInfo fields = makeStringInfo();
+
+	uname(&unameData);
+
+	appendStringInfo(fields, "citus_version=%s", CITUS_VERSION);
+	appendStringInfo(fields, "&table_count=" UINT64_FORMAT, roundedDistTableCount);
+	appendStringInfo(fields, "&cluster_size=" UINT64_FORMAT, roundedClusterSize);
+	appendStringInfo(fields, "&worker_node_count=%u", workerNodeCount);
+	appendStringInfo(fields, "&os_name=%s&os_release=%s&os_version=%s&hwid=%s",
+					 unameData.sysname, unameData.release, unameData.version,
+					 unameData.machine);
+
+	SendHttpPostRequest("http://localhost:5000/collect_stats", fields->data);
 }
 
 
+/*
+ * ClusterSize returns total size of data store in the cluster consisting of
+ * given distributed tables.
+ */
+static uint64_t
+ClusterSize(List *distributedTableList)
+{
+	uint64_t clusterSize = 0;
+	ListCell *distTableCacheEntryCell = NULL;
+
+	foreach(distTableCacheEntryCell, distributedTableList)
+	{
+		DistTableCacheEntry *distTableCacheEntry = lfirst(distTableCacheEntryCell);
+		Oid relationId = distTableCacheEntry->relationId;
+		Datum distTableSizeDatum = DirectFunctionCall1(citus_table_size, ObjectIdGetDatum(
+														   relationId));
+
+		clusterSize += DatumGetInt64(distTableSizeDatum);
+	}
+
+	return clusterSize;
+}
+
+
+/*
+ * NextPow2 returns smallest power of 2 less than or equal to n. If n is greater
+ * than 2^63, it returns 2^63.
+ */
+static uint64_t
+NextPow2(uint64_t n)
+{
+	uint64_t result = 1;
+
+	/* if there is no 64-bit power of 2 greater than n, return 2^63 */
+	if (n > (1ull << 63))
+	{
+		return (1ull << 63);
+	}
+
+	while (result < n)
+	{
+		result *= 2;
+	}
+
+	return result;
+}
+
+
+/*
+ * SendHttpPostRequest sends a HTTP/HTTPS POST request to the given URL with the
+ * given POST fields.
+ */
 static bool
-SendGETRequest(const char *url)
+SendHttpPostRequest(const char *url, const char *postFields)
 {
 	bool requestSent = false;
 	CURLcode curlCode = false;
@@ -43,6 +122,8 @@ SendGETRequest(const char *url)
 	if (curl)
 	{
 		curl_easy_setopt(curl, CURLOPT_URL, url);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields);
+
 		curlCode = curl_easy_perform(curl);
 		if (curlCode == CURLE_OK)
 		{

@@ -107,6 +107,11 @@ typedef struct ShardPlacement
 /* Config variable managed via guc.c */
 extern int ReplicationModel;
 
+/* Size functions */
+extern Datum citus_table_size(PG_FUNCTION_ARGS);
+extern Datum citus_total_relation_size(PG_FUNCTION_ARGS);
+extern Datum citus_relation_size(PG_FUNCTION_ARGS);
+
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
