@@ -439,7 +439,12 @@ StoreErrorMessage(PGconn *connection, StringInfo queryResultString)
 	char *errorMessage = PQerrorMessage(connection);
 	if (errorMessage != NULL)
 	{
-		char *firstNewlineIndex = strchr(errorMessage, '\n');
+		char *firstNewlineIndex = NULL;
+
+		/* copy the error message to a writable memory */
+		errorMessage = pnstrdup(errorMessage, strlen(errorMessage));
+
+		firstNewlineIndex = strchr(errorMessage, '\n');
 
 		/* trim the error message at the line break */
 		if (firstNewlineIndex != NULL)

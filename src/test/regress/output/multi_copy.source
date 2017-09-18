@@ -878,19 +878,15 @@ ALTER USER test_user WITH nologin;
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash, line 1: "1,1"
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash, line 2: "2,2"
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash, line 3: "3,3"
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash, line 6: "6,6"
 -- verify shards in the first worker as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
@@ -912,7 +908,6 @@ SELECT shardid, shardstate, nodename, nodeport
 COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 ERROR:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_reference, line 1: "3,1"
 -- verify shards for reference table are still valid
 SELECT shardid, shardstate, nodename, nodeport
@@ -930,11 +925,9 @@ SELECT shardid, shardstate, nodename, nodeport
 COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 WARNING:  connection error: localhost:57637
 DETAIL:  FATAL:  role "test_user" is not permitted to log in
-
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
 ERROR:  could not connect to any active placements
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
