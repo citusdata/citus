@@ -613,11 +613,17 @@ AppendShardIdToName(char **name, uint64 shardId)
 	shardIdAndSeparatorLength = strlen(shardIdAndSeparator);
 
 	/*
-	 * If *name strlen is < (NAMEDATALEN - shardIdAndSeparatorLength),
-	 * it is safe merely to append the separator and shardId.
+	 * If *name strlen is < (NAMEDATALEN - shardIdAndSeparatorLength - 1),
+	 * it is safe merely to append the separator and shardId. We truncate
+	 * down to 63 instead of 64 characters because postgres generates an
+	 * array type named _<relation name truncated to 63 characters> during
+	 * table creation, while postgres solves naming conflicts by adding
+	 * more underscores, the lock it takes on the type name would prevent
+	 * us from creating multiple shard placements of a table with a long
+	 * name concurrently.
 	 */
 
-	if (nameLength < (NAMEDATALEN - shardIdAndSeparatorLength))
+	if (nameLength < (NAMEDATALEN - shardIdAndSeparatorLength - 1))
 	{
 		snprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
@@ -652,7 +658,7 @@ AppendShardIdToName(char **name, uint64 shardId)
 		longNameHash = hash_any((unsigned char *) (*name), nameLength);
 		multiByteClipLength = pg_mbcliplen(*name, nameLength, (NAMEDATALEN -
 															   shardIdAndSeparatorLength -
-															   10));
+															   10 - 1));
 		snprintf(extendedName, NAMEDATALEN, "%.*s%c%.8x%s",
 				 multiByteClipLength, (*name),
 				 SHARD_NAME_SEPARATOR, longNameHash,
