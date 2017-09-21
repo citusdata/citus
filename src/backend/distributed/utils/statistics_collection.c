@@ -25,6 +25,7 @@ CallHome(void) { }
 #include <curl/curl.h>
 #include <sys/utsname.h>
 
+#include "access/xact.h"
 #include "citus_version.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/worker_manager.h"
@@ -37,12 +38,21 @@ static bool SendHttpPostRequest(const char *url, const char *postFields);
 void
 CallHome(void)
 {
-	List *distributedTables = DistributedTableList();
-	uint64_t roundedDistTableCount = NextPow2(list_length(distributedTables));
-	uint64_t roundedClusterSize = NextPow2(ClusterSize(distributedTables));
-	uint32_t workerNodeCount = ActivePrimaryNodeCount();
+	List *distributedTables = NIL;
+	uint64_t roundedDistTableCount = 0;
+	uint64_t roundedClusterSize = 0;
+	uint32_t workerNodeCount = 0;
 	struct utsname unameData;
 	StringInfo fields = makeStringInfo();
+
+	elog(WARNING, "Calling home!");
+
+	StartTransactionCommand();
+	distributedTables = DistributedTableList();
+	roundedDistTableCount = NextPow2(list_length(distributedTables));
+	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
+	workerNodeCount = ActivePrimaryNodeCount();
+	CommitTransactionCommand();
 
 	uname(&unameData);
 
@@ -50,9 +60,8 @@ CallHome(void)
 	appendStringInfo(fields, "&table_count=" UINT64_FORMAT, roundedDistTableCount);
 	appendStringInfo(fields, "&cluster_size=" UINT64_FORMAT, roundedClusterSize);
 	appendStringInfo(fields, "&worker_node_count=%u", workerNodeCount);
-	appendStringInfo(fields, "&os_name=%s&os_release=%s&os_version=%s&hwid=%s",
-					 unameData.sysname, unameData.release, unameData.version,
-					 unameData.machine);
+	appendStringInfo(fields, "&os_name=%s&os_release=%s&hwid=%s",
+					 unameData.sysname, unameData.release, unameData.machine);
 
 	SendHttpPostRequest("http://localhost:5000/collect_stats", fields->data);
 }
@@ -60,7 +69,7 @@ CallHome(void)
 
 /*
  * ClusterSize returns total size of data store in the cluster consisting of
- * given distributed tables.
+ * given distributed tables. We ignore tables which we cannot get their size.
  */
 static uint64_t
 ClusterSize(List *distributedTableList)
@@ -72,10 +81,18 @@ ClusterSize(List *distributedTableList)
 	{
 		DistTableCacheEntry *distTableCacheEntry = lfirst(distTableCacheEntryCell);
 		Oid relationId = distTableCacheEntry->relationId;
-		Datum distTableSizeDatum = DirectFunctionCall1(citus_table_size, ObjectIdGetDatum(
-														   relationId));
 
-		clusterSize += DatumGetInt64(distTableSizeDatum);
+		PG_TRY();
+		{
+			Datum distTableSizeDatum = DirectFunctionCall1(citus_table_size,
+														   ObjectIdGetDatum(relationId));
+			clusterSize += DatumGetInt64(distTableSizeDatum);
+		}
+		PG_CATCH();
+		{
+			FlushErrorState();
+		}
+		PG_END_TRY();
 	}
 
 	return clusterSize;
