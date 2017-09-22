@@ -18,6 +18,7 @@
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
+#include "utils/palloc.h"
 
 
 /* GUC, determining whether statements sent to remote nodes are logged */
@@ -191,7 +192,7 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	int nodePort = connection->port;
 
 	ereport(elevel, (errmsg("connection error: %s:%d", nodeName, nodePort),
-					 errdetail("%s", PQerrorMessage(connection->pgConn))));
+					 errdetail("%s", pchomp(PQerrorMessage(connection->pgConn)))));
 }
 
 
@@ -229,16 +230,7 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 		 */
 		if (messagePrimary == NULL)
 		{
-			char *lastNewlineIndex = NULL;
-
-			messagePrimary = PQerrorMessage(connection->pgConn);
-			lastNewlineIndex = strrchr(messagePrimary, '\n');
-
-			/* trim trailing newline, if any */
-			if (lastNewlineIndex != NULL)
-			{
-				*lastNewlineIndex = '\0';
-			}
+			messagePrimary = pchomp(PQerrorMessage(connection->pgConn));
 		}
 
 		ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
@@ -255,6 +247,28 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 	}
 	PG_END_TRY();
 }
+
+
+/* *INDENT-OFF* */
+#if (PG_VERSION_NUM < 100000)
+
+/*
+ * Make copy of string with all trailing newline characters removed.
+ */
+char *
+pchomp(const char *in)
+{
+	size_t		n;
+
+	n = strlen(in);
+	while (n > 0 && in[n - 1] == '\n')
+		n--;
+	return pnstrdup(in, n);
+}
+
+#endif
+
+/* *INDENT-ON* */
 
 
 /*

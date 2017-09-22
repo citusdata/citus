@@ -266,39 +266,39 @@ SELECT shards_colocated(1300000, 1300020);
 (1 row)
 
 -- check co-located table list
-SELECT UNNEST(get_colocated_table_array('table1_group1'))::regclass;
+SELECT UNNEST(get_colocated_table_array('table1_group1'))::regclass ORDER BY 1;
     unnest     
 ---------------
- table2_group1
  table1_group1
+ table2_group1
 (2 rows)
 
-SELECT UNNEST(get_colocated_table_array('table5_groupX'))::regclass;
+SELECT UNNEST(get_colocated_table_array('table5_groupX'))::regclass ORDER BY 1;
     unnest     
 ---------------
  table5_groupx
 (1 row)
 
-SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass;
+SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass ORDER BY 1;
     unnest     
 ---------------
  table6_append
 (1 row)
 
 -- check co-located shard list
-SELECT get_colocated_shard_array(1300000);
+SELECT get_colocated_shard_array(1300000) ORDER BY 1;
  get_colocated_shard_array 
 ---------------------------
- {1300004,1300000}
+ {1300000,1300004}
 (1 row)
 
-SELECT get_colocated_shard_array(1300016);
+SELECT get_colocated_shard_array(1300016) ORDER BY 1;
  get_colocated_shard_array 
 ---------------------------
  {1300016}
 (1 row)
 
-SELECT get_colocated_shard_array(1300020);
+SELECT get_colocated_shard_array(1300020) ORDER BY 1;
  get_colocated_shard_array 
 ---------------------------
  {1300020}
