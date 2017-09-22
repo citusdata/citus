@@ -134,14 +134,14 @@ SELECT shards_colocated(1300000, 1300016);
 SELECT shards_colocated(1300000, 1300020);
 
 -- check co-located table list
-SELECT UNNEST(get_colocated_table_array('table1_group1'))::regclass;
-SELECT UNNEST(get_colocated_table_array('table5_groupX'))::regclass;
-SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass;
+SELECT UNNEST(get_colocated_table_array('table1_group1'))::regclass ORDER BY 1;
+SELECT UNNEST(get_colocated_table_array('table5_groupX'))::regclass ORDER BY 1;
+SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass ORDER BY 1;
 
 -- check co-located shard list
-SELECT get_colocated_shard_array(1300000);
-SELECT get_colocated_shard_array(1300016);
-SELECT get_colocated_shard_array(1300020);
+SELECT get_colocated_shard_array(1300000) ORDER BY 1;
+SELECT get_colocated_shard_array(1300016) ORDER BY 1;
+SELECT get_colocated_shard_array(1300020) ORDER BY 1;
 
 -- check FindShardIntervalIndex function
 SELECT find_shard_interval_index(1300000);
