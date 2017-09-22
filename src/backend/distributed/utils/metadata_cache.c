@@ -113,6 +113,7 @@ typedef struct MetadataCacheData
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
+	Oid distTransactionRecordIndexId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
 	Oid extensionOwner;
@@ -1793,6 +1794,17 @@ DistTransactionGroupIndexId(void)
 						 &MetadataCache.distTransactionGroupIndexId);
 
 	return MetadataCache.distTransactionGroupIndexId;
+}
+
+
+/* return oid of pg_dist_transaction_unique_constraint */
+Oid
+DistTransactionRecordIndexId(void)
+{
+	CachedRelationLookup("pg_dist_transaction_unique_constraint",
+						 &MetadataCache.distTransactionRecordIndexId);
+
+	return MetadataCache.distTransactionRecordIndexId;
 }
 
 
