@@ -367,6 +367,20 @@ SELECT true AS valid FROM explain_xml($$
 
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
+	
+-- Test multi shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12;
+	
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 OR l_orderkey = 3;
+
+-- Test multi shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem_hash_part;
 
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';

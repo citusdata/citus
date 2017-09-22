@@ -28,6 +28,14 @@ typedef struct CitusScanState
 } CitusScanState;
 
 
+/* managed via guc.c */
+typedef enum
+{
+	PARALLEL_CONNECTION = 0,
+	SEQUENTIAL_CONNECTION = 1
+} MultiShardConnectionTypes;
+extern int MultiShardConnectionType;
+
 extern Node * RealTimeCreateScan(CustomScan *scan);
 extern Node * TaskTrackerCreateScan(CustomScan *scan);
 extern Node * RouterCreateScan(CustomScan *scan);

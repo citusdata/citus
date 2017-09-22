@@ -36,7 +36,8 @@ extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  restrictionContext,
 											  List **placementList, uint64 *anchorShardId,
 											  List **relationShardList, bool
-											  replacePrunedQueryWithDummy);
+											  replacePrunedQueryWithDummy,
+											  bool *multiShardModifyQuery);
 extern List * RouterInsertTaskList(Query *query, DeferredErrorMessage **planningError);
 extern List * IntersectPlacementList(List *lhsPlacementList, List *rhsPlacementList);
 extern DeferredErrorMessage * ModifyQuerySupported(Query *queryTree,
@@ -52,6 +53,7 @@ extern RangeTblEntry * ExtractDistributedInsertValuesRTE(Query *query);
 extern bool IsMultiRowInsert(Query *query);
 extern void AddShardIntervalRestrictionToSelect(Query *subqery,
 												ShardInterval *shardInterval);
+extern bool UpdateOrDeleteQuery(Query *query);
 
 
 #endif /* MULTI_ROUTER_PLANNER_H */

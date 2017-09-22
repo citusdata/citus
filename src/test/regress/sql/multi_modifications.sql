@@ -194,9 +194,6 @@ SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 DELETE FROM limit_orders WHERE id = (2 * 123);
 SELECT COUNT(*) FROM limit_orders WHERE id = 246;
 
--- commands with no constraints on the partition key are not supported
-DELETE FROM limit_orders WHERE bidder_id = 162;
-
 -- commands with a USING clause are unsupported
 CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
@@ -206,9 +203,6 @@ DELETE FROM limit_orders USING bidders WHERE limit_orders.id = 246 AND
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders DEFAULT VALUES RETURNING *)
 DELETE FROM limit_orders;
-
--- cursors are not supported
-DELETE FROM limit_orders WHERE CURRENT OF cursor_name;
 
 INSERT INTO limit_orders VALUES (246, 'TSLA', 162, '2007-07-02 16:32:15', 'sell', 20.69);
 
@@ -298,9 +292,6 @@ ALTER TABLE renamed_orders RENAME TO limit_orders_750000;
 -- Third: Connect back to master node
 \c - - - :master_port
 
--- commands with no constraints on the partition key are not supported
-UPDATE limit_orders SET limit_price = 0.00;
-
 -- attempting to change the partition key is unsupported
 UPDATE limit_orders SET id = 0 WHERE id = 246;
 UPDATE limit_orders SET id = 0 WHERE id = 0 OR id = 246;
@@ -381,9 +372,6 @@ ALTER TABLE limit_orders DROP array_of_values;
 
 -- even in RETURNING
 UPDATE limit_orders SET placed_at = placed_at WHERE id = 246 RETURNING NOW();
-
--- cursors are not supported
-UPDATE limit_orders SET symbol = 'GM' WHERE CURRENT OF cursor_name;
 
 -- check that multi-row UPDATE/DELETEs with RETURNING work
 INSERT INTO multiple_hash VALUES ('0', '1');

@@ -2341,6 +2341,7 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
 	DeferredErrorMessage *planningError = NULL;
+	bool multiShardModifQuery = false;
 
 	/*
 	 * Add the restriction qual parameter value in all baserestrictinfos.
@@ -2379,7 +2380,10 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	 */
 	planningError = PlanRouterQuery(taskQuery, copiedRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
-									&relationShardList, replacePrunedQueryWithDummy);
+									&relationShardList, replacePrunedQueryWithDummy,
+									&multiShardModifQuery);
+
+	Assert(!multiShardModifQuery);
 
 	/* we don't expect to this this error but keeping it as a precaution for future changes */
 	if (planningError)

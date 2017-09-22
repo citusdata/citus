@@ -37,6 +37,7 @@
 
 
 static List *plannerRestrictionContextList = NIL;
+int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 
 /* create custom scan methods for separate executors */
 static CustomScanMethods RealTimeCustomScanMethods = {
@@ -284,6 +285,56 @@ IsModifyCommand(Query *query)
 
 
 /*
+ * IsMultiShardModifyPlan returns true if the given plan was generated for
+ * multi shard update or delete query.
+ */
+bool
+IsMultiShardModifyPlan(MultiPlan *multiPlan)
+{
+	if (IsUpdateOrDelete(multiPlan) && IsMultiTaskPlan(multiPlan))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * IsMultiTaskPlan returns true if job contains multiple tasks.
+ */
+bool
+IsMultiTaskPlan(MultiPlan *multiPlan)
+{
+	Job *workerJob = multiPlan->workerJob;
+
+	if (workerJob != NULL && list_length(workerJob->taskList) > 1)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * IsUpdateOrDelete returns true if the query performs update or delete.
+ */
+bool
+IsUpdateOrDelete(MultiPlan *multiPlan)
+{
+	CmdType commandType = multiPlan->operation;
+
+	if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * IsModifyMultiPlan returns true if the multi plan performs modifications,
  * false otherwise.
  */
@@ -436,9 +487,11 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 	/*
 	 * As explained above, force planning costs to be unrealistically high if
-	 * query planning failed (possibly) due to prepared statement parameters.
+	 * query planning failed (possibly) due to prepared statement parameters or
+	 * if it is planned as a multi shard modify query.
 	 */
-	if (distributedPlan->planningError && hasUnresolvedParams)
+	if ((distributedPlan->planningError || IsMultiShardModifyPlan(distributedPlan)) &&
+		hasUnresolvedParams)
 	{
 		/*
 		 * Arbitraryly high cost, but low enough that it can be added up
@@ -527,6 +580,20 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 		{
 			customScan->methods = &DelayedErrorCustomScanMethods;
 			break;
+		}
+	}
+
+	if (IsMultiTaskPlan(multiPlan))
+	{
+		/* if it is not a single task executable plan, inform user according to the log level */
+		if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF)
+		{
+			ereport(MultiTaskQueryLogLevel, (errmsg(
+												 "multi-task query about to be executed"),
+											 errhint(
+												 "Queries are split to multiple tasks "
+												 "if they have to be split into several"
+												 " queries on the workers.")));
 		}
 	}
 

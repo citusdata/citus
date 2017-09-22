@@ -38,6 +38,9 @@
 #include "utils/memutils.h"
 
 
+/* controls the connection type for multi shard update/delete queries */
+int MultiShardConnectionType = PARALLEL_CONNECTION;
+
 /*
  * Define executor methods for the different executor types.
  */
@@ -176,11 +179,14 @@ RouterCreateScan(CustomScan *scan)
 	{
 		Assert(isModificationQuery);
 
-		if (IsMultiRowInsert(workerJob->jobQuery))
+		if (IsMultiRowInsert(workerJob->jobQuery) ||
+			(IsUpdateOrDelete(multiPlan) &&
+			 MultiShardConnectionType == SEQUENTIAL_CONNECTION))
 		{
 			/*
-			 * Multi-row INSERT is executed sequentially instead of using
-			 * parallel connections.
+			 * Multi shard update deletes while multi_shard_modify_mode equals
+			 * to 'sequential' or Multi-row INSERT are executed sequentially
+			 * instead of using parallel connections.
 			 */
 			scanState->customScanState.methods = &RouterSequentialModifyCustomExecMethods;
 		}
