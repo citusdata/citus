@@ -55,8 +55,7 @@
 #include "utils/memutils.h"
 
 
-static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList,
-										   Oid relationId);
+static List * ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList);
 
 
 PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
@@ -176,8 +175,7 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
 
 	CHECK_FOR_INTERRUPTS();
 
-	taskList = ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList,
-											relationId);
+	taskList = ModifyMultipleShardsTaskList(modifyQuery, prunedShardIntervalList);
 	affectedTupleCount = ExecuteModifyTasksWithoutResults(taskList);
 
 	PG_RETURN_INT32(affectedTupleCount);
@@ -189,14 +187,14 @@ master_modify_multiple_shards(PG_FUNCTION_ARGS)
  * given list of shards.
  */
 static List *
-ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList, Oid relationId)
+ModifyMultipleShardsTaskList(Query *query, List *shardIntervalList)
 {
 	List *taskList = NIL;
 	ListCell *shardIntervalCell = NULL;
 	uint64 jobId = INVALID_JOB_ID;
 	int taskId = 1;
 
-	/* lock metadata before getting placment lists */
+	/* lock metadata before getting placement lists */
 	LockShardListMetadata(shardIntervalList, ShareLock);
 
 	foreach(shardIntervalCell, shardIntervalList)

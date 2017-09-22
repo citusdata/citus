@@ -54,7 +54,11 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 		Task *task = (Task *) lfirst(taskCell);
 		Query *query = originalQuery;
 
-		if (task->insertSelectQuery)
+		if (UpdateOrDeleteQuery(query) && list_length(taskList))
+		{
+			query = copyObject(originalQuery);
+		}
+		else if (task->insertSelectQuery)
 		{
 			/* for INSERT..SELECT, adjust shard names in SELECT part */
 			RangeTblEntry *copiedInsertRte = NULL;

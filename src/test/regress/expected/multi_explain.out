@@ -747,6 +747,70 @@ t
 SELECT true AS valid FROM explain_json($$
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030$$);
 t
+	
+-- Test multi shard update
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12;
+Custom Scan (Citus Router)
+  Task Count: 4
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Update on lineitem_hash_part_360290 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_hash_part_360291 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Update on lineitem_hash_part_360292 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360292 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_hash_part_360293 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360293 lineitem_hash_part
+	
+EXPLAIN (COSTS FALSE)
+	UPDATE lineitem_hash_part
+	SET l_suppkey = 12
+	WHERE l_orderkey = 1 OR l_orderkey = 3;
+Custom Scan (Citus Router)
+  Task Count: 2
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Update on lineitem_hash_part_360290 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                    Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Update on lineitem_hash_part_360291 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+                    Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
+-- Test multi shard delete
+EXPLAIN (COSTS FALSE)
+	DELETE FROM lineitem_hash_part;
+Custom Scan (Citus Router)
+  Task Count: 4
+  Tasks Shown: All
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Delete on lineitem_hash_part_360290 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Delete on lineitem_hash_part_360291 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57637 dbname=regression
+        ->  Delete on lineitem_hash_part_360292 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360292 lineitem_hash_part
+  ->  Task
+        Node: host=localhost port=57638 dbname=regression
+        ->  Delete on lineitem_hash_part_360293 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360293 lineitem_hash_part
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
