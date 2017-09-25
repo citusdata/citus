@@ -24,9 +24,25 @@
 #if (PG_VERSION_NUM >= 90600 && PG_VERSION_NUM < 110000)
 
 #include "access/hash.h"
+#include "storage/fd.h"
 
 /* PostgreSQL 11 splits hash procs into "standard" and "extended" */
 #define HASHSTANDARD_PROC HASHPROC
+
+
+static inline int
+BasicOpenFilePerm(FileName fileName, int fileFlags, int fileMode)
+{
+	return BasicOpenFile(fileName, fileFlags, fileMode);
+}
+
+
+static inline File
+PathNameOpenFilePerm(FileName fileName, int fileFlags, int fileMode)
+{
+	return PathNameOpenFile(fileName, fileFlags, fileMode);
+}
+
 
 #endif
 

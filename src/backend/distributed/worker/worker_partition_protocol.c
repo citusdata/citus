@@ -410,7 +410,7 @@ OpenPartitionFiles(StringInfo directoryName, uint32 fileCount)
 	{
 		StringInfo filePath = PartitionFilename(directoryName, fileIndex);
 
-		fileDescriptor = PathNameOpenFile(filePath->data, fileFlags, fileMode);
+		fileDescriptor = PathNameOpenFilePerm(filePath->data, fileFlags, fileMode);
 		if (fileDescriptor < 0)
 		{
 			ereport(ERROR, (errcode_for_file_access(),
