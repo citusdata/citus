@@ -40,7 +40,7 @@ CollectBasicUsageStatistics(void)
 	uint64_t roundedDistTableCount = 0;
 	uint64_t roundedClusterSize = 0;
 	uint32_t workerNodeCount = 0;
-	const long timeout_seconds = 1;
+	const long timeout_seconds = 5;
 	struct utsname unameData;
 	StringInfo fields = makeStringInfo();
 
