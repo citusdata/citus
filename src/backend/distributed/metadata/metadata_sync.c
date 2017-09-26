@@ -38,6 +38,7 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "foreign/foreign.h"
 #include "nodes/pg_list.h"
 #include "utils/builtins.h"
@@ -984,7 +985,7 @@ TypeOfColumn(Oid tableId, int16 columnId)
 {
 	Relation tableRelation = relation_open(tableId, NoLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(tableRelation);
-	Form_pg_attribute attrForm = tupleDescriptor->attrs[columnId - 1];
+	Form_pg_attribute attrForm = TupleDescAttr(tupleDescriptor, columnId - 1);
 	relation_close(tableRelation, NoLock);
 	return attrForm->atttypid;
 }

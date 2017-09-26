@@ -17,6 +17,7 @@
 
 #include "distributed/relay_utility.h"
 #include "distributed/transmit.h"
+#include "distributed/version_compat.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
 #include "storage/fd.h"
@@ -166,7 +167,7 @@ FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 		}
 	}
 
-	fileDesc = PathNameOpenFile((char *) filename, fileFlags, fileMode);
+	fileDesc = PathNameOpenFilePerm((char *) filename, fileFlags, fileMode);
 	if (fileDesc < 0)
 	{
 		ereport(ERROR, (errcode_for_file_access(),

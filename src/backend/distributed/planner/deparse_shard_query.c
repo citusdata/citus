@@ -20,6 +20,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
@@ -262,7 +263,8 @@ ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte)
 
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		FormData_pg_attribute *attributeForm = tupleDescriptor->attrs[columnIndex];
+		FormData_pg_attribute *attributeForm = TupleDescAttr(tupleDescriptor,
+															 columnIndex);
 		TargetEntry *targetEntry = NULL;
 		StringInfo resname = NULL;
 		Const *constValue = NULL;

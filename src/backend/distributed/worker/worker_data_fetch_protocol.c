@@ -39,6 +39,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/task_tracker.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "storage/lmgr.h"
 #include "tcop/tcopprot.h"
@@ -263,7 +264,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 	/* create local file to append remote data to */
 	snprintf(filename, MAXPGPATH, "%s", filePath->data);
 
-	fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
+	fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
 	if (fileDescriptor < 0)
 	{
 		ereport(WARNING, (errcode_for_file_access(),
