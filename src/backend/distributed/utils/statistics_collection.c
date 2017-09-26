@@ -26,7 +26,7 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 
 static uint64_t NextPow2(uint64_t n);
 static uint64_t ClusterSize(List *distributedTableList);
-static bool SendHttpPostRequest(const char *url, const char *postFields);
+static bool SendHttpPostRequest(const char *url, const char *postFields, long timeout_seconds);
 
 /*
  * CollectBasicUsageStatistics sends basic usage statistics to Citus servers.
@@ -40,6 +40,7 @@ CollectBasicUsageStatistics(void)
 	uint64_t roundedDistTableCount = 0;
 	uint64_t roundedClusterSize = 0;
 	uint32_t workerNodeCount = 0;
+	const long timeout_seconds = 1;
 	struct utsname unameData;
 	StringInfo fields = makeStringInfo();
 
@@ -59,7 +60,7 @@ CollectBasicUsageStatistics(void)
 	appendStringInfo(fields, "&os_name=%s&os_release=%s&hwid=%s",
 					 unameData.sysname, unameData.release, unameData.machine);
 
-	SendHttpPostRequest("http://localhost:5000/collect_stats", fields->data);
+	SendHttpPostRequest("http://localhost:5000/collect_stats", fields->data, timeout_seconds);
 }
 
 
@@ -124,7 +125,7 @@ NextPow2(uint64_t n)
  * given POST fields.
  */
 static bool
-SendHttpPostRequest(const char *url, const char *postFields)
+SendHttpPostRequest(const char *url, const char *postFields, long timeout_seconds)
 {
 	bool requestSent = false;
 	CURLcode curlCode = false;
@@ -136,6 +137,7 @@ SendHttpPostRequest(const char *url, const char *postFields)
 	{
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
 
 		curlCode = curl_easy_perform(curl);
 		if (curlCode == CURLE_OK)
