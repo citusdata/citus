@@ -276,8 +276,13 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
+		/* collect statistics every 24 hours */
 		const double statistics_collection_interval = 24.0 * 3600.0;
-		const double statistics_collection_start = 10.0 * 60.0;
+		/*
+		 * ... but don't collect in first 30 minutes, to not report short living
+		 * instances like in CI tests.
+		 */
+		const double statistics_collection_start = 30.0 * 60.0;
 		time_t current_time = time(NULL);
 		double since_boot = difftime(current_time, boot_time);
 		double since_last_statistics_collection = difftime(current_time,
