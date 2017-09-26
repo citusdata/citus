@@ -41,6 +41,7 @@
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
+#include "distributed/statistics_collection.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_manager.h"
@@ -784,6 +785,18 @@ RegisterCitusConfigVariables(void)
 		PGC_POSTMASTER,
 		0,
 		NULL, NULL, NULL);
+
+#if HAVE_LIBCURL
+	DefineCustomBoolVariable(
+		"citus.enable_statistics_collection",
+		gettext_noop("Enables sending basic usage statistics to Citus."),
+		NULL,
+		&EnableStatisticsCollection,
+		true,
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+#endif /* HAVE_LIBCURL */
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");

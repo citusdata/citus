@@ -85,8 +85,6 @@ typedef struct MaintenanceDaemonDBData
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 
-static time_t last_call_home = 0;
-
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
 
@@ -214,6 +212,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
+	time_t boot_time = time(NULL);
+	time_t last_statistics_collection = 0;
 	ErrorContextCallback errorCallback;
 
 	/*
@@ -276,8 +276,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
+		const double statistics_collection_interval = 24.0 * 3600.0;
+		const double statistics_collection_start = 10.0 * 60.0;
 		time_t current_time = time(NULL);
-		double since_last_call_home = difftime(current_time, last_call_home);
+		double since_boot = difftime(current_time, boot_time);
+		double since_last_statistics_collection = difftime(current_time,
+														   last_statistics_collection);
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -296,10 +300,16 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
-		if (last_call_home == 0 || since_last_call_home >= 60.0)
+		if (since_boot >= statistics_collection_start &&
+			since_last_statistics_collection >= statistics_collection_interval)
 		{
-			CallHome();
-			last_call_home = current_time;
+#if HAVE_LIBCURL
+			if (EnableStatisticsCollection)
+			{
+				CollectBasicUsageStatistics();
+			}
+#endif
+			last_statistics_collection = current_time;
 		}
 
 		/* the config value -1 disables the distributed deadlock detection  */

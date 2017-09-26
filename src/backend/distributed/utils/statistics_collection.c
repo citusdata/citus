@@ -7,18 +7,8 @@
  *
  *-------------------------------------------------------------------------
  */
-#include "postgres.h"
 
-#include "distributed/statistics_collection.h"
-
-#if HAVE_LIBCURL == 0
-
-/* if we don't have libcurl, CallHome is no-op. */
-void
-CallHome(void) { }
-
-
-#else
+#if HAVE_LIBCURL
 
 #include "postgres.h"
 
@@ -28,15 +18,18 @@ CallHome(void) { }
 #include "access/xact.h"
 #include "citus_version.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
+
+bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
 static uint64_t NextPow2(uint64_t n);
 static uint64_t ClusterSize(List *distributedTableList);
 static bool SendHttpPostRequest(const char *url, const char *postFields);
 
 void
-CallHome(void)
+CollectBasicUsageStatistics(void)
 {
 	List *distributedTables = NIL;
 	uint64_t roundedDistTableCount = 0;
@@ -156,4 +149,4 @@ SendHttpPostRequest(const char *url, const char *postFields)
 }
 
 
-#endif
+#endif /* HAVE_LIBCURL */
