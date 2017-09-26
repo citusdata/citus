@@ -28,6 +28,11 @@ static uint64_t NextPow2(uint64_t n);
 static uint64_t ClusterSize(List *distributedTableList);
 static bool SendHttpPostRequest(const char *url, const char *postFields);
 
+/*
+ * CollectBasicUsageStatistics sends basic usage statistics to Citus servers.
+ * This includes Citus version, table count rounded to next power of 2, cluster
+ * size rounded to next power of 2, worker node count, and uname data.
+ */
 void
 CollectBasicUsageStatistics(void)
 {
@@ -37,8 +42,6 @@ CollectBasicUsageStatistics(void)
 	uint32_t workerNodeCount = 0;
 	struct utsname unameData;
 	StringInfo fields = makeStringInfo();
-
-	elog(WARNING, "Calling home!");
 
 	StartTransactionCommand();
 	distributedTables = DistributedTableList();
