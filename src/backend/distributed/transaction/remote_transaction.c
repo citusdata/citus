@@ -115,25 +115,17 @@ void
 FinishRemoteTransactionBegin(struct MultiConnection *connection)
 {
 	RemoteTransaction *transaction = &connection->remoteTransaction;
-	PGresult *result = NULL;
-	const bool raiseErrors = true;
+	bool clearSuccessful = true;
+	bool raiseErrors = true;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_STARTING);
 
-	result = GetRemoteCommandResult(connection, raiseErrors);
-	if (!IsResponseOK(result))
-	{
-		ReportResultError(connection, result, WARNING);
-		MarkRemoteTransactionFailed(connection, raiseErrors);
-	}
-	else
+	clearSuccessful = ClearResults(connection, raiseErrors);
+	if (clearSuccessful)
 	{
 		transaction->transactionState = REMOTE_TRANS_STARTED;
 		transaction->lastSuccessfulSubXact = transaction->lastQueuedSubXact;
 	}
-
-	PQclear(result);
-	ForgetResults(connection);
 
 	if (!transaction->transactionFailed)
 	{
