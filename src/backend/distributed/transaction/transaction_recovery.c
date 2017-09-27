@@ -384,7 +384,7 @@ PendingWorkerTransactionList(MultiConnection *connection)
 	int rowCount = 0;
 	int rowIndex = 0;
 	List *transactionNames = NIL;
-	int coordinatorId = 0;
+	int coordinatorId = GetLocalGroupId();
 
 	appendStringInfo(command, "SELECT gid FROM pg_prepared_xacts "
 							  "WHERE gid LIKE 'citus_%d_%%'",
