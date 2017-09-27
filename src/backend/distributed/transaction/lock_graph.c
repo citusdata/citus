@@ -49,6 +49,7 @@ static bool ParseBoolField(PGresult *result, int rowIndex, int colIndex);
 static TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(void);
+static bool IsProcessWaitingForRelationExtension(PGPROC *proc);
 static void LockLockData(void);
 static void UnlockLockData(void);
 static void AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc,
@@ -447,6 +448,12 @@ BuildLocalWaitGraph(void)
 			continue;
 		}
 
+		/* skip if the process is blocked for relation extension */
+		if (IsProcessWaitingForRelationExtension(currentProc))
+		{
+			continue;
+		}
+
 		AddProcToVisit(&remaining, currentProc);
 	}
 
@@ -456,6 +463,12 @@ BuildLocalWaitGraph(void)
 
 		/* only blocked processes result in wait edges */
 		if (!IsProcessWaitingForLock(waitingProc))
+		{
+			continue;
+		}
+
+		/* skip if the process is blocked for relation extension */
+		if (IsProcessWaitingForRelationExtension(waitingProc))
 		{
 			continue;
 		}
@@ -476,6 +489,36 @@ BuildLocalWaitGraph(void)
 	UnlockLockData();
 
 	return waitGraph;
+}
+
+
+/*
+ * IsProcessWaitingForRelationExtension returns true if the given PROC
+ * waiting on relation extension lock.
+ *
+ * In general for the purpose of distributed deadlock detection, we should
+ * skip if the process blocked on the relation extension. Those locks are
+ * held for a short duration while the relation is actually extended on
+ * the disk and released as soon as the extension is done, even before the
+ * execution of the command that triggered the extension finishes. Thus,
+ * recording such waits on our lock graphs could yield detecting wrong
+ * distributed deadlocks.
+ */
+static bool
+IsProcessWaitingForRelationExtension(PGPROC *proc)
+{
+	PROCLOCK *waitProcLock = NULL;
+	LOCK *waitLock = NULL;
+
+	if (proc->waitStatus != STATUS_WAITING)
+	{
+		return false;
+	}
+
+	waitProcLock = proc->waitProcLock;
+	waitLock = waitProcLock->tag.myLock;
+
+	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND;
 }
 
 
@@ -550,9 +593,14 @@ AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 	{
 		PGPROC *currentProc = procLock->tag.myProc;
 
-		/* skip processes from the same lock group and ones that don't conflict */
+		/*
+		 * Skip processes from the same lock group, processes that don't conflict,
+		 * and processes that are waiting on a relation extension lock, which
+		 * will be released shortly.
+		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
-			IsConflictingLockMask(procLock->holdMask, conflictMask))
+			IsConflictingLockMask(procLock->holdMask, conflictMask) &&
+			!IsProcessWaitingForRelationExtension(currentProc))
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
@@ -590,9 +638,14 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 	{
 		int awaitMask = LOCKBIT_ON(currentProc->waitLockMode);
 
-		/* skip processes from the same lock group and ones that don't conflict */
+		/*
+		 * Skip processes from the same lock group, processes that don't conflict,
+		 * and processes that are waiting on a relation extension lock, which
+		 * will be released shortly.
+		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
-			IsConflictingLockMask(awaitMask, conflictMask))
+			IsConflictingLockMask(awaitMask, conflictMask) &&
+			!IsProcessWaitingForRelationExtension(currentProc))
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
@@ -621,7 +674,9 @@ AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 	GetBackendDataForProc(waitingProc, &waitingBackendData);
 	GetBackendDataForProc(blockingProc, &blockingBackendData);
 
-	curEdge->isBlockingXactWaiting = IsProcessWaitingForLock(blockingProc);
+	curEdge->isBlockingXactWaiting =
+		IsProcessWaitingForLock(blockingProc) &&
+		!IsProcessWaitingForRelationExtension(blockingProc);
 	if (curEdge->isBlockingXactWaiting)
 	{
 		AddProcToVisit(remaining, blockingProc);
