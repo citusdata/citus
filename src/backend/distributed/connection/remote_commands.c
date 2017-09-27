@@ -56,6 +56,8 @@ IsResponseOK(PGresult *result)
  *
  * Note that this might require network IO. If that's not acceptable, use
  * NonblockingForgetResults().
+ *
+ * ClearResults is variant of this function which can also raise errors.
  */
 void
 ForgetResults(MultiConnection *connection)
@@ -78,6 +80,52 @@ ForgetResults(MultiConnection *connection)
 		}
 		PQclear(result);
 	}
+}
+
+
+/*
+ * ClearResults clears a connection from pending activity,
+ * returns true if all pending commands return success. It raises
+ * error if raiseErrors flag is set, any command fails and transaction
+ * is marked critical.
+ *
+ * Note that this might require network IO. If that's not acceptable, use
+ * NonblockingForgetResults().
+ */
+bool
+ClearResults(MultiConnection *connection, bool raiseErrors)
+{
+	bool success = true;
+
+	while (true)
+	{
+		PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+		if (result == NULL)
+		{
+			break;
+		}
+
+		/*
+		 * End any pending copy operation. Transaction will be marked
+		 * as failed by the following part.
+		 */
+		if (PQresultStatus(result) == PGRES_COPY_IN)
+		{
+			PQputCopyEnd(connection->pgConn, NULL);
+		}
+
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, WARNING);
+			MarkRemoteTransactionFailed(connection, raiseErrors);
+
+			success = false;
+		}
+
+		PQclear(result);
+	}
+
+	return success;
 }
 
 

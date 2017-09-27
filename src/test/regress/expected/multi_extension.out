@@ -329,3 +329,42 @@ FROM
 -- we don't need the schema and the function anymore
 DROP SCHEMA test_deamon CASCADE;
 NOTICE:  drop cascades to function test_deamon.maintenance_deamon_died(text)
+-- verify citus does not crash while creating a table when run against an older worker
+-- create_distributed_table piggybacks multiple commands into single one, if one worker
+-- did not have the required UDF it should fail instead of crash.
+-- create a test database, configure citus with single node
+CREATE DATABASE another;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+\c - - - :worker_1_port
+CREATE DATABASE another;
+NOTICE:  Citus partially supports CREATE DATABASE for distributed databases
+DETAIL:  Citus does not propagate CREATE DATABASE command to workers
+HINT:  You can manually create a database and its extensions on workers.
+\c - - - :master_port
+\c another
+CREATE EXTENSION citus;
+SELECT FROM master_add_node('localhost', :worker_1_port);
+--
+(1 row)
+
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
+RENAME TO dummy_assign_function;
+\c - - - :master_port
+SET citus.shard_replication_factor to 1;
+-- create_distributed_table command should fail
+CREATE TABLE t1(a int, b int);
+SELECT create_distributed_table('t1', 'a');
+WARNING:  function assign_distributed_transaction_id(integer, integer, unknown) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+CONTEXT:  while executing command on localhost:57637
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+CONTEXT:  while executing command on localhost:57637
+\c regression
+\c - - - :worker_1_port
+DROP DATABASE another;
+\c - - - :master_port
+DROP DATABASE another;
