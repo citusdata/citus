@@ -307,3 +307,37 @@ FROM
 
 -- we don't need the schema and the function anymore
 DROP SCHEMA test_deamon CASCADE;
+
+
+-- verify citus does not crash while creating a table when run against an older worker
+-- create_distributed_table piggybacks multiple commands into single one, if one worker
+-- did not have the required UDF it should fail instead of crash.
+
+-- create a test database, configure citus with single node
+CREATE DATABASE another;
+\c - - - :worker_1_port
+CREATE DATABASE another;
+\c - - - :master_port
+
+\c another
+CREATE EXTENSION citus;
+SELECT FROM master_add_node('localhost', :worker_1_port);
+
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
+RENAME TO dummy_assign_function;
+
+\c - - - :master_port
+SET citus.shard_replication_factor to 1;
+-- create_distributed_table command should fail
+CREATE TABLE t1(a int, b int);
+SELECT create_distributed_table('t1', 'a');
+
+\c regression
+\c - - - :worker_1_port
+DROP DATABASE another;
+
+\c - - - :master_port
+DROP DATABASE another;
+
