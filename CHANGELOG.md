@@ -1,3 +1,7 @@
+### citus v6.1.3 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
 ### citus v6.1.2 (May 31, 2017) ###
 
 * Fixes a common cause of deadlocks when repairing tables with foreign keys
