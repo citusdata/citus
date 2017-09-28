@@ -861,8 +861,6 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 		CommandCounterIncrement();
 	}
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
-
 	/*
 	 * Copy local file into the relation. We call ProcessUtility() instead of
 	 * directly calling DoCopy() because some extensions (e.g. cstore_fdw) hook
@@ -880,6 +878,8 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 
 	/* finally delete the temporary file we created */
 	DeleteFile(localFilePath->data);
+
+	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
 	return true;
 }
