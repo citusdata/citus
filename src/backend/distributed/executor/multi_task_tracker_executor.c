@@ -27,6 +27,7 @@
 #include "commands/dbcommands.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/connection_management.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -68,7 +69,8 @@ static Task * TaskHashLookup(HTAB *trackerHash, TaskType taskType, uint64 jobId,
 							 uint32 taskId);
 static bool TopLevelTask(Task *task);
 static bool TransmitExecutionCompleted(TaskExecution *taskExecution);
-static HTAB * TrackerHash(const char *taskTrackerHashName, List *workerNodeList);
+static HTAB * TrackerHash(const char *taskTrackerHashName, List *workerNodeList,
+						  char *userName);
 static HTAB * TrackerHashCreate(const char *taskTrackerHashName,
 								uint32 taskTrackerHashSize);
 static TaskTracker * TrackerHashEnter(HTAB *taskTrackerHash, char *nodeName,
@@ -157,6 +159,7 @@ MultiTaskTrackerExecute(Job *job)
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
 	HTAB *transmitTrackerHash = NULL;
+	char *extensionOwner = CitusExtensionOwnerName();
 	const char *taskTrackerHashName = "Task Tracker Hash";
 	const char *transmitTrackerHashName = "Transmit Tracker Hash";
 	List *jobIdList = NIL;
@@ -191,8 +194,12 @@ MultiTaskTrackerExecute(Job *job)
 	workerNodeList = WorkerNodeList();
 	taskTrackerCount = (uint32) list_length(workerNodeList);
 
-	taskTrackerHash = TrackerHash(taskTrackerHashName, workerNodeList);
-	transmitTrackerHash = TrackerHash(transmitTrackerHashName, workerNodeList);
+	/* connect as the current user for running queries */
+	taskTrackerHash = TrackerHash(taskTrackerHashName, workerNodeList, NULL);
+
+	/* connect as the superuser for fetching result files */
+	transmitTrackerHash = TrackerHash(transmitTrackerHashName, workerNodeList,
+									  extensionOwner);
 
 	TrackerHashConnect(taskTrackerHash);
 	TrackerHashConnect(transmitTrackerHash);
@@ -660,10 +667,11 @@ TransmitExecutionCompleted(TaskExecution *taskExecution)
 /*
  * TrackerHash creates a task tracker hash with the given name. The function
  * then inserts one task tracker entry for each node in the given worker node
- * list, and initializes state for each task tracker.
+ * list, and initializes state for each task tracker. The userName argument
+ * indicates which user to connect as.
  */
 static HTAB *
-TrackerHash(const char *taskTrackerHashName, List *workerNodeList)
+TrackerHash(const char *taskTrackerHashName, List *workerNodeList, char *userName)
 {
 	/* create task tracker hash */
 	uint32 taskTrackerHashSize = list_length(workerNodeList);
@@ -705,6 +713,7 @@ TrackerHash(const char *taskTrackerHashName, List *workerNodeList)
 		}
 
 		taskTracker->taskStateHash = taskStateHash;
+		taskTracker->userName = userName;
 	}
 
 	return taskTrackerHash;
@@ -838,9 +847,10 @@ TrackerConnectPoll(TaskTracker *taskTracker)
 			char *nodeName = taskTracker->workerName;
 			uint32 nodePort = taskTracker->workerPort;
 			char *nodeDatabase = get_database_name(MyDatabaseId);
+			char *nodeUser = taskTracker->userName;
 
 			int32 connectionId = MultiClientConnectStart(nodeName, nodePort,
-														 nodeDatabase);
+														 nodeDatabase, nodeUser);
 			if (connectionId != INVALID_CONNECTION_ID)
 			{
 				taskTracker->connectionId = connectionId;
