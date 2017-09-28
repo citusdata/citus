@@ -399,12 +399,28 @@ IsTransmitStmt(Node *parsetree)
 static void
 VerifyTransmitStmt(CopyStmt *copyStatement)
 {
+	char *fileName = NULL;
+
 	/* do some minimal option verification */
 	if (copyStatement->relation == NULL ||
 		copyStatement->relation->relname == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("FORMAT 'transmit' requires a target file")));
+	}
+
+	fileName = copyStatement->relation->relname;
+
+	if (is_absolute_path(fileName))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						(errmsg("absolute path not allowed"))));
+	}
+	else if (!path_is_relative_and_below_cwd(fileName))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 (errmsg("path must be in or below the current directory"))));
 	}
 
 	if (copyStatement->filename != NULL)
