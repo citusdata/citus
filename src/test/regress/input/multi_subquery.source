@@ -702,7 +702,7 @@ LIMIT
 
 -- Same queries above with explain
 -- Simple join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS FALSE) SELECT
 	avg(array_length(events, 1)) AS event_average
 FROM
 	(SELECT
@@ -729,7 +729,7 @@ FROM
 		user_id) AS subquery;
 
 -- Union and left join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS FALSE) SELECT
 	avg(array_length(events, 1)) AS event_average,
 	hasdone
 FROM
@@ -793,7 +793,7 @@ GROUP BY
 	hasdone;
 
 -- Union, left join and having subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS FALSE) SELECT
 	avg(array_length(events, 1)) AS event_average,
 	count_pay
 	FROM (
@@ -865,7 +865,7 @@ ORDER BY
 	count_pay;
 
 -- Lateral join subquery pushdown
-EXPLAIN SELECT
+EXPLAIN (COSTS FALSE) SELECT
 	tenant_id,
 	user_id,
 	user_lastseen,

@@ -209,7 +209,7 @@ EXPLAIN (COSTS FALSE) EXECUTE task_tracker_query;
 SET citus.task_executor_type TO 'real-time';
 
 PREPARE router_executor_query AS SELECT l_quantity FROM lineitem WHERE l_orderkey = 5;
-EXPLAIN EXECUTE router_executor_query;
+EXPLAIN (COSTS FALSE) EXECUTE router_executor_query;
 
 PREPARE real_time_executor_query AS
 	SELECT avg(l_linenumber) FROM lineitem WHERE l_orderkey > 9030;

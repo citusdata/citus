@@ -108,9 +108,9 @@ CREATE TABLE clustered_table (
 CREATE INDEX clustered_time_idx ON clustered_table (received_at);
 CLUSTER clustered_table USING clustered_time_idx;
 SELECT table_ddl_command_array('clustered_table');
-                                                                                                                                    table_ddl_command_array                                                                                                                                    
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- {"CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)","CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at) TABLESPACE pg_default","ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx"}
+                                                                                                                         table_ddl_command_array                                                                                                                         
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"CREATE TABLE public.clustered_table (data json NOT NULL, received_at timestamp without time zone NOT NULL)","CREATE INDEX clustered_time_idx ON public.clustered_table USING btree (received_at)","ALTER TABLE public.clustered_table CLUSTER ON clustered_time_idx"}
 (1 row)
 
 -- fiddly things like storage type and statistics also work
