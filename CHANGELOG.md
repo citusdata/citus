@@ -1,3 +1,7 @@
+### citus v7.0.2 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
 ### citus v7.0.1 (September 12, 2017) ###
 
 * Fixes a bug that could cause memory leaks in `INSERT ... SELECT` queries
