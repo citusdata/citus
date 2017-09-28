@@ -48,10 +48,12 @@ bool ExpireCachedShards = false;
 
 
 /* Local functions forward declarations */
-static void FetchRegularFile(const char *nodeName, uint32 nodePort,
-							 StringInfo remoteFilename, StringInfo localFilename);
+static void FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
+										StringInfo remoteFilename,
+										StringInfo localFilename);
 static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
-							   StringInfo transmitCommand, StringInfo filePath);
+							   const char *nodeUser, StringInfo transmitCommand,
+							   StringInfo filePath);
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
 static void DeleteFile(const char *filename);
@@ -123,7 +125,9 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	}
 
 	nodeName = text_to_cstring(nodeNameText);
-	FetchRegularFile(nodeName, nodePort, remoteFilename, taskFilename);
+
+	/* we've made sure the file names are sanitized, safe to fetch as superuser */
+	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
 
 	PG_RETURN_VOID();
 }
@@ -167,7 +171,9 @@ worker_fetch_query_results_file(PG_FUNCTION_ARGS)
 	}
 
 	nodeName = text_to_cstring(nodeNameText);
-	FetchRegularFile(nodeName, nodePort, remoteFilename, taskFilename);
+
+	/* we've made sure the file names are sanitized, safe to fetch as superuser */
+	FetchRegularFileAsSuperUser(nodeName, nodePort, remoteFilename, taskFilename);
 
 	PG_RETURN_VOID();
 }
@@ -186,11 +192,16 @@ TaskFilename(StringInfo directoryName, uint32 taskId)
 }
 
 
-/* Helper function to transfer the remote file in an idempotent manner. */
+/*
+ * FetchRegularFileAsSuperUser copies a file from a remote node in an idempotent
+ * manner. It connects to the remote node as superuser to give file access.
+ * Callers must make sure that the file names are sanitized.
+ */
 static void
-FetchRegularFile(const char *nodeName, uint32 nodePort,
-				 StringInfo remoteFilename, StringInfo localFilename)
+FetchRegularFileAsSuperUser(const char *nodeName, uint32 nodePort,
+							StringInfo remoteFilename, StringInfo localFilename)
 {
+	char *nodeUser = NULL;
 	StringInfo attemptFilename = NULL;
 	StringInfo transmitCommand = NULL;
 	uint32 randomId = (uint32) random();
@@ -209,7 +220,11 @@ FetchRegularFile(const char *nodeName, uint32 nodePort,
 	transmitCommand = makeStringInfo();
 	appendStringInfo(transmitCommand, TRANSMIT_REGULAR_COMMAND, remoteFilename->data);
 
-	received = ReceiveRegularFile(nodeName, nodePort, transmitCommand, attemptFilename);
+	/* connect as superuser to give file access */
+	nodeUser = CitusExtensionOwnerName();
+
+	received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
+								  attemptFilename);
 	if (!received)
 	{
 		ereport(ERROR, (errmsg("could not receive file \"%s\" from %s:%u",
@@ -236,7 +251,7 @@ FetchRegularFile(const char *nodeName, uint32 nodePort,
  * and returns false.
  */
 static bool
-ReceiveRegularFile(const char *nodeName, uint32 nodePort,
+ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 				   StringInfo transmitCommand, StringInfo filePath)
 {
 	int32 fileDescriptor = -1;
@@ -268,7 +283,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 	nodeDatabase = get_database_name(MyDatabaseId);
 
 	/* connect to remote node */
-	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, NULL);
+	connectionId = MultiClientConnect(nodeName, nodePort, nodeDatabase, nodeUser);
 	if (connectionId == INVALID_CONNECTION_ID)
 	{
 		ReceiveResourceCleanup(connectionId, filename, fileDescriptor);
@@ -812,7 +827,8 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 	remoteCopyCommand = makeStringInfo();
 	appendStringInfo(remoteCopyCommand, COPY_OUT_COMMAND, tableName);
 
-	received = ReceiveRegularFile(nodeName, nodePort, remoteCopyCommand, localFilePath);
+	received = ReceiveRegularFile(nodeName, nodePort, NULL, remoteCopyCommand,
+								  localFilePath);
 	if (!received)
 	{
 		return false;
@@ -887,6 +903,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 static bool
 FetchForeignTable(const char *nodeName, uint32 nodePort, const char *tableName)
 {
+	const char *nodeUser = NULL;
 	StringInfo localFilePath = NULL;
 	StringInfo remoteFilePath = NULL;
 	StringInfo transmitCommand = NULL;
@@ -913,7 +930,16 @@ FetchForeignTable(const char *nodeName, uint32 nodePort, const char *tableName)
 	transmitCommand = makeStringInfo();
 	appendStringInfo(transmitCommand, TRANSMIT_REGULAR_COMMAND, remoteFilePath->data);
 
-	received = ReceiveRegularFile(nodeName, nodePort, transmitCommand, localFilePath);
+	/*
+	 * We allow some arbitrary input in the file name and connect to the remote
+	 * node as superuser to transmit. Therefore, we only allow calling this
+	 * function when already running as superuser.
+	 */
+	EnsureSuperUser();
+	nodeUser = CitusExtensionOwnerName();
+
+	received = ReceiveRegularFile(nodeName, nodePort, nodeUser, transmitCommand,
+								  localFilePath);
 	if (!received)
 	{
 		return false;
@@ -1252,7 +1278,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	sourceCopyCommand = makeStringInfo();
 	appendStringInfo(sourceCopyCommand, COPY_OUT_COMMAND, sourceQualifiedName);
 
-	received = ReceiveRegularFile(sourceNodeName, sourceNodePort, sourceCopyCommand,
+	received = ReceiveRegularFile(sourceNodeName, sourceNodePort, NULL, sourceCopyCommand,
 								  localFilePath);
 	if (!received)
 	{

@@ -517,6 +517,8 @@ VerifyTransmitStmt(CopyStmt *copyStatement)
 {
 	char *fileName = NULL;
 
+	EnsureSuperUser();
+
 	/* do some minimal option verification */
 	if (copyStatement->relation == NULL ||
 		copyStatement->relation->relname == NULL)
