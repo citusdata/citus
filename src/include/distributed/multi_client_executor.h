@@ -98,7 +98,7 @@ typedef struct WaitInfo
 extern int32 MultiClientConnect(const char *nodeName, uint32 nodePort,
 								const char *nodeDatabase, const char *nodeUser);
 extern int32 MultiClientConnectStart(const char *nodeName, uint32 nodePort,
-									 const char *nodeDatabase);
+									 const char *nodeDatabase, const char *nodeUser);
 extern ConnectStatus MultiClientConnectPoll(int32 connectionId);
 extern void MultiClientDisconnect(int32 connectionId);
 extern bool MultiClientConnectionUp(int32 connectionId);
