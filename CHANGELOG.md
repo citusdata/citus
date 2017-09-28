@@ -1,3 +1,7 @@
+### citus v7.0.2 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
 ### citus v6.2.4 (September 28, 2017) ###
 
 * Updates task-tracker to limit file access
