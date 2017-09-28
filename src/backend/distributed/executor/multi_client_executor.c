@@ -167,12 +167,12 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
  * error and returns INVALID_CONNECTION_ID.
  */
 int32
-MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeDatabase)
+MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeDatabase,
+						const char *userName)
 {
 	PGconn *connection = NULL;
 	char connInfoString[STRING_BUFFER_SIZE];
 	ConnStatusType connStatusType = CONNECTION_BAD;
-	char *userName = CurrentUserName();
 
 	int32 connectionId = AllocateConnectionId();
 	if (connectionId == INVALID_CONNECTION_ID)
@@ -186,6 +186,11 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 		ereport(ERROR, (errcode(ERRCODE_ACTIVE_SQL_TRANSACTION),
 						errmsg("cannot open new connections after the first modification "
 							   "command within a transaction")));
+	}
+
+	if (userName == NULL)
+	{
+		userName = CurrentUserName();
 	}
 
 	/* transcribe connection paremeters to string */

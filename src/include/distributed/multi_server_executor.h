@@ -153,6 +153,7 @@ typedef struct TaskTracker
 {
 	uint32 workerPort;              /* node's port; part of hash table key */
 	char workerName[WORKER_LENGTH]; /* node's name; part of hash table key */
+	char *userName;                 /* which user to connect as */
 	TrackerStatus trackerStatus;
 	int32 connectionId;
 	uint32 connectPollCount;

@@ -272,7 +272,8 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			/* we use the same database name on the master and worker nodes */
 			nodeDatabase = get_database_name(MyDatabaseId);
 
-			connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase);
+			connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase,
+												   NULL);
 			connectionIdArray[currentIndex] = connectionId;
 
 			/* if valid, poll the connection until the connection is initiated */
