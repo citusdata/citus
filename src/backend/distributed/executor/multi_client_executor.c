@@ -127,7 +127,8 @@ MultiClientConnect(const char *nodeName, uint32 nodePort, const char *nodeDataba
  * error and returns INVALID_CONNECTION_ID.
  */
 int32
-MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeDatabase)
+MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeDatabase,
+						const char *userName)
 {
 	MultiConnection *connection = NULL;
 	ConnStatusType connStatusType = CONNECTION_OK;
@@ -148,7 +149,8 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 	}
 
 	/* prepare asynchronous request for worker node connection */
-	connection = StartNodeConnection(connectionFlags, nodeName, nodePort);
+	connection = StartNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+												 userName, nodeDatabase);
 	connStatusType = PQstatus(connection->pgConn);
 
 	/*

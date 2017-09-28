@@ -7,7 +7,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1420000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1420000;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 2;
-CREATE TABLE test (id integer);
+CREATE TABLE test (id integer, val integer);
 SELECT create_distributed_table('test', 'id');
  create_distributed_table 
 --------------------------
@@ -56,6 +56,9 @@ GRANT SELECT ON TABLE test_1420001 TO read_access;
 -- create prepare tests
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
 PREPARE prepare_select AS SELECT count(*) FROM test;
+-- not allowed to read absolute paths, even as superuser
+COPY "/etc/passwd" TO STDOUT WITH (format transmit);
+ERROR:  absolute path not allowed
 -- check full permission
 SET ROLE full_access;
 EXECUTE prepare_insert(1);
@@ -85,7 +88,22 @@ SELECT count(*) FROM test;
      2
 (1 row)
 
+-- test re-partition query (needs to transmit intermediate results)
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ count 
+-------
+     0
+(1 row)
+
+-- should not be able to transmit directly
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
 SET citus.task_executor_type TO 'real-time';
+-- should not be able to transmit directly
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
 -- check read permission
 SET ROLE read_access;
 EXECUTE prepare_insert(1);
@@ -117,6 +135,17 @@ SELECT count(*) FROM test;
      2
 (1 row)
 
+-- test re-partition query (needs to transmit intermediate results)
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ count 
+-------
+     0
+(1 row)
+
+-- should not be able to transmit directly
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
 SET citus.task_executor_type TO 'real-time';
 -- check no permission
 SET ROLE no_access;
@@ -133,6 +162,13 @@ ERROR:  permission denied for relation test
 SET citus.task_executor_type TO 'task-tracker';
 SELECT count(*) FROM test;
 ERROR:  permission denied for relation test
+-- test re-partition query
+SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
+ERROR:  permission denied for relation test
+-- should not be able to transmit directly
+COPY "postgresql.conf" TO STDOUT WITH (format transmit);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
 SET citus.task_executor_type TO 'real-time';
 RESET ROLE;
 DROP TABLE test;
