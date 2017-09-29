@@ -3322,16 +3322,6 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 		workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);
 	}
 
-	/* display debug message on limit push down */
-	if (workerLimitNode != NULL)
-	{
-		Const *workerLimitConst = (Const *) workerLimitNode;
-		int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
-
-		ereport(DEBUG1, (errmsg("push down of limit count: " INT64_FORMAT,
-								workerLimitCount)));
-	}
-
 	return workerLimitNode;
 }
 
