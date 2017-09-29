@@ -1497,6 +1497,7 @@ SELECT author_id FROM articles_hash
 	ORDER BY
 		author_id
 	LIMIT 1;
+DEBUG:  push down of limit count: 1
  author_id 
 -----------
          1
@@ -1709,6 +1710,7 @@ SELECT author_id FROM articles_append
 	ORDER BY
 		author_id
 	LIMIT 1;
+DEBUG:  push down of limit count: 1
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
@@ -1723,6 +1725,7 @@ SELECT author_id FROM articles_append
 	ORDER BY
 		author_id
 	LIMIT 1;
+DEBUG:  push down of limit count: 1
 WARNING:  relation "public.articles_append" does not exist
 CONTEXT:  while executing command on localhost:57638
 WARNING:  relation "public.articles_append" does not exist
@@ -1769,6 +1772,7 @@ SELECT * FROM articles_hash
 	ORDER BY
 		author_id, id
 	LIMIT 5;
+DEBUG:  push down of limit count: 5
  id | author_id |    title     | word_count 
 ----+-----------+--------------+------------
   1 |         1 | arsenous     |       9572

@@ -155,9 +155,9 @@ static bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column
 
 /* Local functions forward declarations for limit clauses */
 static Node * WorkerLimitCount(MultiExtendedOp *originalOpNode,
-							   bool groupedByDistinctPartitionColumn);
+							   bool groupedByDisjointPartitionColumn);
 static List * WorkerSortClauseList(MultiExtendedOp *originalOpNode,
-								   bool groupedByDistinctPartitionColumn);
+								   bool groupedByDisjointPartitionColumn);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByAverage(List *sortClauseList, List *targetList);
@@ -1928,9 +1928,9 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	/* if we can push down the limit, also set related fields */
 	workerExtendedOpNode->limitCount = WorkerLimitCount(originalOpNode,
-														groupedByDistinctPartitionColumn);
+														groupedByDisjointPartitionColumn);
 	workerExtendedOpNode->sortClauseList =
-		WorkerSortClauseList(originalOpNode, groupedByDistinctPartitionColumn);
+		WorkerSortClauseList(originalOpNode, groupedByDisjointPartitionColumn);
 
 	/*
 	 * If grouped by a partition column whose values are shards have disjoint sets
@@ -3245,7 +3245,7 @@ ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn)
  */
 static Node *
 WorkerLimitCount(MultiExtendedOp *originalOpNode,
-				 bool groupedByDistinctPartitionColumn)
+				 bool groupedByDisjointPartitionColumn)
 {
 	Node *workerLimitNode = NULL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3276,7 +3276,7 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 	 * original limit. Else if we have order by clauses with commutative aggregates,
 	 * we can push down approximate limits.
 	 */
-	if (groupClauseList == NIL || groupedByDistinctPartitionColumn)
+	if (groupClauseList == NIL || groupedByDisjointPartitionColumn)
 	{
 		canPushDownLimit = true;
 	}
@@ -3322,6 +3322,16 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 		workerLimitNode = (Node *) MakeIntegerConstInt64(workerLimitCount);
 	}
 
+	/* display debug message on limit push down */
+	if (workerLimitNode != NULL)
+	{
+		Const *workerLimitConst = (Const *) workerLimitNode;
+		int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
+
+		ereport(DEBUG1, (errmsg("push down of limit count: " INT64_FORMAT,
+								workerLimitCount)));
+	}
+
 	return workerLimitNode;
 }
 
@@ -3335,7 +3345,7 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
  */
 static List *
 WorkerSortClauseList(MultiExtendedOp *originalOpNode,
-					 bool groupedByDistinctPartitionColumn)
+					 bool groupedByDisjointPartitionColumn)
 {
 	List *workerSortClauseList = NIL;
 	List *groupClauseList = originalOpNode->groupClauseList;
@@ -3356,7 +3366,7 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 	 * in different task results. By ordering on the group by clause, we ensure
 	 * that query results are consistent.
 	 */
-	if (groupClauseList == NIL || groupedByDistinctPartitionColumn)
+	if (groupClauseList == NIL || groupedByDisjointPartitionColumn)
 	{
 		workerSortClauseList = originalOpNode->sortClauseList;
 	}
