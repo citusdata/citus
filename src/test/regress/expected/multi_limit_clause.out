@@ -1,6 +1,14 @@
 --
 -- MULTI_LIMIT_CLAUSE
 --
+CREATE TABLE lineitem_hash (LIKE lineitem);
+SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO lineitem_hash SELECT * FROM lineitem;
 -- Display debug messages on limit clause push down.
 SET client_min_messages TO DEBUG1;
 -- Check that we can correctly handle the Limit clause in distributed queries.
@@ -203,4 +211,91 @@ DEBUG:  push down of limit count: 1
        1.00 |       0.00 | 99167.304347826087
 (1 row)
 
+-- We can push down LIMIT clause when we group by partition column of a hash
+-- partitioned table.
+SELECT l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC LIMIT 5;
+DEBUG:  push down of limit count: 5
+ l_orderkey | count 
+------------+-------
+      14885 |     7
+      14884 |     7
+      14821 |     7
+      14790 |     7
+      14785 |     7
+(5 rows)
+
+SELECT l_orderkey
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY l_orderkey LIMIT 5;
+DEBUG:  push down of limit count: 5
+ l_orderkey 
+------------
+          1
+          2
+          3
+          4
+          5
+(5 rows)
+
+-- Don't push down if not grouped by partition column.
+SELECT max(l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_linestatus
+	ORDER BY 1 DESC LIMIT 2;
+  max  
+-------
+ 14947
+ 14916
+(2 rows)
+
+-- Don't push down if table is distributed by append
+SELECT l_orderkey, max(l_shipdate)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 LIMIT 5;
+ l_orderkey |    max     
+------------+------------
+       4678 | 11-27-1998
+      12384 | 11-26-1998
+       1124 | 11-25-1998
+      11523 | 11-22-1998
+      14694 | 11-21-1998
+(5 rows)
+
+-- Push down if grouped by multiple columns one of which is partition column.
+SELECT
+	l_linestatus, l_orderkey, max(l_shipdate)
+	FROM lineitem_hash
+	GROUP BY l_linestatus, l_orderkey
+	ORDER BY 3 DESC, 1, 2 LIMIT 5;
+DEBUG:  push down of limit count: 5
+ l_linestatus | l_orderkey |    max     
+--------------+------------+------------
+ O            |       4678 | 11-27-1998
+ O            |      12384 | 11-26-1998
+ O            |       1124 | 11-25-1998
+ O            |      11523 | 11-22-1998
+ O            |      14694 | 11-21-1998
+(5 rows)
+
+-- Don't push down if grouped by multiple columns none of which is partition column.
+SELECT
+	l_linestatus, l_shipmode, max(l_shipdate)
+	FROM lineitem_hash
+	GROUP BY l_linestatus, l_shipmode
+	ORDER BY 3 DESC, 1, 2 LIMIT 5;
+ l_linestatus | l_shipmode |    max     
+--------------+------------+------------
+ O            | AIR        | 11-27-1998
+ O            | RAIL       | 11-26-1998
+ O            | SHIP       | 11-21-1998
+ O            | REG AIR    | 11-19-1998
+ O            | TRUCK      | 11-17-1998
+(5 rows)
+
 SET client_min_messages TO NOTICE;
+DROP TABLE lineitem_hash;
