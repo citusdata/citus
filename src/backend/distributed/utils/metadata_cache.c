@@ -2713,18 +2713,21 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	 */
 	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
 	{
-		ClearMetadataOIDCache();
+		InvalidateMetadataSystemCache();
 	}
 }
 
 
 /*
- * ClearMetadataOIDCache resets all the cached OIDs and the extensionLoaded flag.
+ * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionLoaded flag,
+ * and invalidates the worker node and local group ID caches.
  */
 void
-ClearMetadataOIDCache(void)
+InvalidateMetadataSystemCache(void)
 {
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
+	workerNodeHashValid = false;
+	LocalGroupId = -1;
 }
 
 
