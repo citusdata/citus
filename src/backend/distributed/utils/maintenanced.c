@@ -281,7 +281,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * this causes us to cache a stale pg_dist_node OID. We'd actually expect
 		 * all invalidations to arrive after obtaining a lock in LockCitusExtension.
 		 */
-		ClearMetadataOIDCache();
+		InvalidateMetadataSystemCache();
 
 		/*
 		 * Perform Work.  If a specific task needs to be called sooner than
