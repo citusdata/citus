@@ -30,9 +30,9 @@ test: multi_load_data
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_basic_queries multi_complex_expressions 
-test: multi_agg_distinct multi_limit_clause multi_limit_clause_approximate
+test: multi_agg_distinct multi_limit_clause_approximate
 test: multi_average_expression multi_working_columns
-test: multi_array_agg
+test: multi_array_agg multi_limit_clause
 test: multi_agg_type_conversion multi_count_type_conversion
 test: multi_hash_pruning
 test: multi_query_directory_cleanup
