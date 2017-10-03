@@ -8,3 +8,18 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 280000;
 \copy customer FROM '@abs_srcdir@/data/customer.2.data' with delimiter '|'
 \copy customer FROM '@abs_srcdir@/data/customer.3.data' with delimiter '|'
 \copy part FROM '@abs_srcdir@/data/part.more.data' with delimiter '|'
+-- Exchange partition files in binary format in remaining tests
+SELECT success FROM run_command_on_workers('ALTER SYSTEM SET citus.binary_worker_copy_format TO on');
+ success 
+---------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('SELECT pg_reload_conf()');
+ success 
+---------
+ t
+ t
+(2 rows)
+
