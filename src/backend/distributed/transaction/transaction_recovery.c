@@ -478,8 +478,8 @@ DeleteTransactionRecord(int32 groupId, char *transactionName)
 {
 	Relation pgDistTransaction = NULL;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
+	ScanKeyData scanKey[2];
+	int scanKeyCount = 2;
 	bool indexOK = true;
 	HeapTuple heapTuple = NULL;
 	bool heapTupleFound = false;
@@ -488,9 +488,11 @@ DeleteTransactionRecord(int32 groupId, char *transactionName)
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+	ScanKeyInit(&scanKey[1], Anum_pg_dist_transaction_gid,
+				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(transactionName));
 
 	scanDescriptor = systable_beginscan(pgDistTransaction,
-										DistTransactionGroupIndexId(), indexOK,
+										DistTransactionRecordIndexId(), indexOK,
 										NULL, scanKeyCount, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);

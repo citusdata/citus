@@ -2945,6 +2945,17 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
+	/*
+	 * We currently don't support finding partition keys in the subqueries
+	 * that references from outer subqueries. For example, in corrolated
+	 * subqueries in WHERE clause, we don't support use of partition keys
+	 * in the subquery that is referred from the outer query.
+	 */
+	if (candidateColumn->varlevelsup > 0)
+	{
+		return;
+	}
+
 	rangeTableEntryIndex = candidateColumn->varno - 1;
 	rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
@@ -3161,7 +3172,14 @@ PartitionColumnOpExpressionList(Query *query)
 		rangeTableEntryIndex = candidatePartitionColumn->varno - 1;
 		rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
-		Assert(rangeTableEntry->rtekind == RTE_RELATION);
+		/*
+		 * We currently don't support checking for equality when user refers
+		 * to a column from the JOIN instead of the relation.
+		 */
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
 
 		relationId = rangeTableEntry->relid;
 		partitionColumn = DistPartitionKey(relationId);

@@ -62,6 +62,7 @@ typedef struct AttributeEquivalenceClassMember
 } AttributeEquivalenceClassMember;
 
 
+static uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 							   Index relationRteIndex, Index *partitionKeyIndex);
 static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
@@ -329,9 +330,8 @@ FindTranslatedVar(List *appendRelList, Oid relationOid, Index relationRteIndex,
  * joined on their partition keys.
  *
  * The function returns true if all relations are joined on their partition keys.
- * Otherwise, the function returns false. In order to support reference tables
- * with subqueries, equality between attributes of reference tables and partition
- * key of distributed tables are also considered.
+ * Otherwise, the function returns false. We ignore reference tables at all since
+ * they don't have partition keys.
  *
  * In order to do that, we invented a new equivalence class namely:
  * AttributeEquivalenceClass. In very simple words, a AttributeEquivalenceClass is
@@ -365,14 +365,24 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 	List *joinRestrictionAttributeEquivalenceList = NIL;
 	List *allAttributeEquivalenceList = NIL;
 
+	uint32 referenceRelationCount = ReferenceRelationCount(restrictionContext);
 	uint32 totalRelationCount = list_length(restrictionContext->relationRestrictionList);
+	uint32 nonReferenceRelationCount = totalRelationCount - referenceRelationCount;
 
 	/*
-	 * If the query includes only one relation, we should not check the partition
-	 * column equality. Single table should not need to fetch data from other nodes
-	 * except it's own node(s).
+	 * If the query includes a single relation which is not a reference table,
+	 * we should not check the partition column equality.
+	 * Consider two example cases:
+	 *   (i)   The query includes only a single colocated relation
+	 *   (ii)  A colocated relation is joined with a (or multiple) reference
+	 *         table(s) where colocated relation is not joined on the partition key
+	 *
+	 * For the above two cases, we don't need to execute the partition column equality
+	 * algorithm. The reason is that the essence of this function is to ensure that the
+	 * tasks that are going to be created should not need data from other tasks. In both
+	 * cases mentioned above, the necessary data per task would be on available.
 	 */
-	if (totalRelationCount == 1)
+	if (nonReferenceRelationCount <= 1)
 	{
 		return true;
 	}
@@ -391,6 +401,31 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
 
 	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
 													restrictionContext);
+}
+
+
+/*
+ * ReferenceRelationCount iterates over the relations and returns the reference table
+ * relation count.
+ */
+static uint32
+ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+	uint32 referenceRelationCount = 0;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(relationRestrictionCell);
+
+		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		{
+			referenceRelationCount++;
+		}
+	}
+
+	return referenceRelationCount;
 }
 
 
@@ -433,6 +468,12 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
 		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+
+		/* we shouldn't check for the equality of reference tables */
+		if (PartitionMethod(relationRestriction->relationId) == DISTRIBUTE_BY_NONE)
+		{
+			continue;
+		}
 
 		if (!bms_is_member(rteIdentity, commonRteIdentities))
 		{
@@ -621,7 +662,7 @@ GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
 
 /*
  * GenerateCommonEquivalence gets a list of unrelated AttributeEquiavalanceClass
- * whose all members are partition keys or a column of reference table.
+ * whose all members are partition keys.
  *
  * With the equivalence classes, the function follows the algorithm
  * outlined below:
@@ -1084,8 +1125,14 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
 
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
-	if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE &&
-		relationPartitionKey->varattno != varToBeAdded->varattno)
+	/* we don't need reference tables in the equality on columns */
+	if (relationPartitionKey == NULL)
+	{
+		return;
+	}
+
+	/* we're only interested in distribution columns */
+	if (relationPartitionKey->varattno != varToBeAdded->varattno)
 	{
 		return;
 	}

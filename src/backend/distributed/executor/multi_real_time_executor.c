@@ -29,6 +29,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/version_compat.h"
 #include "storage/fd.h"
 #include "utils/timestamp.h"
 
@@ -272,7 +273,8 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			/* we use the same database name on the master and worker nodes */
 			nodeDatabase = get_database_name(MyDatabaseId);
 
-			connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase);
+			connectionId = MultiClientConnectStart(nodeName, nodePort, nodeDatabase,
+												   NULL);
 			connectionIdArray[currentIndex] = connectionId;
 
 			/* if valid, poll the connection until the connection is initiated */
@@ -521,7 +523,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 				int fileFlags = (O_APPEND | O_CREAT | O_RDWR | O_TRUNC | PG_BINARY);
 				int fileMode = (S_IRUSR | S_IWUSR);
 
-				int32 fileDescriptor = BasicOpenFile(filename, fileFlags, fileMode);
+				int32 fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
 				if (fileDescriptor >= 0)
 				{
 					/*

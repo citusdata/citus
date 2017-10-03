@@ -92,6 +92,7 @@ static void ExplainOneQuery(Query *query, int cursorOptions,
 static void ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 							const char *queryString, ParamListInfo params);
 #endif
+#if (PG_VERSION_NUM < 110000)
 static void ExplainOpenGroup(const char *objtype, const char *labelname,
 							 bool labeled, ExplainState *es);
 static void ExplainCloseGroup(const char *objtype, const char *labelname,
@@ -99,6 +100,7 @@ static void ExplainCloseGroup(const char *objtype, const char *labelname,
 static void ExplainXMLTag(const char *tagname, int flags, ExplainState *es);
 static void ExplainJSONLineEnding(ExplainState *es);
 static void ExplainYAMLLineStarting(ExplainState *es);
+#endif
 
 
 /*
@@ -635,6 +637,7 @@ ExplainOneQuery(Query *query, IntoClause *into, ExplainState *es,
 	}
 }
 
+#if (PG_VERSION_NUM < 110000)
 /*
  * Open a group of related objects.
  *
@@ -811,3 +814,4 @@ ExplainYAMLLineStarting(ExplainState *es)
 		appendStringInfoSpaces(es->str, es->indent * 2);
 	}
 }
+#endif

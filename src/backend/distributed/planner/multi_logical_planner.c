@@ -31,6 +31,7 @@
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/relation.h"
 #include "optimizer/clauses.h"
 #include "optimizer/prep.h"
 #include "optimizer/tlist.h"
@@ -69,6 +70,8 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  PlannerRestrictionContext
 																	  *
 																	  plannerRestrictionContext);
+static DeferredErrorMessage * DeferErrorIfUnsupportedSublinkAndReferenceTable(
+	Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedFilters(Query *subquery);
 static bool EqualOpExpressionLists(List *firstOpExpressionList,
 								   List *secondOpExpressionList);
@@ -87,6 +90,7 @@ static MultiNode * MultiPlanTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
 static bool HasUnsupportedReferenceTableJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
+static bool ShouldRecurseForReferenceTableJoinChecks(RelOptInfo *relOptInfo);
 static bool HasUnsupportedJoinWalker(Node *node, void *context);
 static bool ErrorHintRequired(const char *errorHint, Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryRepartition(Query *
@@ -96,8 +100,8 @@ static bool HasOuterJoin(Query *queryTree);
 static bool HasOuterJoinWalker(Node *node, void *maxJoinLevel);
 static bool HasComplexJoinOrder(Query *queryTree);
 static bool HasComplexRangeTableType(Query *queryTree);
-static bool RelationInfoHasReferenceTable(PlannerInfo *plannerInfo,
-										  RelOptInfo *relationInfo);
+static bool RelationInfoContainsReferenceTable(PlannerInfo *plannerInfo,
+											   RelOptInfo *relationInfo);
 static void ValidateClauseList(List *clauseList);
 static void ValidateSubqueryPushdownClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
@@ -542,7 +546,16 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 							 "one another relation using distribution keys and "
 							 "equality operator.", NULL);
 	}
-	else if (HasUnsupportedReferenceTableJoin(plannerRestrictionContext))
+
+	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
+	error = DeferErrorIfUnsupportedSublinkAndReferenceTable(originalQuery);
+	if (error)
+	{
+		return error;
+	}
+
+	/* we shouldn't allow reference tables in the outer part of outer joins */
+	if (HasUnsupportedReferenceTableJoin(plannerRestrictionContext))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 							 "cannot pushdown the subquery",
@@ -576,6 +589,43 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		{
 			return error;
 		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedSublinkAndReferenceTable returns a deferred error if the
+ * given query is not suitable for subquery pushdown.
+ *
+ * While planning sublinks, we rely on Postgres in the sense that it converts some of
+ * sublinks into joins.
+ *
+ * In some cases, sublinks are pulled up and converted into outer joins. Those cases
+ * are already handled with HasUnsupportedReferenceTableJoin().
+ *
+ * If the sublinks are not pulled up, we should still error out in if any reference table
+ * appears in the FROM clause of a subquery.
+ *
+ * Otherwise, the result would include duplicate rows.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
+{
+	if (!queryTree->hasSubLinks)
+	{
+		return NULL;
+	}
+
+	if (HasReferenceTable((Node *) queryTree->rtable))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Reference tables are not allowed in FROM "
+							 "clause when the query has subqueries in "
+							 "WHERE clause",
+							 NULL);
 	}
 
 	return NULL;
@@ -853,6 +903,14 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		}
 	}
 
+	deferredError = DeferErrorIfUnsupportedSublinkAndReferenceTable(subqueryTree);
+	if (deferredError)
+	{
+		preconditionsSatisfied = false;
+		errorDetail = (char *) deferredError->detail;
+	}
+
+
 	/* finally check and return deferred if not satisfied */
 	if (!preconditionsSatisfied)
 	{
@@ -1027,7 +1085,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 
 /*
  * TargetListOnPartitionColumn checks if at least one target list entry is on
- * partition column or the table is a reference table.
+ * partition column.
  */
 static bool
 TargetListOnPartitionColumn(Query *query, List *targetEntryList)
@@ -1048,15 +1106,13 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
 
 		/*
-		 * If the expression belongs to reference table directly returns true.
-		 * We can assume that target list entry always on partition column of
-		 * reference tables.
+		 * If the expression belongs to a reference table continue searching for
+		 * other partition keys.
 		 */
 		if (IsDistributedTable(relationId) && PartitionMethod(relationId) ==
 			DISTRIBUTE_BY_NONE)
 		{
-			targetListOnPartitionColumn = true;
-			break;
+			continue;
 		}
 
 		if (isPartitionColumn)
@@ -1459,15 +1515,18 @@ HasUnsupportedReferenceTableJoin(PlannerRestrictionContext *plannerRestrictionCo
 
 		if (joinType == JOIN_SEMI || joinType == JOIN_ANTI || joinType == JOIN_LEFT)
 		{
-			if (RelationInfoHasReferenceTable(plannerInfo, outerrel))
+			if (ShouldRecurseForReferenceTableJoinChecks(outerrel) &&
+				RelationInfoContainsReferenceTable(plannerInfo, outerrel))
 			{
 				return true;
 			}
 		}
 		else if (joinType == JOIN_FULL)
 		{
-			if (RelationInfoHasReferenceTable(plannerInfo, innerrel) ||
-				RelationInfoHasReferenceTable(plannerInfo, outerrel))
+			if ((ShouldRecurseForReferenceTableJoinChecks(innerrel) &&
+				 RelationInfoContainsReferenceTable(plannerInfo, innerrel)) ||
+				(ShouldRecurseForReferenceTableJoinChecks(outerrel) &&
+				 RelationInfoContainsReferenceTable(plannerInfo, outerrel)))
 			{
 				return true;
 			}
@@ -1479,12 +1538,66 @@ HasUnsupportedReferenceTableJoin(PlannerRestrictionContext *plannerRestrictionCo
 
 
 /*
- * RelationInfoHasReferenceTable check whether the relationInfo has reference table.
- * Since relation ids of relationInfo indexes to the range table entry list of
- * planner info, planner info is also passed.
+ * ShouldRecurseForReferenceTableJoinChecks is a helper function for deciding
+ * on whether the input relOptInfo should be checked for unsupported reference
+ * tables.
  */
 static bool
-RelationInfoHasReferenceTable(PlannerInfo *plannerInfo, RelOptInfo *relationInfo)
+ShouldRecurseForReferenceTableJoinChecks(RelOptInfo *relOptInfo)
+{
+	/*
+	 * We shouldn't recursively go down for joins since we're already
+	 * going to process each join seperately. Otherwise we'd restrict
+	 * the coverage. See the below sketch where (h) denotes a hash
+	 * distributed relation, (r) denotes a reference table, (L) denotes
+	 * LEFT JOIN and (I) denotes INNER JOIN. If we're to recurse into
+	 * the inner join, we'd be preventing to push down the following
+	 * join tree, which is actually safe to push down.
+	 *
+	 *                       (L)
+	 *                      /  \
+	 *                   (I)     h
+	 *                  /  \
+	 *                r      h
+	 */
+	if (relOptInfo->reloptkind == RELOPT_JOINREL)
+	{
+		return false;
+	}
+
+	/*
+	 * Note that we treat the same query where relations appear in subqueries
+	 * differently. (i.e., use SELECT * FROM r; instead of r)
+	 *
+	 * In that case, to relax some restrictions, we do the following optimization:
+	 * If the subplan (i.e., plannerInfo corresponding to the subquery) contains any
+	 * joins, we skip reference table checks keeping in mind that the join is already
+	 * going to be processed seperately. This optimization should suffice for many
+	 * use cases.
+	 */
+	if (relOptInfo->reloptkind == RELOPT_BASEREL && relOptInfo->subroot != NULL)
+	{
+		PlannerInfo *subroot = relOptInfo->subroot;
+
+		if (list_length(subroot->join_rel_list) > 0)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * RelationInfoContainsReferenceTable checks whether the relationInfo
+ * contains any reference tables. If found, the function returns true.
+ *
+ * Note that since relation ids of relationInfo indexes to the range
+ * table entry list of planner info, planner info is also passed.
+ */
+static bool
+RelationInfoContainsReferenceTable(PlannerInfo *plannerInfo, RelOptInfo *relationInfo)
 {
 	Relids relids = bms_copy(relationInfo->relids);
 	int relationId = -1;
@@ -2863,6 +2976,11 @@ NeedsDistributedPlanning(Query *queryTree)
 
 	if (hasLocalRelation && hasDistributedRelation)
 	{
+		if (InsertSelectIntoLocalTable(queryTree))
+		{
+			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+								   "local table")));
+		}
 		ereport(ERROR, (errmsg("cannot plan queries which include both local and "
 							   "distributed relations")));
 	}
@@ -2927,9 +3045,17 @@ ExtractRangeTableRelationWalkerWithRTEExpand(Node *node, List **rangeTableRelati
 												rangeTableRelationList, 0);
 		}
 	}
+	else if (IsA(node, Query))
+	{
+		walkIsComplete = query_tree_walker((Query *) node,
+										   ExtractRangeTableRelationWalkerWithRTEExpand,
+										   rangeTableRelationList, QTW_EXAMINE_RTES);
+	}
 	else
 	{
-		walkIsComplete = ExtractRangeTableRelationWalker(node, rangeTableRelationList);
+		walkIsComplete = expression_tree_walker(node,
+												ExtractRangeTableRelationWalkerWithRTEExpand,
+												rangeTableRelationList);
 	}
 
 	return walkIsComplete;

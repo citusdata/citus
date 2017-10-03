@@ -69,6 +69,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_pruning.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "tsearch/ts_locale.h"
@@ -334,7 +335,7 @@ CopyToExistingShards(CopyStmt *copyStatement, char *completionTag)
 	/* build the list of column names for remote COPY statements */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped)
@@ -892,7 +893,7 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 
 	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescription->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 		Oid typeId = InvalidOid;
 		char typeCategory = '\0';
 		bool typePreferred = false;
@@ -1205,17 +1206,8 @@ ReportCopyError(MultiConnection *connection, PGresult *result)
 	}
 	else
 	{
-		/* probably a connection problem, get the message from the connection */
-		char *lastNewlineIndex = NULL;
-
-		remoteMessage = PQerrorMessage(connection->pgConn);
-		lastNewlineIndex = strrchr(remoteMessage, '\n');
-
-		/* trim trailing newline, if any */
-		if (lastNewlineIndex != NULL)
-		{
-			*lastNewlineIndex = '\0';
-		}
+		/* trim the trailing characters */
+		remoteMessage = pchomp(PQerrorMessage(connection->pgConn));
 
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
 						errmsg("failed to complete COPY on %s:%d", connection->hostname,
@@ -1240,7 +1232,7 @@ ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat)
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
 		FmgrInfo *currentOutputFunction = &columnOutputFunctions[columnIndex];
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(rowDescriptor, columnIndex);
 		Oid columnTypeId = currentColumn->atttypid;
 		Oid outputFunctionId = InvalidOid;
 		bool typeVariableLength = false;
@@ -1291,7 +1283,7 @@ AppendCopyRowData(Datum *valueArray, bool *isNullArray, TupleDesc rowDescriptor,
 	}
 	for (columnIndex = 0; columnIndex < totalColumnCount; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = rowDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(rowDescriptor, columnIndex);
 		Datum value = valueArray[columnIndex];
 		bool isNull = isNullArray[columnIndex];
 		bool lastColumn = false;
@@ -1366,7 +1358,7 @@ AvailableColumnCount(TupleDesc tupleDescriptor)
 
 	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 
 		if (!currentColumn->attisdropped)
 		{
@@ -2009,6 +2001,14 @@ CitusCopyDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	MemoryContextSwitchTo(oldContext);
 
 	copyDest->tuplesSent++;
+
+	/*
+	 * Release per tuple memory allocated in this function. If we're writing
+	 * the results of an INSERT ... SELECT then the SELECT execution will use
+	 * its own executor state and reset the per tuple expression context
+	 * separately.
+	 */
+	ResetPerTupleExprContext(executorState);
 
 	return true;
 }

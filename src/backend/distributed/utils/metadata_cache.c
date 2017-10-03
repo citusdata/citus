@@ -113,6 +113,7 @@ typedef struct MetadataCacheData
 	Oid distPlacementGroupidIndexId;
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
+	Oid distTransactionRecordIndexId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
 	Oid extensionOwner;
@@ -642,11 +643,18 @@ LookupShardCacheEntry(int64 shardId)
 
 		if (!shardEntry->tableEntry->isValid)
 		{
+			Oid oldRelationId = shardEntry->tableEntry->relationId;
+			Oid currentRelationId = LookupShardRelation(shardId);
+
 			/*
-			 * The cache entry might not be valid right now. Reload cache entry
-			 * and recheck (as the offset might have changed).
+			 * The relation OID to which the shard belongs could have changed,
+			 * most notably when the extension is dropped and a shard ID is
+			 * reused. Reload the cache entries for both old and new relation
+			 * ID and then look up the shard entry again.
 			 */
-			LookupDistTableCacheEntry(shardEntry->tableEntry->relationId);
+			LookupDistTableCacheEntry(oldRelationId);
+			LookupDistTableCacheEntry(currentRelationId);
+
 			recheck = true;
 		}
 	}
@@ -1789,6 +1797,17 @@ DistTransactionGroupIndexId(void)
 }
 
 
+/* return oid of pg_dist_transaction_unique_constraint */
+Oid
+DistTransactionRecordIndexId(void)
+{
+	CachedRelationLookup("pg_dist_transaction_unique_constraint",
+						 &MetadataCache.distTransactionRecordIndexId);
+
+	return MetadataCache.distTransactionRecordIndexId;
+}
+
+
 /* return oid of pg_dist_placement_groupid_index */
 Oid
 DistPlacementGroupidIndexId(void)
@@ -2694,18 +2713,21 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	 */
 	if (relationId != InvalidOid && relationId == MetadataCache.distPartitionRelationId)
 	{
-		ClearMetadataOIDCache();
+		InvalidateMetadataSystemCache();
 	}
 }
 
 
 /*
- * ClearMetadataOIDCache resets all the cached OIDs and the extensionLoaded flag.
+ * InvalidateMetadataSystemCache resets all the cached OIDs and the extensionLoaded flag,
+ * and invalidates the worker node and local group ID caches.
  */
 void
-ClearMetadataOIDCache(void)
+InvalidateMetadataSystemCache(void)
 {
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
+	workerNodeHashValid = false;
+	LocalGroupId = -1;
 }
 
 

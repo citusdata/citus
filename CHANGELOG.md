@@ -1,3 +1,25 @@
+### citus v7.0.2 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
+### citus v6.2.4 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
+### citus v6.1.3 (September 28, 2017) ###
+
+* Updates task-tracker to limit file access
+
+### citus v7.0.1 (September 12, 2017) ###
+
+* Fixes a bug that could cause memory leaks in `INSERT ... SELECT` queries
+
+* Fixes a bug that could cause incorrect execution of prepared statements
+
+* Fixes a bug that could cause excessive memory usage during COPY
+
+* Incorporates latest changes from core PostgreSQL code
+
 ### citus v7.0.0 (August 28, 2017) ###
 
 * Adds support for PostgreSQL 10

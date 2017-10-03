@@ -46,6 +46,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
@@ -235,6 +236,14 @@ create_reference_table(PG_FUNCTION_ARGS)
 
 	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+
+	/*
+	 * Ensure schema exists on each worker node. We can not run this function
+	 * transactionally, since we may create shards over separate sessions and
+	 * shard creation depends on the schema being present and visible from all
+	 * sessions.
+	 */
+	EnsureSchemaExistsOnAllNodes(relationId);
 
 	/*
 	 * Lock target relation with an exclusive lock - there's no way to make
@@ -627,7 +636,8 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	if (distributionMethod == DISTRIBUTE_BY_HASH)
 	{
 		Oid hashSupportFunction = SupportFunctionForColumn(distributionColumn,
-														   HASH_AM_OID, HASHPROC);
+														   HASH_AM_OID,
+														   HASHSTANDARD_PROC);
 		if (hashSupportFunction == InvalidOid)
 		{
 			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
@@ -1276,7 +1286,7 @@ TupleDescColumnNameList(TupleDesc tupleDescriptor)
 
 	for (columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
 	{
-		Form_pg_attribute currentColumn = tupleDescriptor->attrs[columnIndex];
+		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescriptor, columnIndex);
 		char *columnName = NameStr(currentColumn->attname);
 
 		if (currentColumn->attisdropped)
@@ -1303,7 +1313,7 @@ RelationUsesIdentityColumns(TupleDesc relationDesc)
 
 	for (attributeIndex = 0; attributeIndex < relationDesc->natts; attributeIndex++)
 	{
-		Form_pg_attribute attributeForm = relationDesc->attrs[attributeIndex];
+		Form_pg_attribute attributeForm = TupleDescAttr(relationDesc, attributeIndex);
 
 		if (attributeForm->attidentity != '\0')
 		{

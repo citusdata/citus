@@ -56,6 +56,7 @@
 #include "distributed/transmit.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/version_compat.h"
 #include "executor/executor.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
@@ -634,12 +635,30 @@ IsTransmitStmt(Node *parsetree)
 static void
 VerifyTransmitStmt(CopyStmt *copyStatement)
 {
+	char *fileName = NULL;
+
+	EnsureSuperUser();
+
 	/* do some minimal option verification */
 	if (copyStatement->relation == NULL ||
 		copyStatement->relation->relname == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("FORMAT 'transmit' requires a target file")));
+	}
+
+	fileName = copyStatement->relation->relname;
+
+	if (is_absolute_path(fileName))
+	{
+		ereport(ERROR, (errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+						(errmsg("absolute path not allowed"))));
+	}
+	else if (!path_is_relative_and_below_cwd(fileName))
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 (errmsg("path must be in or below the current directory"))));
 	}
 
 	if (copyStatement->filename != NULL)
@@ -3111,7 +3130,9 @@ InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
  *
  * This code is heavily borrowed from RangeVarCallbackForDropRelation() in
  * commands/tablecmds.c in Postgres source. We need this to ensure the right
- * order of locking while dealing with DROP INDEX statments.
+ * order of locking while dealing with DROP INDEX statments. Because we are
+ * exclusively using this callback for INDEX processing, the PARTITION-related
+ * logic from PostgreSQL's similar callback has been omitted as unneeded.
  */
 static void
 RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid, void *arg)
@@ -3255,16 +3276,13 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 	if (attnamelist == NIL)
 	{
 		/* Generate default column list */
-		Form_pg_attribute *attr = tupDesc->attrs;
 		int			attr_count = tupDesc->natts;
 		int			i;
 
 		for (i = 0; i < attr_count; i++)
 		{
-			if (attr[i]->attisdropped)
-			{
+			if (TupleDescAttr(tupDesc, i)->attisdropped)
 				continue;
-			}
 			attnums = lappend_int(attnums, i + 1);
 		}
 	}
@@ -3283,41 +3301,35 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 			attnum = InvalidAttrNumber;
 			for (i = 0; i < tupDesc->natts; i++)
 			{
-				if (tupDesc->attrs[i]->attisdropped)
-				{
+				Form_pg_attribute att = TupleDescAttr(tupDesc, i);
+
+				if (att->attisdropped)
 					continue;
-				}
-				if (namestrcmp(&(tupDesc->attrs[i]->attname), name) == 0)
+				if (namestrcmp(&(att->attname), name) == 0)
 				{
-					attnum = tupDesc->attrs[i]->attnum;
+					attnum = att->attnum;
 					break;
 				}
 			}
 			if (attnum == InvalidAttrNumber)
 			{
 				if (rel != NULL)
-				{
 					ereport(ERROR,
 							(errcode(ERRCODE_UNDEFINED_COLUMN),
-					errmsg("column \"%s\" of relation \"%s\" does not exist",
-						   name, RelationGetRelationName(rel))));
-				}
+							 errmsg("column \"%s\" of relation \"%s\" does not exist",
+									name, RelationGetRelationName(rel))));
 				else
-				{
 					ereport(ERROR,
 							(errcode(ERRCODE_UNDEFINED_COLUMN),
 							 errmsg("column \"%s\" does not exist",
 									name)));
-				}
 			}
 			/* Check for duplicates */
 			if (list_member_int(attnums, attnum))
-			{
 				ereport(ERROR,
 						(errcode(ERRCODE_DUPLICATE_COLUMN),
 						 errmsg("column \"%s\" specified more than once",
 								name)));
-			}
 			attnums = lappend_int(attnums, attnum);
 		}
 	}

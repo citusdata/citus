@@ -64,6 +64,7 @@ static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSele
 static Query * WrapSubquery(Query *subquery);
 static void CastSelectTargetList(List *selectTargetList, Oid targetRelationId,
 								 List *insertTargetList);
+static bool CheckInsertSelectQuery(Query *query);
 
 
 /*
@@ -73,18 +74,62 @@ static void CastSelectTargetList(List *selectTargetList, Oid targetRelationId,
  *
  * Note that the input query should be the original parsetree of
  * the query (i.e., not passed trough the standard planner).
+ */
+bool
+InsertSelectIntoDistributedTable(Query *query)
+{
+	bool insertSelectQuery = CheckInsertSelectQuery(query);
+
+	if (insertSelectQuery)
+	{
+		RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(query);
+		if (IsDistributedTable(insertRte->relid))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * InsertSelectIntoLocalTable checks whether INSERT INTO ... SELECT inserts
+ * into local table. Note that query must be a sample of INSERT INTO ... SELECT
+ * type of query.
+ */
+bool
+InsertSelectIntoLocalTable(Query *query)
+{
+	bool insertSelectQuery = CheckInsertSelectQuery(query);
+
+	if (insertSelectQuery)
+	{
+		RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(query);
+		if (!IsDistributedTable(insertRte->relid))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * CheckInsertSelectQuery returns true when the input query is an INSERT INTO
+ * ... SELECT kind of query.
  *
  * This function is inspired from getInsertSelectQuery() on
  * rewrite/rewriteManip.c.
  */
-bool
-InsertSelectIntoDistributedTable(Query *query)
+static bool
+CheckInsertSelectQuery(Query *query)
 {
 	CmdType commandType = query->commandType;
 	List *fromList = NULL;
 	RangeTblRef *rangeTableReference = NULL;
 	RangeTblEntry *subqueryRte = NULL;
-	RangeTblEntry *insertRte = NULL;
 
 	if (commandType != CMD_INSERT)
 	{
@@ -116,12 +161,6 @@ InsertSelectIntoDistributedTable(Query *query)
 
 	/* ensure that there is a query */
 	Assert(IsA(subqueryRte->subquery, Query));
-
-	insertRte = ExtractInsertRangeTableEntry(query);
-	if (!IsDistributedTable(insertRte->relid))
-	{
-		return false;
-	}
 
 	return true;
 }

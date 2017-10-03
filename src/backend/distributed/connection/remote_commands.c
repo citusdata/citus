@@ -18,6 +18,7 @@
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
+#include "utils/palloc.h"
 
 
 /* GUC, determining whether statements sent to remote nodes are logged */
@@ -55,6 +56,8 @@ IsResponseOK(PGresult *result)
  *
  * Note that this might require network IO. If that's not acceptable, use
  * NonblockingForgetResults().
+ *
+ * ClearResults is variant of this function which can also raise errors.
  */
 void
 ForgetResults(MultiConnection *connection)
@@ -77,6 +80,52 @@ ForgetResults(MultiConnection *connection)
 		}
 		PQclear(result);
 	}
+}
+
+
+/*
+ * ClearResults clears a connection from pending activity,
+ * returns true if all pending commands return success. It raises
+ * error if raiseErrors flag is set, any command fails and transaction
+ * is marked critical.
+ *
+ * Note that this might require network IO. If that's not acceptable, use
+ * NonblockingForgetResults().
+ */
+bool
+ClearResults(MultiConnection *connection, bool raiseErrors)
+{
+	bool success = true;
+
+	while (true)
+	{
+		PGresult *result = GetRemoteCommandResult(connection, raiseErrors);
+		if (result == NULL)
+		{
+			break;
+		}
+
+		/*
+		 * End any pending copy operation. Transaction will be marked
+		 * as failed by the following part.
+		 */
+		if (PQresultStatus(result) == PGRES_COPY_IN)
+		{
+			PQputCopyEnd(connection->pgConn, NULL);
+		}
+
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, WARNING);
+			MarkRemoteTransactionFailed(connection, raiseErrors);
+
+			success = false;
+		}
+
+		PQclear(result);
+	}
+
+	return success;
 }
 
 
@@ -191,7 +240,7 @@ ReportConnectionError(MultiConnection *connection, int elevel)
 	int nodePort = connection->port;
 
 	ereport(elevel, (errmsg("connection error: %s:%d", nodeName, nodePort),
-					 errdetail("%s", PQerrorMessage(connection->pgConn))));
+					 errdetail("%s", pchomp(PQerrorMessage(connection->pgConn)))));
 }
 
 
@@ -229,16 +278,7 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 		 */
 		if (messagePrimary == NULL)
 		{
-			char *lastNewlineIndex = NULL;
-
-			messagePrimary = PQerrorMessage(connection->pgConn);
-			lastNewlineIndex = strrchr(messagePrimary, '\n');
-
-			/* trim trailing newline, if any */
-			if (lastNewlineIndex != NULL)
-			{
-				*lastNewlineIndex = '\0';
-			}
+			messagePrimary = pchomp(PQerrorMessage(connection->pgConn));
 		}
 
 		ereport(elevel, (errcode(sqlState), errmsg("%s", messagePrimary),
@@ -255,6 +295,28 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 	}
 	PG_END_TRY();
 }
+
+
+/* *INDENT-OFF* */
+#if (PG_VERSION_NUM < 100000)
+
+/*
+ * Make copy of string with all trailing newline characters removed.
+ */
+char *
+pchomp(const char *in)
+{
+	size_t		n;
+
+	n = strlen(in);
+	while (n > 0 && in[n - 1] == '\n')
+		n--;
+	return pnstrdup(in, n);
+}
+
+#endif
+
+/* *INDENT-ON* */
 
 
 /*
@@ -497,6 +559,7 @@ PutRemoteCopyData(MultiConnection *connection, const char *buffer, int nbytes)
 {
 	PGconn *pgConn = connection->pgConn;
 	int copyState = 0;
+	bool allowInterrupts = true;
 
 	if (PQstatus(pgConn) != CONNECTION_OK)
 	{
@@ -506,21 +569,22 @@ PutRemoteCopyData(MultiConnection *connection, const char *buffer, int nbytes)
 	Assert(PQisnonblocking(pgConn));
 
 	copyState = PQputCopyData(pgConn, buffer, nbytes);
-
-	if (copyState == 1)
-	{
-		/* successful */
-		return true;
-	}
-	else if (copyState == -1)
+	if (copyState == -1)
 	{
 		return false;
 	}
-	else
-	{
-		bool allowInterrupts = true;
-		return FinishConnectionIO(connection, allowInterrupts);
-	}
+
+	/*
+	 * PQputCopyData may have queued up part of the data even if it managed
+	 * to send some of it succesfully. We provide back pressure by waiting
+	 * until the socket is writable to prevent the internal libpq buffers
+	 * from growing excessively.
+	 *
+	 * In the future, we could reduce the frequency of these pushbacks to
+	 * achieve higher throughput.
+	 */
+
+	return FinishConnectionIO(connection, allowInterrupts);
 }
 
 
@@ -535,6 +599,7 @@ PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg)
 {
 	PGconn *pgConn = connection->pgConn;
 	int copyState = 0;
+	bool allowInterrupts = true;
 
 	if (PQstatus(pgConn) != CONNECTION_OK)
 	{
@@ -544,21 +609,14 @@ PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg)
 	Assert(PQisnonblocking(pgConn));
 
 	copyState = PQputCopyEnd(pgConn, errormsg);
-
-	if (copyState == 1)
-	{
-		/* successful */
-		return true;
-	}
-	else if (copyState == -1)
+	if (copyState == -1)
 	{
 		return false;
 	}
-	else
-	{
-		bool allowInterrupts = true;
-		return FinishConnectionIO(connection, allowInterrupts);
-	}
+
+	/* see PutRemoteCopyData() */
+
+	return FinishConnectionIO(connection, allowInterrupts);
 }
 
 

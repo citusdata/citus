@@ -26,6 +26,7 @@ extern bool LogRemoteCommands;
 /* simple helpers */
 extern bool IsResponseOK(struct pg_result *result);
 extern void ForgetResults(MultiConnection *connection);
+extern bool ClearResults(MultiConnection *connection, bool raiseErrors);
 extern bool NonblockingForgetResults(MultiConnection *connection);
 extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 
@@ -33,6 +34,7 @@ extern bool SqlStateMatchesCategory(char *sqlStateString, int category);
 extern void ReportConnectionError(MultiConnection *connection, int elevel);
 extern void ReportResultError(MultiConnection *connection, struct pg_result *result,
 							  int elevel);
+extern char * pchomp(const char *in);
 extern void LogRemoteCommand(MultiConnection *connection, const char *command);
 
 /* wrappers around libpq functions, with command logging support */
