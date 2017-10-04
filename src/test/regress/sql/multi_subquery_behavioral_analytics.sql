@@ -1659,8 +1659,60 @@ FROM
   WHERE 
     users_table.value_1 < 50 AND test_join_function_2(users_table.user_id, temp.user_id);
 
+-- DISTINCT in the outer query and DISTINCT in the subquery
+SELECT
+    DISTINCT users_ids.user_id
+FROM 
+   (SELECT DISTINCT user_id FROM users_table) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+      users_table AS ma, events_table as short_list
+    WHERE 
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 3
+    ) temp 
+  ON users_ids.user_id = temp.user_id 
+  WHERE temp.value_1 < 50
+  ORDER BY 1
+  LIMIT 5;
+
+-- DISTINCT ON in the outer query and DISTINCT in the subquery
+SELECT
+    DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
+FROM 
+   (SELECT DISTINCT user_id FROM users_table) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+      users_table AS ma, events_table as short_list
+    WHERE 
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 15
+    ) temp 
+  ON users_ids.user_id = temp.user_id 
+  WHERE temp.value_1 < 50
+  ORDER BY 1, 2
+  LIMIT 5;
+
+-- DISTINCT ON in the outer query and DISTINCT ON in the subquery
+SELECT
+    DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
+FROM 
+   (SELECT DISTINCT ON (user_id) user_id, value_1 FROM users_table ORDER BY 1,2) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+      users_table AS ma, events_table as short_list
+    WHERE 
+      short_list.user_id = ma.user_id and ma.value_1 < 25 and short_list.event_type < 3
+    ) temp 
+  ON users_ids.user_id = temp.user_id 
+  ORDER BY 1,2
+  LIMIT 5;
+
 DROP FUNCTION test_join_function_2(integer, integer);
 
 SET citus.enable_router_execution TO TRUE;
 SET citus.subquery_pushdown to OFF;
-

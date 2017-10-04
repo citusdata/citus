@@ -1805,13 +1805,6 @@ ErrorIfQueryNotSupported(Query *queryTree)
 		errorHint = filterHint;
 	}
 
-	if (queryTree->distinctClause)
-	{
-		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with DISTINCT clause";
-		errorHint = filterHint;
-	}
-
 	if (queryTree->groupingSets)
 	{
 		preconditionsSatisfied = false;
@@ -2850,6 +2843,8 @@ MultiExtendedOpNode(Query *queryTree)
 	extendedOpNode->limitCount = queryTree->limitCount;
 	extendedOpNode->limitOffset = queryTree->limitOffset;
 	extendedOpNode->havingQual = queryTree->havingQual;
+	extendedOpNode->distinctClause = queryTree->distinctClause;
+	extendedOpNode->hasDistinctOn = queryTree->hasDistinctOn;
 
 	return extendedOpNode;
 }

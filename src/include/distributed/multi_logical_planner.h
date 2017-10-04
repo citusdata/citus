@@ -173,6 +173,8 @@ typedef struct MultiExtendedOp
 	Node *limitCount;
 	Node *limitOffset;
 	Node *havingQual;
+	List *distinctClause;
+	bool hasDistinctOn;
 } MultiExtendedOp;
 
 

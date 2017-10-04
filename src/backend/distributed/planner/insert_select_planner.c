@@ -30,6 +30,7 @@
 #include "optimizer/clauses.h"
 #include "optimizer/planner.h"
 #include "optimizer/restrictinfo.h"
+#include "optimizer/tlist.h"
 #include "optimizer/var.h"
 #include "parser/parsetree.h"
 #include "parser/parse_coerce.h"
@@ -53,6 +54,7 @@ static DeferredErrorMessage * DistributedInsertSelectSupported(Query *queryTree,
 															   RangeTblEntry *subqueryRte,
 															   bool allReferenceTables);
 static DeferredErrorMessage * MultiTaskRouterSelectQuerySupported(Query *query);
+static bool HasUnsupportedDistinctOn(Query *query);
 static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 RangeTblEntry *insertRte,
 																 RangeTblEntry *
@@ -777,6 +779,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 	List *queryList = NIL;
 	ListCell *queryCell = NULL;
 	StringInfo errorDetail = NULL;
+	bool hasUnsupportedDistinctOn = false;
 
 	ExtractQueryWalker((Node *) query, &queryList);
 	foreach(queryCell, queryList)
@@ -865,19 +868,49 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		}
 
 		/*
-		 * We cannot support DISTINCT ON clauses since it could be on a non-partition column.
-		 * In that case, there is no way that Citus can support this.
+		 * We don't support DISTINCT ON clauses on non-partition columns.
 		 */
-		if (subquery->hasDistinctOn)
+		hasUnsupportedDistinctOn = HasUnsupportedDistinctOn(subquery);
+		if (hasUnsupportedDistinctOn)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "DISTINCT ON clauses are not allowed in distributed "
-								 "INSERT ... SELECT queries",
+								 "DISTINCT ON (non-partition column) clauses are not "
+								 "allowed in distributed INSERT ... SELECT queries",
 								 NULL, NULL);
 		}
 	}
 
 	return NULL;
+}
+
+
+/*
+ * HasUnsupportedDistinctOn returns true if the query has distinct on and
+ * distinct targets do not contain partition column.
+ */
+static bool
+HasUnsupportedDistinctOn(Query *query)
+{
+	ListCell *distinctCell = NULL;
+
+	if (!query->hasDistinctOn)
+	{
+		return false;
+	}
+
+	foreach(distinctCell, query->distinctClause)
+	{
+		SortGroupClause *distinctClause = lfirst(distinctCell);
+		TargetEntry *distinctEntry = get_sortgroupclause_tle(distinctClause,
+															 query->targetList);
+
+		if (IsPartitionColumn(distinctEntry->expr, query))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

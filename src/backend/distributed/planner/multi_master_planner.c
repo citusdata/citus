@@ -152,6 +152,73 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 
 
 /*
+ * BuildDistinctPlan creates an returns a plan for distinct. Depending on
+ * availability of hash function it chooses HashAgg over Sort/Unique
+ * plans.
+ * This function has a potential performance issue since we blindly set
+ * Plan nodes without looking at cost. We might need to revisit this
+ * if we have performance issues with select distinct queries.
+ */
+static Plan *
+BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
+{
+	Plan *distinctPlan = NULL;
+	bool distinctClausesHashable = true;
+	List *distinctClauseList = masterQuery->distinctClause;
+	List *targetList = copyObject(masterQuery->targetList);
+	List *columnList = pull_var_clause_default((Node *) targetList);
+	ListCell *columnCell = NULL;
+
+	if (IsA(subPlan, Agg))
+	{
+		return subPlan;
+	}
+
+	Assert(masterQuery->distinctClause);
+	Assert(!masterQuery->hasDistinctOn);
+
+	/*
+	 * For upper level plans above the sequential scan, the planner expects the
+	 * table id (varno) to be set to OUTER_VAR.
+	 */
+	foreach(columnCell, columnList)
+	{
+		Var *column = (Var *) lfirst(columnCell);
+		column->varno = OUTER_VAR;
+	}
+
+	/*
+	 * Create group by plan with HashAggregate if all distinct
+	 * members are hashable, Otherwise create sort+unique plan.
+	 */
+	distinctClausesHashable = grouping_is_hashable(distinctClauseList);
+	if (distinctClausesHashable)
+	{
+		const long rowEstimate = 10;  /* using the same value as BuildAggregatePlan() */
+		AttrNumber *distinctColumnIdArray = extract_grouping_cols(distinctClauseList,
+																  subPlan->targetlist);
+		Oid *distinctColumnOpArray = extract_grouping_ops(distinctClauseList);
+		uint32 distinctClauseCount = list_length(distinctClauseList);
+
+		distinctPlan = (Plan *) make_agg(targetList, NIL, AGG_HASHED,
+										 AGGSPLIT_SIMPLE, distinctClauseCount,
+										 distinctColumnIdArray,
+										 distinctColumnOpArray, NIL, NIL,
+										 rowEstimate, subPlan);
+	}
+	else
+	{
+		Sort *sortPlan = make_sort_from_sortclauses(masterQuery->distinctClause,
+													subPlan);
+		distinctPlan = (Plan *) make_unique_from_sortclauses((Plan *) sortPlan,
+															 masterQuery->distinctClause);
+	}
+
+	return distinctPlan;
+}
+
+
+/*
  * BuildSelectStatement builds the final select statement to run on the master
  * node, before returning results to the user. The function first gets the custom
  * scan node for all results fetched to the master, and layers aggregation, sort
@@ -166,6 +233,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 	Plan *topLevelPlan = NULL;
 	ListCell *targetEntryCell = NULL;
 	List *columnNameList = NULL;
+	List *sortClauseList = copyObject(masterQuery->sortClause);
 
 	/* (1) make PlannedStmt and set basic information */
 	selectStatement = makeNode(PlannedStmt);
@@ -203,10 +271,47 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = &remoteScan->scan.plan;
 	}
 
-	/* (3) add a sorting plan if needed */
-	if (masterQuery->sortClause)
+	/*
+	 * (3) create distinct plan if needed.
+	 *
+	 * distinct on() requires sort + unique plans. Unique itself is not enough
+	 * as it only compares the current value with previous one when checking
+	 * uniqueness, thus ordering is necessary. If already has order by
+	 * clause we append distinct clauses to the end of it. Postgresql requires
+	 * that if both distinct on() and order by exists, ordering shall start
+	 * on distinct clauses. Therefore we can safely append distinct clauses to
+	 * the end of order by clauses. Although the same column may appear more
+	 * than once in order by clauses, created plan uses only one instance, for
+	 * example order by a,b,a,a,b,c is translated to equivalent order by a,b,c.
+	 *
+	 * If the query has distinct clause but not distinct on, we first create
+	 * distinct plan that is either HashAggreate or Sort + Unique plans depending
+	 * on hashable property of columns in distinct clause. If there is order by
+	 * clause, it is handled after distinct planning.
+	 */
+	if (masterQuery->hasDistinctOn)
 	{
-		List *sortClauseList = masterQuery->sortClause;
+		ListCell *distinctCell = NULL;
+		foreach(distinctCell, masterQuery->distinctClause)
+		{
+			SortGroupClause *singleDistinctClause = lfirst(distinctCell);
+			Index sortGroupRef = singleDistinctClause->tleSortGroupRef;
+
+			if (get_sortgroupref_clause_noerr(sortGroupRef, sortClauseList) == NULL)
+			{
+				sortClauseList = lappend(sortClauseList, singleDistinctClause);
+			}
+		}
+	}
+	else if (masterQuery->distinctClause)
+	{
+		Plan *distinctPlan = BuildDistinctPlan(masterQuery, topLevelPlan);
+		topLevelPlan = distinctPlan;
+	}
+
+	/* (4) add a sorting plan if needed */
+	if (sortClauseList)
+	{
 		Sort *sortPlan = make_sort_from_sortclauses(sortClauseList, topLevelPlan);
 
 		/* just for reproducible costs between different PostgreSQL versions */
@@ -217,7 +322,20 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) sortPlan;
 	}
 
-	/* (4) add a limit plan if needed */
+	/*
+	 * (5) add a unique plan for distinctOn.
+	 * If the query has distinct on we add a sort clause in step 3. Therefore
+	 * Step 4 always creates a sort plan.
+	 * */
+	if (masterQuery->hasDistinctOn)
+	{
+		Assert(IsA(topLevelPlan, Sort));
+		topLevelPlan =
+			(Plan *) make_unique_from_sortclauses(topLevelPlan,
+												  masterQuery->distinctClause);
+	}
+
+	/* (5) add a limit plan if needed */
 	if (masterQuery->limitCount || masterQuery->limitOffset)
 	{
 		Node *limitCount = masterQuery->limitCount;
@@ -226,7 +344,7 @@ BuildSelectStatement(Query *masterQuery, List *masterTargetList, CustomScan *rem
 		topLevelPlan = (Plan *) limitPlan;
 	}
 
-	/* (5) finally set our top level plan in the plan tree */
+	/* (6) finally set our top level plan in the plan tree */
 	selectStatement->planTree = topLevelPlan;
 
 	return selectStatement;
