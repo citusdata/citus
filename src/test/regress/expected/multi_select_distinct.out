@@ -1,0 +1,824 @@
+--
+-- MULTI_SELECT_DISTINCT
+--
+-- Tests select distinct, and select distinct on features.
+--
+-- function calls are supported
+SELECT DISTINCT l_orderkey, now() FROM lineitem_hash_part LIMIT 0;
+ l_orderkey | now 
+------------+-----
+(0 rows)
+
+SELECT DISTINCT l_partkey, 1 + (random() * 0)::int FROM lineitem_hash_part ORDER BY 1 DESC LIMIT 3; 
+ l_partkey | ?column? 
+-----------+----------
+    199973 |        1
+    199946 |        1
+    199943 |        1
+(3 rows)
+
+-- const expressions are supported
+SELECT DISTINCT l_orderkey, 1+1 FROM lineitem_hash_part ORDER BY 1 LIMIT 5;
+ l_orderkey | ?column? 
+------------+----------
+          1 |        2
+          2 |        2
+          3 |        2
+          4 |        2
+          5 |        2
+(5 rows)
+
+-- non const expressions are also supported
+SELECT DISTINCT l_orderkey, l_partkey + 1 FROM lineitem_hash_part ORDER BY 1, 2 LIMIT 5;
+ l_orderkey | ?column? 
+------------+----------
+          1 |     2133
+          1 |    15636
+          1 |    24028
+          1 |    63701
+          1 |    67311
+(5 rows)
+
+-- column expressions are supported
+SELECT DISTINCT l_orderkey, l_shipinstruct || l_shipmode FROM lineitem_hash_part ORDER BY 2 , 1 LIMIT 5;
+ l_orderkey |    ?column?    
+------------+----------------
+         32 | COLLECT CODAIR
+         39 | COLLECT CODAIR
+         66 | COLLECT CODAIR
+         70 | COLLECT CODAIR
+         98 | COLLECT CODAIR
+(5 rows)
+
+-- function calls with const input are supported
+SELECT DISTINCT l_orderkey, strpos('AIR', 'A') FROM lineitem_hash_part ORDER BY 1,2 LIMIT 5;
+ l_orderkey | strpos 
+------------+--------
+          1 |      1
+          2 |      1
+          3 |      1
+          4 |      1
+          5 |      1
+(5 rows)
+
+-- function calls with non-const input are supported
+SELECT DISTINCT l_orderkey, strpos(l_shipmode, 'I')
+	FROM lineitem_hash_part
+	WHERE strpos(l_shipmode, 'I') > 1
+	ORDER BY 2, 1
+	LIMIT 5;
+ l_orderkey | strpos 
+------------+--------
+          1 |      2
+          3 |      2
+          5 |      2
+         32 |      2
+         33 |      2
+(5 rows)
+
+-- distinct on partition column
+-- verify counts match with respect to count(distinct)
+CREATE TEMP TABLE temp_orderkeys AS SELECT DISTINCT l_orderkey FROM lineitem_hash_part;
+SELECT COUNT(*) FROM temp_orderkeys;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT COUNT(DISTINCT l_orderkey) FROM lineitem_hash_part;
+ count 
+-------
+  2985
+(1 row)
+
+SELECT DISTINCT l_orderkey FROM lineitem_hash_part WHERE l_orderkey < 500 and l_partkey < 5000 order by 1;
+ l_orderkey 
+------------
+          1
+          3
+         32
+         35
+         39
+         65
+        129
+        130
+        134
+        164
+        194
+        228
+        261
+        290
+        320
+        321
+        354
+        418
+(18 rows)
+
+-- distinct on non-partition column
+SELECT DISTINCT l_partkey FROM lineitem_hash_part WHERE l_orderkey > 5 and l_orderkey < 20 order by 1;
+ l_partkey 
+-----------
+     79251
+     94780
+    139636
+    145243
+    151894
+    157238
+    163073
+    182052
+(8 rows)
+
+SELECT DISTINCT l_shipmode FROM lineitem_hash_part ORDER BY 1 DESC;
+ l_shipmode 
+------------
+ TRUCK     
+ SHIP      
+ REG AIR   
+ RAIL      
+ MAIL      
+ FOB       
+ AIR       
+(7 rows)
+
+-- distinct with multiple columns 
+SELECT DISTINCT l_orderkey, o_orderdate
+	FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+	WHERE l_orderkey < 10
+	ORDER BY l_orderkey;
+ l_orderkey | o_orderdate 
+------------+-------------
+          1 | 01-02-1996
+          2 | 12-01-1996
+          3 | 10-14-1993
+          4 | 10-11-1995
+          5 | 07-30-1994
+          6 | 02-21-1992
+          7 | 01-10-1996
+(7 rows)
+
+-- distinct on partition column with aggregate
+-- this is the same as the one without distinct due to group by
+SELECT DISTINCT l_orderkey, count(*)
+	FROM lineitem_hash_part
+	WHERE l_orderkey < 200
+	GROUP BY 1
+	HAVING count(*) > 5
+	ORDER BY 2 DESC, 1;
+ l_orderkey | count 
+------------+-------
+          7 |     7
+         68 |     7
+        129 |     7
+        164 |     7
+        194 |     7
+          1 |     6
+          3 |     6
+         32 |     6
+         35 |     6
+         39 |     6
+         67 |     6
+         69 |     6
+         70 |     6
+         71 |     6
+        134 |     6
+        135 |     6
+        163 |     6
+        192 |     6
+        197 |     6
+(19 rows)
+
+	
+-- explain the query to see actual plan
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_orderkey, count(*)
+		FROM lineitem_hash_part
+		WHERE l_orderkey < 200
+		GROUP BY 1
+		HAVING count(*) > 5
+		ORDER BY 2 DESC, 1;
+                                                                           QUERY PLAN                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint) DESC, remote_scan.l_orderkey
+   ->  HashAggregate
+         Group Key: remote_scan.l_orderkey
+         Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 5)
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  HashAggregate
+                           Group Key: l_orderkey
+                           Filter: (count(*) > 5)
+                           ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                 Filter: (l_orderkey < 200)
+(15 rows)
+
+-- distinct on non-partition column with aggregate
+-- this is the same as non-distinct version due to group by
+SELECT DISTINCT l_partkey, count(*)
+	FROM lineitem_hash_part
+	GROUP BY 1 
+	HAVING count(*) > 2
+	ORDER BY 1;
+ l_partkey | count 
+-----------+-------
+      1051 |     3
+      1927 |     3
+      6983 |     3
+     15283 |     3
+     87761 |     3
+    136884 |     3
+    149926 |     3
+    160895 |     3
+    177771 |     3
+    188804 |     3
+    199146 |     3
+(11 rows)
+
+	
+-- explain the query to see actual plan
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_partkey, count(*)
+		FROM lineitem_hash_part
+		GROUP BY 1 
+		HAVING count(*) > 2
+		ORDER BY 1;
+                                             QUERY PLAN                                             
+----------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.l_partkey
+   ->  HashAggregate
+         Group Key: remote_scan.l_partkey
+         Filter: (COALESCE((pg_catalog.sum(remote_scan.worker_column_3))::bigint, '0'::bigint) > 2)
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  HashAggregate
+                           Group Key: l_partkey
+                           ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(13 rows)
+
+-- distinct on non-partition column and avg
+SELECT DISTINCT l_partkey, avg(l_linenumber)
+	FROM lineitem_hash_part
+	WHERE l_partkey < 500
+	GROUP BY 1 
+	HAVING avg(l_linenumber) > 2
+	ORDER BY 1;
+ l_partkey |        avg         
+-----------+--------------------
+        18 | 7.0000000000000000
+        79 | 6.0000000000000000
+       149 | 4.5000000000000000
+       175 | 5.0000000000000000
+       179 | 6.0000000000000000
+       182 | 3.0000000000000000
+       222 | 4.0000000000000000
+       278 | 3.0000000000000000
+       299 | 7.0000000000000000
+       308 | 7.0000000000000000
+       309 | 5.0000000000000000
+       321 | 3.0000000000000000
+       337 | 6.0000000000000000
+       364 | 3.0000000000000000
+       403 | 4.0000000000000000
+(15 rows)
+
+-- distinct on multiple non-partition columns
+SELECT DISTINCT l_partkey, l_suppkey
+	FROM lineitem_hash_part
+	WHERE l_shipmode = 'AIR' AND l_orderkey < 100
+	ORDER BY 1, 2;
+ l_partkey | l_suppkey 
+-----------+-----------
+      2132 |      4633
+      4297 |      1798
+     37531 |        35
+     44161 |      6666
+     44706 |      4707
+     67831 |      5350
+     85811 |      8320
+     94368 |      6878
+    108338 |       849
+    108570 |      8571
+    137267 |      4807
+    137469 |      9983
+    173489 |      3490
+    196156 |      1195
+    197921 |       441
+(15 rows)
+
+	
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_partkey, l_suppkey
+		FROM lineitem_hash_part
+		WHERE l_shipmode = 'AIR' AND l_orderkey < 100
+		ORDER BY 1, 2;
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: remote_scan.l_partkey, remote_scan.l_suppkey
+   ->  HashAggregate
+         Group Key: remote_scan.l_partkey, remote_scan.l_suppkey
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Unique
+                           ->  Sort
+                                 Sort Key: l_partkey, l_suppkey
+                                 ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       Filter: ((l_orderkey < 100) AND (l_shipmode = 'AIR'::bpchar))
+(14 rows)
+
+-- distinct on partition column
+SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
+	FROM lineitem_hash_part
+	WHERE l_orderkey < 35
+	ORDER BY 1;
+ l_orderkey | l_partkey | l_suppkey 
+------------+-----------+-----------
+          1 |    155190 |      7706
+          2 |    106170 |      1191
+          3 |      4297 |      1798
+          4 |     88035 |      5560
+          5 |    108570 |      8571
+          6 |    139636 |      2150
+          7 |    182052 |      9607
+         32 |     82704 |      7721
+         33 |     61336 |      8855
+         34 |     88362 |       871
+(10 rows)
+
+	
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey, l_suppkey
+		FROM lineitem_hash_part
+		WHERE l_orderkey < 35
+		ORDER BY 1;
+                                          QUERY PLAN                                          
+----------------------------------------------------------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: remote_scan.l_orderkey
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Unique
+                           ->  Sort
+                                 Sort Key: l_orderkey
+                                 ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       Filter: (l_orderkey < 35)
+(13 rows)
+
+-- distinct on non-partition column
+-- note order by is required here
+-- otherwise query results will be different since
+-- distinct on clause is on non-partition column
+SELECT DISTINCT ON (l_partkey) l_partkey, l_orderkey
+	FROM lineitem_hash_part
+	ORDER BY 1,2
+	LIMIT 20;
+ l_partkey | l_orderkey 
+-----------+------------
+        18 |      12005
+        79 |       5121
+        91 |       2883
+       149 |        807
+       175 |       4102
+       179 |       2117
+       182 |        548
+       195 |       2528
+       204 |      10048
+       222 |       9413
+       245 |       9446
+       278 |       1287
+       299 |       1122
+       308 |      11137
+       309 |       2374
+       318 |        321
+       321 |       5984
+       337 |      10403
+       350 |      13698
+       358 |       4323
+(20 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_partkey) l_partkey, l_orderkey
+		FROM lineitem_hash_part
+		ORDER BY 1,2
+		LIMIT 20;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Unique
+         ->  Sort
+               Sort Key: remote_scan.l_partkey, remote_scan.l_orderkey
+               ->  Custom Scan (Citus Real-Time)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Limit
+                                 ->  Unique
+                                       ->  Sort
+                                             Sort Key: l_partkey, l_orderkey
+                                             ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(14 rows)
+
+-- distinct on with joins
+-- each customer's first order key
+SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
+	FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+	WHERE o_custkey < 15
+	ORDER BY 1,2;
+ o_custkey | l_orderkey 
+-----------+------------
+         1 |       9154
+         2 |      10563
+         4 |        320
+         5 |      11682
+         7 |      10402
+         8 |        102
+        10 |       1602
+        11 |      12800
+        13 |        994
+        14 |      11011
+(10 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
+		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+		WHERE o_custkey < 15
+		ORDER BY 1,2;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Unique
+                           ->  Sort
+                                 Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
+                                 ->  Hash Join
+                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
+                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Hash
+                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                                   Filter: (o_custkey < 15)
+(17 rows)
+
+-- explain without order by
+-- notice master plan has order by on distinct on column
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (o_custkey) o_custkey, l_orderkey
+		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+		WHERE o_custkey < 15;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: remote_scan.o_custkey
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Unique
+                           ->  Sort
+                                 Sort Key: orders_hash_part.o_custkey
+                                 ->  Hash Join
+                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
+                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Hash
+                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                                   Filter: (o_custkey < 15)
+(17 rows)
+
+-- each customer's each order's first l_partkey
+SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
+	FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+	WHERE o_custkey < 20
+	ORDER BY 1,2,3;
+ o_custkey | l_orderkey | l_linenumber | l_partkey 
+-----------+------------+--------------+-----------
+         1 |       9154 |            1 |     86513
+         1 |      14656 |            1 |     59539
+         2 |      10563 |            1 |    147459
+         4 |        320 |            1 |      4415
+         4 |        739 |            1 |     84489
+         4 |      10688 |            1 |     45037
+         4 |      10788 |            1 |     50814
+         4 |      13728 |            1 |     86216
+         5 |      11682 |            1 |     31634
+         5 |      11746 |            1 |    180724
+         5 |      14308 |            1 |    157430
+         7 |      10402 |            1 |     53661
+         7 |      13031 |            1 |    112161
+         7 |      14145 |            1 |    138729
+         7 |      14404 |            1 |    143034
+         8 |        102 |            1 |     88914
+         8 |        164 |            1 |     91309
+         8 |      13601 |            1 |     40504
+        10 |       1602 |            1 |    182806
+        10 |       9862 |            1 |     86241
+        10 |      11431 |            1 |     62112
+        10 |      13124 |            1 |     29414
+        11 |      12800 |            1 |    152806
+        13 |        994 |            1 |     64486
+        13 |       1603 |            1 |     38191
+        13 |       4704 |            1 |     77934
+        13 |       9927 |            1 |       875
+        14 |      11011 |            1 |    172485
+        17 |        896 |            1 |     38675
+        17 |       5507 |            1 |      9600
+        19 |        353 |            1 |    119305
+        19 |       1504 |            1 |     81389
+        19 |       1669 |            1 |     78373
+        19 |       5893 |            1 |    133707
+        19 |       9954 |            1 |     92138
+        19 |      14885 |            1 |     36154
+(36 rows)
+
+-- explain without order by
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
+		FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+		WHERE o_custkey < 20;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Unique
+   ->  Sort
+         Sort Key: remote_scan.o_custkey, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Unique
+                           ->  Sort
+                                 Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
+                                 ->  Hash Join
+                                       Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
+                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Hash
+                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                                   Filter: (o_custkey < 20)
+(17 rows)
+
+-- each customer's each order's last l_partkey
+SELECT DISTINCT ON (o_custkey, l_orderkey) o_custkey, l_orderkey, l_linenumber, l_partkey
+	FROM lineitem_hash_part JOIN orders_hash_part ON (l_orderkey = o_orderkey) 
+	WHERE o_custkey < 15
+	ORDER BY 1,2,3 DESC;
+ o_custkey | l_orderkey | l_linenumber | l_partkey 
+-----------+------------+--------------+-----------
+         1 |       9154 |            7 |    173448
+         1 |      14656 |            1 |     59539
+         2 |      10563 |            4 |    110741
+         4 |        320 |            2 |    192158
+         4 |        739 |            5 |    187523
+         4 |      10688 |            2 |    132574
+         4 |      10788 |            4 |    196473
+         4 |      13728 |            3 |     12450
+         5 |      11682 |            3 |    177152
+         5 |      11746 |            7 |    193807
+         5 |      14308 |            3 |    140916
+         7 |      10402 |            2 |     64514
+         7 |      13031 |            6 |      7761
+         7 |      14145 |            6 |    130723
+         7 |      14404 |            7 |     35349
+         8 |        102 |            4 |     61158
+         8 |        164 |            7 |      3037
+         8 |      13601 |            5 |     12470
+        10 |       1602 |            1 |    182806
+        10 |       9862 |            5 |    135675
+        10 |      11431 |            7 |      8563
+        10 |      13124 |            3 |     67055
+        11 |      12800 |            5 |    179110
+        13 |        994 |            4 |    130471
+        13 |       1603 |            2 |     65209
+        13 |       4704 |            3 |     63081
+        13 |       9927 |            6 |    119356
+        14 |      11011 |            7 |     95939
+(28 rows)
+
+-- subqueries
+SELECT DISTINCT l_orderkey, l_partkey
+	FROM (
+		SELECT l_orderkey, l_partkey
+		FROM lineitem_hash_part
+		) q
+	ORDER BY 1,2
+	LIMIT 10;
+ l_orderkey | l_partkey 
+------------+-----------
+          1 |      2132
+          1 |     15635
+          1 |     24027
+          1 |     63700
+          1 |     67310
+          1 |    155190
+          2 |    106170
+          3 |      4297
+          3 |     19036
+          3 |     29380
+(10 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_orderkey, l_partkey
+		FROM (
+			SELECT l_orderkey, l_partkey
+			FROM lineitem_hash_part
+			) q
+		ORDER BY 1,2
+		LIMIT 10;
+                                                QUERY PLAN                                                
+----------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
+         ->  HashAggregate
+               Group Key: remote_scan.l_orderkey, remote_scan.l_partkey
+               ->  Custom Scan (Citus Real-Time)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: l_orderkey, l_partkey
+                                       ->  HashAggregate
+                                             Group Key: l_orderkey, l_partkey
+                                             ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(16 rows)
+
+SELECT DISTINCT l_orderkey, cnt
+	FROM (
+		SELECT l_orderkey, count(*) as cnt
+		FROM lineitem_hash_part
+		GROUP BY 1
+		) q
+	ORDER BY 1,2
+	LIMIT 10;
+ l_orderkey | cnt 
+------------+-----
+          1 |   6
+          2 |   1
+          3 |   6
+          4 |   1
+          5 |   3
+          6 |   1
+          7 |   7
+         32 |   6
+         33 |   4
+         34 |   3
+(10 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT l_orderkey, cnt
+		FROM (
+			SELECT l_orderkey, count(*) as cnt
+			FROM lineitem_hash_part
+			GROUP BY 1
+			) q
+		ORDER BY 1,2
+		LIMIT 10;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan.l_orderkey, remote_scan.cnt
+         ->  HashAggregate
+               Group Key: remote_scan.l_orderkey, remote_scan.cnt
+               ->  Custom Scan (Citus Real-Time)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Limit
+                                 ->  Sort
+                                       Sort Key: lineitem_hash_part.l_orderkey, (count(*))
+                                       ->  HashAggregate
+                                             Group Key: lineitem_hash_part.l_orderkey, count(*)
+                                             ->  HashAggregate
+                                                   Group Key: lineitem_hash_part.l_orderkey
+                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(18 rows)
+
+-- distinct on partition column
+-- random() is added to inner query to prevent flattening
+SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey
+	FROM (
+		SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r
+		FROM lineitem_hash_part
+		) q
+	WHERE r > 1
+	ORDER BY 1,2
+	LIMIT 10;
+ l_orderkey | l_partkey 
+------------+-----------
+          1 |      2132
+          2 |    106170
+          3 |      4297
+          4 |     88035
+          5 |     37531
+          6 |    139636
+          7 |     79251
+         32 |      2743
+         33 |     33918
+         34 |     88362
+(10 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_orderkey) l_orderkey, l_partkey
+		FROM (
+			SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r
+			FROM lineitem_hash_part
+			) q
+		WHERE r > 1
+		ORDER BY 1,2
+		LIMIT 10;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Unique
+         ->  Sort
+               Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
+               ->  Custom Scan (Citus Real-Time)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Limit
+                                 ->  Unique
+                                       ->  Sort
+                                             Sort Key: q.l_orderkey, q.l_partkey
+                                             ->  Subquery Scan on q
+                                                   Filter: (q.r > 1)
+                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(16 rows)
+
+-- distinct on non-partition column
+SELECT DISTINCT ON (l_partkey) l_orderkey, l_partkey
+	FROM (
+		SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r
+		FROM lineitem_hash_part
+		) q
+	WHERE r > 1
+	ORDER BY 2,1
+	LIMIT 10;
+ l_orderkey | l_partkey 
+------------+-----------
+      12005 |        18
+       5121 |        79
+       2883 |        91
+        807 |       149
+       4102 |       175
+       2117 |       179
+        548 |       182
+       2528 |       195
+      10048 |       204
+       9413 |       222
+(10 rows)
+
+EXPLAIN (COSTS FALSE)
+	SELECT DISTINCT ON (l_partkey) l_orderkey, l_partkey
+		FROM (
+			SELECT l_orderkey, l_partkey, (random()*10)::int + 2 as r
+			FROM lineitem_hash_part
+			) q
+		WHERE r > 1
+		ORDER BY 2,1
+		LIMIT 10;
+                                                   QUERY PLAN                                                   
+----------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Unique
+         ->  Sort
+               Sort Key: remote_scan.l_partkey, remote_scan.l_orderkey
+               ->  Custom Scan (Citus Real-Time)
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Limit
+                                 ->  Unique
+                                       ->  Sort
+                                             Sort Key: q.l_partkey, q.l_orderkey
+                                             ->  Subquery Scan on q
+                                                   Filter: (q.r > 1)
+                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+(16 rows)
+

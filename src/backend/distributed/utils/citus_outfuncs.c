@@ -292,6 +292,8 @@ OutMultiExtendedOp(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(limitCount);
 	WRITE_NODE_FIELD(limitOffset);
 	WRITE_NODE_FIELD(havingQual);
+	WRITE_BOOL_FIELD(hasDistinctOn);
+	WRITE_NODE_FIELD(distinctClause);
 
 	OutMultiUnaryNodeFields(str, (const MultiUnaryNode *) node);
 }

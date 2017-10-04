@@ -1298,6 +1298,8 @@ MasterExtendedOpNode(MultiExtendedOp *originalOpNode)
 	masterExtendedOpNode->targetList = newTargetEntryList;
 	masterExtendedOpNode->groupClauseList = originalOpNode->groupClauseList;
 	masterExtendedOpNode->sortClauseList = originalOpNode->sortClauseList;
+	masterExtendedOpNode->distinctClause = originalOpNode->distinctClause;
+	masterExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
 	masterExtendedOpNode->limitCount = originalOpNode->limitCount;
 	masterExtendedOpNode->limitOffset = originalOpNode->limitOffset;
 	masterExtendedOpNode->havingQual = newHavingQual;
@@ -1787,6 +1789,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 	WorkerAggregateWalkerContext *walkerContext =
 		palloc0(sizeof(WorkerAggregateWalkerContext));
 	Index nextSortGroupRefIndex = 0;
+	bool queryHasAggregates = false;
 
 	walkerContext->repartitionSubquery = false;
 	walkerContext->expressionList = NIL;
@@ -1826,6 +1829,7 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 			WorkerAggregateWalker((Node *) originalExpression, walkerContext);
 
 			newExpressionList = walkerContext->expressionList;
+			queryHasAggregates = true;
 		}
 		else
 		{
@@ -1924,6 +1928,15 @@ WorkerExtendedOpNode(MultiExtendedOp *originalOpNode,
 
 	workerExtendedOpNode = CitusMakeNode(MultiExtendedOp);
 	workerExtendedOpNode->targetList = newTargetEntryList;
+	workerExtendedOpNode->distinctClause = NIL;
+	workerExtendedOpNode->hasDistinctOn = false;
+
+	if (!queryHasAggregates)
+	{
+		workerExtendedOpNode->distinctClause = originalOpNode->distinctClause;
+		workerExtendedOpNode->hasDistinctOn = originalOpNode->hasDistinctOn;
+	}
+
 	workerExtendedOpNode->groupClauseList = groupClauseList;
 
 	/* if we can push down the limit, also set related fields */
@@ -3356,10 +3369,10 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 
 /*
  * WorkerSortClauseList first checks if the given extended node contains a limit
- * that can be pushed down. If it does, the function then checks if we need to
- * add any sorting and grouping clauses to the sort list we push down for the
- * limit. If we do, the function adds these clauses and returns them. Otherwise,
- * the function returns null.
+ * or hasDistinctOn that can be pushed down. If it does, the function then
+ * checks if we need to add any sorting and grouping clauses to the sort list we
+ * push down for the limit. If we do, the function adds these clauses and
+ * returns them. Otherwise, the function returns null.
  */
 static List *
 WorkerSortClauseList(MultiExtendedOp *originalOpNode,
@@ -3370,8 +3383,8 @@ WorkerSortClauseList(MultiExtendedOp *originalOpNode,
 	List *sortClauseList = originalOpNode->sortClauseList;
 	List *targetList = originalOpNode->targetList;
 
-	/* if no limit node, no need to push down sort clauses */
-	if (originalOpNode->limitCount == NULL)
+	/* if no limit node and no hasDistinctOn, no need to push down sort clauses */
+	if (originalOpNode->limitCount == NULL && !originalOpNode->hasDistinctOn)
 	{
 		return NIL;
 	}
