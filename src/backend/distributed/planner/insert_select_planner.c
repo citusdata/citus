@@ -776,6 +776,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 {
 	List *queryList = NIL;
 	ListCell *queryCell = NULL;
+	StringInfo errorDetail = NULL;
 
 	ExtractQueryWalker((Node *) query, &queryList);
 	foreach(queryCell, queryList)
@@ -797,7 +798,7 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 		if (subquery->limitCount != NULL)
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "LIMIT clauses are not allowed in distirbuted INSERT "
+								 "LIMIT clauses are not allowed in distributed INSERT "
 								 "... SELECT queries",
 								 NULL, NULL);
 		}
@@ -811,17 +812,34 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 								 NULL, NULL);
 		}
 
-		/*
-		 * We could potentially support window clauses where the data is partitioned
-		 * over distribution column. For simplicity, we currently do not support window
-		 * clauses at all.
-		 */
-		if (subquery->windowClause != NULL)
+		/* group clause list must include partition column */
+		if (subquery->groupClause)
 		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "window functions are not allowed in distributed "
-								 "INSERT ... SELECT queries",
-								 NULL, NULL);
+			List *groupClauseList = subquery->groupClause;
+			List *targetEntryList = subquery->targetList;
+			List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
+															  targetEntryList);
+			bool groupOnPartitionColumn = TargetListOnPartitionColumn(subquery,
+																	  groupTargetEntryList);
+			if (!groupOnPartitionColumn)
+			{
+				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+									 "Group by list without distribution column is "
+									 "not allowed  in distributed INSERT ... "
+									 "SELECT queries",
+									 NULL, NULL);
+			}
+		}
+
+		/*
+		 * We support window functions when the window function
+		 * is partitioned on distribution column.
+		 */
+		if (subquery->windowClause && !SafeToPushdownWindowFunction(subquery,
+																	&errorDetail))
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED, errorDetail->data, NULL,
+								 NULL);
 		}
 
 		if (subquery->setOperations != NULL)
