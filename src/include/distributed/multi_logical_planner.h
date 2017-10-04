@@ -185,6 +185,8 @@ extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *query
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext,
 											  ParamListInfo boundParams);
+extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
+extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool NeedsDistributedPlanning(Query *queryTree);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
