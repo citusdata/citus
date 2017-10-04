@@ -626,16 +626,60 @@ DEBUG:  Plan is router executable
 SET client_min_messages TO INFO;
 truncate agg_events;
 SET client_min_messages TO DEBUG2;
--- we do not support DISTINCT ON clauses
+-- DISTINCT ON clauses are supported
+-- distinct on(non-partition column)
+-- values are pulled to master
 INSERT INTO agg_events (value_1_agg, user_id)
   SELECT
     DISTINCT ON (value_1) value_1, user_id
   FROM
     raw_events_first;
-DEBUG:  DISTINCT ON clauses are not allowed in distributed INSERT ... SELECT queries
+DEBUG:  DISTINCT ON (non-partition column) clauses are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  could not run distributed query with DISTINCT clause
-HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
+ user_id | value_1_agg 
+---------+-------------
+       1 |          10
+       2 |          20
+       3 |          30
+       4 |          40
+       5 |          50
+       6 |          60
+       7 |            
+       8 |          80
+       9 |          90
+(9 rows)
+
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+truncate agg_events;
+SET client_min_messages TO DEBUG2;
+-- distinct on(partition column)
+-- queries are forwared to workers
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (user_id) value_1, user_id
+  FROM
+    raw_events_first;
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300008 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300000 raw_events_first WHERE ((worker_hash(user_id) >= '-2147483648'::integer) AND (worker_hash(user_id) <= '-1073741825'::integer))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300009 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300001 raw_events_first WHERE ((worker_hash(user_id) >= '-1073741824'::integer) AND (worker_hash(user_id) <= '-1'::integer))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300010 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300002 raw_events_first WHERE ((worker_hash(user_id) >= 0) AND (worker_hash(user_id) <= 1073741823))
+DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_table_alias (user_id, value_1_agg) SELECT DISTINCT ON (user_id) user_id, value_1 FROM public.raw_events_first_13300003 raw_events_first WHERE ((worker_hash(user_id) >= 1073741824) AND (worker_hash(user_id) <= 2147483647))
+DEBUG:  Plan is router executable
+SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
+ user_id | value_1_agg 
+---------+-------------
+       1 |          10
+       2 |          20
+       3 |          30
+       4 |          40
+       5 |          50
+       6 |          60
+       7 |            
+       8 |          80
+       9 |          90
+(9 rows)
+
 -- We do not support some CTEs
 WITH fist_table_agg AS
   (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)

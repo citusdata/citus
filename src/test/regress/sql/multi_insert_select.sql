@@ -478,12 +478,31 @@ SET client_min_messages TO INFO;
 truncate agg_events;
 SET client_min_messages TO DEBUG2;
 
--- we do not support DISTINCT ON clauses
+-- DISTINCT ON clauses are supported
+-- distinct on(non-partition column)
+-- values are pulled to master
 INSERT INTO agg_events (value_1_agg, user_id)
   SELECT
     DISTINCT ON (value_1) value_1, user_id
   FROM
     raw_events_first;
+
+SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
+
+-- we don't want to see constraint vialotions, so truncate first
+SET client_min_messages TO INFO;
+truncate agg_events;
+SET client_min_messages TO DEBUG2;
+
+-- distinct on(partition column)
+-- queries are forwared to workers
+INSERT INTO agg_events (value_1_agg, user_id)
+  SELECT
+    DISTINCT ON (user_id) value_1, user_id
+  FROM
+    raw_events_first;
+
+SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 
 -- We do not support some CTEs
 WITH fist_table_agg AS

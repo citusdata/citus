@@ -454,4 +454,74 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
  14371 |   101 | 50.5232064574490293
 (1 row)
 
-   
+-- DISTINCT in the outer query and DISTINCT in the subquery
+TRUNCATE agg_results;
+INSERT INTO agg_results(user_id)
+SELECT
+    DISTINCT users_ids.user_id
+FROM 
+   (SELECT DISTINCT user_id FROM users_table) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+    	users_table AS ma, events_table as short_list
+    WHERE 
+    	short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 3
+    ) temp 
+  ON users_ids.user_id = temp.user_id 
+  WHERE temp.value_1 < 50;
+-- get some statistics from the aggregated results to ensure the results are correct
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+ count | count |         avg         
+-------+-------+---------------------
+    27 |    27 | 54.0000000000000000
+(1 row)
+
+-- DISTINCT ON in the outer query and DISTINCT in the subquery
+TRUNCATE agg_results;
+INSERT INTO agg_results(user_id, value_1_agg, value_2_agg)
+SELECT
+    DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
+FROM 
+   (SELECT DISTINCT user_id FROM users_table) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+      users_table AS ma, events_table as short_list
+    WHERE 
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 15
+    ) temp 
+  ON users_ids.user_id = temp.user_id 
+  WHERE temp.value_1 < 50
+  ORDER BY 1, 2;
+SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
+ count | count |         avg         |         avg         
+-------+-------+---------------------+---------------------
+    80 |    80 | 50.7875000000000000 | 10.0125000000000000
+(1 row)
+
+-- DISTINCT ON in the outer query and DISTINCT ON in the subquery
+TRUNCATE agg_results;
+INSERT INTO agg_results(user_id, value_1_agg, value_2_agg)
+SELECT
+    DISTINCT ON (users_ids.user_id) users_ids.user_id, temp.value_1, prob
+FROM 
+   (SELECT DISTINCT ON (user_id) user_id, value_2 FROM users_table ORDER BY 1,2) as users_ids
+        JOIN 
+   (SELECT  
+      ma.user_id, ma.value_1, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+    FROM 
+      users_table AS ma, events_table as short_list
+    WHERE 
+      short_list.user_id = ma.user_id and ma.value_1 < 5000 and short_list.event_type < 3
+    ) temp 
+  ON users_ids.user_id = temp.user_id
+  ORDER BY 1, 2;
+SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
+ count | count |         avg         |        avg         
+-------+-------+---------------------+--------------------
+    27 |    27 | 54.0000000000000000 | 9.8518518518518519
+(1 row)
+

@@ -24,6 +24,7 @@ struct MultiPlan;
 struct CustomScan;
 extern PlannedStmt * MasterNodeSelectPlan(struct MultiPlan *multiPlan,
 										  struct CustomScan *dataScan);
+extern Unique * make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
 
 
 #endif   /* MULTI_MASTER_PLANNER_H */

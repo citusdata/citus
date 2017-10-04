@@ -578,6 +578,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	FromExpr *joinTree = NULL;
 	Node *joinRoot = NULL;
 	Node *havingQual = NULL;
+	bool hasDistinctOn = false;
+	List *distinctClause = NIL;
 
 	/* we start building jobs from below the collect node */
 	Assert(!CitusIsA(multiNode, MultiCollect));
@@ -625,6 +627,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	{
 		MultiExtendedOp *extendedOp = (MultiExtendedOp *) linitial(extendedOpNodeList);
 		targetList = copyObject(extendedOp->targetList);
+		distinctClause = extendedOp->distinctClause;
+		hasDistinctOn = extendedOp->hasDistinctOn;
 	}
 	else
 	{
@@ -699,6 +703,8 @@ BuildJobQuery(MultiNode *multiNode, List *dependedJobList)
 	jobQuery->limitCount = limitCount;
 	jobQuery->havingQual = havingQual;
 	jobQuery->hasAggs = contain_agg_clause((Node *) targetList);
+	jobQuery->distinctClause = distinctClause;
+	jobQuery->hasDistinctOn = hasDistinctOn;
 
 	return jobQuery;
 }
@@ -1405,6 +1411,9 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	Node *limitCount = NULL;
 	Node *limitOffset = NULL;
 	FromExpr *joinTree = NULL;
+	bool hasAggregates = false;
+	List *distinctClause = NIL;
+	bool hasDistinctOn = false;
 
 	/* we start building jobs from below the collect node */
 	Assert(!CitusIsA(multiNode, MultiCollect));
@@ -1450,6 +1459,8 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 		limitOffset = extendedOp->limitOffset;
 		sortClauseList = extendedOp->sortClauseList;
 		havingQual = extendedOp->havingQual;
+		distinctClause = extendedOp->distinctClause;
+		hasDistinctOn = extendedOp->hasDistinctOn;
 	}
 
 	/* build group clauses */
@@ -1457,6 +1468,19 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 
 	/* build the where clause list using select predicates */
 	whereClauseList = QuerySelectClauseList(multiNode);
+
+	if (contain_agg_clause((Node *) targetList) ||
+		contain_agg_clause((Node *) havingQual))
+	{
+		hasAggregates = true;
+	}
+
+	/* distinct is not send to worker query if there are top level aggregates */
+	if (hasAggregates)
+	{
+		hasDistinctOn = false;
+		distinctClause = NIL;
+	}
 
 	/*
 	 * Build the From/Where construct. We keep the where-clause list implicitly
@@ -1480,8 +1504,9 @@ BuildSubqueryJobQuery(MultiNode *multiNode)
 	jobQuery->limitOffset = limitOffset;
 	jobQuery->limitCount = limitCount;
 	jobQuery->havingQual = havingQual;
-	jobQuery->hasAggs = contain_agg_clause((Node *) targetList) ||
-						contain_agg_clause((Node *) havingQual);
+	jobQuery->hasAggs = hasAggregates;
+	jobQuery->hasDistinctOn = hasDistinctOn;
+	jobQuery->distinctClause = distinctClause;
 
 	return jobQuery;
 }
