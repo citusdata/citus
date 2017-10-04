@@ -720,7 +720,15 @@ shard_name(PG_FUNCTION_ARGS)
 
 	schemaId = get_rel_namespace(relationId);
 	schemaName = get_namespace_name(schemaId);
-	qualifiedName = quote_qualified_identifier(schemaName, relationName);
+
+	if (strncmp(schemaName, "public", NAMEDATALEN) == 0)
+	{
+		qualifiedName = (char *) quote_identifier(relationName);
+	}
+	else
+	{
+		qualifiedName = quote_qualified_identifier(schemaName, relationName);
+	}
 
 	PG_RETURN_TEXT_P(cstring_to_text(qualifiedName));
 }

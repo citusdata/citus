@@ -1386,18 +1386,18 @@ JOIN
 USING (shardid)
 ORDER BY
   id;
- id |      shard_name      | nodename  | nodeport 
-----+----------------------+-----------+----------
-  1 | public.users_1200022 | localhost |    57637
-  2 | public.users_1200025 | localhost |    57638
-  3 | public.users_1200023 | localhost |    57638
-  4 | public.users_1200023 | localhost |    57638
-  5 | public.users_1200022 | localhost |    57637
-  6 | public.users_1200024 | localhost |    57637
-  7 | public.users_1200023 | localhost |    57638
-  8 | public.users_1200022 | localhost |    57637
-  9 | public.users_1200025 | localhost |    57638
- 10 | public.users_1200022 | localhost |    57637
+ id |  shard_name   | nodename  | nodeport 
+----+---------------+-----------+----------
+  1 | users_1200022 | localhost |    57637
+  2 | users_1200025 | localhost |    57638
+  3 | users_1200023 | localhost |    57638
+  4 | users_1200023 | localhost |    57638
+  5 | users_1200022 | localhost |    57637
+  6 | users_1200024 | localhost |    57637
+  7 | users_1200023 | localhost |    57638
+  8 | users_1200022 | localhost |    57637
+  9 | users_1200025 | localhost |    57638
+ 10 | users_1200022 | localhost |    57637
 (10 rows)
 
 END;
