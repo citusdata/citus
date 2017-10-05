@@ -12,10 +12,13 @@
 
 #if HAVE_LIBCURL
 
+#define STATS_COLLECTION_URL "http://localhost:5000/collect_stats"
+#define HTTP_TIMEOUT_SECONDS 5
+
 /* Config variables managed via guc.c */
 extern bool EnableStatisticsCollection;
 
-extern void CollectBasicUsageStatistics(void);
+extern bool CollectBasicUsageStatistics(void);
 
 #endif /* HAVE_LIBCURL */
 

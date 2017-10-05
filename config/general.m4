@@ -1,4 +1,6 @@
 # config/general.m4
+# Portions Copyright (c) 1996-2017, PostgreSQL Global Development Group
+# Portions Copyright (c) 1994, The Regents of the University of California
 
 # This file defines new macros to process configure command line
 # arguments, to replace the brain-dead AC_ARG_WITH and AC_ARG_ENABLE.

@@ -39,6 +39,7 @@
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
+#include "utils/memutils.h"
 
 
 /*
@@ -212,8 +213,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
-	time_t boot_time = time(NULL);
-	time_t last_statistics_collection = 0;
+	time_t prevStatsCollection = 0;
+	bool prevStatsCollectionFailed = false;
 	ErrorContextCallback errorCallback;
 
 	/*
@@ -276,17 +277,10 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
-		/* collect statistics every 24 hours */
-		const double statistics_collection_interval = 24.0 * 3600.0;
-		/*
-		 * ... but don't collect in first 30 minutes, to not report short living
-		 * instances like in CI tests.
-		 */
-		const double statistics_collection_start = 30.0 * 60.0;
-		time_t current_time = time(NULL);
-		double since_boot = difftime(current_time, boot_time);
-		double since_last_statistics_collection = difftime(current_time,
-														   last_statistics_collection);
+
+		time_t currentTime = time(NULL);
+		double secondsSincePrevStatsCollection = difftime(currentTime,
+														  prevStatsCollection);
 
 		CHECK_FOR_INTERRUPTS();
 
@@ -305,16 +299,28 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
-		if (since_boot >= statistics_collection_start &&
-			since_last_statistics_collection >= statistics_collection_interval)
+		if (secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_INTERVAL ||
+			(prevStatsCollectionFailed &&
+			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
 		{
 #if HAVE_LIBCURL
 			if (EnableStatisticsCollection)
 			{
-				CollectBasicUsageStatistics();
+				MemoryContext statsCollectionContext =
+					AllocSetContextCreate(CurrentMemoryContext,
+										  "StatsCollection",
+										  ALLOCSET_DEFAULT_MINSIZE,
+										  ALLOCSET_DEFAULT_INITSIZE,
+										  ALLOCSET_DEFAULT_MAXSIZE);
+				MemoryContext oldContext =
+					MemoryContextSwitchTo(statsCollectionContext);
+
+				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
+
+				MemoryContextSwitchTo(oldContext);
 			}
 #endif
-			last_statistics_collection = current_time;
+			prevStatsCollection = currentTime;
 		}
 
 		/* the config value -1 disables the distributed deadlock detection  */

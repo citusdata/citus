@@ -21,28 +21,31 @@
 #include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
+#include "utils/json.h"
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
-static uint64_t NextPow2(uint64_t n);
-static uint64_t ClusterSize(List *distributedTableList);
-static bool SendHttpPostRequest(const char *url, const char *postFields, long timeout_seconds);
+static uint64 NextPow2(uint64 n);
+static uint64 ClusterSize(List *distributedTableList);
+static bool SendHttpPostJsonRequest(const char *url, const char *postFields, long
+									timeout_seconds);
 
 /*
  * CollectBasicUsageStatistics sends basic usage statistics to Citus servers.
  * This includes Citus version, table count rounded to next power of 2, cluster
- * size rounded to next power of 2, worker node count, and uname data.
+ * size rounded to next power of 2, worker node count, and uname data. Returns
+ * true if we actually have sent statistics to the server.
  */
-void
+bool
 CollectBasicUsageStatistics(void)
 {
 	List *distributedTables = NIL;
-	uint64_t roundedDistTableCount = 0;
-	uint64_t roundedClusterSize = 0;
-	uint32_t workerNodeCount = 0;
-	const long timeout_seconds = 5;
-	struct utsname unameData;
+	uint64 roundedDistTableCount = 0;
+	uint64 roundedClusterSize = 0;
+	uint32 workerNodeCount = 0;
 	StringInfo fields = makeStringInfo();
+	struct utsname unameData;
+	memset(&unameData, 0, sizeof(unameData));
 
 	StartTransactionCommand();
 	distributedTables = DistributedTableList();
@@ -51,16 +54,29 @@ CollectBasicUsageStatistics(void)
 	workerNodeCount = ActivePrimaryNodeCount();
 	CommitTransactionCommand();
 
+	/* don't send statistics if we are not sure this is the coordinator node */
+	if (workerNodeCount == 0)
+	{
+		return false;
+	}
+
 	uname(&unameData);
 
-	appendStringInfo(fields, "citus_version=%s", CITUS_VERSION);
-	appendStringInfo(fields, "&table_count=" UINT64_FORMAT, roundedDistTableCount);
-	appendStringInfo(fields, "&cluster_size=" UINT64_FORMAT, roundedClusterSize);
-	appendStringInfo(fields, "&worker_node_count=%u", workerNodeCount);
-	appendStringInfo(fields, "&os_name=%s&os_release=%s&hwid=%s",
-					 unameData.sysname, unameData.release, unameData.machine);
+	appendStringInfoString(fields, "{\"citus_version\": ");
+	escape_json(fields, CITUS_VERSION);
+	appendStringInfo(fields, ",\"table_count\": " UINT64_FORMAT, roundedDistTableCount);
+	appendStringInfo(fields, ",\"cluster_size\": " UINT64_FORMAT, roundedClusterSize);
+	appendStringInfo(fields, ",\"worker_node_count\": %u", workerNodeCount);
+	appendStringInfoString(fields, ",\"os_name\": ");
+	escape_json(fields, unameData.sysname);
+	appendStringInfoString(fields, ",\"os_release\": ");
+	escape_json(fields, unameData.release);
+	appendStringInfoString(fields, ",\"hwid\": ");
+	escape_json(fields, unameData.machine);
+	appendStringInfoString(fields, "}");
 
-	SendHttpPostRequest("http://localhost:5000/collect_stats", fields->data, timeout_seconds);
+	return SendHttpPostJsonRequest(STATS_COLLECTION_URL, fields->data,
+								   HTTP_TIMEOUT_SECONDS);
 }
 
 
@@ -68,16 +84,17 @@ CollectBasicUsageStatistics(void)
  * ClusterSize returns total size of data store in the cluster consisting of
  * given distributed tables. We ignore tables which we cannot get their size.
  */
-static uint64_t
+static uint64
 ClusterSize(List *distributedTableList)
 {
-	uint64_t clusterSize = 0;
+	uint64 clusterSize = 0;
 	ListCell *distTableCacheEntryCell = NULL;
 
 	foreach(distTableCacheEntryCell, distributedTableList)
 	{
 		DistTableCacheEntry *distTableCacheEntry = lfirst(distTableCacheEntryCell);
 		Oid relationId = distTableCacheEntry->relationId;
+		MemoryContext savedContext = CurrentMemoryContext;
 
 		PG_TRY();
 		{
@@ -88,6 +105,9 @@ ClusterSize(List *distributedTableList)
 		PG_CATCH();
 		{
 			FlushErrorState();
+
+			/* citus_table_size() throws an error while the memory context is changed */
+			MemoryContextSwitchTo(savedContext);
 		}
 		PG_END_TRY();
 	}
@@ -98,12 +118,17 @@ ClusterSize(List *distributedTableList)
 
 /*
  * NextPow2 returns smallest power of 2 less than or equal to n. If n is greater
- * than 2^63, it returns 2^63.
+ * than 2^63, it returns 2^63. Returns 0 when n iz 0.
  */
-static uint64_t
-NextPow2(uint64_t n)
+static uint64
+NextPow2(uint64 n)
 {
-	uint64_t result = 1;
+	uint64 result = 1;
+
+	if (n == 0)
+	{
+		return 0;
+	}
 
 	/* if there is no 64-bit power of 2 greater than n, return 2^63 */
 	if (n > (1ull << 63))
@@ -121,13 +146,13 @@ NextPow2(uint64_t n)
 
 
 /*
- * SendHttpPostRequest sends a HTTP/HTTPS POST request to the given URL with the
- * given POST fields.
+ * SendHttpPostJsonRequest sends a HTTP/HTTPS POST request to the given URL with
+ * the given json object.
  */
 static bool
-SendHttpPostRequest(const char *url, const char *postFields, long timeout_seconds)
+SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeout_seconds)
 {
-	bool requestSent = false;
+	bool success = false;
 	CURLcode curlCode = false;
 	CURL *curl = NULL;
 
@@ -135,22 +160,43 @@ SendHttpPostRequest(const char *url, const char *postFields, long timeout_second
 	curl = curl_easy_init();
 	if (curl)
 	{
+		struct curl_slist *headers = NULL;
+		headers = curl_slist_append(headers, "Content-Type: application/json");
+		headers = curl_slist_append(headers, "charsets: utf-8");
+
 		curl_easy_setopt(curl, CURLOPT_URL, url);
-		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postFields);
+		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonObj);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
+		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 		curlCode = curl_easy_perform(curl);
 		if (curlCode == CURLE_OK)
 		{
-			requestSent = true;
+			int httpCode = 0;
+			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
+			if (httpCode == 200)
+			{
+				success = true;
+			}
+			else if (httpCode >= 400 && httpCode < 500)
+			{
+				ereport(WARNING, (errmsg("HTTP request failed."),
+								  errhint("HTTP response code: %d", httpCode)));
+			}
+		}
+		else
+		{
+			ereport(WARNING, (errmsg("Sending HTTP POST request failed."),
+							  errhint("Error code: %s.", curl_easy_strerror(curlCode))));
 		}
 
+		curl_slist_free_all(headers);
 		curl_easy_cleanup(curl);
 	}
 
 	curl_global_cleanup();
 
-	return requestSent;
+	return success;
 }
 
 
