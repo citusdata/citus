@@ -18,6 +18,7 @@
 /* Config variables managed via guc.c */
 extern bool EnableStatisticsCollection;
 
+extern void WarnIfSyncDNS(void);
 extern bool CollectBasicUsageStatistics(void);
 
 #endif /* HAVE_LIBCURL */

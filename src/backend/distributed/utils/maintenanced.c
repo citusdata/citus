@@ -315,6 +315,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				MemoryContext oldContext =
 					MemoryContextSwitchTo(statsCollectionContext);
 
+				WarnIfSyncDNS();
 				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
 
 				MemoryContextSwitchTo(oldContext);

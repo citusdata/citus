@@ -30,6 +30,22 @@ static uint64 ClusterSize(List *distributedTableList);
 static bool SendHttpPostJsonRequest(const char *url, const char *postFields, long
 									timeout_seconds);
 
+/* WarnIfSyncDNS warns if libcurl is compiled with synchronous DNS. */
+void
+WarnIfSyncDNS(void)
+{
+	curl_version_info_data *version_info = curl_version_info(CURLVERSION_NOW);
+	if (!(version_info->features & CURL_VERSION_ASYNCHDNS))
+	{
+		ereport(WARNING, (errmsg("your current libcurl version doesn't support "
+								 "asynchronous DNS, which might cause unexpected "
+								 "delays in database's operation"),
+						  errhint("Install a libcurl version with asynchronous DNS "
+								  "support.")));
+	}
+}
+
+
 /*
  * CollectBasicUsageStatistics sends basic usage statistics to Citus servers.
  * This includes Citus version, table count rounded to next power of 2, cluster
@@ -53,12 +69,6 @@ CollectBasicUsageStatistics(void)
 	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
 	workerNodeCount = ActivePrimaryNodeCount();
 	CommitTransactionCommand();
-
-	/* don't send statistics if we are not sure this is the coordinator node */
-	if (workerNodeCount == 0)
-	{
-		return false;
-	}
 
 	uname(&unameData);
 

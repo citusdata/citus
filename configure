@@ -1311,7 +1311,8 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
-  --without-libcurl       do not use libcurl for anonymous statistics report
+  --without-libcurl       do not use libcurl for anonymous statistics
+                          collection
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -3821,7 +3822,7 @@ else
   as_fn_error $? "libcurl header not found
 If you have libcurl already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable anonymous statistics collection." "$LINENO" 5
+Use --without-libcurl to disable libcurl support." "$LINENO" 5
 fi
 
 

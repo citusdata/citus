@@ -144,7 +144,7 @@ fi
 # libcurl
 #
 PGAC_ARG_BOOL(with, libcurl, yes,
-              [do not use libcurl for anonymous statistics report])
+              [do not use libcurl for anonymous statistics collection])
 
 if test "$with_libcurl" = yes; then
   AC_CHECK_LIB(curl, curl_global_init, [],
@@ -155,7 +155,7 @@ Use --without-libcurl to disable anonymous statistics collection.])])
   AC_CHECK_HEADER(curl/curl.h, [], [AC_MSG_ERROR([libcurl header not found
 If you have libcurl already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
-Use --without-libcurl to disable anonymous statistics collection.])])
+Use --without-libcurl to disable libcurl support.])])
   CITUS_CFLAGS="$CITUS_CFLAGS -DHAVE_LIBCURL"
 fi
 

@@ -66,6 +66,8 @@ static void WarningForEnableDeadlockPrevention(bool newval, void *extra);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static void NormalizeWorkerListPath(void);
+static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
+											 source);
 
 
 /* *INDENT-OFF* */
@@ -786,17 +788,23 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
-#if HAVE_LIBCURL
 	DefineCustomBoolVariable(
 		"citus.enable_statistics_collection",
 		gettext_noop("Enables sending basic usage statistics to Citus."),
-		NULL,
+		gettext_noop("Citus uploads daily anonymous usage reports containing "
+					 "rounded node count, shard size, distributed table count, "
+					 "and operating system name. This configuration value controls "
+					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
+#if HAVE_LIBCURL
 		true,
+#else
+		false,
+#endif
 		PGC_SIGHUP,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-#endif /* HAVE_LIBCURL */
+		&StatisticsCollectionGucCheckHook,
+		NULL, NULL);
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
@@ -878,4 +886,26 @@ NormalizeWorkerListPath(void)
 	SetConfigOption("citus.worker_list_file", absoluteFileName, PGC_POSTMASTER,
 					PGC_S_OVERRIDE);
 	free(absoluteFileName);
+}
+
+
+static bool
+StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
+{
+#if HAVE_LIBCURL
+	return true;
+#else
+
+	/* if libcurl is not installed, only accept false */
+	if (*newval)
+	{
+		ereport(WARNING, (errmsg("cannot set EnableStatisticsCollection to false "
+								 "when built with --without-libcurl.")));
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+#endif
 }
