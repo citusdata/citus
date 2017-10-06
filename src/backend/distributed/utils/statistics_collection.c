@@ -28,18 +28,18 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
 static bool SendHttpPostJsonRequest(const char *url, const char *postFields, long
-									timeout_seconds);
+									timeoutSeconds);
 
 /* WarnIfSyncDNS warns if libcurl is compiled with synchronous DNS. */
 void
 WarnIfSyncDNS(void)
 {
-	curl_version_info_data *version_info = curl_version_info(CURLVERSION_NOW);
-	if (!(version_info->features & CURL_VERSION_ASYNCHDNS))
+	curl_version_info_data *versionInfo = curl_version_info(CURLVERSION_NOW);
+	if (!(versionInfo->features & CURL_VERSION_ASYNCHDNS))
 	{
 		ereport(WARNING, (errmsg("your current libcurl version doesn't support "
 								 "asynchronous DNS, which might cause unexpected "
-								 "delays in database's operation"),
+								 "delays in the operation of Citus"),
 						  errhint("Install a libcurl version with asynchronous DNS "
 								  "support.")));
 	}
@@ -83,6 +83,8 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.release);
 	appendStringInfoString(fields, ",\"hwid\": ");
 	escape_json(fields, unameData.machine);
+	appendStringInfoString(fields, ",\"api_version\": ");
+	escape_json(fields, STATS_COLLECTION_API_VERSION);
 	appendStringInfoString(fields, "}");
 
 	return SendHttpPostJsonRequest(STATS_COLLECTION_URL, fields->data,
@@ -160,7 +162,7 @@ NextPow2(uint64 n)
  * the given json object.
  */
 static bool
-SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeout_seconds)
+SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSeconds)
 {
 	bool success = false;
 	CURLcode curlCode = false;
@@ -176,7 +178,7 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeout_secon
 
 		curl_easy_setopt(curl, CURLOPT_URL, url);
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonObj);
-		curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeout_seconds);
+		curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeoutSeconds);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
 		curlCode = curl_easy_perform(curl);

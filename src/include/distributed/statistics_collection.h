@@ -13,6 +13,7 @@
 #if HAVE_LIBCURL
 
 #define STATS_COLLECTION_URL "http://localhost:5000/collect_stats"
+#define STATS_COLLECTION_API_VERSION "1"
 #define HTTP_TIMEOUT_SECONDS 5
 
 /* Config variables managed via guc.c */

@@ -899,8 +899,8 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 	/* if libcurl is not installed, only accept false */
 	if (*newval)
 	{
-		ereport(WARNING, (errmsg("cannot set EnableStatisticsCollection to false "
-								 "when built with --without-libcurl.")));
+		GUC_check_errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
+		GUC_check_errdetail("Citus was compiled without libcurl support.");
 		return false;
 	}
 	else
