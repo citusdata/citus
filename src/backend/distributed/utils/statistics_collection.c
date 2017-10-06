@@ -130,7 +130,7 @@ ClusterSize(List *distributedTableList)
 
 /*
  * NextPow2 returns smallest power of 2 less than or equal to n. If n is greater
- * than 2^63, it returns 2^63. Returns 0 when n iz 0.
+ * than 2^63, it returns 2^63. Returns 0 when n is 0.
  */
 static uint64
 NextPow2(uint64 n)
