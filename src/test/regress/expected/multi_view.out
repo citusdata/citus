@@ -107,11 +107,20 @@ SELECT count(*) FROM priority_orders join air_shipped_lineitems ON (o_orderkey =
    700
 (1 row)
 
--- count distinct on partition column is not supported
+-- count distinct on partition column is supported
 SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  table partitioning is unsuitable for aggregate (distinct)
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+ count 
+-------
+   551
+(1 row)
+
+-- count distinct on non-partition column is supported
+SELECT count(distinct o_orderpriority) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
+ count 
+-------
+     2
+(1 row)
+
 -- count distinct on partition column is supported on router queries
 SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitems
 	ON (o_orderkey = l_orderkey)

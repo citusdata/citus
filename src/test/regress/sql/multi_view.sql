@@ -45,8 +45,11 @@ SELECT count(*) FROM orders_hash_part join air_shipped_lineitems ON (o_orderkey 
 -- join between views
 SELECT count(*) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
 
--- count distinct on partition column is not supported
+-- count distinct on partition column is supported
 SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
+
+-- count distinct on non-partition column is supported
+SELECT count(distinct o_orderpriority) FROM priority_orders join air_shipped_lineitems ON (o_orderkey = l_orderkey);
 
 -- count distinct on partition column is supported on router queries
 SELECT count(distinct o_orderkey) FROM priority_orders join air_shipped_lineitems
@@ -70,7 +73,6 @@ SELECT count(*) FROM priority_orders right join lineitem_hash_part ON (o_orderke
 
 -- but view at the outer side is. This is essentially the same as a left join with arguments reversed.
 SELECT count(*) FROM lineitem_hash_part right join priority_orders ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
-
 
 -- left join on router query is supported
 SELECT o_orderkey, l_linenumber FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey)

@@ -41,8 +41,22 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
 
--- it is not supported if there is no grouping or grouping is on non-partition field
+-- it is also supported if there is no grouping or grouping is on non-partition field
+SELECT
+	count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	ORDER BY 1 DESC
+	LIMIT 10;
+
+EXPLAIN (COSTS false, VERBOSE true)
 SELECT
 	count(DISTINCT l_partkey)
 	FROM lineitem_hash
@@ -55,6 +69,96 @@ SELECT
 	GROUP BY l_shipmode
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_shipmode, count(DISTINCT l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+-- mixed mode count distinct, grouped by partition column
+SELECT
+	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 3 DESC, 2 DESC, 1
+	LIMIT 10;
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey, count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 3 DESC, 2 DESC, 1
+	LIMIT 10;
+
+-- partition/non-partition column count distinct no grouping
+SELECT
+	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash;
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	count(distinct l_orderkey), count(distinct l_partkey), count(distinct l_shipmode)
+	FROM lineitem_hash;
+
+-- distinct/non-distinct on partition and non-partition columns
+SELECT
+	count(distinct l_orderkey), count(l_orderkey),
+	count(distinct l_partkey), count(l_partkey),
+	count(distinct l_shipmode), count(l_shipmode)
+	FROM lineitem_hash;
+
+-- mixed mode count distinct, grouped by non-partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	ORDER BY 1, 2 DESC, 3 DESC;
+
+-- mixed mode count distinct, grouped by non-partition column
+-- having on partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_orderkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_orderkey) > 1300
+	ORDER BY 1, 2 DESC;
+
+-- same but having clause is not on target list
+SELECT
+	l_shipmode, count(distinct l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_orderkey) > 1300
+	ORDER BY 1, 2 DESC;
+
+-- mixed mode count distinct, grouped by non-partition column
+-- having on non-partition column
+SELECT
+	l_shipmode, count(distinct l_partkey), count(distinct l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_suppkey) > 1550
+	ORDER BY 1, 2 DESC;
+
+-- same but having clause is not on target list
+SELECT
+	l_shipmode, count(distinct l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_suppkey) > 1550
+	ORDER BY 1, 2 DESC;
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_shipmode, count(distinct l_partkey)
+	FROM lineitem_hash
+	GROUP BY l_shipmode
+	HAVING count(distinct l_suppkey) > 1550
+	ORDER BY 1, 2 DESC;
 
 -- count distinct is supported on single table subqueries
 SELECT *
@@ -75,13 +179,67 @@ SELECT *
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 
--- count distinct with filters
-SELECT
-	l_orderkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
-	FROM lineitem_hash
-	GROUP BY l_orderkey
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT *
+	FROM (
+		SELECT
+			l_partkey, count(DISTINCT l_orderkey)
+			FROM lineitem_hash
+			GROUP BY l_partkey) sub
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
+
+-- count distinct with filters
+SELECT
+	l_orderkey,
+	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 3 DESC, 1
+	LIMIT 10;
+
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_orderkey,
+	count(DISTINCT l_suppkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_suppkey)
+	FROM lineitem_hash
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 3 DESC, 1
+	LIMIT 10;
+
+-- group by on non-partition column
+SELECT
+	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash
+	GROUP BY l_suppkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+-- explaining the same query fails
+EXPLAIN (COSTS false, VERBOSE true)
+SELECT
+	l_suppkey, count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash
+	GROUP BY l_suppkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+
+-- without group by, on partition column
+SELECT
+	count(DISTINCT l_orderkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash;
+
+-- without group by, on non-partition column
+SELECT
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR')
+	FROM lineitem_hash;
+
+SELECT
+	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
+	count(DISTINCT l_partkey),
+	count(DISTINCT l_shipdate)
+	FROM lineitem_hash;
 
 -- filter column already exists in target list
 SELECT *

@@ -34,6 +34,7 @@ static List * MasterTargetList(List *workerTargetList);
 static PlannedStmt * BuildSelectStatement(Query *masterQuery, List *masterTargetList,
 										  CustomScan *remoteScan);
 static Agg * BuildAggregatePlan(Query *masterQuery, Plan *subPlan);
+static bool HasDistinctAggregate(Query *masterQuery);
 static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
 
 
@@ -287,13 +288,37 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 	/* if we have grouping, then initialize appropriate information */
 	if (groupColumnCount > 0)
 	{
-		if (!grouping_is_hashable(groupColumnList))
+		bool groupingIsHashable = grouping_is_hashable(groupColumnList);
+		bool groupingIsSortable = grouping_is_hashable(groupColumnList);
+		bool hasDistinctAggregate = HasDistinctAggregate(masterQuery);
+
+		if (!groupingIsHashable && !groupingIsSortable)
 		{
-			ereport(ERROR, (errmsg("grouped column list cannot be hashed")));
+			ereport(ERROR, (errmsg("grouped column list cannot be hashed or sorted")));
 		}
 
-		/* switch to hashed aggregate strategy to allow grouping */
-		aggregateStrategy = AGG_HASHED;
+		/*
+		 * Postgres hash aggregate strategy does not support distinct aggregates
+		 * in group and order by with aggregate operations.
+		 * see nodeAgg.c:build_pertrans_for_aggref(). In that case we use
+		 * sorted agg strategy, otherwise we use hash strategy.
+		 */
+		if (!groupingIsHashable || hasDistinctAggregate)
+		{
+			if (!groupingIsSortable)
+			{
+				ereport(ERROR, (errmsg("grouped column list must cannot be sorted"),
+								errdetail("Having a distinct aggregate requires "
+										  "grouped column list to be sortable.")));
+			}
+
+			aggregateStrategy = AGG_SORTED;
+			subPlan = (Plan *) make_sort_from_sortclauses(groupColumnList, subPlan);
+		}
+		else
+		{
+			aggregateStrategy = AGG_HASHED;
+		}
 
 		/* get column indexes that are being grouped */
 		groupColumnIdArray = extract_grouping_cols(groupColumnList, subPlan->targetlist);
@@ -316,6 +341,40 @@ BuildAggregatePlan(Query *masterQuery, Plan *subPlan)
 
 
 /*
+ * HasDistinctAggregate returns true if the query has a distinct
+ * aggregate in its target list or in having clause.
+ */
+static bool
+HasDistinctAggregate(Query *masterQuery)
+{
+	List *targetVarList = NIL;
+	List *havingVarList = NIL;
+	List *allColumnList = NIL;
+	ListCell *allColumnCell = NULL;
+
+	targetVarList = pull_var_clause((Node *) masterQuery->targetList,
+									PVC_INCLUDE_AGGREGATES);
+	havingVarList = pull_var_clause(masterQuery->havingQual, PVC_INCLUDE_AGGREGATES);
+
+	allColumnList = list_concat(targetVarList, havingVarList);
+	foreach(allColumnCell, allColumnList)
+	{
+		Node *columnNode = lfirst(allColumnCell);
+		if (IsA(columnNode, Aggref))
+		{
+			Aggref *aggref = (Aggref *) columnNode;
+			if (aggref->aggdistinct != NIL)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * BuildDistinctPlan creates an returns a plan for distinct. Depending on
  * availability of hash function it chooses HashAgg over Sort/Unique
  * plans.
@@ -332,6 +391,7 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 	List *targetList = copyObject(masterQuery->targetList);
 	List *columnList = pull_var_clause_default((Node *) targetList);
 	ListCell *columnCell = NULL;
+	bool hasDistinctAggregate = false;
 
 	if (IsA(subPlan, Agg))
 	{
@@ -353,10 +413,12 @@ BuildDistinctPlan(Query *masterQuery, Plan *subPlan)
 
 	/*
 	 * Create group by plan with HashAggregate if all distinct
-	 * members are hashable, Otherwise create sort+unique plan.
+	 * members are hashable, and not containing distinct aggregate.
+	 * Otherwise create sort+unique plan.
 	 */
 	distinctClausesHashable = grouping_is_hashable(distinctClauseList);
-	if (distinctClausesHashable)
+	hasDistinctAggregate = HasDistinctAggregate(masterQuery);
+	if (distinctClausesHashable && !hasDistinctAggregate)
 	{
 		const long rowEstimate = 10;  /* using the same value as BuildAggregatePlan() */
 		AttrNumber *distinctColumnIdArray = extract_grouping_cols(distinctClauseList,
