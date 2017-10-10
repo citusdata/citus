@@ -238,3 +238,19 @@ SELECT master_add_secondary_node('localhost', 9995, 'localhost', :worker_1_port)
 SELECT master_add_secondary_node('localhost', 9994, primaryname => 'localhost', primaryport => :worker_2_port);
 SELECT master_add_secondary_node('localhost', 9993, 'localhost', 2000);
 SELECT master_add_secondary_node('localhost', 9992, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
+
+SELECT nodeid AS worker_1_node FROM pg_dist_node WHERE nodeport=:worker_1_port \gset
+
+-- master_update_node checks node exists
+SELECT master_update_node(100, 'localhost', 8000);
+-- master_update_node disallows aliasing existing node
+SELECT master_update_node(:worker_1_node, 'localhost', :worker_2_port);
+
+-- master_update_node moves a node
+SELECT master_update_node(:worker_1_node, 'somehost', 9000);
+
+SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
+
+-- cleanup
+SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
+SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
