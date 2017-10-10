@@ -304,7 +304,12 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
 		{
 #if HAVE_LIBCURL
-			if (EnableStatisticsCollection)
+			bool citusHasBeenLoaded = false;
+			StartTransactionCommand();
+			citusHasBeenLoaded = CitusHasBeenLoaded();
+			CommitTransactionCommand();
+
+			if (EnableStatisticsCollection && citusHasBeenLoaded)
 			{
 				MemoryContext statsCollectionContext =
 					AllocSetContextCreate(CurrentMemoryContext,
@@ -319,9 +324,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
 
 				MemoryContextSwitchTo(oldContext);
+				prevStatsCollection = currentTime;
 			}
 #endif
-			prevStatsCollection = currentTime;
 		}
 
 		/* the config value -1 disables the distributed deadlock detection  */

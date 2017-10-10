@@ -8,8 +8,6 @@
  *-------------------------------------------------------------------------
  */
 
-#if HAVE_LIBCURL
-
 #include "postgres.h"
 
 #include <curl/curl.h>
@@ -24,6 +22,8 @@
 #include "utils/json.h"
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
+
+#if HAVE_LIBCURL
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
@@ -83,12 +83,10 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.release);
 	appendStringInfoString(fields, ",\"hwid\": ");
 	escape_json(fields, unameData.machine);
-	appendStringInfoString(fields, ",\"api_version\": ");
-	escape_json(fields, STATS_COLLECTION_API_VERSION);
 	appendStringInfoString(fields, "}");
 
-	return SendHttpPostJsonRequest(STATS_COLLECTION_URL, fields->data,
-								   HTTP_TIMEOUT_SECONDS);
+	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/collect_stats",
+								   fields->data, HTTP_TIMEOUT_SECONDS);
 }
 
 
