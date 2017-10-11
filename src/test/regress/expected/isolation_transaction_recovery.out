@@ -15,8 +15,7 @@ recover_prepared_transactions
 0              
 step s2-insert: 
     INSERT INTO test_transaction_recovery VALUES (1,2);
- <waiting ...>
+
 step s1-commit: 
     COMMIT;
 
-step s2-insert: <... completed>

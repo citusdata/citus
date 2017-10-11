@@ -33,5 +33,5 @@ step "s2-insert"
     INSERT INTO test_transaction_recovery VALUES (1,2);
 }
 
-# Recovery and 2PCs should block each other
+# Recovery and 2PCs should not block each other
 permutation "s1-begin" "s1-recover" "s2-insert" "s1-commit"
