@@ -12,12 +12,15 @@ AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
 AC_PROG_SED
 AC_PROG_AWK
 
-# CITUS_VERSION definition
-AC_DEFINE_UNQUOTED(CITUS_VERSION, "$PACKAGE_VERSION", [Citus version as a string])
-
 # CITUS_MAJORVERSION definition
 [CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`]
 AC_DEFINE_UNQUOTED(CITUS_MAJORVERSION, "$CITUS_MAJORVERSION", [Citus major version as a string])
+
+# CITUS_VERSION definition
+PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version],
+             [CITUS_VERSION="$PACKAGE_VERSION$withval"],
+             [CITUS_VERSION="$PACKAGE_VERSION"])
+AC_DEFINE_UNQUOTED(CITUS_VERSION, "$CITUS_VERSION", [Citus version as a string])
 
 # CITUS_VERSION_NUM definition
 # awk -F is a regex on some platforms, and not on others, so make "." a tab

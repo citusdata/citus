@@ -683,6 +683,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+with_extra_version
 enable_coverage
 with_libcurl
 '
@@ -1311,6 +1312,8 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
+  --with-extra-version=STRING
+                          append STRING to version
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
 
@@ -2156,18 +2159,41 @@ fi
 done
 
 
-# CITUS_VERSION definition
-
-cat >>confdefs.h <<_ACEOF
-#define CITUS_VERSION "$PACKAGE_VERSION"
-_ACEOF
-
-
 # CITUS_MAJORVERSION definition
 CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`
 
 cat >>confdefs.h <<_ACEOF
 #define CITUS_MAJORVERSION "$CITUS_MAJORVERSION"
+_ACEOF
+
+
+# CITUS_VERSION definition
+
+
+
+# Check whether --with-extra-version was given.
+if test "${with_extra_version+set}" = set; then :
+  withval=$with_extra_version;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-extra-version option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-extra-version option" "$LINENO" 5
+      ;;
+    *)
+      CITUS_VERSION="$PACKAGE_VERSION$withval"
+      ;;
+  esac
+
+else
+  CITUS_VERSION="$PACKAGE_VERSION"
+fi
+
+
+
+cat >>confdefs.h <<_ACEOF
+#define CITUS_VERSION "$CITUS_VERSION"
 _ACEOF
 
 
