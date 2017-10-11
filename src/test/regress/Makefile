@@ -43,36 +43,44 @@ check-full: check-multi check-multi-mx check-multi-task-tracker-extra check-work
 # for check-worker. But that's harmless besides a few cycles.
 check-worker: all
 	$(pg_regress_multi_check) --load-extension=citus \
+	--server-option=citus.enable_statistics_collection=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/worker_schedule $(EXTRA_TESTS)
 
 check-multi: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
+	--server-option=citus.enable_statistics_collection=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-multi-vg: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	--server-option=citus.enable_statistics_collection=0 \
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
 check-isolation: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
+	--server-option=citus.enable_statistics_collection=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/isolation_schedule $(EXTRA_TESTS)
 
 check-vanilla: all tempinstall-main
-	$(pg_regress_multi_check) --load-extension=citus --vanillatest
+	$(pg_regress_multi_check) --load-extension=citus --vanillatest \
+	--server-option=citus.enable_statistics_collection=0
 
 check-multi-mx: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
+	--server-option=citus.enable_statistics_collection=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_mx_schedule $(EXTRA_TESTS)
 
 check-multi-task-tracker-extra: all tempinstall-main
 	$(pg_regress_multi_check) --load-extension=citus \
+	--server-option=citus.enable_statistics_collection=0 \
 	--server-option=citus.task_executor_type=task-tracker \
 	--server-option=citus.large_table_shard_count=1 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_task_tracker_extra_schedule $(EXTRA_TESTS)
 
 check-follower-cluster: all
 	$(pg_regress_multi_check) --load-extension=citus --follower-cluster \
+	--server-option=citus.enable_statistics_collection=0 \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_follower_schedule $(EXTRA_TESTS)
 
 clean distclean maintainer-clean:
