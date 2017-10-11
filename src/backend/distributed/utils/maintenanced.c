@@ -16,6 +16,7 @@
 
 #include "postgres.h"
 
+#include <time.h>
 
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -27,7 +28,9 @@
 #include "catalog/namespace.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
+#include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/statistics_collection.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
 #include "storage/ipc.h"
@@ -36,6 +39,7 @@
 #include "storage/lmgr.h"
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
+#include "utils/memutils.h"
 
 
 /*
@@ -209,6 +213,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
+	time_t prevStatsCollection = 0;
+	bool prevStatsCollectionFailed = false;
 	ErrorContextCallback errorCallback;
 
 	/*
@@ -271,8 +277,21 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
+		time_t currentTime = time(NULL);
+		double secondsSincePrevStatsCollection = difftime(currentTime,
+														  prevStatsCollection);
+		bool citusHasBeenLoaded = false;
 
 		CHECK_FOR_INTERRUPTS();
+
+		StartTransactionCommand();
+		citusHasBeenLoaded = CitusHasBeenLoaded();
+		CommitTransactionCommand();
+
+		if (!citusHasBeenLoaded)
+		{
+			continue;
+		}
 
 		/*
 		 * XXX: We clear the metadata cache before every iteration because otherwise
@@ -288,6 +307,31 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * timeout indicates, it's ok to lower it to that value.  Expensive
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
+
+		if (secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_INTERVAL ||
+			(prevStatsCollectionFailed &&
+			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
+		{
+#if HAVE_LIBCURL
+			if (EnableStatisticsCollection)
+			{
+				MemoryContext statsCollectionContext =
+					AllocSetContextCreate(CurrentMemoryContext,
+										  "StatsCollection",
+										  ALLOCSET_DEFAULT_MINSIZE,
+										  ALLOCSET_DEFAULT_INITSIZE,
+										  ALLOCSET_DEFAULT_MAXSIZE);
+				MemoryContext oldContext =
+					MemoryContextSwitchTo(statsCollectionContext);
+
+				WarnIfSyncDNS();
+				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
+
+				MemoryContextSwitchTo(oldContext);
+				prevStatsCollection = currentTime;
+			}
+#endif
+		}
 
 		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)

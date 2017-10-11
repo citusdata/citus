@@ -70,7 +70,7 @@ endif
 # Add options passed to configure or computed therein, to CFLAGS/CPPFLAGS/...
 override CFLAGS += @CFLAGS@ @CITUS_CFLAGS@
 override CPPFLAGS := @CPPFLAGS@ -I '${citus_abs_top_srcdir}/src/include' -I'${citus_top_builddir}/src/include' $(CPPFLAGS)
-override LDFLAGS += @LDFLAGS@
+override LDFLAGS += @LDFLAGS@ @CITUS_LDFLAGS@
 
 # optional file with user defined, additional, rules
 -include ${citus_abs_srcdir}/src/Makefile.custom
