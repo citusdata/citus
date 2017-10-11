@@ -277,12 +277,21 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
-
 		time_t currentTime = time(NULL);
 		double secondsSincePrevStatsCollection = difftime(currentTime,
 														  prevStatsCollection);
+		bool citusHasBeenLoaded = false;
 
 		CHECK_FOR_INTERRUPTS();
+
+		StartTransactionCommand();
+		citusHasBeenLoaded = CitusHasBeenLoaded();
+		CommitTransactionCommand();
+
+		if (!citusHasBeenLoaded)
+		{
+			continue;
+		}
 
 		/*
 		 * XXX: We clear the metadata cache before every iteration because otherwise
@@ -304,12 +313,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
 		{
 #if HAVE_LIBCURL
-			bool citusHasBeenLoaded = false;
-			StartTransactionCommand();
-			citusHasBeenLoaded = CitusHasBeenLoaded();
-			CommitTransactionCommand();
-
-			if (EnableStatisticsCollection && citusHasBeenLoaded)
+			if (EnableStatisticsCollection)
 			{
 				MemoryContext statsCollectionContext =
 					AllocSetContextCreate(CurrentMemoryContext,

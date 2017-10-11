@@ -85,7 +85,7 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.machine);
 	appendStringInfoString(fields, "}");
 
-	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/collect_stats",
+	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
 								   fields->data, HTTP_TIMEOUT_SECONDS);
 }
 
