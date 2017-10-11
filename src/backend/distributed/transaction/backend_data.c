@@ -640,3 +640,45 @@ MyBackendGotCancelledDueToDeadlock(void)
 
 	return cancelledDueToDeadlock;
 }
+
+
+/*
+ * ActiveDistributedTransactionNumbers returns a list of pointers to
+ * transaction numbers of distributed transactions that are in progress.
+ */
+List *
+ActiveDistributedTransactionNumbers(void)
+{
+	List *activeTransactionNumberList = NIL;
+	int curBackend = 0;
+
+	/* build list of starting procs */
+	for (curBackend = 0; curBackend < MaxBackends; curBackend++)
+	{
+		PGPROC *currentProc = &ProcGlobal->allProcs[curBackend];
+		BackendData currentBackendData;
+		uint64 *transactionNumber = NULL;
+
+		if (currentProc->pid == 0)
+		{
+			/* unused PGPROC slot */
+			continue;
+		}
+
+		GetBackendDataForProc(currentProc, &currentBackendData);
+
+		if (!IsInDistributedTransaction(&currentBackendData))
+		{
+			/* not a distributed transaction */
+			continue;
+		}
+
+		transactionNumber = (uint64 *) palloc0(sizeof(uint64));
+		*transactionNumber = currentBackendData.transactionId.transactionNumber;
+
+		activeTransactionNumberList = lappend(activeTransactionNumberList,
+											  transactionNumber);
+	}
+
+	return activeTransactionNumberList;
+}

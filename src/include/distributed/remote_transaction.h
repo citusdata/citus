@@ -79,6 +79,11 @@ typedef struct RemoteTransaction
 } RemoteTransaction;
 
 
+/* utility functions for dealing with remote transactions */
+extern bool ParsePreparedTransactionName(char *preparedTransactionName, int *groupId,
+										 int *procId, uint64 *transactionNumber,
+										 uint32 *connectionNumber);
+
 /* change an individual remote transaction's state */
 extern void StartRemoteTransactionBegin(struct MultiConnection *connection);
 extern void FinishRemoteTransactionBegin(struct MultiConnection *connection);
