@@ -10,6 +10,10 @@
 
 #include "postgres.h"
 
+bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
+
+#if HAVE_LIBCURL
+
 #include <curl/curl.h>
 #include <sys/utsname.h>
 
@@ -20,10 +24,6 @@
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/json.h"
-
-bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
-
-#if HAVE_LIBCURL
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
