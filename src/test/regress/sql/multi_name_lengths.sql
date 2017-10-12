@@ -172,6 +172,18 @@ SELECT shard_name('multi_name_lengths.too_long_123456789012345678901234567890123
 FROM pg_dist_shard
 WHERE logicalrelid = 'multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass;
 
+DROP TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890;
+
+-- verify that we can create shard placements with long names in a transaction
+-- (this could be problematic due to array type name collisions)
+BEGIN;
+CREATE TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890 (
+        col1 integer not null,
+        col2 integer not null);
+SELECT create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1');
+CREATE INDEX indexlng_12345678901234567890123456789012345678901234567890
+ON multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890 (col1);
+COMMIT;
 
 DROP TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890;
 
