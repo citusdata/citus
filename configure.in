@@ -144,7 +144,8 @@ fi
 # libcurl
 #
 PGAC_ARG_BOOL(with, libcurl, yes,
-              [do not use libcurl for anonymous statistics collection])
+              [do not use libcurl for anonymous statistics collection],
+              [AC_DEFINE([HAVE_LIBCURL], 1, [Define to 1 to build with libcurl support. (--with-libcurl)])])
 
 if test "$with_libcurl" = yes; then
   AC_CHECK_LIB(curl, curl_global_init, [],
@@ -156,7 +157,6 @@ Use --without-libcurl to disable anonymous statistics collection.])])
 If you have libcurl already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-libcurl to disable libcurl support.])])
-  CITUS_CFLAGS="$CITUS_CFLAGS -DHAVE_LIBCURL"
 fi
 
 AC_SUBST(CITUS_CFLAGS, "$CITUS_CFLAGS")

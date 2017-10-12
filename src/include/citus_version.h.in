@@ -11,3 +11,6 @@
 
 /* Citus version as a number */
 #undef CITUS_VERSION_NUM
+
+/* Define to 1 if you have the `curl' library (-lcurl). */
+#undef HAVE_LIBCURL

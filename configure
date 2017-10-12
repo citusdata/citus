@@ -3349,7 +3349,9 @@ if test "${with_libcurl+set}" = set; then :
   withval=$with_libcurl;
   case $withval in
     yes)
-      :
+
+$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
+
       ;;
     no)
       :
@@ -3361,6 +3363,8 @@ if test "${with_libcurl+set}" = set; then :
 
 else
   with_libcurl=yes
+
+$as_echo "#define HAVE_LIBCURL 1" >>confdefs.h
 
 fi
 
@@ -3826,7 +3830,6 @@ Use --without-libcurl to disable libcurl support." "$LINENO" 5
 fi
 
 
-  CITUS_CFLAGS="$CITUS_CFLAGS -DHAVE_LIBCURL"
 fi
 
 CITUS_CFLAGS="$CITUS_CFLAGS"
