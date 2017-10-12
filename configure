@@ -2342,6 +2342,26 @@ fi
 done
 
 
+# CITUS_NAME definition
+
+cat >>confdefs.h <<_ACEOF
+#define CITUS_NAME "$PACKAGE_NAME"
+_ACEOF
+
+
+case $PACKAGE_NAME in
+  'Citus Enterprise') citus_edition=enterprise ;;
+               Citus) citus_edition=community ;;
+                   *) as_fn_error $? "Unrecognized package name." "$LINENO" 5 ;;
+esac
+
+# CITUS_EDITION definition
+
+cat >>confdefs.h <<_ACEOF
+#define CITUS_EDITION "$citus_edition"
+_ACEOF
+
+
 # CITUS_MAJORVERSION definition
 CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`
 

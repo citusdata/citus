@@ -12,6 +12,18 @@ AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
 AC_PROG_SED
 AC_PROG_AWK
 
+# CITUS_NAME definition
+AC_DEFINE_UNQUOTED(CITUS_NAME, "$PACKAGE_NAME", [Citus full name as a string])
+
+case $PACKAGE_NAME in
+  'Citus Enterprise') citus_edition=enterprise ;;
+               Citus) citus_edition=community ;;
+                   *) AC_MSG_ERROR([Unrecognized package name.]) ;;
+esac
+
+# CITUS_EDITION definition
+AC_DEFINE_UNQUOTED(CITUS_EDITION, "$citus_edition", [Citus edition as a string])
+
 # CITUS_MAJORVERSION definition
 [CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`]
 AC_DEFINE_UNQUOTED(CITUS_MAJORVERSION, "$CITUS_MAJORVERSION", [Citus major version as a string])

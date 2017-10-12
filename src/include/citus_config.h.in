@@ -10,11 +10,17 @@
  */
 
 
+/* Citus edition as a string */
+#undef CITUS_EDITION
+
 /* Extension version expected by this Citus build */
 #undef CITUS_EXTENSIONVERSION
 
 /* Citus major version as a string */
 #undef CITUS_MAJORVERSION
+
+/* Citus full name as a string */
+#undef CITUS_NAME
 
 /* Citus version as a string */
 #undef CITUS_VERSION
