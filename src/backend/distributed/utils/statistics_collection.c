@@ -12,7 +12,7 @@
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 
 #include <curl/curl.h>
 #include <sys/utsname.h>
