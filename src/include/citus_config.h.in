@@ -22,6 +22,9 @@
 /* Citus version as a number */
 #undef CITUS_VERSION_NUM
 
+/* A string containing the version number, platform, and C compiler */
+#undef CITUS_VERSION_STR
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
@@ -69,6 +72,9 @@
 
 /* Define to the version of this package. */
 #undef PACKAGE_VERSION
+
+/* The size of `void *', as computed by sizeof. */
+#undef SIZEOF_VOID_P
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
