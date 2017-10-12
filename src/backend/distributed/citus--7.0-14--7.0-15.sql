@@ -17,3 +17,12 @@ LANGUAGE C STRICT
 AS $$MODULE_PATHNAME$$, $$dump_local_wait_edges$$;
 COMMENT ON FUNCTION pg_catalog.dump_local_wait_edges()
 IS 'returns all local lock wait chains, that start from distributed transactions';
+
+CREATE TYPE pg_catalog.citus_metadata_tag AS ENUM ('server_id');
+
+CREATE TABLE pg_catalog.pg_dist_metadata(
+    tag citus_metadata_tag,
+    value text
+);
+
+INSERT INTO pg_dist_metadata VALUES ('server_id', (random() * 1e18)::bigint::text);

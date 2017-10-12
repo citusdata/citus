@@ -3167,3 +3167,42 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 	/* bump command counter, to force invalidation to take effect */
 	CommandCounterIncrement();
 }
+
+
+static StringInfo
+GetDistMetadata(const char* tag)
+{
+	StringInfo metadataValue = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	const int scanKeyCount = 0;
+	HeapTuple heapTuple = NULL;
+	Oid metadataTableOid = InvalidOid;
+	Relation pgDistMetadata = NULL;
+	TupleDesc tupleDescriptor = NULL;
+
+	metadataTableOid = get_relname_relid("pg_dist_metadata", PG_CATALOG_NAMESPACE);
+	if (metadataTableOid == InvalidOid)
+	{
+		return NULL;
+	}
+
+	pgDistMetadata = heap_open(metadataTableOid, AccessShareLock);
+
+	scanDescriptor = systable_beginscan(pgDistMetadata,
+										InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+
+	tupleDescriptor = RelationGetDescr(pgDistMetadata);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
+	{
+		heapTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistMetadata, AccessShareLock);
+
+	return metadataValue;
+}
