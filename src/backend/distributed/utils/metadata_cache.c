@@ -3169,8 +3169,8 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 }
 
 
-static StringInfo
-GetDistMetadata(const char* tag)
+StringInfo
+GetDistMetadata(const char *tag)
 {
 	StringInfo metadataValue = NULL;
 	SysScanDesc scanDescriptor = NULL;
@@ -3198,6 +3198,17 @@ GetDistMetadata(const char* tag)
 	heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
+		bool tagIsNull = false;
+		bool valueIsNull = false;
+		Datum tagDatum = heap_getattr(heapTuple, 1, tupleDescriptor, &tagIsNull);
+		Datum valueDatum = heap_getattr(heapTuple, 2, tupleDescriptor, &valueIsNull);
+		const char *tagStr = TextDatumGetCString(tagDatum);
+		if (strncmp(tagStr, tag, strlen(tagStr)) == 0)
+		{
+			metadataValue = makeStringInfo();
+			appendStringInfoString(metadataValue, TextDatumGetCString(valueDatum));
+			break;
+		}
 		heapTuple = systable_getnext(scanDescriptor);
 	}
 

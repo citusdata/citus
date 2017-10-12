@@ -170,9 +170,13 @@ $(EXTENSION)--7.0-14.sql: $(EXTENSION)--7.0-13.sql $(EXTENSION)--7.0-13--7.0-14.
 	cat $^ > $@
 $(EXTENSION)--7.0-15.sql: $(EXTENSION)--7.0-14.sql $(EXTENSION)--7.0-14--7.0-15.sql
 	cat $^ > $@
+<<<<<<< HEAD
 $(EXTENSION)--7.1-1.sql: $(EXTENSION)--7.0-15.sql $(EXTENSION)--7.0-15--7.1-1.sql
 	cat $^ > $@
 $(EXTENSION)--7.1-2.sql: $(EXTENSION)--7.1-1.sql $(EXTENSION)--7.1-1--7.1-2.sql
+=======
+$(EXTENSION)--7.0-16.sql: $(EXTENSION)--7.0-15.sql $(EXTENSION)--7.0-15--7.0-16.sql
+>>>>>>> more code.
 	cat $^ > $@
 
 NO_PGXS = 1
