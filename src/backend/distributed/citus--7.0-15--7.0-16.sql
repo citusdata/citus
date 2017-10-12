@@ -1,8 +1,8 @@
 /* citus--7.0-15--7.0-16 */
 
 CREATE TABLE citus.pg_dist_metadata(
-    tag text,
-    value text
+    tag text NOT NULL,
+    value text NOT NULL
 );
 ALTER TABLE citus.pg_dist_metadata SET SCHEMA pg_catalog;
 

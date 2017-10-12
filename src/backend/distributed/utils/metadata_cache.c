@@ -3206,11 +3206,13 @@ GetDistMetadata(const char *tag)
 	{
 		bool tagIsNull = false;
 		bool valueIsNull = false;
+		const char *tagStr = NULL;
 		Datum tagDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_tag,
 									  tupleDescriptor, &tagIsNull);
 		Datum valueDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_value,
 										tupleDescriptor, &valueIsNull);
-		const char *tagStr = TextDatumGetCString(tagDatum);
+		Assert(!tagIsNull && !valueIsNull);
+		tagStr = TextDatumGetCString(tagDatum);
 		if (strncmp(tagStr, tag, strlen(tagStr)) == 0)
 		{
 			metadataValue = makeStringInfo();
