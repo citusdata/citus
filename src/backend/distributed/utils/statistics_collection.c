@@ -23,7 +23,7 @@
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
