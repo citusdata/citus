@@ -60,7 +60,9 @@ CollectBasicUsageStatistics(void)
 	uint64 roundedDistTableCount = 0;
 	uint64 roundedClusterSize = 0;
 	uint32 workerNodeCount = 0;
+	char *serverId = NULL;
 	StringInfo fields = makeStringInfo();
+	MemoryContext statsContext = CurrentMemoryContext;
 	struct utsname unameData;
 	memset(&unameData, 0, sizeof(unameData));
 
@@ -80,6 +82,7 @@ CollectBasicUsageStatistics(void)
 	roundedDistTableCount = NextPow2(list_length(distributedTables));
 	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
 	workerNodeCount = ActivePrimaryNodeCount();
+	serverId = MemoryContextStrdup(statsContext, GetDistMetadata("server_id")->data);
 	CommitTransactionCommand();
 
 	uname(&unameData);
@@ -95,6 +98,8 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.release);
 	appendStringInfoString(fields, ",\"hwid\": ");
 	escape_json(fields, unameData.machine);
+	appendStringInfoString(fields, ",\"server_id\": ");
+	escape_json(fields, serverId);
 	appendStringInfoString(fields, "}");
 
 	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",

@@ -31,6 +31,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_local_group.h"
+#include "distributed/pg_dist_metadata.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -3169,6 +3170,11 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 }
 
 
+/*
+ * GetDistMetadata looks up for the value of the metadata with the given tag in
+ * pg_dist_metadata table. If pg_dist_metadata doesn't exist or the tag doesn't
+ * exist in pg_dist_metadata, throws an error.
+ */
 StringInfo
 GetDistMetadata(const char *tag)
 {
@@ -3184,7 +3190,7 @@ GetDistMetadata(const char *tag)
 	metadataTableOid = get_relname_relid("pg_dist_metadata", PG_CATALOG_NAMESPACE);
 	if (metadataTableOid == InvalidOid)
 	{
-		return NULL;
+		ereport(ERROR, (errmsg("pg_dist_metadata was not found")));
 	}
 
 	pgDistMetadata = heap_open(metadataTableOid, AccessShareLock);
@@ -3200,8 +3206,10 @@ GetDistMetadata(const char *tag)
 	{
 		bool tagIsNull = false;
 		bool valueIsNull = false;
-		Datum tagDatum = heap_getattr(heapTuple, 1, tupleDescriptor, &tagIsNull);
-		Datum valueDatum = heap_getattr(heapTuple, 2, tupleDescriptor, &valueIsNull);
+		Datum tagDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_tag,
+									  tupleDescriptor, &tagIsNull);
+		Datum valueDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_value,
+										tupleDescriptor, &valueIsNull);
 		const char *tagStr = TextDatumGetCString(tagDatum);
 		if (strncmp(tagStr, tag, strlen(tagStr)) == 0)
 		{
@@ -3211,9 +3219,13 @@ GetDistMetadata(const char *tag)
 		}
 		heapTuple = systable_getnext(scanDescriptor);
 	}
-
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistMetadata, AccessShareLock);
+
+	if (metadataValue == NULL)
+	{
+		ereport(ERROR, (errmsg("metadata with tag '%s' was not found", tag)));
+	}
 
 	return metadataValue;
 }
