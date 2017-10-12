@@ -182,7 +182,7 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 		curlCode = curl_easy_perform(curl);
 		if (curlCode == CURLE_OK)
 		{
-			int httpCode = 0;
+			int64 httpCode = 0;
 			curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
 			if (httpCode == 200)
 			{
@@ -191,7 +191,8 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 			else if (httpCode >= 400 && httpCode < 500)
 			{
 				ereport(WARNING, (errmsg("HTTP request failed."),
-								  errhint("HTTP response code: %d", httpCode)));
+								  errhint("HTTP response code: " INT64_FORMAT,
+										  httpCode)));
 			}
 		}
 		else
