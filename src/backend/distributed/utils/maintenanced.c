@@ -328,6 +328,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
 
 				MemoryContextSwitchTo(oldContext);
+				MemoryContextDelete(statsCollectionContext);
 				prevStatsCollection = currentTime;
 			}
 #endif
