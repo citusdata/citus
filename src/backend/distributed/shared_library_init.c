@@ -796,7 +796,7 @@ RegisterCitusConfigVariables(void)
 					 "and operating system name. This configuration value controls "
 					 "whether these reports are sent."),
 		&EnableStatisticsCollection,
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 		true,
 #else
 		false,
@@ -892,7 +892,7 @@ NormalizeWorkerListPath(void)
 static bool
 StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 {
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 	return true;
 #else
 

@@ -10,10 +10,12 @@
 #ifndef STATISTICS_COLLECTION_H
 #define STATISTICS_COLLECTION_H
 
+#include "citus_version.h"
+
 /* Config variables managed via guc.c */
 extern bool EnableStatisticsCollection;
 
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 
 #define STATS_COLLECTION_HOST "https://citus-statistics.herokuapp.com"
 #define HTTP_TIMEOUT_SECONDS 5
