@@ -8,11 +8,11 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1390000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1390000;
 -- Tests with invalid relation IDs
 SELECT citus_table_size(1);
-ERROR:  could not open relation with OID 1
+ERROR:  could not compute table size: relation does not exist
 SELECT citus_relation_size(1);
-ERROR:  could not open relation with OID 1
+ERROR:  could not compute table size: relation does not exist
 SELECT citus_total_relation_size(1);
-ERROR:  could not open relation with OID 1
+ERROR:  could not compute table size: relation does not exist
 -- Tests with non-distributed table
 CREATE TABLE non_distributed_table (x int);
 SELECT citus_table_size('non_distributed_table');

@@ -169,8 +169,13 @@ DistributedTableSize(Oid relationId, char *sizeQuery)
 							   " blocks which contain multi-shard data modifications")));
 	}
 
-	/* try to open relation, will error out if the relation does not exist */
-	relation = relation_open(relationId, AccessShareLock);
+	relation = try_relation_open(relationId, AccessShareLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR,
+				(errmsg("could not compute table size: relation does not exist")));
+	}
 
 	ErrorIfNotSuitableToGetSize(relationId);
 
