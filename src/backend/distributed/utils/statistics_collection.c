@@ -10,6 +10,8 @@
 
 #include "postgres.h"
 
+#include "citus_version.h"
+
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
 #ifdef HAVE_LIBCURL
@@ -18,7 +20,6 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 #include <sys/utsname.h>
 
 #include "access/xact.h"
-#include "citus_version.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"

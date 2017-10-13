@@ -23,6 +23,7 @@
 
 #include "access/xact.h"
 #include "catalog/pg_extension.h"
+#include "citus_version.h"
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
@@ -312,7 +313,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			(prevStatsCollectionFailed &&
 			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
 		{
-#if HAVE_LIBCURL
+#ifdef HAVE_LIBCURL
 			if (EnableStatisticsCollection)
 			{
 				MemoryContext statsCollectionContext =
