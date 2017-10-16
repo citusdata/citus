@@ -1,3 +1,19 @@
+### citus v7.0.3 (October 16, 2017) ###
+
+* Fixes several bugs that could cause crash
+
+* Fixes a bug that could cause deadlock while creating reference tables
+
+* Fixes a bug that could cause false-positives in deadlock detection
+
+* Fixes a bug that could cause  2PC recovery not to work from MX workers
+
+* Fixes a bug that could cause cache incohorency
+
+* Fixes a bug that could cause maintenance daemon to skip cache invalidations
+
+* Improves performance of transaction recovery by using correct index
+
 ### citus v7.0.2 (September 28, 2017) ###
 
 * Updates task-tracker to limit file access
