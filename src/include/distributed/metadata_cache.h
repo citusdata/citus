@@ -109,6 +109,7 @@ extern Oid DistNodeRelationId(void);
 extern Oid DistLocalGroupIdRelationId(void);
 
 /* index oids */
+extern Oid DistNodeNodeIdIndexId(void);
 extern Oid DistPartitionLogicalRelidIndexId(void);
 extern Oid DistPartitionColocationidIndexId(void);
 extern Oid DistShardLogicalRelidIndexId(void);
