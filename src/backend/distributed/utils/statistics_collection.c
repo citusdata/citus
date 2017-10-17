@@ -65,7 +65,8 @@ CollectBasicUsageStatistics(void)
 	memset(&unameData, 0, sizeof(unameData));
 
 	StartTransactionCommand();
-	/* 
+
+	/*
 	 * If there is a version mismatch between loaded version and available
 	 * version, metadata functions will fail. We return early to avoid crashing.
 	 * This can happen when updating the Citus extension.
