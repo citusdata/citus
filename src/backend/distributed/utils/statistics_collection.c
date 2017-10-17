@@ -65,6 +65,17 @@ CollectBasicUsageStatistics(void)
 	memset(&unameData, 0, sizeof(unameData));
 
 	StartTransactionCommand();
+
+	/*
+	 * If there is a version mismatch between loaded version and available
+	 * version, metadata functions will fail. We return early to avoid crashing.
+	 * This can happen when updating the Citus extension.
+	 */
+	if (!CheckCitusVersion(LOG_SERVER_ONLY))
+	{
+		CommitTransactionCommand();
+		return false;
+	}
 	distributedTables = DistributedTableList();
 	roundedDistTableCount = NextPow2(list_length(distributedTables));
 	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
