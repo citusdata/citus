@@ -3171,14 +3171,13 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 
 
 /*
- * GetDistMetadata looks up for the value of the metadata with the given tag in
- * pg_dist_metadata table. If pg_dist_metadata doesn't exist or the tag doesn't
- * exist in pg_dist_metadata, throws an error.
+ * DistMetadataList returns list of metadata tag/value pairs stored at pg_dist_metadata.
+ * Each pair is a list with two StringInfos.
  */
-StringInfo
-GetDistMetadata(const char *tag)
+List *
+DistMetadataList(void)
 {
-	StringInfo metadataValue = NULL;
+	List *metadataList = NIL;
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 0;
@@ -3204,30 +3203,27 @@ GetDistMetadata(const char *tag)
 	heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
+		StringInfo tagStr = NULL;
+		StringInfo valueStr = NULL;
 		bool tagIsNull = false;
 		bool valueIsNull = false;
-		const char *tagStr = NULL;
+
 		Datum tagDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_tag,
 									  tupleDescriptor, &tagIsNull);
 		Datum valueDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_value,
 										tupleDescriptor, &valueIsNull);
 		Assert(!tagIsNull && !valueIsNull);
-		tagStr = TextDatumGetCString(tagDatum);
-		if (strncmp(tagStr, tag, strlen(tagStr)) == 0)
-		{
-			metadataValue = makeStringInfo();
-			appendStringInfoString(metadataValue, TextDatumGetCString(valueDatum));
-			break;
-		}
+
+		tagStr = makeStringInfo();
+		appendStringInfoString(tagStr, TextDatumGetCString(tagDatum));
+		valueStr = makeStringInfo();
+		appendStringInfoString(valueStr, TextDatumGetCString(valueDatum));
+		metadataList = lappend(metadataList, list_make2(tagStr, valueStr));
+
 		heapTuple = systable_getnext(scanDescriptor);
 	}
 	systable_endscan(scanDescriptor);
 	heap_close(pgDistMetadata, AccessShareLock);
 
-	if (metadataValue == NULL)
-	{
-		ereport(ERROR, (errmsg("metadata with tag '%s' was not found", tag)));
-	}
-
-	return metadataValue;
+	return metadataList;
 }
