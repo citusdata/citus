@@ -12,12 +12,27 @@ AC_COPYRIGHT([Copyright (c) 2012-2017, Citus Data, Inc.])
 AC_PROG_SED
 AC_PROG_AWK
 
-# CITUS_VERSION definition
-AC_DEFINE_UNQUOTED(CITUS_VERSION, "$PACKAGE_VERSION", [Citus version as a string])
+# CITUS_NAME definition
+AC_DEFINE_UNQUOTED(CITUS_NAME, "$PACKAGE_NAME", [Citus full name as a string])
+
+case $PACKAGE_NAME in
+  'Citus Enterprise') citus_edition=enterprise ;;
+               Citus) citus_edition=community ;;
+                   *) AC_MSG_ERROR([Unrecognized package name.]) ;;
+esac
+
+# CITUS_EDITION definition
+AC_DEFINE_UNQUOTED(CITUS_EDITION, "$citus_edition", [Citus edition as a string])
 
 # CITUS_MAJORVERSION definition
 [CITUS_MAJORVERSION=`expr "$PACKAGE_VERSION" : '\([0-9][0-9]*\.[0-9][0-9]*\)'`]
 AC_DEFINE_UNQUOTED(CITUS_MAJORVERSION, "$CITUS_MAJORVERSION", [Citus major version as a string])
+
+# CITUS_VERSION definition
+PGAC_ARG_REQ(with, extra-version, [STRING], [append STRING to version],
+             [CITUS_VERSION="$PACKAGE_VERSION$withval"],
+             [CITUS_VERSION="$PACKAGE_VERSION"])
+AC_DEFINE_UNQUOTED(CITUS_VERSION, "$CITUS_VERSION", [Citus version as a string])
 
 # CITUS_VERSION_NUM definition
 # awk -F is a regex on some platforms, and not on others, so make "." a tab
@@ -86,6 +101,23 @@ SAVE_CFLAGS="$CFLAGS"
 AC_PROG_CC([$($PG_CONFIG --cc)])
 CFLAGS="$SAVE_CFLAGS"
 
+host_guess=`${SHELL} $srcdir/config/config.guess`
+
+# Create compiler version string
+if test x"$GCC" = x"yes" ; then
+  cc_string=`${CC} --version | sed q`
+  case $cc_string in [[A-Za-z]]*) ;; *) cc_string="GCC $cc_string";; esac
+elif test x"$SUN_STUDIO_CC" = x"yes" ; then
+  cc_string=`${CC} -V 2>&1 | sed q`
+else
+  cc_string=$CC
+fi
+
+AC_CHECK_SIZEOF([void *])
+
+AC_DEFINE_UNQUOTED(CITUS_VERSION_STR,
+                   ["$PACKAGE_NAME $CITUS_VERSION on $host_guess, compiled by $cc_string, `expr $ac_cv_sizeof_void_p \* 8`-bit"],
+                   [A string containing the version number, platform, and C compiler])
 
 # Locate source and build directory of the postgres we're building
 # against. Can't rely on either still being present, but e.g. optional
