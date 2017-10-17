@@ -133,7 +133,13 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	relation = relation_open(relationId, ExclusiveLock);
+	relation = try_relation_open(relationId, ExclusiveLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create distributed table: "
+							   "relation does not exist")));
+	}
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
@@ -191,7 +197,13 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	 * sense of this table until we've committed, and we don't want multiple
 	 * backends manipulating this relation.
 	 */
-	relation = relation_open(relationId, ExclusiveLock);
+	relation = try_relation_open(relationId, ExclusiveLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not create distributed table: "
+							   "relation does not exist")));
+	}
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
