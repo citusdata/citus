@@ -1,4 +1,4 @@
-/* citus--7.0-15--7.0-16 */
+/* citus--7.1-2--7.1-3 */
 
 CREATE TABLE citus.pg_dist_metadata(
     tag text NOT NULL,
