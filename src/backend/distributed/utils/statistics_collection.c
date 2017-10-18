@@ -12,8 +12,11 @@
 
 #include "citus_version.h"
 #include "fmgr.h"
-#include "utils/backend_random.h"
 #include "utils/uuid.h"
+
+#if PG_VERSION_NUM >= 100000
+#include "utils/backend_random.h"
+#endif
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
