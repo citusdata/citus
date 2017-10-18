@@ -259,9 +259,12 @@ citus_server_id(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("failed to generate server identifier")));
 	}
 #else
-	for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
 	{
-		buf[bufIdx] = (uint8) (random() & 0xFF);
+		int bufIdx = 0;
+		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+		{
+			buf[bufIdx] = (uint8) (random() & 0xFF);
+		}
 	}
 #endif
 
