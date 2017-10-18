@@ -11,7 +11,7 @@ CREATE FUNCTION citus_server_id()
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$citus_server_id$$;
 COMMENT ON FUNCTION citus_server_id()
-    IS 'generate a random UUID to be used as server identifier.';
+    IS 'generates a random UUID to be used as server identifier';
 
 INSERT INTO pg_dist_node_metadata
     VALUES (jsonb_build_object('server_id', citus_server_id()::text));
