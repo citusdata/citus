@@ -11,6 +11,8 @@
 #include "postgres.h"
 
 #include "citus_version.h"
+#include "utils/backend_random.h"
+#include "utils/uuid.h"
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
@@ -25,9 +27,11 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/json.h"
-#include "utils/jsonapi.h"
 #include "utils/jsonb.h"
+
+#if PG_VERSION_NUM >= 100000
 #include "utils/fmgrprotos.h"
+#endif
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
@@ -233,3 +237,26 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 
 
 #endif /* HAVE_LIBCURL */
+
+PG_FUNCTION_INFO_V1(citus_server_id);
+
+/* citus_server_id returns a random UUID value as server identifier. */
+Datum
+citus_server_id(PG_FUNCTION_ARGS)
+{
+	uint8 *buf = (uint8 *) palloc(UUID_LEN);
+
+	if (!pg_backend_random((char *) buf, UUID_LEN))
+	{
+		ereport(ERROR, (errmsg("failed to generate server identifier")));
+	}
+
+	/*
+	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see
+	 * http://tools.ietf.org/html/rfc4122#section-4.4
+	 */
+	buf[6] = (buf[6] & 0x0f) | 0x40;    /* "version" field */
+	buf[8] = (buf[8] & 0x3f) | 0x80;    /* "variant" field */
+
+	PG_RETURN_UUID_P((pg_uuid_t *) buf);
+}
