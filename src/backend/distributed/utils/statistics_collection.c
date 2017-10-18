@@ -240,7 +240,10 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 
 PG_FUNCTION_INFO_V1(citus_server_id);
 
-/* citus_server_id returns a random UUID value as server identifier. */
+/*
+ * citus_server_id returns a random UUID value as server identifier. This is
+ * modeled after PostgreSQL's pg_random_uuid().
+ */
 Datum
 citus_server_id(PG_FUNCTION_ARGS)
 {
