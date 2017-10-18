@@ -258,7 +258,7 @@ citus_server_id(PG_FUNCTION_ARGS)
 #else
 	for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
 	{
-		buf[bufIdx] = random() & 0xff;
+		buf[bufIdx] = (uint8) (random() & 0xFF);
 	}
 #endif
 
