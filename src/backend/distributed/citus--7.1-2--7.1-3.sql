@@ -6,7 +6,7 @@ CREATE TABLE citus.pg_dist_node_metadata(
 ALTER TABLE citus.pg_dist_node_metadata SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.pg_dist_node_metadata TO public;
 
-CREATE FUNCTION citus_server_id()
+CREATE FUNCTION pg_catalog.citus_server_id()
     RETURNS uuid
     LANGUAGE C STRICT
     AS 'MODULE_PATHNAME', $$citus_server_id$$;

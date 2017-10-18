@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "citus_version.h"
+#include "fmgr.h"
 #include "utils/backend_random.h"
 #include "utils/uuid.h"
 
@@ -249,10 +250,17 @@ citus_server_id(PG_FUNCTION_ARGS)
 {
 	uint8 *buf = (uint8 *) palloc(UUID_LEN);
 
+#if PG_VERSION_NUM >= 100000
 	if (!pg_backend_random((char *) buf, UUID_LEN))
 	{
 		ereport(ERROR, (errmsg("failed to generate server identifier")));
 	}
+#else
+	for (int bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+	{
+		buf[bufIdx] = random() & 0xff;
+	}
+#endif
 
 	/*
 	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see
