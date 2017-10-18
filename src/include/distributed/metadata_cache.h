@@ -87,7 +87,7 @@ extern List * ShardPlacementList(uint64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
 extern void InvalidateMetadataSystemCache(void);
-extern List * DistMetadataList(void);
+extern Datum DistNodeMetadata(void);
 
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);

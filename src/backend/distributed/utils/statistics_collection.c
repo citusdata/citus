@@ -25,6 +25,9 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/json.h"
+#include "utils/jsonapi.h"
+#include "utils/jsonb.h"
+#include "utils/fmgrprotos.h"
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
@@ -60,9 +63,9 @@ CollectBasicUsageStatistics(void)
 	uint64 roundedDistTableCount = 0;
 	uint64 roundedClusterSize = 0;
 	uint32 workerNodeCount = 0;
-	List *metadataList = NIL;
-	ListCell *metadataCell = NULL;
 	StringInfo fields = makeStringInfo();
+	Datum metadataJsonbDatum = 0;
+	char *metadataJsonbStr = NULL;
 	struct utsname unameData;
 	memset(&unameData, 0, sizeof(unameData));
 
@@ -82,7 +85,9 @@ CollectBasicUsageStatistics(void)
 	roundedDistTableCount = NextPow2(list_length(distributedTables));
 	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
 	workerNodeCount = ActivePrimaryNodeCount();
-	metadataList = DistMetadataList();
+	metadataJsonbDatum = DistNodeMetadata();
+	metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
+														   metadataJsonbDatum));
 	uname(&unameData);
 
 	appendStringInfoString(fields, "{\"citus_version\": ");
@@ -96,16 +101,7 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.release);
 	appendStringInfoString(fields, ",\"hwid\": ");
 	escape_json(fields, unameData.machine);
-	foreach(metadataCell, metadataList)
-	{
-		List *metadataEntry = lfirst(metadataCell);
-		StringInfo tag = linitial(metadataEntry);
-		StringInfo value = lsecond(metadataEntry);
-		appendStringInfoString(fields, ",");
-		escape_json(fields, tag->data);
-		appendStringInfoString(fields, ": ");
-		escape_json(fields, value->data);
-	}
+	appendStringInfo(fields, ",\"node_metadata\": %s", metadataJsonbStr);
 	appendStringInfoString(fields, "}");
 
 	CommitTransactionCommand();

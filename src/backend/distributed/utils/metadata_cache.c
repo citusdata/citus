@@ -31,7 +31,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_local_group.h"
-#include "distributed/pg_dist_metadata.h"
+#include "distributed/pg_dist_node_metadata.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -3171,59 +3171,48 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 
 
 /*
- * DistMetadataList returns list of metadata tag/value pairs stored at pg_dist_metadata.
- * Each pair is a list with two StringInfos.
+ * DistNodeMetadata returns the single metadata jsonb object stored in
+ * pg_dist_node_metadata.
  */
-List *
-DistMetadataList(void)
+Datum
+DistNodeMetadata(void)
 {
-	List *metadataList = NIL;
+	Datum metadata = 0;
 	SysScanDesc scanDescriptor = NULL;
 	ScanKeyData scanKey[1];
 	const int scanKeyCount = 0;
 	HeapTuple heapTuple = NULL;
 	Oid metadataTableOid = InvalidOid;
-	Relation pgDistMetadata = NULL;
+	Relation pgDistNodeMetadata = NULL;
 	TupleDesc tupleDescriptor = NULL;
 
-	metadataTableOid = get_relname_relid("pg_dist_metadata", PG_CATALOG_NAMESPACE);
+	metadataTableOid = get_relname_relid("pg_dist_node_metadata", PG_CATALOG_NAMESPACE);
 	if (metadataTableOid == InvalidOid)
 	{
-		ereport(ERROR, (errmsg("pg_dist_metadata was not found")));
+		ereport(ERROR, (errmsg("pg_dist_node_metadata was not found")));
 	}
 
-	pgDistMetadata = heap_open(metadataTableOid, AccessShareLock);
-
-	scanDescriptor = systable_beginscan(pgDistMetadata,
+	pgDistNodeMetadata = heap_open(metadataTableOid, AccessShareLock);
+	scanDescriptor = systable_beginscan(pgDistNodeMetadata,
 										InvalidOid, false,
 										NULL, scanKeyCount, scanKey);
-
-	tupleDescriptor = RelationGetDescr(pgDistMetadata);
+	tupleDescriptor = RelationGetDescr(pgDistNodeMetadata);
 
 	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	if (HeapTupleIsValid(heapTuple))
 	{
-		StringInfo tagStr = NULL;
-		StringInfo valueStr = NULL;
-		bool tagIsNull = false;
-		bool valueIsNull = false;
-
-		Datum tagDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_tag,
-									  tupleDescriptor, &tagIsNull);
-		Datum valueDatum = heap_getattr(heapTuple, Anum_pg_dist_metadata_value,
-										tupleDescriptor, &valueIsNull);
-		Assert(!tagIsNull && !valueIsNull);
-
-		tagStr = makeStringInfo();
-		appendStringInfoString(tagStr, TextDatumGetCString(tagDatum));
-		valueStr = makeStringInfo();
-		appendStringInfoString(valueStr, TextDatumGetCString(valueDatum));
-		metadataList = lappend(metadataList, list_make2(tagStr, valueStr));
-
-		heapTuple = systable_getnext(scanDescriptor);
+		bool isNull = false;
+		metadata = heap_getattr(heapTuple, Anum_pg_dist_node_metadata_metadata,
+								tupleDescriptor, &isNull);
+		Assert(!isNull);
 	}
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistMetadata, AccessShareLock);
+	else
+	{
+		ereport(ERROR, (errmsg("could not find any entries in pg_dist_metadata")));
+	}
 
-	return metadataList;
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistNodeMetadata, AccessShareLock);
+
+	return metadata;
 }
