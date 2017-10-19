@@ -31,6 +31,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_local_group.h"
+#include "distributed/pg_dist_node_metadata.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/pg_dist_shard.h"
@@ -3166,4 +3167,52 @@ CitusInvalidateRelcacheByShardId(int64 shardId)
 
 	/* bump command counter, to force invalidation to take effect */
 	CommandCounterIncrement();
+}
+
+
+/*
+ * DistNodeMetadata returns the single metadata jsonb object stored in
+ * pg_dist_node_metadata.
+ */
+Datum
+DistNodeMetadata(void)
+{
+	Datum metadata = 0;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	const int scanKeyCount = 0;
+	HeapTuple heapTuple = NULL;
+	Oid metadataTableOid = InvalidOid;
+	Relation pgDistNodeMetadata = NULL;
+	TupleDesc tupleDescriptor = NULL;
+
+	metadataTableOid = get_relname_relid("pg_dist_node_metadata", PG_CATALOG_NAMESPACE);
+	if (metadataTableOid == InvalidOid)
+	{
+		ereport(ERROR, (errmsg("pg_dist_node_metadata was not found")));
+	}
+
+	pgDistNodeMetadata = heap_open(metadataTableOid, AccessShareLock);
+	scanDescriptor = systable_beginscan(pgDistNodeMetadata,
+										InvalidOid, false,
+										NULL, scanKeyCount, scanKey);
+	tupleDescriptor = RelationGetDescr(pgDistNodeMetadata);
+
+	heapTuple = systable_getnext(scanDescriptor);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		bool isNull = false;
+		metadata = heap_getattr(heapTuple, Anum_pg_dist_node_metadata_metadata,
+								tupleDescriptor, &isNull);
+		Assert(!isNull);
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("could not find any entries in pg_dist_metadata")));
+	}
+
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistNodeMetadata, AccessShareLock);
+
+	return metadata;
 }

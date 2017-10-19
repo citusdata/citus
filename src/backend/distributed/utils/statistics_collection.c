@@ -11,6 +11,12 @@
 #include "postgres.h"
 
 #include "citus_version.h"
+#include "fmgr.h"
+#include "utils/uuid.h"
+
+#if PG_VERSION_NUM >= 100000
+#include "utils/backend_random.h"
+#endif
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
@@ -25,6 +31,11 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
 #include "utils/json.h"
+#include "utils/jsonb.h"
+
+#if PG_VERSION_NUM >= 100000
+#include "utils/fmgrprotos.h"
+#endif
 
 static uint64 NextPow2(uint64 n);
 static uint64 ClusterSize(List *distributedTableList);
@@ -61,6 +72,8 @@ CollectBasicUsageStatistics(void)
 	uint64 roundedClusterSize = 0;
 	uint32 workerNodeCount = 0;
 	StringInfo fields = makeStringInfo();
+	Datum metadataJsonbDatum = 0;
+	char *metadataJsonbStr = NULL;
 	struct utsname unameData;
 	memset(&unameData, 0, sizeof(unameData));
 
@@ -80,8 +93,9 @@ CollectBasicUsageStatistics(void)
 	roundedDistTableCount = NextPow2(list_length(distributedTables));
 	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
 	workerNodeCount = ActivePrimaryNodeCount();
-	CommitTransactionCommand();
-
+	metadataJsonbDatum = DistNodeMetadata();
+	metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
+														   metadataJsonbDatum));
 	uname(&unameData);
 
 	appendStringInfoString(fields, "{\"citus_version\": ");
@@ -95,7 +109,10 @@ CollectBasicUsageStatistics(void)
 	escape_json(fields, unameData.release);
 	appendStringInfoString(fields, ",\"hwid\": ");
 	escape_json(fields, unameData.machine);
+	appendStringInfo(fields, ",\"node_metadata\": %s", metadataJsonbStr);
 	appendStringInfoString(fields, "}");
+
+	CommitTransactionCommand();
 
 	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
 								   fields->data, HTTP_TIMEOUT_SECONDS);
@@ -224,3 +241,39 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 
 
 #endif /* HAVE_LIBCURL */
+
+PG_FUNCTION_INFO_V1(citus_server_id);
+
+/*
+ * citus_server_id returns a random UUID value as server identifier. This is
+ * modeled after PostgreSQL's pg_random_uuid().
+ */
+Datum
+citus_server_id(PG_FUNCTION_ARGS)
+{
+	uint8 *buf = (uint8 *) palloc(UUID_LEN);
+
+#if PG_VERSION_NUM >= 100000
+	if (!pg_backend_random((char *) buf, UUID_LEN))
+	{
+		ereport(ERROR, (errmsg("failed to generate server identifier")));
+	}
+#else
+	{
+		int bufIdx = 0;
+		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
+		{
+			buf[bufIdx] = (uint8) (random() & 0xFF);
+		}
+	}
+#endif
+
+	/*
+	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see
+	 * http://tools.ietf.org/html/rfc4122#section-4.4
+	 */
+	buf[6] = (buf[6] & 0x0f) | 0x40;    /* "version" field */
+	buf[8] = (buf[8] & 0x3f) | 0x80;    /* "variant" field */
+
+	PG_RETURN_UUID_P((pg_uuid_t *) buf);
+}
