@@ -933,7 +933,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId, char *nodeRack,
 	}
 	else
 	{
-		uint maxGroupId = GetMaxGroupId();
+		uint32 maxGroupId = GetMaxGroupId();
 
 		if (groupId > maxGroupId)
 		{
