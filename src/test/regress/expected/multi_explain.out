@@ -1101,21 +1101,19 @@ INSERT INTO lineitem_hash_part
 WITH cte1 AS (SELECT * FROM cte1 LIMIT 5)
 SELECT s FROM cte1;
 Custom Scan (Citus INSERT ... SELECT via coordinator)
-  ->  Subquery Scan on citus_insert_select_subquery
+  ->  CTE Scan on cte1
         CTE cte1
           ->  Function Scan on generate_series s
-        ->  CTE Scan on cte1
-              CTE cte1
-                ->  Limit
-                      ->  CTE Scan on cte1 cte1_1
+        CTE cte1
+          ->  Limit
+                ->  CTE Scan on cte1 cte1_1
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
 Custom Scan (Citus INSERT ... SELECT via coordinator)
-  ->  Subquery Scan on citus_insert_select_subquery
-        ->  HashAggregate
-              Group Key: s.s
-              ->  Append
-                    ->  Function Scan on generate_series s
-                    ->  Function Scan on generate_series s_1
+  ->  HashAggregate
+        Group Key: s.s
+        ->  Append
+              ->  Function Scan on generate_series s
+              ->  Function Scan on generate_series s_1

@@ -297,6 +297,7 @@ ON (f.id = f2.id)) as outer_most
 GROUP BY
   outer_most.id;
 
+
 -- subqueries in WHERE clause
 INSERT INTO raw_events_second
             (user_id)
@@ -1956,6 +1957,115 @@ SELECT * FROM drop_col_table WHERE col2 = '1';
 
 RESET client_min_messages;
 
+-- make sure casts are handled correctly
+CREATE TABLE coerce_events(user_id int, time timestamp, value_1 numeric);
+SELECT create_distributed_table('coerce_events', 'user_id');
+
+CREATE TABLE coerce_agg (user_id int, value_1_agg int);
+SELECT create_distributed_table('coerce_agg', 'user_id');
+
+INSERT INTO coerce_events(user_id, value_1) VALUES (1, 1), (2, 2), (10, 10);
+
+-- numeric -> int (straight function)
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+ORDER BY 2 DESC, 1 DESC
+LIMIT 5;
+
+-- int -> text
+ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE text;
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+LIMIT 5;
+
+SELECT * FROM coerce_agg;
+
+TRUNCATE coerce_agg;
+
+-- int -> char(1)
+ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE char(1);
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+LIMIT 5;
+
+SELECT * FROM coerce_agg;
+
+TRUNCATE coerce_agg;
+TRUNCATE coerce_events;
+
+-- char(5) -> char(1)
+ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE char(5);
+INSERT INTO coerce_events(user_id, value_1) VALUES (1, 'aaaaa'), (2, 'bbbbb');
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+LIMIT 5;
+
+-- char(1) -> char(5)
+ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE char(1) USING value_1::char(1);
+ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE char(5);
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+LIMIT 5;
+SELECT * FROM coerce_agg;
+
+TRUNCATE coerce_agg;
+TRUNCATE coerce_events;
+
+-- integer -> integer (check VALUE < 5)
+ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE integer USING NULL;
+ALTER TABLE coerce_agg ALTER COLUMN value_1_agg TYPE integer USING NULL;
+ALTER TABLE coerce_agg ADD CONSTRAINT small_number CHECK (value_1_agg < 5);
+
+INSERT INTO coerce_events (user_id, value_1) VALUES (1, 1), (10, 10);
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop;
+
+SELECT * FROM coerce_agg;
+
+-- integer[3] -> text[3]
+TRUNCATE coerce_events;
+ALTER TABLE coerce_events ALTER COLUMN value_1 TYPE integer[3] USING NULL;
+INSERT INTO coerce_events(user_id, value_1) VALUES (1, '{1,1,1}'), (2, '{2,2,2}');
+ALTER TABLE coerce_agg DROP COLUMN value_1_agg;
+ALTER TABLE coerce_agg ADD COLUMN value_1_agg text[3];
+INSERT INTO coerce_agg(user_id, value_1_agg)
+SELECT *
+FROM (
+  SELECT user_id, value_1
+  FROM coerce_events
+) AS ftop
+LIMIT 5;
+
+SELECT * FROM coerce_agg;
+
+-- wrap in a transaction to improve performance
+BEGIN;
+DROP TABLE coerce_events;
+DROP TABLE coerce_agg;
 DROP TABLE drop_col_table;
 DROP TABLE raw_table;
 DROP TABLE summary_table;
@@ -1968,3 +2078,4 @@ DROP TABLE table_with_serial;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;
+COMMIT;

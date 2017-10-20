@@ -869,7 +869,7 @@ FilterAndPartitionTable(const char *filterQuery,
 			heap_deform_tuple(row, rowDescriptor, valueArray, isNullArray);
 
 			AppendCopyRowData(valueArray, isNullArray, rowDescriptor,
-							  rowOutputState, columnOutputFunctions);
+							  rowOutputState, columnOutputFunctions, NULL);
 
 			rowText = rowOutputState->fe_msgbuf;
 
