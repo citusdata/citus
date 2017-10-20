@@ -17,6 +17,7 @@
 #include "distributed/metadata_cache.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_coerce.h"
 #include "tcop/dest.h"
 
 
@@ -50,6 +51,17 @@ typedef struct NodeAddress
 	char *nodeName;
 	int32 nodePort;
 } NodeAddress;
+
+/* struct to allow rReceive to coerce tuples before sending them to workers  */
+typedef struct CopyCoercionData
+{
+	CoercionPathType coercionType;
+	FmgrInfo coerceFunction;
+
+	FmgrInfo inputFunction;
+	FmgrInfo outputFunction;
+	Oid typioparam; /* inputFunction has an extra param */
+} CopyCoercionData;
 
 /* CopyDestReceiver can be used to stream results into a distributed table */
 typedef struct CitusCopyDestReceiver
@@ -88,6 +100,9 @@ typedef struct CitusCopyDestReceiver
 	CopyOutState copyOutState;
 	FmgrInfo *columnOutputFunctions;
 
+	/* instructions for coercing incoming tuples */
+	CopyCoercionData *columnCoercionPaths;
+
 	/* number of tuples sent */
 	int64 tuplesSent;
 } CitusCopyDestReceiver;
@@ -103,7 +118,8 @@ extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryForm
 extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  TupleDesc rowDescriptor,
 							  CopyOutState rowOutputState,
-							  FmgrInfo *columnOutputFunctions);
+							  FmgrInfo *columnOutputFunctions,
+							  CopyCoercionData *columnCoercionPaths);
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);

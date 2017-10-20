@@ -64,8 +64,6 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 static MultiPlan * CreateCoordinatorInsertSelectPlan(Query *parse);
 static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSelectQuery);
 static Query * WrapSubquery(Query *subquery);
-static void CastSelectTargetList(List *selectTargetList, Oid targetRelationId,
-								 List *insertTargetList);
 static bool CheckInsertSelectQuery(Query *query);
 
 
@@ -1185,10 +1183,6 @@ CreateCoordinatorInsertSelectPlan(Query *parse)
 
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
-	/* make sure the SELECT returns the right type for copying into the table */
-	CastSelectTargetList(selectQuery->targetList, targetRelationId,
-						 insertSelectQuery->targetList);
-
 	multiPlan->insertSelectSubquery = selectQuery;
 	multiPlan->insertTargetList = insertSelectQuery->targetList;
 	multiPlan->targetRelationId = targetRelationId;
@@ -1308,63 +1302,4 @@ WrapSubquery(Query *subquery)
 	outerQuery->targetList = newTargetList;
 
 	return outerQuery;
-}
-
-
-/*
- * CastSelectTargetList adds casts to the target entries in selectTargetList
- * to match the type in insertTargetList. This ensures that the results of
- * the SELECT will have the right type when serialised during COPY. For
- * example, a float that is inserted into a an int column normally has an
- * implicit cast, but if we send it through the COPY protocol the serialised
- * form would contain decimal notation, which is not valid for int.
- */
-static void
-CastSelectTargetList(List *selectTargetList, Oid targetRelationId, List *insertTargetList)
-{
-	ListCell *insertTargetCell = NULL;
-	ListCell *selectTargetCell = NULL;
-
-	/* add casts when the SELECT output does not directly match the table */
-	forboth(insertTargetCell, insertTargetList,
-			selectTargetCell, selectTargetList)
-	{
-		TargetEntry *insertTargetEntry = (TargetEntry *) lfirst(insertTargetCell);
-		TargetEntry *selectTargetEntry = (TargetEntry *) lfirst(selectTargetCell);
-
-		Var *columnVar = NULL;
-		Oid columnType = InvalidOid;
-		int32 columnTypeMod = 0;
-		Oid selectOutputType = InvalidOid;
-
-		/* indirection is not supported, e.g. INSERT INTO table (composite_column.x) */
-		if (!IsA(insertTargetEntry->expr, Var))
-		{
-			ereport(ERROR, (errmsg("can only handle regular columns in the target "
-								   "list")));
-		}
-
-		columnVar = (Var *) insertTargetEntry->expr;
-		columnType = get_atttype(targetRelationId, columnVar->varattno);
-		columnTypeMod = get_atttypmod(targetRelationId, columnVar->varattno);
-		selectOutputType = columnVar->vartype;
-
-		/*
-		 * If the type in the target list does not match the type of the column,
-		 * we need to cast to the column type. PostgreSQL would do this
-		 * automatically during the insert, but we're passing the SELECT
-		 * output directly to COPY.
-		 */
-		if (columnType != selectOutputType)
-		{
-			Expr *selectExpression = selectTargetEntry->expr;
-			Expr *typeCastedSelectExpr =
-				(Expr *) coerce_to_target_type(NULL, (Node *) selectExpression,
-											   selectOutputType, columnType,
-											   columnTypeMod, COERCION_EXPLICIT,
-											   COERCE_IMPLICIT_CAST, -1);
-
-			selectTargetEntry->expr = typeCastedSelectExpr;
-		}
-	}
 }
