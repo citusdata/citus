@@ -31,7 +31,7 @@
 
 /* local functions forward declarations */
 static List * OpenConnectionsToAllNodes(void);
-static void BlockAllDistributedWrites(void);
+static void BlockDistributedTransactions(void);
 static void CreateRemoteRestorePoints(char *restoreName, List *connectionList);
 
 
@@ -94,7 +94,7 @@ citus_create_restore_point(PG_FUNCTION_ARGS)
 	RemoteTransactionListBegin(connectionList);
 
 	/* DANGER: finish as quickly as possible after this */
-	BlockAllDistributedWrites();
+	BlockDistributedTransactions();
 
 	/* do local restore point first to bail out early if something goes wrong */
 	localRestorePoint = XLogRestorePoint(restoreNameString);
@@ -139,26 +139,16 @@ OpenConnectionsToAllNodes(void)
 
 
 /*
- * BlockAllDistributedWrites blocks all modifications to distributed tables
- * by taking ShareRowExclusive locks on all distributed tables.
+ * BlockDistributedTransactions blocks distributed transactions that use 2PC
+ * and changes to pg_dist_node (e.g. node addition) and pg_dist_partition
+ * (table creation).
  */
 static void
-BlockAllDistributedWrites(void)
+BlockDistributedTransactions(void)
 {
-	ListCell *distributedTableCell = NULL;
-	List *distributedTableList = DistributedTableList();
-
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 	LockRelationOid(DistPartitionRelationId(), ExclusiveLock);
-
-	foreach(distributedTableCell, distributedTableList)
-	{
-		DistTableCacheEntry *cacheEntry =
-			(DistTableCacheEntry *) lfirst(distributedTableCell);
-
-		/* block all modifications */
-		LockRelationOid(cacheEntry->relationId, ShareRowExclusiveLock);
-	}
+	LockRelationOid(DistTransactionRelationId(), ExclusiveLock);
 }
 
 

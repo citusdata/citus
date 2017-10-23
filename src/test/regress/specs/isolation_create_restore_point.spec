@@ -1,5 +1,6 @@
 setup
 {
+	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE restore_table (test_id integer NOT NULL, data text);
 	SELECT create_distributed_table('restore_table', 'test_id');
 }
@@ -14,6 +15,7 @@ session "s1"
 step "s1-begin"
 {
 	BEGIN;
+	SET citus.multi_shard_commit_protocol TO '2pc';
 }
 
 step "s1-create-distributed"
@@ -29,7 +31,16 @@ step "s1-insert"
 
 step "s1-modify-multiple"
 {
-	SELECT master_modify_multiple_shards($$UPDATE restore_table SET data = 'world'$$);
+	UPDATE restore_table SET data = 'world';
+}
+
+step "s1-multi-statement"
+{
+	SET citus.multi_shard_commit_protocol TO '2pc';
+	BEGIN;
+	INSERT INTO restore_table VALUES (1,'hello');
+	INSERT INTO restore_table VALUES (2,'hello');
+	COMMIT;
 }
 
 step "s1-ddl"
@@ -40,6 +51,16 @@ step "s1-ddl"
 step "s1-copy"
 {
 	COPY restore_table FROM PROGRAM 'echo 1,hello' WITH CSV;
+}
+
+step "s1-recover"
+{
+	SELECT recover_prepared_transactions();
+}
+
+step "s1-create-restore"
+{
+	SELECT 1 FROM citus_create_restore_point('citus-test-2');
 }
 
 step "s1-drop"
@@ -64,25 +85,38 @@ step "s1-commit"
 
 session "s2"
 
+step "s2-begin"
+{
+	BEGIN;
+}
+
 step "s2-create-restore"
 {
 	SELECT 1 FROM citus_create_restore_point('citus-test');
 }
 
+step "s2-commit"
+{
+	COMMIT;
+}
+
 # verify that citus_create_restore_point is blocked by concurrent create_distributed_table
 permutation "s1-begin" "s1-create-distributed" "s2-create-restore" "s1-commit"
 
-# verify that citus_create_restore_point is blocked by concurrent INSERT
+# verify that citus_create_restore_point is not blocked by concurrent INSERT (only commit)
 permutation "s1-begin" "s1-insert" "s2-create-restore" "s1-commit"
 
-# verify that citus_create_restore_point is blocked by concurrent master_modify_multiple_shards
+# verify that citus_create_restore_point is not blocked by concurrent multi-shard UPDATE (only commit)
 permutation "s1-begin" "s1-modify-multiple" "s2-create-restore" "s1-commit"
 
-# verify that citus_create_restore_point is blocked by concurrent DDL
+# verify that citus_create_restore_point is not blocked by concurrent DDL (only commit)
 permutation "s1-begin" "s1-ddl" "s2-create-restore" "s1-commit"
 
-# verify that citus_create_restore_point is blocked by concurrent COPY
+# verify that citus_create_restore_point is not blocked by concurrent COPY (only commit)
 permutation "s1-begin" "s1-copy" "s2-create-restore" "s1-commit"
+
+# verify that citus_create_restore_point is blocked by concurrent recover_prepared_transactions
+permutation "s1-begin" "s1-recover" "s2-create-restore" "s1-commit"
 
 # verify that citus_create_restore_point is blocked by concurrent DROP TABLE
 permutation "s1-begin" "s1-drop" "s2-create-restore" "s1-commit"
@@ -92,3 +126,15 @@ permutation "s1-begin" "s1-add-node" "s2-create-restore" "s1-commit"
 
 # verify that citus_create_restore_point is blocked by concurrent master_remove_node
 permutation "s1-begin" "s1-remove-node" "s2-create-restore" "s1-commit"
+
+# verify that citus_create_restore_point is blocked by concurrent citus_create_restore_point
+permutation "s1-begin" "s1-create-restore" "s2-create-restore" "s1-commit"
+
+# verify that multi-shard UPDATE is blocked by concurrent citus_create_restore_point
+permutation "s2-begin" "s2-create-restore" "s1-modify-multiple" "s2-commit"
+
+# verify that DDL is blocked by concurrent citus_create_restore_point
+permutation "s2-begin" "s2-create-restore" "s1-ddl" "s2-commit"
+
+# verify that multi-statement transactions is blocked by concurrent citus_create_restore_point
+permutation "s2-begin" "s2-create-restore" "s1-multi-statement" "s2-commit"
