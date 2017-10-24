@@ -1044,7 +1044,7 @@ GetNodeTuple(char *nodeName, int32 nodePort)
 	const int scanKeyCount = 2;
 	const bool indexOK = false;
 
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[2];
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 	HeapTuple nodeTuple = NULL;
@@ -1289,7 +1289,7 @@ DeleteNodeRow(char *nodeName, int32 nodePort)
 
 	HeapTuple heapTuple = NULL;
 	SysScanDesc heapScan = NULL;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[2];
 
 	Relation pgDistNode = heap_open(DistNodeRelationId(), RowExclusiveLock);
 

@@ -744,10 +744,15 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 	int connectionIndex = 0;
 	ListCell *connectionCell = NULL;
 
-	MultiConnection *allConnections[totalConnectionCount];
-	WaitEvent events[totalConnectionCount];
-	bool connectionReady[totalConnectionCount];
+	MultiConnection *allConnections[REMOTE_MAX_CONNECTIONS];
+	WaitEvent events[REMOTE_MAX_CONNECTIONS];
+	bool connectionReady[REMOTE_MAX_CONNECTIONS];
 	WaitEventSet *waitEventSet = NULL;
+
+	if (totalConnectionCount > REMOTE_MAX_CONNECTIONS)
+	{
+		ereport(ERROR, (errmsg("too many connections")));
+	}
 
 	/* convert connection list to an array such that we can move items around */
 	foreach(connectionCell, connectionList)

@@ -457,7 +457,7 @@ ColocationId(int shardCount, int replicationFactor, Oid distributionColumnType)
 	HeapTuple colocationTuple = NULL;
 	SysScanDesc scanDescriptor;
 	const int scanKeyCount = 3;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[3];
 	bool indexOK = true;
 
 	Relation pgDistColocation = heap_open(DistColocationRelationId(), AccessShareLock);
@@ -660,7 +660,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	bool shouldSyncMetadata = false;
 	bool indexOK = true;
 	int scanKeyCount = 1;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[1];
 	Datum values[Natts_pg_dist_partition];
 	bool isNull[Natts_pg_dist_partition];
 	bool replace[Natts_pg_dist_partition];
@@ -1052,7 +1052,7 @@ DeleteColocationGroup(uint32 colocationId)
 	Relation pgDistColocation = NULL;
 	SysScanDesc scanDescriptor = NULL;
 	int scanKeyCount = 1;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[1];
 	bool indexOK = false;
 	HeapTuple heapTuple = NULL;
 

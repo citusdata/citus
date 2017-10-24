@@ -133,9 +133,8 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 
-	const int attributeCount = 5;
-	Datum values[attributeCount];
-	bool isNulls[attributeCount];
+	Datum values[5];
+	bool isNulls[5];
 
 	DistributedTransactionId *distributedTransctionId = NULL;
 
@@ -196,9 +195,8 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 
 	int backendIndex = 0;
 
-	const int attributeCount = 5;
-	Datum values[attributeCount];
-	bool isNulls[attributeCount];
+	Datum values[5];
+	bool isNulls[5];
 
 	CheckCitusVersion(ERROR);
 
