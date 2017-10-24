@@ -89,6 +89,11 @@ CitusNodeTagI(Node *node)
 	return ((CitusNode*)(node))->citus_tag;
 }
 
+/*
+ * Postgres's nodes/nodes.h has more information on why we do this.
+ */
+#ifdef __GNUC__
+
 /* Citus variant of newNode(), don't use directly. */
 #define CitusNewNode(size, tag) \
 ({	CitusNode   *_result; \
@@ -99,6 +104,22 @@ CitusNodeTagI(Node *node)
 	_result->citus_tag =(int) (tag); \
 	_result; \
 })
+
+#else
+
+extern PGDLLIMPORT CitusNode *newCitusNodeMacroHolder;
+
+#define CitusNewNode(size, tag) \
+( \
+	AssertMacro((size) >= sizeof(CitusNode)),		/* need the tag, at least */ \
+	newCitusNodeMacroHolder = (CitusNode *) palloc0fast(size), \
+	newCitusNodeMacroHolder->extensible.type = T_ExtensibleNode, \
+	newCitusNodeMacroHolder->extensible.extnodename = CitusNodeTagNames[tag - CITUS_NODE_TAG_START], \
+	newCitusNodeMacroHolder->citus_tag =(int) (tag), \
+	newCitusNodeMacroHolder \
+)
+
+#endif
 
 
 /*
