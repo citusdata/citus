@@ -152,7 +152,7 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	RemoveDirectory(taskDirectory);
+	CitusRemoveDirectory(taskDirectory);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -213,7 +213,7 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	/* close partition files and atomically rename (commit) them */
 	ClosePartitionFiles(partitionFileArray, fileCount);
-	RemoveDirectory(taskDirectory);
+	CitusRemoveDirectory(taskDirectory);
 	RenameDirectory(taskAttemptDirectory, taskDirectory);
 
 	PG_RETURN_VOID();
@@ -615,13 +615,13 @@ CreateDirectory(StringInfo directoryName)
 
 
 /*
- * RemoveDirectory first checks if the given directory exists. If it does, the
+ * CitusRemoveDirectory first checks if the given directory exists. If it does, the
  * function recursively deletes the contents of the given directory, and then
  * deletes the directory itself. This function is modeled on the Boost file
  * system library's remove_all() method.
  */
 void
-RemoveDirectory(StringInfo filename)
+CitusRemoveDirectory(StringInfo filename)
 {
 	struct stat fileStat;
 	int removed = 0;
@@ -674,7 +674,7 @@ RemoveDirectory(StringInfo filename)
 			fullFilename = makeStringInfo();
 			appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
 
-			RemoveDirectory(fullFilename);
+			CitusRemoveDirectory(fullFilename);
 
 			FreeStringInfo(fullFilename);
 		}
