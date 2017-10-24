@@ -293,7 +293,7 @@ static void
 PrepareMasterJobDirectory(Job *workerJob)
 {
 	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
-	CreateDirectory(jobDirectoryName);
+	CitusCreateDirectory(jobDirectoryName);
 
 	ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
 	ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);

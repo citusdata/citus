@@ -333,13 +333,13 @@ InitTaskDirectory(uint64 jobId, uint32 taskId)
 	jobDirectoryExists = DirectoryExists(jobDirectoryName);
 	if (!jobDirectoryExists)
 	{
-		CreateDirectory(jobDirectoryName);
+		CitusCreateDirectory(jobDirectoryName);
 	}
 
 	taskDirectoryExists = DirectoryExists(taskDirectoryName);
 	if (!taskDirectoryExists)
 	{
-		CreateDirectory(taskDirectoryName);
+		CitusCreateDirectory(taskDirectoryName);
 	}
 
 	UnlockJobResource(jobId, AccessExclusiveLock);
@@ -371,7 +371,7 @@ InitTaskAttemptDirectory(uint64 jobId, uint32 taskId)
 	 * If this task previously failed, and gets re-executed and improbably draws
 	 * the same randomId, the task will fail to create the directory.
 	 */
-	CreateDirectory(taskAttemptDirectoryName);
+	CitusCreateDirectory(taskAttemptDirectoryName);
 
 	return taskAttemptDirectoryName;
 }
@@ -602,7 +602,7 @@ DirectoryExists(StringInfo directoryName)
 
 /* Creates a new directory with the given directory name. */
 void
-CreateDirectory(StringInfo directoryName)
+CitusCreateDirectory(StringInfo directoryName)
 {
 	int makeOK = mkdir(directoryName->data, S_IRWXU);
 	if (makeOK != 0)
