@@ -211,7 +211,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 * writing to a table within the schema.
 	 */
 	jobDirectoryName = JobDirectoryName(jobId);
-	RemoveDirectory(jobDirectoryName);
+	CitusRemoveDirectory(jobDirectoryName);
 
 	LockJobResource(jobId, AccessExclusiveLock);
 	jobSchemaName = JobSchemaName(jobId);

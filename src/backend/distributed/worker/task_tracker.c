@@ -340,7 +340,7 @@ TrackerCleanupJobDirectories(void)
 	StringInfo jobCacheDirectory = makeStringInfo();
 	appendStringInfo(jobCacheDirectory, "base/%s", PG_JOB_CACHE_DIR);
 
-	RemoveDirectory(jobCacheDirectory);
+	CitusRemoveDirectory(jobCacheDirectory);
 	CreateDirectory(jobCacheDirectory);
 
 	FreeStringInfo(jobCacheDirectory);
