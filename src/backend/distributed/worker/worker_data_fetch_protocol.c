@@ -65,7 +65,7 @@ static bool ReceiveRegularFile(const char *nodeName, uint32 nodePort,
 							   StringInfo filePath);
 static void ReceiveResourceCleanup(int32 connectionId, const char *filename,
 								   int32 fileDescriptor);
-static void DeleteFile(const char *filename);
+static void CitusDeleteFile(const char *filename);
 static void FetchTableCommon(text *tableName, uint64 remoteTableSize,
 							 ArrayType *nodeNameObject, ArrayType *nodePortObject,
 							 bool (*FetchTableFunction)(const char *, uint32,
@@ -370,7 +370,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 						  errmsg("could not close file \"%s\": %m", filename)));
 
 		/* if we failed to close file, try to delete it before erroring out */
-		DeleteFile(filename);
+		CitusDeleteFile(filename);
 
 		return false;
 	}
@@ -418,7 +418,7 @@ ReceiveResourceCleanup(int32 connectionId, const char *filename, int32 fileDescr
 
 /* Deletes file with the given filename. */
 static void
-DeleteFile(const char *filename)
+CitusDeleteFile(const char *filename)
 {
 	int deleted = unlink(filename);
 	if (deleted != 0)
@@ -894,7 +894,7 @@ FetchRegularTable(const char *nodeName, uint32 nodePort, const char *tableName)
 						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	/* finally delete the temporary file we created */
-	DeleteFile(localFilePath->data);
+	CitusDeleteFile(localFilePath->data);
 
 	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 
@@ -1289,7 +1289,7 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 						PROCESS_UTILITY_TOPLEVEL, NULL, None_Receiver, NULL);
 
 	/* finally delete the temporary file we created */
-	DeleteFile(localFilePath->data);
+	CitusDeleteFile(localFilePath->data);
 
 	PG_RETURN_VOID();
 }
