@@ -637,7 +637,7 @@ NodeGroupHasShardPlacements(uint32 groupId, bool onlyConsiderActivePlacements)
 
 	HeapTuple heapTuple = NULL;
 	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[2];
 
 	Relation pgPlacement = heap_open(DistPlacementRelationId(),
 									 AccessShareLock);
@@ -1097,7 +1097,7 @@ DeleteShardPlacementRow(uint64 placementId)
 	Relation pgDistPlacement = NULL;
 	SysScanDesc scanDescriptor = NULL;
 	const int scanKeyCount = 1;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[1];
 	bool indexOK = true;
 	HeapTuple heapTuple = NULL;
 	TupleDesc tupleDescriptor = NULL;

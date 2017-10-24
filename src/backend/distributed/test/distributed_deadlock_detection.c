@@ -49,9 +49,8 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 	HASH_SEQ_STATUS status;
 	TransactionNode *transactionNode = NULL;
 
-	const int attributeCount = 2;
-	Datum values[attributeCount];
-	bool isNulls[attributeCount];
+	Datum values[2];
+	bool isNulls[2];
 
 	CheckCitusVersion(ERROR);
 

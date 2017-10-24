@@ -56,5 +56,4 @@ extern void CreateTableMetadataOnWorkers(Oid relationId);
 	"shardlength = EXCLUDED.shardlength, " \
 	"groupid = EXCLUDED.groupid"
 
-
 #endif /* METADATA_SYNC_H */

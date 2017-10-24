@@ -273,7 +273,7 @@ IsDistributedTableViaCatalog(Oid relationId)
 	HeapTuple partitionTuple = NULL;
 	SysScanDesc scanDescriptor = NULL;
 	const int scanKeyCount = 1;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[1];
 	bool indexOK = true;
 
 	Relation pgDistPartition = heap_open(DistPartitionRelationId(), AccessShareLock);
