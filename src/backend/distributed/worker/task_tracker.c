@@ -341,7 +341,7 @@ TrackerCleanupJobDirectories(void)
 	appendStringInfo(jobCacheDirectory, "base/%s", PG_JOB_CACHE_DIR);
 
 	CitusRemoveDirectory(jobCacheDirectory);
-	CreateDirectory(jobCacheDirectory);
+	CitusCreateDirectory(jobCacheDirectory);
 
 	FreeStringInfo(jobCacheDirectory);
 }
@@ -1086,7 +1086,7 @@ CreateJobDirectoryIfNotExists(uint64 jobId)
 	bool jobDirectoryExists = DirectoryExists(jobDirectoryName);
 	if (!jobDirectoryExists)
 	{
-		CreateDirectory(jobDirectoryName);
+		CitusCreateDirectory(jobDirectoryName);
 	}
 
 	FreeStringInfo(jobDirectoryName);
