@@ -8,6 +8,7 @@
  *
  *-------------------------------------------------------------------------
  */
+#include "stdint.h"
 #include "postgres.h"
 
 #include "access/nbtree.h"
