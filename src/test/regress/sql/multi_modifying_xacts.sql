@@ -963,12 +963,21 @@ ORDER BY shardid, nodeport;
 -- verify data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
 
--- connect back to the worker and set rename the test_user back
-\c - :default_user - :worker_1_port
-ALTER USER test_user_new RENAME TO test_user;
+-- break the other node as well
+\c - :default_user - :worker_2_port
+ALTER USER test_user RENAME TO test_user_new;
+
+\c - test_user - :master_port
+
+-- fails on all shard placements
+INSERT INTO numbers_hash_failure_test VALUES (2,2);
 
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
+
+-- unbreak both nodes by renaming the user back to the original name
+SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_user');
+
 DROP TABLE reference_modifying_xacts, hash_modifying_xacts, hash_modifying_xacts_second,
 	reference_failure_test, numbers_hash_failure_test;
 

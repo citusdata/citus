@@ -242,8 +242,7 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
 BEGIN;
 INSERT INTO labs_mx VALUES (7, 'E Corp');
 INSERT INTO objects_mx VALUES (2, 'BAD');
-WARNING:  illegal value
-ERROR:  could not modify any active placements
+ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
@@ -262,8 +261,7 @@ SELECT * FROM labs_mx WHERE id = 7;
 BEGIN;
 INSERT INTO labs_mx VALUES (7, 'E Corp');
 INSERT INTO objects_mx VALUES (2, 'BAD');
-WARNING:  illegal value
-ERROR:  could not modify any active placements
+ERROR:  illegal value
 COMMIT;
 -- data should NOT be persisted
 SELECT * FROM objects_mx WHERE id = 2;
@@ -286,8 +284,7 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad_mx();
 BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (2, 'BAD');
-WARNING:  illegal value
-ERROR:  could not modify any active placements
+ERROR:  illegal value
 INSERT INTO labs_mx VALUES (8, 'Aperture Science');
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO labs_mx VALUES (9, 'BAD');
@@ -309,8 +306,7 @@ SELECT * FROM labs_mx WHERE id = 8;
 BEGIN;
 INSERT INTO objects_mx VALUES (1, 'apple');
 INSERT INTO objects_mx VALUES (2, 'BAD');
-WARNING:  illegal value
-ERROR:  could not modify any active placements
+ERROR:  illegal value
 INSERT INTO labs_mx VALUES (8, 'Aperture Science');
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 INSERT INTO labs_mx VALUES (9, 'BAD');
