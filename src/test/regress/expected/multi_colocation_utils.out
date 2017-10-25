@@ -286,22 +286,23 @@ SELECT UNNEST(get_colocated_table_array('table6_append'))::regclass ORDER BY 1;
 (1 row)
 
 -- check co-located shard list
-SELECT get_colocated_shard_array(1300000) ORDER BY 1;
- get_colocated_shard_array 
----------------------------
- {1300000,1300004}
+SELECT UNNEST(get_colocated_shard_array(1300000))::regclass ORDER BY 1;
+ unnest  
+---------
+ 1300000
+ 1300004
+(2 rows)
+
+SELECT UNNEST(get_colocated_shard_array(1300016))::regclass ORDER BY 1;
+ unnest  
+---------
+ 1300016
 (1 row)
 
-SELECT get_colocated_shard_array(1300016) ORDER BY 1;
- get_colocated_shard_array 
----------------------------
- {1300016}
-(1 row)
-
-SELECT get_colocated_shard_array(1300020) ORDER BY 1;
- get_colocated_shard_array 
----------------------------
- {1300020}
+SELECT UNNEST(get_colocated_shard_array(1300020))::regclass ORDER BY 1;
+ unnest  
+---------
+ 1300020
 (1 row)
 
 -- check FindShardIntervalIndex function
