@@ -27,6 +27,7 @@
 #include "access/stratnum.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/relay_utility.h"
@@ -108,6 +109,17 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 				{
 					char **indexName = &(command->name);
 					AppendShardIdToName(indexName, shardId);
+				}
+				else if (command->subtype == AT_ReplicaIdentity)
+				{
+					ReplicaIdentityStmt *replicaIdentity =
+						(ReplicaIdentityStmt *) command->def;
+
+					if (replicaIdentity->identity_type == REPLICA_IDENTITY_INDEX)
+					{
+						char **indexName = &(replicaIdentity->name);
+						AppendShardIdToName(indexName, shardId);
+					}
 				}
 			}
 
