@@ -37,6 +37,7 @@ test: multi_load_data
 test: multi_behavioral_analytics_create_table
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries
 test: multi_insert_select multi_insert_select_window
+test: multi_shard_update_delete
 
 # ---
 # Tests for partitioning support

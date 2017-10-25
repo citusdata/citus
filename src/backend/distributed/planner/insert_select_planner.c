@@ -269,15 +269,6 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 		++taskIdIndex;
 	}
 
-	if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF &&
-		list_length(sqlTaskList) > 1)
-	{
-		ereport(MultiTaskQueryLogLevel, (errmsg("multi-task query about to be executed"),
-										 errhint("Queries are split to multiple tasks "
-												 "if they have to be split into several"
-												 " queries on the workers.")));
-	}
-
 	/* Create the worker job */
 	workerJob = CitusMakeNode(Job);
 	workerJob->taskList = sqlTaskList;
@@ -484,6 +475,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	List *shardOpExpressions = NIL;
 	RestrictInfo *shardRestrictionList = NULL;
 	DeferredErrorMessage *planningError = NULL;
+	bool multiShardModifyQuery = false;
 
 	/* grab shared metadata lock to stop concurrent placement additions */
 	LockShardDistributionMetadata(shardId, ShareLock);
@@ -543,7 +535,10 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	 */
 	planningError = PlanRouterQuery(copiedSubquery, copiedRestrictionContext,
 									&selectPlacementList, &selectAnchorShardId,
-									&relationShardList, replacePrunedQueryWithDummy);
+									&relationShardList, replacePrunedQueryWithDummy,
+									&multiShardModifyQuery);
+
+	Assert(!multiShardModifyQuery);
 
 	if (planningError)
 	{
