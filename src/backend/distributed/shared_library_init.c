@@ -120,6 +120,12 @@ static const struct config_enum_entry multi_task_query_log_level_options[] = {
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry multi_shard_modify_connection_options[] = {
+	{ "parallel", PARALLEL_CONNECTION, false },
+	{ "sequential", SEQUENTIAL_CONNECTION, false },
+	{ NULL, 0, false }
+};
+
 /* *INDENT-ON* */
 
 
@@ -729,6 +735,16 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&MultiTaskQueryLogLevel,
 		MULTI_TASK_QUERY_INFO_OFF, multi_task_query_log_level_options,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.multi_shard_modify_mode",
+		gettext_noop("Sets the connection type for multi shard modify queries"),
+		NULL,
+		&MultiShardConnectionType,
+		PARALLEL_CONNECTION, multi_shard_modify_connection_options,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);

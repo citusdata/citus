@@ -19,7 +19,7 @@
 /* values used by jobs and tasks which do not require identifiers */
 #define INVALID_JOB_ID 0
 #define INVALID_TASK_ID 0
-
+#define MULTI_TASK_QUERY_INFO_OFF 0  /* do not log multi-task queries */
 
 typedef struct RelationRestrictionContext
 {
@@ -83,7 +83,10 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										JoinType jointype,
 										JoinPathExtraData *extra);
 extern bool IsModifyCommand(Query *query);
+extern bool IsUpdateOrDelete(struct MultiPlan *multiPlan);
 extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
+extern bool IsMultiTaskPlan(struct MultiPlan *multiPlan);
+extern bool IsMultiShardModifyPlan(struct MultiPlan *multiPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 
 
