@@ -91,7 +91,8 @@ DETAIL:  Key (id)=(32743) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders_mx VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
-ERROR:  could not modify any active placements
+ERROR:  division by zero
+CONTEXT:  while executing command on localhost:57638
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are unsupported
 INSERT INTO limit_orders_mx VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',

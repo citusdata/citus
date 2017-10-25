@@ -188,7 +188,8 @@ DETAIL:  Key (id)=(32743) already exists.
 CONTEXT:  while executing command on localhost:57638
 -- INSERT, with RETURNING specified, failing with a non-constraint error
 INSERT INTO limit_orders VALUES (34153, 'LEE', 5994, '2001-04-16 03:37:28', 'buy', 0.58) RETURNING id / 0;
-ERROR:  could not modify any active placements
+ERROR:  division by zero
+CONTEXT:  while executing command on localhost:57637
 SET client_min_messages TO DEFAULT;
 -- commands with non-constant partition values are supported
 INSERT INTO limit_orders VALUES (random() * 100, 'ORCL', 152, '2011-08-25 11:50:45',
@@ -399,9 +400,8 @@ ALTER TABLE limit_orders_750000 RENAME TO renamed_orders;
 \c - - - :master_port
 -- Fourth: Perform an INSERT on the remaining node
 INSERT INTO limit_orders VALUES (276, 'ADR', 140, '2007-07-02 16:32:15', 'sell', 43.67);
-WARNING:  relation "public.limit_orders_750000" does not exist
+ERROR:  relation "public.limit_orders_750000" does not exist
 CONTEXT:  while executing command on localhost:57637
-ERROR:  could not modify any active placements
 -- Last: Verify worker is still healthy
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
