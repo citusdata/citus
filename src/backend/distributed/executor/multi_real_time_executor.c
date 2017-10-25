@@ -21,7 +21,6 @@
 
 #include <sys/stat.h>
 #include <unistd.h>
-#include <poll.h>
 
 #include "commands/dbcommands.h"
 #include "distributed/connection_management.h"
