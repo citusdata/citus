@@ -1897,6 +1897,7 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
  * ALTER TABLE SET|DROP NOT NULL
  * ALTER TABLE SET|DROP DEFAULT
  * ALTER TABLE ADD|DROP CONSTRAINT
+ * ALTER TABLE REPLICA IDENTITY
  */
 static void
 ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
@@ -2036,11 +2037,12 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_DropConstraint:
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
+			case AT_ReplicaIdentity:
 			{
 				/*
 				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
 				 * , ALTER TABLE .. ALTER COLUMN .. SET NOT NULL and ALTER TABLE ENABLE/
-				 * DISABLE TRIGGER ALL
+				 * DISABLE TRIGGER ALL, ALTER TABLE .. REPLICA IDENTITY ..
 				 */
 				break;
 			}
