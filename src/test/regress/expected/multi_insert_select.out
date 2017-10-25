@@ -139,8 +139,7 @@ FROM
 WHERE
   user_id = 0;
 WARNING:  function public.evaluate_on_master(integer) does not exist
-WARNING:  function public.evaluate_on_master(integer) does not exist
-ERROR:  could not modify any active placements
+ERROR:  function public.evaluate_on_master(integer) does not exist
 \set VERBOSITY default
 -- add one more row
 INSERT INTO raw_events_first (user_id, time) VALUES

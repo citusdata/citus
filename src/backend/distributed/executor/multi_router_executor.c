@@ -701,6 +701,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 	ListCell *taskPlacementCell = NULL;
 	ListCell *connectionCell = NULL;
 	int64 affectedTupleCount = -1;
+	int failureCount = 0;
 	bool resultsOK = false;
 	bool gotResults = false;
 
@@ -761,12 +762,14 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 			 * MarkFailedShardPlacements() to ensure future statements will not use this
 			 * placement.
 			 */
+			failureCount++;
 			continue;
 		}
 
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
+			failureCount++;
 			continue;
 		}
 
@@ -778,6 +781,15 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 			/*
 			 * If we have multiple tasks and one fails, we cannot clear
 			 * the tuple store and start over. Error out instead.
+			 */
+			failOnError = true;
+		}
+
+		if (failureCount + 1 == list_length(taskPlacementList))
+		{
+			/*
+			 * If we already failed on all other placements (possibly 0),
+			 * relay errors directly.
 			 */
 			failOnError = true;
 		}
@@ -818,9 +830,18 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 			resultsOK = true;
 			gotResults = true;
 		}
+		else
+		{
+			failureCount++;
+		}
 	}
 
-	/* if all placements failed, error out */
+	/*
+	 * If a command results in an error on all workers, we relay the last error
+	 * in the loop above by setting failOnError. However, if all connections fail
+	 * we still complete the loop without throwing an error. In that case, throw
+	 * an error below.
+	 */
 	if (!resultsOK)
 	{
 		ereport(ERROR, (errmsg("could not modify any active placements")));
