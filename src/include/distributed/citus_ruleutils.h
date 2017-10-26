@@ -41,6 +41,7 @@ extern void deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid,
 extern char * pg_get_indexclusterdef_string(Oid indexRelationId);
 extern List * pg_get_table_grants(Oid relationId);
 extern bool contain_nextval_expression_walker(Node *node, void *context);
+extern char * pg_get_replica_identity_command(Oid tableRelationId);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
 extern void pg_get_query_def(Query *query, StringInfo buffer);

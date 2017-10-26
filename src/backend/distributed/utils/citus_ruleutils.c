@@ -1066,3 +1066,49 @@ contain_nextval_expression_walker(Node *node, void *context)
 	}
 	return expression_tree_walker(node, contain_nextval_expression_walker, context);
 }
+
+
+/*
+ * pg_get_replica_identity_command function returns the required ALTER .. TABLE
+ * command to define the replica identity.
+ */
+char *
+pg_get_replica_identity_command(Oid tableRelationId)
+{
+	Relation relation = NULL;
+	StringInfo buf = makeStringInfo();
+	char *relationName = NULL;
+	char replicaIdentity = 0;
+
+	relation = heap_open(tableRelationId, AccessShareLock);
+
+	replicaIdentity = relation->rd_rel->relreplident;
+
+	relationName = generate_qualified_relation_name(tableRelationId);
+
+	if (replicaIdentity == REPLICA_IDENTITY_INDEX)
+	{
+		Oid indexId = RelationGetReplicaIndex(relation);
+
+		if (OidIsValid(indexId))
+		{
+			appendStringInfo(buf, "ALTER TABLE %s REPLICA IDENTITY USING INDEX %s ",
+							 relationName,
+							 quote_identifier(get_rel_name(indexId)));
+		}
+	}
+	else if (replicaIdentity == REPLICA_IDENTITY_NOTHING)
+	{
+		appendStringInfo(buf, "ALTER TABLE %s REPLICA IDENTITY NOTHING",
+						 relationName);
+	}
+	else if (replicaIdentity == REPLICA_IDENTITY_FULL)
+	{
+		appendStringInfo(buf, "ALTER TABLE %s REPLICA IDENTITY FULL",
+						 relationName);
+	}
+
+	heap_close(relation, AccessShareLock);
+
+	return (buf->len > 0) ? buf->data : NULL;
+}
