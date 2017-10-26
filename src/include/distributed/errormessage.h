@@ -48,12 +48,22 @@ DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, cons
  * The trickery with __builtin_constant_p/pg_unreachable aims to have the
  * compiler understand that the function will not return if elevel >= ERROR.
  */
+#ifdef HAVE__BUILTIN_CONSTANT_P
 #define RaiseDeferredError(error, elevel) \
 	do { \
 		RaiseDeferredErrorInternal(error, elevel); \
 		if (__builtin_constant_p(elevel) && (elevel) >= ERROR) { \
 			pg_unreachable(); } \
 	} while (0)
+#else  /* !HAVE_BUILTIN_CONSTANT_P */
+#define RaiseDeferredError(error, elevel) \
+	do { \
+		const int elevel_ = (elevel); \
+		RaiseDeferredErrorInternal(error, elevel_); \
+		if (elevel_ >= ERROR) { \
+			pg_unreachable(); } \
+	} while (0)
+#endif /* HAVE_BUILTIN_CONSTANT_P */
 
 void RaiseDeferredErrorInternal(DeferredErrorMessage *error, int elevel);
 
