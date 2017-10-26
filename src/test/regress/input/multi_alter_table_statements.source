@@ -240,9 +240,36 @@ COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'lineitem_alter';
 
 -- Create single-shard table (to avoid deadlocks in the upcoming test hackery)
-CREATE TABLE single_shard_items (id integer, name text);
+CREATE TABLE single_shard_items (id integer NOT NULL, name text);
 SELECT master_create_distributed_table('single_shard_items', 'id', 'hash');
 SELECT master_create_worker_shards('single_shard_items', 1, 2);
+
+-- Verify that ALTER TABLE .. REPLICATION IDENTITY [USING INDEX]* .. works
+CREATE UNIQUE INDEX replica_idx on single_shard_items(id);
+
+SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
+SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
+
+ALTER TABLE single_shard_items REPLICA IDENTITY nothing;
+SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
+SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
+
+ALTER TABLE single_shard_items REPLICA IDENTITY full;
+SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
+SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
+
+ALTER TABLE single_shard_items REPLICA IDENTITY USING INDEX replica_idx;
+SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
+SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
+
+ALTER TABLE single_shard_items REPLICA IDENTITY default, REPLICA IDENTITY USING INDEX replica_idx, REPLICA IDENTITY nothing;
+SELECT relreplident FROM pg_class WHERE relname = 'single_shard_items';
+SELECT run_command_on_workers('SELECT relreplident FROM pg_class WHERE relname LIKE ''single_shard_items_%'' LIMIT 1;');
+
+ALTER TABLE single_shard_items ADD COLUMN test_col int, REPLICA IDENTITY full;
+
+DROP INDEX replica_idx;
+ALTER TABLE single_shard_items REPLICA IDENTITY default;
 
 -- Drop the column from the worker...
 \c - - - :worker_2_port
