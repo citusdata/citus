@@ -422,3 +422,90 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products
 
 \c - - - :master_port
 DROP TABLE products;
+
+SET citus.shard_count to 2;
+-- Test if the ALTER TABLE %s ADD %s PRIMARY KEY %s works
+CREATE SCHEMA sc1;
+CREATE TABLE sc1.alter_add_prim_key(x int, y int);
+CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON sc1.alter_add_prim_key(x);
+ALTER TABLE sc1.alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
+SELECT create_distributed_table('sc1.alter_add_prim_key', 'x');
+SELECT (run_command_on_workers($$
+    SELECT  
+        kc.constraint_name 
+    FROM 
+        information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
+    WHERE
+        kc.table_schema = 'sc1' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%' 
+    ORDER BY 
+    1
+    LIMIT 
+        1;
+    $$)).*
+ORDER BY 
+    1,2,3,4;
+
+CREATE SCHEMA sc2;
+CREATE TABLE sc2.alter_add_prim_key(x int, y int);
+SET search_path TO 'sc2';
+SELECT create_distributed_table('alter_add_prim_key', 'x');
+CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
+ALTER TABLE alter_add_prim_key ADD CONSTRAINT alter_pk_idx PRIMARY KEY USING INDEX alter_pk_idx;
+SELECT (run_command_on_workers($$
+    SELECT  
+        kc.constraint_name 
+    FROM 
+        information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
+    WHERE
+        kc.table_schema = 'sc2' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
+    ORDER BY 
+    1
+    LIMIT 
+        1;
+    $$)).*
+ORDER BY 
+    1,2,3,4;
+
+-- We are running almost the same test with a slight change on the constraint name because if the constraint has a different name than the index, Postgres renames the index.
+CREATE SCHEMA sc3;
+CREATE TABLE sc3.alter_add_prim_key(x int);
+INSERT INTO sc3.alter_add_prim_key(x) SELECT generate_series(1,100);
+SET search_path TO 'sc3';
+SELECT create_distributed_table('alter_add_prim_key', 'x');
+CREATE UNIQUE INDEX CONCURRENTLY alter_pk_idx ON alter_add_prim_key(x);
+ALTER TABLE alter_add_prim_key ADD CONSTRAINT a_constraint PRIMARY KEY USING INDEX alter_pk_idx;
+SELECT (run_command_on_workers($$
+    SELECT  
+        kc.constraint_name 
+    FROM 
+        information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
+    WHERE
+        kc.table_schema = 'sc3' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
+    ORDER BY 
+    1
+    LIMIT 
+        1;
+    $$)).*
+ORDER BY 
+    1,2,3,4;
+
+ALTER TABLE alter_add_prim_key DROP CONSTRAINT a_constraint;
+SELECT (run_command_on_workers($$
+    SELECT  
+        kc.constraint_name 
+    FROM 
+        information_schema.table_constraints tc join information_schema.key_column_usage kc on (kc.table_name = tc.table_name and kc.table_schema = tc.table_schema and kc.constraint_name = tc.constraint_name)
+    WHERE
+        kc.table_schema = 'sc3' and tc.constraint_type = 'PRIMARY KEY' and kc.table_name LIKE 'alter_add_prim_key_%'
+    ORDER BY 
+    1
+    LIMIT 
+        1;
+    $$)).*
+ORDER BY 
+    1,2,3,4;
+SET search_path TO 'public';
+
+DROP SCHEMA sc1 CASCADE;
+DROP SCHEMA sc2 CASCADE;
+DROP SCHEMA sc3 CASCADE;
