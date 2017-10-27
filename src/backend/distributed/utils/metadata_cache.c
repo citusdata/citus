@@ -177,6 +177,7 @@ static void RegisterWorkerNodeCacheCallbacks(void);
 static void RegisterLocalGroupIdCacheCallbacks(void);
 static uint32 WorkerNodeHashCode(const void *key, Size keySize);
 static void ResetDistTableCacheEntry(DistTableCacheEntry *cacheEntry);
+static void CreateDistTableCache(void);
 static void InvalidateDistRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId);
 static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid relationId);
@@ -2345,13 +2346,7 @@ InitializeDistTableCache(void)
 	DistShardScanKey[0].sk_attno = Anum_pg_dist_shard_logicalrelid;
 
 	/* initialize the per-table hash table */
-	MemSet(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
-	info.entrysize = sizeof(DistTableCacheEntry);
-	info.hash = tag_hash;
-	DistTableCacheHash =
-		hash_create("Distributed Relation Cache", 32, &info,
-					HASH_ELEM | HASH_FUNCTION);
+	CreateDistTableCache();
 
 	/* initialize the per-shard hash table */
 	MemSet(&info, 0, sizeof(info));
@@ -2728,6 +2723,43 @@ InvalidateDistRelationCacheCallback(Datum argument, Oid relationId)
 	{
 		InvalidateMetadataSystemCache();
 	}
+}
+
+
+/*
+ * FlushDistTableCache flushes the entire distributed relation cache, frees
+ * all entries, and recreates the cache.
+ */
+void
+FlushDistTableCache(void)
+{
+	DistTableCacheEntry *cacheEntry = NULL;
+	HASH_SEQ_STATUS status;
+
+	hash_seq_init(&status, DistTableCacheHash);
+
+	while ((cacheEntry = (DistTableCacheEntry *) hash_seq_search(&status)) != NULL)
+	{
+		ResetDistTableCacheEntry(cacheEntry);
+	}
+
+	hash_destroy(DistTableCacheHash);
+	CreateDistTableCache();
+}
+
+
+/* CreateDistTableCache initializes the per-table hash table */
+static void
+CreateDistTableCache(void)
+{
+	HASHCTL info;
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(DistTableCacheEntry);
+	info.hash = tag_hash;
+	DistTableCacheHash =
+		hash_create("Distributed Relation Cache", 32, &info,
+					HASH_ELEM | HASH_FUNCTION);
 }
 
 
