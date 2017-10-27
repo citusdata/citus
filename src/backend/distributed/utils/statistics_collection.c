@@ -114,7 +114,7 @@ CollectBasicUsageStatistics(void)
 
 	CommitTransactionCommand();
 
-	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
+	return SendHttpPostJsonRequest(REPORTS_BASE_URL "/v1/usage_reports",
 								   fields->data, HTTP_TIMEOUT_SECONDS);
 }
 

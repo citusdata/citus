@@ -17,7 +17,6 @@ extern bool EnableStatisticsCollection;
 
 #ifdef HAVE_LIBCURL
 
-#define STATS_COLLECTION_HOST "https://citus-statistics.herokuapp.com"
 #define HTTP_TIMEOUT_SECONDS 5
 
 extern void WarnIfSyncDNS(void);
