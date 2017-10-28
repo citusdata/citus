@@ -831,7 +831,6 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 				}
 
 				connection = (MultiConnection *) event->user_data;
-				connectionIndex = event->pos + pendingConnectionsStartIndex;
 
 				if (event->events & WL_SOCKET_WRITEABLE)
 				{
@@ -844,7 +843,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 					else if (sendStatus == 0)
 					{
 						/* done writing, only wait for read events */
-						ModifyWaitEvent(waitEventSet, connectionIndex, WL_SOCKET_READABLE,
+						ModifyWaitEvent(waitEventSet, event->pos, WL_SOCKET_READABLE,
 										NULL);
 					}
 				}
@@ -866,6 +865,7 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 
 				if (connectionIsReady)
 				{
+					connectionIndex = event->pos + pendingConnectionsStartIndex;
 					connectionReady[connectionIndex] = true;
 					rebuildWaitEventSet = true;
 				}
