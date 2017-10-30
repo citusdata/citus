@@ -38,7 +38,13 @@
 #include "utils/palloc.h"
 
 
+#define TRANSFER_MODE_AUTOMATIC 'a'
+#define TRANSFER_MODE_FORCE_LOGICAL 'l'
+#define TRANSFER_MODE_BLOCK_WRITES 'b'
+
+
 /* local function forward declarations */
+static char LookupShardTransferMode(Oid shardReplicationModeOid);
 static void RepairShardPlacement(int64 shardId, char *sourceNodeName,
 								 int32 sourceNodePort, char *targetNodeName,
 								 int32 targetNodePort);
@@ -72,6 +78,8 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 	text *targetNodeNameText = PG_GETARG_TEXT_P(3);
 	int32 targetNodePort = PG_GETARG_INT32(4);
 	bool doRepair = PG_GETARG_BOOL(5);
+	Oid shardReplicationModeOid = PG_GETARG_OID(6);
+	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
@@ -82,6 +90,12 @@ master_copy_shard_placement(PG_FUNCTION_ARGS)
 						errmsg("master_copy_shard_placement() "
 							   "with do not repair functionality "
 							   "is only supported on Citus Enterprise")));
+	}
+	else if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("using logical replication with repair functionality "
+							   "is currently not supported")));
 	}
 
 	EnsureCoordinator();
@@ -105,6 +119,39 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("master_move_shard_placement() is only supported on "
 						   "Citus Enterprise")));
+}
+
+
+/*
+ * LookupShardTransferMode maps the oids of citus.shard_transfer_mode enum
+ * values to a char.
+ */
+static char
+LookupShardTransferMode(Oid shardReplicationModeOid)
+{
+	char shardReplicationMode = 0;
+
+	Datum enumLabelDatum = DirectFunctionCall1(enum_out, shardReplicationModeOid);
+	char *enumLabel = DatumGetCString(enumLabelDatum);
+
+	if (strncmp(enumLabel, "auto", NAMEDATALEN) == 0)
+	{
+		shardReplicationMode = TRANSFER_MODE_AUTOMATIC;
+	}
+	else if (strncmp(enumLabel, "force_logical", NAMEDATALEN) == 0)
+	{
+		shardReplicationMode = TRANSFER_MODE_FORCE_LOGICAL;
+	}
+	else if (strncmp(enumLabel, "block_writes", NAMEDATALEN) == 0)
+	{
+		shardReplicationMode = TRANSFER_MODE_BLOCK_WRITES;
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("invalid label for enum: %s", enumLabel)));
+	}
+
+	return shardReplicationMode;
 }
 
 
