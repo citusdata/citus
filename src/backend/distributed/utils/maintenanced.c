@@ -214,7 +214,9 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
-	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY = GetCurrentTimestamp();
+	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY =
+		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
+	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
 
 	/*
@@ -323,17 +325,25 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				statsCollectionSuccess = CollectBasicUsageStatistics();
 			}
 
-			if (statsCollectionSuccess)
+			/*
+			 * If statistics collection was successful the next collection is
+			 * 24-hours later. Also, if this was a retry attempt we don't do
+			 * any more retries until 24-hours later, so we limit number of
+			 * retries to one.
+			 */
+			if (statsCollectionSuccess || retryStatsCollection)
 			{
 				nextStatsCollectionTime =
 					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
 												STATS_COLLECTION_TIMEOUT_MILLIS);
+				retryStatsCollection = false;
 			}
 			else
 			{
 				nextStatsCollectionTime =
 					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
 												STATS_COLLECTION_RETRY_TIMEOUT_MILLIS);
+				retryStatsCollection = true;
 			}
 
 			CommitTransactionCommand();
