@@ -73,12 +73,14 @@ SELECT p_partkey, count(distinct l_orderkey) FROM lineitem_range, part
 (10 rows)
 
 RESET citus.large_table_shard_count;
--- Check that we don't support count(distinct) on non-partition column, and
--- complex expressions.
+-- Check that we support count(distinct) on non-partition column.
 SELECT count(distinct l_partkey) FROM lineitem_range;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  table partitioning is unsuitable for aggregate (distinct)
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+ count 
+-------
+ 11661
+(1 row)
+
+-- Check that we don't support complex expressions.
 SELECT count(distinct (l_orderkey + 1)) FROM lineitem_range;
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  aggregate (distinct) on complex expressions is unsupported
@@ -101,12 +103,14 @@ SELECT p_mfgr, count(distinct p_partkey) FROM part GROUP BY p_mfgr ORDER BY p_mf
  Manufacturer#5            |   185
 (5 rows)
 
--- We don't support count(distinct) queries if table is append partitioned and
--- has multiple shards
-SELECT count(distinct o_orderkey) FROM orders;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  table partitioning is unsuitable for aggregate (distinct)
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+-- We support count(distinct) queries on append partitioned tables
+-- both on partition column, and non-partition column.
+SELECT count(distinct o_orderkey), count(distinct o_custkey) FROM orders;
+ count | count 
+-------+-------
+  2984 |   923
+(1 row)
+
 -- Hash partitioned tables:
 CREATE TABLE lineitem_hash (
 	l_orderkey bigint not null,
@@ -152,11 +156,14 @@ SELECT avg(distinct l_orderkey) FROM lineitem_hash;
  7463.9474036850921273
 (1 row)
 
--- count(distinct) on non-partition column or expression is not allowed
+-- count(distinct) on non-partition column is allowed
 SELECT count(distinct l_partkey) FROM lineitem_hash;
-ERROR:  cannot compute aggregate (distinct)
-DETAIL:  table partitioning is unsuitable for aggregate (distinct)
-HINT:  You can load the hll extension from contrib packages and enable distinct approximations.
+ count 
+-------
+ 11661
+(1 row)
+
+-- count(distinct) on column expression is not allowed
 SELECT count(distinct (l_orderkey + 1)) FROM lineitem_hash;
 ERROR:  cannot compute aggregate (distinct)
 DETAIL:  aggregate (distinct) on complex expressions is unsupported
@@ -170,4 +177,21 @@ SELECT * FROM hash_results h, range_results r WHERE h.l_orderkey = r.l_orderkey 
 ------------+-------+------------+-------
 (0 rows)
 
+-- count(distinct) is allowed if we group by non-partition column
+SELECT l_partkey, count(distinct l_orderkey) INTO hash_results_np FROM lineitem_hash GROUP BY l_partkey;
+SELECT l_partkey, count(distinct l_orderkey) INTO range_results_np FROM lineitem_range GROUP BY l_partkey;
+-- they should return the same results
+SELECT * FROM hash_results_np h, range_results_np r WHERE h.l_partkey = r.l_partkey AND h.count != r.count;
+ l_partkey | count | l_partkey | count 
+-----------+-------+-----------+-------
+(0 rows)
+
+-- other agg(distinct) are not allowed on non-partition columns even they are grouped
+-- on non-partition columns
+SELECT SUM(distinct l_partkey) FROM lineitem_hash;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
+SELECT l_shipmode, sum(distinct l_partkey) FROM lineitem_hash GROUP BY l_shipmode;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  table partitioning is unsuitable for aggregate (distinct)
 DROP TABLE lineitem_hash;
