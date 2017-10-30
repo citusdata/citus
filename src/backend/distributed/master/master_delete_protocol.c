@@ -297,8 +297,8 @@ master_drop_sequences(PG_FUNCTION_ARGS)
 	{
 		appendStringInfoString(dropSeqCommand, " CASCADE");
 
-		SendCommandToWorkers(ALL_WORKERS, DISABLE_DDL_PROPAGATION);
-		SendCommandToWorkers(ALL_WORKERS, dropSeqCommand->data);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, DISABLE_DDL_PROPAGATION);
+		SendCommandToWorkers(WORKERS_WITH_METADATA, dropSeqCommand->data);
 	}
 
 	PG_RETURN_VOID();
