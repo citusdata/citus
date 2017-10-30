@@ -42,6 +42,8 @@ PG_FUNCTION_INFO_V1(citus_server_id);
 #include "utils/fmgrprotos.h"
 #endif
 
+static size_t StatisticsCallback(char *contents, size_t size, size_t count,
+								 void *userData);
 static size_t CheckForUpdatesCallback(char *contents, size_t size, size_t count,
 									  void *userData);
 static bool JsonbFieldInt32(Jsonb *jsonb, const char *fieldName, int32 *result);
@@ -50,7 +52,8 @@ static uint64 NextPow2(uint64 n);
 static uint64 DistributedTablesSize(List *distTableOids);
 static bool UrlEncode(StringInfo buf, const char *str);
 static bool SendHttpPostJsonRequest(const char *url, const char *postFields,
-									long timeoutSeconds);
+									long timeoutSeconds,
+									curl_write_callback responseCallback);
 static bool SendHttpGetJsonRequest(const char *url, long timeoutSeconds,
 								   curl_write_callback responseCallback);
 static bool PerformHttpRequest(CURL *curl);
@@ -145,7 +148,20 @@ CollectBasicUsageStatistics(void)
 	appendStringInfoString(fields, "}");
 
 	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
-								   fields->data, HTTP_TIMEOUT_SECONDS);
+								   fields->data, HTTP_TIMEOUT_SECONDS,
+								   StatisticsCallback);
+}
+
+
+/*
+ * StatisticsCallback receives the response for the request sent by
+ * CollectBasicUsageStatistics. For now, it doesn't check the contents of the
+ * response and succeeds for any response.
+ */
+static size_t
+StatisticsCallback(char *contents, size_t size, size_t count, void *userData)
+{
+	return size * count;
 }
 
 
@@ -424,10 +440,11 @@ UrlEncode(StringInfo buf, const char *str)
 
 /*
  * SendHttpPostJsonRequest sends a HTTP/HTTPS POST request to the given URL with
- * the given json object.
+ * the given json object. responseCallback is called with the content of response.
  */
 static bool
-SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSeconds)
+SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSeconds,
+						curl_write_callback responseCallback)
 {
 	bool success = false;
 	CURL *curl = NULL;
@@ -445,6 +462,7 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonObj);
 		curl_easy_setopt(curl, CURLOPT_TIMEOUT, timeoutSeconds);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, responseCallback);
 
 		success = PerformHttpRequest(curl);
 
