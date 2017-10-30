@@ -325,6 +325,13 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 
 			if (statsCollectionSuccess)
 			{
+				/*
+				 * Checking for updates only when collecting statistics succeeds,
+				 * so we don't log update messages twice when we retry statistics
+				 * collection in a minute.
+				 */
+				CheckForUpdates();
+
 				nextStatsCollectionTime =
 					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
 												STATS_COLLECTION_TIMEOUT_MILLIS);
