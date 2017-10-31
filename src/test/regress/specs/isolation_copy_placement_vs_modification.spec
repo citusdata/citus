@@ -104,7 +104,7 @@ step "s2-print-index-count"
 	SELECT 
 		nodeport, success, result 
 	FROM 
-		run_command_on_placements('test_copy_placement_vs_modification', 'select count(*) from pg_indexes WHERE schemaname || ''.'' || tablename = ''%s''')
+		run_command_on_placements('test_copy_placement_vs_modification', 'select count(*) from pg_indexes WHERE tablename = ''%s''')
 	ORDER BY
 		nodeport;
 }
