@@ -39,9 +39,9 @@ SELECT shard_name(NULL, 666666);
 SELECT shard_name(0, 666666);
 ERROR:  object_name does not reference a valid relation
 SELECT shard_name('too_long_12345678901234567890123456789012345678901234567890'::regclass, 666666);
-                               shard_name                               
-------------------------------------------------------------------------
- public.too_long_12345678901234567890123456789012345678_e0119164_666666
+                           shard_name                            
+-----------------------------------------------------------------
+ too_long_12345678901234567890123456789012345678_e0119164_666666
 (1 row)
 
 SELECT shard_name('too_long_12345678901234567890123456789012345678901234567890'::regclass, NULL);
@@ -316,9 +316,9 @@ SELECT master_create_worker_shards(U&'elephant_!0441!043B!043E!043D!0441!043B!04
 SELECT shard_name(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass, min(shardid))
 FROM pg_dist_shard
 WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass;
-                        shard_name                        
-----------------------------------------------------------
- public."elephant_слонслонслонсло_c8b737c2_2250000000002"
+                    shard_name                     
+---------------------------------------------------
+ "elephant_слонслонслонсло_c8b737c2_2250000000002"
 (1 row)
 
 \c - - - :worker_1_port
