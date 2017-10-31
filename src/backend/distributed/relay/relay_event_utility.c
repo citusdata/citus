@@ -100,8 +100,19 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			{
 				AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
 
-				if (command->subtype == AT_AddConstraint ||
-					command->subtype == AT_DropConstraint)
+				if (command->subtype == AT_AddConstraint)
+				{
+					Constraint *constraint = (Constraint *) command->def;
+
+					if (constraint->contype == CONSTR_PRIMARY && constraint->indexname)
+					{
+						char **indexName = &(constraint->indexname);
+						AppendShardIdToName(indexName, shardId);
+					}
+
+					AppendShardIdToConstraintName(command, shardId);
+				}
+				if (command->subtype == AT_DropConstraint)
 				{
 					AppendShardIdToConstraintName(command, shardId);
 				}
