@@ -66,6 +66,7 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 			Query *copiedSubquery = NULL;
 			List *relationShardList = task->relationShardList;
 			ShardInterval *shardInterval = LoadShardInterval(task->anchorShardId);
+			char partitionMethod = 0;
 
 			query = copyObject(originalQuery);
 
@@ -73,7 +74,13 @@ RebuildQueryStrings(Query *originalQuery, List *taskList)
 			copiedSubqueryRte = ExtractSelectRangeTableEntry(query);
 			copiedSubquery = copiedSubqueryRte->subquery;
 
-			AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
+			/* there are no restrictions to add for reference tables */
+			partitionMethod = PartitionMethod(shardInterval->relationId);
+			if (partitionMethod != DISTRIBUTE_BY_NONE)
+			{
+				AddShardIntervalRestrictionToSelect(copiedSubquery, shardInterval);
+			}
+
 			ReorderInsertSelectTargetLists(query, copiedInsertRte, copiedSubqueryRte);
 
 			/* setting an alias simplifies deparsing of RETURNING */
