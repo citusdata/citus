@@ -7,7 +7,7 @@
 -- DECLARE CURSOR, and COPY ... TO statements.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1000000;
+SET citus.next_shard_id TO 1000000;
 
 
 CREATE TEMP TABLE lineitem_pricing_summary AS 

@@ -4,7 +4,7 @@
 -- the tables that are used depends to multi_insert_select_behavioral_analytics_create_table.sql
 
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
--- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
+-- SET citus.next_shard_id TO 1400000;
 
 SET citus.enable_router_execution TO false;
 -- a very simple union query

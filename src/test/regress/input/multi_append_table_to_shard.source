@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 230000;
+SET citus.next_shard_id TO 230000;
 
 
 -- Initialize tables to join

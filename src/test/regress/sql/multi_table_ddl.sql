@@ -4,7 +4,7 @@
 -- Tests around changing the schema and dropping of a distributed table
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 870000;
+SET citus.next_shard_id TO 870000;
 
 
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);

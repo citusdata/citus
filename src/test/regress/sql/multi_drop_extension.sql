@@ -4,7 +4,7 @@
 -- Tests around dropping and recreating the extension
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 550000;
+SET citus.next_shard_id TO 550000;
 
 
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);

@@ -551,7 +551,6 @@ SELECT master_apply_delete_command('DELETE FROM nation_append') ;
 
 \c - - - :master_port
 
-
 -- check joins of tables which are in schemas other than public
 -- we create new tables with replication factor of 1
 -- so that we guarantee to have repartitions when necessary
@@ -759,6 +758,7 @@ SELECT create_reference_table('schema_with_user.test_table');
 \dn schema_with_user
 
 \c - - - :master_port
+
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
 SELECT run_command_on_workers('DROP OWNED BY "test-user" CASCADE');
