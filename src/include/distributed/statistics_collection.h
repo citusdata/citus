@@ -12,6 +12,17 @@
 
 #include "citus_version.h"
 
+/*
+ * Append USED_WITH_LIBCURL_ONLY to definitions of variables that are only used
+ * when compiled with libcurl, to avoid compiler warnings about unused variables
+ * when built without libcurl.
+ */
+#ifdef HAVE_LIBCURL
+#define USED_WITH_LIBCURL_ONLY
+#else
+#define USED_WITH_LIBCURL_ONLY pg_attribute_unused()
+#endif
+
 /* Config variables managed via guc.c */
 extern bool EnableStatisticsCollection;
 
