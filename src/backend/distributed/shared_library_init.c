@@ -226,7 +226,7 @@ multi_log_hook(ErrorData *edata)
 		MyBackendGotCancelledDueToDeadlock())
 	{
 		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
-		edata->message = "canceling the transaction since it has "
+		edata->message = "canceling the transaction since it was "
 						 "involved in a distributed deadlock";
 	}
 }
