@@ -6,14 +6,14 @@
 -- tables.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 640000;
+SET citus.next_shard_id TO 640000;
 
 
 --
 -- CREATE TEST TABLES
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102080;
+SET citus.next_shard_id TO 102080;
 
 CREATE TABLE index_test_range(a int, b int, c int);
 SELECT master_create_distributed_table('index_test_range', 'a', 'range');

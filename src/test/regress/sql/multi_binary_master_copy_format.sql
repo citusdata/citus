@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 430000;
+SET citus.next_shard_id TO 430000;
 
 
 -- Try binary master copy for different executors

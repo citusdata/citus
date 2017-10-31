@@ -5,7 +5,7 @@
 --
 
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
--- ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1400000;
+-- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
 SET citus.enable_router_execution TO FALSE;

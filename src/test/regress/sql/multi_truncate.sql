@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1210000;
+SET citus.next_shard_id TO 1210000;
 
 --
 -- truncate for append distribution

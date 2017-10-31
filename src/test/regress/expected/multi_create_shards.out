@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 370000;
+SET citus.next_shard_id TO 370000;
 -- ===================================================================
 -- create test functions and types needed for tests
 -- ===================================================================

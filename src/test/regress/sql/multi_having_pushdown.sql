@@ -2,7 +2,7 @@
 -- MULTI_HAVING_PUSHDOWN
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 590000;
+SET citus.next_shard_id TO 590000;
 
 CREATE TABLE lineitem_hash (LIKE lineitem);
 SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');

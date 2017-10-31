@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 650000;
+SET citus.next_shard_id TO 650000;
 
 -- Set configuration to print table join order and pruned shards
 

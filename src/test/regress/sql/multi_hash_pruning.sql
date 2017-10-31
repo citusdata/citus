@@ -5,7 +5,7 @@
 -- Tests for shard and join pruning logic on hash partitioned tables.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 630000;
+SET citus.next_shard_id TO 630000;
 
 -- Create a table partitioned on integer column and update partition type to
 -- hash. Then load data into this table and update shard min max values with

@@ -7,7 +7,7 @@
 -- tracker executor here, as we cannot run repartition jobs with real time executor.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 710000;
+SET citus.next_shard_id TO 710000;
 
 -- print whether we're using version > 9 to make version-specific tests clear
 SHOW server_version \gset

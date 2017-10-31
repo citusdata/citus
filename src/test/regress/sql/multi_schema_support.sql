@@ -2,7 +2,7 @@
 -- MULTI_SCHEMA_SUPPORT
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
+SET citus.next_shard_id TO 1190000;
 
 -- create schema to test schema support
 CREATE SCHEMA test_schema_support;

@@ -1,7 +1,7 @@
 --
 -- MULTI_TASK_STRING_SIZE
 --
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1602000;
+SET citus.next_shard_id TO 1602000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1602000;
 CREATE TABLE wide_table
 (

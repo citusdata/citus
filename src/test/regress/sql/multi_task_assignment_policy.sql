@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 880000;
+SET citus.next_shard_id TO 880000;
 
 -- print whether we're using version > 9 to make version-specific tests clear
 SHOW server_version \gset
