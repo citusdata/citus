@@ -1885,6 +1885,25 @@ SELECT * FROM ref_table ORDER BY user_id, value_1;
 
 DROP TABLE ref_table;
 
+-- Select from reference table into reference table
+CREATE TABLE ref1 (d timestamptz);
+SELECT create_reference_table('ref1');
+
+CREATE TABLE ref2 (d date);
+SELECT create_reference_table('ref2');
+INSERT INTO ref2 VALUES ('2017-10-31');
+
+INSERT INTO ref1 SELECT * FROM ref2;
+SELECT count(*) from ref1;
+
+-- also test with now()
+INSERT INTO ref1 SELECT now() FROM ref2;
+SELECT count(*) from ref1;
+
+
+DROP TABLE ref1;
+DROP TABLE ref2;
+
 -- Select into an append-partitioned table is not supported
 CREATE TABLE insert_append_table (user_id int, value_4 bigint);
 SELECT create_distributed_table('insert_append_table', 'user_id', 'append');
