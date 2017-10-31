@@ -2,7 +2,7 @@
 -- MULTI_METADATA_ACCESS
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1360000;
+SET citus.next_shard_id TO 1360000;
 
 CREATE USER no_access;
 SET ROLE no_access;

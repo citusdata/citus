@@ -7,7 +7,7 @@
 -- executor here, as we cannot run repartition jobs with real time executor.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 690000;
+SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
 
 -- print whether we're using version > 9 to make version-specific tests clear

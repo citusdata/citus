@@ -6,7 +6,7 @@
 -- databases, schemas, and roles.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1010000;
+SET citus.next_shard_id TO 1010000;
 
 
 CREATE DATABASE new_database;

@@ -7,7 +7,7 @@
 -- not done yet.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 580000;
+SET citus.next_shard_id TO 580000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 580000;
 
 CREATE SCHEMA test;

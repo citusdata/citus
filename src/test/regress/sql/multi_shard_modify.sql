@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 350000;
+SET citus.next_shard_id TO 350000;
 
 
 -- Create a new hash partitioned multi_shard_modify_test table and load data into it.
@@ -162,4 +162,4 @@ SELECT master_modify_multiple_shards('UPDATE multi_shard_modify_test SET t_value
 -- commands with stable functions in their quals are allowed
 SELECT master_modify_multiple_shards('DELETE FROM multi_shard_modify_test WHERE t_key = temp_stable_func()');
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 102046;
+SET citus.next_shard_id TO 102046;

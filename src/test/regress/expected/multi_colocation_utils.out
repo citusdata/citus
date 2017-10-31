@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
+SET citus.next_shard_id TO 1300000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 -- ===================================================================
 -- create test utility function
@@ -631,6 +631,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colloca
 (1 row)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1300068;
 CREATE TABLE table1_groupF ( id int );
 SELECT create_reference_table('table1_groupF');
  create_reference_table 

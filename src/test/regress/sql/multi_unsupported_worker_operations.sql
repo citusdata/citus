@@ -4,7 +4,7 @@
 
 -- Tests for ensuring unsupported functions on workers error out.
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1270000;
+SET citus.next_shard_id TO 1270000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1370000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1370000;
 

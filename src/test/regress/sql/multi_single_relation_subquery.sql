@@ -4,7 +4,7 @@
 -- This test checks that we are able to run selected set of distributed SQL subqueries.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 860000;
+SET citus.next_shard_id TO 860000;
 
 
 SET citus.task_executor_type TO 'task-tracker';

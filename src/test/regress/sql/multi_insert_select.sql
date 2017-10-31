@@ -2,7 +2,7 @@
 -- MULTI_INSERT_SELECT
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13300000;
+SET citus.next_shard_id TO 13300000;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 13300000;
 
 -- create co-located tables

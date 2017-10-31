@@ -8,7 +8,7 @@
 -- result files.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 810000;
+SET citus.next_shard_id TO 810000;
 SET citus.enable_unique_job_ids TO off;
 
 

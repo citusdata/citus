@@ -1,7 +1,7 @@
 --
 -- MULTI_JOIN_ORDER_TPCH_LARGE
 --
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 660000;
+SET citus.next_shard_id TO 660000;
 -- Enable configuration to print table join order
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;

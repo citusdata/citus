@@ -2,7 +2,7 @@
 -- MULTI_SQL_FUNCTION
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1230000;
+SET citus.next_shard_id TO 1230000;
 
 
 CREATE FUNCTION sql_test_no_1() RETURNS bigint AS '

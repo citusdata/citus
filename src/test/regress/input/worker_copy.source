@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 260000;
+SET citus.next_shard_id TO 260000;
 
 
 COPY lineitem FROM '@abs_srcdir@/data/lineitem.1.data' WITH DELIMITER '|';

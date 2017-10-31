@@ -2,7 +2,7 @@
 -- multi shard update delete
 -- this file is intended to test multi shard update/delete queries
 --
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1440000;
+SET citus.next_shard_id TO 1440000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1440000;
 SET citus.shard_replication_factor to 1;
 SET citus.multi_shard_modify_mode to 'parallel';
