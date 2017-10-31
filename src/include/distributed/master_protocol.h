@@ -93,6 +93,7 @@ extern int ShardReplicationFactor;
 extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
 extern int NextShardId;
+extern int NextPlacementId;
 
 
 extern bool IsCoordinator(void);
