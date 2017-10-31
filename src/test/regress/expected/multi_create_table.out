@@ -920,8 +920,131 @@ NOTICE:  Copying data from local table...
 (1 row)
 
 COMMIT;
+SET citus.shard_count TO 4;
+BEGIN;
+CREATE SCHEMA sc3;
+CREATE TABLE sc3.alter_replica_table
+(
+	name text,
+	id int PRIMARY KEY
+);
+ALTER TABLE sc3.alter_replica_table REPLICA IDENTITY USING INDEX alter_replica_table_pkey;
+SELECT create_distributed_table('sc3.alter_replica_table', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COMMIT;
+SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc3' LIMIT 1$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,i)
+ (localhost,57638,t,i)
+(2 rows)
+
+BEGIN;
+CREATE SCHEMA sc4;
+CREATE TABLE sc4.alter_replica_table
+(
+	name text,
+	id int PRIMARY KEY
+);
+INSERT INTO sc4.alter_replica_table(id) SELECT generate_series(1,100);
+SET search_path = 'sc4';
+ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX alter_replica_table_pkey;
+SELECT create_distributed_table('alter_replica_table', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COMMIT;
+SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc4' LIMIT 1$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,i)
+ (localhost,57638,t,i)
+(2 rows)
+
+SET search_path = 'public';
+BEGIN;
+CREATE SCHEMA sc5;
+CREATE TABLE sc5.alter_replica_table
+(
+	name text,
+	id int NOT NULL
+);
+INSERT INTO sc5.alter_replica_table(id) SELECT generate_series(1,100);
+ALTER TABLE sc5.alter_replica_table REPLICA IDENTITY FULL;
+SELECT create_distributed_table('sc5.alter_replica_table', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COMMIT;
+SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc5' LIMIT 1$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,f)
+ (localhost,57638,t,f)
+(2 rows)
+
+BEGIN;
+CREATE SCHEMA sc6;
+CREATE TABLE sc6.alter_replica_table
+(
+	name text,
+	id int NOT NULL
+);
+INSERT INTO sc6.alter_replica_table(id) SELECT generate_series(1,100);
+CREATE UNIQUE INDEX unique_idx ON sc6.alter_replica_table(id);
+ALTER TABLE sc6.alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
+SELECT create_distributed_table('sc6.alter_replica_table', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COMMIT;
+SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='sc6' LIMIT 1$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,i)
+ (localhost,57638,t,i)
+(2 rows)
+
+BEGIN;
+CREATE TABLE alter_replica_table
+(
+	name text,
+	id int NOT NULL
+);
+INSERT INTO alter_replica_table(id) SELECT generate_series(1,100);
+CREATE UNIQUE INDEX unique_idx ON alter_replica_table(id);
+ALTER TABLE alter_replica_table REPLICA IDENTITY USING INDEX unique_idx;
+SELECT create_distributed_table('alter_replica_table', 'id');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+COMMIT;
+SELECT run_command_on_workers($$SELECT relreplident FROM pg_class join information_schema.tables AS tables ON (pg_class.relname=tables.table_name) WHERE relname LIKE 'alter_replica_table_%' AND table_schema='public' LIMIT 1$$);
+ run_command_on_workers 
+------------------------
+ (localhost,57637,t,i)
+ (localhost,57638,t,i)
+(2 rows)
+
 DROP TABLE tt1;
 DROP TABLE tt2;
+DROP TABLE alter_replica_table;
 DROP SCHEMA sc CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table sc.ref
@@ -930,3 +1053,11 @@ DROP SCHEMA sc2 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table sc2.hash
 drop cascades to table sc2.ref
+DROP SCHEMA sc3 CASCADE;
+NOTICE:  drop cascades to table sc3.alter_replica_table
+DROP SCHEMA sc4 CASCADE;
+NOTICE:  drop cascades to table sc4.alter_replica_table
+DROP SCHEMA sc5 CASCADE;
+NOTICE:  drop cascades to table sc5.alter_replica_table
+DROP SCHEMA sc6 CASCADE;
+NOTICE:  drop cascades to table sc6.alter_replica_table

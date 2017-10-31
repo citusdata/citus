@@ -69,9 +69,8 @@ int ShardReplicationFactor = 1; /* desired replication factor for shards */
 int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 
-
+static List * GetTableReplicaIdentityCommand(Oid relationId);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
-
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -474,6 +473,7 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 	List *tableDDLEventList = NIL;
 	List *tableCreationCommandList = NIL;
 	List *indexAndConstraintCommandList = NIL;
+	List *replicaIdentityEvents = NIL;
 
 	tableCreationCommandList = GetTableCreationCommands(relationId,
 														includeSequenceDefaults);
@@ -482,7 +482,42 @@ GetTableDDLEvents(Oid relationId, bool includeSequenceDefaults)
 	indexAndConstraintCommandList = GetTableIndexAndConstraintCommands(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
 
+	replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
+	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
+
 	return tableDDLEventList;
+}
+
+
+/*
+ * GetTableReplicaIdentityCommand returns the list of DDL commands to
+ * (re)define the replica identity choice for a given table.
+ */
+static List *
+GetTableReplicaIdentityCommand(Oid relationId)
+{
+	List *replicaIdentityCreateCommandList = NIL;
+	char *replicaIdentityCreateCommand = NULL;
+
+	/*
+	 * We skip non-relations because postgres does not support
+	 * ALTER TABLE .. REPLICA IDENTITY on non-relations.
+	 */
+	char relationKind = get_rel_relkind(relationId);
+	if (relationKind != RELKIND_RELATION)
+	{
+		return NIL;
+	}
+
+	replicaIdentityCreateCommand = pg_get_replica_identity_command(relationId);
+
+	if (replicaIdentityCreateCommand)
+	{
+		replicaIdentityCreateCommandList = lappend(replicaIdentityCreateCommandList,
+												   replicaIdentityCreateCommand);
+	}
+
+	return replicaIdentityCreateCommandList;
 }
 
 
