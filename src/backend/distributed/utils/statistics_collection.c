@@ -155,6 +155,17 @@ DistributedTablesSize(List *distTableOids)
 		Datum tableSizeDatum = 0;
 
 		/*
+		 * Relations can get dropped after getting the Oid list and before we
+		 * reach here. Acquire a lock to make sure the relation is available
+		 * while we are getting its size.
+		 */
+		Relation relation = try_relation_open(relationId, AccessShareLock);
+		if (relation == NULL)
+		{
+			continue;
+		}
+
+		/*
 		 * Ignore hash partitioned tables with size greater than 1, since
 		 * citus_table_size() doesn't work on them.
 		 */
@@ -167,6 +178,7 @@ DistributedTablesSize(List *distTableOids)
 		tableSizeDatum = DirectFunctionCall1(citus_table_size,
 											 ObjectIdGetDatum(relationId));
 		totalSize += DatumGetInt64(tableSizeDatum);
+		heap_close(relation, AccessShareLock);
 	}
 
 	return totalSize;
