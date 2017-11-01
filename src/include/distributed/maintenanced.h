@@ -13,10 +13,10 @@
 #define MAINTENANCED_H
 
 /* collect statistics every 24 hours */
-#define STATISTICS_COLLECTION_INTERVAL 86400
+#define STATS_COLLECTION_TIMEOUT_MILLIS (24 * 60 * 60 * 1000)
 
 /* if statistics collection fails, retry in 1 minute */
-#define STATISTICS_COLLECTION_RETRY_INTERVAL 60
+#define STATS_COLLECTION_RETRY_TIMEOUT_MILLIS (60 * 1000)
 
 /* config variable for */
 extern double DistributedDeadlockDetectionTimeoutFactor;
