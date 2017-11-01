@@ -97,6 +97,12 @@ CollectBasicUsageStatistics(void)
 	bool metadataCollectionFailed = false;
 	memset(&unameData, 0, sizeof(unameData));
 
+	/*
+	 * Start a subtransaction so we can rollback database's state to it in case
+	 * of error.
+	 */
+	BeginInternalSubTransaction(NULL);
+
 	PG_TRY();
 	{
 		distTableOids = DistTableOidList();
@@ -106,6 +112,13 @@ CollectBasicUsageStatistics(void)
 		metadataJsonbDatum = DistNodeMetadata();
 		metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
 															   metadataJsonbDatum));
+
+		/*
+		 * Releasing a subtransaction doesn't free its memory context, since the
+		 * data it contains will be needed at upper commit. See the comments for
+		 * AtSubCommit_Memory() at postgres/src/backend/access/transam/xact.c.
+		 */
+		ReleaseCurrentSubTransaction();
 	}
 	PG_CATCH();
 	{
@@ -113,6 +126,8 @@ CollectBasicUsageStatistics(void)
 		MemoryContextSwitchTo(savedContext);
 		edata = CopyErrorData();
 		FlushErrorState();
+
+		RollbackAndReleaseCurrentSubTransaction();
 
 		/* rethrow as WARNING */
 		edata->elevel = WARNING;
@@ -210,17 +225,25 @@ CheckForUpdatesCallback(char *contents, size_t size, size_t count, void *userDat
 	StringInfo responseNullTerminated = makeStringInfo();
 	appendBinaryStringInfo(responseNullTerminated, contents, size * count);
 
+	/*
+	 * Start a subtransaction so we can rollback database's state to it in case
+	 * of error.
+	 */
+	BeginInternalSubTransaction(NULL);
+
 	/* jsonb_in can throw errors */
 	PG_TRY();
 	{
 		Datum responseCStringDatum = CStringGetDatum(responseNullTerminated->data);
 		Datum responseJasonbDatum = DirectFunctionCall1(jsonb_in, responseCStringDatum);
 		responseJsonb = DatumGetJsonb(responseJasonbDatum);
+		ReleaseCurrentSubTransaction();
 	}
 	PG_CATCH();
 	{
 		MemoryContextSwitchTo(savedContext);
 		FlushErrorState();
+		RollbackAndReleaseCurrentSubTransaction();
 		responseJsonb = NULL;
 	}
 	PG_END_TRY();
@@ -287,18 +310,26 @@ JsonbFieldInt32(Jsonb *jsonb, const char *fieldName, int32 *result)
 		return false;
 	}
 
+	/*
+	 * Start a subtransaction so we can rollback database's state to it in case
+	 * of error.
+	 */
+	BeginInternalSubTransaction(NULL);
+
 	/* numeric_int4 can throw errors */
 	PG_TRY();
 	{
 		Datum resultNumericDatum = NumericGetDatum(fieldValue->val.numeric);
 		*result = DatumGetInt32(DirectFunctionCall1(numeric_int4, resultNumericDatum));
 		success = true;
+		ReleaseCurrentSubTransaction();
 	}
 	PG_CATCH();
 	{
 		MemoryContextSwitchTo(savedContext);
 		FlushErrorState();
 		success = false;
+		RollbackAndReleaseCurrentSubTransaction();
 	}
 	PG_END_TRY();
 
