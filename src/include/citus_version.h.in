@@ -23,3 +23,6 @@
 
 /* Define to 1 if you have the `curl' library (-lcurl). */
 #undef HAVE_LIBCURL
+
+/* Base URL for statistics collection and update checks */
+#undef REPORTS_BASE_URL
