@@ -20,6 +20,8 @@
 
 bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus */
 
+PG_FUNCTION_INFO_V1(citus_server_id);
+
 #ifdef HAVE_LIBCURL
 
 #include <curl/curl.h>
@@ -27,6 +29,8 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 
 #include "access/xact.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_join_order.h"
+#include "distributed/shardinterval_utils.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/worker_manager.h"
 #include "lib/stringinfo.h"
@@ -38,7 +42,7 @@ bool EnableStatisticsCollection = true; /* send basic usage statistics to Citus 
 #endif
 
 static uint64 NextPow2(uint64 n);
-static uint64 ClusterSize(List *distributedTableList);
+static uint64 DistributedTablesSize(List *distTableOids);
 static bool SendHttpPostJsonRequest(const char *url, const char *postFields, long
 									timeoutSeconds);
 
@@ -67,36 +71,54 @@ WarnIfSyncDNS(void)
 bool
 CollectBasicUsageStatistics(void)
 {
-	List *distributedTables = NIL;
+	List *distTableOids = NIL;
 	uint64 roundedDistTableCount = 0;
 	uint64 roundedClusterSize = 0;
 	uint32 workerNodeCount = 0;
 	StringInfo fields = makeStringInfo();
 	Datum metadataJsonbDatum = 0;
 	char *metadataJsonbStr = NULL;
+	MemoryContext savedContext = CurrentMemoryContext;
 	struct utsname unameData;
+	int unameResult PG_USED_FOR_ASSERTS_ONLY = 0;
+	bool metadataCollectionFailed = false;
 	memset(&unameData, 0, sizeof(unameData));
 
-	StartTransactionCommand();
+	PG_TRY();
+	{
+		distTableOids = DistTableOidList();
+		roundedDistTableCount = NextPow2(list_length(distTableOids));
+		roundedClusterSize = NextPow2(DistributedTablesSize(distTableOids));
+		workerNodeCount = ActivePrimaryNodeCount();
+		metadataJsonbDatum = DistNodeMetadata();
+		metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
+															   metadataJsonbDatum));
+	}
+	PG_CATCH();
+	{
+		ErrorData *edata = NULL;
+		MemoryContextSwitchTo(savedContext);
+		edata = CopyErrorData();
+		FlushErrorState();
+
+		/* rethrow as WARNING */
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+		metadataCollectionFailed = true;
+	}
+	PG_END_TRY();
 
 	/*
-	 * If there is a version mismatch between loaded version and available
-	 * version, metadata functions will fail. We return early to avoid crashing.
-	 * This can happen when updating the Citus extension.
+	 * Returning here instead of in PG_CATCH() since PG_END_TRY() resets couple
+	 * of global variables.
 	 */
-	if (!CheckCitusVersion(LOG_SERVER_ONLY))
+	if (metadataCollectionFailed)
 	{
-		CommitTransactionCommand();
 		return false;
 	}
-	distributedTables = DistributedTableList();
-	roundedDistTableCount = NextPow2(list_length(distributedTables));
-	roundedClusterSize = NextPow2(ClusterSize(distributedTables));
-	workerNodeCount = ActivePrimaryNodeCount();
-	metadataJsonbDatum = DistNodeMetadata();
-	metadataJsonbStr = DatumGetCString(DirectFunctionCall1(jsonb_out,
-														   metadataJsonbDatum));
-	uname(&unameData);
+
+	unameResult = uname(&unameData);
+	Assert(unameResult == 0);  /* uname() always succeeds if we pass valid buffer */
 
 	appendStringInfoString(fields, "{\"citus_version\": ");
 	escape_json(fields, CITUS_VERSION);
@@ -112,46 +134,42 @@ CollectBasicUsageStatistics(void)
 	appendStringInfo(fields, ",\"node_metadata\": %s", metadataJsonbStr);
 	appendStringInfoString(fields, "}");
 
-	CommitTransactionCommand();
-
 	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
 								   fields->data, HTTP_TIMEOUT_SECONDS);
 }
 
 
 /*
- * ClusterSize returns total size of data store in the cluster consisting of
- * given distributed tables. We ignore tables which we cannot get their size.
+ * DistributedTablesSize returns total size of data store in the cluster consisting
+ * of given distributed tables. We ignore tables which we cannot get their size.
  */
 static uint64
-ClusterSize(List *distributedTableList)
+DistributedTablesSize(List *distTableOids)
 {
-	uint64 clusterSize = 0;
-	ListCell *distTableCacheEntryCell = NULL;
+	uint64 totalSize = 0;
+	ListCell *distTableOidCell = NULL;
 
-	foreach(distTableCacheEntryCell, distributedTableList)
+	foreach(distTableOidCell, distTableOids)
 	{
-		DistTableCacheEntry *distTableCacheEntry = lfirst(distTableCacheEntryCell);
-		Oid relationId = distTableCacheEntry->relationId;
-		MemoryContext savedContext = CurrentMemoryContext;
+		Oid relationId = lfirst_oid(distTableOidCell);
+		Datum tableSizeDatum = 0;
 
-		PG_TRY();
+		/*
+		 * Ignore hash partitioned tables with size greater than 1, since
+		 * citus_table_size() doesn't work on them.
+		 */
+		if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
+			!SingleReplicatedTable(relationId))
 		{
-			Datum distTableSizeDatum = DirectFunctionCall1(citus_table_size,
-														   ObjectIdGetDatum(relationId));
-			clusterSize += DatumGetInt64(distTableSizeDatum);
+			continue;
 		}
-		PG_CATCH();
-		{
-			FlushErrorState();
 
-			/* citus_table_size() throws an error while the memory context is changed */
-			MemoryContextSwitchTo(savedContext);
-		}
-		PG_END_TRY();
+		tableSizeDatum = DirectFunctionCall1(citus_table_size,
+											 ObjectIdGetDatum(relationId));
+		totalSize += DatumGetInt64(tableSizeDatum);
 	}
 
-	return clusterSize;
+	return totalSize;
 }
 
 
@@ -242,8 +260,6 @@ SendHttpPostJsonRequest(const char *url, const char *jsonObj, long timeoutSecond
 
 #endif /* HAVE_LIBCURL */
 
-PG_FUNCTION_INFO_V1(citus_server_id);
-
 /*
  * citus_server_id returns a random UUID value as server identifier. This is
  * modeled after PostgreSQL's pg_random_uuid().
@@ -254,11 +270,14 @@ citus_server_id(PG_FUNCTION_ARGS)
 	uint8 *buf = (uint8 *) palloc(UUID_LEN);
 
 #if PG_VERSION_NUM >= 100000
+
+	/*
+	 * If pg_backend_random() fails, fall-back to using random(). In previous
+	 * versions of postgres we don't have pg_backend_random(), so use it by
+	 * default in that case.
+	 */
 	if (!pg_backend_random((char *) buf, UUID_LEN))
-	{
-		ereport(ERROR, (errmsg("failed to generate server identifier")));
-	}
-#else
+#endif
 	{
 		int bufIdx = 0;
 		for (bufIdx = 0; bufIdx < UUID_LEN; bufIdx++)
@@ -266,7 +285,6 @@ citus_server_id(PG_FUNCTION_ARGS)
 			buf[bufIdx] = (uint8) (random() & 0xFF);
 		}
 	}
-#endif
 
 	/*
 	 * Set magic numbers for a "version 4" (pseudorandom) UUID, see

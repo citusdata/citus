@@ -214,8 +214,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 	MaintenanceDaemonDBData *myDbData = NULL;
-	time_t prevStatsCollection = 0;
-	bool prevStatsCollectionFailed = false;
+	TimestampTz nextStatsCollectionTime USED_WITH_LIBCURL_ONLY = GetCurrentTimestamp();
 	ErrorContextCallback errorCallback;
 
 	/*
@@ -278,30 +277,17 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		int latchFlags = WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH;
 		double timeout = 10000.0; /* use this if the deadlock detection is disabled */
 		bool foundDeadlock = false;
-		time_t currentTime = time(NULL);
-		double secondsSincePrevStatsCollection = difftime(currentTime,
-														  prevStatsCollection);
-		bool citusHasBeenLoaded = false;
 
 		CHECK_FOR_INTERRUPTS();
 
-		StartTransactionCommand();
-		citusHasBeenLoaded = CitusHasBeenLoaded();
-		CommitTransactionCommand();
-
-		if (!citusHasBeenLoaded)
-		{
-			continue;
-		}
-
 		/*
-		 * XXX: We clear the metadata cache before every iteration because otherwise
-		 * it might contain stale OIDs. It appears that in some cases invalidation
-		 * messages for a DROP EXTENSION may arrive during deadlock detection and
+		 * XXX: Each task should clear the metadata cache before every iteration
+		 * by calling InvalidateMetadataSystemCache(), because otherwise it
+		 * might contain stale OIDs. It appears that in some cases invalidation
+		 * messages for a DROP EXTENSION may arrive during these tasks and
 		 * this causes us to cache a stale pg_dist_node OID. We'd actually expect
 		 * all invalidations to arrive after obtaining a lock in LockCitusExtension.
 		 */
-		InvalidateMetadataSystemCache();
 
 		/*
 		 * Perform Work.  If a specific task needs to be called sooner than
@@ -309,35 +295,54 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		 * tasks should do their own time math about whether to re-run checks.
 		 */
 
-		if (secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_INTERVAL ||
-			(prevStatsCollectionFailed &&
-			 secondsSincePrevStatsCollection >= STATISTICS_COLLECTION_RETRY_INTERVAL))
-		{
 #ifdef HAVE_LIBCURL
-			if (EnableStatisticsCollection)
+		if (EnableStatisticsCollection &&
+			GetCurrentTimestamp() >= nextStatsCollectionTime)
+		{
+			bool statsCollectionSuccess = false;
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			/*
+			 * Lock the extension such that it cannot be dropped or created
+			 * concurrently. Skip statistics collection if citus extension is
+			 * not accessible.
+			 *
+			 * Similarly, we skip statistics collection if there exists any
+			 * version mismatch or the extension is not fully created yet.
+			 */
+			if (!LockCitusExtension())
 			{
-				MemoryContext statsCollectionContext =
-					AllocSetContextCreate(CurrentMemoryContext,
-										  "StatsCollection",
-										  ALLOCSET_DEFAULT_MINSIZE,
-										  ALLOCSET_DEFAULT_INITSIZE,
-										  ALLOCSET_DEFAULT_MAXSIZE);
-				MemoryContext oldContext =
-					MemoryContextSwitchTo(statsCollectionContext);
-
-				WarnIfSyncDNS();
-				prevStatsCollectionFailed = !CollectBasicUsageStatistics();
-
-				MemoryContextSwitchTo(oldContext);
-				MemoryContextDelete(statsCollectionContext);
-				prevStatsCollection = currentTime;
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping statistics collection")));
 			}
-#endif
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				WarnIfSyncDNS();
+				statsCollectionSuccess = CollectBasicUsageStatistics();
+			}
+
+			if (statsCollectionSuccess)
+			{
+				nextStatsCollectionTime =
+					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
+												STATS_COLLECTION_TIMEOUT_MILLIS);
+			}
+			else
+			{
+				nextStatsCollectionTime =
+					TimestampTzPlusMilliseconds(GetCurrentTimestamp(),
+												STATS_COLLECTION_RETRY_TIMEOUT_MILLIS);
+			}
+
+			CommitTransactionCommand();
 		}
+#endif
 
 		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
+			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
 
 			/*
