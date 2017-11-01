@@ -147,7 +147,7 @@ CollectBasicUsageStatistics(void)
 	appendStringInfo(fields, ",\"node_metadata\": %s", metadataJsonbStr);
 	appendStringInfoString(fields, "}");
 
-	return SendHttpPostJsonRequest(STATS_COLLECTION_HOST "/v1/usage_reports",
+	return SendHttpPostJsonRequest(REPORTS_BASE_URL "/v1/usage_reports",
 								   fields->data, HTTP_TIMEOUT_SECONDS,
 								   StatisticsCallback);
 }
@@ -170,7 +170,7 @@ void
 CheckForUpdates(void)
 {
 	StringInfo url = makeStringInfo();
-	appendStringInfoString(url, STATS_COLLECTION_HOST "/v1/releases/latest?edition=");
+	appendStringInfoString(url, REPORTS_BASE_URL "/v1/releases/latest?edition=");
 
 	if (!UrlEncode(url, CITUS_EDITION))
 	{

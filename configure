@@ -686,6 +686,7 @@ enable_option_checking
 with_extra_version
 enable_coverage
 with_libcurl
+with_reports_hostname
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1316,6 +1317,9 @@ Optional Packages:
                           append STRING to version
   --without-libcurl       do not use libcurl for anonymous statistics
                           collection
+  --with-reports-hostname=HOSTNAME
+                          Use HOSTNAME as hostname for statistics collection
+                          and update checks
 
 Some influential environment variables:
   PG_CONFIG   Location to find pg_config for target PostgreSQL instalation
@@ -4111,6 +4115,36 @@ fi
 
 
 fi
+
+# REPORTS_BASE_URL definition
+
+
+
+# Check whether --with-reports-hostname was given.
+if test "${with_reports_hostname+set}" = set; then :
+  withval=$with_reports_hostname;
+  case $withval in
+    yes)
+      as_fn_error $? "argument required for --with-reports-hostname option" "$LINENO" 5
+      ;;
+    no)
+      as_fn_error $? "argument required for --with-reports-hostname option" "$LINENO" 5
+      ;;
+    *)
+      REPORTS_BASE_URL="https://${withval}"
+      ;;
+  esac
+
+else
+  REPORTS_BASE_URL="https://reports.citusdata.com"
+fi
+
+
+
+cat >>confdefs.h <<_ACEOF
+#define REPORTS_BASE_URL "$REPORTS_BASE_URL"
+_ACEOF
+
 
 CITUS_CFLAGS="$CITUS_CFLAGS"
 
