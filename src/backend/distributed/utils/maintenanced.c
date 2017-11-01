@@ -318,6 +318,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			}
 			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 			{
+				FlushDistTableCache();
 				WarnIfSyncDNS();
 				statsCollectionSuccess = CollectBasicUsageStatistics();
 			}
