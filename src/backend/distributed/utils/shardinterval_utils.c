@@ -390,7 +390,7 @@ SingleReplicatedTable(Oid relationId)
 		uint64 shardId = (*shardIdPointer);
 		List *shardPlacementList = ShardPlacementList(shardId);
 
-		if (shardPlacementList->length > 1)
+		if (list_length(shardPlacementList) != 1)
 		{
 			return false;
 		}
