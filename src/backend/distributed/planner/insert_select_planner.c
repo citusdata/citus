@@ -321,14 +321,6 @@ DistributedInsertSelectSupported(Query *queryTree, RangeTblEntry *insertRte,
 							 NULL, NULL);
 	}
 
-	if (GetLocalGroupId() != 0)
-	{
-		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "distributed INSERT ... SELECT can only be performed from "
-							 "the coordinator",
-							 NULL, NULL);
-	}
-
 	/* we do not expect to see a view in modify target */
 	foreach(rangeTableCell, queryTree->rtable)
 	{

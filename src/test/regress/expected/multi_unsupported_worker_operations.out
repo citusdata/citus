@@ -264,19 +264,6 @@ SELECT count(*) FROM mx_table;
      5
 (1 row)
 
--- INSERT / SELECT pulls results to worker
-BEGIN;
-SET LOCAL client_min_messages TO DEBUG;
-INSERT INTO mx_table_2 SELECT * FROM mx_table;
-DEBUG:  distributed INSERT ... SELECT can only be performed from the coordinator
-DEBUG:  Collecting INSERT ... SELECT results on coordinator
-END;
-SELECT count(*) FROM mx_table_2;
- count 
--------
-     5
-(1 row)
-
 -- mark_tables_colocated
 UPDATE pg_dist_partition SET colocationid = 0 WHERE logicalrelid='mx_table_2'::regclass;
 SELECT mark_tables_colocated('mx_table', ARRAY['mx_table_2']);
