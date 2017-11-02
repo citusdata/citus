@@ -276,7 +276,7 @@ SELECT * FROM multiple_hash_mx WHERE category = '2' ORDER BY category, data;
 INSERT INTO multiple_hash_mx
 SELECT s, s*2 FROM generate_series(1,10) s;
 
--- but are never distributed
+-- including distributed INSERT ... SELECT
 BEGIN;
 SET LOCAL client_min_messages TO DEBUG1;
 INSERT INTO multiple_hash_mx SELECT * FROM multiple_hash_mx;
