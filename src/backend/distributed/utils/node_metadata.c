@@ -58,7 +58,6 @@ static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static Datum AddNodeMetadata(char *nodeName, int32 nodePort, int32 groupId,
 							 char *nodeRack, bool hasMetadata, bool isActive,
 							 Oid nodeRole, char *nodeCluster, bool *nodeAlreadyExists);
-static uint32 CountPrimariesWithMetadata();
 static void SetNodeState(char *nodeName, int32 nodePort, bool isActive);
 static HeapTuple GetNodeTuple(char *nodeName, int32 nodePort);
 static Datum GenerateNodeTuple(WorkerNode *workerNode);
@@ -861,8 +860,8 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 
 /* CountPrimariesWithMetadata returns the number of primary nodes which have metadata. */
-static uint32
-CountPrimariesWithMetadata()
+uint32
+CountPrimariesWithMetadata(void)
 {
 	uint32 primariesWithMetadata = 0;
 	WorkerNode *workerNode = NULL;

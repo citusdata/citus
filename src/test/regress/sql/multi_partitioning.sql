@@ -806,11 +806,17 @@ COMMIT;
 
 DROP TABLE
 IF EXISTS
-    partitioning_test_2012,
-    partitioning_test_2013,
+    partitioning_test_2009,
     partitioned_events_table,
     partitioned_users_table,
     list_partitioned_events_table,
     multi_column_partitioning,
     partitioning_locks,
     partitioning_locks_for_select;
+
+-- make sure we can create a partitioned table with streaming replication
+SET citus.replication_model TO 'streaming';
+CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
+CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+SELECT create_distributed_table('partitioning_test', 'id');
+DROP TABLE partitioning_test;

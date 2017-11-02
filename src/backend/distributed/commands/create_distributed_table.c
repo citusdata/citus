@@ -728,11 +728,12 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 		}
 
 		/* we currently don't support MX tables to be distributed partitioned table */
-		if (replicationModel == REPLICATION_MODEL_STREAMING)
+		if (replicationModel == REPLICATION_MODEL_STREAMING &&
+			CountPrimariesWithMetadata() > 0)
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("distributing partitioned tables which uses "
-								   "streaming replication is not supported")));
+							errmsg("distributing partitioned tables is not supported "
+								   "with Citus MX")));
 		}
 
 		/* we don't support distributing tables with multi-level partitioning */
