@@ -101,9 +101,6 @@ typedef struct WorkerTask
  */
 typedef struct WorkerTasksSharedStateData
 {
-	/* Hash table shared by the task tracker and task tracker protocol functions */
-	HTAB *taskHash;
-
 	/* Lock protecting workerNodesHash */
 	int taskHashTrancheId;
 #if (PG_VERSION_NUM >= 100000)
@@ -123,6 +120,7 @@ extern int MaxTaskStringSize;
 
 /* State shared by the task tracker and task tracker protocol functions */
 extern WorkerTasksSharedStateData *WorkerTasksSharedState;
+extern HTAB *TaskTrackerTaskHash;
 
 /* Entry point */
 extern void TaskTrackerMain(Datum main_arg);

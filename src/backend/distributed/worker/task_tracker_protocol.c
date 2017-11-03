@@ -189,7 +189,7 @@ task_tracker_cleanup_job(PG_FUNCTION_ARGS)
 	 */
 	LWLockAcquire(&WorkerTasksSharedState->taskHashLock, LW_EXCLUSIVE);
 
-	hash_seq_init(&status, WorkerTasksSharedState->taskHash);
+	hash_seq_init(&status, TaskTrackerTaskHash);
 
 	currentTask = (WorkerTask *) hash_seq_search(&status);
 	while (currentTask != NULL)
@@ -415,8 +415,7 @@ CleanupTask(WorkerTask *workerTask)
 	}
 
 	/* remove the task from the shared hash */
-	taskRemoved = hash_search(WorkerTasksSharedState->taskHash, hashKey, HASH_REMOVE,
-							  NULL);
+	taskRemoved = hash_search(TaskTrackerTaskHash, hashKey, HASH_REMOVE, NULL);
 	if (taskRemoved == NULL)
 	{
 		ereport(FATAL, (errmsg("worker task hash corrupted")));
