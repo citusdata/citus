@@ -75,6 +75,7 @@ extern WorkerNode * PrimaryNodeForGroup(uint32 groupId, bool *groupContainsNodes
 extern bool WorkerNodeIsPrimary(WorkerNode *worker);
 extern bool WorkerNodeIsSecondary(WorkerNode *worker);
 extern bool WorkerNodeIsReadable(WorkerNode *worker);
+extern uint32 CountPrimariesWithMetadata(void);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);
