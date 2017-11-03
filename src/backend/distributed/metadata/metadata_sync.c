@@ -35,6 +35,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_join_order.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -251,6 +252,16 @@ MetadataCreateCommands(void)
 		if (ShouldSyncTableMetadata(cacheEntry->relationId))
 		{
 			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+
+			if (PartitionedTable(cacheEntry->relationId))
+			{
+				char *relationName = get_rel_name(cacheEntry->relationId);
+
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("cannot perform metadata sync for "
+									   "partitioned table \"%s\"",
+									   relationName)));
+			}
 		}
 	}
 
