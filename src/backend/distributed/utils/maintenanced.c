@@ -51,7 +51,7 @@ typedef struct MaintenanceDaemonControlData
 	/*
 	 * Lock protecting the shared memory state.  This is to be taken when
 	 * looking up (shared mode) or inserting (exclusive mode) per-database
-	 * data in dbHash.
+	 * data in MaintenanceDaemonDBHash.
 	 */
 	int trancheId;
 #if (PG_VERSION_NUM >= 100000)
@@ -60,12 +60,6 @@ typedef struct MaintenanceDaemonControlData
 	LWLockTranche lockTranche;
 #endif
 	LWLock lock;
-
-	/*
-	 * Hash-table of workers, one entry for each database with citus
-	 * activated.
-	 */
-	HTAB *dbHash;
 } MaintenanceDaemonControlData;
 
 
@@ -89,6 +83,12 @@ double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
+
+/*
+ * Hash-table of workers, one entry for each database with citus
+ * activated.
+ */
+static HTAB *MaintenanceDaemonDBHash;
 
 static volatile sig_atomic_t got_SIGHUP = false;
 
@@ -128,7 +128,7 @@ InitializeMaintenanceDaemonBackend(void)
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonControl->dbHash,
+	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
 													 &MyDatabaseId,
 													 HASH_ENTER_NULL, &found);
 
@@ -225,8 +225,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_SHARED);
 
 	myDbData = (MaintenanceDaemonDBData *)
-			   hash_search(MaintenanceDaemonControl->dbHash, &databaseOid,
-						   HASH_FIND, NULL);
+			   hash_search(MaintenanceDaemonDBHash, &databaseOid, HASH_FIND, NULL);
 	if (!myDbData)
 	{
 		/*
@@ -530,10 +529,9 @@ MaintenanceDaemonShmemInit(void)
 	hashInfo.hash = tag_hash;
 	hashFlags = (HASH_ELEM | HASH_FUNCTION);
 
-	MaintenanceDaemonControl->dbHash =
-		ShmemInitHash("Maintenance Database Hash",
-					  max_worker_processes, max_worker_processes,
-					  &hashInfo, hashFlags);
+	MaintenanceDaemonDBHash = ShmemInitHash("Maintenance Database Hash",
+											max_worker_processes, max_worker_processes,
+											&hashInfo, hashFlags);
 
 	LWLockRelease(AddinShmemInitLock);
 
@@ -622,7 +620,7 @@ StopMaintenanceDaemon(Oid databaseId)
 
 	LWLockAcquire(&MaintenanceDaemonControl->lock, LW_EXCLUSIVE);
 
-	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonControl->dbHash,
+	dbData = (MaintenanceDaemonDBData *) hash_search(MaintenanceDaemonDBHash,
 													 &databaseId, HASH_REMOVE, &found);
 	if (found)
 	{
