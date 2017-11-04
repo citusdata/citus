@@ -62,6 +62,7 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	DistributedTransactionId *distributedTransactionId = NULL;
 	ListCell *subIdCell = NULL;
 	List *activeSubXacts = NIL;
+	const char *timestamp = NULL;
 
 	Assert(transaction->transactionState == REMOTE_TRANS_INVALID);
 
@@ -84,12 +85,13 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 * seperate roundtrips for these two statements.
 	 */
 	distributedTransactionId = GetCurrentDistributedTransactionId();
+	timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
 	appendStringInfo(beginAndSetDistributedTransactionId,
 					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
 					 ", '%s');",
 					 distributedTransactionId->initiatorNodeIdentifier,
 					 distributedTransactionId->transactionNumber,
-					 timestamptz_to_str(distributedTransactionId->timestamp));
+					 timestamp);
 
 	/* append in-progress savepoints for this transaction */
 	activeSubXacts = ActiveSubXacts();
