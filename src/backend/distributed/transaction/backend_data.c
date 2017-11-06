@@ -297,7 +297,10 @@ void
 InitializeBackendManagement(void)
 {
 	/* allocate shared memory */
-	RequestAddinShmemSpace(BackendManagementShmemSize());
+	if (!IsUnderPostmaster)
+	{
+		RequestAddinShmemSpace(BackendManagementShmemSize());
+	}
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = BackendManagementShmemInit;

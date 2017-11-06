@@ -170,8 +170,13 @@ _PG_init(void)
 	/*
 	 * Extend the database directory structure before continuing with
 	 * initialization - one of the later steps might require them to exist.
+	 * If in a sub-process (windows / EXEC_BACKEND) this already has been
+	 * done.
 	 */
-	CreateRequiredDirectories();
+	if (!IsUnderPostmaster)
+	{
+		CreateRequiredDirectories();
+	}
 
 	/*
 	 * Register Citus configuration variables. Do so before intercepting
