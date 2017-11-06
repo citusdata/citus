@@ -100,11 +100,16 @@ TaskTrackerRegister(void)
 {
 	BackgroundWorker worker;
 
-	/* organize and register initialization of required shared memory */
-	RequestAddinShmemSpace(TaskTrackerShmemSize());
-
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = TaskTrackerShmemInit;
+
+	if (IsUnderPostmaster)
+	{
+		return;
+	}
+
+	/* organize and register initialization of required shared memory */
+	RequestAddinShmemSpace(TaskTrackerShmemSize());
 
 	/* and that the task tracker is started as background worker */
 	memset(&worker, 0, sizeof(worker));
