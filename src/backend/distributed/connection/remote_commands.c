@@ -424,7 +424,7 @@ SendRemoteCommandParams(MultiConnection *connection, const char *command,
 	 * Don't try to send command if connection is entirely gone
 	 * (PQisnonblocking() would crash).
 	 */
-	if (!pgConn)
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
 	{
 		return 0;
 	}
@@ -457,7 +457,7 @@ SendRemoteCommand(MultiConnection *connection, const char *command)
 	 * Don't try to send command if connection is entirely gone
 	 * (PQisnonblocking() would crash).
 	 */
-	if (!pgConn)
+	if (!pgConn || PQstatus(pgConn) != CONNECTION_OK)
 	{
 		return 0;
 	}
