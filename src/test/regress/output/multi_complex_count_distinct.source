@@ -35,6 +35,7 @@ SELECT master_create_worker_shards('lineitem_hash', 8, 1);
 
 \copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \copy lineitem_hash FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+ANALYZE lineitem_hash;
 SET citus.task_executor_type to "task-tracker";
 -- count(distinct) is supported on top level query if there
 -- is a grouping on the partition key	
@@ -65,8 +66,8 @@ SELECT
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
-                                                                                                 QUERY PLAN                                                                                                 
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                                                                              QUERY PLAN                                                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  Limit
    Output: remote_scan.l_orderkey, COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum((COALESCE((pg_catalog.sum(remote_scan.count))::bigint, '0'::bigint))))::bigint, '0'::bigint))))::bigint, '0'::bigint)
    ->  Sort
@@ -89,12 +90,9 @@ SELECT
                                        ->  GroupAggregate
                                              Output: l_orderkey, count(DISTINCT l_partkey)
                                              Group Key: lineitem_hash.l_orderkey
-                                             ->  Sort
-                                                   Output: l_orderkey, l_partkey
-                                                   Sort Key: lineitem_hash.l_orderkey DESC
-                                                   ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
-                                                         Output: l_orderkey, l_partkey
-(27 rows)
+                                             ->  Index Scan Backward using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(24 rows)
 
 -- it is also supported if there is no grouping or grouping is on non-partition field
 SELECT
@@ -237,12 +235,9 @@ SELECT
                                        ->  GroupAggregate
                                              Output: l_orderkey, count(DISTINCT l_partkey), count(DISTINCT l_shipmode)
                                              Group Key: lineitem_hash.l_orderkey
-                                             ->  Sort
-                                                   Output: l_orderkey, l_partkey, l_shipmode
-                                                   Sort Key: lineitem_hash.l_orderkey
-                                                   ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
-                                                         Output: l_orderkey, l_partkey, l_shipmode
-(27 rows)
+                                             ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(24 rows)
 
 -- partition/non-partition column count distinct no grouping
 SELECT
@@ -524,12 +519,9 @@ SELECT
                                        ->  GroupAggregate
                                              Output: l_orderkey, count(DISTINCT l_suppkey) FILTER (WHERE (l_shipmode = 'AIR'::bpchar)), count(DISTINCT l_suppkey)
                                              Group Key: lineitem_hash.l_orderkey
-                                             ->  Sort
-                                                   Output: l_orderkey, l_suppkey, l_shipmode
-                                                   Sort Key: lineitem_hash.l_orderkey
-                                                   ->  Seq Scan on public.lineitem_hash_240000 lineitem_hash
-                                                         Output: l_orderkey, l_suppkey, l_shipmode
-(27 rows)
+                                             ->  Index Scan using lineitem_hash_pkey_240000 on public.lineitem_hash_240000 lineitem_hash
+                                                   Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+(24 rows)
 
 -- group by on non-partition column
 SELECT
