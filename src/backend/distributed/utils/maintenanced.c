@@ -107,7 +107,10 @@ static bool LockCitusExtension(void);
 void
 InitializeMaintenanceDaemon(void)
 {
-	RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
+	if (!IsUnderPostmaster)
+	{
+		RequestAddinShmemSpace(MaintenanceDaemonShmemSize());
+	}
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = MaintenanceDaemonShmemInit;
