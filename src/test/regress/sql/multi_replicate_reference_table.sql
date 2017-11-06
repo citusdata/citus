@@ -457,6 +457,13 @@ ORDER BY 1,4,5;
 -- this should have no effect
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
+-- test adding an invalid node while we have reference tables to replicate
+-- set client message level to ERROR to suppress OS-dependent host name resolution warnings
+SET client_min_messages to ERROR;
+SELECT master_add_node('invalid-node-name', 9999);
+
+SET client_min_messages to DEFAULT;
+
 -- drop unnecassary tables
 DROP TABLE initially_not_replicated_reference_table;
 
