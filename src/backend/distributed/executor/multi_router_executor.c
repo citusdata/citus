@@ -1141,8 +1141,11 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 											 &currentAffectedTupleCount);
 			}
 
-			/* should have rolled back on error */
-			Assert(queryOK);
+			/* We error out if the worker fails to return a result for the query. */
+			if (!queryOK)
+			{
+				ReportConnectionError(connection, ERROR);
+			}
 
 			if (placementIndex == 0)
 			{
