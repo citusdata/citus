@@ -397,6 +397,7 @@ DistributedTablesSize(List *distTableOids)
 		if (PartitionMethod(relationId) == DISTRIBUTE_BY_HASH &&
 			!SingleReplicatedTable(relationId))
 		{
+			heap_close(relation, AccessShareLock);
 			continue;
 		}
 
