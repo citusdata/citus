@@ -22,7 +22,6 @@
 #include "distributed/backend_data.h"
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/connection_management.h"
-#include "distributed/connection_management.h"
 #include "distributed/distributed_deadlock_detection.h"
 #include "distributed/maintenanced.h"
 #include "distributed/master_metadata_utility.h"
@@ -107,6 +106,16 @@ static const struct config_enum_entry use_secondary_nodes_options[] = {
 static const struct config_enum_entry multi_shard_commit_protocol_options[] = {
 	{ "1pc", COMMIT_PROTOCOL_1PC, false },
 	{ "2pc", COMMIT_PROTOCOL_2PC, false },
+	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry citus_ssl_mode_options[] = {
+	{ "disable", CITUS_SSL_MODE_DISABLE, false },
+	{ "allow", CITUS_SSL_MODE_ALLOW, false },
+	{ "prefer", CITUS_SSL_MODE_PREFER, false },
+	{ "require", CITUS_SSL_MODE_REQUIRE, false },
+	{ "verify-ca", CITUS_SSL_MODE_VERIFY_CA, false },
+	{ "verify-full", CITUS_SSL_MODE_VERIFY_FULL, false },
 	{ NULL, 0, false }
 };
 
@@ -303,6 +312,19 @@ RegisterCitusConfigVariables(void)
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 	NormalizeWorkerListPath();
+
+	DefineCustomEnumVariable(
+		"citus.sslmode",
+		gettext_noop("SSL mode to use for connections to worker nodes."),
+		gettext_noop("When connecting to a worker node, specify whether the SSL mode"
+					 "mode for the connection is 'disable', 'allow', 'prefer' "
+					 "(the default), 'require', 'verify-ca' or 'verify-full'."),
+		&CitusSSLMode,
+		CITUS_SSL_MODE_PREFER,
+		citus_ssl_mode_options,
+		PGC_POSTMASTER,
+		GUC_SUPERUSER_ONLY,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.binary_master_copy_format",
