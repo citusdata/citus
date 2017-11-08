@@ -14,6 +14,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/remote_transaction.h"
 #include "lib/ilist.h"
+#include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/timestamp.h"
 
@@ -106,6 +107,23 @@ typedef struct ConnectionHashEntry
 	dlist_head *connections;
 } ConnectionHashEntry;
 
+/*
+ * SSL modes available for connecting to worker nodes.
+ */
+enum CitusSSLMode
+{
+	CITUS_SSL_MODE_DISABLE = 1 << 0,
+	CITUS_SSL_MODE_ALLOW = 1 << 1,
+	CITUS_SSL_MODE_PREFER = 1 << 2,
+	CITUS_SSL_MODE_REQUIRE = 1 << 3,
+	CITUS_SSL_MODE_VERIFY_CA = 1 << 4,
+	CITUS_SSL_MODE_VERIFY_FULL = 1 << 5
+};
+
+
+/* SSL mode to use when connecting to worker nodes */
+extern int CitusSSLMode;
+
 /* maximum duration to wait for connection */
 extern int NodeConnectionTimeout;
 
@@ -133,6 +151,7 @@ extern MultiConnection * StartNodeUserDatabaseConnection(uint32 flags,
 														 int32 port,
 														 const char *user,
 														 const char *database);
+extern char * CitusSSLModeString(void);
 extern void CloseNodeConnectionsAfterTransaction(char *nodeName, int nodePort);
 extern void CloseConnection(MultiConnection *connection);
 extern void ShutdownConnection(MultiConnection *connection);
