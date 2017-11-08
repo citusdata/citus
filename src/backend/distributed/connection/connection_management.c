@@ -28,8 +28,10 @@
 
 
 int NodeConnectionTimeout = 5000;
+int CitusSSLMode = CITUS_SSL_MODE_PREFER;
 HTAB *ConnectionHash = NULL;
 MemoryContext ConnectionContext = NULL;
+
 
 static uint32 ConnectionHashHash(const void *key, Size keysize);
 static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
@@ -591,14 +593,15 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	char nodePortString[12];
 	const char *clientEncoding = GetDatabaseEncodingName();
 	MultiConnection *connection = NULL;
+	const char *sslmode = CitusSSLModeString();
 
 	const char *keywords[] = {
-		"host", "port", "dbname", "user",
+		"host", "port", "dbname", "user", "sslmode",
 		"client_encoding", "fallback_application_name",
 		NULL
 	};
 	const char *values[] = {
-		key->hostname, nodePortString, key->database, key->user,
+		key->hostname, nodePortString, key->database, key->user, sslmode,
 		clientEncoding, "citus", NULL
 	};
 
@@ -621,6 +624,52 @@ StartConnectionEstablishment(ConnectionHashKey *key)
 	PQsetnonblocking(connection->pgConn, true);
 
 	return connection;
+}
+
+
+/*
+ * CitusSSLModeString returns the current value of citus.sslmode.
+ */
+char *
+CitusSSLModeString(void)
+{
+	switch (CitusSSLMode)
+	{
+		case CITUS_SSL_MODE_DISABLE:
+		{
+			return "disable";
+		}
+
+		case CITUS_SSL_MODE_ALLOW:
+		{
+			return "allow";
+		}
+
+		case CITUS_SSL_MODE_PREFER:
+		{
+			return "prefer";
+		}
+
+		case CITUS_SSL_MODE_REQUIRE:
+		{
+			return "require";
+		}
+
+		case CITUS_SSL_MODE_VERIFY_CA:
+		{
+			return "verify-ca";
+		}
+
+		case CITUS_SSL_MODE_VERIFY_FULL:
+		{
+			return "verify-full";
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("unrecognized value for citus.sslmode")));
+		}
+	}
 }
 
 
