@@ -820,3 +820,87 @@ CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
 CREATE TABLE partitioning_test_2009 PARTITION OF partitioning_test FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
 SELECT create_distributed_table('partitioning_test', 'id');
 DROP TABLE partitioning_test;
+
+-- make sure we can attach partitions to a distributed table in a schema
+CREATE SCHEMA partitioning_schema;
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
+CREATE TABLE partitioning_schema."schema-test_2009"(id int, time date);
+ALTER TABLE partitioning_schema."schema-test" ATTACH PARTITION partitioning_schema."schema-test_2009" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+
+-- attached partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+DROP TABLE partitioning_schema."schema-test";
+
+-- make sure we can create partition of a distributed table in a schema
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
+CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF partitioning_schema."schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+
+-- newly created partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+DROP TABLE partitioning_schema."schema-test";
+
+-- make sure creating partitioned tables works while search_path is set
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+SET search_path = partitioning_schema;
+SELECT create_distributed_table('"schema-test"', 'id');
+CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF "schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+
+-- newly created partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+
+DROP SCHEMA partitioning_schema CASCADE;

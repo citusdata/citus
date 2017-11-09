@@ -874,7 +874,7 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 											  missingOk);
 			Var *parentDistributionColumn = DistPartitionKey(parentRelationId);
 			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
-			char *parentRelationName = get_rel_name(parentRelationId);
+			char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 			bool viaDeprecatedAPI = false;
 
 			CreateDistributedTable(relationId, parentDistributionColumn,
@@ -952,11 +952,11 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 			{
 				Var *distributionColumn = DistPartitionKey(relationId);
 				char distributionMethod = DISTRIBUTE_BY_HASH;
-				char *relationName = get_rel_name(relationId);
+				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
 
 				CreateDistributedTable(partitionRelationId, distributionColumn,
-									   distributionMethod, relationName,
+									   distributionMethod, parentRelationName,
 									   viaDeprecatedAPI);
 			}
 		}
