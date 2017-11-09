@@ -96,6 +96,16 @@ CREATE INDEX CONCURRENTLY lineitem_concurrently_index ON lineitem (l_orderkey);
 CREATE TABLE local_table (id integer, name text);
 CREATE INDEX CONCURRENTLY ON local_table(id);
 DROP TABLE local_table;
+-- Verify that we can run CLUSTER command
+CLUSTER index_test_hash USING index_test_hash_index_a;
+-- Verify that we ERROR on CLUSTER VERBOSE
+CLUSTER VERBOSE index_test_hash USING index_test_hash_index_a;
+ERROR:  cannot run CLUSTER command
+DETAIL:  VERBOSE option is currently unsupported for distributed tables.
+-- Verify that we WARN on CLUSTER ALL
+CLUSTER;
+WARNING:  not propagating CLUSTER command to worker nodes
+HINT:  Provide a specific table in order to CLUSTER distributed tables.
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
  schemaname |    tablename     |             indexname              | tablespace |                                                      indexdef                                                       
@@ -140,6 +150,13 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
  count 
 -------
      0
+(1 row)
+
+-- Verify that we actually run the CLUSTER COMMAND
+SELECT sum(indisclustered::integer) FROM pg_index;
+ sum 
+-----
+   8
 (1 row)
 
 \c - - - :master_port

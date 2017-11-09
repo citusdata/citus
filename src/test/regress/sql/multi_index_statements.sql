@@ -71,6 +71,15 @@ CREATE TABLE local_table (id integer, name text);
 CREATE INDEX CONCURRENTLY ON local_table(id);
 DROP TABLE local_table;
 
+-- Verify that we can run CLUSTER command
+CLUSTER index_test_hash USING index_test_hash_index_a;
+
+-- Verify that we ERROR on CLUSTER VERBOSE
+CLUSTER VERBOSE index_test_hash USING index_test_hash_index_a;
+
+-- Verify that we WARN on CLUSTER ALL
+CLUSTER;
+
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
@@ -78,6 +87,10 @@ SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class 
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+
+-- Verify that we actually run the CLUSTER COMMAND
+SELECT sum(indisclustered::integer) FROM pg_index;
+
 \c - - - :master_port
 
 -- Verify that we error out on unsupported statement types
