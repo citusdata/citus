@@ -1143,3 +1143,123 @@ LINE 1: SELECT create_distributed_table('partitioning_test', 'id');
                                         ^
 DROP TABLE partitioning_test;
 ERROR:  table "partitioning_test" does not exist
+-- make sure we can attach partitions to a distributed table in a schema
+CREATE SCHEMA partitioning_schema;
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
+SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_schema."schema...
+                                        ^
+CREATE TABLE partitioning_schema."schema-test_2009"(id int, time date);
+ALTER TABLE partitioning_schema."schema-test" ATTACH PARTITION partitioning_schema."schema-test_2009" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "ATTACH"
+LINE 1: ALTER TABLE partitioning_schema."schema-test" ATTACH PARTITI...
+                                                      ^
+-- attached partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
+DROP TABLE partitioning_schema."schema-test";
+ERROR:  table "schema-test" does not exist
+-- make sure we can create partition of a distributed table in a schema
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
+SELECT create_distributed_table('partitioning_schema."schema-test"', 'id');
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 1: SELECT create_distributed_table('partitioning_schema."schema...
+                                        ^
+CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF partitioning_schema."schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...EATE TABLE partitioning_schema."schema-test_2009" PARTITION ...
+                                                             ^
+-- newly created partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
+DROP TABLE partitioning_schema."schema-test";
+ERROR:  table "schema-test" does not exist
+-- make sure creating partitioned tables works while search_path is set
+CREATE TABLE partitioning_schema."schema-test"(id int, time date) PARTITION BY RANGE (time);
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...titioning_schema."schema-test"(id int, time date) PARTITION ...
+                                                             ^
+SET search_path = partitioning_schema;
+SELECT create_distributed_table('"schema-test"', 'id');
+ERROR:  relation "schema-test" does not exist
+LINE 1: SELECT create_distributed_table('"schema-test"', 'id');
+                                        ^
+CREATE TABLE partitioning_schema."schema-test_2009" PARTITION OF "schema-test" FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
+ERROR:  syntax error at or near "PARTITION"
+LINE 1: ...EATE TABLE partitioning_schema."schema-test_2009" PARTITION ...
+                                                             ^
+-- newly created partition is distributed as well
+SELECT 
+	logicalrelid 
+FROM 
+	pg_dist_partition 
+WHERE 
+	logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+ORDER BY 1;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:  logicalrelid IN ('partitioning_schema."schema-test"'::regcl...
+                          ^
+SELECT 
+	logicalrelid, count(*) 
+FROM
+    pg_dist_shard 
+WHERE
+    logicalrelid IN ('partitioning_schema."schema-test"'::regclass, 'partitioning_schema."schema-test_2009"'::regclass)
+GROUP BY
+	logicalrelid
+ORDER BY
+	1,2;
+ERROR:  relation "partitioning_schema.schema-test" does not exist
+LINE 6:     logicalrelid IN ('partitioning_schema."schema-test"'::re...
+                             ^
+DROP SCHEMA partitioning_schema CASCADE;
+NOTICE:  drop cascades to table "schema-test_2009"
