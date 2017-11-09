@@ -874,11 +874,14 @@ ProcessCreateTableStmtPartitionOf(CreateStmt *createStatement)
 											  missingOk);
 			Var *parentDistributionColumn = DistPartitionKey(parentRelationId);
 			char parentDistributionMethod = DISTRIBUTE_BY_HASH;
-			char *parentRelationName = get_rel_name(parentRelationId);
+			char *parentSchemaName = parentRelation->schemaname;
+			char *parentRelationName = parentRelation->relname;
+			char *qualifiedParentName = quote_qualified_identifier(parentSchemaName,
+																   parentRelationName);
 			bool viaDeprecatedAPI = false;
 
 			CreateDistributedTable(relationId, parentDistributionColumn,
-								   parentDistributionMethod, parentRelationName,
+								   parentDistributionMethod, qualifiedParentName,
 								   viaDeprecatedAPI);
 		}
 	}
@@ -952,11 +955,15 @@ ProcessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement)
 			{
 				Var *distributionColumn = DistPartitionKey(relationId);
 				char distributionMethod = DISTRIBUTE_BY_HASH;
-				char *relationName = get_rel_name(relationId);
+				RangeVar *parentRelation = alterTableStatement->relation;
+				char *parentSchemaName = parentRelation->schemaname;
+				char *parentRelationName = parentRelation->relname;
+				char *qualifiedParentName =
+					quote_qualified_identifier(parentSchemaName, parentRelationName);
 				bool viaDeprecatedAPI = false;
 
 				CreateDistributedTable(partitionRelationId, distributionColumn,
-									   distributionMethod, relationName,
+									   distributionMethod, qualifiedParentName,
 									   viaDeprecatedAPI);
 			}
 		}
