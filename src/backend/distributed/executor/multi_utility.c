@@ -121,6 +121,7 @@ static List * PlanDropIndexStmt(DropStmt *dropIndexStatement,
 static List * PlanAlterTableStmt(AlterTableStmt *alterTableStatement,
 								 const char *alterTableCommand);
 static List * PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand);
+static List * PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand);
 static Node * WorkerProcessAlterTableStmt(AlterTableStmt *alterTableStatement,
 										  const char *alterTableCommand);
 static List * PlanAlterObjectSchemaStmt(AlterObjectSchemaStmt *alterObjectSchemaStmt,
@@ -380,6 +381,12 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, RenameStmt))
 		{
 			ddlJobs = PlanRenameStmt((RenameStmt *) parsetree, queryString);
+		}
+
+		/* handle distributed CLUSTER statements */
+		if (IsA(parsetree, ClusterStmt))
+		{
+			ddlJobs = PlanClusterStmt((ClusterStmt *) parsetree, queryString);
 		}
 
 		/*
@@ -1341,6 +1348,66 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = renameCommand;
 	ddlJob->taskList = DDLTaskList(relationId, renameCommand);
+
+	return list_make1(ddlJob);
+}
+
+
+/*
+ * PlanClusterStmt first determines whether a given cluster statement involves
+ * a distributed table. If so (and if it is supported, i.e. no verbose), it
+ * creates a DDLJob to encapsulate information needed during the worker node
+ * portion of DDL execution before returning that DDLJob in a List. If no
+ * distributed table is involved, this function returns NIL.
+ */
+static List *
+PlanClusterStmt(ClusterStmt *clusterStmt, const char *clusterCommand)
+{
+	Oid relationId = InvalidOid;
+	bool missingOK = false;
+	bool isDistributedRelation = false;
+	DDLJob *ddlJob = NULL;
+
+	if (clusterStmt->relation == NULL)
+	{
+		ereport(WARNING, (errmsg("not propagating CLUSTER command to worker nodes"),
+						  errhint("Provide a specific table in order to CLUSTER "
+								  "distributed tables.")));
+
+		return NIL;
+	}
+
+	/* PostgreSQL uses access exclusive lock for CLUSTER command */
+	relationId = RangeVarGetRelid(clusterStmt->relation, AccessExclusiveLock, missingOK);
+
+	/*
+	 * If the table does not exist, don't do anything here to allow PostgreSQL
+	 * to throw the appropriate error or notice message later.
+	 */
+	if (!OidIsValid(relationId))
+	{
+		return NIL;
+	}
+
+	/* we have no planning to do unless the table is distributed */
+	isDistributedRelation = IsDistributedTable(relationId);
+	if (!isDistributedRelation)
+	{
+		return NIL;
+	}
+
+	if (clusterStmt->verbose)
+	{
+		ereport(ERROR, (errmsg("cannot run CLUSTER command"),
+						errdetail("VERBOSE option is currently unsupported "
+								  "for distributed tables.")));
+	}
+
+	ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetRelationId = relationId;
+	ddlJob->concurrentIndexCmd = false;
+	ddlJob->commandString = clusterCommand;
+	ddlJob->taskList = DDLTaskList(relationId, clusterCommand);
 
 	return list_make1(ddlJob);
 }
