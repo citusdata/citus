@@ -49,7 +49,7 @@ static bool ParseBoolField(PGresult *result, int rowIndex, int colIndex);
 static TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(void);
-static bool IsProcessWaitingForRelationExtension(PGPROC *proc);
+static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
 static void LockLockData(void);
 static void UnlockLockData(void);
 static void AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc,
@@ -449,7 +449,7 @@ BuildLocalWaitGraph(void)
 		}
 
 		/* skip if the process is blocked for relation extension */
-		if (IsProcessWaitingForRelationExtension(currentProc))
+		if (IsProcessWaitingForSafeOperations(currentProc))
 		{
 			continue;
 		}
@@ -468,7 +468,7 @@ BuildLocalWaitGraph(void)
 		}
 
 		/* skip if the process is blocked for relation extension */
-		if (IsProcessWaitingForRelationExtension(waitingProc))
+		if (IsProcessWaitingForSafeOperations(waitingProc))
 		{
 			continue;
 		}
@@ -493,19 +493,19 @@ BuildLocalWaitGraph(void)
 
 
 /*
- * IsProcessWaitingForRelationExtension returns true if the given PROC
- * waiting on relation extension lock.
+ * IsProcessWaitingForSafeOperations returns true if the given PROC
+ * waiting on relation extension lock or page locks.
  *
  * In general for the purpose of distributed deadlock detection, we should
- * skip if the process blocked on the relation extension. Those locks are
- * held for a short duration while the relation is actually extended on
- * the disk and released as soon as the extension is done, even before the
- * execution of the command that triggered the extension finishes. Thus,
- * recording such waits on our lock graphs could yield detecting wrong
- * distributed deadlocks.
+ * skip if the process blocked on the locks that may not be part of deadlocks.
+ * Those locks are held for a short duration while the relation or the index
+ * is actually  extended on the disk and released as soon as the extension is
+ * done, even before the execution of the command that triggered the extension
+ * finishes. Thus, recording such waits on our lock graphs could yield detecting
+ * wrong distributed deadlocks.
  */
 static bool
-IsProcessWaitingForRelationExtension(PGPROC *proc)
+IsProcessWaitingForSafeOperations(PGPROC *proc)
 {
 	PROCLOCK *waitProcLock = NULL;
 	LOCK *waitLock = NULL;
@@ -518,7 +518,8 @@ IsProcessWaitingForRelationExtension(PGPROC *proc)
 	waitProcLock = proc->waitProcLock;
 	waitLock = waitProcLock->tag.myLock;
 
-	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND;
+	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
+		   waitLock->tag.locktag_type == LOCKTAG_PAGE;
 }
 
 
@@ -595,12 +596,12 @@ AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 
 		/*
 		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on a relation extension lock, which
-		 * will be released shortly.
+		 * and processes that are waiting on a relation extension lock or page locks,
+		 * which will be released shortly.
 		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
 			IsConflictingLockMask(procLock->holdMask, conflictMask) &&
-			!IsProcessWaitingForRelationExtension(currentProc))
+			!IsProcessWaitingForSafeOperations(currentProc))
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
@@ -640,12 +641,12 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 
 		/*
 		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on a relation extension lock, which
-		 * will be released shortly.
+		 * and processes that are waiting on a relation extension lock or page locks,
+		 * which will be released shortly.
 		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
 			IsConflictingLockMask(awaitMask, conflictMask) &&
-			!IsProcessWaitingForRelationExtension(currentProc))
+			!IsProcessWaitingForSafeOperations(currentProc))
 		{
 			AddWaitEdge(waitGraph, waitingProc, currentProc, remaining);
 		}
@@ -676,7 +677,7 @@ AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 
 	curEdge->isBlockingXactWaiting =
 		IsProcessWaitingForLock(blockingProc) &&
-		!IsProcessWaitingForRelationExtension(blockingProc);
+		!IsProcessWaitingForSafeOperations(blockingProc);
 	if (curEdge->isBlockingXactWaiting)
 	{
 		AddProcToVisit(remaining, blockingProc);
