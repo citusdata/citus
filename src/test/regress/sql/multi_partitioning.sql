@@ -814,6 +814,26 @@ IF EXISTS
     partitioning_locks,
     partitioning_locks_for_select;
 
+-- create partitioned tables in schema
+CREATE SCHEMA partitioning;
+CREATE TABLE partitioning.test (col1 serial, col2 text, col3 timestamptz NOT NULL DEFAULT now()) PARTITION BY RANGE (col3);
+SELECT create_distributed_table('partitioning.test', 'col1');
+
+CREATE TABLE partitioning."test-1" (LIKE partitioning.test);
+ALTER TABLE partitioning.test ATTACH PARTITION partitioning."test-1" FOR VALUES FROM ('2017-11-08 09:00:00+00') TO ('2017-11-08 10:00:00+00');
+INSERT INTO partitioning.test (col2, col3) VALUES ('hello world', '2017-11-08 09:29:31+00');
+SELECT * FROM partitioning.test;
+
+ALTER TABLE partitioning.test DETACH PARTITION partitioning."test-1";
+SELECT * FROM partitioning.test;
+
+CREATE TABLE partitioning."test-2" PARTITION OF partitioning.test FOR VALUES FROM ('2017-11-08 09:00:00+00') TO ('2017-11-08 10:00:00+00');
+INSERT INTO partitioning."test-2" (col2, col3) VALUES ('hello world', '2017-11-08 09:29:31+00');
+SELECT * FROM partitioning.test;
+
+DROP TABLE partitioning."test-2";
+DROP TABLE partitioning.test;
+
 -- make sure we can create a partitioned table with streaming replication
 SET citus.replication_model TO 'streaming';
 CREATE TABLE partitioning_test(id int, time date) PARTITION BY RANGE (time);
