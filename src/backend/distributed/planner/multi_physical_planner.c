@@ -160,6 +160,7 @@ static List * DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragment
 static StringInfo NodeNameArrayString(List *workerNodeList);
 static StringInfo NodePortArrayString(List *workerNodeList);
 static StringInfo DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId);
+static List * BuildRelationShardList(List *rangeTableList, List *fragmentList);
 static void UpdateRangeTableAlias(List *rangeTableList, List *fragmentList);
 static Alias * FragmentAlias(RangeTblEntry *rangeTableEntry,
 							 RangeTableFragment *fragment);
@@ -2529,6 +2530,8 @@ SqlTaskList(Job *job)
 
 		sqlTask = CreateBasicTask(jobId, taskIdIndex, SQL_TASK, sqlQueryString->data);
 		sqlTask->dependedTaskList = dataFetchTaskList;
+		sqlTask->relationShardList = BuildRelationShardList(fragmentRangeTableList,
+															fragmentCombination);
 
 		/* log the query string we generated */
 		ereport(DEBUG4, (errmsg("generated sql query for task %d", sqlTask->taskId),
@@ -3961,6 +3964,40 @@ CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType, char *queryStrin
 	task->queryString = queryString;
 
 	return task;
+}
+
+
+/*
+ * BuildRelationShardList builds a list of RelationShard pairs for a task.
+ * This represents the mapping of range table entries to shard IDs for a
+ * task for the purposes of locking, deparsing, and connection management.
+ */
+static List *
+BuildRelationShardList(List *rangeTableList, List *fragmentList)
+{
+	List *relationShardList = NIL;
+	ListCell *fragmentCell = NULL;
+
+	foreach(fragmentCell, fragmentList)
+	{
+		RangeTableFragment *fragment = (RangeTableFragment *) lfirst(fragmentCell);
+		Index rangeTableId = fragment->rangeTableId;
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableId, rangeTableList);
+
+		CitusRTEKind fragmentType = fragment->fragmentType;
+		if (fragmentType == CITUS_RTE_RELATION)
+		{
+			ShardInterval *shardInterval = (ShardInterval *) fragment->fragmentReference;
+			RelationShard *relationShard = CitusMakeNode(RelationShard);
+
+			relationShard->relationId = rangeTableEntry->relid;
+			relationShard->shardId = shardInterval->shardId;
+
+			relationShardList = lappend(relationShardList, relationShard);
+		}
+	}
+
+	return relationShardList;
 }
 
 
