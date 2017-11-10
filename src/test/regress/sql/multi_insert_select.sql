@@ -1716,7 +1716,7 @@ RETURNING *;
 
 RESET client_min_messages;
 
--- INSERT ... SELECT and multi-shard SELECT in the same transaction is unsupported
+-- INSERT ... SELECT and multi-shard SELECT in the same transaction is supported
 TRUNCATE raw_events_first;
 
 BEGIN;

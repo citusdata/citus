@@ -22,6 +22,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
 
 #include <errno.h>
@@ -175,6 +176,55 @@ MultiClientConnectStart(const char *nodeName, uint32 nodePort, const char *nodeD
 }
 
 
+/*
+ * MultiClientPlacementConnectStart asynchronously tries to establish a connection
+ * for a particular set of shard placements. If it succeeds, it returns the
+ * the connection id. Otherwise, it reports connection error and returns
+ * INVALID_CONNECTION_ID.
+ */
+int32
+MultiClientPlacementConnectStart(List *placementAccessList, const char *userName)
+{
+	MultiConnection *connection = NULL;
+	ConnStatusType connStatusType = CONNECTION_OK;
+	int32 connectionId = AllocateConnectionId();
+	int connectionFlags = CONNECTION_PER_PLACEMENT; /* no cached connections for now */
+
+	if (connectionId == INVALID_CONNECTION_ID)
+	{
+		ereport(WARNING, (errmsg("could not allocate connection in connection pool")));
+		return connectionId;
+	}
+
+	/* prepare asynchronous request for worker node connection */
+	connection = StartPlacementListConnection(connectionFlags, placementAccessList,
+											  userName);
+
+	ClaimConnectionExclusively(connection);
+
+	connStatusType = PQstatus(connection->pgConn);
+
+	/*
+	 * If prepared, we save the connection, and set its initial polling status
+	 * to PGRES_POLLING_WRITING as specified in "Database Connection Control
+	 * Functions" section of the PostgreSQL documentation.
+	 */
+	if (connStatusType != CONNECTION_BAD)
+	{
+		ClientConnectionArray[connectionId] = connection;
+		ClientPollingStatusArray[connectionId] = PGRES_POLLING_WRITING;
+	}
+	else
+	{
+		ReportConnectionError(connection, WARNING);
+
+		connectionId = INVALID_CONNECTION_ID;
+	}
+
+	return connectionId;
+}
+
+
 /* MultiClientConnectPoll returns the status of client connection. */
 ConnectStatus
 MultiClientConnectPoll(int32 connectionId)
@@ -229,6 +279,14 @@ MultiClientConnectPoll(int32 connectionId)
 }
 
 
+/* MultiClientGetConnection returns the connection with the given ID from the pool */
+MultiConnection *
+MultiClientGetConnection(int32 connectionId)
+{
+	return ClientConnectionArray[connectionId];
+}
+
+
 /* MultiClientDisconnect disconnects the connection. */
 void
 MultiClientDisconnect(int32 connectionId)
@@ -241,6 +299,40 @@ MultiClientDisconnect(int32 connectionId)
 	Assert(connection != NULL);
 
 	CloseConnection(connection);
+
+	ClientConnectionArray[connectionId] = NULL;
+	ClientPollingStatusArray[connectionId] = InvalidPollingStatus;
+}
+
+
+/*
+ * MultiClientReleaseConnection removes a connection from the client
+ * executor pool without disconnecting if it is run in the transaction
+ * otherwise it disconnects.
+ *
+ * This allows the connection to be used for other operations in the
+ * same transaction. The connection will still be closed at COMMIT
+ * or ABORT time.
+ */
+void
+MultiClientReleaseConnection(int32 connectionId)
+{
+	MultiConnection *connection = NULL;
+	const int InvalidPollingStatus = -1;
+
+	Assert(connectionId != INVALID_CONNECTION_ID);
+	connection = ClientConnectionArray[connectionId];
+	Assert(connection != NULL);
+
+	/* allow using same connection only in the same transaction */
+	if (!InCoordinatedTransaction())
+	{
+		MultiClientDisconnect(connectionId);
+	}
+	else
+	{
+		UnclaimConnection(connection);
+	}
 
 	ClientConnectionArray[connectionId] = NULL;
 	ClientPollingStatusArray[connectionId] = InvalidPollingStatus;
