@@ -568,6 +568,37 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		ProcessVacuumStmt(vacuumStmt, queryString);
 	}
 
+	/* warn for CLUSTER command on distributed tables */
+	if (IsA(parsetree, ClusterStmt))
+	{
+		ClusterStmt *clusterStmt = (ClusterStmt *) parsetree;
+		bool showPropagationWarning = false;
+
+		/* CLUSTER all */
+		if (clusterStmt->relation == NULL)
+		{
+			showPropagationWarning = true;
+		}
+		else
+		{
+			Oid relationId = InvalidOid;
+			bool missingOK = false;
+
+			relationId = RangeVarGetRelid(clusterStmt->relation, AccessShareLock,
+										  missingOK);
+
+			if (OidIsValid(relationId))
+			{
+				showPropagationWarning = IsDistributedTable(relationId);
+			}
+		}
+
+		if (showPropagationWarning)
+		{
+			ereport(WARNING, (errmsg("not propagating CLUSTER command to worker nodes")));
+		}
+	}
+
 	/*
 	 * Ensure value is valid, we can't do some checks during CREATE
 	 * EXTENSION. This is important to register some invalidation callbacks.
