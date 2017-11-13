@@ -30,6 +30,8 @@ extern int MultiShardConnectionType;
 
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
 extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
+extern void ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
+										DestReceiver *dest);
 
 
 #endif /* MULTI_EXECUTOR_H */

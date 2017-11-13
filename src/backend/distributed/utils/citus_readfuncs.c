@@ -211,6 +211,8 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(insertTargetList);
 	READ_OID_FIELD(targetRelationId);
 
+	READ_NODE_FIELD(subPlanList);
+
 	READ_NODE_FIELD(planningError);
 
 	READ_DONE();

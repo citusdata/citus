@@ -15,6 +15,7 @@
 #define MULTI_LOGICAL_PLANNER_H
 
 #include "distributed/citus_nodes.h"
+#include "distributed/errormessage.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodes.h"
@@ -190,9 +191,16 @@ extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *query
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
+extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
+																	  originalQuery,
+																	  PlannerRestrictionContext
+																	  *
+																	  plannerRestrictionContext);
+extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
+																 bool
+																 outerMostQueryHasLimit);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
-extern bool NeedsDistributedPlanning(Query *queryTree);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
 extern MultiNode * GrandChildNode(MultiUnaryNode *multiNode);

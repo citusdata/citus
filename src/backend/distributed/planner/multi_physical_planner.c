@@ -2068,6 +2068,67 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	ExtractRangeTableRelationWalker((Node *) subquery, &rangeTableList);
 
 	/*
+	 * Hack to handle queries with no tables (e.g. join between subplans only):
+	 * Push it down using the router planner in the same way we handle SELECTs
+	 * that prune to 0 shards.
+	 */
+	if (list_length(rangeTableList) == 0)
+	{
+		Task *subqueryTask = NULL;
+		StringInfo queryString = makeStringInfo();
+		List *selectPlacementList = NIL;
+		uint64 selectAnchorShardId = INVALID_SHARD_ID;
+		List *relationShardList = NIL;
+		bool replacePrunedQueryWithDummy = true;
+		DeferredErrorMessage *planningError = NULL;
+		bool multiShardModifQuery = false;
+
+		/*
+		 * Use router select planner to decide on whether we can push down the query
+		 * or not. If we can, we also rely on the side-effects that all RTEs have been
+		 * updated to point to the relevant nodes and selectPlacementList is determined.
+		 */
+		planningError = PlanRouterQuery(subquery, relationRestrictionContext,
+										&selectPlacementList, &selectAnchorShardId,
+										&relationShardList, replacePrunedQueryWithDummy,
+										&multiShardModifQuery);
+
+		/* we don't expect to this this error but keeping it as a precaution for future changes */
+		if (planningError)
+		{
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot perform distributed planning for the given "
+								   "query"),
+							errdetail(
+								"Select query cannot be pushed down to the worker.")));
+		}
+
+		/*
+		 * Ands are made implicit during shard pruning, as predicate comparison and
+		 * refutation depend on it being so. We need to make them explicit again so
+		 * that the query string is generated as (...) AND (...) as opposed to
+		 * (...), (...).
+		 */
+		subquery->jointree->quals =
+			(Node *) make_ands_explicit((List *) subquery->jointree->quals);
+
+		/* and generate the full query string */
+		pg_get_query_def(subquery, queryString);
+		ereport(DEBUG4, (errmsg("distributed statement: %s", queryString->data)));
+
+		subqueryTask = CreateBasicTask(jobId, taskIdIndex, SQL_TASK, queryString->data);
+		subqueryTask->dependedTaskList = NULL;
+		subqueryTask->anchorShardId = selectAnchorShardId;
+		subqueryTask->taskPlacementList = selectPlacementList;
+		subqueryTask->upsertQuery = false;
+		subqueryTask->relationShardList = relationShardList;
+
+		sqlTaskList = lappend(sqlTaskList, subqueryTask);
+
+		return sqlTaskList;
+	}
+
+	/*
 	 * Find the first relation that is not a reference table. We'll use the shards
 	 * of that relation as the target shards.
 	 */
@@ -4575,9 +4636,19 @@ AssignTaskList(List *sqlTaskList)
 	hasMergeTaskDependencies = HasMergeTaskDependencies(sqlTaskList);
 	if (!hasMergeTaskDependencies)
 	{
-		Assert(hasAnchorShardId);
-
-		assignedSqlTaskList = AssignAnchorShardTaskList(sqlTaskList);
+		if (hasAnchorShardId)
+		{
+			assignedSqlTaskList = AssignAnchorShardTaskList(sqlTaskList);
+		}
+		else
+		{
+			/*
+			 * A pull-push query has no anchor shard and no merge task dependencies.
+			 * We already assign placements to such queries and can use the original
+			 * list.
+			 */
+			assignedSqlTaskList = sqlTaskList;
+		}
 
 		return assignedSqlTaskList;
 	}

@@ -80,11 +80,6 @@ static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join
 
 /* Local functions forward declarations */
 static bool SingleRelationRepartitionSubquery(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
-																	  originalQuery,
-																	  PlannerRestrictionContext
-																	  *
-																	  plannerRestrictionContext);
 static RelationRestrictionContext * FilterRelationRestrictionContext(
 	RelationRestrictionContext *relationRestrictionContext,
 	Relids
@@ -621,7 +616,7 @@ SingleRelationRepartitionSubquery(Query *queryTree)
  * to worker nodes. These helper functions returns a deferred error if we
  * cannot push down the subquery.
  */
-static DeferredErrorMessage *
+DeferredErrorMessage *
 DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 										PlannerRestrictionContext *
 										plannerRestrictionContext)
@@ -988,7 +983,7 @@ DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
  * limit, we let this query to run, but results could be wrong depending on the
  * features of underlying tables.
  */
-static DeferredErrorMessage *
+DeferredErrorMessage *
 DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
@@ -2595,7 +2590,8 @@ HasComplexRangeTableType(Query *queryTree)
 		 * subquery.
 		 */
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
-			rangeTableEntry->rtekind != RTE_SUBQUERY)
+			rangeTableEntry->rtekind != RTE_SUBQUERY &&
+			rangeTableEntry->rtekind != RTE_FUNCTION)
 		{
 			hasComplexRangeTableType = true;
 		}
@@ -3400,75 +3396,9 @@ FindNodesOfType(MultiNode *node, int type)
 	return nodeList;
 }
 
-
 /*
- * NeedsDistributedPlanning checks if the passed in query is a query running
- * on a distributed table. If it is, we start distributed planning.
- *
- * For distributed relations it also assigns identifiers to the relevant RTEs.
- */
-bool
-NeedsDistributedPlanning(Query *queryTree)
-{
-	CmdType commandType = queryTree->commandType;
-	List *rangeTableList = NIL;
-	ListCell *rangeTableCell = NULL;
-	bool hasLocalRelation = false;
-	bool hasDistributedRelation = false;
-
-	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
-		commandType != CMD_UPDATE && commandType != CMD_DELETE)
-	{
-		return false;
-	}
-
-	/*
-	 * We can handle INSERT INTO distributed_table SELECT ... even if the SELECT
-	 * part references local tables, so skip the remaining checks.
-	 */
-	if (InsertSelectIntoDistributedTable(queryTree))
-	{
-		return true;
-	}
-
-	/* extract range table entries for simple relations only */
-	ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
-
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-
-		/* check if relation is local or distributed */
-		Oid relationId = rangeTableEntry->relid;
-
-		if (IsDistributedTable(relationId))
-		{
-			hasDistributedRelation = true;
-		}
-		else
-		{
-			hasLocalRelation = true;
-		}
-	}
-
-	if (hasLocalRelation && hasDistributedRelation)
-	{
-		if (InsertSelectIntoLocalTable(queryTree))
-		{
-			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
-								   "local table")));
-		}
-		ereport(ERROR, (errmsg("cannot plan queries which include both local and "
-							   "distributed relations")));
-	}
-
-	return hasDistributedRelation;
-}
-
-
-/*
- * ExtractRangeTableRelationWalker gathers all range table relation entries
- * in a query.
+ * ExtractRangeTableRelationWalker gathers all range table entries in a query
+ * and filters them to preserve only those of the RTE_RELATION type.
  */
 bool
 ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)

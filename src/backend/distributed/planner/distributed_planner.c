@@ -8,6 +8,7 @@
  */
 
 #include "postgres.h"
+#include "miscadmin.h"
 
 #include <float.h>
 #include <limits.h>
@@ -16,6 +17,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/errormessage.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -32,6 +34,7 @@
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
@@ -40,7 +43,19 @@ static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 
 
+/*
+ * CteReferenceWalkerContext is used to collect CTE references in
+ * CteReferenceListWalker.
+ */
+struct CteReferenceWalkerContext
+{
+	int level;
+	List *cteReferenceList;
+};
+
+
 /* local function forward declarations */
+static bool NeedsDistributedPlanningWalker(Node *node, void *context);
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
@@ -55,6 +70,15 @@ static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
+static void PlanPullPushCTEs(Query *query, List **subPlanList);
+static bool CteReferenceListWalker(Node *node, struct CteReferenceWalkerContext *context);
+static void PlanPullPushSubqueries(Query *query, List **subPlanList);
+static bool PlanPullPushSubqueriesWalker(Node *node, List **planList);
+static bool ContainsReferencesToOuterQuery(Node *node);
+static bool ContainsReferencesToOuterQueryWalker(Node *node, void *context);
+static Query * BuildSubPlanResultQuery(Query *subquery, int subPlanId);
+static void RemoveRTEsFromPlannerRestrictionContext(List *rangeTableList);
+static bool RangeTableListContainsIdentity(List *rangeTableList, int rteIdentity);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
@@ -144,6 +168,130 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 
 	return result;
+}
+
+
+/*
+ * NeedsDistributedPlanning checks if the passed in query is a query running
+ * on a distributed table. If it is, we start distributed planning.
+ */
+bool
+NeedsDistributedPlanning(Query *queryTree)
+{
+	bool needsDistributedPlanning = false;
+
+	CmdType commandType = queryTree->commandType;
+	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+		commandType != CMD_UPDATE && commandType != CMD_DELETE)
+	{
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded())
+	{
+		return false;
+	}
+
+	/*
+	 * We can handle INSERT INTO distributed_table SELECT ... even if the SELECT
+	 * part references local tables, so skip the remaining checks.
+	 */
+	if (InsertSelectIntoDistributedTable(queryTree))
+	{
+		return true;
+	}
+
+	if (!NeedsDistributedPlanningWalker((Node *) queryTree, NULL))
+	{
+		return false;
+	}
+
+	if (InsertSelectIntoLocalTable(queryTree))
+	{
+		ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+							   "local table")));
+	}
+
+	return true;
+}
+
+
+static bool
+NeedsDistributedPlanningWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		ListCell *rangeTableCell = NULL;
+		bool hasLocalRelation = false;
+		bool hasDistributedRelation = false;
+		Oid readResultsFileFuncId = CitusResultFileFuncId();
+
+		foreach(rangeTableCell, query->rtable)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+			Oid relationId = InvalidOid;
+
+			if (rangeTableEntry->rtekind == RTE_FUNCTION &&
+				rangeTableEntry->functions != NIL)
+			{
+				RangeTblFunction *rangeTableFunction = NULL;
+				FuncExpr *funcExpr = NULL;
+
+				rangeTableFunction = linitial(rangeTableEntry->functions);
+
+				funcExpr = rangeTableFunction->funcexpr;
+				if (funcExpr == NULL)
+				{
+					/* be a little defensive about wacky plans */
+					continue;
+				}
+
+				if (funcExpr->funcid == readResultsFileFuncId)
+				{
+					/* treat result files on workers as distributed relations */
+					hasDistributedRelation = true;
+				}
+			}
+
+			if (rangeTableEntry->rtekind != RTE_RELATION)
+			{
+				continue;
+			}
+
+			relationId = rangeTableEntry->relid;
+			if (IsDistributedTable(relationId))
+			{
+				hasDistributedRelation = true;
+			}
+			else
+			{
+				hasLocalRelation = true;
+			}
+		}
+
+		if (hasLocalRelation && hasDistributedRelation)
+		{
+			ereport(ERROR, (errmsg("cannot plan (sub)queries which join local and "
+								   "distributed relations")));
+		}
+
+		if (hasDistributedRelation)
+		{
+			return true;
+		}
+
+		return query_tree_walker(query, NeedsDistributedPlanningWalker, NULL, 0);
+	}
+	else
+	{
+		return expression_tree_walker(node, NeedsDistributedPlanningWalker, NULL);
+	}
 }
 
 
@@ -396,6 +544,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	}
 	else
 	{
+		List *subPlanList = NIL;
+
 		/*
 		 * For select queries we, if router executor is enabled, first try to
 		 * plan the query as a router query. If not supported, otherwise try
@@ -425,9 +575,47 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		 */
 		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
-			MultiTreeRoot *logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
-																plannerRestrictionContext,
-																boundParams);
+			MultiTreeRoot *logicalPlan = NULL;
+
+			/*
+			 * The logical planner does not know how to deal with subqueries
+			 * that require a merge step (e.g. aggregates, limit). Plan these
+			 * subqueries separately and replace them with a subquery that
+			 * scans intermediate results.
+			 */
+			PlanPullPushSubqueries(originalQuery, &subPlanList);
+
+			/*
+			 * If subqueries are executed using pull-push then we need to replan
+			 * the query to get the new planner restriction context (without
+			 * relations that appear in pull-push subqueries) and to apply
+			 * planner transformations.
+			 */
+			if (list_length(subPlanList) > 0)
+			{
+				bool setPartitionedTablesInherited = false;
+				Query *newQuery = copyObject(originalQuery);
+
+				/* remove the pre-transformation planner restrictions context */
+				PopPlannerRestrictionContext();
+
+				/* create a fresh new planner context */
+				plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+
+				/* run the planner again to rebuild the planner restriction context */
+				AssignRTEIdentities(newQuery);
+				AdjustPartitioningForDistributedPlanning(newQuery,
+														 setPartitionedTablesInherited);
+
+				standard_planner(newQuery, 0, boundParams);
+
+				/* overwrite the old transformed query with the new transformed query */
+				memcpy(query, newQuery, sizeof(Query));
+			}
+
+			logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+												 plannerRestrictionContext,
+												 boundParams);
 			MultiLogicalPlanOptimize(logicalPlan);
 
 			/*
@@ -445,6 +633,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);
+
+			distributedPlan->subPlanList = subPlanList;
 		}
 	}
 
@@ -506,6 +696,422 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	}
 
 	return resultPlan;
+}
+
+
+static void
+PlanPullPushSubqueries(Query *query, List **subPlanList)
+{
+	PlanPullPushCTEs(query, subPlanList);
+
+	/* descend into subqueries */
+	query_tree_walker(query, PlanPullPushSubqueriesWalker, subPlanList, 0);
+}
+
+
+static void
+PlanPullPushCTEs(Query *query, List **subPlanList)
+{
+	ListCell *cteCell = NULL;
+	struct CteReferenceWalkerContext context = { -1, NIL };
+
+	/* get all RTE_CTEs that point to CTEs from cteList */
+	CteReferenceListWalker((Node *) query, &context);
+
+	foreach(cteCell, query->cteList)
+	{
+		CommonTableExpr *cte = (CommonTableExpr *) lfirst(cteCell);
+		char *cteName = cte->ctename;
+		Query *subquery = (Query *) cte->ctequery;
+		Query *subPlanQuery = copyObject(subquery);
+		int subPlanId = list_length(*subPlanList);
+		Query *resultQuery = NULL;
+		PlannedStmt *subPlan = NULL;
+		ListCell *rteCell = NULL;
+
+		/* build a subplan for the CTE */
+		resultQuery = BuildSubPlanResultQuery(subquery, subPlanId);
+
+		/* TODO: remove */
+		{
+			StringInfo subPlanString = makeStringInfo();
+			pg_get_query_def(subPlanQuery, subPlanString);
+			elog(DEBUG1, "building subplan for query: %s", subPlanString->data);
+		}
+
+		/* replace references to the CTE with a subquery that reads results */
+		foreach(rteCell, context.cteReferenceList)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rteCell);
+
+			if (rangeTableEntry->rtekind != RTE_CTE)
+			{
+				/* RTE was already replaced and its ctename is NULL */
+				continue;
+			}
+
+			if (strncmp(rangeTableEntry->ctename, cteName, NAMEDATALEN) == 0)
+			{
+				/* TODO: remove */
+				{
+					StringInfo resultQueryString = makeStringInfo();
+					pg_get_query_def(resultQuery, resultQueryString);
+					elog(DEBUG1, "replacing reference to CTE %s with result subquery: %s",
+						 cteName, resultQueryString->data);
+				}
+
+				pfree(rangeTableEntry->ctename);
+
+				rangeTableEntry->rtekind = RTE_SUBQUERY;
+
+				/* TODO: can avoid copy the first time */
+				rangeTableEntry->subquery = copyObject(resultQuery);
+				rangeTableEntry->ctename = NULL;
+				rangeTableEntry->ctelevelsup = 0;
+			}
+		}
+
+		subPlan = planner(subPlanQuery, 0, NULL);
+		(*subPlanList) = lappend(*subPlanList, subPlan);
+	}
+
+	/*
+	 * All CTEs are now executed through subplans and RTE_CTEs pointing
+	 * to the CTE list have been replaced with subqueries. We can now
+	 * clear the cteList. (TODO: maybe free it?)
+	 */
+	query->cteList = NIL;
+}
+
+
+/*
+ * CteReferenceList
+ */
+static bool
+CteReferenceListWalker(Node *node, struct CteReferenceWalkerContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) node;
+
+		if (rangeTableEntry->rtekind == RTE_CTE &&
+			rangeTableEntry->ctelevelsup == context->level)
+		{
+			context->cteReferenceList = lappend(context->cteReferenceList,
+												rangeTableEntry);
+		}
+
+		/* caller will descend into range table entry */
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		context->level += 1;
+		query_tree_walker(query, CteReferenceListWalker, context, QTW_EXAMINE_RTES);
+		context->level -= 1;
+
+		return false;
+	}
+	else
+	{
+		return expression_tree_walker(node, CteReferenceListWalker, context);
+	}
+}
+
+
+static bool
+PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		DeferredErrorMessage *pushdownError = NULL;
+
+		PlanPullPushSubqueries(query, subPlanList);
+
+		StringInfo s = makeStringInfo();
+		pg_get_query_def(query, s);
+
+		if (ContainsReferencesToOuterQuery((Node *) query))
+		{
+			return false;
+		}
+
+		pushdownError = DeferErrorIfCannotPushdownSubquery(query, false);
+		if (pushdownError != NULL)
+		{
+			PlannedStmt *subPlan = NULL;
+			int subPlanId = list_length(*subPlanList);
+			Query *resultQuery = NULL;
+
+			resultQuery = BuildSubPlanResultQuery(query, subPlanId);
+
+			StringInfo r = makeStringInfo();
+			pg_get_query_def(resultQuery, r);
+
+			elog(DEBUG1, "replacing subquery %s with: %s", s->data, r->data);
+
+			subPlan = planner(copyObject(query), 0, NULL);
+			(*subPlanList) = lappend(*subPlanList, subPlan);
+
+			memcpy(query, resultQuery, sizeof(Query));
+		}
+
+		return false;
+	}
+	else
+	{
+		return expression_tree_walker(node, PlanPullPushSubqueriesWalker, subPlanList);
+	}
+}
+
+
+static bool
+ContainsReferencesToOuterQuery(Node *node)
+{
+	return ContainsReferencesToOuterQueryWalker(node, NULL);
+}
+
+
+static bool
+ContainsReferencesToOuterQueryWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Var))
+	{
+		if (((Var *) node)->varlevelsup > 0)
+		{
+			return true;
+		}
+		return false;
+	}
+
+	if (IsA(node, CurrentOfExpr))
+	{
+		return true;
+	}
+
+	if (IsA(node, PlaceHolderVar))
+	{
+		if (((PlaceHolderVar *) node)->phlevelsup > 0)
+		{
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, ContainsReferencesToOuterQueryWalker, context);
+}
+
+
+
+static Query *
+BuildSubPlanResultQuery(Query *subquery, int subPlanId)
+{
+	Query *resultQuery = NULL;
+	StringInfo resultFileName = makeStringInfo();
+	Const *resultFileNameConst = NULL;
+	Const *resultFormatConst = NULL;
+	FuncExpr *funcExpr = NULL;
+	Alias *funcAlias = NULL;
+	List *funcColNames = NIL;
+	List *funcColTypes = NIL;
+	List *funcColTypMods = NIL;
+	List *funcColCollations = NIL;
+	RangeTblFunction *rangeTableFunction = NULL;
+	RangeTblEntry *rangeTableEntry = NULL;
+	RangeTblRef *rangeTableRef = NULL;
+	FromExpr *joinTree = NULL;
+	ListCell *targetEntryCell = NULL;
+	List *targetList = NIL;
+	int columnNumber = 1;
+
+	foreach(targetEntryCell, subquery->targetList)
+	{
+		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+		Node *targetExpr = (Node *) targetEntry->expr;
+		char *columnName = targetEntry->resname;
+		Oid columnType = exprType(targetExpr);
+		Oid columnTypMod = exprTypmod(targetExpr);
+		Oid columnCollation = exprCollation(targetExpr);
+		Var *functionColumnVar = NULL;
+		TargetEntry *newTargetEntry = makeNode(TargetEntry);
+
+		if (targetEntry->resjunk)
+		{
+			continue;
+		}
+
+		funcColNames = lappend(funcColNames, makeString(columnName));
+		funcColTypes = lappend_int(funcColTypes, columnType);
+		funcColTypMods = lappend_int(funcColTypMods, columnTypMod);
+		funcColCollations = lappend_int(funcColCollations, columnCollation);
+
+		functionColumnVar = makeNode(Var);
+		functionColumnVar->varno = 1;
+		functionColumnVar->varattno = columnNumber;
+		functionColumnVar->vartype = columnType;
+		functionColumnVar->vartypmod = columnTypMod;
+		functionColumnVar->varcollid = columnCollation;
+		functionColumnVar->varlevelsup = 0;
+
+		newTargetEntry = makeNode(TargetEntry);
+		newTargetEntry->expr = (Expr *) functionColumnVar;
+		newTargetEntry->resno = columnNumber;
+		newTargetEntry->resname = columnName;
+
+		targetList = lappend(targetList, newTargetEntry);
+
+		columnNumber++;
+	}
+
+	appendStringInfo(resultFileName, "base/pgsql_job_cache/%d_%d_%d_%d.data",
+					 GetUserId(), GetLocalGroupId(), MyProcPid, subPlanId);
+
+	resultFileNameConst = makeNode(Const);
+	resultFileNameConst->consttype = TEXTOID;
+	resultFileNameConst->consttypmod = -1;
+	resultFileNameConst->constlen = -1;
+	resultFileNameConst->constvalue = CStringGetTextDatum(resultFileName->data);
+	resultFileNameConst->constbyval = false;
+	resultFileNameConst->constisnull = false;
+	resultFileNameConst->location = -1;
+
+	resultFormatConst = makeNode(Const);
+	resultFormatConst->consttype = TEXTOID;
+	resultFormatConst->consttypmod = -1;
+	resultFormatConst->constlen = -1;
+	resultFormatConst->constvalue = CStringGetTextDatum("binary");
+	resultFormatConst->constbyval = false;
+	resultFormatConst->constisnull = false;
+	resultFormatConst->location = -1;
+
+	funcExpr = makeNode(FuncExpr);
+	funcExpr->funcid = CitusResultFileFuncId();
+	funcExpr->funcretset = true;
+	funcExpr->funcvariadic = false;
+	funcExpr->funcformat = 0;
+	funcExpr->funccollid = 0;
+	funcExpr->inputcollid = 100; /* TODO, what's this value? */
+	funcExpr->location = -1; /* TODO 68 */
+	funcExpr->args = list_make2(resultFileNameConst, resultFormatConst);
+
+	rangeTableFunction = makeNode(RangeTblFunction);
+	rangeTableFunction->funccolcount = list_length(funcColNames);
+	rangeTableFunction->funccolnames = funcColNames;
+	rangeTableFunction->funccoltypes = funcColTypes;
+	rangeTableFunction->funccoltypmods = funcColTypMods;
+	rangeTableFunction->funccolcollations = funcColCollations;
+	rangeTableFunction->funcparams = NULL;
+	rangeTableFunction->funcexpr = (Node *) funcExpr;
+
+	funcAlias = makeNode(Alias);
+	funcAlias->aliasname = "read_records_file";
+	funcAlias->colnames = funcColNames;
+
+	rangeTableEntry = makeNode(RangeTblEntry);
+	rangeTableEntry->rtekind = RTE_FUNCTION;
+	rangeTableEntry->functions = list_make1(rangeTableFunction);
+	rangeTableEntry->inFromCl = true;
+	rangeTableEntry->eref = funcAlias;
+
+	rangeTableRef = makeNode(RangeTblRef);
+	rangeTableRef->rtindex = 1;
+
+	joinTree = makeNode(FromExpr);
+	joinTree->fromlist = list_make1(rangeTableRef);
+
+	resultQuery = makeNode(Query);
+	resultQuery->commandType = CMD_SELECT;
+	resultQuery->rtable = list_make1(rangeTableEntry);
+	resultQuery->jointree = joinTree;
+	resultQuery->targetList = targetList;
+
+	return resultQuery;
+}
+
+
+/*
+ * RemoveRTEsFromPlannerRestrictionContext removes relation restriction contexts
+ * after replacing a subquery.
+ */
+static void
+RemoveRTEsFromPlannerRestrictionContext(List *rangeTableList)
+{
+	PlannerRestrictionContext *plannerRestrictionContext = NULL;
+	RelationRestrictionContext *relationRestrictionContext = NULL;
+	MemoryContext restrictionsMemoryContext = NULL;
+	MemoryContext oldMemoryContext = NULL;
+	ListCell *relationRestrictionCell = NULL;
+	List *newRelationRestrictionList = NIL;
+
+	plannerRestrictionContext = CurrentPlannerRestrictionContext();
+	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
+	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
+
+	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
+
+	foreach(relationRestrictionCell, relationRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+		RangeTblEntry *rangeTableEntry = relationRestriction->rte;
+		int rteIdentity = GetRTEIdentity(rangeTableEntry);
+
+		if (RangeTableListContainsIdentity(rangeTableList, rteIdentity))
+		{
+			continue;
+		}
+
+		newRelationRestrictionList = lappend(newRelationRestrictionList,
+											 relationRestriction);
+	}
+
+	relationRestrictionContext->relationRestrictionList = newRelationRestrictionList;
+
+	MemoryContextSwitchTo(oldMemoryContext);
+}
+
+
+static bool
+RangeTableListContainsIdentity(List *rangeTableList, int rteIdentity)
+{
+	ListCell *rangeTableCell = NULL;
+	bool rteIdentityFound = false;
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		int currentRteIdentity = 0;
+
+		if (rangeTableEntry->rtekind != RTE_RELATION)
+		{
+			continue;
+		}
+
+		currentRteIdentity = GetRTEIdentity(rangeTableEntry);
+		if (currentRteIdentity == rteIdentity)
+		{
+			rteIdentityFound = true;
+			break;
+		}
+	}
+
+	return rteIdentityFound;
 }
 
 

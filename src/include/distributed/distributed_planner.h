@@ -82,6 +82,7 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										RelOptInfo *innerrel,
 										JoinType jointype,
 										JoinPathExtraData *extra);
+extern bool NeedsDistributedPlanning(Query *queryTree);
 extern bool IsModifyCommand(Query *query);
 extern bool IsUpdateOrDelete(struct DistributedPlan *distributedPlan);
 extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);

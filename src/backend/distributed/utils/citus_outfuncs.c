@@ -191,6 +191,8 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(insertTargetList);
 	WRITE_OID_FIELD(targetRelationId);
 
+	WRITE_NODE_FIELD(subPlanList);
+
 	WRITE_NODE_FIELD(planningError);
 }
 

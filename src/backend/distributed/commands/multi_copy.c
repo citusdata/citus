@@ -1083,7 +1083,6 @@ ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId, bool useBinaryCop
 
 	char *schemaName = copyStatement->relation->schemaname;
 	char *relationName = copyStatement->relation->relname;
-
 	char *shardName = pstrdup(relationName);
 	char *shardQualifiedName = NULL;
 
@@ -2351,4 +2350,240 @@ CitusCopyDestReceiverDestroy(DestReceiver *destReceiver)
 	}
 
 	pfree(copyDest);
+}
+
+
+static StringInfo ConstructTransmitStatement(char *transmitFileName);
+static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
+										  TupleDesc inputTupleDescriptor);
+static bool RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest);
+static void RemoteFileDestReceiverShutdown(DestReceiver *destReceiver);
+static void RemoteFileDestReceiverDestroy(DestReceiver *destReceiver);
+
+
+/*
+ * ConstructTransmitStatement constructs the text of a COPY statement for a particular
+ * shard.
+ */
+static StringInfo
+ConstructTransmitStatement(char *transmitFileName)
+{
+	StringInfo command = makeStringInfo();
+
+	appendStringInfo(command, "COPY \"%s\" FROM STDIN WITH (FORMAT TRANSMIT)",
+					 transmitFileName);
+
+	return command;
+}
+
+
+RemoteFileDestReceiver *
+CreateRemoteFileDestReceiver(char *transmitFileName, EState *executorState,
+							 List *initialNodeList)
+{
+	RemoteFileDestReceiver *transmitDest = NULL;
+
+	transmitDest = (RemoteFileDestReceiver *) palloc0(sizeof(RemoteFileDestReceiver));
+
+	/* set up the DestReceiver function pointers */
+	transmitDest->pub.receiveSlot = RemoteFileDestReceiverReceive;
+	transmitDest->pub.rStartup = RemoteFileDestReceiverStartup;
+	transmitDest->pub.rShutdown = RemoteFileDestReceiverShutdown;
+	transmitDest->pub.rDestroy = RemoteFileDestReceiverDestroy;
+	transmitDest->pub.mydest = DestCopyOut;
+
+	/* set up output parameters */
+	transmitDest->transmitFileName = transmitFileName;
+	transmitDest->executorState = executorState;
+	transmitDest->initialNodeList = initialNodeList;
+	transmitDest->memoryContext = CurrentMemoryContext;
+
+	return transmitDest;
+}
+
+
+/*
+ * RemoteFileDestReceiverStartup implements the rStartup interface of
+ * RemoteFileDestReceiver. It opens the relation
+ */
+static void
+RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
+							  TupleDesc inputTupleDescriptor)
+{
+	RemoteFileDestReceiver *transmitDest = (RemoteFileDestReceiver *) dest;
+
+	char *transmitFileName = transmitDest->transmitFileName;
+
+	CopyOutState copyOutState = NULL;
+	const char *delimiterCharacter = "\t";
+	const char *nullPrintCharacter = "\\N";
+
+	List *initialNodeList = transmitDest->initialNodeList;
+	ListCell *initialNodeCell = NULL;
+	List *connectionList = NIL;
+	ListCell *connectionCell = NULL;
+
+	transmitDest->tupleDescriptor = inputTupleDescriptor;
+
+	/* define how tuples will be serialised */
+	copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
+	copyOutState->delim = (char *) delimiterCharacter;
+	copyOutState->null_print = (char *) nullPrintCharacter;
+	copyOutState->null_print_client = (char *) nullPrintCharacter;
+	copyOutState->binary = CanUseBinaryCopyFormat(inputTupleDescriptor);
+	copyOutState->fe_msgbuf = makeStringInfo();
+	copyOutState->rowcontext = GetPerTupleMemoryContext(transmitDest->executorState);
+	transmitDest->copyOutState = copyOutState;
+
+	/* prepare output functions */
+	transmitDest->columnOutputFunctions =
+		ColumnOutputFunctions(inputTupleDescriptor, copyOutState->binary);
+
+	BeginOrContinueCoordinatedTransaction();
+
+	foreach(initialNodeCell, initialNodeList)
+	{
+		WorkerNode *workerNode = (WorkerNode *) lfirst(initialNodeCell);
+		int connectionFlags = 0;
+		char *nodeName = workerNode->workerName;
+		int nodePort = workerNode->workerPort;
+		MultiConnection *connection = NULL;
+
+		connection = StartNodeConnection(connectionFlags, nodeName, nodePort);
+		ClaimConnectionExclusively(connection);
+		connectionList = lappend(connectionList, connection);
+	}
+
+	FinishConnectionListEstablishment(connectionList);
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+		StringInfo copyCommand = NULL;
+		bool querySent = false;
+
+		copyCommand = ConstructTransmitStatement(transmitFileName);
+
+		querySent = SendRemoteCommand(connection, copyCommand->data);
+		if (!querySent)
+		{
+			ReportConnectionError(connection, ERROR);
+		}
+	}
+
+	foreach(connectionCell, connectionList)
+	{
+		MultiConnection *connection = (MultiConnection *) lfirst(connectionCell);
+		bool raiseInterrupts = true;
+
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (PQresultStatus(result) != PGRES_COPY_IN)
+		{
+			ReportResultError(connection, result, ERROR);
+		}
+
+		PQclear(result);
+	}
+
+	if (copyOutState->binary)
+	{
+		SendCopyBinaryHeaders(copyOutState, 0, connectionList);
+	}
+
+	transmitDest->connectionList = connectionList;
+}
+
+
+/*
+ * RemoteFileDestReceiverReceive implements the receiveSlot function of
+ * RemoteFileDestReceiver. It takes a TupleTableSlot and sends the contents to
+ * the appropriate shard placement(s).
+ */
+static bool
+RemoteFileDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
+{
+	RemoteFileDestReceiver *transmitDest = (RemoteFileDestReceiver *) dest;
+
+	TupleDesc tupleDescriptor = transmitDest->tupleDescriptor;
+
+	List *connectionList = transmitDest->connectionList;
+	CopyOutState copyOutState = transmitDest->copyOutState;
+	FmgrInfo *columnOutputFunctions = transmitDest->columnOutputFunctions;
+
+	Datum *columnValues = NULL;
+	bool *columnNulls = NULL;
+
+	EState *executorState = transmitDest->executorState;
+	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
+	MemoryContext oldContext = MemoryContextSwitchTo(executorTupleContext);
+
+	slot_getallattrs(slot);
+
+	columnValues = slot->tts_values;
+	columnNulls = slot->tts_isnull;
+
+	/* replicate row to shard placements */
+	resetStringInfo(copyOutState->fe_msgbuf);
+
+	/* TODO: set coercions */
+	AppendCopyRowData(columnValues, columnNulls, tupleDescriptor,
+					  copyOutState, columnOutputFunctions, NULL);
+	SendCopyDataToAll(copyOutState->fe_msgbuf, 0, connectionList);
+
+	MemoryContextSwitchTo(oldContext);
+
+	transmitDest->tuplesSent++;
+
+	/*
+	 * Release per tuple memory allocated in this function. If we're writing
+	 * the results of an INSERT ... SELECT then the SELECT execution will use
+	 * its own executor state and reset the per tuple expression context
+	 * separately.
+	 */
+	ResetPerTupleExprContext(executorState);
+
+	return true;
+}
+
+
+/*
+ * RemoteFileDestReceiverShutdown implements the rShutdown interface of
+ * RemoteFileDestReceiver. It ends the COPY on all the open connections and closes
+ * the relation.
+ */
+static void
+RemoteFileDestReceiverShutdown(DestReceiver *destReceiver)
+{
+	RemoteFileDestReceiver *transmitDest = (RemoteFileDestReceiver *) destReceiver;
+
+	List *connectionList = transmitDest->connectionList;
+	CopyOutState copyOutState = transmitDest->copyOutState;
+
+	/* send copy binary footers to all shard placements */
+	if (copyOutState->binary)
+	{
+		SendCopyBinaryFooters(copyOutState, 0, connectionList);
+	}
+
+	/* close the COPY input on all shard placements */
+	EndRemoteCopy(0, connectionList, true);
+}
+
+
+static void
+RemoteFileDestReceiverDestroy(DestReceiver *destReceiver)
+{
+	RemoteFileDestReceiver *transmitDest = (RemoteFileDestReceiver *) destReceiver;
+
+	if (transmitDest->copyOutState)
+	{
+		pfree(transmitDest->copyOutState);
+	}
+
+	if (transmitDest->columnOutputFunctions)
+	{
+		pfree(transmitDest->columnOutputFunctions);
+	}
+
+	pfree(transmitDest);
 }

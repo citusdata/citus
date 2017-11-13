@@ -15,6 +15,7 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/multi_copy.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
@@ -34,6 +35,7 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
+static void ExecuteSubPlans(List *subPlanList, EState *estate);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
@@ -273,12 +275,48 @@ DelayedErrorCreateScan(CustomScan *scan)
 
 
 /*
- * CitusSelectBeginScan is an empty function for BeginCustomScan callback.
+ * CitusSelectBeginScan starts a distributed SELECT command. In particur,
+ * it executes an subplans that the SELECT depends on.
  */
 static void
 CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	/* just an empty function */
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	List *subPlanList = distributedPlan->subPlanList;
+
+	ExecuteSubPlans(subPlanList, estate);
+}
+
+
+/*
+ * ExecuteSubPlans executes a list of subplans from a distributed plan
+ * by executing each plan from the top.
+ */
+static void
+ExecuteSubPlans(List *subPlanList, EState *estate)
+{
+	ListCell *subPlanCell = NULL;
+	int subPlanId = 0;
+
+	foreach(subPlanCell, subPlanList)
+	{
+		PlannedStmt *subPlan = (PlannedStmt *) lfirst(subPlanCell);
+		DestReceiver *copyDest = NULL;
+		ParamListInfo params = NULL;
+		StringInfo targetFileName = makeStringInfo();
+		List *nodeList = ActivePrimaryNodeList();
+
+		appendStringInfo(targetFileName, "base/pgsql_job_cache/%d_%d_%d_%d.data",
+						 GetUserId(), GetLocalGroupId(), MyProcPid, subPlanId);
+
+		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(targetFileName->data,
+																 estate, nodeList);
+
+		ExecutePlanIntoDestReceiver(subPlan, params, copyDest);
+
+		subPlanId++;
+	}
 }
 
 

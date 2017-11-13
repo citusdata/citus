@@ -125,6 +125,7 @@ extern Oid DistPlacementGroupidIndexId(void);
 
 /* function oids */
 extern Oid CitusExtraDataContainerFuncId(void);
+extern Oid CitusResultFileFuncId(void);
 extern Oid CitusWorkerHashFunctionId(void);
 
 /* nodeRole enum oids */

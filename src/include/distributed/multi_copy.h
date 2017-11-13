@@ -74,6 +74,8 @@ typedef struct CitusCopyDestReceiver
 	List *columnNameList;
 	int partitionColumnIndex;
 
+	char *transmitFileName;
+
 	/* distributed table metadata */
 	DistTableCacheEntry *tableMetadata;
 
@@ -108,12 +110,45 @@ typedef struct CitusCopyDestReceiver
 } CitusCopyDestReceiver;
 
 
+/* CopyDestReceiver can be used to stream results into a distributed table */
+typedef struct RemoteFileDestReceiver
+{
+	/* public DestReceiver interface */
+	DestReceiver pub;
+
+	char *transmitFileName;
+
+	/* descriptor of the tuples that are sent to the worker */
+	TupleDesc tupleDescriptor;
+
+	/* EState for per-tuple memory allocation */
+	EState *executorState;
+
+	/* MemoryContext for DestReceiver session */
+	MemoryContext memoryContext;
+
+	List *initialNodeList;
+	List *connectionList;
+
+	/* state on how to copy out data types */
+	CopyOutState copyOutState;
+	FmgrInfo *columnOutputFunctions;
+
+	/* number of tuples sent */
+	int64 tuplesSent;
+} RemoteFileDestReceiver;
+
+
 /* function declarations for copying into a distributed table */
 extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
 														   EState *executorState,
 														   bool stopOnFailure);
+
+extern RemoteFileDestReceiver * CreateRemoteFileDestReceiver(char *transmitFileName,
+															 EState *executorState,
+															 List *initialNodeList);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  TupleDesc rowDescriptor,

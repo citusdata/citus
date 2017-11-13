@@ -72,6 +72,7 @@ typedef struct RemoteExplainPlan
 
 
 /* Explain functions for distributed queries */
+static void ExplainSubPlans(List *subPlanList, ExplainState *es);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
@@ -124,6 +125,11 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
+	if (distributedPlan->subPlanList != NIL)
+	{
+		ExplainSubPlans(distributedPlan->subPlanList, es);
+	}
+
 	ExplainJob(distributedPlan->workerJob, es);
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
@@ -163,6 +169,46 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 #endif
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
+}
+
+
+static void
+ExplainSubPlans(List *subPlanList, ExplainState *es)
+{
+	ListCell *subPlanCell = NULL;
+
+	ExplainOpenGroup("Subplans", "Subplans", false, es);
+
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		appendStringInfoSpaces(es->str, es->indent * 2);
+		appendStringInfo(es->str, "->  Distributed Subplan\n");
+		es->indent += 3;
+	}
+
+	foreach(subPlanCell, subPlanList)
+	{
+		PlannedStmt *subPlan = (PlannedStmt *) lfirst(subPlanCell);
+		IntoClause *into = NULL;
+		ParamListInfo params = NULL;
+		char *queryString = NULL;
+		instr_time planduration;
+
+#if (PG_VERSION_NUM >= 100000)
+		ExplainOnePlan(subPlan, into, es, queryString, params, NULL,
+					   &planduration);
+#else
+		ExplainOnePlan(subPlan, into, es, queryString, params,
+					   &planduration);
+#endif
+	}
+
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		es->indent -= 3;
+	}
+
+	ExplainCloseGroup("Subplans", "Subplans", false, es);
 }
 
 

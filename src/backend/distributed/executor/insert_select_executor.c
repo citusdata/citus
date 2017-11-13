@@ -149,13 +149,12 @@ ExecuteSelectIntoRelation(Oid targetRelationId, List *insertTargetList,
  * ExecuteIntoDestReceiver plans and executes a query and sends results to the given
  * DestReceiver.
  */
-static void
-ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
+void
+ExecutePlanIntoDestReceiver(PlannedStmt *queryPlan, ParamListInfo params,
+							DestReceiver *dest)
 {
-	PlannedStmt *queryPlan = NULL;
 	Portal portal = NULL;
 	int eflags = 0;
-	int cursorOptions = 0;
 	long count = FETCH_ALL;
 
 	/* create a new portal for executing the query */
@@ -163,11 +162,6 @@ ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 
 	/* don't display the portal in pg_cursors, it is for internal use only */
 	portal->visible = false;
-
-	cursorOptions = CURSOR_OPT_PARALLEL_OK;
-
-	/* plan the subquery, this may be another distributed query */
-	queryPlan = pg_plan_query(query, cursorOptions, params);
 
 	PortalDefineQuery(portal,
 					  NULL,
@@ -183,4 +177,23 @@ ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
 	PortalRun(portal, count, false, dest, dest, NULL);
 #endif
 	PortalDrop(portal, false);
+}
+
+
+/*
+ * ExecuteIntoDestReceiver plans and executes a query and sends results to the given
+ * DestReceiver.
+ */
+static void
+ExecuteIntoDestReceiver(Query *query, ParamListInfo params, DestReceiver *dest)
+{
+	PlannedStmt *queryPlan = NULL;
+	int cursorOptions = 0;
+
+	cursorOptions = CURSOR_OPT_PARALLEL_OK;
+
+	/* plan the subquery, this may be another distributed query */
+	queryPlan = pg_plan_query(query, cursorOptions, params);
+
+	ExecutePlanIntoDestReceiver(queryPlan, params, dest);
 }

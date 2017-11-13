@@ -118,6 +118,7 @@ typedef struct MetadataCacheData
 	Oid distTransactionGroupIndexId;
 	Oid distTransactionRecordIndexId;
 	Oid extraDataContainerFuncId;
+	Oid resultFileFuncId;
 	Oid workerHashFunctionId;
 	Oid extensionOwner;
 	Oid primaryNodeRoleId;
@@ -1850,6 +1851,23 @@ CitusExtraDataContainerFuncId(void)
 	}
 
 	return MetadataCache.extraDataContainerFuncId;
+}
+
+
+/* return oid of the read_records_file(text,text) function */
+Oid
+CitusResultFileFuncId(void)
+{
+	if (MetadataCache.resultFileFuncId == InvalidOid)
+	{
+		List *nameList = list_make2(makeString("pg_catalog"),
+									makeString("read_records_file"));
+		Oid paramOids[2] = { TEXTOID, TEXTOID };
+
+		MetadataCache.resultFileFuncId = LookupFuncName(nameList, 2, paramOids, true);
+	}
+
+	return MetadataCache.resultFileFuncId;
 }
 
 
