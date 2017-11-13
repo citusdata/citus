@@ -78,6 +78,9 @@ PG_FUNCTION_INFO_V1(master_get_table_ddl_events);
 PG_FUNCTION_INFO_V1(master_get_new_shardid);
 PG_FUNCTION_INFO_V1(master_get_new_placementid);
 PG_FUNCTION_INFO_V1(master_get_active_worker_nodes);
+PG_FUNCTION_INFO_V1(master_get_round_robin_candidate_nodes);
+PG_FUNCTION_INFO_V1(master_stage_shard_row);
+PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
 
 
 /*
@@ -367,6 +370,45 @@ GetNextPlacementId(void)
 	placementId = DatumGetInt64(placementIdDatum);
 
 	return placementId;
+}
+
+
+/*
+ * master_get_round_robin_candidate_nodes is a stub UDF to make pg_upgrade
+ * work flawlessly while upgrading servers from 6.1. This implementation
+ * will be removed after the UDF dropped on the sql side properly.
+ */
+Datum
+master_get_round_robin_candidate_nodes(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("this function is deprecated and no longer is used")));
+}
+
+
+/*
+ * master_stage_shard_row is a stub UDF to make pg_upgrade
+ * work flawlessly while upgrading servers from 6.1. This implementation
+ * will be removed after the UDF dropped on the sql side properly.
+ */
+Datum
+master_stage_shard_row(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("this function is deprecated and no longer is used")));
+}
+
+
+/*
+ * master_stage_shard_placement_row is a stub UDF to make pg_upgrade
+ * work flawlessly while upgrading servers from 6.1. This implementation
+ * will be removed after the UDF dropped on the sql side properly.
+ */
+Datum
+master_stage_shard_placement_row(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("this function is deprecated and no longer is used")));
 }
 
 
