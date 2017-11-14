@@ -653,6 +653,29 @@ ORDER BY
 (0 rows)
 
 \c - - - :master_port
+-- try using the coordinator as a worker and then dropping the table
+SELECT master_add_node('localhost', :master_port);
+NOTICE:  Replicating reference table "transactional_drop_reference" to the node localhost:57636
+                        master_add_node                        
+---------------------------------------------------------------
+ (1380010,1380008,localhost,57636,default,f,t,primary,default)
+(1 row)
+
+CREATE TABLE citus_local (id serial, k int);
+SELECT create_distributed_table('citus_local', 'id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+INSERT INTO citus_local (k) VALUES (2);
+DROP TABLE citus_local;
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node 
+--------------------
+ 
+(1 row)
+
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
