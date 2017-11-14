@@ -1,3 +1,53 @@
+### citus v7.1.0 (November 14, 2017) ###
+
+* Adds support for native queries with multi shard `UPDATE`/`DELETE` queries
+
+* Expands reference table support in subquery pushdown
+
+* Adds window function support for subqueries and `INSERT ... SELECT` queries
+
+* Adds support for `COUNT(DISTINCT) [ON]` queries on non-partition columns
+
+* Adds support for `DISTINCT [ON]` queries on non-partition columns
+
+* Introduces basic usage statistic collector
+
+* Adds support for setting replica identity while creating distributed tables
+
+* Adds support for `ALTER TABLE ... REPLICA IDENTITY` queries
+
+* Adds pushdown support for `LIMIT` and `HAVING` grouped by partition key
+
+* Adds support for `INSERT ... SELECT` queries via worker nodes on MX clusters
+
+* Adds support for adding primary key using already defined index
+
+* Adds parameter to shard copy functions to support distinct replication models
+
+* Changes `shard_name` UDF to omit public schema name
+
+* Adds `master_move_node` UDF to make changes on nodename/nodeport more easy
+
+* Fixes a bug that could cause casting error with `INSERT ... SELECT` queries
+
+* Fixes a bug that could prevent upgrading servers from Citus 6.1
+
+* Fixes a bug that could prevent attaching partitions to a table in schema
+
+* Fixes a bug that could prevent adding a node to cluster with reference table
+
+* Fixes a bug that could cause a crash with `INSERT ... SELECT` queries
+
+* Fixes a bug that could prevent creating a partitoned table on Cloud
+
+* Implements various performance improvements
+
+* Adds internal infrastructures and tests to improve development process
+
+* Addresses various race conditions and deadlocks
+
+* Improves and standardizes error messages
+
 ### citus v7.0.3 (October 16, 2017) ###
 
 * Fixes several bugs that could cause crash
