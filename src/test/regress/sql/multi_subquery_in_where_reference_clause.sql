@@ -55,6 +55,38 @@ WHERE
       )
 LIMIT 3;
 
+-- immutable functions are also treated as reference tables
+SELECT
+  user_id
+FROM
+  (SELECT user_id FROM generate_series(1,10) AS series(user_id)) users_reference_table
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_reference_table.user_id = events_table.user_id
+      )
+LIMIT 3;
+
+-- subqueries without FROM are also treated as reference tables
+SELECT
+  user_id
+FROM
+  (SELECT  5 AS user_id) users_reference_table
+WHERE
+  NOT EXISTS
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_reference_table.user_id = events_table.user_id
+      )
+LIMIT 3;
+
 -- subqueries in WHERE with IN operator without equality
 SELECT 
   users_table.user_id, count(*)
@@ -72,6 +104,43 @@ WHERE
 GROUP BY users_table.user_id
 ORDER BY 2 DESC, 1 DESC
 LIMIT 3;
+
+-- immutable functions are also treated as reference tables
+SELECT
+  users_table.user_id, count(*)
+FROM
+  users_table
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              generate_series(1,10) AS events_reference_table(user_id)
+           WHERE
+              users_table.user_id > events_reference_table.user_id
+          )
+GROUP BY users_table.user_id
+ORDER BY 2 DESC, 1 DESC
+LIMIT 3;
+
+-- immutable functions are also treated as reference tables
+SELECT
+  users_table.user_id, count(*)
+FROM
+  users_table
+WHERE
+  value_2 IN
+          (SELECT
+              value_2
+           FROM
+              (SELECT 5 AS user_id) AS events_reference_table
+           WHERE
+              users_table.user_id > events_reference_table.user_id
+          )
+GROUP BY users_table.user_id
+ORDER BY 2 DESC, 1 DESC
+LIMIT 3;
+
 
 -- should error out since reference table exist on the left side 
 -- of the left lateral join

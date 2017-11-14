@@ -1803,7 +1803,7 @@ ORDER BY 1,2;
 (2 rows)
 
 DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
--- a not supported query due to constant range table entry
+-- a query with a constant subquery
 SELECT count(*) as subquery_count
 FROM (
   SELECT 
@@ -1822,9 +1822,12 @@ FROM (
   ON a.user_id = b.user_id 
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
--- same with INNER JOIN
+ subquery_count 
+----------------
+              1
+(1 row)
+
+-- volatile function in the subquery
 SELECT count(*) as subquery_count
 FROM (
   SELECT 
@@ -1838,13 +1841,13 @@ FROM (
   ) as a
   INNER JOIN (
   SELECT
-    1 as user_id
+    random()::int as user_id
   ) AS b 
   ON a.user_id = b.user_id 
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause can only contain immutable functions
 -- this is slightly different, we use RTE_VALUEs here
 SELECT Count(*) AS subquery_count 
 FROM (SELECT 
@@ -1866,7 +1869,7 @@ FROM (SELECT
 WHERE b.user_id IS NULL 
 GROUP BY a.user_id;  
 ERROR:  cannot push down this subquery
-DETAIL:  Table expressions other than simple relations and subqueries are currently unsupported
+DETAIL:  VALUES in multi-shard queries is currently unsupported
 -- same query without LIMIT/OFFSET returns 30 rows
 SET client_min_messages TO DEBUG1;
 -- now, lets use a simple expression on the LIMIT and explicit coercion on the OFFSET

@@ -228,6 +228,91 @@ FROM
       97 | 71002659
 (10 rows)
 
+-- table function can be the inner relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ count 
+-------
+    10
+(1 row)
+
+-- table function cannot be used without subquery pushdown
+SELECT count(*) FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id = users_ref_test_table.id;
+ERROR:  could not run distributed query with complex table expressions
+HINT:  Consider using an equality filter on the distributed table's partition column.
+-- table function can be the inner relationship in an outer join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table LEFT JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ count 
+-------
+    10
+(1 row)
+
+-- table function cannot be the outer relationship in an outer join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a table function in the outer part of the outer join
+-- volatile functions cannot be used as table expressions
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ERROR:  cannot push down this subquery
+DETAIL:  Only immutable functions can be used as a table expressions in a multi-shard query
+-- cannot sneak in a volatile function as a parameter
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ERROR:  cannot push down this subquery
+DETAIL:  Only immutable functions can be used as a table expressions in a multi-shard query
+-- cannot perform a union with table function
+SELECT count(*) FROM
+  (SELECT user_id FROM user_buy_test_table
+   UNION ALL
+   SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
+ERROR:  cannot push down this subquery
+DETAIL:  Table functions are not supported with union operator
+-- subquery without FROM can be the inner relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN (SELECT 4 AS id) users_ref_test_table
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ count 
+-------
+     1
+(1 row)
+
+-- subquery without FROM triggers subquery pushdown
+SELECT count(*) FROM user_buy_test_table JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+ count 
+-------
+     1
+(1 row)
+
+-- subquery without FROM can be the inner relationship in an outer join
+SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+ count 
+-------
+     4
+(1 row)
+
+-- subquery without FROM cannot be the outer relationship in an outer join
+SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a subquery without FROM in the outer part of the outer join
+-- cannot perform a union with subquery without FROM
+SELECT count(*) FROM
+  (SELECT user_id FROM user_buy_test_table
+   UNION ALL
+   SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
 SELECT

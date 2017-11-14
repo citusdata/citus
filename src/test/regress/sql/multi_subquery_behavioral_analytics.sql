@@ -1432,7 +1432,7 @@ SELECT * FROM run_command_on_workers('DROP FUNCTION array_index(ANYARRAY, ANYELE
 ORDER BY 1,2;
 DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
 
--- a not supported query due to constant range table entry
+-- a query with a constant subquery
 SELECT count(*) as subquery_count
 FROM (
   SELECT 
@@ -1452,7 +1452,7 @@ FROM (
 WHERE b.user_id IS NULL
 GROUP BY a.user_id;
 
--- same with INNER JOIN
+-- volatile function in the subquery
 SELECT count(*) as subquery_count
 FROM (
   SELECT 
@@ -1466,7 +1466,7 @@ FROM (
   ) as a
   INNER JOIN (
   SELECT
-    1 as user_id
+    random()::int as user_id
   ) AS b 
   ON a.user_id = b.user_id 
 WHERE b.user_id IS NULL
