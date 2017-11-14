@@ -22,7 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
-#include <sys/errno.h>
 
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
