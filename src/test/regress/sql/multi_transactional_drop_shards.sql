@@ -363,6 +363,14 @@ ORDER BY
 
 \c - - - :master_port
 
+-- try using the coordinator as a worker and then dropping the table
+SELECT master_add_node('localhost', :master_port);
+CREATE TABLE citus_local (id serial, k int);
+SELECT create_distributed_table('citus_local', 'id');
+INSERT INTO citus_local (k) VALUES (2);
+DROP TABLE citus_local;
+SELECT master_remove_node('localhost', :master_port);
+
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
