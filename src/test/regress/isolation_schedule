@@ -23,6 +23,7 @@ test: isolation_distributed_deadlock_detection
 # writes, run this test serially.
 test: isolation_create_restore_point
 
+test: isolation_master_append_table
 test: isolation_multi_shard_modify_vs_all
 test: isolation_hash_copy_vs_all
 test: isolation_append_copy_vs_all
@@ -38,4 +39,3 @@ test: isolation_delete_vs_all
 test: isolation_truncate_vs_all
 test: isolation_drop_vs_all
 test: isolation_ddl_vs_all
-test: isolation_master_append_table
