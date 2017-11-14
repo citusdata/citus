@@ -464,10 +464,8 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 SELECT nextval('mx_table_with_sequence_b_seq');
 SELECT nextval('mx_table_with_sequence_c_seq');
 
--- Check that dropping the mx table with sequences works as expected, even the metadata
--- syncing is stopped to one of the workers
+-- Check that dropping the mx table with sequences works as expected
 \c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 DROP TABLE mx_table_with_sequence;
 \d mx_table_with_sequence
 \ds mx_table_with_sequence_b_seq
