@@ -914,7 +914,7 @@ FROM
   (SELECT 1)
 ) b;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 -- we don't support subqueries without relations
 SELECT 
   *
@@ -925,7 +925,7 @@ FROM
   (SELECT (random() * 100)::int)
 ) b;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 -- we don't support subqueries without relations
 SELECT 
   user_id, value_3
@@ -946,7 +946,7 @@ FROM
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -990,7 +990,7 @@ FROM
 GROUP BY types
 ORDER BY types;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 SET citus.enable_router_execution TO true;
 DROP TABLE events_reference_table;
 DROP TABLE users_reference_table;

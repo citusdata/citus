@@ -70,6 +70,11 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
+-- Subqueries without relation with a volatile functions (non-constant)
+SELECT count(*) FROM (
+   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r)
+) b;
+
 -- Check that we error out if there is non relation subqueries
 SELECT count(*) FROM
 (

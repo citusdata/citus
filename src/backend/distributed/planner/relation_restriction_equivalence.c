@@ -1314,6 +1314,12 @@ ContainsUnionSubquery(Query *queryTree)
 		return false;
 	}
 
+	/* subquery without FROM */
+	if (joiningRangeTableCount == 0)
+	{
+		return false;
+	}
+
 	subqueryRteIndex = linitial_int(joinTreeTableIndexList);
 	rangeTableEntry = rt_fetch(subqueryRteIndex, rangeTableList);
 	if (rangeTableEntry->rtekind != RTE_SUBQUERY)

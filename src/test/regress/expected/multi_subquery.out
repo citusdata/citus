@@ -71,6 +71,12 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- Subqueries without relation with a volatile functions (non-constant)
+SELECT count(*) FROM (
+   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r)
+) b;
+ERROR:  cannot push down this subquery
+DETAIL:  Subqueries without a FROM clause can only contain immutable functions
 -- Check that we error out if there is non relation subqueries
 SELECT count(*) FROM
 (
@@ -78,7 +84,7 @@ SELECT count(*) FROM
    (SELECT 1::bigint)
 ) b;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 -- Check that we error out if queries in union do not include partition columns.
 SELECT count(*) FROM
 (

@@ -499,16 +499,34 @@ FROM (
 ORDER BY 2 DESC, 1;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- subquery in where clause doesn't have a relation
-SELECT 
+-- subquery in where clause doesn't have a relation, but is constant
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 1);
+WHERE
+  value_2 >
+          (SELECT 1)
+ORDER BY 1 ASC
+LIMIT 2;
+ user_id 
+---------
+       0
+       0
+(2 rows)
+
+-- subquery in where clause has a volatile function and no relation
+SELECT
+  user_id
+FROM
+  users_table
+WHERE
+  value_2 >
+          (SELECT random())
+ORDER BY 1 ASC
+LIMIT 2;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause can only contain immutable functions
 -- OFFSET is not supported in the subquey
 SELECT 
   user_id
