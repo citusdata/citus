@@ -55,9 +55,19 @@ step "s1-update_all_value_1"
 	UPDATE users_test_table SET value_1 = 3;
 }
 
-step "s1-update_value_1_of_1_or_3"
+step "s1-update_value_1_of_1_or_3_to_5"
 {
 	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 1 or user_id = 3;
+}
+
+step "s1-update_value_1_of_1_or_3_to_7"
+{
+	UPDATE users_test_table SET value_1 = 7 WHERE user_id = 1 or user_id = 3;
+}
+
+step "s1-update_value_1_of_2_or_4_to_5"
+{
+	UPDATE users_test_table SET value_1 = 5 WHERE user_id = 2 or user_id = 4;
 }
 
 step "s1-commit"
@@ -97,12 +107,12 @@ step "s2-update_all_value_1"
 	UPDATE users_test_table SET value_1 = 6;
 }
 
-step "s2-update_value_1_of_1_or_3"
+step "s2-update_value_1_of_1_or_3_to_8"
 {
 	UPDATE users_test_table SET value_1 = 8 WHERE user_id = 1 or user_id = 3;
 }
 
-step "s2-update_value_1_of_4_or_6"
+step "s2-update_value_1_of_4_or_6_to_4"
 {
 	UPDATE users_test_table SET value_1 = 4 WHERE user_id = 4 or user_id = 6;
 }
@@ -115,14 +125,22 @@ step "s2-commit"
 # test with parallel connections
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-select" "s1-commit" "s2-select" "s2-commit"
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-update_all_value_1" "s1-commit" "s2-commit"
-permutation "s1-begin" "s1-update_value_1_of_1_or_3" "s2-begin" "s2-update_value_1_of_4_or_6" "s1-commit" "s2-commit" "s2-select" 
-permutation "s1-begin" "s1-update_value_1_of_1_or_3" "s2-begin" "s2-update_value_1_of_1_or_3" "s1-commit" "s2-commit" "s2-select" 
+permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit" "s2-select" 
+permutation "s1-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select" 
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-to-table" "s1-commit" "s2-commit" "s2-select" 
 permutation "s1-begin" "s1-update_all_value_1" "s2-begin" "s2-insert-into-select" "s1-commit" "s2-commit" "s2-select"
+# multi-shard update affecting the same rows
+permutation "s1-begin" "s2-begin" "s1-update_value_1_of_1_or_3_to_5" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit"
+# multi-shard update affecting the different rows
+permutation "s1-begin" "s2-begin" "s2-update_value_1_of_1_or_3_to_8" "s1-update_value_1_of_2_or_4_to_5" "s2-commit" "s1-commit"
 
 # test with sequential connections, sequential tests should not block each other
 # if they are targeting different shards. If multiple connections updating the same
 # row, second one must wait for the first one.
 permutation "s1-begin" "s1-change_connection_mode_to_sequential" "s1-update_all_value_1" "s2-begin" "s2-change_connection_mode_to_sequential" "s2-update_all_value_1" "s1-commit" "s2-commit" "s2-select"
-permutation "s1-begin" "s1-change_connection_mode_to_sequential" "s1-update_value_1_of_1_or_3" "s2-begin" "s2-change_connection_mode_to_sequential" "s2-update_value_1_of_1_or_3" "s1-commit" "s2-commit" "s2-select"
-permutation "s1-begin" "s1-change_connection_mode_to_sequential" "s1-update_value_1_of_1_or_3" "s2-begin" "s2-change_connection_mode_to_sequential" "s2-update_value_1_of_4_or_6" "s1-commit" "s2-commit" "s2-select"
+permutation "s1-begin" "s1-change_connection_mode_to_sequential" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-change_connection_mode_to_sequential" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit" "s2-select"
+permutation "s1-begin" "s1-change_connection_mode_to_sequential" "s1-update_value_1_of_1_or_3_to_5" "s2-begin" "s2-change_connection_mode_to_sequential" "s2-update_value_1_of_4_or_6_to_4" "s1-commit" "s2-commit" "s2-select"
+# multi-shard update affecting the same rows
+permutation "s1-begin" "s2-begin" "s1-change_connection_mode_to_sequential" "s2-change_connection_mode_to_sequential" "s1-update_value_1_of_1_or_3_to_5" "s2-update_value_1_of_1_or_3_to_8" "s1-commit" "s2-commit"
+# multi-shard update affecting the different rows
+permutation "s1-begin" "s2-begin" "s1-change_connection_mode_to_sequential" "s2-change_connection_mode_to_sequential" "s2-update_value_1_of_1_or_3_to_8" "s1-update_value_1_of_2_or_4_to_5" "s1-commit" "s2-commit"
