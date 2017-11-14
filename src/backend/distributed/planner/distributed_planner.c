@@ -245,8 +245,10 @@ NeedsDistributedPlanningWalker(Node *node, void *context)
 			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 			Oid relationId = InvalidOid;
 
-			if (rangeTableEntry->rtekind != RTE_RELATION)
+			if (rangeTableEntry->rtekind != RTE_RELATION ||
+				rangeTableEntry->relkind == RELKIND_VIEW)
 			{
+				/* only consider tables */
 				continue;
 			}
 
