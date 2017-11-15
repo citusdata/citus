@@ -496,6 +496,10 @@ BuildLocalWaitGraph(void)
  * IsProcessWaitingForSafeOperations returns true if the given PROC
  * waiting on relation extension locks, page locks or speculative locks.
  *
+ * The function also returns true if the waiting process is an autovacuum
+ * process given that autovacuum cannot contribute to any distributed
+ * deadlocks.
+ *
  * In general for the purpose of distributed deadlock detection, we should
  * skip if the process blocked on the locks that may not be part of deadlocks.
  * Those locks are held for a short duration while the relation or the index
@@ -509,10 +513,18 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 {
 	PROCLOCK *waitProcLock = NULL;
 	LOCK *waitLock = NULL;
+	PGXACT *pgxact = NULL;
 
 	if (proc->waitStatus != STATUS_WAITING)
 	{
 		return false;
+	}
+
+	/* get the transaction that the backend associated with */
+	pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
+	if (pgxact->vacuumFlags & PROC_IS_AUTOVACUUM)
+	{
+		return true;
 	}
 
 	waitProcLock = proc->waitProcLock;
