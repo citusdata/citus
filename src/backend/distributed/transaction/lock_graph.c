@@ -494,7 +494,7 @@ BuildLocalWaitGraph(void)
 
 /*
  * IsProcessWaitingForSafeOperations returns true if the given PROC
- * waiting on relation extension lock or page locks.
+ * waiting on relation extension locks, page locks or speculative locks.
  *
  * In general for the purpose of distributed deadlock detection, we should
  * skip if the process blocked on the locks that may not be part of deadlocks.
@@ -519,7 +519,8 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 	waitLock = waitProcLock->tag.myLock;
 
 	return waitLock->tag.locktag_type == LOCKTAG_RELATION_EXTEND ||
-		   waitLock->tag.locktag_type == LOCKTAG_PAGE;
+		   waitLock->tag.locktag_type == LOCKTAG_PAGE ||
+		   waitLock->tag.locktag_type == LOCKTAG_SPECULATIVE_TOKEN;
 }
 
 
@@ -596,8 +597,7 @@ AddEdgesForLockWaits(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 
 		/*
 		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on a relation extension lock or page locks,
-		 * which will be released shortly.
+		 * and processes that are waiting on safe operations.
 		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
 			IsConflictingLockMask(procLock->holdMask, conflictMask) &&
@@ -641,8 +641,7 @@ AddEdgesForWaitQueue(WaitGraph *waitGraph, PGPROC *waitingProc, PROCStack *remai
 
 		/*
 		 * Skip processes from the same lock group, processes that don't conflict,
-		 * and processes that are waiting on a relation extension lock or page locks,
-		 * which will be released shortly.
+		 * and processes that are waiting on safe operations.
 		 */
 		if (!IsSameLockGroup(waitingProc, currentProc) &&
 			IsConflictingLockMask(awaitMask, conflictMask) &&
