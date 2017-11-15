@@ -179,10 +179,10 @@ SELECT create_distributed_table('test_append_table','id','append');
 SELECT master_create_empty_shard('test_append_table');
  master_create_empty_shard 
 ---------------------------
-                   1440066
+                   1440010
 (1 row)
 
-SELECT * FROM master_append_table_to_shard(1440066, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
                     0.0266667
@@ -191,10 +191,10 @@ SELECT * FROM master_append_table_to_shard(1440066, 'append_stage_table', 'local
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
  new_shard_id 
 --------------
-      1440067
+      1440011
 (1 row)
 
-SELECT * FROM master_append_table_to_shard(1440067, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
                     0.0266667
@@ -272,9 +272,9 @@ LINE 1: UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY id;
 ERROR:  relation "tt1" does not exist
-LINE 1: SELECT * FROM tt1;
+LINE 1: SELECT * FROM tt1 ORDER BY id;
                       ^
 -- Modify main table and partition table within same transaction
 BEGIN;
@@ -289,9 +289,9 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 DELETE FROM tt1_1120;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY id;
 ERROR:  relation "tt1" does not exist
-LINE 1: SELECT * FROM tt1;
+LINE 1: SELECT * FROM tt1 ORDER BY id;
                       ^
 DROP TABLE tt1;
 ERROR:  table "tt1" does not exist
@@ -307,13 +307,13 @@ BEGIN;
 \COPY tt2 FROM STDIN DELIMITER AS ',';
 UPDATE tt2 SET col_2 = 1;
 COMMIT;
-SELECT * FROM tt2;
+SELECT * FROM tt2 ORDER BY id;
  id | col_2 
 ----+-------
   1 |     1
-  7 |     1
-  3 |     1
   2 |     1
+  3 |     1
+  7 |     1
   9 |     1
 (5 rows)
 
@@ -322,10 +322,10 @@ UPDATE tt2 SET col_2 = 5 RETURNING id, col_2;
  id | col_2 
 ----+-------
   1 |     5
-  7 |     5
   3 |     5
-  2 |     5
+  7 |     5
   9 |     5
+  2 |     5
 (5 rows)
 
 SET citus.multi_shard_modify_mode to sequential;
@@ -333,10 +333,10 @@ UPDATE tt2 SET col_2 = 3 RETURNING id, col_2;
  id | col_2 
 ----+-------
   1 |     3
-  7 |     3
   3 |     3
-  2 |     3
+  7 |     3
   9 |     3
+  2 |     3
 (5 rows)
 
 DROP TABLE tt2;

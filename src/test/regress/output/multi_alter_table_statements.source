@@ -891,7 +891,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
     END;
 $up$ LANGUAGE plpgsql;
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220056
+BEFORE INSERT ON trigger_table_220028
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 \c - - - :master_port
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');

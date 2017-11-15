@@ -184,7 +184,7 @@ CREATE TABLE table2_groupC ( id text );
 SELECT create_distributed_table('table2_groupC', 'id');
 
 -- change shard count
-SET citus.shard_count = 4;
+SET citus.shard_count = 8;
 
 CREATE TABLE table1_groupD ( id int );
 SELECT create_distributed_table('table1_groupD', 'id');
@@ -285,14 +285,13 @@ SELECT create_distributed_table('table_failing', 'id', colocate_with => NULL);
 -- check with different distribution column types
 CREATE TABLE table_bigint ( id bigint );
 SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_groupE');
-
 -- check worker table schemas
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300050'::regclass;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300052'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300062'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300064'::regclass;
 
 \c - - - :master_port
-SET citus.next_shard_id TO 1300068;
+SET citus.next_shard_id TO 1300080;
 
 CREATE TABLE table1_groupF ( id int );
 SELECT create_reference_table('table1_groupF');

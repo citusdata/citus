@@ -636,16 +636,16 @@ ORDER BY
 	logicalrelid, shardid;
         logicalrelid         | shardid | nodename  | nodeport 
 -----------------------------+---------+-----------+----------
- mx_test_schema_1.mx_table_1 | 1310104 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310105 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310106 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310107 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310108 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310109 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310110 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310111 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310112 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310113 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310021 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310022 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310023 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310024 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310025 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310026 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310027 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310028 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310029 | localhost |    57637
 (10 rows)
 
 	
@@ -686,16 +686,16 @@ ORDER BY
 	logicalrelid, shardid;
         logicalrelid         | shardid | nodename  | nodeport 
 -----------------------------+---------+-----------+----------
- mx_test_schema_1.mx_table_1 | 1310104 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310105 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310106 | localhost |    57637
- mx_test_schema_1.mx_table_1 | 1310107 | localhost |    57638
- mx_test_schema_1.mx_table_1 | 1310108 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310109 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310110 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310111 | localhost |    57637
- mx_test_schema_2.mx_table_2 | 1310112 | localhost |    57638
- mx_test_schema_2.mx_table_2 | 1310113 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310020 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310021 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310022 | localhost |    57637
+ mx_test_schema_1.mx_table_1 | 1310023 | localhost |    57638
+ mx_test_schema_1.mx_table_1 | 1310024 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310025 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310026 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310027 | localhost |    57637
+ mx_test_schema_2.mx_table_2 | 1310028 | localhost |    57638
+ mx_test_schema_2.mx_table_2 | 1310029 | localhost |    57637
 (10 rows)
 
 -- Check that metadata of MX tables don't exist on the non-metadata worker
@@ -1277,8 +1277,8 @@ ORDER BY
  	nodeport;
  logicalrelid | partmethod | repmodel | shardid | placementid | nodename  | nodeport 
 --------------+------------+----------+---------+-------------+-----------+----------
- mx_ref       | n          | t        | 1310183 |      100183 | localhost |    57637
- mx_ref       | n          | t        | 1310183 |      100184 | localhost |    57638
+ mx_ref       | n          | t        | 1310071 |      100071 | localhost |    57637
+ mx_ref       | n          | t        | 1310071 |      100072 | localhost |    57638
 (2 rows)
 
 	
@@ -1363,7 +1363,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310184 | localhost |    57637
+ 1310072 | localhost |    57637
 (1 row)
 
 \c - - - :worker_1_port
@@ -1372,7 +1372,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310184 | localhost |    57637
+ 1310072 | localhost |    57637
 (1 row)
 
 \c - - - :master_port
@@ -1389,8 +1389,8 @@ WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310184 | localhost |    57637
- 1310184 | localhost |    57638
+ 1310072 | localhost |    57637
+ 1310072 | localhost |    57638
 (2 rows)
 
 \c - - - :worker_1_port
@@ -1400,8 +1400,8 @@ WHERE logicalrelid='mx_ref'::regclass
 ORDER BY shardid, nodeport;
  shardid | nodename  | nodeport 
 ---------+-----------+----------
- 1310184 | localhost |    57637
- 1310184 | localhost |    57638
+ 1310072 | localhost |    57637
+ 1310072 | localhost |    57638
 (2 rows)
 
 -- Get the metadata back into a consistent state
