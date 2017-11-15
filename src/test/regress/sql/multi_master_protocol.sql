@@ -4,7 +4,7 @@
 -- Tests that check the metadata returned by the master node.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 740000;
+SET citus.next_shard_id TO 740000;
 
 
 SELECT part_storage_type, part_key, part_replica_count, part_max_size,

@@ -1,7 +1,7 @@
 --
 -- Distributed Partitioned Table Tests
 --
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1660000;
+SET citus.next_shard_id TO 1660000;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;

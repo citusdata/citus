@@ -4,7 +4,7 @@
 -- Tests that check the metadata after master_remove_node.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1380000;
+SET citus.next_shard_id TO 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1380000;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART 1380000;
@@ -405,6 +405,8 @@ WHERE
     nodeport = :worker_2_port;
     
 \c - - - :master_port
+
+SET citus.next_shard_id TO 1380001;
 
 -- verify table structure is changed
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_node_reference_table'::regclass;

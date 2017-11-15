@@ -3,7 +3,7 @@
 ---
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1220000;
+SET citus.next_shard_id TO 1220000;
 
 -- create test table
 CREATE TABLE large_table(a int, b int);

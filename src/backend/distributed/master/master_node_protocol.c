@@ -68,6 +68,8 @@ int ShardCount = 32;
 int ShardReplicationFactor = 1; /* desired replication factor for shards */
 int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
+int NextShardId = 0;
+int NextPlacementId = 0;
 
 static List * GetTableReplicaIdentityCommand(Oid relationId);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
@@ -291,13 +293,32 @@ master_get_new_shardid(PG_FUNCTION_ARGS)
 uint64
 GetNextShardId()
 {
-	text *sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	text *sequenceName = NULL;
+	Oid sequenceId = InvalidOid;
+	Datum sequenceIdDatum = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Datum shardIdDatum = 0;
 	uint64 shardId = 0;
+
+	/*
+	 * In regression tests, we would like to generate shard IDs consistently
+	 * even if the tests run in parallel. Instead of the sequence, we can use
+	 * the next_shard_id GUC to specify which shard ID the current session should
+	 * generate next. The GUC is automatically increased by 1 every time a new
+	 * shard ID is generated.
+	 */
+	if (NextShardId > 0)
+	{
+		shardId = NextShardId;
+		NextShardId += 1;
+
+		return shardId;
+	}
+
+	sequenceName = cstring_to_text(SHARDID_SEQUENCE_NAME);
+	sequenceId = ResolveRelationId(sequenceName);
+	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
@@ -351,13 +372,32 @@ master_get_new_placementid(PG_FUNCTION_ARGS)
 uint64
 GetNextPlacementId(void)
 {
-	text *sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
-	Oid sequenceId = ResolveRelationId(sequenceName);
-	Datum sequenceIdDatum = ObjectIdGetDatum(sequenceId);
+	text *sequenceName = NULL;
+	Oid sequenceId = InvalidOid;
+	Datum sequenceIdDatum = 0;
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
 	Datum placementIdDatum = 0;
 	uint64 placementId = 0;
+
+	/*
+	 * In regression tests, we would like to generate placement IDs consistently
+	 * even if the tests run in parallel. Instead of the sequence, we can use
+	 * the next_placement_id GUC to specify which shard ID the current session
+	 * should generate next. The GUC is automatically increased by 1 every time
+	 * a new placement ID is generated.
+	 */
+	if (NextPlacementId > 0)
+	{
+		placementId = NextPlacementId;
+		NextPlacementId += 1;
+
+		return placementId;
+	}
+
+	sequenceName = cstring_to_text(PLACEMENTID_SEQUENCE_NAME);
+	sequenceId = ResolveRelationId(sequenceName);
+	sequenceIdDatum = ObjectIdGetDatum(sequenceId);
 
 	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
 	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
