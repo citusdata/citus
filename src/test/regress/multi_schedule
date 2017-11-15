@@ -20,8 +20,7 @@ test: multi_703_upgrade
 test: multi_cluster_management
 test: multi_test_helpers
 test: multi_table_ddl
-test: multi_name_lengths
-test: multi_metadata_access
+test: multi_name_lengths multi_metadata_access
 
 test: multi_read_from_secondaries
 
@@ -30,20 +29,15 @@ test: multi_read_from_secondaries
 # uploading data to it.
 # ----------
 test: multi_create_table
-test: multi_create_table_constraints
-test: multi_master_protocol
-test: multi_load_data
+test: multi_create_table_constraints multi_master_protocol multi_behavioral_analytics_create_table multi_load_data
 
-test: multi_behavioral_analytics_create_table
-test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries
+test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_shard_update_delete
 test: multi_insert_select multi_insert_select_window
-test: multi_shard_update_delete
 
 # ---
 # Tests for partitioning support
 # ---
-test: multi_partitioning_utils
-test: multi_partitioning
+test: multi_partitioning_utils multi_partitioning
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
