@@ -30,10 +30,9 @@ SET
 WHERE 
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'orders_subquery'::regclass ORDER BY shardid DESC LIMIT 1);
 
--- If group by is not on partition column then we error out from single table
--- repartition code path
+-- If group by is not on partition column then we use a subplan
 SELECT
-	avg(order_count)
+	avg(order_count)::int
 FROM
 	(SELECT
 		l_suppkey,

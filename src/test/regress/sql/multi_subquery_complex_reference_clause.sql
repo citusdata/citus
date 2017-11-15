@@ -1062,7 +1062,7 @@ SELECT * FROM
 
 -- similiar to the above examples, this time there is a subquery 
 -- whose output is not in the DISTINCT clause
-SELECT * FROM
+SELECT count(*) FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
 ) as foo;

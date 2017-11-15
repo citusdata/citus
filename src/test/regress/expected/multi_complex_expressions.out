@@ -346,15 +346,27 @@ SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
 ERROR:  cannot perform local joins that involve expressions
 DETAIL:  local joins can be performed between columns only
 -- Check that we can issue limit/offset queries
--- OFFSET in subqueries are not supported
--- Error in the planner when single repartition subquery
-SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries with offset are not supported yet
--- Error in the optimizer when subquery pushdown is on
-SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries with offset are not supported yet
+-- OFFSET in subqueries are supported through subplans
+SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey LIMIT 5 OFFSET 20) sq;
+ o_custkey 
+-----------
+        35
+        37
+        38
+        40
+        41
+(5 rows)
+
+SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 5 OFFSET 20) sq;
+ o_orderkey 
+------------
+         69
+         70
+         71
+         96
+         97
+(5 rows)
+
 -- Simple LIMIT/OFFSET with ORDER BY
 SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
  o_orderkey 

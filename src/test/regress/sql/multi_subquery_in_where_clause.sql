@@ -499,9 +499,9 @@ WHERE
 ORDER BY 1 ASC
 LIMIT 2;
 
--- OFFSET is not supported in the subquey
+-- subquery with OFFSET will be executed in a subplan
 SELECT 
-  user_id
+  count(*)
 FROM 
   users_table
 WHERE 

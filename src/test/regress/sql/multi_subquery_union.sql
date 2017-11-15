@@ -565,17 +565,18 @@ GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
 
-
--- now lets also have some unsupported queries
-
--- group by is not on the partition key
+-- group by is not on the partition key, uses subplan
 SELECT user_id, sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM events_table GROUP BY user_id
       UNION
     SELECT value_1 as user_id, sum(value_2) AS counter FROM users_table GROUP BY value_1
 ) user_id 
-GROUP BY user_id;
+GROUP BY user_id
+ORDER BY 2 DESC
+LIMIT 5;
+
+-- now lets also have some unsupported queries
 
 -- partition key is not selected
 SELECT sum(counter) 
