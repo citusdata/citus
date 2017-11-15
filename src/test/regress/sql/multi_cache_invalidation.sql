@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1601000;
+SET citus.next_shard_id TO 1601000;
 CREATE TABLE tab9 (test_id integer NOT NULL, data int);
 CREATE TABLE tab10 (test_id integer NOT NULL, data int);
 SELECT master_create_distributed_table('tab9', 'test_id', 'hash');

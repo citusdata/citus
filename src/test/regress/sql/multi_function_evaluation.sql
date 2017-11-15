@@ -2,7 +2,7 @@
 -- MULTI_FUNCTION_EVALUATION
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1200000;
+SET citus.next_shard_id TO 1200000;
 
 -- nextval() works (no good way to test DEFAULT, or, by extension, SERIAL)
 

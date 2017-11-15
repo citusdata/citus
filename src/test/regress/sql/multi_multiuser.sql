@@ -4,7 +4,7 @@
 -- Test user permissions.
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1420000;
+SET citus.next_shard_id TO 1420000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1420000;
 
 SET citus.shard_replication_factor TO 1;

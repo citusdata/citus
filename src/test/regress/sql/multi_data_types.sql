@@ -4,7 +4,7 @@
 -- ===================================================================
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 530000;
+SET citus.next_shard_id TO 530000;
 
 
 -- create a custom type...

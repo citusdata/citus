@@ -1,7 +1,7 @@
 -- this test file aims to test UPSERT feature on Citus
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 980000;
+SET citus.next_shard_id TO 980000;
 
 
 CREATE TABLE upsert_test

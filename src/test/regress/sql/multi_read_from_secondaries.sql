@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1600000;
+SET citus.next_shard_id TO 1600000;
 
 \c "dbname=regression options='-c\ citus.use_secondary_nodes=always'"
 

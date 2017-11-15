@@ -1,5 +1,5 @@
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 850000;
+SET citus.next_shard_id TO 850000;
 
 
 -- ===================================================================

@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1100000;
+SET citus.next_shard_id TO 1100000;
 
 
 \set JobId 201010

@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 660000;
+SET citus.next_shard_id TO 660000;
 
 
 -- Enable configuration to print table join order

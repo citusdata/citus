@@ -5,7 +5,7 @@
 -- transaction block here so that we don't emit debug messages with changing
 -- transaction ids in them. Also, we set the executor type to task tracker
 -- executor here, as we cannot run repartition jobs with real time executor.
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 690000;
+SET citus.next_shard_id TO 690000;
 SET citus.enable_unique_job_ids TO off;
 -- print whether we're using version > 9 to make version-specific tests clear
 SHOW server_version \gset

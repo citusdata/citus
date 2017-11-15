@@ -1,5 +1,5 @@
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1300000;
+SET citus.next_shard_id TO 1300000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 
 -- ===================================================================
@@ -292,6 +292,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_collocation.table4_groupE_1300052'::regclass;
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1300068;
 
 CREATE TABLE table1_groupF ( id int );
 SELECT create_reference_table('table1_groupF');
