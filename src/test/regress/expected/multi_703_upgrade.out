@@ -1,4 +1,4 @@
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 103000;
+SET citus.next_shard_id TO 103000;
 -- tests that the upgrade from 7.0-2 to 7.0-3 properly migrates shard placements
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';

@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 520000;
+SET citus.next_shard_id TO 520000;
 
 CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL

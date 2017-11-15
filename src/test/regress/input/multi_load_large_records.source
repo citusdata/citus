@@ -6,7 +6,7 @@
 -- are creating shards of correct size even when records are large.
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 300000;
+SET citus.next_shard_id TO 300000;
 
 
 SET citus.shard_max_size TO "256kB";

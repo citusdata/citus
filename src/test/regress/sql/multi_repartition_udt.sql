@@ -2,7 +2,7 @@
 -- MULTI_REPARTITION_UDT
 --
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 535000;
+SET citus.next_shard_id TO 535000;
 
 -- START type creation
 

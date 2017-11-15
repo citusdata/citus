@@ -3,7 +3,7 @@
 --
 
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13100000;
+SET citus.next_shard_id TO 13100000;
 
 CREATE FUNCTION deparse_shard_query_test(text)
 	RETURNS VOID
