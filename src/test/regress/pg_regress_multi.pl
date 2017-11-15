@@ -238,6 +238,7 @@ push(@pgOptions, '-c', "shared_preload_libraries=citus");
 push(@pgOptions, '-c', "wal_level=logical");
 
 # Citus options set for the tests
+push(@pgOptions, '-c', "citus.shard_count=4");
 push(@pgOptions, '-c', "citus.shard_max_size=300kB");
 push(@pgOptions, '-c', "citus.max_running_tasks_per_node=4");
 push(@pgOptions, '-c', "citus.expire_cached_shards=on");

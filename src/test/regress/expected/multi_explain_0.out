@@ -757,20 +757,20 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360290 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360038 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Update on lineitem_hash_part_360291 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360039 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360292 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360292 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360040 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360040 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Update on lineitem_hash_part_360293 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360293 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 	
 EXPLAIN (COSTS FALSE)
 	UPDATE lineitem_hash_part
@@ -781,13 +781,13 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Update on lineitem_hash_part_360290 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360038 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Update on lineitem_hash_part_360291 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+        ->  Update on lineitem_hash_part_360039 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
                     Filter: ((l_orderkey = 1) OR (l_orderkey = 3))
 -- Test multi shard delete
 EXPLAIN (COSTS FALSE)
@@ -797,20 +797,20 @@ Custom Scan (Citus Router)
   Tasks Shown: All
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_hash_part_360290 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+        ->  Delete on lineitem_hash_part_360038 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Delete on lineitem_hash_part_360291 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360291 lineitem_hash_part
+        ->  Delete on lineitem_hash_part_360039 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360039 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57637 dbname=regression
-        ->  Delete on lineitem_hash_part_360292 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360292 lineitem_hash_part
+        ->  Delete on lineitem_hash_part_360040 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360040 lineitem_hash_part
   ->  Task
         Node: host=localhost port=57638 dbname=regression
-        ->  Delete on lineitem_hash_part_360293 lineitem_hash_part
-              ->  Seq Scan on lineitem_hash_part_360293 lineitem_hash_part
+        ->  Delete on lineitem_hash_part_360041 lineitem_hash_part
+              ->  Seq Scan on lineitem_hash_part_360041 lineitem_hash_part
 -- Test track tracker
 SET citus.task_executor_type TO 'task-tracker';
 SET citus.explain_all_tasks TO off;
@@ -1072,7 +1072,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               ->  Task
                     Node: host=localhost port=57637 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360295 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360043 orders_hash_part
 SELECT true AS valid FROM explain_json($$
   INSERT INTO lineitem_hash_part (l_orderkey)
   SELECT o_orderkey FROM orders_hash_part LIMIT 3;
@@ -1089,7 +1089,7 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
               ->  Task
                     Node: host=localhost port=57637 dbname=regression
                     ->  Limit
-                          ->  Seq Scan on orders_hash_part_360295 orders_hash_part
+                          ->  Seq Scan on orders_hash_part_360043 orders_hash_part
 EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part (l_orderkey)
 SELECT s FROM generate_series(1,5) s;
