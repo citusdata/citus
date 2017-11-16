@@ -108,6 +108,7 @@ DatumArrayToArrayType(Datum *datumArray, int datumCount, Oid datumTypeId)
  * ListToHashSet creates a hash table in which the keys are copied from
  * from itemList and the values are the same as the keys. This can
  * be used for fast lookups of the presence of a byte array in a set.
+ * itemList should be a list of pointers.
  *
  * If isStringList is true, then look-ups are performed through string
  * comparison of strings up to keySize in length. If isStringList is
@@ -132,8 +133,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 
 	if (!isStringList)
 	{
-		info.hash = tag_hash;
-		flags |= HASH_FUNCTION;
+		flags |= HASH_BLOBS;
 	}
 
 	itemSet = hash_create("ListToHashSet", capacity, &info, flags);

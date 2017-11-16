@@ -644,7 +644,8 @@ MyBackendGotCancelledDueToDeadlock(void)
 
 /*
  * ActiveDistributedTransactionNumbers returns a list of pointers to
- * transaction numbers of distributed transactions that are in progress.
+ * transaction numbers of distributed transactions that are in progress
+ * and were started by the node on which it is called.
  */
 List *
 ActiveDistributedTransactionNumbers(void)
@@ -670,6 +671,12 @@ ActiveDistributedTransactionNumbers(void)
 		if (!IsInDistributedTransaction(&currentBackendData))
 		{
 			/* not a distributed transaction */
+			continue;
+		}
+
+		if (!currentBackendData.transactionId.transactionOriginator)
+		{
+			/* not a coordinator process */
 			continue;
 		}
 
