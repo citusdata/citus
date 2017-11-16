@@ -12,7 +12,7 @@
 #ifndef RELATION_RESTRICTION_EQUIVALENCE_H
 #define RELATION_RESTRICTION_EQUIVALENCE_H
 
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 
 
 extern bool ContainsUnionSubquery(Query *queryTree);

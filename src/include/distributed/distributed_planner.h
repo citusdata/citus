@@ -1,14 +1,14 @@
 /*-------------------------------------------------------------------------
  *
- * multi_planner.h
+ * distributed_planner.h
  *	  General Citus planner code.
  *
  * Copyright (c) 2012-2016, Citus Data, Inc.
  *-------------------------------------------------------------------------
  */
 
-#ifndef MULTI_PLANNER_H
-#define MULTI_PLANNER_H
+#ifndef DISTRIBUTED_PLANNER_H
+#define DISTRIBUTED_PLANNER_H
 
 #include "nodes/plannodes.h"
 #include "nodes/relation.h"
@@ -71,9 +71,9 @@ typedef struct RelationShard
 } RelationShard;
 
 
-extern PlannedStmt * multi_planner(Query *parse, int cursorOptions,
-								   ParamListInfo boundParams);
-extern struct MultiPlan * GetMultiPlan(CustomScan *node);
+extern PlannedStmt * distributed_planner(Query *parse, int cursorOptions,
+										 ParamListInfo boundParams);
+extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index index, RangeTblEntry *rte);
 extern void multi_join_restriction_hook(PlannerInfo *root,
@@ -83,13 +83,13 @@ extern void multi_join_restriction_hook(PlannerInfo *root,
 										JoinType jointype,
 										JoinPathExtraData *extra);
 extern bool IsModifyCommand(Query *query);
-extern bool IsUpdateOrDelete(struct MultiPlan *multiPlan);
-extern bool IsModifyMultiPlan(struct MultiPlan *multiPlan);
-extern bool IsMultiTaskPlan(struct MultiPlan *multiPlan);
-extern bool IsMultiShardModifyPlan(struct MultiPlan *multiPlan);
+extern bool IsUpdateOrDelete(struct DistributedPlan *distributedPlan);
+extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
+extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
+extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 
 
 extern int GetRTEIdentity(RangeTblEntry *rte);
 
-#endif /* MULTI_PLANNER_H */
+#endif /* DISTRIBUTED_PLANNER_H */

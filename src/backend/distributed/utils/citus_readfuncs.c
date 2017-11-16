@@ -15,7 +15,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/errormessage.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
@@ -195,9 +195,9 @@ ReadJob(READFUNC_ARGS)
 
 
 READFUNC_RET
-ReadMultiPlan(READFUNC_ARGS)
+ReadDistributedPlan(READFUNC_ARGS)
 {
-	READ_LOCALS(MultiPlan);
+	READ_LOCALS(DistributedPlan);
 
 	READ_INT_FIELD(operation);
 	READ_BOOL_FIELD(hasReturning);

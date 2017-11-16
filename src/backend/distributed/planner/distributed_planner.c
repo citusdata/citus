@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * multi_planner.c
+ * distributed_planner.c
  *	  General Citus planner code.
  *
  * Copyright (c) 2012-2016, Citus Data, Inc.
@@ -19,7 +19,7 @@
 #include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -74,8 +74,10 @@ static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *origin
 static void AdjustParseTree(Query *parse, bool assignRTEIdentities,
 							bool setPartitionedTablesInherited);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
-static PlannedStmt * FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan);
-static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
+static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
+								  DistributedPlan *distributedPlan);
+static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
+										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
@@ -89,7 +91,7 @@ static bool HasUnresolvedExternParamsWalker(Node *expression, ParamListInfo boun
 
 /* Distributed planner hook */
 PlannedStmt *
-multi_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
+distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 {
 	PlannedStmt *result = NULL;
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
@@ -289,9 +291,9 @@ IsModifyCommand(Query *query)
  * multi shard update or delete query.
  */
 bool
-IsMultiShardModifyPlan(MultiPlan *multiPlan)
+IsMultiShardModifyPlan(DistributedPlan *distributedPlan)
 {
-	if (IsUpdateOrDelete(multiPlan) && IsMultiTaskPlan(multiPlan))
+	if (IsUpdateOrDelete(distributedPlan) && IsMultiTaskPlan(distributedPlan))
 	{
 		return true;
 	}
@@ -304,9 +306,9 @@ IsMultiShardModifyPlan(MultiPlan *multiPlan)
  * IsMultiTaskPlan returns true if job contains multiple tasks.
  */
 bool
-IsMultiTaskPlan(MultiPlan *multiPlan)
+IsMultiTaskPlan(DistributedPlan *distributedPlan)
 {
-	Job *workerJob = multiPlan->workerJob;
+	Job *workerJob = distributedPlan->workerJob;
 
 	if (workerJob != NULL && list_length(workerJob->taskList) > 1)
 	{
@@ -321,9 +323,9 @@ IsMultiTaskPlan(MultiPlan *multiPlan)
  * IsUpdateOrDelete returns true if the query performs update or delete.
  */
 bool
-IsUpdateOrDelete(MultiPlan *multiPlan)
+IsUpdateOrDelete(DistributedPlan *distributedPlan)
 {
-	CmdType commandType = multiPlan->operation;
+	CmdType commandType = distributedPlan->operation;
 
 	if (commandType == CMD_UPDATE || commandType == CMD_DELETE)
 	{
@@ -335,21 +337,21 @@ IsUpdateOrDelete(MultiPlan *multiPlan)
 
 
 /*
- * IsModifyMultiPlan returns true if the multi plan performs modifications,
+ * IsModifyDistributedPlan returns true if the multi plan performs modifications,
  * false otherwise.
  */
 bool
-IsModifyMultiPlan(MultiPlan *multiPlan)
+IsModifyDistributedPlan(DistributedPlan *distributedPlan)
 {
-	bool isModifyMultiPlan = false;
-	CmdType operation = multiPlan->operation;
+	bool isModifyDistributedPlan = false;
+	CmdType operation = distributedPlan->operation;
 
 	if (operation == CMD_INSERT || operation == CMD_UPDATE || operation == CMD_DELETE)
 	{
-		isModifyMultiPlan = true;
+		isModifyDistributedPlan = true;
 	}
 
-	return isModifyMultiPlan;
+	return isModifyDistributedPlan;
 }
 
 
@@ -362,7 +364,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 					  ParamListInfo boundParams,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
-	MultiPlan *distributedPlan = NULL;
+	DistributedPlan *distributedPlan = NULL;
 	PlannedStmt *resultPlan = NULL;
 	bool hasUnresolvedParams = false;
 
@@ -435,8 +437,8 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			CheckNodeIsDumpable((Node *) logicalPlan);
 
 			/* Create the physical plan */
-			distributedPlan = MultiPhysicalPlanCreate(logicalPlan,
-													  plannerRestrictionContext);
+			distributedPlan = CreatePhysicalDistributedPlan(logicalPlan,
+															plannerRestrictionContext);
 
 			/* distributed plan currently should always succeed or error out */
 			Assert(distributedPlan && distributedPlan->planningError == NULL);
@@ -456,7 +458,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	{
 		/* currently always should have a more specific error otherwise */
 		Assert(hasUnresolvedParams);
-		distributedPlan = CitusMakeNode(MultiPlan);
+		distributedPlan = CitusMakeNode(DistributedPlan);
 		distributedPlan->planningError =
 			DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 						  "could not create distributed plan",
@@ -505,31 +507,31 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 
 
 /*
- * GetMultiPlan returns the associated MultiPlan for a CustomScan.
+ * GetDistributedPlan returns the associated DistributedPlan for a CustomScan.
  */
-MultiPlan *
-GetMultiPlan(CustomScan *customScan)
+DistributedPlan *
+GetDistributedPlan(CustomScan *customScan)
 {
 	Node *node = NULL;
-	MultiPlan *multiPlan = NULL;
+	DistributedPlan *distributedPlan = NULL;
 
 	Assert(list_length(customScan->custom_private) == 1);
 
 	node = (Node *) linitial(customScan->custom_private);
-	Assert(CitusIsA(node, MultiPlan));
+	Assert(CitusIsA(node, DistributedPlan));
 
 	node = CheckNodeCopyAndSerialization(node);
 
 	/*
 	 * When using prepared statements the same plan gets reused across
 	 * multiple statements and transactions. We make several modifications
-	 * to the MultiPlan during execution such as assigning task placements
+	 * to the DistributedPlan during execution such as assigning task placements
 	 * and evaluating functions and parameters. These changes should not
 	 * persist, so we always work on a copy.
 	 */
-	multiPlan = (MultiPlan *) copyObject(node);
+	distributedPlan = (DistributedPlan *) copyObject(node);
 
-	return multiPlan;
+	return distributedPlan;
 }
 
 
@@ -538,16 +540,16 @@ GetMultiPlan(CustomScan *customScan)
  * which can be run by the PostgreSQL executor.
  */
 static PlannedStmt *
-FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
+FinalizePlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan)
 {
 	PlannedStmt *finalPlan = NULL;
 	CustomScan *customScan = makeNode(CustomScan);
-	Node *multiPlanData = NULL;
+	Node *distributedPlanData = NULL;
 	MultiExecutorType executorType = MULTI_EXECUTOR_INVALID_FIRST;
 
-	if (!multiPlan->planningError)
+	if (!distributedPlan->planningError)
 	{
-		executorType = JobExecutorType(multiPlan);
+		executorType = JobExecutorType(distributedPlan);
 	}
 
 	switch (executorType)
@@ -583,7 +585,7 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 		}
 	}
 
-	if (IsMultiTaskPlan(multiPlan))
+	if (IsMultiTaskPlan(distributedPlan))
 	{
 		/* if it is not a single task executable plan, inform user according to the log level */
 		if (MultiTaskQueryLogLevel != MULTI_TASK_QUERY_INFO_OFF)
@@ -597,16 +599,16 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
 		}
 	}
 
-	multiPlan->relationIdList = localPlan->relationOids;
+	distributedPlan->relationIdList = localPlan->relationOids;
 
-	multiPlanData = (Node *) multiPlan;
+	distributedPlanData = (Node *) distributedPlan;
 
-	customScan->custom_private = list_make1(multiPlanData);
+	customScan->custom_private = list_make1(distributedPlanData);
 	customScan->flags = CUSTOMPATH_SUPPORT_BACKWARD_SCAN;
 
-	if (multiPlan->masterQuery)
+	if (distributedPlan->masterQuery)
 	{
-		finalPlan = FinalizeNonRouterPlan(localPlan, multiPlan, customScan);
+		finalPlan = FinalizeNonRouterPlan(localPlan, distributedPlan, customScan);
 	}
 	else
 	{
@@ -623,12 +625,12 @@ FinalizePlan(PlannedStmt *localPlan, MultiPlan *multiPlan)
  * and task-tracker executors.
  */
 static PlannedStmt *
-FinalizeNonRouterPlan(PlannedStmt *localPlan, MultiPlan *multiPlan,
+FinalizeNonRouterPlan(PlannedStmt *localPlan, DistributedPlan *distributedPlan,
 					  CustomScan *customScan)
 {
 	PlannedStmt *finalPlan = NULL;
 
-	finalPlan = MasterNodeSelectPlan(multiPlan, customScan);
+	finalPlan = MasterNodeSelectPlan(distributedPlan, customScan);
 	finalPlan->queryId = localPlan->queryId;
 	finalPlan->utilityStmt = localPlan->utilityStmt;
 
