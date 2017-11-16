@@ -97,9 +97,9 @@ CopyNodeJob(COPYFUNC_ARGS)
 
 
 void
-CopyNodeMultiPlan(COPYFUNC_ARGS)
+CopyNodeDistributedPlan(COPYFUNC_ARGS)
 {
-	DECLARE_FROM_AND_NEW_NODE(MultiPlan);
+	DECLARE_FROM_AND_NEW_NODE(DistributedPlan);
 
 	COPY_SCALAR_FIELD(operation);
 	COPY_SCALAR_FIELD(hasReturning);

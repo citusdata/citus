@@ -54,7 +54,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/shardinterval_utils.h"

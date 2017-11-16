@@ -30,7 +30,7 @@
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
 #include "distributed/placement_connection.h"
@@ -112,7 +112,7 @@ void
 CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	MultiPlan *multiPlan = scanState->multiPlan;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
 
 	if (!ExplainDistributedQueries)
 	{
@@ -124,7 +124,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	ExplainOpenGroup("Distributed Query", "Distributed Query", true, es);
 
-	ExplainJob(multiPlan->workerJob, es);
+	ExplainJob(distributedPlan->workerJob, es);
 
 	ExplainCloseGroup("Distributed Query", "Distributed Query", true, es);
 }
@@ -140,8 +140,8 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 								   struct ExplainState *es)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	MultiPlan *multiPlan = scanState->multiPlan;
-	Query *query = multiPlan->insertSelectSubquery;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Query *query = distributedPlan->insertSelectSubquery;
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
 	char *queryString = NULL;

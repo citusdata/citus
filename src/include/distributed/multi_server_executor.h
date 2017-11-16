@@ -195,7 +195,7 @@ extern void MultiRealTimeExecute(Job *job);
 extern void MultiTaskTrackerExecute(Job *job);
 
 /* Function declarations common to more than one executor */
-extern MultiExecutorType JobExecutorType(MultiPlan *multiPlan);
+extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
 extern void RemoveJobDirectory(uint64 jobId);
 extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
 extern void CleanupTaskExecution(TaskExecution *taskExecution);

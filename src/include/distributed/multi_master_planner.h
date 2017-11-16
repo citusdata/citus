@@ -20,9 +20,9 @@
 
 
 /* Function declarations for building local plans on the master node */
-struct MultiPlan;
+struct DistributedPlan;
 struct CustomScan;
-extern PlannedStmt * MasterNodeSelectPlan(struct MultiPlan *multiPlan,
+extern PlannedStmt * MasterNodeSelectPlan(struct DistributedPlan *distributedPlan,
 										  struct CustomScan *dataScan);
 extern Unique * make_unique_from_sortclauses(Plan *lefttree, List *distinctList);
 

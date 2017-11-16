@@ -25,7 +25,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/master_metadata_utility.h"
 #include "lib/stringinfo.h"
@@ -173,11 +173,11 @@ OutMultiTreeRoot(OUTFUNC_ARGS)
 
 
 void
-OutMultiPlan(OUTFUNC_ARGS)
+OutDistributedPlan(OUTFUNC_ARGS)
 {
-	WRITE_LOCALS(MultiPlan);
+	WRITE_LOCALS(DistributedPlan);
 
-	WRITE_NODE_TYPE("MULTIPLAN");
+	WRITE_NODE_TYPE("DISTRIBUTEDPLAN");
 
 	WRITE_INT_FIELD(operation);
 	WRITE_BOOL_FIELD(hasReturning);

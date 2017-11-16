@@ -15,7 +15,7 @@
 
 #include "distributed/multi_master_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/worker_protocol.h"
 #include "nodes/makefuncs.h"
@@ -47,12 +47,12 @@ static Plan * BuildDistinctPlan(Query *masterQuery, Plan *subPlan);
  * filled into the tuple store inside provided custom scan.
  */
 PlannedStmt *
-MasterNodeSelectPlan(MultiPlan *multiPlan, CustomScan *remoteScan)
+MasterNodeSelectPlan(DistributedPlan *distributedPlan, CustomScan *remoteScan)
 {
-	Query *masterQuery = multiPlan->masterQuery;
+	Query *masterQuery = distributedPlan->masterQuery;
 	PlannedStmt *masterSelectPlan = NULL;
 
-	Job *workerJob = multiPlan->workerJob;
+	Job *workerJob = distributedPlan->workerJob;
 	List *workerTargetList = workerJob->jobQuery->targetList;
 	List *masterTargetList = MasterTargetList(workerTargetList);
 
