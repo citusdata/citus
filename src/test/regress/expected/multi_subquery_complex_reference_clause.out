@@ -1193,6 +1193,116 @@ ORDER BY 1 LIMIT 3;
        2
 (3 rows)
 
+-- should be able to pushdown since one of the subqueries has distinct on reference tables
+-- and there is only reference table in that subquery
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT DISTINCT user_id as distinct_users FROM users_reference_table) users_ref ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+ distinct_users | event_type |              time               
+----------------+------------+---------------------------------
+             78 |        815 | Tue Jan 21 05:59:54.833395 2014
+             92 |        826 | Tue Jan 21 05:57:26.643861 2014
+             65 |        241 | Tue Jan 21 05:56:52.624231 2014
+             23 |        573 | Tue Jan 21 05:55:28.796818 2014
+             98 |         23 | Tue Jan 21 05:54:57.987456 2014
+(5 rows)
+
+-- the same query wuth multiple reference tables in the subquery
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT DISTINCT users_reference_table.user_id as distinct_users FROM users_reference_table, events_reference_table 
+ WHERE events_reference_table.user_id =  users_reference_table.user_id AND events_reference_table.event_type IN (1,2,3,4)) users_ref
+ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+ distinct_users | event_type |              time               
+----------------+------------+---------------------------------
+             65 |        241 | Tue Jan 21 05:56:52.624231 2014
+             98 |         23 | Tue Jan 21 05:54:57.987456 2014
+             26 |        957 | Tue Jan 21 05:43:16.99674 2014
+             44 |        682 | Tue Jan 21 05:43:00.838945 2014
+             81 |        852 | Tue Jan 21 05:34:56.310878 2014
+(5 rows)
+
+-- similar query as the above, but with group bys
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT user_id as distinct_users FROM users_reference_table GROUP BY distinct_users) users_ref ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+ distinct_users | event_type |              time               
+----------------+------------+---------------------------------
+             78 |        815 | Tue Jan 21 05:59:54.833395 2014
+             92 |        826 | Tue Jan 21 05:57:26.643861 2014
+             65 |        241 | Tue Jan 21 05:56:52.624231 2014
+             23 |        573 | Tue Jan 21 05:55:28.796818 2014
+             98 |         23 | Tue Jan 21 05:54:57.987456 2014
+(5 rows)
+
+-- should not push down this query since there is a distributed table (i.e., events_table)
+-- which is not in the DISTINCT clause
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
+) as foo;
+ERROR:  cannot push down this subquery
+DETAIL:  Distinct on columns without partition column is currently unsupported
+SELECT * FROM
+(
+  SELECT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
+  GROUP BY 1
+) as foo;
+ERROR:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported
+-- similiar to the above examples, this time there is a subquery 
+-- whose output is not in the DISTINCT clause
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
+) as foo;
+ERROR:  cannot push down this subquery
+DETAIL:  Distinct on columns without partition column is currently unsupported
+-- the following query is safe to push down since the DISTINCT clause include distribution column
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id, us_events.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table WHERE event_type IN (2,3)) as us_events WHERE users_reference_table.user_id = us_events.user_id
+) as foo 
+ORDER BY 1 DESC 
+LIMIT 4;
+ user_id | user_id 
+---------+---------
+      98 |      98
+      96 |      96
+      90 |      90
+      81 |      81
+(4 rows)
+
+-- should not pushdown since there is a non partition column on the DISTINCT clause
+SELECT * FROM
+(
+  SELECT 
+    DISTINCT users_reference_table.user_id, us_events.value_4 
+  FROM 
+    users_reference_table, 
+    (SELECT user_id, value_4, random() FROM events_table WHERE event_type IN (2,3)) as us_events 
+  WHERE 
+    users_reference_table.user_id = us_events.user_id
+) as foo 
+ORDER BY 1 DESC 
+LIMIT 4;
+ERROR:  cannot push down this subquery
+DETAIL:  Distinct on columns without partition column is currently unsupported
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;

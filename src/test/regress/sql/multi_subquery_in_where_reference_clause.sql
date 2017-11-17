@@ -297,3 +297,25 @@ GROUP BY user_id
 HAVING count(*) > 66
 ORDER BY user_id
 LIMIT 5;
+
+-- similar query with slightly more complex group by
+-- though the error message is a bit confusing
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_reference_table  
+           WHERE 
+              users_table.user_id = events_reference_table.user_id AND event_type = 50
+           GROUP BY
+              (users_table.user_id * 2)
+          )
+GROUP BY user_id
+HAVING count(*) > 66
+ORDER BY user_id
+LIMIT 5;
