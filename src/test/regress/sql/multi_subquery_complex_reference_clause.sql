@@ -950,6 +950,81 @@ SELECT foo.user_id FROM
 ) as foo
 ORDER BY 1 LIMIT 3;
 
+-- should be able to pushdown since one of the subqueries has distinct on reference tables
+-- and there is only reference table in that subquery
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT DISTINCT user_id as distinct_users FROM users_reference_table) users_ref ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+
+-- the same query wuth multiple reference tables in the subquery
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT DISTINCT users_reference_table.user_id as distinct_users FROM users_reference_table, events_reference_table 
+ WHERE events_reference_table.user_id =  users_reference_table.user_id AND events_reference_table.event_type IN (1,2,3,4)) users_ref
+ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+
+-- similar query as the above, but with group bys
+SELECT 
+  distinct_users, event_type, time
+FROM
+(SELECT user_id, time, event_type FROM events_table) as events_dist INNER JOIN
+(SELECT user_id as distinct_users FROM users_reference_table GROUP BY distinct_users) users_ref ON (events_dist.user_id = users_ref.distinct_users)
+ORDER BY time DESC
+LIMIT 5
+OFFSET 0;
+
+-- should not push down this query since there is a distributed table (i.e., events_table)
+-- which is not in the DISTINCT clause
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
+) as foo;
+
+SELECT * FROM
+(
+  SELECT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
+  GROUP BY 1
+) as foo;
+
+-- similiar to the above examples, this time there is a subquery 
+-- whose output is not in the DISTINCT clause
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
+) as foo;
+
+-- the following query is safe to push down since the DISTINCT clause include distribution column
+SELECT * FROM
+(
+  SELECT DISTINCT users_reference_table.user_id, us_events.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table WHERE event_type IN (2,3)) as us_events WHERE users_reference_table.user_id = us_events.user_id
+) as foo 
+ORDER BY 1 DESC 
+LIMIT 4;
+
+-- should not pushdown since there is a non partition column on the DISTINCT clause
+SELECT * FROM
+(
+  SELECT 
+    DISTINCT users_reference_table.user_id, us_events.value_4 
+  FROM 
+    users_reference_table, 
+    (SELECT user_id, value_4, random() FROM events_table WHERE event_type IN (2,3)) as us_events 
+  WHERE 
+    users_reference_table.user_id = us_events.user_id
+) as foo 
+ORDER BY 1 DESC 
+LIMIT 4;
+
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;
