@@ -1,8 +1,7 @@
 -- ===================================================================
 -- test insert select functionality for window functions
 -- ===================================================================
-TRUNCATE agg_results;
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
 FROM
@@ -14,15 +13,15 @@ FROM
     WINDOW my_win AS (PARTITION BY user_id ORDER BY time DESC)
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
  10001 |   101 | 49.5810418958104190
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- the same test with different syntax
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
 FROM
@@ -33,15 +32,15 @@ FROM
     events_table
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
  10001 |   101 | 49.5810418958104190
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- similar test with lag
-INSERT INTO agg_results (user_id, agg_time, value_2_agg, value_3_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg, value_3_agg)
 SELECT
    user_id, time, lag_event_type, row_no
 FROM
@@ -52,15 +51,15 @@ FROM
     events_table WINDOW my_win AS (PARTITION BY user_id ORDER BY time DESC)
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
  10001 |   101 | 49.5810418958104190
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- simple window function, partitioned and grouped by on the distribution key
-INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT
    user_id, rnk, tme
 FROM
@@ -74,15 +73,15 @@ FROM
   WINDOW my_win AS (PARTITION BY user_id ORDER BY avg(event_type) DESC)
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
   1188 |   101 | 49.7895622895622896
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- top level query has a group by on the result of the window function
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    min(user_id), min(time), lag_event_type
 FROM
@@ -95,15 +94,15 @@ FROM
 GROUP BY
   lag_event_type;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |        avg         
 -------+-------+--------------------
   1002 |    50 | 9.7844311377245509
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- window functions should work along with joins as well
-INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
   SELECT
@@ -116,15 +115,15 @@ SELECT * FROM
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time)
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    195 |    91 | 51.0205128205128205
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- two window functions in a single subquery should work fine as well
-INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
   SELECT
@@ -138,15 +137,15 @@ SELECT * FROM
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    202 |    91 | 50.2970297029702970
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- window functions should be fine within subquery joins
-INSERT INTO agg_results (user_id, value_1_agg, value_2_agg, value_3_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg, value_3_agg)
 SELECT sub_1.user_id, max(lag_1), max(rank_1), max(rank_2) FROM
 (
   SELECT
@@ -175,15 +174,15 @@ JOIN
  GROUP BY
   sub_1.user_id;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
     91 |    91 | 50.2637362637362637
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- GROUP BYs and PARTITION BYs should work fine together
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    avg(user_id), max(time), my_rank
 FROM
@@ -201,15 +200,15 @@ WHERE
 GROUP BY
   my_rank;
  -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
      7 |     6 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- aggregates in the PARTITION BY is also allows
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    avg(user_id), max(time), my_rank
 FROM
@@ -227,16 +226,16 @@ WHERE
 GROUP BY
   my_rank;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
      8 |     7 | 48.8750000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- GROUP BY should not necessarly be inclusive of partitioning
 -- but this query doesn't make much sense
-INSERT INTO agg_results (user_id, value_1_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg)
 SELECT
    avg(user_id), my_rank
 FROM
@@ -252,15 +251,15 @@ FROM
 GROUP BY
   my_rank;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
      1 |     1 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Group by has more columns than partition by which uses coordinator insert ... select
-INSERT INTO agg_results(user_id, value_2_agg)
+INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT
     DISTINCT user_id, SUM(value_2) OVER (PARTITION BY user_id)
@@ -274,14 +273,14 @@ ORDER BY
 LIMIT
   10;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
     10 |    10 | 49.1000000000000000
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_2_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT user_id, max(sum) FROM (
   SELECT
     user_id, SUM(value_2) OVER (PARTITION BY user_id, value_1)
@@ -292,15 +291,15 @@ SELECT user_id, max(sum) FROM (
 ) a
 GROUP BY user_id;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    101 |   101 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
   -- Subquery in where with window function
-INSERT INTO agg_results(user_id)
+INSERT INTO agg_results_window(user_id)
 SELECT
   user_id
 FROM
@@ -318,17 +317,17 @@ WHERE
 GROUP BY
   user_id;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
      4 |     4 | 35.2500000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Partition by with aggregate functions. This query does not make much sense since the
 -- result of aggregate function will be the same for every row in a partition and it is
 -- not going to affect the group that the count function will work on.
-INSERT INTO agg_results(user_id, value_2_agg)
+INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT
     user_id, COUNT(*) OVER (PARTITION BY user_id, MIN(value_2))
@@ -338,15 +337,15 @@ SELECT * FROM (
   1
 ) a;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    101 |   101 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Some more nested queries
-INSERT INTO agg_results(user_id, value_2_agg, value_3_agg, value_4_agg)
+INSERT INTO agg_results_window(user_id, value_2_agg, value_3_agg, value_4_agg)
 SELECT
   user_id, rank, SUM(ABS(value_2 - value_3)) AS difference, COUNT(*) AS distinct_users
 FROM (
@@ -361,14 +360,14 @@ FROM (
 GROUP BY
   user_id, rank;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
   9501 |   101 | 49.8461214608988528
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_1_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT * FROM (
   SELECT DISTINCT
     f3.user_id, ABS(f2.sum - f3.sum)
@@ -392,15 +391,15 @@ WHERE
   f3.user_id=f2.user_id
 ) a;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    101 |   101 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- test with reference table partitioned on columns from both
-INSERT INTO agg_results(user_id, value_1_agg)
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM
 (
@@ -410,15 +409,15 @@ FROM
       users_table, users_ref_test_table
 ) a;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    101 |   101 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Window functions with HAVING clause
-INSERT INTO agg_results (user_id, value_1_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg)
 SELECT * FROM (
   SELECT
     DISTINCT user_id, rank() OVER (PARTITION BY user_id ORDER BY value_1)
@@ -428,15 +427,15 @@ SELECT * FROM (
     user_id, value_1 HAVING count(*) > 1
 ) a;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    437 |   100 | 49.9496567505720824
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Window functions with HAVING clause which uses coordinator insert ... select
-INSERT INTO agg_results (user_id, value_1_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg)
 SELECT * FROM (
   SELECT
     DISTINCT user_id, rank() OVER (PARTITION BY user_id ORDER BY value_1)
@@ -450,13 +449,13 @@ ORDER BY
 LIMIT
   10;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
     10 |     5 | 32.4000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Window function in View works
 CREATE VIEW view_with_window_func AS
 SELECT
@@ -466,20 +465,20 @@ FROM
 GROUP BY
   user_id, value_1
 HAVING count(*) > 1;
-INSERT INTO agg_results(user_id, value_1_agg)
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM
   view_with_window_func;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    437 |   100 | 49.9496567505720824
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- Window function in View works and the query uses coordinator insert ... select
-INSERT INTO agg_results(user_id, value_1_agg)
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM
   view_with_window_func
@@ -487,14 +486,14 @@ LIMIT
   10;
 -- get some statistics from the aggregated results to ensure the results are correct
 -- since there is a limit but not order, we cannot run avg(user_id)
-SELECT count(*) FROM agg_results;
+SELECT count(*) FROM agg_results_window;
  count 
 -------
     10
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_1_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT
   user_id, max(avg)
 FROM
@@ -517,14 +516,14 @@ LIMIT
   5;
 -- get some statistics from the aggregated results to ensure the results are correct
 -- since there is a limit but not order, we cannot test avg or distinct count
-SELECT count(*) FROM agg_results;
+SELECT count(*) FROM agg_results_window;
  count 
 -------
      5
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_1_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT
   user_id, max(avg)
 FROM
@@ -544,14 +543,14 @@ FROM
 GROUP BY
   user_id;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
     94 |    94 | 50.4787234042553191
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_1_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM (
         ( SELECT user_id,
@@ -589,14 +588,14 @@ LIMIT
   5;
 -- get some statistics from the aggregated results to ensure the results are correct
 -- since there is a limit but not order, we cannot test avg or distinct count
-SELECT count(*) FROM agg_results;
+SELECT count(*) FROM agg_results_window;
  count 
 -------
      5
 (1 row)
 
-TRUNCATE agg_results;
-INSERT INTO agg_results(user_id, value_1_agg)
+TRUNCATE agg_results_window;
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM (
         ( SELECT user_id,
@@ -631,15 +630,15 @@ FROM (
         )
 ) AS ftop;
 -- get some statistics from the aggregated results to ensure the results are correct
-SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
+SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_window;
  count | count |         avg         
 -------+-------+---------------------
    101 |   101 | 50.0000000000000000
 (1 row)
 
-TRUNCATE agg_results;
+TRUNCATE agg_results_window;
 -- lets have some queries that Citus shouldn't push down
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
 FROM
@@ -658,7 +657,7 @@ ERROR:  cannot push down this subquery
 DETAIL:  Window functions with PARTITION BY list missing distribution column is currently unsupported
 -- user needs to supply partition by which should
 -- include the distribution key
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
 FROM
@@ -677,7 +676,7 @@ ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 -- user needs to supply partition by which should
 -- include the distribution key
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, rnk
 FROM
@@ -695,7 +694,7 @@ LIMIT
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 -- w2 should not be pushed down
-INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
+INSERT INTO agg_results_window (user_id, value_1_agg, value_2_agg)
 SELECT * FROM
 (
   SELECT
@@ -713,7 +712,7 @@ LIMIT
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions with PARTITION BY list missing distribution column is currently unsupported
 -- GROUP BY includes the partition key, but not the WINDOW function
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
 FROM
@@ -731,7 +730,7 @@ WHERE
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 -- GROUP BY includes the partition key, but not the WINDOW function
-INSERT INTO agg_results (user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window (user_id, agg_time, value_2_agg)
 SELECT
    user_id, time, my_rank
 FROM
@@ -749,7 +748,7 @@ WHERE
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions with PARTITION BY list missing distribution column is currently unsupported
 -- w2 should not be allowed
-INSERT INTO agg_results (user_id, value_2_agg, value_3_agg)
+INSERT INTO agg_results_window (user_id, value_2_agg, value_3_agg)
 SELECT * FROM
 (
   SELECT
@@ -765,7 +764,7 @@ SELECT * FROM
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 -- unsupported window function with an override
-INSERT INTO agg_results(user_id, agg_time, value_2_agg)
+INSERT INTO agg_results_window(user_id, agg_time, value_2_agg)
 SELECT * FROM (
   SELECT
     user_id, date_trunc('day', time) as time, sum(rank) OVER w2
@@ -783,7 +782,7 @@ SELECT * FROM (
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions with PARTITION BY list missing distribution column is currently unsupported
   -- Subquery in where with unsupported window function
-INSERT INTO agg_results(user_id)
+INSERT INTO agg_results_window(user_id)
 SELECT
   user_id
 FROM
@@ -803,7 +802,7 @@ GROUP BY
 ERROR:  cannot push down this subquery
 DETAIL:  Window functions without PARTITION BY on distribution column is currently unsupported
 -- Aggregate function on distribution column should error out
-INSERT INTO agg_results(user_id, value_2_agg)
+INSERT INTO agg_results_window(user_id, value_2_agg)
 SELECT * FROM (
   SELECT
     user_id, COUNT(*) OVER (PARTITION BY sum(user_id), MIN(value_2))
@@ -816,7 +815,7 @@ ERROR:  cannot push down this subquery
 DETAIL:  Window functions with PARTITION BY list missing distribution column is currently unsupported
 -- UNION with only one subquery which has a partition on non-distribution column should
 -- error out
-INSERT INTO agg_results(user_id, value_1_agg)
+INSERT INTO agg_results_window(user_id, value_1_agg)
 SELECT *
 FROM (
         ( SELECT user_id,

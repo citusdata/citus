@@ -51,6 +51,14 @@ SELECT create_distributed_table('agg_results_fourth', 'user_id');
  
 (1 row)
 
+-- same as agg_results_second
+CREATE TABLE agg_results_window (user_id int, value_1_agg int, value_2_agg int, value_3_agg float, value_4_agg bigint, agg_time timestamp);
+SELECT create_distributed_table('agg_results_window', 'user_id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
 CREATE TABLE users_ref_test_table(id int, it_name varchar(25), k_no int);
 SELECT create_reference_table('users_ref_test_table');
  create_reference_table 
