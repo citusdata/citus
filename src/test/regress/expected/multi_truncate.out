@@ -320,7 +320,7 @@ SELECT * FROM test_local_truncate;
 SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
  master_drop_all_shards 
 ------------------------
-                     32
+                      4
 (1 row)
 
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
@@ -356,7 +356,7 @@ SELECT * FROM test_local_truncate;
 SELECT master_drop_all_shards('test_local_truncate', 'pubic', 'test_local_truncate');
  master_drop_all_shards 
 ------------------------
-                     32
+                      4
 (1 row)
 
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;

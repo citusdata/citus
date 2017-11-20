@@ -426,7 +426,6 @@ CREATE TABLE trigger_table (
 );
 
 SELECT create_distributed_table('trigger_table', 'id');
-
 -- first set a trigger on a shard
 \c - - - :worker_1_port
 
@@ -438,7 +437,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
 $up$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220056
+BEFORE INSERT ON trigger_table_220028
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 
 \c - - - :master_port

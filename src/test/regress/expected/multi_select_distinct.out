@@ -211,7 +211,7 @@ EXPLAIN (COSTS FALSE)
                      ->  HashAggregate
                            Group Key: l_orderkey
                            Filter: (count(*) > 5)
-                           ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                           ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                  Filter: (l_orderkey < 200)
 (15 rows)
 
@@ -259,7 +259,7 @@ EXPLAIN (COSTS FALSE)
                      Node: host=localhost port=57637 dbname=regression
                      ->  HashAggregate
                            Group Key: l_partkey
-                           ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                           ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (13 rows)
 
 -- distinct on non-partition column and avg
@@ -332,7 +332,7 @@ EXPLAIN (COSTS FALSE)
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_partkey, l_suppkey
-                                 ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        Filter: ((l_orderkey < 100) AND (l_shipmode = 'AIR'::bpchar))
 (14 rows)
 
@@ -374,7 +374,7 @@ EXPLAIN (COSTS FALSE)
                      ->  Unique
                            ->  Sort
                                  Sort Key: l_orderkey
-                                 ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                 ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        Filter: (l_orderkey < 35)
 (13 rows)
 
@@ -430,7 +430,7 @@ EXPLAIN (COSTS FALSE)
                                  ->  Unique
                                        ->  Sort
                                              Sort Key: l_partkey, l_orderkey
-                                             ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (14 rows)
 
 -- distinct on with joins
@@ -473,9 +473,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
                                                    Filter: (o_custkey < 15)
 (17 rows)
 
@@ -500,9 +500,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
                                                    Filter: (o_custkey < 15)
 (17 rows)
 
@@ -571,9 +571,9 @@ EXPLAIN (COSTS FALSE)
                                  Sort Key: orders_hash_part.o_custkey, lineitem_hash_part.l_orderkey
                                  ->  Hash Join
                                        Hash Cond: (lineitem_hash_part.l_orderkey = orders_hash_part.o_orderkey)
-                                       ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                       ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        ->  Hash
-                                             ->  Seq Scan on orders_hash_part_360294 orders_hash_part
+                                             ->  Seq Scan on orders_hash_part_360042 orders_hash_part
                                                    Filter: (o_custkey < 20)
 (17 rows)
 
@@ -661,7 +661,7 @@ EXPLAIN (COSTS FALSE)
                                        Sort Key: l_orderkey, l_partkey
                                        ->  HashAggregate
                                              Group Key: l_orderkey, l_partkey
-                                             ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                             ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (16 rows)
 
 SELECT DISTINCT l_orderkey, cnt
@@ -714,7 +714,7 @@ EXPLAIN (COSTS FALSE)
                                              Group Key: lineitem_hash_part.l_orderkey, count(*)
                                              ->  HashAggregate
                                                    Group Key: lineitem_hash_part.l_orderkey
-                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (18 rows)
 
 -- distinct on partition column
@@ -767,7 +767,7 @@ EXPLAIN (COSTS FALSE)
                                              Sort Key: q.l_orderkey, q.l_partkey
                                              ->  Subquery Scan on q
                                                    Filter: (q.r > 1)
-                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (16 rows)
 
 -- distinct on non-partition column
@@ -819,6 +819,6 @@ EXPLAIN (COSTS FALSE)
                                              Sort Key: q.l_partkey, q.l_orderkey
                                              ->  Subquery Scan on q
                                                    Filter: (q.r > 1)
-                                                   ->  Seq Scan on lineitem_hash_part_360290 lineitem_hash_part
+                                                   ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (16 rows)
 

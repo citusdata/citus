@@ -31,8 +31,8 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 32
-                     Tasks Shown: One of 32
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  Limit
@@ -83,8 +83,8 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_shipmode
                Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 32
-                     Tasks Shown: One of 32
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
@@ -107,8 +107,8 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.l_shipmode, remote_scan.l_orderkey
                Filter: (sum(remote_scan.worker_column_4) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 32
-                     Tasks Shown: One of 32
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  Limit
@@ -136,8 +136,8 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3, remote_scan.worker_column_4
                Filter: (sum(remote_scan.worker_column_5) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 32
-                     Tasks Shown: One of 32
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  Limit
@@ -148,7 +148,7 @@ EXPLAIN (COSTS FALSE)
                                              Filter: (sum(lineitem_hash.l_quantity) > '24'::numeric)
                                              ->  Hash Join
                                                    Hash Cond: (orders_hash.o_orderkey = lineitem_hash.l_orderkey)
-                                                   ->  Seq Scan on orders_hash_590032 orders_hash
+                                                   ->  Seq Scan on orders_hash_590004 orders_hash
                                                    ->  Hash
                                                          ->  Seq Scan on lineitem_hash_590000 lineitem_hash
 (22 rows)
@@ -168,15 +168,15 @@ EXPLAIN (COSTS FALSE)
                Group Key: remote_scan.worker_column_2, remote_scan.worker_column_3
                Filter: (sum(remote_scan.worker_column_4) > '24'::numeric)
                ->  Custom Scan (Citus Real-Time)
-                     Task Count: 32
-                     Tasks Shown: One of 32
+                     Task Count: 4
+                     Tasks Shown: One of 4
                      ->  Task
                            Node: host=localhost port=57637 dbname=regression
                            ->  HashAggregate
                                  Group Key: lineitem_hash.l_shipmode, orders_hash.o_clerk
                                  ->  Hash Join
                                        Hash Cond: (orders_hash.o_orderkey = lineitem_hash.l_orderkey)
-                                       ->  Seq Scan on orders_hash_590032 orders_hash
+                                       ->  Seq Scan on orders_hash_590004 orders_hash
                                        ->  Hash
                                              ->  Seq Scan on lineitem_hash_590000 lineitem_hash
 (18 rows)

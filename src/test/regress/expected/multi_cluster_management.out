@@ -413,7 +413,7 @@ WHERE
 	AND pg_dist_shard_placement.nodeport = :worker_2_port;
  count 
 -------
-    32
+     4
 (1 row)
 
 	

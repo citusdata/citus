@@ -377,11 +377,10 @@ INSERT INTO tt1 VALUES(1);
 INSERT INTO tt2 SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 
-
 -- Table should exist on the worker node
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360430'::regclass;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360462'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360066'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360070'::regclass;
 \c - - - :master_port
 
 DROP TABLE tt1;
@@ -397,7 +396,7 @@ ROLLBACK;
 
 -- Table exists on the worker node.
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360494'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360074'::regclass;
 \c - - - :master_port
 
 -- There should be no table on the worker node
@@ -417,7 +416,7 @@ COMMIT;
 
 -- Placements should be created on the worker
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360495'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360075'::regclass;
 \c - - - :master_port
 
 DROP TABLE tt1;
