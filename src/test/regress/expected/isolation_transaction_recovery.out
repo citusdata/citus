@@ -19,3 +19,27 @@ step s2-insert:
 step s1-commit: 
     COMMIT;
 
+
+starting permutation: s1-begin s1-recover s2-recover s1-commit
+create_reference_table
+
+               
+step s1-begin: 
+    BEGIN;
+
+step s1-recover: 
+    SELECT recover_prepared_transactions();
+
+recover_prepared_transactions
+
+0              
+step s2-recover: 
+    SELECT recover_prepared_transactions();
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-recover: <... completed>
+recover_prepared_transactions
+
+0              
