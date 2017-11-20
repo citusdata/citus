@@ -24,6 +24,7 @@
 #include "access/relscan.h"
 #include "access/xact.h"
 #include "catalog/indexing.h"
+#include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -47,13 +48,11 @@ PG_FUNCTION_INFO_V1(recover_prepared_transactions);
 /* Local functions forward declarations */
 static int RecoverPreparedTransactions(void);
 static int RecoverWorkerTransactions(WorkerNode *workerNode);
-static List * NameListDifference(List *nameList, List *subtractList);
-static int CompareNames(const void *leftPointer, const void *rightPointer);
-static bool FindMatchingName(char **nameArray, int nameCount, char *needle,
-							 int *matchIndex);
 static List * PendingWorkerTransactionList(MultiConnection *connection);
-static List * UnconfirmedWorkerTransactionsList(int groupId);
-static void DeleteTransactionRecord(int32 groupId, char *transactionName);
+static bool IsTransactionInProgress(HTAB *activeTransactionNumberSet,
+									char *preparedTransactionName);
+static bool RecoverPreparedTransactionOnWorker(MultiConnection *connection,
+											   char *transactionName, bool shouldCommit);
 
 
 /*
@@ -120,13 +119,6 @@ RecoverPreparedTransactions(void)
 	ListCell *workerNodeCell = NULL;
 	int recoveredTransactionCount = 0;
 
-	/*
-	 * We block here if metadata transactions are ongoing, since we
-	 * mustn't commit/abort their prepared transactions under their
-	 * feet. We also prevent concurrent recovery.
-	 */
-	LockRelationOid(DistTransactionRelationId(), ExclusiveLock);
-
 	workerList = ActivePrimaryNodeList();
 
 	foreach(workerNodeCell, workerList)
@@ -153,25 +145,35 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	char *nodeName = workerNode->workerName;
 	int nodePort = workerNode->workerPort;
 
+	List *activeTransactionNumberList = NIL;
+	HTAB *activeTransactionNumberSet = NULL;
+
 	List *pendingTransactionList = NIL;
-	ListCell *pendingTransactionCell = NULL;
+	HTAB *pendingTransactionSet = NULL;
+	List *recheckTransactionList = NIL;
+	HTAB *recheckTransactionSet = NULL;
 
-	List *unconfirmedTransactionList = NIL;
-	char **unconfirmedTransactionArray = NULL;
-	int unconfirmedTransactionCount = 0;
-	int unconfirmedTransactionIndex = 0;
+	Relation pgDistTransaction = NULL;
+	SysScanDesc scanDescriptor = NULL;
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	HeapTuple heapTuple = NULL;
+	TupleDesc tupleDescriptor = NULL;
 
-	List *committedTransactionList = NIL;
-	ListCell *committedTransactionCell = NULL;
+	HASH_SEQ_STATUS status;
 
 	MemoryContext localContext = NULL;
 	MemoryContext oldContext = NULL;
+	bool recoveryFailed = false;
 
 	int connectionFlags = SESSION_LIFESPAN;
 	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
-	if (connection->pgConn == NULL)
+	if (connection->pgConn == NULL || PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		/* cannot recover transactions on this worker right now */
+		ereport(WARNING, (errmsg("transaction recovery cannot connect to %s:%d",
+								 nodeName, nodePort)));
+
 		return 0;
 	}
 
@@ -182,191 +184,221 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 										 ALLOCSET_DEFAULT_MAXSIZE);
 	oldContext = MemoryContextSwitchTo(localContext);
 
-	/* find transactions that were committed, but not yet confirmed */
-	unconfirmedTransactionList = UnconfirmedWorkerTransactionsList(groupId);
-	unconfirmedTransactionList = SortList(unconfirmedTransactionList, CompareNames);
+	/* take table lock first to avoid running concurrently */
+	pgDistTransaction = heap_open(DistTransactionRelationId(), ShareUpdateExclusiveLock);
+	tupleDescriptor = RelationGetDescr(pgDistTransaction);
 
-	/* convert list to an array to use with FindMatchingNames */
-	unconfirmedTransactionCount = list_length(unconfirmedTransactionList);
-	unconfirmedTransactionArray =
-		(char **) PointerArrayFromList(unconfirmedTransactionList);
+	/*
+	 * We're going to check the list of prepared transactions on the worker,
+	 * but some of those prepared transactions might belong to ongoing
+	 * distributed transactions.
+	 *
+	 * We could avoid this by temporarily blocking new prepared transactions
+	 * from being created by taking an ExlusiveLock on pg_dist_transaction.
+	 * However, this hurts write performance, so instead we avoid blocking
+	 * by consulting the list of active distributed transactions, and follow
+	 * a carefully chosen order to avoid race conditions:
+	 *
+	 * 1) P = prepared transactions on worker
+	 * 2) A = active distributed transactions
+	 * 3) T = pg_dist_transaction snapshot
+	 * 4) Q = prepared transactions on worker
+	 *
+	 * By observing A after P, we get a conclusive answer to which distributed
+	 * transactions we observed in P are still in progress. It is safe to recover
+	 * the transactions in P - A based on the presence or absence of a record
+	 * in T.
+	 *
+	 * We also remove records in T if there is no prepared transaction, which
+	 * we assume means the transaction committed. However, a transaction could
+	 * have left prepared transactions and committed between steps 1 and 2.
+	 * In that case, we would incorrectly remove the records, while the
+	 * prepared transaction is still in place.
+	 *
+	 * We therefore observe the set of prepared transactions one more time in
+	 * step 4. The aforementioned transactions would show up in Q, but not in
+	 * P. We can skip those transactions and recover them later.
+	 */
 
 	/* find stale prepared transactions on the remote node */
 	pendingTransactionList = PendingWorkerTransactionList(connection);
-	pendingTransactionList = SortList(pendingTransactionList, CompareNames);
+	pendingTransactionSet = ListToHashSet(pendingTransactionList, NAMEDATALEN, true);
 
-	/*
-	 * Transactions that have no pending prepared transaction are assumed to
-	 * have been committed. Any records in unconfirmedTransactionList that
-	 * don't have a transaction in pendingTransactionList can be removed.
-	 */
-	committedTransactionList = NameListDifference(unconfirmedTransactionList,
-												  pendingTransactionList);
+	/* find in-progress distributed transactions */
+	activeTransactionNumberList = ActiveDistributedTransactionNumbers();
+	activeTransactionNumberSet = ListToHashSet(activeTransactionNumberList,
+											   sizeof(uint64), false);
 
-	/*
-	 * For each pending prepared transaction, check whether there is a transaction
-	 * record. If so, commit. If not, the transaction that started the transaction
-	 * must have rolled back and thus the prepared transaction should be aborted.
-	 */
-	foreach(pendingTransactionCell, pendingTransactionList)
+	/* scan through all recovery records of the current worker */
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
+
+	/* get a snapshot of pg_dist_transaction */
+	scanDescriptor = systable_beginscan(pgDistTransaction,
+										DistTransactionGroupIndexId(), indexOK,
+										NULL, scanKeyCount, scanKey);
+
+	/* find stale prepared transactions on the remote node */
+	recheckTransactionList = PendingWorkerTransactionList(connection);
+	recheckTransactionSet = ListToHashSet(recheckTransactionList, NAMEDATALEN, true);
+
+	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
 	{
-		char *transactionName = (char *) lfirst(pendingTransactionCell);
-		StringInfo command = makeStringInfo();
-		int executeCommand = 0;
-		PGresult *result = NULL;
+		bool isNull = false;
+		bool isTransactionInProgress = false;
+		bool foundPreparedTransactionBeforeCommit = false;
+		bool foundPreparedTransactionAfterCommit = false;
 
-		bool shouldCommit = FindMatchingName(unconfirmedTransactionArray,
-											 unconfirmedTransactionCount,
-											 transactionName,
-											 &unconfirmedTransactionIndex);
+		Datum transactionNameDatum = heap_getattr(heapTuple,
+												  Anum_pg_dist_transaction_gid,
+												  tupleDescriptor, &isNull);
+		char *transactionName = TextDatumGetCString(transactionNameDatum);
 
-		if (shouldCommit)
+		isTransactionInProgress = IsTransactionInProgress(activeTransactionNumberSet,
+														  transactionName);
+		if (isTransactionInProgress)
 		{
-			/* should have committed this prepared transaction */
-			appendStringInfo(command, "COMMIT PREPARED '%s'", transactionName);
-		}
-		else
-		{
-			/* no record of this prepared transaction, abort */
-			appendStringInfo(command, "ROLLBACK PREPARED '%s'", transactionName);
-		}
-
-		executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
-		if (executeCommand == QUERY_SEND_FAILED)
-		{
-			break;
-		}
-		if (executeCommand == RESPONSE_NOT_OKAY)
-		{
-			/* cannot recover this transaction right now */
+			/*
+			 * Do not touch in progress transactions as we might mistakenly
+			 * commit a transaction that is actually in the process of
+			 * aborting or vice-versa.
+			 */
 			continue;
 		}
 
-		PQclear(result);
-		ForgetResults(connection);
+		/*
+		 * Remove the transaction from the pending list such that only transactions
+		 * that need to be aborted remain at the end.
+		 */
+		hash_search(pendingTransactionSet, transactionName, HASH_REMOVE,
+					&foundPreparedTransactionBeforeCommit);
 
-		ereport(NOTICE, (errmsg("recovered a prepared transaction on %s:%d",
-								nodeName, nodePort),
-						 errcontext("%s", command->data)));
+		hash_search(recheckTransactionSet, transactionName, HASH_FIND,
+					&foundPreparedTransactionAfterCommit);
 
-		if (shouldCommit)
-		{
-			committedTransactionList = lappend(committedTransactionList,
-											   transactionName);
-		}
-
-		recoveredTransactionCount += 1;
-	}
-
-	/* we can remove the transaction records of confirmed transactions */
-	foreach(committedTransactionCell, committedTransactionList)
-	{
-		char *transactionName = (char *) lfirst(committedTransactionCell);
-
-		DeleteTransactionRecord(groupId, transactionName);
-	}
-
-	MemoryContextReset(localContext);
-	MemoryContextSwitchTo(oldContext);
-
-	return recoveredTransactionCount;
-}
-
-
-/*
- * NameListDifference returns the difference between the bag of
- * names in nameList and subtractList. Both are assumed to be
- * sorted. We cannot use list_difference_ptr here since we need
- * to compare the actual strings.
- */
-static List *
-NameListDifference(List *nameList, List *subtractList)
-{
-	List *differenceList = NIL;
-	ListCell *nameCell = NULL;
-
-	int subtractIndex = 0;
-	int subtractCount = list_length(subtractList);
-	char **subtractArray = (char **) PointerArrayFromList(subtractList);
-
-	foreach(nameCell, nameList)
-	{
-		char *baseName = (char *) lfirst(nameCell);
-
-		bool nameFound = FindMatchingName(subtractArray, subtractCount,
-										  baseName, &subtractIndex);
-
-		if (!nameFound)
+		if (foundPreparedTransactionBeforeCommit && foundPreparedTransactionAfterCommit)
 		{
 			/*
-			 * baseName is not in subtractArray and thus included
-			 * in the difference.
+			 * The transaction was committed, but the prepared transaction still exists
+			 * on the worker. Try committing it.
+			 *
+			 * We double check that the recovery record exists both before and after
+			 * checking ActiveDistributedTransactionNumbers(), since we may have
+			 * observed a prepared transaction that was committed immediately after.
 			 */
-			differenceList = lappend(differenceList, baseName);
+			bool shouldCommit = true;
+			bool commitSucceeded = RecoverPreparedTransactionOnWorker(connection,
+																	  transactionName,
+																	  shouldCommit);
+			if (!commitSucceeded)
+			{
+				/*
+				 * Failed to commit on the current worker. Stop without throwing
+				 * an error to allow recover_prepared_transactions to continue with
+				 * other workers.
+				 */
+				recoveryFailed = true;
+				break;
+			}
+
+			recoveredTransactionCount++;
+
+			/*
+			 * We successfully committed the prepared transaction, safe to delete
+			 * the recovery record.
+			 */
 		}
-	}
-
-	pfree(subtractArray);
-
-	return differenceList;
-}
-
-
-/*
- * CompareNames compares names using strncmp. Its signature allows it to
- * be used in qsort.
- */
-static int
-CompareNames(const void *leftPointer, const void *rightPointer)
-{
-	const char *leftString = *((char **) leftPointer);
-	const char *rightString = *((char **) rightPointer);
-
-	int nameCompare = strncmp(leftString, rightString, NAMEDATALEN);
-
-	return nameCompare;
-}
-
-
-/*
- * FindMatchingName searches for name in nameArray, starting at the
- * value pointed to by matchIndex and stopping at the first index of
- * name which is greater or equal to needle. nameArray is assumed
- * to be sorted.
- *
- * The function sets matchIndex to the index of the name and returns
- * true if the name is equal to needle. If matchIndex >= nameCount,
- * then the function always returns false.
- */
-static bool
-FindMatchingName(char **nameArray, int nameCount, char *needle,
-				 int *matchIndex)
-{
-	bool foundMatchingName = false;
-	int searchIndex = *matchIndex;
-	int compareResult = -1;
-
-	while (searchIndex < nameCount)
-	{
-		char *testName = nameArray[searchIndex];
-		compareResult = strncmp(needle, testName, NAMEDATALEN);
-
-		if (compareResult <= 0)
+		else if (foundPreparedTransactionAfterCommit)
 		{
-			break;
+			/*
+			 * We found a committed pg_dist_transaction record that initially did
+			 * not have a prepared transaction, but did when we checked again.
+			 *
+			 * If a transaction started and committed just after we observed the
+			 * set of prepared transactions, and just before we called
+			 * ActiveDistributedTransactionNumbers, then we would see  a recovery
+			 * record without a prepared transaction in pendingTransactionSet,
+			 * but there may be prepared transactions that failed to commit.
+			 * We should not delete the records for those prepared transactions,
+			 * since we would otherwise roll back them on the next call to
+			 * recover_prepared_transactions.
+			 *
+			 * In addition, if the transaction started after the call to
+			 * ActiveDistributedTransactionNumbers and finished just before our
+			 * pg_dist_transaction snapshot, then it may still be in the process
+			 * of comitting the prepared transactions in the post-commit callback
+			 * and we should not touch the prepared transactions.
+			 *
+			 * To handle these cases, we just leave the records and prepared
+			 * transactions for the next call to recover_prepared_transactions
+			 * and skip them here.
+			 */
+
+			continue;
+		}
+		else
+		{
+			/*
+			 * We found a recovery record without any prepared transaction. It
+			 * must have already been committed, so it's safe to delete the
+			 * recovery record.
+			 *
+			 * Transactions that started after we observed pendingTransactionSet,
+			 * but successfully committed their prepared transactions before
+			 * ActiveDistributedTransactionNumbers are indistinguishable from
+			 * transactions that committed at an earlier time, in which case it's
+			 * safe delete the recovery record as well.
+			 */
 		}
 
-		searchIndex++;
+		simple_heap_delete(pgDistTransaction, &heapTuple->t_self);
 	}
 
-	*matchIndex = searchIndex;
+	systable_endscan(scanDescriptor);
+	heap_close(pgDistTransaction, NoLock);
 
-	if (compareResult == 0)
+	if (!recoveryFailed)
 	{
-		foundMatchingName = true;
+		char *pendingTransactionName = NULL;
+		bool abortSucceeded = true;
+
+		/*
+		 * All remaining prepared transactions that are not part of an in-progress
+		 * distributed transaction should be aborted since we did not find a recovery
+		 * record, which implies the disributed transaction aborted.
+		 */
+		hash_seq_init(&status, pendingTransactionSet);
+
+		while ((pendingTransactionName = hash_seq_search(&status)) != NULL)
+		{
+			bool isTransactionInProgress = false;
+			bool shouldCommit = false;
+
+			isTransactionInProgress = IsTransactionInProgress(activeTransactionNumberSet,
+															  pendingTransactionName);
+			if (isTransactionInProgress)
+			{
+				continue;
+			}
+
+			shouldCommit = false;
+			abortSucceeded = RecoverPreparedTransactionOnWorker(connection,
+																pendingTransactionName,
+																shouldCommit);
+			if (!abortSucceeded)
+			{
+				hash_seq_term(&status);
+				break;
+			}
+
+			recoveredTransactionCount++;
+		}
 	}
 
-	return foundMatchingName;
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(localContext);
+
+	return recoveredTransactionCount;
 }
 
 
@@ -420,113 +452,73 @@ PendingWorkerTransactionList(MultiConnection *connection)
 
 
 /*
- * UnconfirmedWorkerTransactionList returns a list of unconfirmed transactions
- * for a group of workers from pg_dist_transaction. A transaction is confirmed
- * once we have verified that it does not exist in pg_prepared_xacts on the
- * remote node and the entry in pg_dist_transaction is removed.
+ * IsTransactionInProgress returns whether the distributed transaction to which
+ * preparedTransactionName belongs is still in progress, or false if the
+ * transaction name cannot be parsed. This can happen when the user manually
+ * inserts into pg_dist_transaction.
  */
-static List *
-UnconfirmedWorkerTransactionsList(int groupId)
+static bool
+IsTransactionInProgress(HTAB *activeTransactionNumberSet, char *preparedTransactionName)
 {
-	List *transactionNameList = NIL;
-	Relation pgDistTransaction = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	bool indexOK = true;
-	HeapTuple heapTuple = NULL;
+	int groupId = 0;
+	int procId = 0;
+	uint32 connectionNumber = 0;
+	uint64 transactionNumber = 0;
+	bool isValidName = false;
+	bool isTransactionInProgress = false;
 
-	pgDistTransaction = heap_open(DistTransactionRelationId(), AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
-
-	scanDescriptor = systable_beginscan(pgDistTransaction,
-										DistTransactionGroupIndexId(), indexOK,
-										NULL, scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	isValidName = ParsePreparedTransactionName(preparedTransactionName, &groupId, &procId,
+											   &transactionNumber, &connectionNumber);
+	if (isValidName)
 	{
-		TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
-		bool isNull = false;
-
-		Datum transactionNameDatum = heap_getattr(heapTuple,
-												  Anum_pg_dist_transaction_gid,
-												  tupleDescriptor, &isNull);
-
-		char *transactionName = TextDatumGetCString(transactionNameDatum);
-		transactionNameList = lappend(transactionNameList, transactionName);
-
-		heapTuple = systable_getnext(scanDescriptor);
+		hash_search(activeTransactionNumberSet, &transactionNumber, HASH_FIND,
+					&isTransactionInProgress);
 	}
 
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistTransaction, AccessShareLock);
-
-	return transactionNameList;
+	return isTransactionInProgress;
 }
 
 
 /*
- * DeleteTransactionRecord opens the pg_dist_transaction system catalog, finds the
- * first (unique) row that corresponds to the given transactionName and worker node,
- * and deletes this row.
+ * RecoverPreparedTransactionOnWorker recovers a single prepared transaction over
+ * the given connection. If shouldCommit is true we send
  */
-static void
-DeleteTransactionRecord(int32 groupId, char *transactionName)
+static bool
+RecoverPreparedTransactionOnWorker(MultiConnection *connection, char *transactionName,
+								   bool shouldCommit)
 {
-	Relation pgDistTransaction = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[2];
-	int scanKeyCount = 2;
-	bool indexOK = true;
-	HeapTuple heapTuple = NULL;
-	bool heapTupleFound = false;
+	StringInfo command = makeStringInfo();
+	PGresult *result = NULL;
+	int executeCommand = 0;
+	bool raiseInterrupts = false;
 
-	pgDistTransaction = heap_open(DistTransactionRelationId(), RowExclusiveLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_transaction_groupid,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(groupId));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_transaction_gid,
-				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(transactionName));
-
-	scanDescriptor = systable_beginscan(pgDistTransaction,
-										DistTransactionRecordIndexId(), indexOK,
-										NULL, scanKeyCount, scanKey);
-
-	heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	if (shouldCommit)
 	{
-		TupleDesc tupleDescriptor = RelationGetDescr(pgDistTransaction);
-		bool isNull = false;
-
-		Datum gidDatum = heap_getattr(heapTuple,
-									  Anum_pg_dist_transaction_gid,
-									  tupleDescriptor, &isNull);
-
-		char *gid = TextDatumGetCString(gidDatum);
-
-		if (strncmp(transactionName, gid, NAMEDATALEN) == 0)
-		{
-			heapTupleFound = true;
-			break;
-		}
-
-		heapTuple = systable_getnext(scanDescriptor);
+		/* should have committed this prepared transaction */
+		appendStringInfo(command, "COMMIT PREPARED '%s'", transactionName);
+	}
+	else
+	{
+		/* should have aborted this prepared transaction */
+		appendStringInfo(command, "ROLLBACK PREPARED '%s'", transactionName);
 	}
 
-	/* if we couldn't find the transaction record to delete, error out */
-	if (!heapTupleFound)
+	executeCommand = ExecuteOptionalRemoteCommand(connection, command->data, &result);
+	if (executeCommand == QUERY_SEND_FAILED)
 	{
-		ereport(ERROR, (errmsg("could not find valid entry for transaction record "
-							   "'%s' in group %d",
-							   transactionName, groupId)));
+		return false;
+	}
+	if (executeCommand == RESPONSE_NOT_OKAY)
+	{
+		return false;
 	}
 
-	simple_heap_delete(pgDistTransaction, &heapTuple->t_self);
-	CommandCounterIncrement();
+	PQclear(result);
+	ClearResults(connection, raiseInterrupts);
 
-	systable_endscan(scanDescriptor);
-	heap_close(pgDistTransaction, RowExclusiveLock);
+	ereport(LOG, (errmsg("recovered a prepared transaction on %s:%d",
+						 connection->hostname, connection->port),
+				  errcontext("%s", command->data)));
+
+	return true;
 }
