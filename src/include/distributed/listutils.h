@@ -17,6 +17,7 @@
 
 #include "nodes/pg_list.h"
 #include "utils/array.h"
+#include "utils/hsearch.h"
 
 
 /* utility functions declaration shared within this module */
@@ -25,5 +26,6 @@ extern List * SortList(List *pointerList,
 extern void ** PointerArrayFromList(List *pointerList);
 extern ArrayType * DatumArrayToArrayType(Datum *datumArray, int datumCount,
 										 Oid datumTypeId);
+extern HTAB * ListToHashSet(List *pointerList, Size keySize, bool isStringList);
 
 #endif /* CITUS_LISTUTILS_H */

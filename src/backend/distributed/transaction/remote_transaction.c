@@ -27,6 +27,9 @@
 #include "utils/hsearch.h"
 
 
+#define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"
+
+
 static void StartRemoteTransactionSavepointBegin(MultiConnection *connection,
 												 SubTransactionId subId);
 static void FinishRemoteTransactionSavepointBegin(MultiConnection *connection,
@@ -1241,8 +1244,33 @@ Assign2PCIdentifier(MultiConnection *connection)
 
 	/* print all numbers as unsigned to guarantee no minus symbols appear in the name */
 	snprintf(connection->remoteTransaction.preparedName, NAMEDATALEN,
-			 "citus_%u_%u_"UINT64_FORMAT "_%u", GetLocalGroupId(), MyProcPid,
+			 PREPARED_TRANSACTION_NAME_FORMAT, GetLocalGroupId(), MyProcPid,
 			 transactionNumber, connectionNumber++);
+}
+
+
+/*
+ * ParsePreparedTransactionName parses a prepared transaction name to extract
+ * the initiator group ID, initiator process ID, distributed transaction number,
+ * and the connection number. If the transaction name does not match the expected
+ * format ParsePreparedTransactionName returns false, and true otherwise.
+ */
+bool
+ParsePreparedTransactionName(char *preparedTransactionName, int *groupId, int *procId,
+							 uint64 *transactionNumber, uint32 *connectionNumber)
+{
+	const int expectedFieldCount = 4;
+	int parsedFieldCount = 0;
+	bool nameValid = false;
+
+	parsedFieldCount = sscanf(preparedTransactionName, PREPARED_TRANSACTION_NAME_FORMAT,
+							  groupId, procId, transactionNumber, connectionNumber);
+	if (parsedFieldCount == expectedFieldCount)
+	{
+		nameValid = true;
+	}
+
+	return nameValid;
 }
 
 

@@ -46,12 +46,6 @@ PREPARE TRANSACTION 'citus_12_should_be_sorted_into_middle';
 INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_commit');
 INSERT INTO pg_dist_transaction VALUES (12, 'citus_12_should_be_forgotten');
 SELECT recover_prepared_transactions();
-NOTICE:  recovered a prepared transaction on localhost:57637
-CONTEXT:  ROLLBACK PREPARED 'citus_12_should_abort'
-NOTICE:  recovered a prepared transaction on localhost:57637
-CONTEXT:  ROLLBACK PREPARED 'citus_12_should_be_sorted_into_middle'
-NOTICE:  recovered a prepared transaction on localhost:57637
-CONTEXT:  COMMIT PREPARED 'citus_12_should_commit'
  recover_prepared_transactions 
 -------------------------------
                              3
