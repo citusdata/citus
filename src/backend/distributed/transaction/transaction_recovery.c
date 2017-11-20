@@ -246,7 +246,8 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	{
 		bool isNull = false;
 		bool isTransactionInProgress = false;
-		bool isTransactionPending = false;
+		bool foundPreparedTransactionBeforeCommit = false;
+		bool foundPreparedTransactionAfterCommit = false;
 
 		Datum transactionNameDatum = heap_getattr(heapTuple,
 												  Anum_pg_dist_transaction_gid,
@@ -270,13 +271,20 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 		 * that need to be aborted remain at the end.
 		 */
 		hash_search(pendingTransactionSet, transactionName, HASH_REMOVE,
-					&isTransactionPending);
+					&foundPreparedTransactionBeforeCommit);
 
-		if (isTransactionPending)
+		hash_search(recheckTransactionSet, transactionName, HASH_FIND,
+					&foundPreparedTransactionAfterCommit);
+
+		if (foundPreparedTransactionBeforeCommit && foundPreparedTransactionAfterCommit)
 		{
 			/*
 			 * The transaction was committed, but the prepared transaction still exists
 			 * on the worker. Try committing it.
+			 *
+			 * We double check that the recovery record exists both before and after
+			 * checking ActiveDistributedTransactionNumbers(), since we may have
+			 * observed a prepared transaction that was committed immediately after.
 			 */
 			bool shouldCommit = true;
 			bool commitSucceeded = RecoverPreparedTransactionOnWorker(connection,
@@ -300,53 +308,46 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 			 * the recovery record.
 			 */
 		}
-		else
+		else if (foundPreparedTransactionAfterCommit)
 		{
-			bool foundNewPreparedTransaction = false;
-
 			/*
-			 * We found a committed pg_dist_transaction record without a prepared
-			 * transaction. In the typical case, this means that the prepared
-			 * transaction was successfully committed from the post-commit callback
-			 * and we can therefore delete the recovery record. However, there is a
-			 * race condition.
+			 * We found a committed pg_dist_transaction record that initially did
+			 * not have a prepared transaction, but did when we checked again.
 			 *
 			 * If a transaction started and committed just after we observed the
-			 * set of prepared transactions, and just before we took our
-			 * pg_dist_transaction snapshot, then we would see its records, but it may
-			 * have prepared transactions that failed to commit and that we did not
-			 * observe. We should not delete the records, since we would otherwise
-			 * roll back the prepared transaction on the next call to
+			 * set of prepared transactions, and just before we called
+			 * ActiveDistributedTransactionNumbers, then we would see  a recovery
+			 * record without a prepared transaction in pendingTransactionSet,
+			 * but there may be prepared transactions that failed to commit.
+			 * We should not delete the records for those prepared transactions,
+			 * since we would otherwise roll back them on the next call to
 			 * recover_prepared_transactions.
 			 *
-			 * In addition, if the transaction started after the call it
-			 * ActiveDistributedTransactionNumbers, then it may still be in the process
-			 * of comitting the prepared transactions in the post-commit callback.
+			 * In addition, if the transaction started after the call to
+			 * ActiveDistributedTransactionNumbers and finished just before our
+			 * pg_dist_transaction snapshot, then it may still be in the process
+			 * of comitting the prepared transactions in the post-commit callback
+			 * and we should not touch the prepared transactions.
 			 *
-			 * We check the prepared transactions again after taking the
-			 * pg_dist_transaction snapshot. Any prepared transactions that appear
-			 * in this set, but not in pendingTransactionSet, may have been created
-			 * before the pg_dist_transaction snapshot. We skip deleting the records
-			 * for those transactions since there are prepared transactions that
-			 * need to be commit, but we cannot commit them now, since they might
-			 * still be getting committed and committing them twice would result in
-			 * failures.
-			 *
-			 * In this case, we just leave the records and prepared transactions
-			 * for the next call to recover_prepared_transactions.
+			 * To handle these cases, we just leave the records and prepared
+			 * transactions for the next call to recover_prepared_transactions
+			 * and skip them here.
 			 */
-			hash_search(recheckTransactionSet, transactionName, HASH_FIND,
-						&foundNewPreparedTransaction);
 
-			if (foundNewPreparedTransaction)
-			{
-				continue;
-			}
-
+			continue;
+		}
+		else
+		{
 			/*
-			 * There is a recovery record and definitely no prepared transaction, it
-			 * must have been committed immediately, so it's safe to delete the
+			 * We found a recovery record without any prepared transaction. It
+			 * must have already been committed, so it's safe to delete the
 			 * recovery record.
+			 *
+			 * Transactions that started after we observed pendingTransactionSet,
+			 * but successfully committed their prepared transactions before
+			 * ActiveDistributedTransactionNumbers are indistinguishable from
+			 * transactions that committed at an earlier time, in which case it's
+			 * safe delete the recovery record as well.
 			 */
 		}
 
