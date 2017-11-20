@@ -4,7 +4,7 @@
 # Regression tests that exercise distributed planning/execution functionality.
 #
 # All new regression tests are expected to be run by this schedule. Tests that
-# do not set specific task executor type should also be added to 
+# do not set specific task executor type should also be added to
 # multi_task_tracker_extra_schedule.
 #
 # Note that we use variant comparison files to test version dependent regression
@@ -49,7 +49,7 @@ test: multi_partitioning
 # Miscellaneous tests to check our query planning behavior
 # ----------
 test: multi_deparse_shard_query multi_distributed_transaction_id
-test: multi_basic_queries multi_complex_expressions 
+test: multi_basic_queries multi_complex_expressions
 test: multi_explain
 test: multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions
@@ -168,7 +168,7 @@ test: multi_subtransactions
 test: multi_copy
 
 # ---------
-# multi_router_planner creates hash partitioned tables. 
+# multi_router_planner creates hash partitioned tables.
 # ---------
 test: multi_router_planner
 
@@ -188,7 +188,7 @@ test: multi_size_queries
 test: multi_drop_extension
 
 # ----------
-# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers 
+# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
 test: multi_metadata_sync

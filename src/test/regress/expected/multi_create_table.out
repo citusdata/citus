@@ -700,13 +700,13 @@ INSERT INTO tt2 SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 -- Table should exist on the worker node
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360430'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360066'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 
 (1 row)
 
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360462'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt2_360070'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 
@@ -728,13 +728,13 @@ SELECT create_distributed_table('append_tt1','id','append');
 SELECT master_create_empty_shard('append_tt1');
  master_create_empty_shard 
 ---------------------------
-                    360494
+                    360074
 (1 row)
 
 ROLLBACK;
 -- Table exists on the worker node.
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360494'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.append_tt1_360074'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 
@@ -771,7 +771,7 @@ SELECT * FROM tt1 WHERE id = 1;
 COMMIT;
 -- Placements should be created on the worker
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360495'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid = 'public.tt1_360075'::regclass;
  Column |  Type   | Modifiers 
 --------+---------+-----------
  id     | integer | 

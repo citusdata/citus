@@ -138,9 +138,9 @@ INSERT INTO append_stage_table VALUES(5,4);
 CREATE TABLE test_append_table(id int, col_2 int);
 SELECT create_distributed_table('test_append_table','id','append');
 SELECT master_create_empty_shard('test_append_table');
-SELECT * FROM master_append_table_to_shard(1440066, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
-SELECT * FROM master_append_table_to_shard(1440067, 'append_stage_table', 'localhost', :master_port);
+SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table', 'localhost', :master_port);
 UPDATE test_append_table SET col_2 = 5;
 SELECT * FROM test_append_table;
 
@@ -169,7 +169,7 @@ UPDATE tt1 SET col_2 = 12 WHERE col_2 > 10 and col_2 < 20;
 -- Update rows from partititon tt1_510
 UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 COMMIT;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY id;
 
 -- Modify main table and partition table within same transaction
 BEGIN;
@@ -178,7 +178,7 @@ UPDATE tt1 SET col_2 = 7 WHERE col_2 < 10 and col_2 > 5;
 DELETE FROM tt1_510;
 DELETE FROM tt1_1120;
 COMMIT;
-SELECT * FROM tt1;
+SELECT * FROM tt1 ORDER BY id;
 DROP TABLE tt1;
 
 -- Update and copy in the same transaction
@@ -195,7 +195,7 @@ BEGIN;
 \.
 UPDATE tt2 SET col_2 = 1;
 COMMIT;
-SELECT * FROM tt2;
+SELECT * FROM tt2 ORDER BY id;
 
 -- Test returning with both type of executors
 UPDATE tt2 SET col_2 = 5 RETURNING id, col_2;

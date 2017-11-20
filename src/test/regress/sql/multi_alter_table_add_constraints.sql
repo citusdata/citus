@@ -398,10 +398,9 @@ ROLLBACK;
 
 -- There should be no constraint on master and worker(s) 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
-
 \c - - - :worker_1_port
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450034'::regclass;
 
 \c - - - :master_port
 
@@ -418,7 +417,7 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regc
 
 \c - - - :worker_1_port
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450034'::regclass;
 
 \c - - - :master_port
 DROP TABLE products;
