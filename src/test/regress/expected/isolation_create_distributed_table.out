@@ -1,0 +1,102 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s2-begin s1-create_distributed_table s2-create_distributed_table s1-commit s2-commit
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+
+create_distributed_table
+
+               
+step s2-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create_distributed_table: <... completed>
+error in steps s1-commit s2-create_distributed_table: ERROR:  table "table_to_distribute" is already distributed
+step s2-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s2-begin s1-create_distributed_table s2-copy_to_local_table s1-commit s2-commit
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+
+create_distributed_table
+
+               
+step s2-copy_to_local_table: 
+	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-copy_to_local_table: <... completed>
+step s2-commit: 
+	COMMIT;
+
+
+starting permutation: s1-begin s2-begin s2-copy_to_local_table s1-create_distributed_table s2-commit s1-commit
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s2-copy_to_local_table: 
+	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+
+step s1-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+ <waiting ...>
+step s2-commit: 
+	COMMIT;
+
+step s1-create_distributed_table: <... completed>
+create_distributed_table
+
+               
+step s1-commit: 
+    COMMIT;
+
+
+starting permutation: s1-copy_to_local_table s1-begin s2-begin s1-create_distributed_table s2-create_distributed_table s1-commit s2-commit
+step s1-copy_to_local_table: 
+	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+
+step s1-begin: 
+    BEGIN;
+
+step s2-begin: 
+	BEGIN;
+
+step s1-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+
+create_distributed_table
+
+               
+step s2-create_distributed_table: 
+	SELECT create_distributed_table('table_to_distribute', 'id');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create_distributed_table: <... completed>
+error in steps s1-commit s2-create_distributed_table: ERROR:  table "table_to_distribute" is already distributed
+step s2-commit: 
+	COMMIT;
+
