@@ -3,8 +3,8 @@
 --
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1450000;
-ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1450000;
+SET citus.next_shard_id TO 1450000;
+SET citus.next_placement_id TO 1450000;
 -- Check "PRIMARY KEY CONSTRAINT"
 CREATE TABLE products (
     product_no integer,
@@ -487,6 +487,8 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products
 (0 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1450038;
+SET citus.next_placement_id TO 1450038;
 DROP TABLE products;
 SET citus.shard_count to 2;
 -- Test if the ALTER TABLE %s ADD %s PRIMARY KEY %s works
