@@ -302,41 +302,30 @@ DROP VIEW priority_orders;
 CREATE VIEW recent_users AS
 	SELECT user_id, max(time) as lastseen FROM users_table
 	GROUP BY user_id
-	HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC; 
+	HAVING max(time) > '2017-11-23 16:20:33.264457'::timestamp order by 2 DESC; 
 SELECT * FROM recent_users;
  user_id |            lastseen             
 ---------+---------------------------------
-      87 | Tue Jan 21 05:53:51.866813 2014
-      50 | Tue Jan 21 05:53:44.251016 2014
-      74 | Tue Jan 21 05:54:04.837808 2014
-       6 | Tue Jan 21 05:57:47.118755 2014
-      71 | Tue Jan 21 05:55:52.018461 2014
-      39 | Tue Jan 21 05:55:18.875997 2014
-      66 | Tue Jan 21 05:51:31.681997 2014
-     100 | Tue Jan 21 05:49:04.953009 2014
-      46 | Tue Jan 21 05:49:00.229807 2014
-      86 | Tue Jan 21 05:48:54.381334 2014
-      13 | Tue Jan 21 05:48:45.418146 2014
-      90 | Tue Jan 21 05:48:25.027491 2014
-      58 | Tue Jan 21 05:47:30.418553 2014
-      44 | Tue Jan 21 05:47:01.104523 2014
-(14 rows)
+       1 | Thu Nov 23 17:30:34.635085 2017
+       5 | Thu Nov 23 16:48:32.08896 2017
+       3 | Thu Nov 23 17:18:51.048758 2017
+(3 rows)
 
 -- create a view for recent_events
 CREATE VIEW recent_events AS
 	SELECT user_id, time FROM events_table
-	WHERE time > '2014-01-20 01:45:49.978738'::timestamp;
+	WHERE time > '2017-11-23 16:20:33.264457'::timestamp;
 SELECT count(*) FROM recent_events;
  count 
 -------
-  1105
+     6
 (1 row)
 
 -- count number of events of recent_users
 SELECT count(*) FROM recent_users ru JOIN events_table et ON (ru.user_id = et.user_id);
  count 
 -------
-  1336
+    50
 (1 row)
 
 -- count number of events of per recent users order by count
@@ -348,21 +337,10 @@ SELECT ru.user_id, count(*)
 	ORDER BY 2 DESC, 1;
  user_id | count 
 ---------+-------
-      13 |   118
-      44 |   109
-      90 |   109
-      87 |   105
-      46 |   103
-      86 |   100
-      66 |    98
-      39 |    96
-      71 |    95
-      74 |    93
-       6 |    89
-      58 |    87
-      50 |    79
-     100 |    55
-(14 rows)
+       3 |    21
+       1 |    15
+       5 |    14
+(3 rows)
 
 -- the same query with a left join however, it would still generate the same result
 SELECT ru.user_id, count(*) 
@@ -373,21 +351,10 @@ SELECT ru.user_id, count(*)
 	ORDER BY 2 DESC, 1;
  user_id | count 
 ---------+-------
-      13 |   118
-      44 |   109
-      90 |   109
-      87 |   105
-      46 |   103
-      86 |   100
-      66 |    98
-      39 |    96
-      71 |    95
-      74 |    93
-       6 |    89
-      58 |    87
-      50 |    79
-     100 |    55
-(14 rows)
+       3 |    21
+       1 |    15
+       5 |    14
+(3 rows)
 
 -- query wrapped inside a subquery, it needs another top level order by
 SELECT * FROM
@@ -400,21 +367,10 @@ SELECT * FROM
 ORDER BY 2 DESC, 1;
  user_id | count 
 ---------+-------
-      13 |   118
-      44 |   109
-      90 |   109
-      87 |   105
-      46 |   103
-      86 |   100
-      66 |    98
-      39 |    96
-      71 |    95
-      74 |    93
-       6 |    89
-      58 |    87
-      50 |    79
-     100 |    55
-(14 rows)
+       3 |    21
+       1 |    15
+       5 |    14
+(3 rows)
 
 -- non-partition key joins are not supported inside subquery
 SELECT * FROM
@@ -432,21 +388,9 @@ DETAIL:  Each relation should be joined with at least one another relation using
 SELECT ru.user_id FROM recent_users ru JOIN recent_events re USING(user_id) GROUP BY ru.user_id ORDER BY ru.user_id;
  user_id 
 ---------
-       6
-      13
-      39
-      44
-      46
-      50
-      58
-      66
-      71
-      74
-      86
-      87
-      90
-     100
-(14 rows)
+       1
+       3
+(2 rows)
 
 -- outer join inside a subquery
 -- recent_events who are not done by recent users
@@ -456,7 +400,7 @@ SELECT count(*) FROM (
 	WHERE recent_user IS NULL;
  count 
 -------
-   957
+     2
 (1 row)
 
 -- same query with anti-join
@@ -465,83 +409,64 @@ SELECT count(*)
 	WHERE ru.user_id IS NULL;
  count 
 -------
-   957
+     2
 (1 row)
 
 -- join between view and table
--- users who has recent activity and they have an entry with value_1 is less than 15
-SELECT ut.* FROM recent_users ru JOIN users_table ut USING (user_id) WHERE ut.value_1 < 15 ORDER BY 1,2;
+-- users who has recent activity and they have an entry with value_1 is less than 3
+SELECT ut.* FROM recent_users ru JOIN users_table ut USING (user_id) WHERE ut.value_1 < 3 ORDER BY 1,2;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
-       6 | Mon Jan 13 05:30:08.289267 2014 |      12 |     140 |     618 |        
-       6 | Thu Jan 16 15:17:16.779695 2014 |       6 |     978 |     430 |        
-       6 | Sun Jan 19 06:09:39.900888 2014 |       3 |     908 |     688 |        
-      13 | Sun Jan 19 22:09:26.256209 2014 |       2 |     755 |     584 |        
-      39 | Wed Jan 15 05:46:51.48765 2014  |      14 |     657 |     137 |        
-      39 | Sun Jan 19 11:26:47.45937 2014  |      12 |     118 |     165 |        
-      44 | Wed Jan 15 14:23:52.532426 2014 |       8 |     204 |     735 |        
-      44 | Sun Jan 19 05:53:34.829093 2014 |       4 |     758 |     205 |        
-      46 | Mon Jan 13 20:39:11.211169 2014 |       0 |     235 |     475 |        
-      46 | Wed Jan 15 09:14:57.471944 2014 |       2 |     407 |     664 |        
-      50 | Sat Jan 11 11:07:13.089216 2014 |       6 |     292 |     425 |        
-      58 | Sun Jan 19 22:36:14.795396 2014 |       2 |      86 |     311 |        
-      66 | Tue Jan 14 20:16:31.219213 2014 |      14 |     347 |     655 |        
-      74 | Tue Jan 21 01:38:39.570986 2014 |       9 |     334 |     642 |        
-      86 | Sun Jan 19 06:18:51.466578 2014 |      14 |     712 |     490 |        
-      87 | Sat Jan 11 20:46:28.439073 2014 |       2 |     528 |     311 |        
-      90 | Sun Jan 12 21:37:30.778206 2014 |      11 |     458 |     377 |        
-     100 | Sun Jan 19 22:32:08.284043 2014 |       2 |     384 |     149 |        
-(18 rows)
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |       4 |        
+       3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |        
+       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |       4 |        
+       3 | Thu Nov 23 03:23:24.702501 2017 |       1 |       2 |       5 |        
+       3 | Thu Nov 23 06:20:05.854857 2017 |       1 |       4 |       2 |        
+       3 | Thu Nov 23 09:57:41.540228 2017 |       2 |       2 |       3 |        
+       3 | Thu Nov 23 11:18:53.114408 2017 |       2 |       2 |       0 |        
+       3 | Thu Nov 23 12:56:49.29191 2017  |       0 |       5 |       1 |        
+       3 | Thu Nov 23 17:18:51.048758 2017 |       1 |       5 |       5 |        
+       5 | Wed Nov 22 20:43:18.667473 2017 |       0 |       3 |       2 |        
+       5 | Wed Nov 22 21:02:07.575129 2017 |       2 |       0 |       2 |        
+       5 | Wed Nov 22 22:10:24.315371 2017 |       1 |       2 |       1 |        
+       5 | Thu Nov 23 00:54:44.192608 2017 |       1 |       3 |       2 |        
+       5 | Thu Nov 23 07:47:09.542999 2017 |       1 |       4 |       3 |        
+       5 | Thu Nov 23 09:05:08.53142 2017  |       2 |       2 |       2 |        
+       5 | Thu Nov 23 09:17:47.706703 2017 |       2 |       5 |       3 |        
+       5 | Thu Nov 23 10:15:31.764558 2017 |       2 |       2 |       2 |        
+       5 | Thu Nov 23 14:29:02.557934 2017 |       2 |       1 |       2 |        
+       5 | Thu Nov 23 15:55:08.493462 2017 |       0 |       3 |       3 |        
+       5 | Thu Nov 23 16:28:38.455322 2017 |       2 |       5 |       4 |        
+(21 rows)
 
 -- determine if a recent user has done a given event type or not
 SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
 	FROM recent_users ru
 	LEFT JOIN events_table et
-	ON(ru.user_id = et.user_id AND et.event_type = 625)
+	ON(ru.user_id = et.user_id AND et.event_type = 6)
 	ORDER BY 2 DESC, 1;
  user_id | done_event 
 ---------+------------
-       6 | YES
-      13 | NO
-      39 | NO
-      44 | NO
-      46 | NO
-      50 | NO
-      58 | NO
-      66 | NO
-      71 | NO
-      74 | NO
-      86 | NO
-      87 | NO
-      90 | NO
-     100 | NO
-(14 rows)
+       1 | YES
+       3 | NO
+       5 | NO
+(3 rows)
 
 -- view vs table join wrapped inside a subquery
 SELECT * FROM
 	(SELECT ru.user_id, CASE WHEN et.user_id IS NULL THEN 'NO' ELSE 'YES' END as done_event
 		FROM recent_users ru
 		LEFT JOIN events_table et
-		ON(ru.user_id = et.user_id AND et.event_type = 625)
+		ON(ru.user_id = et.user_id AND et.event_type = 6)
 	) s1
 ORDER BY 2 DESC, 1;
  user_id | done_event 
 ---------+------------
-       6 | YES
-      13 | NO
-      39 | NO
-      44 | NO
-      46 | NO
-      50 | NO
-      58 | NO
-      66 | NO
-      71 | NO
-      74 | NO
-      86 | NO
-      87 | NO
-      90 | NO
-     100 | NO
-(14 rows)
+       1 | YES
+       3 | NO
+       5 | NO
+(3 rows)
 
 -- event vs table non-partition-key join is not supported
 SELECT * FROM
@@ -554,41 +479,32 @@ ORDER BY 2 DESC, 1;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
 -- create a select only view
-CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150;
+CREATE VIEW selected_users AS SELECT * FROM users_table WHERE value_1 >= 1 and value_1 <3;
 CREATE VIEW recent_selected_users AS SELECT su.* FROM selected_users su JOIN recent_users ru USING(user_id);
 SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER BY 1;
  user_id 
 ---------
-       6
-      13
-      39
-      44
-      46
-      50
-      58
-      66
-      71
-      74
-      86
-      90
-(12 rows)
+       1
+       3
+       5
+(3 rows)
 
 -- this would be supported when we implement where partition_key in (subquery) support
 SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users) GROUP BY 1,2 ORDER BY 1 DESC,2 DESC LIMIT 5;
  user_id |              time               
 ---------+---------------------------------
-      90 | Tue Jan 21 02:50:05.379732 2014
-      90 | Tue Jan 21 00:08:33.911898 2014
-      90 | Mon Jan 20 22:25:39.21906 2014
-      90 | Mon Jan 20 21:11:10.814326 2014
-      90 | Mon Jan 20 19:16:33.359257 2014
+       5 | Thu Nov 23 16:11:02.929469 2017
+       5 | Thu Nov 23 14:40:40.467511 2017
+       5 | Thu Nov 23 14:28:51.833214 2017
+       5 | Thu Nov 23 14:23:09.889786 2017
+       5 | Thu Nov 23 13:26:45.571108 2017
 (5 rows)
 
 -- it is supported when it is a router query
-SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 90);
+SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 1);
  count 
 -------
-   109
+    15
 (1 row)
 
 -- expected this to work but it did not
@@ -603,15 +519,12 @@ SELECT *
 		(SELECT user_id FROM recent_users) 
 		UNION
 		(SELECT user_id FROM selected_users) ) u
-	WHERE user_id < 15 AND user_id > 10
+	WHERE user_id < 2 AND user_id > 0
 	ORDER BY user_id;
  user_id 
 ---------
-      11
-      12
-      13
-      14
-(4 rows)
+       1
+(1 row)
 
 -- union all also works for views
 SELECT *
@@ -619,36 +532,23 @@ SELECT *
 		(SELECT user_id FROM recent_users) 
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
-	WHERE user_id < 15 AND user_id > 10
+	WHERE user_id < 2 AND user_id > 0
 	ORDER BY user_id;
  user_id 
 ---------
-      11
-      11
-      11
-      12
-      12
-      12
-      12
-      12
-      12
-      13
-      13
-      13
-      13
-      13
-      14
-(15 rows)
+       1
+       1
+(2 rows)
 
 SELECT count(*)
 	FROM (
 		(SELECT user_id FROM recent_users) 
 		UNION
 		(SELECT user_id FROM selected_users) ) u
-	WHERE user_id < 15 AND user_id > 10;
+	WHERE user_id < 2 AND user_id > 0;
  count 
 -------
-     4
+     1
 (1 row)
 
 -- expected this to work but it does not
@@ -657,7 +557,7 @@ SELECT count(*)
 		(SELECT user_id FROM recent_users) 
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
-	WHERE user_id < 15 AND user_id > 10;
+	WHERE user_id < 2 AND user_id > 0;
 ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
 DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
 -- expand view definitions and re-run last 2 queries
@@ -665,70 +565,68 @@ SELECT count(*)
 	FROM (
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
-			HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC) aa
+			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
 		) 
 		UNION
-		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150) bb) ) u
-	WHERE user_id < 15 AND user_id > 10;
+		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
+	WHERE user_id < 2 AND user_id > 0;
  count 
 -------
-     4
+     1
 (1 row)
 
 SELECT count(*)
 	FROM (
 		(SELECT user_id FROM (SELECT user_id, max(time) as lastseen FROM users_table
 			GROUP BY user_id
-			HAVING max(time) > '2014-01-21 05:45:49.978738'::timestamp order by 2 DESC) aa
+			HAVING max(time) > '2017-11-22 05:45:49.978738'::timestamp order by 2 DESC) aa
 		) 
 		UNION ALL
-		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 120 and value_1 <150) bb) ) u
-	WHERE user_id < 15 AND user_id > 10;
+		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
+	WHERE user_id < 2 AND user_id > 0;
 ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
 DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
 -- test distinct
 -- distinct is supported if it is on a partition key
-CREATE VIEW distinct_user_with_value_1_15 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 15;
-SELECT * FROM distinct_user_with_value_1_15 ORDER BY user_id;
+CREATE VIEW distinct_user_with_value_1_3 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 3;
+SELECT * FROM distinct_user_with_value_1_3 ORDER BY user_id;
  user_id 
 ---------
-       7
-       8
-      35
-      42
-      46
-      53
-      70
-      82
-      87
-      88
-      96
-(11 rows)
+       1
+       2
+       3
+       4
+       5
+       6
+(6 rows)
 
 -- distinct is not supported if it is on a non-partition key
-CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 15;
+CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 3;
 SELECT * FROM distinct_value_1;
 ERROR:  cannot perform distributed planning on this query
 DETAIL:  Subqueries without group by clause are not supported yet
 -- CTEs are not supported even if they are on views
 CREATE VIEW cte_view_1 AS
-WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 15) SELECT * FROM c1 WHERE value_2 < 500;
+WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
 SELECT * FROM cte_view_1;
 ERROR:  cannot push down this subquery
 DETAIL:  CTEs in multi-shard queries are currently unsupported
 -- this is single shard query but still not supported since it has view + cte
 -- router planner can't detect it
-SELECT * FROM cte_view_1 WHERE user_id = 8;
+SELECT * FROM cte_view_1 WHERE user_id = 2;
 ERROR:  cannot push down this subquery
 DETAIL:  CTEs in multi-shard queries are currently unsupported
 -- if CTE itself prunes down to a single shard than the view is supported (router plannable)
 CREATE VIEW cte_view_2 AS
-WITH c1 AS (SELECT * FROM users_table WHERE user_id = 8) SELECT * FROM c1 WHERE value_1 = 15;
+WITH c1 AS (SELECT * FROM users_table WHERE user_id = 2) SELECT * FROM c1 WHERE value_1 = 3;
 SELECT * FROM cte_view_2;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
-       8 | Tue Jan 21 00:52:36.967785 2014 |      15 |      10 |     868 |        
-(1 row)
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |       4 |        
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 11:41:04.042936 2017 |       3 |       4 |       1 |        
+(4 rows)
 
 CREATE VIEW router_view AS SELECT * FROM users_table WHERE user_id = 2;
 -- router plannable
@@ -742,18 +640,14 @@ SELECT user_id FROM router_view GROUP BY 1;
  SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN recent_events USING (user_id) ORDER BY 2 LIMIT 3;
  user_id |              time               
 ---------+---------------------------------
-       2 | Mon Jan 20 02:02:03.208351 2014
-       2 | Mon Jan 20 02:34:14.54301 2014
-       2 | Mon Jan 20 03:16:38.418772 2014
-(3 rows)
+       2 | Thu Nov 23 17:26:14.563216 2017
+(1 row)
 
  SELECT * FROM (SELECT user_id FROM router_view GROUP BY 1) rv JOIN (SELECT * FROM recent_events) re USING (user_id) ORDER BY 2 LIMIT 3;
  user_id |              time               
 ---------+---------------------------------
-       2 | Mon Jan 20 02:02:03.208351 2014
-       2 | Mon Jan 20 02:34:14.54301 2014
-       2 | Mon Jan 20 03:16:38.418772 2014
-(3 rows)
+       2 | Thu Nov 23 17:26:14.563216 2017
+(1 row)
 
 -- views with limits
 CREATE VIEW recent_10_users AS
@@ -779,31 +673,27 @@ DETAIL:  Limit in subquery without limit in the outermost query is unsupported
 SELECT * FROM recent_10_users ORDER BY lastseen DESC LIMIT 10;
  user_id |            lastseen             
 ---------+---------------------------------
-       6 | Tue Jan 21 05:57:47.118755 2014
-      71 | Tue Jan 21 05:55:52.018461 2014
-      39 | Tue Jan 21 05:55:18.875997 2014
-      74 | Tue Jan 21 05:54:04.837808 2014
-      87 | Tue Jan 21 05:53:51.866813 2014
-      50 | Tue Jan 21 05:53:44.251016 2014
-      66 | Tue Jan 21 05:51:31.681997 2014
-     100 | Tue Jan 21 05:49:04.953009 2014
-      46 | Tue Jan 21 05:49:00.229807 2014
-      86 | Tue Jan 21 05:48:54.381334 2014
-(10 rows)
+       1 | Thu Nov 23 17:30:34.635085 2017
+       3 | Thu Nov 23 17:18:51.048758 2017
+       5 | Thu Nov 23 16:48:32.08896 2017
+       4 | Thu Nov 23 15:32:02.360969 2017
+       6 | Thu Nov 23 14:43:18.024104 2017
+       2 | Thu Nov 23 13:52:54.83829 2017
+(6 rows)
 
 SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
  user_id |              time               | event_type | value_2 | value_3 | value_4 
 ---------+---------------------------------+------------+---------+---------+---------
-      65 | Tue Jan 21 05:56:52.624231 2014 |        241 |      30 |     543 |        
-      42 | Tue Jan 21 05:46:35.158342 2014 |        761 |     877 |     335 |        
-      54 | Tue Jan 21 05:46:19.103645 2014 |        595 |     477 |     996 |        
-      44 | Tue Jan 21 05:43:00.838945 2014 |        682 |     641 |     448 |        
-      27 | Tue Jan 21 05:34:10.935865 2014 |        912 |     605 |     989 |        
-      61 | Tue Jan 21 05:25:27.452065 2014 |        392 |     472 |     925 |        
-      19 | Tue Jan 21 05:23:09.26298 2014  |        202 |     888 |     640 |        
-      65 | Tue Jan 21 05:22:56.725329 2014 |        519 |     457 |     259 |        
-      27 | Tue Jan 21 05:19:14.38026 2014  |         19 |      19 |     205 |        
-      11 | Tue Jan 21 05:15:14.879531 2014 |        459 |     545 |      80 |        
+       1 | Thu Nov 23 21:54:46.924477 2017 |          6 |       4 |       5 |        
+       4 | Thu Nov 23 18:10:21.338399 2017 |          1 |       2 |       4 |        
+       3 | Thu Nov 23 18:08:26.550729 2017 |          2 |       4 |       3 |        
+       2 | Thu Nov 23 17:26:14.563216 2017 |          1 |       5 |       3 |        
+       3 | Thu Nov 23 16:44:41.903713 2017 |          4 |       2 |       2 |        
+       3 | Thu Nov 23 16:31:56.219594 2017 |          5 |       1 |       2 |        
+       4 | Thu Nov 23 16:20:33.264457 2017 |          0 |       0 |       3 |        
+       5 | Thu Nov 23 16:11:02.929469 2017 |          4 |       2 |       0 |        
+       2 | Thu Nov 23 15:58:49.273421 2017 |          5 |       1 |       2 |        
+       5 | Thu Nov 23 14:40:40.467511 2017 |          1 |       4 |       1 |        
 (10 rows)
 
 RESET citus.subquery_pushdown;
@@ -825,26 +715,24 @@ EXPLAIN (COSTS FALSE) SELECT user_id FROM recent_selected_users GROUP BY 1 ORDER
                            Group Key: users_table.user_id
                            ->  Hash Join
                                  Hash Cond: (users_table.user_id = ru.user_id)
-                                 ->  Bitmap Heap Scan on users_table_1400000 users_table
-                                       Recheck Cond: ((value_1 >= 120) AND (value_1 < 150))
-                                       ->  Bitmap Index Scan on is_index3_1400000
-                                             Index Cond: ((value_1 >= 120) AND (value_1 < 150))
+                                 ->  Seq Scan on users_table_1400000 users_table
+                                       Filter: ((value_1 >= 1) AND (value_1 < 3))
                                  ->  Hash
                                        ->  Subquery Scan on ru
                                              ->  Sort
                                                    Sort Key: (max(users_table_1."time")) DESC
                                                    ->  HashAggregate
                                                          Group Key: users_table_1.user_id
-                                                         Filter: (max(users_table_1."time") > '2014-01-21 05:45:49.978738'::timestamp without time zone)
+                                                         Filter: (max(users_table_1."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
                                                          ->  Seq Scan on users_table_1400000 users_table_1
-(25 rows)
+(23 rows)
 
 EXPLAIN (COSTS FALSE) SELECT *
 	FROM (
 		(SELECT user_id FROM recent_users) 
 		UNION
 		(SELECT user_id FROM selected_users) ) u
-	WHERE user_id < 15 AND user_id > 10
+	WHERE user_id < 4 AND user_id > 1
 	ORDER BY user_id;
                                                                    QUERY PLAN                                                                    
 -------------------------------------------------------------------------------------------------------------------------------------------------
@@ -864,13 +752,14 @@ EXPLAIN (COSTS FALSE) SELECT *
                                              Sort Key: (max(users_table."time")) DESC
                                              ->  GroupAggregate
                                                    Group Key: users_table.user_id
-                                                   Filter: (max(users_table."time") > '2014-01-21 05:45:49.978738'::timestamp without time zone)
-                                                   ->  Index Scan using is_index1_1400000 on users_table_1400000 users_table
-                                                         Index Cond: ((user_id < 15) AND (user_id > 10))
-                                 ->  Index Scan using is_index1_1400000 on users_table_1400000 users_table_1
-                                       Index Cond: ((user_id < 15) AND (user_id > 10))
-                                       Filter: ((value_1 >= 120) AND (value_1 < 150))
-(22 rows)
+                                                   Filter: (max(users_table."time") > '2017-11-23 16:20:33.264457'::timestamp without time zone)
+                                                   ->  Sort
+                                                         Sort Key: users_table.user_id
+                                                         ->  Seq Scan on users_table_1400000 users_table
+                                                               Filter: ((user_id < 4) AND (user_id > 1))
+                                 ->  Seq Scan on users_table_1400000 users_table_1
+                                       Filter: ((value_1 >= 1) AND (value_1 < 3) AND (user_id < 4) AND (user_id > 1))
+(23 rows)
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
 ERROR:  cannot push down this subquery
@@ -909,7 +798,7 @@ DROP VIEW router_view;
 DROP VIEW cte_view_2;
 DROP VIEW cte_view_1;
 DROP VIEW distinct_value_1;
-DROP VIEW distinct_user_with_value_1_15;
+DROP VIEW distinct_user_with_value_1_3;
 DROP VIEW recent_selected_users;
 DROP VIEW selected_users;
 DROP VIEW recent_events;
