@@ -191,6 +191,7 @@ extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *query
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
+extern DeferredErrorMessage * DeferErrorIfQueryNotSupported(Query *queryTree);
 extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  originalQuery,
 																	  PlannerRestrictionContext

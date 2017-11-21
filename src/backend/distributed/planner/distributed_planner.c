@@ -904,10 +904,18 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 		pushdownError = DeferErrorIfCannotPushdownSubquery(query, false);
 		if (pushdownError != NULL)
 		{
+			DeferredErrorMessage *unsupportedQueryError = NULL;
 			PlannedStmt *subPlan = NULL;
 			int subPlanId = list_length(*subPlanList);
 			Query *resultQuery = NULL;
 			int cursorOptions = 0;
+
+			unsupportedQueryError = DeferErrorIfQueryNotSupported(query);
+			if (unsupportedQueryError)
+			{
+				/* query is not supported, no point in planning it separately */
+				return false;
+			}
 
 			resultQuery = BuildSubPlanResultQuery(query, subPlanId);
 
