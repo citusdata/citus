@@ -2440,7 +2440,7 @@ GROUP BY
 ORDER BY 
   types;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 -- similar to the above, but constant rte is on the right side of the query
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2495,5 +2495,5 @@ GROUP BY
 ORDER BY 
   types;
 ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without relations are unsupported
+DETAIL:  Subqueries without a FROM clause are not supported with union operator
 SET citus.enable_router_execution TO TRUE;
