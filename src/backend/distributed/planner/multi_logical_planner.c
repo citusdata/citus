@@ -84,6 +84,8 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
+static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
+static bool RangeTableListContainsOnlyReferenceTables(List *rangeTableList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiPlanTree(Query *queryTree);
@@ -1234,7 +1236,115 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		}
 	}
 
+	/*
+	 * We could still behave as if the target list is on partition column if
+	 * all range table entries are reference tables and all target expressions
+	 * are column references to the given query level.
+	 */
+	if (!targetListOnPartitionColumn)
+	{
+		if (RangeTableListContainsOnlyReferenceTables(query->rtable) &&
+			AllTargetExpressionsAreColumnReferences(targetEntryList))
+		{
+			targetListOnPartitionColumn = true;
+		}
+	}
+
 	return targetListOnPartitionColumn;
+}
+
+
+/*
+ * AllTargetExpressionsAreColumnReferences returns true if non of the
+ * elements in the target entry list belong to an outer query (for
+ * example the query is a sublink and references to another query
+ * in the from list).
+ *
+ * The function also returns true if any of the  target entries is not
+ * a column itself. This might be too restrictive, but, given that we're
+ * handling a very specific type of queries, that seems acceptable for now.
+ */
+static bool
+AllTargetExpressionsAreColumnReferences(List *targetEntryList)
+{
+	ListCell *targetEntryCell = NULL;
+
+	foreach(targetEntryCell, targetEntryList)
+	{
+		TargetEntry *targetEntry = lfirst(targetEntryCell);
+		Var *candidateColumn = NULL;
+		Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
+			(Node *) targetEntry->expr);
+
+		if (IsA(strippedColumnExpression, Var))
+		{
+			candidateColumn = (Var *) strippedColumnExpression;
+		}
+		else if (IsA(strippedColumnExpression, FieldSelect))
+		{
+			FieldSelect *compositeField = (FieldSelect *) strippedColumnExpression;
+			Expr *fieldExpression = compositeField->arg;
+
+			if (IsA(fieldExpression, Var))
+			{
+				candidateColumn = (Var *) fieldExpression;
+			}
+		}
+
+		/* we don't support target entries that are not columns */
+		if (candidateColumn == NULL)
+		{
+			return false;
+		}
+
+		if (candidateColumn->varlevelsup > 0)
+		{
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * RangeTableListContainsOnlyReferenceTables returns true if all range table
+ * entries are reference tables.
+ *
+ * The function returns false for range table entries that are not relations.
+ *
+ * Note that the function doesn't recurse into subqueries, returns false when
+ * a subquery is found.
+ */
+static bool
+RangeTableListContainsOnlyReferenceTables(List *rangeTableList)
+{
+	ListCell *rangeTableCell = NULL;
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		if (rangeTableEntry->rtekind == RTE_RELATION)
+		{
+			Oid relationId = rangeTableEntry->relid;
+
+			if (!IsDistributedTable(relationId))
+			{
+				return false;
+			}
+
+			if (PartitionMethod(relationId) != DISTRIBUTE_BY_NONE)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
