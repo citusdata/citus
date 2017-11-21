@@ -25,16 +25,16 @@ LIMIT
   10;
  user_id |              time               | rnk 
 ---------+---------------------------------+-----
-      23 | Fri Jan 10 20:11:40.439606 2014 | 127
-      23 | Fri Jan 10 20:15:35.594738 2014 | 126
-      23 | Fri Jan 10 23:14:59.348548 2014 | 125
-      23 | Fri Jan 10 23:38:35.800498 2014 | 124
-      25 | Fri Jan 10 21:50:55.465393 2014 | 123
-      23 | Sat Jan 11 00:40:59.383928 2014 | 123
-      25 | Fri Jan 10 22:43:09.881855 2014 | 122
-      23 | Sat Jan 11 00:42:46.148 2014    | 122
-      25 | Fri Jan 10 23:08:28.963923 2014 | 121
-      23 | Sat Jan 11 01:23:01.126017 2014 | 121
+       2 | Wed Nov 22 20:16:16.614779 2017 |  24
+       2 | Wed Nov 22 22:06:12.107108 2017 |  23
+       2 | Wed Nov 22 22:23:25.40611 2017  |  22
+       3 | Wed Nov 22 18:36:16.372893 2017 |  21
+       2 | Wed Nov 22 22:50:33.855696 2017 |  21
+       3 | Wed Nov 22 20:23:46.906523 2017 |  20
+       2 | Wed Nov 22 22:56:47.673504 2017 |  20
+       3 | Wed Nov 22 21:12:24.542921 2017 |  19
+       2 | Thu Nov 23 01:08:57.24208 2017  |  19
+       3 | Wed Nov 22 21:26:21.185134 2017 |  18
 (10 rows)
 
 -- the same test with different syntax
@@ -53,16 +53,16 @@ LIMIT
   10;
  user_id |              time               | rnk 
 ---------+---------------------------------+-----
-      23 | Fri Jan 10 20:11:40.439606 2014 | 127
-      23 | Fri Jan 10 20:15:35.594738 2014 | 126
-      23 | Fri Jan 10 23:14:59.348548 2014 | 125
-      23 | Fri Jan 10 23:38:35.800498 2014 | 124
-      25 | Fri Jan 10 21:50:55.465393 2014 | 123
-      23 | Sat Jan 11 00:40:59.383928 2014 | 123
-      25 | Fri Jan 10 22:43:09.881855 2014 | 122
-      23 | Sat Jan 11 00:42:46.148 2014    | 122
-      25 | Fri Jan 10 23:08:28.963923 2014 | 121
-      23 | Sat Jan 11 01:23:01.126017 2014 | 121
+       2 | Wed Nov 22 20:16:16.614779 2017 |  24
+       2 | Wed Nov 22 22:06:12.107108 2017 |  23
+       2 | Wed Nov 22 22:23:25.40611 2017  |  22
+       3 | Wed Nov 22 18:36:16.372893 2017 |  21
+       2 | Wed Nov 22 22:50:33.855696 2017 |  21
+       3 | Wed Nov 22 20:23:46.906523 2017 |  20
+       2 | Wed Nov 22 22:56:47.673504 2017 |  20
+       3 | Wed Nov 22 21:12:24.542921 2017 |  19
+       2 | Thu Nov 23 01:08:57.24208 2017  |  19
+       3 | Wed Nov 22 21:26:21.185134 2017 |  18
 (10 rows)
 
 -- similar test with lag
@@ -81,16 +81,16 @@ LIMIT
   10;
  user_id |              time               | lag_event_type | row_no 
 ---------+---------------------------------+----------------+--------
-      23 | Fri Jan 10 20:11:40.439606 2014 |            338 |    127
-      23 | Fri Jan 10 20:15:35.594738 2014 |            999 |    126
-      23 | Fri Jan 10 23:14:59.348548 2014 |            783 |    125
-      23 | Fri Jan 10 23:38:35.800498 2014 |            802 |    124
-      25 | Fri Jan 10 21:50:55.465393 2014 |            517 |    123
-      23 | Sat Jan 11 00:40:59.383928 2014 |            359 |    123
-      25 | Fri Jan 10 22:43:09.881855 2014 |            918 |    122
-      23 | Sat Jan 11 00:42:46.148 2014    |             68 |    122
-      25 | Fri Jan 10 23:08:28.963923 2014 |            757 |    121
-      23 | Sat Jan 11 01:23:01.126017 2014 |            251 |    121
+       2 | Wed Nov 22 20:16:16.614779 2017 |              0 |     24
+       2 | Wed Nov 22 22:06:12.107108 2017 |              3 |     23
+       2 | Wed Nov 22 22:23:25.40611 2017  |              4 |     22
+       2 | Wed Nov 22 22:50:33.855696 2017 |              4 |     21
+       3 | Wed Nov 22 18:36:16.372893 2017 |              3 |     21
+       2 | Wed Nov 22 22:56:47.673504 2017 |              2 |     20
+       3 | Wed Nov 22 20:23:46.906523 2017 |              1 |     20
+       2 | Thu Nov 23 01:08:57.24208 2017  |              3 |     19
+       3 | Wed Nov 22 21:12:24.542921 2017 |              1 |     19
+       3 | Wed Nov 22 21:26:21.185134 2017 |              3 |     18
 (10 rows)
 
 -- simple window function, partitioned and grouped by on the distribution key
@@ -110,18 +110,18 @@ ORDER BY
   2 DESC, 1 DESC, 3 DESC
 LIMIT
   10;
- user_id | rnk |      avg_val_2       
----------+-----+----------------------
-      98 |  12 | 647.5000000000000000
-      95 |  12 | 428.5000000000000000
-      94 |  12 | 608.6666666666666667
-      92 |  12 | 724.0000000000000000
-      91 |  12 | 549.0000000000000000
-      90 |  12 | 525.1000000000000000
-      89 |  12 | 531.0000000000000000
-      87 |  12 | 740.0000000000000000
-      84 |  12 | 487.7500000000000000
-      83 |  12 | 629.5000000000000000
+ user_id | rnk |     avg_val_2      
+---------+-----+--------------------
+       6 |   2 | 2.0000000000000000
+       5 |   2 | 2.0909090909090909
+       4 |   2 | 2.4000000000000000
+       3 |   2 | 3.1666666666666667
+       2 |   2 | 2.0000000000000000
+       1 |   2 | 2.1428571428571429
+       6 |   1 | 2.5000000000000000
+       5 |   1 | 2.6666666666666667
+       4 |   1 | 2.5000000000000000
+       3 |   1 | 1.8000000000000000
 (10 rows)
 
 -- top level query has a group by on the result of the window function
@@ -142,17 +142,15 @@ LIMIT
   10;
  min |               min               | lag_event_type | count 
 -----+---------------------------------+----------------+-------
-  45 | Sat Jan 11 12:47:09.502744 2014 |           1000 |     2
-  18 | Fri Jan 10 20:15:35.594738 2014 |            999 |     9
-   1 | Sat Jan 11 21:08:41.737933 2014 |            998 |    10
-   0 | Sat Jan 11 16:32:40.662168 2014 |            997 |     9
-   3 | Fri Jan 10 23:30:18.011423 2014 |            996 |    13
-  17 | Sun Jan 12 03:54:06.464758 2014 |            995 |     9
-  23 | Tue Jan 14 22:04:23.44321 2014  |            994 |     7
-   7 | Sat Jan 11 04:59:48.119353 2014 |            993 |     9
-   8 | Sat Jan 11 05:14:45.845071 2014 |            992 |    14
-   0 | Sun Jan 12 03:24:01.449152 2014 |            991 |    10
-(10 rows)
+   1 | Thu Nov 23 11:09:38.074595 2017 |              6 |     1
+   2 | Wed Nov 22 19:00:10.396739 2017 |              5 |     7
+   1 | Wed Nov 22 18:49:42.327403 2017 |              4 |    21
+   1 | Wed Nov 22 18:36:16.372893 2017 |              3 |    21
+   1 | Wed Nov 22 19:07:03.846437 2017 |              2 |    17
+   1 | Wed Nov 22 19:03:01.772353 2017 |              1 |    23
+   1 | Wed Nov 22 20:16:16.614779 2017 |              0 |     5
+   1 | Thu Nov 23 14:00:13.20013 2017  |                |     6
+(8 rows)
 
 -- window functions should work along with joins as well
 SELECT * FROM
@@ -163,23 +161,23 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time)
 ) as foo
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
  user_id | lag | rank 
 ---------+-----+------
-      90 |  90 |  114
-      72 |  72 |  109
-      26 |  26 |  109
-      91 |  91 |  108
-      55 |  55 |  107
-      27 |  27 |  106
-      60 |  60 |  101
-      98 |  98 |   97
-      39 |  39 |   95
-      61 |  61 |   93
+       2 |   2 |  109
+       5 |   5 |  105
+       3 |   3 |  103
+       2 |   2 |   91
+       3 |   3 |   86
+       5 |   5 |   79
+       2 |   2 |   73
+       4 |   4 |   70
+       3 |   3 |   69
+       2 |   2 |   55
 (10 rows)
 
 -- two window functions in a single subquery should work fine as well
@@ -191,7 +189,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo
@@ -199,16 +197,16 @@ ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
 LIMIT 10;
  user_id | lag | rank 
 ---------+-----+------
-      73 |  73 |  112
-      73 |     |  112
-      48 |  48 |  111
-      48 |     |  111
-      43 |  43 |  105
-      43 |     |  105
-      77 |  77 |  104
-      77 |     |  104
-      30 |  30 |  104
-      30 |     |  104
+       2 |   2 |   73
+       4 |   4 |   70
+       3 |   3 |   69
+       2 |   2 |   55
+       5 |   5 |   53
+       5 |     |   53
+       3 |   3 |   52
+       4 |   4 |   47
+       2 |   2 |   37
+       3 |   3 |   35
 (10 rows)
 
 -- window functions should be fine within subquery joins
@@ -220,7 +218,7 @@ SELECT sub_1.user_id, max(lag_1), max(rank_1), max(rank_2) FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as sub_1
@@ -232,7 +230,7 @@ JOIN
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.value_2 ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 50) ORDER BY events_table.time)
 ) as sub_2
@@ -243,17 +241,13 @@ JOIN
 LIMIT 10;
  user_id | max | max | max 
 ---------+-----+-----+-----
-      73 |  73 | 112 | 112
-      48 |  48 | 111 | 111
-      43 |  43 | 105 |   1
-      77 |  77 | 104 | 104
-      30 |  30 | 104 | 104
-      50 |  50 | 101 |   1
-      79 |  79 |  97 |   1
-      49 |  49 |  96 |  96
-      44 |  44 |  93 |   1
-      13 |  13 |  87 |   1
-(10 rows)
+       2 |   2 |  73 |  73
+       4 |   4 |  70 |  70
+       3 |   3 |  69 |  69
+       5 |   5 |  53 |  53
+       6 |   6 |  21 |  21
+       1 |   1 |  15 |  15
+(6 rows)
 
 -- GROUP BYs and PARTITION BYs should work fine together
 SELECT
@@ -269,23 +263,17 @@ FROM
     WINDOW my_win AS (PARTITION BY user_id ORDER BY count(*) DESC)
 ) as foo
 WHERE
-  my_rank > 5
+  my_rank > 1
 GROUP BY
   my_rank
 ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-         avg         |           max            | my_rank 
----------------------+--------------------------+---------
- 48.6250000000000000 | Tue Jan 21 00:00:00 2014 |      12
- 48.4786324786324786 | Tue Jan 21 00:00:00 2014 |      11
- 50.2083333333333333 | Tue Jan 21 00:00:00 2014 |      10
- 51.8247422680412371 | Tue Jan 21 00:00:00 2014 |       9
- 46.2061855670103093 | Mon Jan 20 00:00:00 2014 |       8
- 52.5945945945945946 | Mon Jan 20 00:00:00 2014 |       7
- 52.2589285714285714 | Tue Jan 21 00:00:00 2014 |       6
-(7 rows)
+        avg         |           max            | my_rank 
+--------------------+--------------------------+---------
+ 3.5000000000000000 | Wed Nov 22 00:00:00 2017 |       2
+(1 row)
 
 -- aggregates in the PARTITION BY is also allows
 SELECT
@@ -298,7 +286,7 @@ FROM
     events_table
   GROUP BY
     user_id, date_trunc('day', time)
-    WINDOW my_win AS (PARTITION BY user_id, avg(event_type%10)::int ORDER BY count(*) DESC)
+    WINDOW my_win AS (PARTITION BY user_id, avg(event_type%3)::int ORDER BY count(*) DESC)
 ) as foo
 WHERE
   my_rank > 0
@@ -308,17 +296,11 @@ ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
   10;
-         avg         |           max            | my_rank 
----------------------+--------------------------+---------
- 22.0000000000000000 | Fri Jan 10 00:00:00 2014 |       8
- 60.4000000000000000 | Mon Jan 20 00:00:00 2014 |       7
- 55.5500000000000000 | Tue Jan 21 00:00:00 2014 |       6
- 50.6142857142857143 | Tue Jan 21 00:00:00 2014 |       5
- 53.6697247706422018 | Tue Jan 21 00:00:00 2014 |       4
- 49.7604166666666667 | Tue Jan 21 00:00:00 2014 |       3
- 47.9569892473118280 | Tue Jan 21 00:00:00 2014 |       2
- 49.5859375000000000 | Tue Jan 21 00:00:00 2014 |       1
-(8 rows)
+        avg         |           max            | my_rank 
+--------------------+--------------------------+---------
+ 3.7500000000000000 | Wed Nov 22 00:00:00 2017 |       2
+ 3.3750000000000000 | Thu Nov 23 00:00:00 2017 |       1
+(2 rows)
 
 -- GROUP BY should not necessarly be inclusive of partitioning
 -- but this query doesn't make much sense
@@ -340,9 +322,9 @@ ORDER BY
   2 DESC, 1 DESC
 LIMIT
   10;
-         avg         | my_rank 
----------------------+---------
- 50.0000000000000000 |       1
+        avg         | my_rank 
+--------------------+---------
+ 3.5000000000000000 |       1
 (1 row)
 
   -- Using previously defined supported window function on distribution key
@@ -366,16 +348,16 @@ LIMIT
   10;
  user_id |           time           | sum 
 ---------+--------------------------+-----
-       0 | Fri Jan 10 00:00:00 2014 |  32
-       0 | Sat Jan 11 00:00:00 2014 |  40
-       0 | Sat Jan 11 00:00:00 2014 |  38
-       0 | Sat Jan 11 00:00:00 2014 |  30
-       0 | Sun Jan 12 00:00:00 2014 |  49
-       0 | Sun Jan 12 00:00:00 2014 |  47
-       0 | Sun Jan 12 00:00:00 2014 |  34
-       0 | Sun Jan 12 00:00:00 2014 |  29
-       0 | Sun Jan 12 00:00:00 2014 |  24
-       0 | Sun Jan 12 00:00:00 2014 |  20
+       1 | Wed Nov 22 00:00:00 2017 |   1
+       1 | Thu Nov 23 00:00:00 2017 |   7
+       1 | Thu Nov 23 00:00:00 2017 |   6
+       1 | Thu Nov 23 00:00:00 2017 |   5
+       1 | Thu Nov 23 00:00:00 2017 |   4
+       1 | Thu Nov 23 00:00:00 2017 |   3
+       1 | Thu Nov 23 00:00:00 2017 |   2
+       2 | Wed Nov 22 00:00:00 2017 |  17
+       2 | Thu Nov 23 00:00:00 2017 |  18
+       2 | Thu Nov 23 00:00:00 2017 |  16
 (10 rows)
 
 -- test with reference table partitioned on columns from both
@@ -386,7 +368,7 @@ FROM
       DISTINCT user_id, it_name, count(id) OVER (PARTITION BY user_id, id)
     FROM
       users_table, users_ref_test_table
-    WHERE users_table.value_2=users_ref_test_table.k_no
+    WHERE users_table.value_2 + 40 = users_ref_test_table.k_no
 ) a
 ORDER BY
   1, 2, 3
@@ -394,27 +376,11 @@ LIMIT
   20;
  user_id | it_name | count 
 ---------+---------+-------
-       6 | User_4  |     1
-       8 | User_4  |     1
-       9 | User_3  |     1
-      11 | User_3  |     1
-      15 | User_6  |     1
-      16 | User_2  |     1
-      16 | User_3  |     1
-      17 | User_3  |     1
-      17 | User_4  |     1
-      20 | User_3  |     1
-      21 | User_6  |     1
-      22 | User_1  |     1
-      24 | User_4  |     1
-      26 | User_2  |     2
-      27 | User_4  |     1
-      28 | User_2  |     1
-      28 | User_3  |     1
-      31 | User_1  |     1
-      31 | User_4  |     1
-      34 | User_3  |     1
-(20 rows)
+       2 | User_1  |     2
+       3 | User_1  |     6
+       4 | User_1  |     2
+       5 | User_1  |     3
+(4 rows)
 
 -- Group by has more columns than partition by
 SELECT * FROM (
@@ -429,19 +395,15 @@ ORDER BY
   2 DESC, 1
 LIMIT
   10;
- user_id |  sum  
----------+-------
-      46 | 63666
-      23 | 62524
-      56 | 61350
-      12 | 61317
-      48 | 60144
-      71 | 60095
-      45 | 59904
-      94 | 59773
-       3 | 59141
-      93 | 58365
-(10 rows)
+ user_id | sum 
+---------+-----
+       3 |  44
+       5 |  43
+       4 |  41
+       2 |  38
+       1 |  16
+       6 |  16
+(6 rows)
 
 SELECT user_id, max(sum) FROM (
   SELECT
@@ -455,19 +417,15 @@ GROUP BY user_id ORDER BY
   2 DESC,1
 LIMIT
   10;
- user_id | max  
----------+------
-       1 | 2469
-      87 | 2089
-      81 | 1952
-      23 | 1891
-      58 | 1888
-      97 | 1868
-      94 | 1849
-      17 | 1844
-      22 | 1844
-      43 | 1843
-(10 rows)
+ user_id | max 
+---------+-----
+       3 |  15
+       4 |  13
+       2 |  10
+       5 |  10
+       6 |   7
+       1 |   6
+(6 rows)
 
 -- Window functions with HAVING clause
 SELECT * FROM (
@@ -484,16 +442,16 @@ LIMIT
   10;
  user_id | rank 
 ---------+------
-      12 |   10
-      55 |   10
-      12 |    9
-      25 |    9
-      46 |    9
-      55 |    9
-      12 |    8
-      25 |    8
-      36 |    8
-      46 |    8
+       5 |    6
+       2 |    5
+       4 |    5
+       5 |    5
+       2 |    4
+       3 |    4
+       4 |    4
+       5 |    4
+       6 |    4
+       2 |    3
 (10 rows)
 
 -- Window function in View works
@@ -506,16 +464,16 @@ LIMIT
   10;
  user_id | rank 
 ---------+------
-      12 |   10
-      55 |   10
-      12 |    9
-      25 |    9
-      46 |    9
-      55 |    9
-      12 |    8
-      25 |    8
-      36 |    8
-      46 |    8
+       5 |    6
+       2 |    5
+       4 |    5
+       5 |    5
+       2 |    4
+       3 |    4
+       4 |    4
+       5 |    4
+       6 |    4
+       2 |    3
 (10 rows)
 
 -- Window functions with UNION/UNION ALL works
@@ -523,28 +481,28 @@ SELECT
   max(avg)
 FROM
 (
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2, 3, 4, 5))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (6, 7, 8, 9, 10))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (2, 3))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (11, 12, 13, 14, 15))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (3, 4))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (16, 17, 18, 19, 20))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (4, 5))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (21, 22, 23, 24, 25))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (5, 6))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (26, 27, 28, 29, 30))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 6))
 ) b
 GROUP BY user_id
 ORDER BY 1 DESC
 LIMIT 5;
- max 
------
- 996
- 995
- 987
- 978
- 974
+ max  
+------
+    5
+  3.5
+ 3.25
+    3
+    3
 (5 rows)
 
 SELECT *
@@ -580,13 +538,13 @@ FROM (
             user_id)) AS ftop
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
- user_id |  sum   
----------+--------
-      23 | 126017
-      45 | 117323
-      25 | 116595
-      17 | 116520
-      90 | 115843
+ user_id | sum 
+---------+-----
+       2 | 107
+       3 | 101
+       5 |  94
+       4 |  91
+       1 |  62
 (5 rows)
 
 -- Subquery in where with window function
@@ -595,7 +553,7 @@ SELECT
 FROM
   users_table
 WHERE
-  value_2 > 545 AND
+  value_2 > 1 AND
   value_2 < ALL (
     SELECT
       avg(value_3) OVER (PARTITION BY user_id)
@@ -612,9 +570,9 @@ LIMIT
   3;
  user_id 
 ---------
-      69
-      52
-      12
+       4
+       3
+       2
 (3 rows)
 
 -- Some more nested queries
@@ -632,30 +590,30 @@ FROM (
 GROUP BY
   user_id, rank
 ORDER BY
-  difference DESC, rank DESC
+  difference DESC, rank DESC, user_id
 LIMIT 20;
  user_id | rank | difference | distinct_users 
 ---------+------+------------+----------------
-       2 |  101 |       3696 |              2
-      73 |   98 |       3526 |              2
-      73 |  103 |       3522 |              3
-      97 |   73 |       3440 |              2
-      43 |   92 |       3418 |              2
-      57 |   75 |       3286 |              2
-      66 |   64 |       3249 |              3
-      42 |   97 |       3218 |              2
-      19 |  101 |       3110 |              2
-      91 |   94 |       3064 |              2
-      71 |  100 |       3026 |              2
-      59 |   69 |       3016 |              2
-      46 |   83 |       2858 |              2
-      16 |   86 |       2848 |              2
-      23 |   63 |       2734 |              2
-      62 |   96 |       2668 |              2
-      81 |   84 |       2666 |              2
-       7 |   74 |       2648 |              2
-      27 |   97 |       2640 |              2
-      55 |   76 |       2630 |              2
+       4 |   12 |        306 |              9
+       5 |   12 |        136 |              8
+       3 |    1 |         84 |              6
+       5 |   20 |         70 |              5
+       3 |   11 |         55 |              5
+       2 |   11 |         44 |              4
+       2 |    3 |         40 |              5
+       5 |    7 |         30 |              5
+       2 |    8 |         24 |              3
+       4 |   21 |         21 |              3
+       2 |   15 |         21 |              3
+       5 |    4 |         21 |              3
+       6 |    9 |         20 |              2
+       4 |    3 |         15 |              5
+       3 |   16 |         14 |              2
+       4 |    8 |          9 |              3
+       1 |    1 |          9 |              3
+       5 |    1 |          9 |              3
+       6 |    7 |          8 |              2
+       1 |    4 |          8 |              2
 (20 rows)
 
 SELECT * FROM (
@@ -681,21 +639,17 @@ WHERE
   f3.user_id=f2.user_id
 ) a
 ORDER BY
-  abs DESC
+  abs DESC, user_id
 LIMIT 10;
- user_id |  abs  
----------+-------
-      64 | 10669
-      74 | 10037
-      26 |  9571
-      76 |  9376
-      81 |  8330
-      16 |  7746
-       9 |  7100
-      98 |  6922
-      94 |  6895
-      93 |  6653
-(10 rows)
+ user_id | abs 
+---------+-----
+       6 |   2
+       1 |   1
+       2 |   0
+       3 |   0
+       4 |   0
+       5 |   0
+(6 rows)
 
 -- Partition by with aggregate functions. This query does not make much sense since the
 -- result of aggregate function will be the same for every row in a partition and it is
@@ -714,11 +668,11 @@ LIMIT
   5;
  user_id | count 
 ---------+-------
-     100 |     1
-      99 |     1
-      98 |     1
-      97 |     1
-      96 |     1
+       6 |     1
+       5 |     1
+       4 |     1
+       3 |     1
+       2 |     1
 (5 rows)
 
 EXPLAIN (COSTS FALSE, VERBOSE TRUE)
@@ -755,8 +709,8 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                 user_id)) AS ftop
     ORDER BY 2 DESC, 1 DESC
     LIMIT 5;
-                                                                                                             QUERY PLAN                                                                                                             
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
  Limit
    Output: remote_scan.user_id, remote_scan.sum
    ->  Sort
@@ -786,12 +740,18 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                          ->  Append
                                                                ->  WindowAgg
                                                                      Output: users_table.user_id, sum(users_table.value_2) OVER (?)
-                                                                     ->  Index Scan using is_index1_1400000 on public.users_table_1400000 users_table
-                                                                           Output: users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4
+                                                                     ->  Sort
+                                                                           Output: users_table.user_id, users_table.value_2
+                                                                           Sort Key: users_table.user_id
+                                                                           ->  Seq Scan on public.users_table_1400000 users_table
+                                                                                 Output: users_table.user_id, users_table.value_2
                                                                ->  WindowAgg
                                                                      Output: events_table.user_id, sum(events_table.value_2) OVER (?)
-                                                                     ->  Index Scan using is_index2_1400004 on public.events_table_1400004 events_table
-                                                                           Output: events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4
+                                                                     ->  Sort
+                                                                           Output: events_table.user_id, events_table.value_2
+                                                                           Sort Key: events_table.user_id
+                                                                           ->  Seq Scan on public.events_table_1400004 events_table
+                                                                                 Output: events_table.user_id, events_table.value_2
                                              ->  HashAggregate
                                                    Output: users_table_1.user_id, sum((sum(users_table_1.value_2) OVER (?)))
                                                    Group Key: users_table_1.user_id
@@ -801,13 +761,19 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
                                                          ->  Append
                                                                ->  WindowAgg
                                                                      Output: users_table_1.user_id, sum(users_table_1.value_2) OVER (?)
-                                                                     ->  Index Scan using is_index1_1400000 on public.users_table_1400000 users_table_1
-                                                                           Output: users_table_1.user_id, users_table_1."time", users_table_1.value_1, users_table_1.value_2, users_table_1.value_3, users_table_1.value_4
+                                                                     ->  Sort
+                                                                           Output: users_table_1.user_id, users_table_1.value_2
+                                                                           Sort Key: users_table_1.user_id
+                                                                           ->  Seq Scan on public.users_table_1400000 users_table_1
+                                                                                 Output: users_table_1.user_id, users_table_1.value_2
                                                                ->  WindowAgg
                                                                      Output: events_table_1.user_id, sum(events_table_1.value_2) OVER (?)
-                                                                     ->  Index Scan using is_index2_1400004 on public.events_table_1400004 events_table_1
-                                                                           Output: events_table_1.user_id, events_table_1."time", events_table_1.event_type, events_table_1.value_2, events_table_1.value_3, events_table_1.value_4
-(50 rows)
+                                                                     ->  Sort
+                                                                           Output: events_table_1.user_id, events_table_1.value_2
+                                                                           Sort Key: events_table_1.user_id
+                                                                           ->  Seq Scan on public.events_table_1400004 events_table_1
+                                                                                 Output: events_table_1.user_id, events_table_1.value_2
+(62 rows)
 
 -- lets have some queries that Citus shouldn't push down
 SELECT
@@ -871,7 +837,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id+1, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo
@@ -888,7 +854,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (ORDER BY events_table.time)
 ) as foo
@@ -912,7 +878,7 @@ FROM
     WINDOW my_win AS (ORDER BY avg(event_type))
 ) as foo
 WHERE
-  my_rank > 125
+  my_rank > 1
 ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
@@ -933,7 +899,7 @@ FROM
     WINDOW my_win AS (PARTITION BY date_trunc('day', time) ORDER BY avg(event_type))
 ) as foo
 WHERE
-  my_rank > 125
+  my_rank > 1
 ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
@@ -993,17 +959,17 @@ SELECT
   max(avg)
 FROM
 (
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2, 3, 4, 5))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (6, 7, 8, 9, 10))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (2, 3))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (11, 12, 13, 14, 15))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (3, 4))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (16, 17, 18, 19, 20))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (4, 5))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (21, 22, 23, 24, 25))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (5, 6))
     UNION ALL
-  (SELECT avg(value_3) over (partition by event_type), user_id FROM events_table where event_type IN (26, 27, 28, 29, 30))
+  (SELECT avg(value_3) over (partition by event_type), user_id FROM events_table where event_type IN (1, 6))
 ) b
 GROUP BY user_id
 ORDER BY 1 DESC

@@ -17,12 +17,12 @@ WHERE
            FROM 
               events_table  
            WHERE 
-              users_table.user_id = events_table.user_id AND event_type = 50
+              users_table.user_id = events_table.user_id AND event_type = 1
            GROUP BY
               user_id
           )
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 2
 ORDER BY user_id
 LIMIT 5;
 
@@ -38,13 +38,13 @@ WHERE
            FROM 
               events_table 
            WHERE 
-              users_table.user_id = events_table.user_id AND event_type = 50 AND
+              users_table.user_id = events_table.user_id AND event_type = 1 AND
               users_table.time > events_table.time
            GROUP BY
               user_id
           )
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 1
 ORDER BY user_id
 LIMIT 5; 
 
@@ -60,13 +60,13 @@ WHERE
            FROM 
               events_table 
            WHERE 
-              users_table.user_id > events_table.user_id AND event_type = 50 AND
+              users_table.user_id > events_table.user_id AND event_type = 1 AND
               users_table.time = events_table.time
            GROUP BY
               user_id
           )
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 1
 ORDER BY user_id
 LIMIT 5; 
 
@@ -76,7 +76,7 @@ SELECT
 FROM 
   users_table   
 WHERE 
-  value_2 > 545 AND
+  value_2 > 1 AND
   value_2 < ALL (SELECT avg(value_3) FROM events_table WHERE users_table.user_id = events_table.user_id GROUP BY user_id)
 GROUP BY 
   1
@@ -96,7 +96,7 @@ WHERE
              FROM 
               events_table as e2
              WHERE
-              value_2 = 15 AND value_3 > 25 AND
+              value_2 = 1 AND value_3 > 3 AND
               e1.user_id = e2.user_id
             )
 ORDER BY 1;
@@ -113,12 +113,12 @@ WHERE
              FROM 
               events_table as e2
              WHERE
-              value_2 = 15 AND value_3 > 25 AND
+              value_2 = 1 AND value_3 > 3 AND
               e1.user_id = e2.user_id
             )
             GROUP BY 1
 
-HAVING count(*) > 122
+HAVING count(*) > 2
 ORDER BY 1;
 
 -- non-correlated query with =ANY on partition keys
@@ -127,14 +127,14 @@ ORDER BY 1;
 FROM 
   users_table 
 WHERE 
-  user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20) GROUP BY 1 ORDER BY 2 DESC LIMIT 5;
+  user_id =ANY(SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2) GROUP BY 1 ORDER BY 2 DESC LIMIT 5;
 
 -- users that appeared more than 118 times
 SELECT 
   user_id
 FROM 
   users_table
-WHERE 118 <=
+WHERE 2 <=
       (SELECT 
           count(*) 
         FROM 
@@ -153,8 +153,8 @@ ORDER BY
 -- but it is a valid query with an arbitrary subquery in
 -- WHERE clause
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
+  value_1 > 1 AND value_1 < 3
+  AND value_2 >= 1
   AND user_id IN
   (
 		SELECT
@@ -167,7 +167,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		    min(time) AS view_homepage_time
 		  FROM events_table
 		     WHERE
-		     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+		     event_type IN (0, 1)
 		  GROUP BY user_id
 		) e1 LEFT JOIN LATERAL (
 		  SELECT
@@ -177,7 +177,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM events_table
 		  WHERE
 		    user_id = e1.user_id AND
-		       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+		       event_type IN (1, 2)
 		  ORDER BY time
 		) e2 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -187,7 +187,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    user_id = e2.user_id AND
-		    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+		    event_type IN (2, 3)
 		  ORDER BY time
 		) e3 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -197,7 +197,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    user_id = e3.user_id AND
-		    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+		    event_type IN (3, 4)
 		  ORDER BY time
 		) e4 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -205,7 +205,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    user_id = e4.user_id AND
-		    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+		    event_type IN (5, 6)
 		  ORDER BY time
 		) e5 ON true
 		group by e1.user_id
@@ -241,9 +241,9 @@ WHERE
 	      events_table
 	    WHERE
 	      users_table.user_id = events_table.user_id AND
-	      users_table.user_id >= 10 AND
-	      users_table.user_id <= 70 AND
-	      events_table.event_type > 10 AND events_table.event_type < 12
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 1 AND events_table.event_type < 3
 	      )
 	    UNION
 	    (SELECT
@@ -255,9 +255,9 @@ WHERE
 	      events_table
 	    WHERE
 	      users_table.user_id = events_table.user_id AND
-	      users_table.user_id >= 10 AND
-	      users_table.user_id <= 70 AND
-	      events_table.event_type > 12 AND events_table.event_type < 14
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 2 AND events_table.event_type < 4
 	    )
 	  ) AS subquery_1
 	  LEFT JOIN
@@ -267,9 +267,9 @@ WHERE
 	    FROM
 	      users_table
 	    WHERE
-	      user_id >= 10 AND
-	      user_id <= 70 AND
-	      users_table.value_1 > 15 AND users_table.value_1 < 17
+	      user_id >= 1 AND
+	      user_id <= 3 AND
+	      users_table.value_1 > 3 AND users_table.value_1 < 5
 	    GROUP BY
 	      user_id
 	    HAVING
@@ -283,7 +283,7 @@ WHERE
 	  count_pay, user_id
 )
 GROUP BY user_id
-HAVING count(*) > 3 AND sum(value_2) > 49000
+HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
 
 
@@ -306,9 +306,9 @@ FROM (
     				user_id 
     			FROM 
     				users_table 
-    			WHERE value_2 >= 5
-			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id = users_table.user_id)
-				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id)
+    			WHERE value_2 >= 1
+			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
     		)
   ) t
   GROUP BY user_id
@@ -322,8 +322,8 @@ ORDER BY 2 DESC, 1;
 
 -- e4 is not joined on the partition key
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
+  value_1 > 1 AND value_1 < 2
+  AND value_2 >= 1
   AND user_id IN
   (
 		SELECT
@@ -336,7 +336,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		    min(time) AS view_homepage_time
 		  FROM events_table
 		     WHERE
-		     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+		     event_type IN (0, 1)
 		  GROUP BY user_id
 		) e1 LEFT JOIN LATERAL (
 		  SELECT
@@ -346,7 +346,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM events_table
 		  WHERE
 		    user_id = e1.user_id AND
-		       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+		       event_type IN (1, 2)
 		  ORDER BY time
 		) e2 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -356,7 +356,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    user_id = e2.user_id AND
-		    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+		    event_type IN (2, 3)
 		  ORDER BY time
 		) e3 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -366,7 +366,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    value_2 = e3.user_id AND
-		    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+		    event_type IN (3, 4)
 		  ORDER BY time
 		) e4 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -374,7 +374,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_table
 		  WHERE
 		    user_id = e4.user_id AND
-		    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+		    event_type IN (5, 6)
 		  ORDER BY time
 		) e5 ON true
 		group by e1.user_id
@@ -406,9 +406,9 @@ WHERE
 	      events_table
 	    WHERE
 	      users_table.user_id = events_table.user_id AND
-	      users_table.user_id >= 10 AND
-	      users_table.user_id <= 70 AND
-	      events_table.event_type > 10 AND events_table.event_type < 12
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 1 AND events_table.event_type < 3
 	      )
 	    UNION
 	    (SELECT
@@ -420,9 +420,9 @@ WHERE
 	      events_table
 	    WHERE
 	      users_table.user_id = events_table.user_id AND
-	      users_table.user_id >= 10 AND
-	      users_table.user_id <= 70 AND
-	      events_table.event_type > 12 AND events_table.event_type < 14
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 2 AND events_table.event_type < 4
 	    )
 	  ) AS subquery_1
 	  LEFT JOIN
@@ -432,9 +432,9 @@ WHERE
 	    FROM
 	      users_table
 	    WHERE
-	      user_id >= 10 AND
-	      user_id <= 70 AND
-	      users_table.value_1 > 15 AND users_table.value_1 < 17
+	      user_id >= 1 AND
+	      user_id <= 3 AND
+	      users_table.value_1 > 3 AND users_table.value_1 < 5
 	    GROUP BY
 	      user_id
 	    HAVING
@@ -448,7 +448,7 @@ WHERE
 	  count_pay, user_id
 )
 GROUP BY user_id
-HAVING count(*) > 3 AND sum(value_2) > 49000
+HAVING count(*) > 1 AND sum(value_2) > 29
 ORDER BY 1;
 
 -- NOT EXISTS query has non-equi join
@@ -469,8 +469,8 @@ FROM (
     			FROM 
     				users_table 
     			WHERE value_2 >= 5
-			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id = users_table.user_id)
-				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id != users_table.user_id)
+			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id != users_table.user_id)
     		)
   ) t
   GROUP BY user_id
@@ -511,7 +511,7 @@ WHERE
            FROM 
               events_table  
            WHERE 
-              users_table.user_id = events_table.user_id AND event_type = 50
+              users_table.user_id = events_table.user_id AND event_type = 2
            GROUP BY
               user_id
            OFFSET 3
@@ -548,9 +548,9 @@ WHERE  user_id
 -- semi join is not on the partition key for the third subquery
 SELECT user_id
 FROM users_table
-WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
-    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
+    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
+    AND value_2 IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
 
 CREATE FUNCTION test_join_function(integer, integer) RETURNS bool
     AS 'select $1 > $2;'
@@ -560,9 +560,9 @@ CREATE FUNCTION test_join_function(integer, integer) RETURNS bool
 
 -- we disallow JOINs via functions
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 = 101
-  AND value_2 >= 5
-  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND test_join_function(events_table.user_id, users_table.user_id))
+  value_1 = 1
+  AND value_2 >= 2
+  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=1 AND value_3 > 1 AND test_join_function(events_table.user_id, users_table.user_id))
 ORDER BY 1 DESC, 2 DESC
 LIMIT 3;
 

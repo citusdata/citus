@@ -14,13 +14,13 @@ FROM (
     FROM users_table AS u,
          events_table AS e
     WHERE u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (2,3)
   ) t
   GROUP BY user_id
 ) q
-WHERE user_id = 20;
+WHERE user_id = 2;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -41,13 +41,13 @@ FROM (
     FROM users_table AS u,
          events_table AS e
     WHERE u.user_id = e.user_id AND 
-    (u.user_id = 13 OR u.user_id = 20) AND 
-    (e.user_id = 13 OR e.user_id = 20)
-      AND e.event_type IN (100, 101, 102)
+    (u.user_id = 1 OR u.user_id = 2) AND 
+    (e.user_id = 1 OR e.user_id = 2)
+      AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
 ) q
-WHERE (user_id = 13 OR user_id = 20);
+WHERE (user_id = 1 OR user_id = 2);
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -72,9 +72,9 @@ FROM (
       FROM users_table AS u,
           events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (1, 2)
     )
     UNION
     (
@@ -82,20 +82,20 @@ FROM (
       FROM users_table AS u,
          events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (103, 104, 105)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
       SELECT DISTINCT user_id, 
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
       
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 2
+      AND e.event_type IN (5, 6)
   ) t2 ON (t1.user_id = t2.user_id)
-  WHERE t1.user_id = 20
+  WHERE t1.user_id = 2
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
 
@@ -120,8 +120,8 @@ FROM (
       FROM users_table AS u,
           events_table AS e
       WHERE  u.user_id = e.user_id
-      AND (e.user_id = 20 OR e.user_id = 17)
-      AND e.event_type IN (100, 101, 102)
+      AND (e.user_id = 2 OR e.user_id = 3)
+      AND e.event_type IN (1, 2)
     )
     UNION
     (
@@ -129,8 +129,8 @@ FROM (
       FROM users_table AS u,
          events_table AS e
       WHERE  u.user_id = e.user_id
-      AND (e.user_id = 20 OR e.user_id = 17)
-      AND e.event_type IN (103, 104, 105)
+      AND (e.user_id = 2 OR e.user_id = 3)
+      AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
       SELECT DISTINCT user_id, 
@@ -138,10 +138,10 @@ FROM (
       FROM  events_table AS e
       
       WHERE 
-      (e.user_id = 20 OR e.user_id = 17)
-      AND e.event_type IN (106, 107, 108)
+      (e.user_id = 2 OR e.user_id = 3)
+      AND e.event_type IN (4, 5)
   ) t2 ON (t1.user_id = t2.user_id)
-  WHERE (t1.user_id = 20 OR t1.user_id = 17)
+  WHERE (t1.user_id = 2 OR t1.user_id = 1)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event;
 
@@ -173,17 +173,17 @@ FROM (
         SELECT user_id, time
         FROM users_table
         WHERE
-        user_id >= 10 AND
-        user_id <= 70 AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        user_id >= 1 AND
+        user_id <= 5 AND
+        users_table.value_1 > 1 AND users_table.value_1 < 4
 
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
           WHERE user_id = u.user_id AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          events_table.event_type > 1 AND events_table.event_type < 4
         ) t ON true
-        WHERE user_id = 65
+        WHERE user_id = 5
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
@@ -215,18 +215,18 @@ FROM (
         SELECT user_id, time
         FROM users_table
         WHERE
-        user_id >= 10 AND
-        user_id <= 70 AND
-        (user_id = 65 OR user_id = 12) AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        user_id >= 1 AND
+        user_id <= 5 AND
+        (user_id = 5 OR user_id = 1) AND
+        users_table.value_1 > 1 AND users_table.value_1 < 4
 
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
-          WHERE user_id = u.user_id AND (user_id = 65 OR user_id = 12) AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          WHERE user_id = u.user_id AND (user_id = 5 OR user_id = 1) AND
+          events_table.event_type > 1 AND events_table.event_type < 4
         ) t ON true
-        WHERE (user_id = 65 OR user_id = 12)
+        WHERE (user_id = 5 OR user_id = 1)
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
@@ -246,10 +246,10 @@ TRUNCATE agg_results_second;
 INSERT INTO agg_results_second (user_id)
 SELECT DISTINCT user_id
 FROM users_table
-WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
-    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60)
-    AND user_id = 7;
+WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
+    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6)
+    AND user_id = 1;
     
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;  
@@ -265,10 +265,10 @@ TRUNCATE agg_results_second;
 INSERT INTO agg_results_second (user_id)
 SELECT DISTINCT user_id
 FROM users_table
-WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20 AND (user_id = 7 OR user_id = 20))
-    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40 AND (user_id = 7 OR user_id = 20))
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60 AND (user_id = 7 OR user_id = 20))
-    AND (user_id = 7 OR user_id = 20);
+WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2 AND (user_id = 1 OR user_id = 2))
+    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4 AND (user_id = 1 OR user_id = 2))
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6 AND (user_id = 1 OR user_id = 2))
+    AND (user_id = 1 OR user_id = 2);
     
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;  
@@ -282,10 +282,10 @@ TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND user_id=users_table.user_id)
-  AND user_id = 61;
+  value_1 > 1 AND value_1 < 4
+  AND value_2 >= 1
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>1  AND event_type < 3 AND value_3 > 1 AND user_id=users_table.user_id)
+  AND user_id = 2;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -300,10 +300,10 @@ TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND (user_id = 61 OR user_id = 51) AND user_id=users_table.user_id)
-  AND (user_id = 61 OR user_id = 51);
+  value_1 > 1 AND value_1 < 4
+  AND value_2 >= 1
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>0  AND event_type < 2 AND value_3 > 1 AND (user_id = 2 OR user_id = 1) AND user_id=users_table.user_id)
+  AND (user_id = 2 OR user_id = 1);
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -317,10 +317,10 @@ TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_2 >= 5
-  AND user_id = 96
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id=users_table.user_id)
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id);
+  value_2 >= 2
+  AND user_id = 1
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id)
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 4 AND event_type <= 5 AND value_3 > 4 AND user_id=users_table.user_id);
   
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -334,10 +334,10 @@ TRUNCATE agg_results_second;
 
 INSERT INTO agg_results_second(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_2 >= 5
-  AND (user_id = 96 OR user_id = 8)
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id=users_table.user_id AND (user_id = 96 OR user_id = 8))
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id AND (user_id = 96 OR user_id = 8));
+  value_2 >= 2
+  AND (user_id = 1 OR user_id = 2)
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id AND (user_id = 1 OR user_id = 2))
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 4 AND event_type <= 5 AND value_3 > 4 AND user_id=users_table.user_id AND (user_id = 1 OR user_id = 2));
   
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results_second;
@@ -354,17 +354,17 @@ INSERT INTO agg_results_second(user_id, value_2_agg)
   SELECT user_id, 
          value_2 
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
-         AND user_id = 47
+  WHERE  value_1 > 1
+         AND value_1 < 3
+         AND value_2 >= 1 
+         AND user_id = 3
          AND EXISTS (SELECT user_id 
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
+                     WHERE  event_type > 1 
+                            AND event_type < 3 
+                            AND value_3 > 1
                             AND user_id = users_table.user_id
-                            AND user_id = 47
+                            AND user_id = 3
                      GROUP  BY user_id 
                      HAVING Count(*) > 2);
                      
@@ -382,17 +382,16 @@ INSERT INTO agg_results_second(user_id, value_2_agg)
   SELECT user_id, 
          value_2 
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
-         AND (user_id = 47 or user_id = 81)
+  WHERE  value_1 > 1
+         AND value_1 < 3
+         AND value_2 >= 1
+         AND (user_id = 3 or user_id = 4)
          AND EXISTS (SELECT user_id 
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
+                     WHERE  event_type = 2 
+                            AND value_3 > 1 
                             AND user_id = users_table.user_id
-                            AND (user_id = 47 or user_id = 81)
+                            AND (user_id = 3 or user_id = 4)
                      GROUP  BY user_id 
                      HAVING Count(*) > 2);
                      

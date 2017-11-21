@@ -258,14 +258,14 @@ SELECT * FROM
             FROM
               events_reference_table as "events"
             WHERE
-              event_type > 80) as "temp_data_queries"
+              event_type > 2) as "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
+              user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
 
 -- the same query but this time reference table is in the outer part of the query
@@ -278,14 +278,14 @@ SELECT * FROM
             FROM
               events_reference_table as "events"
             WHERE
-              event_type > 80) as "temp_data_queries"
+              event_type > 2) as "temp_data_queries"
            LEFT JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
+              user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
 
 -- we could even suuport the following where the subquery
@@ -332,14 +332,14 @@ FROM
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 12 and user_id < 16 and value_1 > 20) user_where_1_1
+              user_id > 0 and user_id < 5 and value_1 > 1) user_where_1_1
          INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 12 and user_id < 16 and value_2 > 60) user_where_1_join_1
+              user_id > 0 and user_id < 5 and value_2 > 2) user_where_1_join_1
            ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id))
         filter_users_1
       JOIN LATERAL
@@ -348,7 +348,7 @@ FROM
          FROM
           events_reference_table as "events"
          WHERE
-           user_id > 12 and user_id < 16 AND
+           user_id > 0 and user_id < 5 AND
            user_id = filter_users_1.user_id
          ORDER BY
           time DESC
@@ -364,7 +364,7 @@ FROM
         users_reference_table  as "users"
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
-        "users"."value_2" > 70
+        "users"."value_2" > 2
       LIMIT 1) "some_users_data"
     ON TRUE
    ORDER BY
@@ -393,7 +393,7 @@ SELECT
             FROM
               events_table as "events"
             WHERE
-              user_id > 10 and user_id < 40 AND event_type IN (40, 41, 42, 43, 44, 45) ) "temp_data_queries"
+              user_id > 0 and user_id < 4 AND event_type IN (4, 5) ) "temp_data_queries"
             INNER  JOIN
            (SELECT
               user_where_1_1.real_user_id
@@ -403,14 +403,14 @@ SELECT
                FROM
                 users_reference_table as "users"
                WHERE
-                 user_id > 10 and user_id < 40 and value_2 > 50 ) user_where_1_1
+                 user_id > 0 and user_id < 4 and value_2 > 3 ) user_where_1_1
             INNER JOIN
               (SELECT
                   "users"."user_id"
                FROM
                 users_reference_table as "users"
                WHERE
-                user_id > 10 and user_id < 40 and value_3 > 50 ) user_where_1_join_1
+                user_id > 0 and user_id < 4 and value_3 > 3 ) user_where_1_join_1
            ON ("user_where_1_1".real_user_id = "user_where_1_join_1".user_id)) "user_filters_1"
       ON ("temp_data_queries".user_id = "user_filters_1".real_user_id)) "eventQuery") "pushedDownQuery") "pushedDownQuery"
 GROUP BY
@@ -439,7 +439,7 @@ FROM
                  FROM
                   users_reference_table as "users"
                  WHERE
-                  user_id > 10 and user_id < 40 and value_2 > 30
+                  user_id > 1 and user_id < 4 and value_2 > 2
                 ) simple_user_where_1
             ) all_buckets_1
         ) users_in_segment_1
@@ -449,7 +449,7 @@ FROM
          FROM
           users_reference_table as "users"
          WHERE
-          user_id > 10 and user_id < 40 and value_2 > 60
+          user_id > 1 and user_id < 4 and value_2 > 3
         ) some_users_data
         ON ("users_in_segment_1".user_id = "some_users_data".user_id)
     ) segmentalias_1) "tempQuery"
@@ -470,14 +470,14 @@ FROM
          FROM
           users_reference_table as "users"
          WHERE
-          user_id > 20 and user_id < 70 and users.value_2 = 200) filter_users_1
+          user_id > 2 and user_id < 5 and users.value_2 = 3) filter_users_1
       JOIN LATERAL
         (SELECT
             user_id, value_3
          FROM
           events_reference_table as "events"
          WHERE
-           user_id > 20 and user_id < 70 AND
+           user_id > 2 and user_id < 5 AND
            ("events".user_id = "filter_users_1".user_id)
          ORDER BY
            value_3 DESC
@@ -491,7 +491,7 @@ FROM
         users_reference_table as "users"
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
-        users.value_2 > 200
+        users.value_2 > 3
       LIMIT 1) "some_users_data" ON true
    ORDER BY
     value_3 DESC
@@ -519,14 +519,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 4) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id = "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         LEFT JOIN
         (SELECT
@@ -558,14 +558,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id = "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -593,17 +593,17 @@ FROM (
       FROM users_table AS u,
           events_reference_table AS e
       WHERE  u.user_id > e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (1, 2)
     )
   ) t1 RIGHT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type IN (3, 4)
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
@@ -622,17 +622,17 @@ FROM (
       FROM users_table AS u,
           events_reference_table AS e
       WHERE  u.value_1 > e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type >= 125 AND e.event_type < 130
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type >= 2 AND e.event_type < 3
     )
   ) t1 RIGHT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type >= 130 AND e.event_type < 135
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type >= 3 AND e.event_type < 4
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
@@ -658,14 +658,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id < "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -691,7 +691,7 @@ FROM
             FROM
               events_reference_table as "events"
             WHERE
-              user_id > 10 and user_id < 40) "events_1"
+              user_id > 1 and user_id < 4) "events_1"
          ORDER BY
            time DESC) "recent_events_1"
       GROUP BY
@@ -704,7 +704,7 @@ FROM
       FROM
         users_table as "users"
       WHERE
-        users.value_2 > 50 and users.value_2 < 55) "some_users_data"
+        users.value_2 > 2 and users.value_2 < 4) "some_users_data"
      ON "some_users_data"."user_id" = "some_recent_users"."user_id"
 ORDER BY
   user_id
@@ -729,7 +729,7 @@ FROM
                     FROM
                       events_table as  "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                  UNION
                  (SELECT
                     *
@@ -739,7 +739,7 @@ FROM
                      FROM
                         events_reference_table as "events"
                      WHERE
-                      event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+                      event_type IN (3, 4) ) events_subquery_2)
                UNION
                  (SELECT
                     *
@@ -749,7 +749,7 @@ FROM
                      FROM
                         events_table as  "events"
                      WHERE
-                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                      event_type IN (5, 6) ) events_subquery_3)
                 UNION
                   (SELECT
                       *
@@ -759,7 +759,7 @@ FROM
                      FROM
                       events_table as "events"
                      WHERE
-                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+                      event_type IN (1, 6)) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT
@@ -767,7 +767,7 @@ INNER JOIN
       FROM
         users_table as "users"
       WHERE
-        value_1 > 50 and value_1 < 70) AS t
+        value_1 > 2 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
 ORDER BY
   types;
@@ -792,7 +792,7 @@ FROM
                     FROM
                       events_table as "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION
                  (SELECT *
                   FROM
@@ -807,7 +807,7 @@ FROM
                                 events_reference_table as  "events", users_table as "users"
                               WHERE
                                 events.user_id = users.user_id AND
-                                event_type IN (10, 11, 12, 13, 14, 15)
+                                event_type IN (1, 2)
                                 GROUP BY   "users"."user_id"
                           ) as events_subquery_5
                      ) events_subquery_2)
@@ -819,7 +819,7 @@ FROM
                      FROM
                         events_table as  "events"
                      WHERE
-                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                      event_type IN (3, 4) ) events_subquery_3)
                UNION
                  (SELECT *
                   FROM
@@ -828,7 +828,7 @@ FROM
                      FROM
                       events_table as "events"
                      WHERE
-                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)
+                      event_type IN (5, 6)) events_subquery_4)
                  ) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
@@ -837,7 +837,7 @@ INNER JOIN
       FROM
         users_table as "users"
       WHERE
-        value_1 > 50 and value_1 < 70) AS t
+        value_1 > 2 and value_1 < 4) AS t
      ON (t.user_id = q.user_id)) as final_query
 GROUP BY
   types
@@ -862,7 +862,7 @@ FROM
                     FROM
                       events_table as  "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
@@ -871,7 +871,7 @@ FROM
                      FROM
                         events_table as "events"
                      WHERE
-                        event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+                        event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
@@ -880,7 +880,7 @@ FROM
                      FROM
                         events_reference_table as  "events"
                      WHERE
-                        event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                        event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
@@ -889,12 +889,12 @@ FROM
                      FROM
                         events_table as "events"
                      WHERE
-                        event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+                        event_type IN (1, 6)) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT "users"."user_id"
       FROM users_table as "users"
-      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+      WHERE value_1 > 2 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
 
@@ -930,14 +930,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id < "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -965,8 +965,8 @@ WHERE
              FROM
               events_reference_table as e2
              WHERE
-              value_2 = 15 AND
-              value_3 > 25 AND
+              value_2 = 1 AND
+              value_3 > 3 AND
               e1.value_2 > e2.value_2
             )
             AND u1.user_id > e1.user_id
@@ -977,7 +977,7 @@ LIMIT 5;
 SELECT foo.user_id FROM
 (
   SELECT m.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
-  WHERE event_type > 100000
+  WHERE event_type > 100
 ) as foo;
 
 -- not supported since group by is on the reference table column
