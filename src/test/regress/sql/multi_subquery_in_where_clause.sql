@@ -433,14 +433,27 @@ FROM (
 ) q
 ORDER BY 2 DESC, 1;
 
--- subquery in where clause doesn't have a relation
-SELECT 
+-- subquery in where clause doesn't have a relation, but is constant
+SELECT
   user_id
-FROM 
+FROM
   users_table
-WHERE 
-  value_2 >  
-          (SELECT 1);
+WHERE
+  value_2 >
+          (SELECT 1)
+ORDER BY 1 ASC
+LIMIT 2;
+
+-- subquery in where clause has a volatile function and no relation
+SELECT
+  user_id
+FROM
+  users_table
+WHERE
+  value_2 >
+          (SELECT random())
+ORDER BY 1 ASC
+LIMIT 2;
 
 -- OFFSET is not supported in the subquey
 SELECT 

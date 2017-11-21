@@ -681,7 +681,7 @@ FROM (
         users_table.value_1 > 10 AND users_table.value_1 < 12
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
-          FROM events_table, (SELECT 1 as x) as f
+          FROM events_table, (SELECT random()::int as x) as f
           WHERE user_id = u.user_id AND
           events_table.event_type > 10 AND events_table.event_type < 12
         ) t ON true

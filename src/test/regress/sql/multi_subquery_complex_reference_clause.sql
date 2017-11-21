@@ -136,6 +136,64 @@ FROM
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
 
+-- table function can be the inner relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- table function cannot be used without subquery pushdown
+SELECT count(*) FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+-- table function can be the inner relationship in an outer join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table LEFT JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- table function cannot be the outer relationship in an outer join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- volatile functions cannot be used as table expressions
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- cannot sneak in a volatile function as a parameter
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- cannot perform a union with table function
+SELECT count(*) FROM
+  (SELECT user_id FROM user_buy_test_table
+   UNION ALL
+   SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
+
+-- subquery without FROM can be the inner relationship in a join
+SELECT count(*) FROM
+  (SELECT random() FROM user_buy_test_table JOIN (SELECT 4 AS id) users_ref_test_table
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+-- subquery without FROM triggers subquery pushdown
+SELECT count(*) FROM user_buy_test_table JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+-- subquery without FROM can be the inner relationship in an outer join
+SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+-- subquery without FROM cannot be the outer relationship in an outer join
+SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+
+-- cannot perform a union with subquery without FROM
+SELECT count(*) FROM
+  (SELECT user_id FROM user_buy_test_table
+   UNION ALL
+   SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
+
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
 SELECT
