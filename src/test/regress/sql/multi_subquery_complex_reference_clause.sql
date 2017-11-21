@@ -150,10 +150,16 @@ SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table LEFT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 
+SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+
 -- table function cannot be the outer relationship in an outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+
+SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
 
 -- volatile functions cannot be used as table expressions
 SELECT count(*) FROM
