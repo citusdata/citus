@@ -84,10 +84,10 @@ static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
-static void PlanPullPushCTEs(Query *query, List **subPlanList);
+static DeferredErrorMessage * PlanPullPushCTEs(Query *query, List **subPlanList);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
 static bool ContainsResultFunctionWalker(Node *node, void *context);
-static void PlanPullPushSubqueries(Query *query, List **subPlanList);
+static DeferredErrorMessage * PlanPullPushSubqueries(Query *query, List **subPlanList);
 static bool PlanPullPushSubqueriesWalker(Node *node, List **planList);
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
@@ -576,6 +576,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
 		{
 			MultiTreeRoot *logicalPlan = NULL;
+			DeferredErrorMessage *pullPushError = NULL;
 
 			/*
 			 * The logical planner does not know how to deal with subqueries
@@ -583,7 +584,11 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 			 * subqueries separately and replace them with a subquery that
 			 * scans intermediate results.
 			 */
-			PlanPullPushSubqueries(originalQuery, &subPlanList);
+			pullPushError = PlanPullPushSubqueries(originalQuery, &subPlanList);
+			if (pullPushError != NULL)
+			{
+				RaiseDeferredError(pullPushError, DEBUG1);
+			}
 
 			/*
 			 * If subqueries are executed using pull-push then we need to replan
@@ -699,21 +704,46 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 }
 
 
-static void
+static DeferredErrorMessage *
 PlanPullPushSubqueries(Query *query, List **subPlanList)
 {
-	PlanPullPushCTEs(query, subPlanList);
+	DeferredErrorMessage *error = NULL;
+
+	error = PlanPullPushCTEs(query, subPlanList);
+	if (error != NULL)
+	{
+		return error;
+	}
 
 	/* descend into subqueries */
 	query_tree_walker(query, PlanPullPushSubqueriesWalker, subPlanList, 0);
+
+	return NULL;
 }
 
 
-static void
+static DeferredErrorMessage *
 PlanPullPushCTEs(Query *query, List **subPlanList)
 {
 	ListCell *cteCell = NULL;
 	CteReferenceWalkerContext context = { -1, NIL };
+
+	if (query->hasModifyingCTE)
+	{
+		/* we could easily support these, but it's a little scary */
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "data-modifying statements are not supported in "
+							 "the WITH clauses of distributed queries",
+							 NULL, NULL);
+	}
+
+	if (query->hasRecursive)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "recursive CTEs are not supported in distributed "
+							 "queries",
+							 NULL, NULL);
+	}
 
 	/* get all RTE_CTEs that point to CTEs from cteList */
 	CteReferenceListWalker((Node *) query, &context);
@@ -798,6 +828,8 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 	 * clear the cteList. (TODO: maybe free it?)
 	 */
 	query->cteList = NIL;
+
+	return NULL;
 }
 
 
