@@ -88,6 +88,7 @@ extern bool IsUpdateOrDelete(struct DistributedPlan *distributedPlan);
 extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
+extern bool ContainsResultFunction(Node *node);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
 
 

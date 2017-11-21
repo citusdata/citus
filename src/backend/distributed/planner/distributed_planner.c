@@ -843,6 +843,13 @@ CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context)
 }
 
 
+bool
+ContainsResultFunction(Node *node)
+{
+	return ContainsResultFunctionWalker(node, NULL);
+}
+
+
 /*
  * ContainsResultFunctionWalker
  */
@@ -911,7 +918,7 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 			pg_get_query_def(resultQuery, r);
 			elog(DEBUG1, "replacing subquery %s with: %s", s->data, r->data);
 
-			if (ContainsResultFunctionWalker((Node *) query, NULL))
+			if (ContainsResultFunction((Node *) query))
 			{
 				cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
 			}
