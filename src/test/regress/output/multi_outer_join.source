@@ -814,7 +814,6 @@ FROM
     LEFT JOIN right_values AS r ON l.val = r.val
 WHERE
     r.val IS NULL;
-LOG:  join order: [ "left_values" ][ local partition join "right_values" ]
  val | val 
 -----+-----
    1 |    

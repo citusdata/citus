@@ -96,24 +96,36 @@ SELECT count(*) FROM orders_hash_partitioned;
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 1;
+DEBUG:  Skipping the target shard interval 630001 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 2;
+DEBUG:  Skipping the target shard interval 630000 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630001 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 3;
+DEBUG:  Skipping the target shard interval 630000 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
+DEBUG:  Skipping the target shard interval 630000 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
@@ -121,12 +133,18 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = 4;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 AND o_clerk = 'aaa';
+DEBUG:  Skipping the target shard interval 630001 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
 (1 row)
 
 SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey = abs(-1);
+DEBUG:  Skipping the target shard interval 630001 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
@@ -153,6 +171,8 @@ SELECT count(*) FROM orders_hash_partitioned WHERE o_orderkey > 2;
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR o_orderkey = 2;
+DEBUG:  Skipping the target shard interval 630001 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
  count 
 -------
      0
@@ -167,6 +187,8 @@ SELECT count(*) FROM orders_hash_partitioned
 
 SELECT count(*) FROM orders_hash_partitioned
 	WHERE o_orderkey = 1 OR (o_orderkey = 3 AND o_clerk = 'aaa');
+DEBUG:  Skipping the target shard interval 630002 because SELECT query is pruned away for the interval
+DEBUG:  Skipping the target shard interval 630003 because SELECT query is pruned away for the interval
  count 
 -------
      0
@@ -335,18 +357,6 @@ DEBUG:  Plan is router executable
 SELECT count(*)
 	FROM orders_hash_partitioned orders1, orders_hash_partitioned orders2
 	WHERE orders1.o_orderkey = orders2.o_orderkey;
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
-DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
-DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
-DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
  count 
 -------
      0

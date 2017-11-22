@@ -61,14 +61,11 @@ SELECT distinct(o_orderkey) FROM priority_orders join air_shipped_lineitems
 	ON (o_orderkey = l_orderkey)
 	WHERE (o_orderkey = 231);
 
--- left join support depends on flattening of the query
--- following query fails since the inner part is kept as subquery
-SELECT * FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey);
-
--- however, this works
+-- left joins are supported
+SELECT count(*) FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey);
 SELECT count(*) FROM priority_orders left join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
 
--- view at the inner side of is not supported
+-- view at the inner side of is supported
 SELECT count(*) FROM priority_orders right join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
 
 -- but view at the outer side is. This is essentially the same as a left join with arguments reversed.

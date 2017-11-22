@@ -272,7 +272,6 @@ SELECT
 	FROM lineitem_hash
 	GROUP BY l_linestatus, l_orderkey
 	ORDER BY 3 DESC, 1, 2 LIMIT 5;
-DEBUG:  push down of limit count: 5
  l_linestatus | l_orderkey |    max     
 --------------+------------+------------
  O            |       4678 | 11-27-1998

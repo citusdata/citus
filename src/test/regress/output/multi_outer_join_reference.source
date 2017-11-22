@@ -75,7 +75,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_third_reference b ON (l_custkey = t_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ]
  min | max 
 -----+-----
      |    
@@ -92,7 +91,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_third_reference b ON (l_custkey = t_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -115,7 +113,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -126,7 +123,6 @@ SELECT
 	count(*)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_nationkey = r_nationkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  count 
 -------
     28
@@ -139,7 +135,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
   16 |  20
@@ -152,7 +147,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 5;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |  20
@@ -166,7 +160,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 5 or r_custkey > 15;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    5 |   5
@@ -178,7 +171,6 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 5);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     1
@@ -190,7 +182,6 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -202,7 +193,6 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND l_custkey = -1 /* nonexistant */);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     20 |     0
@@ -220,7 +210,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left_hash b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  20
@@ -265,7 +254,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_hash b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ]
  min | max 
 -----+-----
    1 |  30
@@ -285,7 +273,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  10
@@ -298,7 +285,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey IS NULL OR r_custkey = 15;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  15
@@ -312,7 +298,6 @@ FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b ON (l_custkey = r_custkey)
 WHERE
 	r_custkey = 21 or r_custkey < 10;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
   21 |  21
@@ -324,7 +309,6 @@ SELECT
 FROM
 	multi_outer_join_left_hash a LEFT JOIN multi_outer_join_right_reference b
 	ON (l_custkey = r_custkey AND r_custkey = 21);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  count | count 
 -------+-------
     25 |     1
@@ -342,7 +326,6 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_right_reference a RIGHT JOIN multi_outer_join_left_hash b ON (l_custkey = r_custkey);
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_right_reference" ]
  min | max 
 -----+-----
    1 |  30
@@ -425,7 +408,6 @@ FROM
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey)
 ORDER BY 1,2,3;
-LOG:  join order: [ "multi_outer_join_right_hash" ][ broadcast join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left_hash" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -460,7 +442,6 @@ FROM
 WHERE
 	l_custkey is NULL
 ORDER BY 1;
-LOG:  join order: [ "multi_outer_join_right_hash" ][ broadcast join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_left_hash" ]
  t_custkey | r_custkey | l_custkey 
 -----------+-----------+-----------
         16 |        16 |          
@@ -470,15 +451,43 @@ LOG:  join order: [ "multi_outer_join_right_hash" ][ broadcast join "multi_outer
         20 |        20 |          
 (5 rows)
 
--- Cascading right join with single shard left most table should error out
+-- Cascading right join with single shard on the inside
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey);
-ERROR:  could not run distributed query with complex join orders
-HINT:  Consider joining tables on partition column and have equal filter on joining columns.
+	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY 1,2,3;
+ t_custkey | r_custkey | l_custkey 
+-----------+-----------+-----------
+        11 |        11 |        11
+        12 |        12 |        12
+        13 |        13 |        13
+        14 |        14 |        14
+        15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
+           |           |         1
+           |           |         2
+           |           |         3
+           |           |         4
+           |           |         5
+           |           |         6
+           |           |         7
+           |           |         8
+           |           |         9
+           |           |        10
+(25 rows)
+
 -- full outer join should work with 1-1 matched shards
 SELECT
 	l_custkey, r_custkey
@@ -486,7 +495,6 @@ FROM
 	multi_outer_join_left_hash l1
 	FULL JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
 ORDER BY 1,2;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | r_custkey 
 -----------+-----------
          1 |          
@@ -530,7 +538,6 @@ FROM
 WHERE 
 	r_custkey is NULL
 ORDER BY 1;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | r_custkey 
 -----------+-----------
          1 |          
@@ -554,7 +561,6 @@ FROM
 WHERE 
 	l_custkey is NULL
 ORDER BY 2;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | r_custkey 
 -----------+-----------
            |        16
@@ -573,7 +579,6 @@ FROM
 WHERE 
 	l_custkey is NULL or r_custkey is NULL
 ORDER BY 1,2 DESC;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | r_custkey 
 -----------+-----------
          1 |          
@@ -609,7 +614,6 @@ FROM
 	INNER JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey = r1.r_custkey)
 	LEFT JOIN multi_outer_join_third_reference t1 ON (r1.r_custkey  = t1.t_custkey)
 ORDER BY 1;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ local partition join "multi_outer_join_right_hash" ][ broadcast join "multi_outer_join_third_reference" ]
  l_custkey | r_custkey | t_custkey 
 -----------+-----------+-----------
         11 |        11 |        11
@@ -637,7 +641,6 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
          1 |         1 |          
@@ -667,16 +670,44 @@ LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_
         30 |        30 |        30
 (25 rows)
 
--- inner (local) join  + 2 shards left (dual partition) join should error out
+-- inner (local) join  + 2 shards left (dual partition) join should work
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
 	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey);
-ERROR:  cannot run outer join query if join is not on the partition column
-DETAIL:  Outer joins requiring repartitioning are not supported.
--- inner (local) join  + 2 shards left (dual partition) join should work
+	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY 1,2,3;
+ t_custkey | l_custkey | r_custkey 
+-----------+-----------+-----------
+         1 |         1 |          
+         2 |         2 |          
+         3 |         3 |          
+         4 |         4 |          
+         5 |         5 |          
+         6 |         6 |          
+         7 |         7 |          
+         8 |         8 |          
+         9 |         9 |          
+        10 |        10 |          
+        11 |        11 |        11
+        12 |        12 |        12
+        13 |        13 |        13
+        14 |        14 |        14
+        15 |        15 |        15
+        21 |        21 |        21
+        22 |        22 |        22
+        23 |        23 |        23
+        24 |        24 |        24
+        25 |        25 |        25
+        26 |        26 |        26
+        27 |        27 |        27
+        28 |        28 |        28
+        29 |        29 |        29
+        30 |        30 |        30
+(25 rows)
+
+-- inner (local) join  + 2 shards left join should work
 SELECT
 	l_custkey, t_custkey, r_custkey
 FROM
@@ -684,7 +715,6 @@ FROM
 	INNER JOIN multi_outer_join_third_reference t1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
          1 |         1 |          
@@ -724,7 +754,6 @@ FROM
 WHERE
 	r_custkey is NULL
 ORDER BY 1;
-LOG:  join order: [ "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ][ local partition join "multi_outer_join_right_hash" ]
  l_custkey | t_custkey | r_custkey 
 -----------+-----------+-----------
          1 |         1 |          
@@ -748,7 +777,6 @@ FROM
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third_reference t1 ON (test.c_custkey = t1.t_custkey)
 ORDER BY 1;
-LOG:  join order: [ "multi_outer_join_right_hash" ][ local partition join "multi_outer_join_left_hash" ][ broadcast join "multi_outer_join_third_reference" ]
  t_custkey 
 -----------
         11
@@ -790,8 +818,30 @@ LEFT JOIN (
 GROUP BY l1.l_custkey
 ORDER BY cnt DESC, l1.l_custkey DESC
 LIMIT 20;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries in outer joins are not supported
+ l_custkey | cnt 
+-----------+-----
+        30 |   1
+        29 |   1
+        28 |   1
+        27 |   1
+        25 |   1
+        24 |   1
+        23 |   1
+        22 |   1
+        21 |   1
+        15 |   1
+        14 |   1
+        13 |   1
+        12 |   1
+        11 |   1
+        10 |   1
+         9 |   1
+         8 |   1
+         7 |   1
+         6 |   1
+         5 |   1
+(20 rows)
+
 -- full join among reference tables should go thourgh router planner
 SELECT 
 	t_custkey, r_custkey 
