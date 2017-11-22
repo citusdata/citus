@@ -124,8 +124,20 @@ static CustomExecMethods CoordinatorInsertSelectCustomExecMethods = {
 
 
 /*
- * RegisterCitusCustomScanMethods ets PostgreSQL know about
- * Citus' custom scan nodes.
+ * Let PostgreSQL know about Citus' custom scan nodes.
+ */
+void
+RegisterCitusCustomScanMethods(void)
+{
+	RegisterCustomScanMethods(&RealTimeCustomScanMethods);
+	RegisterCustomScanMethods(&TaskTrackerCustomScanMethods);
+	RegisterCustomScanMethods(&RouterCustomScanMethods);
+	RegisterCustomScanMethods(&CoordinatorInsertSelectCustomScanMethods);
+	RegisterCustomScanMethods(&DelayedErrorCustomScanMethods);
+}
+
+
+/*
  * RealTimeCreateScan creates the scan state for real-time executor queries.
  */
 static Node *
@@ -268,6 +280,7 @@ CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
 	/* just an empty function */
 }
+
 
 /*
  * CitusEndScan is used to clean up tuple store of the given custom scan state.

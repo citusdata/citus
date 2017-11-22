@@ -34,7 +34,7 @@ extern CustomScanMethods CoordinatorInsertSelectCustomScanMethods;
 extern CustomScanMethods DelayedErrorCustomScanMethods;
 
 
-/* common functions for different executors */
+extern void RegisterCitusCustomScanMethods(void);
 extern void CitusExplainScan(CustomScanState *node, List *ancestors, struct
 							 ExplainState *es);
 
