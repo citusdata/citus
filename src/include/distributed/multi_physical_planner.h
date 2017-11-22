@@ -22,7 +22,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/master_metadata_utility.h"
 #include "distributed/multi_logical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "utils/array.h"
@@ -217,22 +217,38 @@ typedef struct JoinSequenceNode
 
 
 /*
- * MultiPlan
+ * DistributedPlan contains all information necessary to execute a
+ * distribute query.
  */
-typedef struct MultiPlan
+typedef struct DistributedPlan
 {
 	CitusNode type;
+
+	/* type of command to execute (SELECT/INSERT/...) */
 	CmdType operation;
 
+	/* specifies whether a DML command has a RETURNING */
 	bool hasReturning;
+
+	/* job tree containing the tasks to be executed on workers */
 	Job *workerJob;
+
+	/* local query that merges results from the workers */
 	Query *masterQuery;
+
+	/* a router executable query is executed entirely on a worker */
 	bool routerExecutable;
+
+	/* which relations are accessed by this distributed plan */
 	List *relationIdList;
 
-	/* INSERT ... SELECT via coordinator only */
+	/* SELECT query in an INSERT ... SELECT via the coordinator */
 	Query *insertSelectSubquery;
+
+	/* target list of an INSERT ... SELECT via the coordinator */
 	List *insertTargetList;
+
+	/* target relation of an INSERT ... SELECT via the coordinator */
 	Oid targetRelationId;
 
 	/*
@@ -241,7 +257,7 @@ typedef struct MultiPlan
 	 * or if prepared statement parameters prevented successful planning.
 	 */
 	DeferredErrorMessage *planningError;
-} MultiPlan;
+} DistributedPlan;
 
 
 /* OperatorCacheEntry contains information for each element in OperatorCache */
@@ -263,9 +279,9 @@ extern bool EnableUniqueJobIds;
 
 
 /* Function declarations for building physical plans and constructing queries */
-extern MultiPlan * MultiPhysicalPlanCreate(MultiTreeRoot *multiTree,
-										   PlannerRestrictionContext *
-										   plannerRestrictionContext);
+extern DistributedPlan * CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
+													   PlannerRestrictionContext *
+													   plannerRestrictionContext);
 extern StringInfo ShardFetchQueryString(uint64 shardId);
 extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);

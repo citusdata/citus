@@ -106,10 +106,10 @@ bool EnableRouterExecution = true;
 
 
 /* planner functions forward declarations */
-static MultiPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
-											  Query *query,
-											  RelationRestrictionContext *
-											  restrictionContext);
+static DistributedPlan * CreateSingleTaskRouterPlan(Query *originalQuery,
+													Query *query,
+													RelationRestrictionContext *
+													restrictionContext);
 static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 										bool *badCoalesce);
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
@@ -158,7 +158,7 @@ static List * MultiShardModifyTaskList(Query *originalQuery, List *relationShard
  * SELECT statement.  If planning fails either NULL is returned, or
  * ->planningError is set to a description of the failure.
  */
-MultiPlan *
+DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
 				 RelationRestrictionContext *restrictionContext)
 {
@@ -183,20 +183,20 @@ CreateRouterPlan(Query *originalQuery, Query *query,
  * statement.  If planning fails ->planningError is set to a description of
  * the failure.
  */
-MultiPlan *
+DistributedPlan *
 CreateModifyPlan(Query *originalQuery, Query *query,
 				 PlannerRestrictionContext *plannerRestrictionContext)
 {
 	Job *job = NULL;
-	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	bool multiShardQuery = false;
 
-	multiPlan->operation = query->commandType;
+	distributedPlan->operation = query->commandType;
 
-	multiPlan->planningError = ModifyQuerySupported(query, multiShardQuery);
-	if (multiPlan->planningError != NULL)
+	distributedPlan->planningError = ModifyQuerySupported(query, multiShardQuery);
+	if (distributedPlan->planningError != NULL)
 	{
-		return multiPlan;
+		return distributedPlan;
 	}
 
 	if (UpdateOrDeleteQuery(query))
@@ -204,31 +204,32 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 		RelationRestrictionContext *restrictionContext =
 			plannerRestrictionContext->relationRestrictionContext;
 
-		job = RouterJob(originalQuery, restrictionContext, &multiPlan->planningError);
+		job = RouterJob(originalQuery, restrictionContext,
+						&distributedPlan->planningError);
 	}
 	else
 	{
-		job = RouterInsertJob(originalQuery, query, &multiPlan->planningError);
+		job = RouterInsertJob(originalQuery, query, &distributedPlan->planningError);
 	}
 
-	if (multiPlan->planningError != NULL)
+	if (distributedPlan->planningError != NULL)
 	{
-		return multiPlan;
+		return distributedPlan;
 	}
 
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
-	multiPlan->workerJob = job;
-	multiPlan->masterQuery = NULL;
-	multiPlan->routerExecutable = true;
-	multiPlan->hasReturning = false;
+	distributedPlan->workerJob = job;
+	distributedPlan->masterQuery = NULL;
+	distributedPlan->routerExecutable = true;
+	distributedPlan->hasReturning = false;
 
 	if (list_length(originalQuery->returningList) > 0)
 	{
-		multiPlan->hasReturning = true;
+		distributedPlan->hasReturning = true;
 	}
 
-	return multiPlan;
+	return distributedPlan;
 }
 
 
@@ -239,26 +240,26 @@ CreateModifyPlan(Query *originalQuery, Query *query,
  * are router plannable by default. If query is not router plannable then either NULL is
  * returned, or the returned plan has planningError set to a description of the problem.
  */
-static MultiPlan *
+static DistributedPlan *
 CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 						   RelationRestrictionContext *restrictionContext)
 {
 	Job *job = NULL;
-	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 
-	multiPlan->operation = query->commandType;
+	distributedPlan->operation = query->commandType;
 
 	/* FIXME: this should probably rather be inlined into CreateRouterPlan */
-	multiPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
-	if (multiPlan->planningError)
+	distributedPlan->planningError = ErrorIfQueryHasModifyingCTE(query);
+	if (distributedPlan->planningError)
 	{
-		return multiPlan;
+		return distributedPlan;
 	}
 
 	/* we cannot have multi shard update/delete query via this code path */
-	job = RouterJob(originalQuery, restrictionContext, &multiPlan->planningError);
+	job = RouterJob(originalQuery, restrictionContext, &distributedPlan->planningError);
 
-	if (multiPlan->planningError)
+	if (distributedPlan->planningError)
 	{
 		/* query cannot be handled by this planner */
 		return NULL;
@@ -266,12 +267,12 @@ CreateSingleTaskRouterPlan(Query *originalQuery, Query *query,
 
 	ereport(DEBUG2, (errmsg("Creating router plan")));
 
-	multiPlan->workerJob = job;
-	multiPlan->masterQuery = NULL;
-	multiPlan->routerExecutable = true;
-	multiPlan->hasReturning = false;
+	distributedPlan->workerJob = job;
+	distributedPlan->masterQuery = NULL;
+	distributedPlan->routerExecutable = true;
+	distributedPlan->hasReturning = false;
 
-	return multiPlan;
+	return distributedPlan;
 }
 
 

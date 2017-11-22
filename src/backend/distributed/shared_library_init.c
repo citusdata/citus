@@ -31,7 +31,7 @@
 #include "distributed/multi_explain.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_logical_optimizer.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_server_executor.h"
@@ -189,7 +189,7 @@ _PG_init(void)
 	RegisterNodes();
 
 	/* intercept planner */
-	planner_hook = multi_planner;
+	planner_hook = distributed_planner;
 
 	/* register utility hook */
 #if (PG_VERSION_NUM >= 100000)
