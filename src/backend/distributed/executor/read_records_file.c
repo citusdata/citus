@@ -129,35 +129,6 @@ IsBinaryFormat(char *copyFormatString)
 }
 
 
-/*
- * static bool
- * IsBinaryFormat(Oid copyFormatOid)
- * {
- *  HeapTuple enumTuple = NULL;
- *  Form_pg_enum enumForm = NULL;
- *  const char *enumLabel = NULL;
- *  bool isBinaryFormat = false;
- *
- *  enumTuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(copyFormatOid));
- *  if (!HeapTupleIsValid(enumTuple))
- *  {
- *      ereport(ERROR, (errmsg("invalid internal value for enum: %u",
- *                             copyFormatOid)));
- *  }
- *
- *  enumForm = (Form_pg_enum) GETSTRUCT(enumTuple);
- *  enumLabel = NameStr(enumForm->enumlabel);
- *
- *  if (strncmp(enumLabel, "binary", NAMEDATALEN) == 0)
- *  {
- *      isBinaryFormat = true;
- *  }
- *
- *  ReleaseSysCache(enumTuple);
- *
- *  return isBinaryFormat;
- * }
- */
 static void
 ReadFileIntoTupleStore(char *fileName, bool isBinaryFormat, TupleDesc tupleDescriptor,
 					   EState *executorState, Tuplestorestate *tupstore)
