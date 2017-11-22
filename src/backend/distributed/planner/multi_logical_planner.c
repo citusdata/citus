@@ -67,6 +67,7 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_INVALID = 0,
 	RECURRING_TUPLES_REFERENCE_TABLE,
 	RECURRING_TUPLES_FUNCTION,
+	RECURRING_TUPLES_RESULT_FUNCTION,
 	RECURRING_TUPLES_EMPTY_JOIN_TREE
 } RecurringTuplesType;
 
@@ -951,7 +952,15 @@ DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
 								 "clause when the query has subqueries in "
 								 "WHERE clause", NULL);
 		}
-		else
+		else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot pushdown the subquery",
+								 "Complex subqueries and CTEs are not allowed in FROM "
+								 "clause when the query has subqueries in "
+								 "WHERE clause", NULL);
+		}
+
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot pushdown the subquery",
@@ -1210,6 +1219,14 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 							 "Table functions are not supported with union operator",
 							 NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 "Complex subqueries and CTEs are not supported with union "
+							 "operator",
+							 NULL);
+	}
 	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -1296,7 +1313,8 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		}
 		else if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
-			if (contain_mutable_functions((Node *) rangeTableEntry->functions))
+			if (!ContainsResultFunction((Node *) rangeTableEntry->functions) &&
+				contain_mutable_functions((Node *) rangeTableEntry->functions))
 			{
 				unsupportedTableCombination = true;
 				errorDetail = "Only immutable functions can be used as a table "
@@ -2001,6 +2019,13 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 							 "There exist a table function in the outer "
 							 "part of the outer join", NULL);
 	}
+	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Subqueries and CTEs cannot be in the outer "
+							 "part of an outer join", NULL);
+	}
 	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
@@ -2146,7 +2171,14 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 		}
 		else if (rangeTableEntry->rtekind == RTE_FUNCTION)
 		{
-			*recurType = RECURRING_TUPLES_FUNCTION;
+			if (ContainsResultFunction((Node *) rangeTableEntry->functions))
+			{
+				*recurType = RECURRING_TUPLES_RESULT_FUNCTION;
+			}
+			else
+			{
+				*recurType = RECURRING_TUPLES_FUNCTION;
+			}
 
 			/*
 			 * Tuples from functions will recur in every query on shards that includes
