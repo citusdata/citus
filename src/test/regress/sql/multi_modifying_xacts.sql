@@ -1,6 +1,6 @@
 
-ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1200000;
-ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 1200000;
+SET citus.next_shard_id TO 1200000;
+SET citus.next_placement_id TO 1200000;
 
 -- ===================================================================
 -- test end-to-end modification functionality
@@ -542,7 +542,7 @@ AND    (s.logicalrelid = 'objects'::regclass OR
 DROP TRIGGER reject_bad ON objects_1200003;
 
 \c - - - :master_port
-
+SET citus.next_shard_id TO 1200004;
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO labs VALUES (8, 'Aperture Science');
@@ -699,6 +699,7 @@ DROP TRIGGER reject_bad_reference ON reference_modifying_xacts_1200006;
 -- now create a hash distributed table and run tests
 -- including both the reference table and the hash
 -- distributed table
+SET citus.next_shard_id TO 1200007;
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE hash_modifying_xacts (key int, value int);
@@ -872,6 +873,7 @@ CREATE USER test_user;
 
 -- now connect back to the master with the new user
 \c - test_user - :master_port
+SET citus.next_shard_id TO 1200015;
 CREATE TABLE reference_failure_test (key int, value int);
 SELECT create_reference_table('reference_failure_test');
 
@@ -975,7 +977,8 @@ INSERT INTO numbers_hash_failure_test VALUES (2,2);
 
 -- connect back to the master with the proper user to continue the tests 
 \c - :default_user - :master_port
-
+SET citus.next_shard_id TO 1200020;
+SET citus.next_placement_id TO 1200033;
 -- unbreak both nodes by renaming the user back to the original name
 SELECT * FROM run_command_on_workers('ALTER USER test_user_new RENAME TO test_user');
 
