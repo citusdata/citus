@@ -189,6 +189,9 @@ _PG_init(void)
 	/* make our additional node types known */
 	RegisterNodes();
 
+	/* make our custom scan nodes known */
+	RegisterCitusCustomScanMethods();
+
 	/* intercept planner */
 	planner_hook = distributed_planner;
 
