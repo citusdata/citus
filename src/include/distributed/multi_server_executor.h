@@ -202,6 +202,10 @@ extern void CleanupTaskExecution(TaskExecution *taskExecution);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
+extern void PrepareMasterJobDirectory(Job *workerJob);
 
+
+extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
+extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
 
 #endif /* MULTI_SERVER_EXECUTOR_H */
