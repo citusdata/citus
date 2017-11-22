@@ -1002,6 +1002,11 @@ ShouldRecursivelyPlanSubquery(Query *query)
 			/* postgres can always plan queries that don't require distributed planning */
 			shouldRecursivelyPlan = true;
 		}
+		else if (TaskExecutorType == MULTI_EXECUTOR_TASK_TRACKER &&
+				 SingleRelationRepartitionSubquery(query))
+		{
+			/* we could plan this subquery through re-partitioning */
+		}
 		else
 		{
 			DeferredErrorMessage *unsupportedQueryError = NULL;

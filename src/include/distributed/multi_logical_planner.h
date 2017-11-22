@@ -200,6 +200,7 @@ extern DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
+extern bool SingleRelationRepartitionSubquery(Query *queryTree);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern MultiNode * ParentNode(MultiNode *multiNode);
