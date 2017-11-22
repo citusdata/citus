@@ -36,7 +36,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
@@ -394,8 +394,8 @@ void
 CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
-	MultiPlan *multiPlan = scanState->multiPlan;
-	Job *workerJob = multiPlan->workerJob;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Job *workerJob = distributedPlan->workerJob;
 	Query *jobQuery = workerJob->jobQuery;
 	List *taskList = workerJob->taskList;
 	bool deferredPruning = workerJob->deferredPruning;
@@ -440,7 +440,7 @@ CitusModifyBeginScan(CustomScanState *node, EState *estate, int eflags)
 	 * We are taking locks on partitions of partitioned tables. These locks are
 	 * necessary for locking tables that appear in the SELECT part of the query.
 	 */
-	LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+	LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
 	/* modify tasks are always assigned using first-replica policy */
 	workerJob->taskList = FirstReplicaAssignTaskList(taskList);
@@ -459,9 +459,9 @@ RouterSequentialModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		MultiPlan *multiPlan = scanState->multiPlan;
-		bool hasReturning = multiPlan->hasReturning;
-		Job *workerJob = multiPlan->workerJob;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		bool hasReturning = distributedPlan->hasReturning;
+		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
 		ListCell *taskCell = NULL;
 		bool multipleTasks = list_length(taskList) > 1;
@@ -506,10 +506,10 @@ RouterMultiModifyExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		MultiPlan *multiPlan = scanState->multiPlan;
-		Job *workerJob = multiPlan->workerJob;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
-		bool hasReturning = multiPlan->hasReturning;
+		bool hasReturning = distributedPlan->hasReturning;
 		bool isModificationQuery = true;
 
 		ExecuteMultipleTasks(scanState, taskList, isModificationQuery, hasReturning);
@@ -536,12 +536,12 @@ RouterSelectExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		MultiPlan *multiPlan = scanState->multiPlan;
-		Job *workerJob = multiPlan->workerJob;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Job *workerJob = distributedPlan->workerJob;
 		List *taskList = workerJob->taskList;
 
 		/* we are taking locks on partitions of partitioned tables */
-		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
 		if (list_length(taskList) > 0)
 		{
@@ -693,7 +693,7 @@ static void
 ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTasks,
 						bool expectResults)
 {
-	CmdType operation = scanState->multiPlan->operation;
+	CmdType operation = scanState->distributedPlan->operation;
 	EState *executorState = scanState->customScanState.ss.ps.state;
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
 	List *taskPlacementList = task->taskPlacementList;

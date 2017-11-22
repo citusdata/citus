@@ -17,7 +17,7 @@
 #include "distributed/errormessage.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "nodes/parsenodes.h"
 
 
@@ -26,11 +26,11 @@
 
 extern bool EnableRouterExecution;
 
-extern MultiPlan * CreateRouterPlan(Query *originalQuery, Query *query,
-									RelationRestrictionContext *restrictionContext);
-extern MultiPlan * CreateModifyPlan(Query *originalQuery, Query *query,
-									PlannerRestrictionContext *
-									plannerRestrictionContext);
+extern DistributedPlan * CreateRouterPlan(Query *originalQuery, Query *query,
+										  RelationRestrictionContext *restrictionContext);
+extern DistributedPlan * CreateModifyPlan(Query *originalQuery, Query *query,
+										  PlannerRestrictionContext *
+										  plannerRestrictionContext);
 extern DeferredErrorMessage * PlanRouterQuery(Query *originalQuery,
 											  RelationRestrictionContext *
 											  restrictionContext,

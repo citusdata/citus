@@ -32,22 +32,22 @@ bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format 
 
 
 /*
- * JobExecutorType selects the executor type for the given multiPlan using the task
- * executor type config value. The function then checks if the given multiPlan needs
+ * JobExecutorType selects the executor type for the given distributedPlan using the task
+ * executor type config value. The function then checks if the given distributedPlan needs
  * more resources than those provided to it by other config values, and issues
  * warnings accordingly. If the selected executor type cannot execute the given
- * multiPlan, the function errors out.
+ * distributedPlan, the function errors out.
  */
 MultiExecutorType
-JobExecutorType(MultiPlan *multiPlan)
+JobExecutorType(DistributedPlan *distributedPlan)
 {
-	Job *job = multiPlan->workerJob;
+	Job *job = distributedPlan->workerJob;
 	List *workerNodeList = NIL;
 	int workerNodeCount = 0;
 	int taskCount = 0;
 	double tasksPerNode = 0.;
 	MultiExecutorType executorType = TaskExecutorType;
-	bool routerExecutablePlan = multiPlan->routerExecutable;
+	bool routerExecutablePlan = distributedPlan->routerExecutable;
 
 	/* check if can switch to router executor */
 	if (routerExecutablePlan)
@@ -56,12 +56,12 @@ JobExecutorType(MultiPlan *multiPlan)
 		return MULTI_EXECUTOR_ROUTER;
 	}
 
-	if (multiPlan->insertSelectSubquery != NULL)
+	if (distributedPlan->insertSelectSubquery != NULL)
 	{
 		return MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	}
 
-	Assert(multiPlan->operation == CMD_SELECT);
+	Assert(distributedPlan->operation == CMD_SELECT);
 
 	workerNodeList = ActiveReadableNodeList();
 	workerNodeCount = list_length(workerNodeList);

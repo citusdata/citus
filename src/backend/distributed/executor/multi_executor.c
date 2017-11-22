@@ -20,7 +20,7 @@
 #include "distributed/multi_copy.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_master_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_resowner.h"
@@ -115,7 +115,7 @@ RealTimeCreateScan(CustomScan *scan)
 
 	scanState->executorType = MULTI_EXECUTOR_REAL_TIME;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->multiPlan = GetMultiPlan(scan);
+	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &RealTimeCustomExecMethods;
 
@@ -133,7 +133,7 @@ TaskTrackerCreateScan(CustomScan *scan)
 
 	scanState->executorType = MULTI_EXECUTOR_TASK_TRACKER;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->multiPlan = GetMultiPlan(scan);
+	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &TaskTrackerCustomExecMethods;
 
@@ -148,20 +148,20 @@ Node *
 RouterCreateScan(CustomScan *scan)
 {
 	CitusScanState *scanState = palloc0(sizeof(CitusScanState));
-	MultiPlan *multiPlan = NULL;
+	DistributedPlan *distributedPlan = NULL;
 	Job *workerJob = NULL;
 	List *taskList = NIL;
 	bool isModificationQuery = false;
 
 	scanState->executorType = MULTI_EXECUTOR_ROUTER;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->multiPlan = GetMultiPlan(scan);
+	scanState->distributedPlan = GetDistributedPlan(scan);
 
-	multiPlan = scanState->multiPlan;
-	workerJob = multiPlan->workerJob;
+	distributedPlan = scanState->distributedPlan;
+	workerJob = distributedPlan->workerJob;
 	taskList = workerJob->taskList;
 
-	isModificationQuery = IsModifyMultiPlan(multiPlan);
+	isModificationQuery = IsModifyDistributedPlan(distributedPlan);
 
 	/* check whether query has at most one shard */
 	if (list_length(taskList) <= 1)
@@ -180,7 +180,7 @@ RouterCreateScan(CustomScan *scan)
 		Assert(isModificationQuery);
 
 		if (IsMultiRowInsert(workerJob->jobQuery) ||
-			(IsUpdateOrDelete(multiPlan) &&
+			(IsUpdateOrDelete(distributedPlan) &&
 			 MultiShardConnectionType == SEQUENTIAL_CONNECTION))
 		{
 			/*
@@ -211,7 +211,7 @@ CoordinatorInsertSelectCreateScan(CustomScan *scan)
 
 	scanState->executorType = MULTI_EXECUTOR_COORDINATOR_INSERT_SELECT;
 	scanState->customScanState.ss.ps.type = T_CustomScanState;
-	scanState->multiPlan = GetMultiPlan(scan);
+	scanState->distributedPlan = GetDistributedPlan(scan);
 
 	scanState->customScanState.methods = &CoordinatorInsertSelectCustomExecMethods;
 
@@ -231,10 +231,10 @@ CoordinatorInsertSelectCreateScan(CustomScan *scan)
 Node *
 DelayedErrorCreateScan(CustomScan *scan)
 {
-	MultiPlan *multiPlan = GetMultiPlan(scan);
+	DistributedPlan *distributedPlan = GetDistributedPlan(scan);
 
 	/* raise the deferred error */
-	RaiseDeferredError(multiPlan->planningError, ERROR);
+	RaiseDeferredError(distributedPlan->planningError, ERROR);
 
 	return NULL;
 }
@@ -264,11 +264,11 @@ RealTimeExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		MultiPlan *multiPlan = scanState->multiPlan;
-		Job *workerJob = multiPlan->workerJob;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Job *workerJob = distributedPlan->workerJob;
 
 		/* we are taking locks on partitions of partitioned tables */
-		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
 		MultiRealTimeExecute(workerJob);
@@ -464,11 +464,11 @@ TaskTrackerExecScan(CustomScanState *node)
 
 	if (!scanState->finishedRemoteScan)
 	{
-		MultiPlan *multiPlan = scanState->multiPlan;
-		Job *workerJob = multiPlan->workerJob;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Job *workerJob = distributedPlan->workerJob;
 
 		/* we are taking locks on partitions of partitioned tables */
-		LockPartitionsInRelationList(multiPlan->relationIdList, AccessShareLock);
+		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
 		MultiTaskTrackerExecute(workerJob);

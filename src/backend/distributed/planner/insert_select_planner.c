@@ -38,9 +38,9 @@
 #include "utils/lsyscache.h"
 
 
-static MultiPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
-													 PlannerRestrictionContext *
-													 plannerRestrictionContext);
+static DistributedPlan * CreateDistributedInsertSelectPlan(Query *originalQuery,
+														   PlannerRestrictionContext *
+														   plannerRestrictionContext);
 static bool SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
 								   Query *originalQuery);
 static Task * RouterModifyTaskForShardInterval(Query *originalQuery,
@@ -61,7 +61,7 @@ static DeferredErrorMessage * InsertPartitionColumnMatchesSelect(Query *query,
 																 subqueryRte,
 																 Oid *
 																 selectPartitionColumnTableId);
-static MultiPlan * CreateCoordinatorInsertSelectPlan(Query *parse);
+static DistributedPlan * CreateCoordinatorInsertSelectPlan(Query *parse);
 static DeferredErrorMessage * CoordinatorInsertSelectSupported(Query *insertSelectQuery);
 static Query * WrapSubquery(Query *subquery);
 static bool CheckInsertSelectQuery(Query *query);
@@ -172,11 +172,11 @@ CheckInsertSelectQuery(Query *query)
  * command to the workers and if that is not possible it creates a
  * plan for evaluating the SELECT on the coordinator.
  */
-MultiPlan *
+DistributedPlan *
 CreateInsertSelectPlan(Query *originalQuery,
 					   PlannerRestrictionContext *plannerRestrictionContext)
 {
-	MultiPlan *distributedPlan = NULL;
+	DistributedPlan *distributedPlan = NULL;
 
 	distributedPlan = CreateDistributedInsertSelectPlan(originalQuery,
 														plannerRestrictionContext);
@@ -194,12 +194,12 @@ CreateInsertSelectPlan(Query *originalQuery,
 
 
 /*
- * CreateDistributedInsertSelectPlan Creates a MultiPlan for distributed
+ * CreateDistributedInsertSelectPlan Creates a DistributedPlan for distributed
  * INSERT ... SELECT queries which could consists of multiple tasks.
  *
- * The function never returns NULL, it errors out if cannot create the MultiPlan.
+ * The function never returns NULL, it errors out if cannot create the DistributedPlan.
  */
-static MultiPlan *
+static DistributedPlan *
 CreateDistributedInsertSelectPlan(Query *originalQuery,
 								  PlannerRestrictionContext *plannerRestrictionContext)
 {
@@ -208,7 +208,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	uint32 taskIdIndex = 1;     /* 0 is reserved for invalid taskId */
 	Job *workerJob = NULL;
 	uint64 jobId = INVALID_JOB_ID;
-	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
 	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(originalQuery);
 	RangeTblEntry *subqueryRte = ExtractSelectRangeTableEntry(originalQuery);
 	Oid targetRelationId = insertRte->relid;
@@ -219,18 +219,19 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	bool allReferenceTables = relationRestrictionContext->allReferenceTables;
 	bool safeToPushDownSubquery = false;
 
-	multiPlan->operation = originalQuery->commandType;
+	distributedPlan->operation = originalQuery->commandType;
 
 	/*
 	 * Error semantics for INSERT ... SELECT queries are different than regular
 	 * modify queries. Thus, handle separately.
 	 */
-	multiPlan->planningError = DistributedInsertSelectSupported(originalQuery, insertRte,
-																subqueryRte,
-																allReferenceTables);
-	if (multiPlan->planningError)
+	distributedPlan->planningError = DistributedInsertSelectSupported(originalQuery,
+																	  insertRte,
+																	  subqueryRte,
+																	  allReferenceTables);
+	if (distributedPlan->planningError)
 	{
-		return multiPlan;
+		return distributedPlan;
 	}
 
 	safeToPushDownSubquery = SafeToPushDownSubquery(plannerRestrictionContext,
@@ -238,7 +239,7 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 
 	/*
 	 * Plan select query for each shard in the target table. Do so by replacing the
-	 * partitioning qual parameter added in multi_planner() using the current shard's
+	 * partitioning qual parameter added in distributed_planner() using the current shard's
 	 * actual boundary values. Also, add the current shard's boundary values to the
 	 * top level subquery to ensure that even if the partitioning qual is not distributed
 	 * to all the tables, we never run the queries on the shards that don't match with
@@ -277,17 +278,17 @@ CreateDistributedInsertSelectPlan(Query *originalQuery,
 	workerJob->requiresMasterEvaluation = RequiresMasterEvaluation(originalQuery);
 
 	/* and finally the multi plan */
-	multiPlan->workerJob = workerJob;
-	multiPlan->masterQuery = NULL;
-	multiPlan->routerExecutable = true;
-	multiPlan->hasReturning = false;
+	distributedPlan->workerJob = workerJob;
+	distributedPlan->masterQuery = NULL;
+	distributedPlan->routerExecutable = true;
+	distributedPlan->hasReturning = false;
 
 	if (list_length(originalQuery->returningList) > 0)
 	{
-		multiPlan->hasReturning = true;
+		distributedPlan->hasReturning = true;
 	}
 
-	return multiPlan;
+	return distributedPlan;
 }
 
 
@@ -423,7 +424,7 @@ SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
 
 /*
  * RouterModifyTaskForShardInterval creates a modify task by
- * replacing the partitioning qual parameter added in multi_planner()
+ * replacing the partitioning qual parameter added in distributed_planner()
  * with the shardInterval's boundary value. Then perform the normal
  * shard pruning on the subquery. Finally, checks if the target shardInterval
  * has exactly same placements with the select task's available anchor
@@ -1134,7 +1135,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
  * CreatteCoordinatorInsertSelectPlan creates a query plan for a SELECT into a
  * distributed table. The query plan can also be executed on a worker in MX.
  */
-static MultiPlan *
+static DistributedPlan *
 CreateCoordinatorInsertSelectPlan(Query *parse)
 {
 	Query *insertSelectQuery = copyObject(parse);
@@ -1144,15 +1145,15 @@ CreateCoordinatorInsertSelectPlan(Query *parse)
 	RangeTblEntry *insertRte = ExtractInsertRangeTableEntry(insertSelectQuery);
 	Oid targetRelationId = insertRte->relid;
 
-	MultiPlan *multiPlan = CitusMakeNode(MultiPlan);
-	multiPlan->operation = CMD_INSERT;
+	DistributedPlan *distributedPlan = CitusMakeNode(DistributedPlan);
+	distributedPlan->operation = CMD_INSERT;
 
-	multiPlan->planningError =
+	distributedPlan->planningError =
 		CoordinatorInsertSelectSupported(insertSelectQuery);
 
-	if (multiPlan->planningError != NULL)
+	if (distributedPlan->planningError != NULL)
 	{
-		return multiPlan;
+		return distributedPlan;
 	}
 
 	selectQuery = selectRte->subquery;
@@ -1183,11 +1184,11 @@ CreateCoordinatorInsertSelectPlan(Query *parse)
 
 	ReorderInsertSelectTargetLists(insertSelectQuery, insertRte, selectRte);
 
-	multiPlan->insertSelectSubquery = selectQuery;
-	multiPlan->insertTargetList = insertSelectQuery->targetList;
-	multiPlan->targetRelationId = targetRelationId;
+	distributedPlan->insertSelectSubquery = selectQuery;
+	distributedPlan->insertTargetList = insertSelectQuery->targetList;
+	distributedPlan->targetRelationId = targetRelationId;
 
-	return multiPlan;
+	return distributedPlan;
 }
 
 

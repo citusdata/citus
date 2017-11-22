@@ -16,7 +16,7 @@
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "executor/executor.h"
@@ -55,10 +55,10 @@ CoordinatorInsertSelectExecScan(CustomScanState *node)
 	if (!scanState->finishedRemoteScan)
 	{
 		EState *executorState = scanState->customScanState.ss.ps.state;
-		MultiPlan *multiPlan = scanState->multiPlan;
-		Query *selectQuery = multiPlan->insertSelectSubquery;
-		List *insertTargetList = multiPlan->insertTargetList;
-		Oid targetRelationId = multiPlan->targetRelationId;
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Query *selectQuery = distributedPlan->insertSelectSubquery;
+		List *insertTargetList = distributedPlan->insertTargetList;
+		Oid targetRelationId = distributedPlan->targetRelationId;
 
 		ereport(DEBUG1, (errmsg("Collecting INSERT ... SELECT results on coordinator")));
 

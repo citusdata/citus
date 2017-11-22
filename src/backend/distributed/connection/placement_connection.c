@@ -17,7 +17,7 @@
 #include "distributed/hash_helpers.h"
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/multi_planner.h"
+#include "distributed/distributed_planner.h"
 #include "distributed/placement_connection.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"

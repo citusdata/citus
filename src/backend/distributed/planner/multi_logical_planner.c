@@ -103,7 +103,7 @@ static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
 static bool RangeTableListContainsOnlyReferenceTables(List *rangeTableList);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
-static MultiNode * MultiPlanTree(Query *queryTree);
+static MultiNode * MultiNodeTree(Query *queryTree);
 static void ErrorIfQueryNotSupported(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
@@ -162,13 +162,13 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * functions will be removed with upcoming subqery changes.
  */
 static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
-static MultiNode * MultiSubqueryPlanTree(Query *originalQuery,
+static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
 										 plannerRestrictionContext);
 static List * SublinkList(Query *originalQuery);
 static bool ExtractSublinkWalker(Node *node, List **sublinkList);
-static MultiNode * SubqueryPushdownMultiPlanTree(Query *queryTree);
+static MultiNode * SubqueryPushdownMultiNodeTree(Query *queryTree);
 
 static List * CreateSubqueryTargetEntryList(List *columnList);
 static void UpdateVarMappingsForExtendedOpNode(List *columnList,
@@ -203,24 +203,24 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
-	 * given that if postgres already flattened the subqueries, MultiPlanTree()
+	 * given that if postgres already flattened the subqueries, MultiNodeTree()
 	 * can plan corresponding distributed plan.
 	 *
 	 * We also check the existence of subqueries in WHERE clause. Note that
 	 * this check needs to be done on the original query given that
 	 * standard_planner() may replace the sublinks with anti/semi joins and
-	 * MultiPlanTree() cannot plan such queries.
+	 * MultiNodeTree() cannot plan such queries.
 	 */
 	if (SubqueryEntryList(queryTree) != NIL || SublinkList(originalQuery) != NIL)
 	{
 		originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 														boundParams);
-		multiQueryNode = MultiSubqueryPlanTree(originalQuery, queryTree,
+		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
 	}
 	else
 	{
-		multiQueryNode = MultiPlanTree(queryTree);
+		multiQueryNode = MultiNodeTree(queryTree);
 	}
 
 	/* add a root node to serve as the permanent handle to the tree */
@@ -376,7 +376,7 @@ ExtractSublinkWalker(Node *node, List **sublinkList)
 
 
 /*
- * MultiSubqueryPlanTree gets the query objects and returns logical plan
+ * SubqueryMultiNodeTree gets the query objects and returns logical plan
  * for subqueries.
  *
  * We currently have two different code paths for creating logic plan for subqueries:
@@ -395,7 +395,7 @@ ExtractSublinkWalker(Node *node, List **sublinkList)
  *                - If found errors, throw it
  */
 static MultiNode *
-MultiSubqueryPlanTree(Query *originalQuery, Query *queryTree,
+SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
@@ -416,7 +416,7 @@ MultiSubqueryPlanTree(Query *originalQuery, Query *queryTree,
 																	plannerRestrictionContext);
 	if (!subqueryPushdownError)
 	{
-		multiQueryNode = SubqueryPushdownMultiPlanTree(originalQuery);
+		multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
 	}
 	else if (subqueryPushdownError)
 	{
@@ -450,7 +450,7 @@ MultiSubqueryPlanTree(Query *originalQuery, Query *queryTree,
 		}
 
 		/* all checks has passed, safe to create the multi plan */
-		multiQueryNode = MultiPlanTree(queryTree);
+		multiQueryNode = MultiNodeTree(queryTree);
 	}
 
 	Assert(multiQueryNode != NULL);
@@ -1591,7 +1591,7 @@ SubqueryEntryList(Query *queryTree)
 
 
 /*
- * MultiPlanTree takes in a parsed query tree and uses that tree to construct a
+ * MultiNodeTree takes in a parsed query tree and uses that tree to construct a
  * logical plan. This plan is based on multi-relational algebra. This function
  * creates the logical plan in several steps.
  *
@@ -1609,7 +1609,7 @@ SubqueryEntryList(Query *queryTree)
  * group, and limit nodes if they appear in the original query tree.
  */
 static MultiNode *
-MultiPlanTree(Query *queryTree)
+MultiNodeTree(Query *queryTree)
 {
 	List *rangeTableList = queryTree->rtable;
 	List *targetEntryList = queryTree->targetList;
@@ -1686,7 +1686,7 @@ MultiPlanTree(Query *queryTree)
 		}
 
 		/* recursively create child nested multitree */
-		subqueryExtendedNode = MultiPlanTree(subqueryTree);
+		subqueryExtendedNode = MultiNodeTree(subqueryTree);
 
 		SetChild((MultiUnaryNode *) subqueryCollectNode, (MultiNode *) subqueryNode);
 		SetChild((MultiUnaryNode *) subqueryNode, subqueryExtendedNode);
@@ -3708,7 +3708,7 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
 
 
 /*
- * SubqueryPushdownMultiTree creates logical plan for subquery pushdown logic.
+ * SubqueryPushdownMultiNodeTree creates logical plan for subquery pushdown logic.
  * Note that this logic will be changed in next iterations, so we decoupled it
  * from other parts of code although it causes some code duplication.
  *
@@ -3719,7 +3719,7 @@ ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
  * down to workers without invoking join order planner.
  */
 static MultiNode *
-SubqueryPushdownMultiPlanTree(Query *queryTree)
+SubqueryPushdownMultiNodeTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
 	List *qualifierList = NIL;
