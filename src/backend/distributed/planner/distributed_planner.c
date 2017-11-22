@@ -89,6 +89,7 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsResultFunctionWalker(Node *node, void *context);
 static DeferredErrorMessage * PlanPullPushSubqueries(Query *query, List **subPlanList);
 static bool PlanPullPushSubqueriesWalker(Node *node, List **planList);
+static bool ShouldRecursivelyPlanSubquery(Query *query);
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
@@ -277,7 +278,7 @@ NeedsDistributedPlanningWalker(Node *node, void *context)
 
 		if (hasLocalRelation && hasDistributedRelation)
 		{
-			ereport(ERROR, (errmsg("cannot plan (sub)queries which join local and "
+			ereport(ERROR, (errmsg("cannot plan queries which join local and "
 								   "distributed relations")));
 		}
 
@@ -924,30 +925,15 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		DeferredErrorMessage *pushdownError = NULL;
 
 		PlanPullPushSubqueries(query, subPlanList);
 
-		if (ContainsReferencesToOuterQuery(query))
+		if (ShouldRecursivelyPlanSubquery(query))
 		{
-			return false;
-		}
-
-		pushdownError = DeferErrorIfCannotPushdownSubquery(query, false);
-		if (pushdownError != NULL)
-		{
-			DeferredErrorMessage *unsupportedQueryError = NULL;
 			PlannedStmt *subPlan = NULL;
 			int subPlanId = list_length(*subPlanList);
 			Query *resultQuery = NULL;
 			int cursorOptions = 0;
-
-			unsupportedQueryError = DeferErrorIfQueryNotSupported(query);
-			if (unsupportedQueryError)
-			{
-				/* query is not supported, no point in planning it separately */
-				return false;
-			}
 
 			resultQuery = BuildSubPlanResultQuery(query, subPlanId);
 
@@ -975,6 +961,46 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 	{
 		return expression_tree_walker(node, PlanPullPushSubqueriesWalker, subPlanList);
 	}
+}
+
+
+/*
+ *
+ */
+static bool
+ShouldRecursivelyPlanSubquery(Query *query)
+{
+	bool shouldRecursivelyPlan = false;
+	DeferredErrorMessage *pushdownError = NULL;
+
+	if (ContainsReferencesToOuterQuery(query))
+	{
+		/* cannot plan correlated subqueries by themselves */
+		return false;
+	}
+
+	pushdownError = DeferErrorIfCannotPushdownSubquery(query, false);
+	if (pushdownError != NULL)
+	{
+		if (!NeedsDistributedPlanning(query))
+		{
+			/* postgres can always plan queries that don't require distributed planning */
+			shouldRecursivelyPlan = true;
+		}
+		else
+		{
+			DeferredErrorMessage *unsupportedQueryError = NULL;
+
+			unsupportedQueryError = DeferErrorIfQueryNotSupported(query);
+			if (unsupportedQueryError == NULL)
+			{
+				/* Citus can plan this distribute (sub)query */
+				shouldRecursivelyPlan = true;
+			}
+		}
+	}
+
+	return shouldRecursivelyPlan;
 }
 
 
