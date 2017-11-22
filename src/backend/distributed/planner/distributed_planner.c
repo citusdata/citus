@@ -710,6 +710,21 @@ PlanPullPushSubqueries(Query *query, List **subPlanList)
 {
 	DeferredErrorMessage *error = NULL;
 
+	if (SubqueryPushdown)
+	{
+		/*
+		 * When the subquery_pushdown flag is enabled we make some hacks
+		 * to push down subqueries with LIMIT. Recursive planning would
+		 * valiantly do the right thing and try to recursively plan the
+		 * inner subqueries, but we don't really want it to because those
+		 * subqueries might not be supported and would be much slower.
+		 *
+		 * Instead, we skip recursive planning altogether when
+		 * subquery_pushdown is enabled.
+		 */
+		return false;
+	}
+
 	error = PlanPullPushCTEs(query, subPlanList);
 	if (error != NULL)
 	{
