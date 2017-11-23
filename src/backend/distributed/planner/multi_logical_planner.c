@@ -122,7 +122,6 @@ static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static void ValidateClauseList(List *clauseList);
-static void ValidateSubqueryPushdownClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
@@ -132,7 +131,6 @@ static MultiNode * MultiJoinTree(List *joinOrderList, List *collectTableList,
 static MultiCollect * CollectNodeForTable(List *collectTableList, uint32 rangeTableId);
 static MultiSelect * MultiSelectNode(List *whereClauseList);
 static bool IsSelectClause(Node *clause);
-static bool IsSublinkClause(Node *clause);
 static MultiProject * MultiProjectNode(List *targetEntryList);
 static MultiExtendedOp * MultiExtendedOpNode(Query *queryTree);
 
@@ -2535,40 +2533,7 @@ ValidateClauseList(List *clauseList)
 	{
 		Node *clause = (Node *) lfirst(clauseCell);
 
-		/*
-		 * There could never be sublinks here given that it is handled
-		 * in subquery pushdown code-path.
-		 */
-		Assert(!IsSublinkClause(clause));
-
 		if (!(IsSelectClause(clause) || IsJoinClause(clause) || or_clause(clause)))
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("unsupported clause type")));
-		}
-	}
-}
-
-
-/*
- * ValidateSubqueryPushdownClauseList walks over the given list of clauses,
- * and checks that we can recognize all the clauses. This function ensures
- * that we do not drop an unsupported clause type on the floor, and thus
- * prevents erroneous results.
- *
- * Note that this function is slightly different than ValidateClauseList(),
- * additionally allowing sublinks.
- */
-static void
-ValidateSubqueryPushdownClauseList(List *clauseList)
-{
-	ListCell *clauseCell = NULL;
-	foreach(clauseCell, clauseList)
-	{
-		Node *clause = (Node *) lfirst(clauseCell);
-
-		if (!(IsSublinkClause(clause) || IsSelectClause(clause) ||
-			  IsJoinClause(clause) || or_clause(clause)))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("unsupported clause type")));
@@ -3053,23 +3018,6 @@ IsSelectClause(Node *clause)
 	}
 
 	return isSelectClause;
-}
-
-
-/*
- * IsSublinkClause determines if the given node is a sublink or subplan.
- */
-static bool
-IsSublinkClause(Node *clause)
-{
-	NodeTag nodeTag = nodeTag(clause);
-
-	if (nodeTag == T_SubLink || nodeTag == T_SubPlan)
-	{
-		return true;
-	}
-
-	return false;
 }
 
 
@@ -3722,7 +3670,6 @@ static MultiNode *
 SubqueryPushdownMultiNodeTree(Query *queryTree)
 {
 	List *targetEntryList = queryTree->targetList;
-	List *qualifierList = NIL;
 	List *columnList = NIL;
 	List *targetColumnList = NIL;
 	MultiCollect *subqueryCollectNode = CitusMakeNode(MultiCollect);
@@ -3736,14 +3683,6 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 
 	/* verify we can perform distributed planning on this query */
 	ErrorIfQueryNotSupported(queryTree);
-
-	/*
-	 * Extract qualifiers and verify we can plan for them. Note that since
-	 * subquery pushdown join planning is based on restriction equivalence,
-	 * checking for these qualifiers may not be necessary.
-	 */
-	qualifierList = QualifierList(queryTree->jointree);
-	ValidateSubqueryPushdownClauseList(qualifierList);
 
 	/*
 	 * We would be creating a new Query and pushing down top level query's

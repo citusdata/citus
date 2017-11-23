@@ -24,6 +24,50 @@ WHERE
 GROUP BY user_id
 HAVING count(*) > 66
 ORDER BY user_id
+LIMIT 5;
+
+-- same query with one additional join on non distribution column
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_table 
+           WHERE 
+              users_table.user_id = events_table.user_id AND event_type = 50 AND
+              users_table.time > events_table.time
+           GROUP BY
+              user_id
+          )
+GROUP BY user_id
+HAVING count(*) > 66
+ORDER BY user_id
+LIMIT 5; 
+
+-- the other way around is not supported
+SELECT 
+  user_id
+FROM 
+  users_table
+WHERE 
+  value_2 >  
+          (SELECT 
+              max(value_2) 
+           FROM 
+              events_table 
+           WHERE 
+              users_table.user_id > events_table.user_id AND event_type = 50 AND
+              users_table.time = events_table.time
+           GROUP BY
+              user_id
+          )
+GROUP BY user_id
+HAVING count(*) > 66
+ORDER BY user_id
 LIMIT 5; 
 
 -- subqueries in where with ALL operator

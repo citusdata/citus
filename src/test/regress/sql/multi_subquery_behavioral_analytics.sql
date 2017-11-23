@@ -1626,6 +1626,16 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 
+SELECT run_command_on_workers($f$
+
+CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
+    AS 'select $1 > $2;'
+    LANGUAGE SQL
+    IMMUTABLE
+    RETURNS NULL ON NULL INPUT;
+
+$f$);
+
 -- we don't support joins via functions 
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -1658,6 +1668,102 @@ FROM
   ON users_table.user_id = temp.user_id
   WHERE 
     users_table.value_1 < 50 AND test_join_function_2(users_table.user_id, temp.user_id);
+
+-- we do support the following since there is already an equality on the partition
+-- key and we have an additional join via a function
+SELECT
+    temp.user_id, users_table.value_1, prob
+FROM
+   users_table
+        JOIN
+   (SELECT
+      ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob, random()
+    FROM
+      users_table AS ma, events_table as short_list
+    WHERE
+      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 100 AND
+       test_join_function_2(ma.value_1, short_list.value_2)
+    ) temp
+  ON users_table.user_id = temp.user_id
+  WHERE 
+    users_table.value_1 < 50
+  ORDER BY 2 DESC, 1 DESC
+  LIMIT 10;
+
+-- similarly we do support non equi joins on columns if there is aready
+-- an equality join
+SELECT
+  count(*)
+FROM
+  (SELECT 
+    event_type, random() 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id = users_table.user_id AND 
+    events_table.time > users_table.time AND 
+    events_table.value_2 IN (10, 100)
+  ) as foo;
+
+-- the other way around is not supported
+SELECT
+  count(*)
+FROM
+  (SELECT 
+    event_type, random() 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id > users_table.user_id AND 
+    events_table.time = users_table.time AND 
+    events_table.value_2 IN (10, 100)
+  ) as foo;
+
+-- we can even allow that on top level joins
+SELECT
+  count(*)
+FROM
+  (SELECT 
+    event_type, random(), events_table.user_id 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id = users_table.user_id AND 
+    events_table.value_2 IN (10, 100)
+  ) as foo,
+(SELECT 
+    event_type, random(), events_table.user_id 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id = users_table.user_id AND 
+    events_table.value_2 IN (20, 200)
+  ) as bar 
+WHERE foo.event_type > bar.event_type
+AND foo.user_id = bar.user_id;
+
+-- note that the following is not supported
+-- since the top level join is not on the distribution key
+SELECT
+  count(*)
+FROM
+  (SELECT 
+    event_type, random() 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id = users_table.user_id AND 
+    events_table.value_2 IN (10, 100)
+  ) as foo,
+(SELECT 
+    event_type, random() 
+  FROM 
+    events_table, users_table 
+  WHERE 
+    events_table.user_id = users_table.user_id AND 
+    events_table.value_2 IN (20, 200)
+  ) as bar 
+WHERE foo.event_type = bar.event_type;
 
 -- DISTINCT in the outer query and DISTINCT in the subquery
 SELECT
@@ -1712,7 +1818,14 @@ FROM
   ORDER BY 1,2
   LIMIT 5;
 
+
 DROP FUNCTION test_join_function_2(integer, integer);
+
+SELECT run_command_on_workers($f$
+
+  DROP FUNCTION test_join_function_2(integer, integer);
+
+$f$);
 
 SET citus.enable_router_execution TO TRUE;
 SET citus.subquery_pushdown to OFF;
