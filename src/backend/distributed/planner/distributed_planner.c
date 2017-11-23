@@ -94,8 +94,6 @@ static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static Query * BuildSubPlanResultQuery(Query *subquery, int subPlanId);
-static void RemoveRTEsFromPlannerRestrictionContext(List *rangeTableList);
-static bool RangeTableListContainsIdentity(List *rangeTableList, int rteIdentity);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
@@ -200,8 +198,6 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 bool
 NeedsDistributedPlanning(Query *queryTree)
 {
-	bool needsDistributedPlanning = false;
-
 	CmdType commandType = queryTree->commandType;
 	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
 		commandType != CMD_UPDATE && commandType != CMD_DELETE)
@@ -1217,75 +1213,6 @@ BuildSubPlanResultQuery(Query *subquery, int subPlanId)
 	resultQuery->targetList = targetList;
 
 	return resultQuery;
-}
-
-
-/*
- * RemoveRTEsFromPlannerRestrictionContext removes relation restriction contexts
- * after replacing a subquery.
- */
-static void
-RemoveRTEsFromPlannerRestrictionContext(List *rangeTableList)
-{
-	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	RelationRestrictionContext *relationRestrictionContext = NULL;
-	MemoryContext restrictionsMemoryContext = NULL;
-	MemoryContext oldMemoryContext = NULL;
-	ListCell *relationRestrictionCell = NULL;
-	List *newRelationRestrictionList = NIL;
-
-	plannerRestrictionContext = CurrentPlannerRestrictionContext();
-	restrictionsMemoryContext = plannerRestrictionContext->memoryContext;
-	oldMemoryContext = MemoryContextSwitchTo(restrictionsMemoryContext);
-
-	relationRestrictionContext = plannerRestrictionContext->relationRestrictionContext;
-
-	foreach(relationRestrictionCell, relationRestrictionContext->relationRestrictionList)
-	{
-		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
-		RangeTblEntry *rangeTableEntry = relationRestriction->rte;
-		int rteIdentity = GetRTEIdentity(rangeTableEntry);
-
-		if (RangeTableListContainsIdentity(rangeTableList, rteIdentity))
-		{
-			continue;
-		}
-
-		newRelationRestrictionList = lappend(newRelationRestrictionList,
-											 relationRestriction);
-	}
-
-	relationRestrictionContext->relationRestrictionList = newRelationRestrictionList;
-
-	MemoryContextSwitchTo(oldMemoryContext);
-}
-
-
-static bool
-RangeTableListContainsIdentity(List *rangeTableList, int rteIdentity)
-{
-	ListCell *rangeTableCell = NULL;
-	bool rteIdentityFound = false;
-
-	foreach(rangeTableCell, rangeTableList)
-	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		int currentRteIdentity = 0;
-
-		if (rangeTableEntry->rtekind != RTE_RELATION)
-		{
-			continue;
-		}
-
-		currentRteIdentity = GetRTEIdentity(rangeTableEntry);
-		if (currentRteIdentity == rteIdentity)
-		{
-			rteIdentityFound = true;
-			break;
-		}
-	}
-
-	return rteIdentityFound;
 }
 
 
