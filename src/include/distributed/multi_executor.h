@@ -14,18 +14,9 @@
 #include "nodes/parsenodes.h"
 #include "nodes/execnodes.h"
 
+#include "distributed/citus_custom_scan.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
-
-
-typedef struct CitusScanState
-{
-	CustomScanState customScanState;  /* underlying custom scan node */
-	DistributedPlan *distributedPlan; /* distributed execution plan */
-	MultiExecutorType executorType;   /* distributed executor type */
-	bool finishedRemoteScan;          /* flag to check if remote scan is finished */
-	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
-} CitusScanState;
 
 
 /* managed via guc.c */
@@ -36,19 +27,9 @@ typedef enum
 } MultiShardConnectionTypes;
 extern int MultiShardConnectionType;
 
-extern Node * RealTimeCreateScan(CustomScan *scan);
-extern Node * TaskTrackerCreateScan(CustomScan *scan);
-extern Node * RouterCreateScan(CustomScan *scan);
-extern Node * CoordinatorInsertSelectCreateScan(CustomScan *scan);
-extern Node * DelayedErrorCreateScan(CustomScan *scan);
-extern void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
-extern TupleTableSlot * RealTimeExecScan(CustomScanState *node);
-extern TupleTableSlot * TaskTrackerExecScan(CustomScanState *node);
-extern void CitusEndScan(CustomScanState *node);
-extern void CitusReScan(CustomScanState *node);
-extern void CitusExplainScan(CustomScanState *node, List *ancestors, struct
-							 ExplainState *es);
+
 extern TupleTableSlot * ReturnTupleFromTuplestore(CitusScanState *scanState);
+extern void LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob);
 
 
 #endif /* MULTI_EXECUTOR_H */
