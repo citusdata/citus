@@ -23,10 +23,14 @@
 #include <unistd.h>
 
 #include "commands/dbcommands.h"
+#include "distributed/citus_custom_scan.h"
 #include "distributed/connection_management.h"
 #include "distributed/multi_client_executor.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/resource_lock.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "storage/fd.h"
@@ -921,4 +925,54 @@ UpdateConnectionCounter(WorkerNodeState *workerNode, ConnectAction connectAction
 	{
 		workerNode->openConnectionCount--;
 	}
+}
+
+
+/*
+ * RealTimeExecScan is a callback function which returns next tuple from a real-time
+ * execution. In the first call, it executes distributed real-time plan and loads
+ * results from temporary files into custom scan's tuple store. Then, it returns
+ * tuples one by one from this tuple store.
+ */
+TupleTableSlot *
+RealTimeExecScan(CustomScanState *node)
+{
+	CitusScanState *scanState = (CitusScanState *) node;
+	TupleTableSlot *resultSlot = NULL;
+
+	if (!scanState->finishedRemoteScan)
+	{
+		DistributedPlan *distributedPlan = scanState->distributedPlan;
+		Job *workerJob = distributedPlan->workerJob;
+
+		/* we are taking locks on partitions of partitioned tables */
+		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+
+		PrepareMasterJobDirectory(workerJob);
+		MultiRealTimeExecute(workerJob);
+
+		LoadTuplesIntoTupleStore(scanState, workerJob);
+
+		scanState->finishedRemoteScan = true;
+	}
+
+	resultSlot = ReturnTupleFromTuplestore(scanState);
+
+	return resultSlot;
+}
+
+
+/*
+ * PrepareMasterJobDirectory creates a directory on the master node to keep job
+ * execution results. We also register this directory for automatic cleanup on
+ * portal delete.
+ */
+void
+PrepareMasterJobDirectory(Job *workerJob)
+{
+	StringInfo jobDirectoryName = MasterJobDirectoryName(workerJob->jobId);
+	CitusCreateDirectory(jobDirectoryName);
+
+	ResourceOwnerEnlargeJobDirectories(CurrentResourceOwner);
+	ResourceOwnerRememberJobDirectory(CurrentResourceOwner, workerJob->jobId);
 }

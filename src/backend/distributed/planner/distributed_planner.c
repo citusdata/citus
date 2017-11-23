@@ -39,32 +39,6 @@
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
 
-/* create custom scan methods for separate executors */
-static CustomScanMethods RealTimeCustomScanMethods = {
-	"Citus Real-Time",
-	RealTimeCreateScan
-};
-
-static CustomScanMethods TaskTrackerCustomScanMethods = {
-	"Citus Task-Tracker",
-	TaskTrackerCreateScan
-};
-
-static CustomScanMethods RouterCustomScanMethods = {
-	"Citus Router",
-	RouterCreateScan
-};
-
-static CustomScanMethods CoordinatorInsertSelectCustomScanMethods = {
-	"Citus INSERT ... SELECT via coordinator",
-	CoordinatorInsertSelectCreateScan
-};
-
-static CustomScanMethods DelayedErrorCustomScanMethods = {
-	"Citus Delayed Error",
-	DelayedErrorCreateScan
-};
-
 
 /* local function forward declarations */
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
