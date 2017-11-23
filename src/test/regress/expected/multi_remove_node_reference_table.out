@@ -654,8 +654,6 @@ WHERE
 \c - - - :master_port
 BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node 
 --------------------

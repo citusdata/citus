@@ -268,8 +268,6 @@ UPDATE limit_orders_mx SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, L
 -- connect coordinator to run the DDL
 \c - - - :master_port
 ALTER TABLE limit_orders_mx ADD COLUMN array_of_values integer[];
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- connect back to the other node
 \c - - - :worker_2_port
 -- updates referencing STABLE functions are allowed
@@ -310,8 +308,6 @@ SELECT array_of_values FROM limit_orders_mx WHERE id = 246;
 -- connect coordinator to run the DDL
 \c - - - :master_port
 ALTER TABLE limit_orders_mx DROP array_of_values;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- connect back to the other node
 \c - - - :worker_2_port
 -- even in RETURNING

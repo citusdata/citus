@@ -162,8 +162,6 @@ INSERT INTO referenced_table VALUES(3, 3);
 INSERT INTO referencing_table VALUES(3, 3);
 BEGIN;
 ALTER TABLE referencing_table ADD COLUMN x int DEFAULT 0;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT master_modify_multiple_shards('DELETE FROM referenced_table');
  master_modify_multiple_shards 
 -------------------------------

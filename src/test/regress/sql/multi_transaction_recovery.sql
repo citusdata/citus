@@ -1,11 +1,12 @@
+-- Tests for prepared transaction recovery
 SET citus.next_shard_id TO 1220000;
 
--- Tests for prepared transaction recovery
+-- Disable auto-recovery for the initial tests
+ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
+SELECT pg_reload_conf();
 
--- Ensure pg_dist_transaction is empty for test
+-- Ensure pg_dist_transaction is empty
 SELECT recover_prepared_transactions();
-
-SELECT * FROM pg_dist_transaction;
 
 -- Create some "fake" prepared transactions to recover
 \c - - - :worker_1_port
@@ -56,12 +57,13 @@ SELECT recover_prepared_transactions();
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
 
--- Committed DDL commands should write 4 transaction recovery records
+-- Aborted DDL commands should not write transaction recovery records
 BEGIN;
 ALTER TABLE test_recovery ADD COLUMN y text;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
 
+-- Committed DDL commands should write 4 transaction recovery records
 ALTER TABLE test_recovery ADD COLUMN y text;
 
 SELECT count(*) FROM pg_dist_transaction;
@@ -80,12 +82,13 @@ SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;
 
--- Committed INSERT..SELECT should write 4 transaction recovery records
+-- Aborted INSERT..SELECT should not write transaction recovery records
 BEGIN;
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 ROLLBACK;
 SELECT count(*) FROM pg_dist_transaction;
 
+-- Committed INSERT..SELECT should write 4 transaction recovery records
 INSERT INTO test_recovery SELECT x, 'earth' FROM test_recovery;
 
 SELECT count(*) FROM pg_dist_transaction;
@@ -106,5 +109,26 @@ hello-1
 SELECT count(*) FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 
+-- Create a single-replica table to enable 2PC in multi-statement transactions
+CREATE TABLE test_recovery_single (LIKE test_recovery);
+SELECT create_distributed_table('test_recovery_single', 'x');
+
+-- Multi-statement transactions should write 2 transaction recovery records
+BEGIN;
+INSERT INTO test_recovery_single VALUES ('hello-0');
+INSERT INTO test_recovery_single VALUES ('hello-2');
+COMMIT;
+SELECT count(*) FROM pg_dist_transaction;
+
+-- Test whether auto-recovery runs
+ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+SELECT count(*) FROM pg_dist_transaction;
+
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+SELECT pg_reload_conf();
+
 DROP TABLE test_recovery_ref;
 DROP TABLE test_recovery;
+DROP TABLE test_recovery_single;

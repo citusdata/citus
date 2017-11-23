@@ -121,7 +121,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	HASHCTL info;
 	HTAB *itemSet = NULL;
 	ListCell *itemCell = NULL;
-	int flags = HASH_ELEM;
+	int flags = HASH_ELEM | HASH_CONTEXT;
 
 	/* allocate sufficient capacity for O(1) expected look-up time */
 	int capacity = (int) (list_length(itemList) / 0.75) + 1;
@@ -130,6 +130,7 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	memset(&info, 0, sizeof(info));
 	info.keysize = keySize;
 	info.entrysize = keySize;
+	info.hcxt = CurrentMemoryContext;
 
 	if (!isStringList)
 	{

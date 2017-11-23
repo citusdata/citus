@@ -38,8 +38,6 @@ SELECT master_create_worker_shards('labs', 1, 1);
 
 -- might be confusing to have two people in the same lab with the same name
 CREATE UNIQUE INDEX avoid_name_confusion_idx ON researchers (lab_id, name);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- add some data
 INSERT INTO researchers VALUES (1, 1, 'Donald Knuth');
 INSERT INTO researchers VALUES (2, 1, 'Niklaus Wirth');
@@ -371,6 +369,7 @@ ORDER BY nodeport, shardid;
 \set VERBOSITY terse
 -- deferred check should abort the transaction
 BEGIN;
+SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 \copy researchers FROM STDIN delimiter ','
@@ -1436,7 +1435,6 @@ SELECT id FROM users WHERE id = 6;
 (1 row)
 
 ALTER TABLE items ADD COLUMN last_update timestamptz;
-NOTICE:  using one-phase commit for distributed DDL commands
 ERROR:  cannot perform a parallel DDL command because multiple placements have been accessed over the same connection
 END;
 -- but the other way around is fine

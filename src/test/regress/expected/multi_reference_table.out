@@ -1317,8 +1317,6 @@ SELECT create_reference_table('reference_table_ddl');
 
 -- CREATE & DROP index and check the workers
 CREATE INDEX reference_index_1 ON reference_table_ddl(value_1);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX reference_index_2 ON reference_table_ddl(value_2, value_3);
 -- should be able to create/drop UNIQUE index on a reference table
 CREATE UNIQUE INDEX reference_index_3 ON reference_table_ddl(value_1);
@@ -1367,8 +1365,6 @@ btree, for table "public.reference_table_ddl_1250019"
 
 \c - - - :master_port
 DROP INDEX reference_index_2;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
  Column  |            Type             |  Modifiers   
@@ -1620,8 +1616,6 @@ ROLLBACK;
 -- DDL+DML is allowed
 BEGIN;
 ALTER TABLE reference_table_test ADD COLUMN value_dummy INT;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO reference_table_test VALUES (2, 2.0, '2', '2016-12-02');
 ROLLBACK;
 -- clean up tables

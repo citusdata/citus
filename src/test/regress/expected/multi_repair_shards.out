@@ -43,8 +43,6 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid
 -- cannot repair a shard after a modification (transaction still open during repair)
 BEGIN;
 ALTER TABLE customer_engagements ADD COLUMN value float;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT master_copy_shard_placement(:newshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  cannot open new connections after the first modification command within a transaction
 ROLLBACK;

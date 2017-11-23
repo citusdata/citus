@@ -22,8 +22,10 @@
 #include "pgstat.h"
 
 #include "access/xact.h"
+#include "access/xlog.h"
 #include "catalog/pg_extension.h"
 #include "citus_version.h"
+#include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "libpq/pqsignal.h"
 #include "catalog/namespace.h"
@@ -32,8 +34,10 @@
 #include "distributed/master_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/transaction_recovery.h"
 #include "nodes/makefuncs.h"
 #include "postmaster/bgworker.h"
+#include "nodes/makefuncs.h"
 #include "storage/ipc.h"
 #include "storage/proc.h"
 #include "storage/latch.h"
@@ -41,6 +45,7 @@
 #include "storage/lwlock.h"
 #include "tcop/tcopprot.h"
 #include "utils/memutils.h"
+#include "utils/lsyscache.h"
 
 
 /*
@@ -80,6 +85,7 @@ typedef struct MaintenanceDaemonDBData
 
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
+int Recover2PCInterval = 60000;
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 static MaintenanceDaemonControlData *MaintenanceDaemonControl = NULL;
@@ -221,6 +227,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		TimestampTzPlusMilliseconds(GetCurrentTimestamp(), 60 * 1000);
 	bool retryStatsCollection USED_WITH_LIBCURL_ONLY = false;
 	ErrorContextCallback errorCallback;
+	TimestampTz lastRecoveryTime = 0;
 
 	/*
 	 * Look up this worker's configuration.
@@ -361,9 +368,54 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 		}
 #endif
 
+		/*
+		 * If enabled, run 2PC recovery on primary nodes (where !RecoveryInProgress()),
+		 * since we'll write to the pg_dist_transaction log.
+		 */
+		if (Recover2PCInterval > 0 && !RecoveryInProgress() &&
+			TimestampDifferenceExceeds(lastRecoveryTime, GetCurrentTimestamp(),
+									   Recover2PCInterval))
+		{
+			int recoveredTransactionCount = 0;
+
+			InvalidateMetadataSystemCache();
+			StartTransactionCommand();
+
+			if (!LockCitusExtension())
+			{
+				ereport(DEBUG1, (errmsg("could not lock the citus extension, "
+										"skipping 2PC recovery")));
+			}
+			else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
+			{
+				/*
+				 * Record last recovery time at start to ensure we run once per
+				 * Recover2PCInterval even if RecoverTwoPhaseCommits takes some time.
+				 */
+				lastRecoveryTime = GetCurrentTimestamp();
+
+				recoveredTransactionCount = RecoverTwoPhaseCommits();
+			}
+
+			CommitTransactionCommand();
+
+			if (recoveredTransactionCount > 0)
+			{
+				ereport(LOG, (errmsg("maintenance daemon recovered %d distributed "
+									 "transactions",
+									 recoveredTransactionCount)));
+			}
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, Recover2PCInterval);
+		}
+
 		/* the config value -1 disables the distributed deadlock detection  */
 		if (DistributedDeadlockDetectionTimeoutFactor != -1.0)
 		{
+			double deadlockTimeout =
+				DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
+
 			InvalidateMetadataSystemCache();
 			StartTransactionCommand();
 
@@ -397,13 +449,13 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			 * citus.distributed_deadlock_detection_factor 2), we'd be able to cancel
 			 * ~10 distributed deadlocks per second.
 			 */
-			timeout =
-				DistributedDeadlockDetectionTimeoutFactor * (double) DeadlockTimeout;
-
 			if (foundDeadlock)
 			{
-				timeout = timeout / 20.0;
+				deadlockTimeout = deadlockTimeout / 20.0;
 			}
+
+			/* make sure we don't wait too long */
+			timeout = Min(timeout, deadlockTimeout);
 		}
 
 		/*

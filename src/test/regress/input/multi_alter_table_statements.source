@@ -300,7 +300,7 @@ COMMIT;
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
 -- Now try with 2pc off
-RESET citus.multi_shard_commit_protocol;
+SET citus.multi_shard_commit_protocol TO '1pc';
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);

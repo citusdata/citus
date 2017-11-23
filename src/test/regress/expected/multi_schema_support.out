@@ -583,8 +583,6 @@ SELECT * FROM nation_hash_composite_types WHERE test_col = '(a,a)'::new_composit
 -- test ALTER TABLE ADD/DROP queries with schemas
 SET search_path TO public;
 ALTER TABLE test_schema_support.nation_hash ADD COLUMN new_col INT;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
    Column    |          Type          | Modifiers 
@@ -610,8 +608,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_su
 \c - - - :master_port
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE test_schema_support.nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
@@ -637,8 +633,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='test_schema_su
 --test with search_path is set
 SET search_path TO test_schema_support;
 ALTER TABLE nation_hash ADD COLUMN new_col INT;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- verify column is added
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
    Column    |          Type          | Modifiers 
@@ -665,8 +659,6 @@ SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_sc
 SET search_path TO test_schema_support;
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS non_existent_column;
 NOTICE:  column "non_existent_column" of relation "nation_hash" does not exist, skipping
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE nation_hash DROP COLUMN IF EXISTS new_col;
 -- verify column is dropped
 SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_schema_support.nation_hash'::regclass;
@@ -693,8 +685,6 @@ SELECT "Column", "Type", "Modifiers" FROM public.table_desc WHERE relid='test_sc
 SET search_path TO public;
 -- CREATE index
 CREATE INDEX index1 ON test_schema_support.nation_hash(n_name);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 --verify INDEX is created
 \d test_schema_support.index1
  Index "test_schema_support.index1"
@@ -714,8 +704,6 @@ btree, for table "test_schema_support.nation_hash_1190003"
 \c - - - :master_port
 -- DROP index
 DROP INDEX test_schema_support.index1;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 --verify INDEX is dropped
 \d test_schema_support.index1
 \c - - - :worker_1_port
@@ -725,8 +713,6 @@ HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_sh
 SET search_path TO test_schema_support;
 -- CREATE index
 CREATE INDEX index1 ON nation_hash(n_name);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 --verify INDEX is created
 \d test_schema_support.index1
  Index "test_schema_support.index1"
@@ -747,8 +733,6 @@ btree, for table "test_schema_support.nation_hash_1190003"
 -- DROP index
 SET search_path TO test_schema_support;
 DROP INDEX index1;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 --verify INDEX is dropped
 \d test_schema_support.index1
 \c - - - :worker_1_port

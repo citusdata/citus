@@ -43,6 +43,7 @@
 #include "distributed/statistics_collection.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
+#include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_protocol.h"
 #include "postmaster/postmaster.h"
@@ -457,6 +458,20 @@ RegisterCitusConfigVariables(void)
 		0,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
 
+	DefineCustomIntVariable(
+		"citus.recover_2pc_interval",
+		gettext_noop("Sets the time to wait between recovering 2PCs."),
+		gettext_noop("2PC transaction recovery needs to run every so often "
+					 "to clean up records in pg_dist_transaction and "
+					 "potentially roll failed 2PCs forward. This setting "
+					 "determines how often recovery should run, "
+					 "use -1 to disable."),
+		&Recover2PCInterval,
+		60000, -1, 7 * 24 * 3600 * 1000,
+		PGC_SIGHUP,
+		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_deadlock_prevention",
 		gettext_noop("Prevents transactions from expanding to multiple nodes"),
@@ -670,13 +685,11 @@ RegisterCitusConfigVariables(void)
 		"citus.multi_shard_commit_protocol",
 		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),
 		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "shards (currently, only COPY on distributed tables modifies more "
-					 "than one shard), two-phase commit is required to ensure data is "
-					 "never lost. Change this setting to '2pc' from its default '1pc' to "
-					 "enable 2 PC. You must also set max_prepared_transactions on the "
-					 "worker nodes. Recovery from failed 2PCs is currently manual."),
+					 "shards, two-phase commit is required to ensure data is never lost "
+					 "and this is the default. However, changing to 1pc may give small "
+					 "performance benefits."),
 		&MultiShardCommitProtocol,
-		COMMIT_PROTOCOL_1PC,
+		COMMIT_PROTOCOL_2PC,
 		multi_shard_commit_protocol_options,
 		PGC_USERSET,
 		0,

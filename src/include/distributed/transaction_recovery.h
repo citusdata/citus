@@ -12,8 +12,13 @@
 #define TRANSACTION_RECOVERY_H
 
 
+/* GUC to configure interval for 2PC auto-recovery */
+extern int Recover2PCInterval;
+
+
 /* Functions declarations for worker transactions */
 extern void LogTransactionRecord(int groupId, char *transactionName);
+extern int RecoverTwoPhaseCommits(void);
 
 
 #endif /* TRANSACTION_RECOVERY_H */

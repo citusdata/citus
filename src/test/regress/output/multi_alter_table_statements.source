@@ -32,8 +32,6 @@ SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append')
 \copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 -- Verify that we can add columns
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
 ALTER TABLE lineitem_alter ADD COLUMN int_column1 INTEGER DEFAULT 1;
 ALTER TABLE lineitem_alter ADD COLUMN int_column2 INTEGER DEFAULT 2;
@@ -117,8 +115,6 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 
 -- Verify that SET|DROP DEFAULT works
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 -- \copy to verify that default values take effect
 \copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
@@ -526,8 +522,6 @@ ALTER TABLE lineitem_alter_220000 ADD COLUMN first integer;
 -- and try to add it in a multi-statement block, which fails
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ALTER TABLE lineitem_alter ADD COLUMN first integer;
 ERROR:  column "first" of relation "lineitem_alter_220000" already exists
 CONTEXT:  while executing command on localhost:57638
@@ -657,11 +651,9 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_item
 (0 rows)
 
 -- Now try with 2pc off
-RESET citus.multi_shard_commit_protocol;
+SET citus.multi_shard_commit_protocol TO '1pc';
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 WARNING:  duplicate key value violates unique constraint "ddl_commands_command_key"
@@ -684,8 +676,6 @@ DROP TABLE ddl_commands;
 -- Distributed SELECTs cannot appear after ALTER
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT count(*) FROM lineitem_alter;
 ERROR:  cannot open new connections after the first modification command within a transaction
 COMMIT;
@@ -863,8 +853,6 @@ SELECT create_distributed_table('sequence_deadlock_test', 'a');
 
 BEGIN;
 ALTER TABLE sequence_deadlock_test ADD COLUMN c int;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP SEQUENCE sequence_deadlock_test_b_seq CASCADE;
 NOTICE:  drop cascades to default for table sequence_deadlock_test column b
 END;
@@ -902,8 +890,6 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 (1 row)
 
 ALTER TABLE trigger_table DISABLE TRIGGER ALL;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
       value       | count 
@@ -961,8 +947,6 @@ SELECT create_distributed_table('test_table_1','id');
 (1 row)
 
 ALTER TABLE test_table_1 ADD CONSTRAINT u_key UNIQUE(id);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 DROP TABLE test_table_1;
 END;
 -- There should be no test_table_1 shard on workers
