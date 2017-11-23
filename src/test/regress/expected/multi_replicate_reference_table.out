@@ -510,8 +510,6 @@ SELECT create_reference_table('replicate_reference_table_ddl');
 
 BEGIN;
 ALTER TABLE replicate_reference_table_ddl ADD column2 int;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "replicate_reference_table_ddl" to the node localhost:57638
 ERROR:  cannot open new connections after the first modification command within a transaction

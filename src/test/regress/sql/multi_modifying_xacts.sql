@@ -295,6 +295,7 @@ ORDER BY nodeport, shardid;
 \set VERBOSITY terse
 -- deferred check should abort the transaction
 BEGIN;
+SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 31, 6, 'Bjarne Stroustrup'

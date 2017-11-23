@@ -1057,8 +1057,6 @@ CREATE TABLE explain_table(id int);
 SELECT create_distributed_table('explain_table', 'id');
 
 ALTER TABLE explain_table ADD COLUMN value int;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 ROLLBACK;
 -- test explain with local INSERT ... SELECT
 EXPLAIN (COSTS OFF)

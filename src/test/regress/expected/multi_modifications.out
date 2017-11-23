@@ -460,8 +460,6 @@ UPDATE limit_orders SET symbol = UPPER(symbol) WHERE id = 246 RETURNING id, LOWE
 (1 row)
 
 ALTER TABLE limit_orders ADD COLUMN array_of_values integer[];
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- updates referencing STABLE functions are allowed
 UPDATE limit_orders SET placed_at = LEAST(placed_at, now()::timestamp) WHERE id = 246;
 -- so are binary operators
@@ -505,8 +503,6 @@ SELECT array_of_values FROM limit_orders WHERE id = 246;
 (1 row)
 
 ALTER TABLE limit_orders DROP array_of_values;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 -- even in RETURNING
 UPDATE limit_orders SET placed_at = placed_at WHERE id = 246 RETURNING NOW();
 ERROR:  non-IMMUTABLE functions are not allowed in the RETURNING clause

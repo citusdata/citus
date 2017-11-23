@@ -71,8 +71,6 @@ SELECT unnest(master_metadata_snapshot());
 
 -- Show that CREATE INDEX commands are included in the metadata snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT unnest(master_metadata_snapshot());
                                                                                                                                                                                                                                                                                                                                                              unnest                                                                                                                                                                                                                                                                                                                                                             
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1286,8 +1284,6 @@ SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_re
 -- Check that DDL commands are propagated to reference tables on workers
 \c - - - :master_port
 ALTER TABLE mx_ref ADD COLUMN col_3 NUMERIC DEFAULT 0;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 CREATE INDEX mx_ref_index ON mx_ref(col_1);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_ref'::regclass;
  Column |  Type   | Modifiers 

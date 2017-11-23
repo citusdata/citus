@@ -241,8 +241,6 @@ SELECT master_create_worker_shards('dropcol_distributed', 4, 1);
 INSERT INTO dropcol_distributed AS dropcol (key, keep1, keep2) VALUES (1, '5', 5) ON CONFLICT(key)
 	DO UPDATE SET keep1 = dropcol.keep1;
 ALTER TABLE dropcol_distributed DROP COLUMN drop2;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO dropcol_distributed (key, keep1, keep2) VALUES (1, '5', 5) ON CONFLICT(key)
 	DO UPDATE SET keep1 = dropcol_distributed.keep1;
 ALTER TABLE dropcol_distributed DROP COLUMN keep2;

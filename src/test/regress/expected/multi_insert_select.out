@@ -1653,8 +1653,6 @@ DETAIL:  Limit in subquery is currently unsupported
 -- connections for all co-located placements.
 BEGIN;
 ALTER TABLE raw_events_second DROP COLUMN value_4;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 INSERT INTO raw_events_first SELECT * FROM raw_events_second; 
 ROLLBACK;
 -- Alterating a table and selecting from it using a single-shard statement

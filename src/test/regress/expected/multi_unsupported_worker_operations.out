@@ -140,8 +140,6 @@ SELECT * FROM mx_ref_table ORDER BY col_1;
 \c - - - :master_port
 DROP TABLE mx_ref_table;
 CREATE UNIQUE INDEX mx_test_uniq_index ON mx_table(col_1);
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 \c - - - :worker_1_port
 -- DDL commands
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
@@ -228,8 +226,6 @@ SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 -- master_remove_node
 \c - - - :master_port
 DROP INDEX mx_test_uniq_index;
-NOTICE:  using one-phase commit for distributed DDL commands
-HINT:  You can enable two-phase commit for extra safety with: SET citus.multi_shard_commit_protocol TO '2pc'
 SELECT 1 FROM master_add_node('localhost', 5432);
  ?column? 
 ----------

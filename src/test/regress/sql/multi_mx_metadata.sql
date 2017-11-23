@@ -1,8 +1,12 @@
 -- Test creation of mx tables and metadata syncing
 
+-- Temporarily disable automatic 2PC recovery
+ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
+SELECT pg_reload_conf();
+
 -- get rid of the previously created entries in pg_dist_transaction
 -- for the sake of getting consistent results in this test file
-SELECT recover_prepared_transactions();
+TRUNCATE pg_dist_transaction;
 
 CREATE TABLE distributed_mx_table (
     key text primary key,
@@ -14,6 +18,7 @@ SET citus.shard_replication_factor TO 1;
 SET citus.replication_model TO streaming;
 
 SET citus.shard_count TO 4;
+
 SELECT create_distributed_table('distributed_mx_table', 'key');
 
 -- Verify that we've logged commit records
@@ -165,3 +170,8 @@ SELECT count(*) FROM pg_dist_transaction;
 \c - - - :worker_1_port
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_abort';
 SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
+
+-- Resume ordinary recovery
+\c - - - :master_port
+ALTER SYSTEM RESET citus.recover_2pc_interval;
+SELECT pg_reload_conf();
