@@ -22,6 +22,7 @@
 #include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/hash_helpers.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
@@ -154,6 +155,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * transaction management. Do so before doing other work, so the
 			 * callbacks still can perform work if needed.
 			 */
+			RemoveIntermediateResultsDirectory();
 			ResetShardPlacementTransactionState();
 
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
@@ -191,6 +193,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * transaction management. Do so before doing other work, so the
 			 * callbacks still can perform work if needed.
 			 */
+			RemoveIntermediateResultsDirectory();
 			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */

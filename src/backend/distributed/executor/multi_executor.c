@@ -123,6 +123,8 @@ LoadTuplesIntoTupleStore(CitusScanState *citusScanState, Job *workerJob)
 		ReadFileIntoTupleStore(taskFilename->data, copyFormat, tupleDescriptor,
 							   citusScanState->tuplestorestate);
 	}
+
+	tuplestore_donestoring(citusScanState->tuplestorestate);
 }
 
 
