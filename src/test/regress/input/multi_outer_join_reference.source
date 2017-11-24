@@ -315,13 +315,14 @@ WHERE
 	l_custkey is NULL
 ORDER BY 1;
 
--- Cascading right join with single shard left most table should error out
+-- Cascading right join with single shard on the inside
 SELECT
 	t_custkey, r_custkey, l_custkey
 FROM
 	multi_outer_join_third_reference t1
 	RIGHT JOIN multi_outer_join_right_hash r1 ON (t1.t_custkey = r1.r_custkey)
-	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey);
+	RIGHT JOIN multi_outer_join_left_hash l1 ON (r1.r_custkey  = l1.l_custkey)
+ORDER BY 1,2,3;
 
 -- full outer join should work with 1-1 matched shards
 SELECT
@@ -386,15 +387,16 @@ FROM
 	LEFT JOIN multi_outer_join_right_hash r1 ON (l1.l_custkey  = r1.r_custkey)
 ORDER BY 1,2,3;
 
--- inner (local) join  + 2 shards left (dual partition) join should error out
+-- inner (local) join  + 2 shards left (dual partition) join should work
 SELECT
 	t_custkey, l_custkey, r_custkey
 FROM
 	multi_outer_join_third_reference t1
 	INNER JOIN multi_outer_join_left_hash l1 ON (l1.l_custkey = t1.t_custkey)
-	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey);
+	LEFT JOIN multi_outer_join_right_reference r1 ON (l1.l_custkey  = r1.r_custkey)
+ORDER BY 1,2,3;
 
--- inner (local) join  + 2 shards left (dual partition) join should work
+-- inner (local) join  + 2 shards left join should work
 SELECT
 	l_custkey, t_custkey, r_custkey
 FROM

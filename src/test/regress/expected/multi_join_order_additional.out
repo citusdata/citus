@@ -184,7 +184,6 @@ LOG:  join order: [ "orders" ][ single partition join "lineitem_hash" ]
 -- Verify we handle local joins between two hash-partitioned tables.
 EXPLAIN SELECT count(*) FROM orders_hash, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
-LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)
@@ -195,7 +194,6 @@ LOG:  join order: [ "orders_hash" ][ local partition join "lineitem_hash" ]
 -- Validate that we can handle broadcast joins with hash-partitioned tables.
 EXPLAIN SELECT count(*) FROM customer_hash, nation
 	WHERE c_nationkey = n_nationkey;
-LOG:  join order: [ "customer_hash" ][ broadcast join "nation" ]
                                 QUERY PLAN                                
 --------------------------------------------------------------------------
  Aggregate  (cost=0.00..0.00 rows=0 width=0)

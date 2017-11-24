@@ -139,22 +139,26 @@ SELECT distinct(o_orderkey) FROM priority_orders join air_shipped_lineitems
         231
 (1 row)
 
--- left join support depends on flattening of the query
--- following query fails since the inner part is kept as subquery
-SELECT * FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries in outer joins are not supported
--- however, this works
+-- left joins are supported
+SELECT count(*) FROM priority_orders left join air_shipped_lineitems ON (o_orderkey = l_orderkey);
+ count 
+-------
+  1345
+(1 row)
+
 SELECT count(*) FROM priority_orders left join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count 
 -------
    700
 (1 row)
 
--- view at the inner side of is not supported
+-- view at the inner side of is supported
 SELECT count(*) FROM priority_orders right join lineitem_hash_part ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries in outer joins are not supported
+ count 
+-------
+  1706
+(1 row)
+
 -- but view at the outer side is. This is essentially the same as a left join with arguments reversed.
 SELECT count(*) FROM lineitem_hash_part right join priority_orders ON (o_orderkey = l_orderkey) WHERE l_shipmode ='AIR';
  count 

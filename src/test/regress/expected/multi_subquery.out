@@ -163,8 +163,8 @@ FROM (
 	GROUP BY
 	   l_orderkey
 ) z;
-ERROR:  cannot push down this subquery
-DETAIL:  distinct in the outermost query is unsupported
+ERROR:  cannot use real time executor with repartition jobs
+HINT:  Set citus.task_executor_type to "task-tracker".
 -- Check supported subquery types.
 SELECT
 	o_custkey,

@@ -209,11 +209,10 @@ EXPLAIN (COSTS FALSE)
                ->  Task
                      Node: host=localhost port=57637 dbname=regression
                      ->  HashAggregate
-                           Group Key: l_orderkey
-                           Filter: (count(*) > 5)
+                           Group Key: lineitem_hash_part.l_orderkey
                            ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                  Filter: (l_orderkey < 200)
-(15 rows)
+(14 rows)
 
 -- distinct on non-partition column with aggregate
 -- this is the same as non-distinct version due to group by
@@ -258,7 +257,7 @@ EXPLAIN (COSTS FALSE)
                ->  Task
                      Node: host=localhost port=57637 dbname=regression
                      ->  HashAggregate
-                           Group Key: l_partkey
+                           Group Key: lineitem_hash_part.l_partkey
                            ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (13 rows)
 
@@ -318,8 +317,8 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part
 		WHERE l_shipmode = 'AIR' AND l_orderkey < 100
 		ORDER BY 1, 2;
-                                             QUERY PLAN                                              
------------------------------------------------------------------------------------------------------
+                                              QUERY PLAN                                              
+------------------------------------------------------------------------------------------------------
  Sort
    Sort Key: remote_scan.l_partkey, remote_scan.l_suppkey
    ->  HashAggregate
@@ -331,7 +330,7 @@ EXPLAIN (COSTS FALSE)
                      Node: host=localhost port=57637 dbname=regression
                      ->  Unique
                            ->  Sort
-                                 Sort Key: l_partkey, l_suppkey
+                                 Sort Key: lineitem_hash_part.l_partkey, lineitem_hash_part.l_suppkey
                                  ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        Filter: ((l_orderkey < 100) AND (l_shipmode = 'AIR'::bpchar))
 (14 rows)
@@ -373,7 +372,7 @@ EXPLAIN (COSTS FALSE)
                      Node: host=localhost port=57637 dbname=regression
                      ->  Unique
                            ->  Sort
-                                 Sort Key: l_orderkey
+                                 Sort Key: lineitem_hash_part.l_orderkey
                                  ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
                                        Filter: (l_orderkey < 35)
 (13 rows)
@@ -415,8 +414,8 @@ EXPLAIN (COSTS FALSE)
 		FROM lineitem_hash_part
 		ORDER BY 1,2
 		LIMIT 20;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+                                                    QUERY PLAN                                                     
+-------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Unique
          ->  Sort
@@ -429,7 +428,7 @@ EXPLAIN (COSTS FALSE)
                            ->  Limit
                                  ->  Unique
                                        ->  Sort
-                                             Sort Key: l_partkey, l_orderkey
+                                             Sort Key: lineitem_hash_part.l_partkey, lineitem_hash_part.l_orderkey
                                              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (14 rows)
 
@@ -644,8 +643,8 @@ EXPLAIN (COSTS FALSE)
 			) q
 		ORDER BY 1,2
 		LIMIT 10;
-                                                QUERY PLAN                                                
-----------------------------------------------------------------------------------------------------------
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
  Limit
    ->  Sort
          Sort Key: remote_scan.l_orderkey, remote_scan.l_partkey
@@ -658,9 +657,9 @@ EXPLAIN (COSTS FALSE)
                            Node: host=localhost port=57637 dbname=regression
                            ->  Limit
                                  ->  Sort
-                                       Sort Key: l_orderkey, l_partkey
+                                       Sort Key: lineitem_hash_part.l_orderkey, lineitem_hash_part.l_partkey
                                        ->  HashAggregate
-                                             Group Key: l_orderkey, l_partkey
+                                             Group Key: lineitem_hash_part.l_orderkey, lineitem_hash_part.l_partkey
                                              ->  Seq Scan on lineitem_hash_part_360038 lineitem_hash_part
 (16 rows)
 

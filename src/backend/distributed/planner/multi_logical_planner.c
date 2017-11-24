@@ -85,6 +85,13 @@ static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  PlannerRestrictionContext
 																	  *
 																	  plannerRestrictionContext);
+static DeferredErrorMessage * DeferErrorIfUnsupportedAggregateDistinct(
+	Query *originalQuery);
+static DeferredErrorMessage * DeferredErrorIfUnsupportedShardDistribution(Query *query);
+static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
+static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
+								ShardInterval *firstInterval,
+								ShardInterval *secondInterval);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSublinkAndReferenceTable(
 	Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedFilters(Query *subquery);
@@ -198,21 +205,29 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 {
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
+	DeferredErrorMessage *subqueryPushdownError = NULL;
 
-	/*
-	 * We check the existence of subqueries in FROM clause on the modified query
-	 * given that if postgres already flattened the subqueries, MultiNodeTree()
-	 * can plan corresponding distributed plan.
-	 *
-	 * We also check the existence of subqueries in WHERE clause. Note that
-	 * this check needs to be done on the original query given that
-	 * standard_planner() may replace the sublinks with anti/semi joins and
-	 * MultiNodeTree() cannot plan such queries.
-	 */
-	if (SubqueryEntryList(queryTree) != NIL || SublinkList(originalQuery) != NIL)
+	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
+													boundParams);
+
+	subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
+																	plannerRestrictionContext);
+	if (!subqueryPushdownError)
 	{
-		originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
-														boundParams);
+		multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
+	}
+	else if (SubqueryEntryList(queryTree) != NIL ||
+			 SublinkList(originalQuery) != NIL)
+	{
+		/*
+		 * If not eligible for single relation repartition query, we should raise
+		 * subquery pushdown error.
+		 */
+		if (!SingleRelationRepartitionSubquery(originalQuery))
+		{
+			RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
+		}
+
 		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
 	}
@@ -397,59 +412,27 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
-	DeferredErrorMessage *subqueryPushdownError = NULL;
+	RangeTblEntry *subqueryRangeTableEntry = NULL;
+	Query *subqueryTree = NULL;
+	DeferredErrorMessage *repartitionQueryError = NULL;
+	List *subqueryEntryList = NULL;
 
-	/*
-	 * This is a generic error check that applies to both subquery pushdown
-	 * and single table repartition subquery.
-	 */
 	ErrorIfQueryNotSupported(originalQuery);
 
-	/*
-	 * In principle, we're first trying subquery pushdown planner. If it fails
-	 * to create a logical plan, continue with trying the single table
-	 * repartition subquery planning.
-	 */
-	subqueryPushdownError = DeferErrorIfUnsupportedSubqueryPushdown(originalQuery,
-																	plannerRestrictionContext);
-	if (!subqueryPushdownError)
+	subqueryEntryList = SubqueryEntryList(queryTree);
+	subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
+	Assert(subqueryRangeTableEntry->rtekind == RTE_SUBQUERY);
+
+	subqueryTree = subqueryRangeTableEntry->subquery;
+
+	repartitionQueryError = DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
+	if (repartitionQueryError)
 	{
-		multiQueryNode = SubqueryPushdownMultiNodeTree(originalQuery);
+		RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
 	}
-	else if (subqueryPushdownError)
-	{
-		bool singleRelationRepartitionSubquery = false;
-		RangeTblEntry *subqueryRangeTableEntry = NULL;
-		Query *subqueryTree = NULL;
-		DeferredErrorMessage *repartitionQueryError = NULL;
-		List *subqueryEntryList = NULL;
 
-		/*
-		 * If not eligible for single relation repartition query, we should raise
-		 * subquery pushdown error.
-		 */
-		singleRelationRepartitionSubquery =
-			SingleRelationRepartitionSubquery(originalQuery);
-		if (!singleRelationRepartitionSubquery)
-		{
-			RaiseDeferredErrorInternal(subqueryPushdownError, ERROR);
-		}
-
-		subqueryEntryList = SubqueryEntryList(queryTree);
-		subqueryRangeTableEntry = (RangeTblEntry *) linitial(subqueryEntryList);
-		Assert(subqueryRangeTableEntry->rtekind == RTE_SUBQUERY);
-
-		subqueryTree = subqueryRangeTableEntry->subquery;
-
-		repartitionQueryError = DeferErrorIfUnsupportedSubqueryRepartition(subqueryTree);
-		if (repartitionQueryError)
-		{
-			RaiseDeferredErrorInternal(repartitionQueryError, ERROR);
-		}
-
-		/* all checks has passed, safe to create the multi plan */
-		multiQueryNode = MultiNodeTree(queryTree);
-	}
+	/* all checks has passed, safe to create the multi plan */
+	multiQueryNode = MultiNodeTree(queryTree);
 
 	Assert(multiQueryNode != NULL);
 
@@ -571,6 +554,18 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 							 "equality operator.", NULL);
 	}
 
+	error = DeferErrorIfUnsupportedAggregateDistinct(originalQuery);
+	if (error)
+	{
+		return error;
+	}
+
+	error = DeferredErrorIfUnsupportedShardDistribution(originalQuery);
+	if (error)
+	{
+		return error;
+	}
+
 	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
 	error = DeferErrorIfUnsupportedSublinkAndReferenceTable(originalQuery);
 	if (error)
@@ -613,6 +608,251 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	}
 
 	return NULL;
+}
+
+
+/*
+ * DeferErrorIfUnsupportedAggregateDistinct checks whether the query
+ * contains an unsupported DISTINCT aggregate.
+ */
+static DeferredErrorMessage *
+DeferErrorIfUnsupportedAggregateDistinct(Query *originalQuery)
+{
+	List *targetList = originalQuery->targetList;
+	List *expressionList = pull_var_clause((Node *) targetList, PVC_INCLUDE_AGGREGATES);
+	ListCell *expressionCell = NULL;
+
+	foreach(expressionCell, expressionList)
+	{
+		Node *expression = (Node *) lfirst(expressionCell);
+		Aggref *aggregateExpression = NULL;
+
+		/* only consider aggregate expressions */
+		if (!IsA(expression, Aggref))
+		{
+			continue;
+		}
+
+		aggregateExpression = (Aggref *) expression;
+		if (aggregateExpression->aggdistinct)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot push down this subquery",
+								 "distinct in the outermost query is unsupported",
+								 NULL);
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * DeferredErrorIfUnsupportedShardDistribution gets list of relations in the
+ * given query and checks if two conditions below hold for them, otherwise it
+ * errors out.
+ *
+ * a. Every relation is distributed by range or hash. This means shards are
+ * disjoint based on the partition column.
+ *
+ * b. All relations have 1-to-1 shard partitioning between them. This means
+ * shard count for every relation is same and for every shard in a relation
+ * there is exactly one shard in other relations with same min/max values.
+ */
+static DeferredErrorMessage *
+DeferredErrorIfUnsupportedShardDistribution(Query *query)
+{
+	Oid firstTableRelationId = InvalidOid;
+	List *relationIdList = RelationIdList(query);
+	List *nonReferenceRelations = NIL;
+	ListCell *relationIdCell = NULL;
+	uint32 relationIndex = 0;
+	uint32 rangeDistributedRelationCount = 0;
+	uint32 hashDistributedRelationCount = 0;
+
+	foreach(relationIdCell, relationIdList)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+		char partitionMethod = 0;
+
+		if (relationId == InvalidOid)
+		{
+			continue;
+		}
+
+		partitionMethod = PartitionMethod(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_RANGE)
+		{
+			rangeDistributedRelationCount++;
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
+		}
+		else if (partitionMethod == DISTRIBUTE_BY_HASH)
+		{
+			hashDistributedRelationCount++;
+			nonReferenceRelations = lappend_oid(nonReferenceRelations,
+												relationId);
+		}
+		else if (partitionMethod == DISTRIBUTE_BY_NONE)
+		{
+			/* do not need to handle reference tables */
+			continue;
+		}
+		else
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot push down this subquery",
+								 "Currently append partitioned relations "
+								 "are not supported",
+								 NULL);
+		}
+	}
+
+	if ((rangeDistributedRelationCount > 0) && (hashDistributedRelationCount > 0))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot push down this subquery",
+							 "A query including both range and hash "
+							 "partitioned relations are unsupported",
+							 NULL);
+	}
+
+	foreach(relationIdCell, nonReferenceRelations)
+	{
+		Oid relationId = lfirst_oid(relationIdCell);
+		bool coPartitionedTables = false;
+		Oid currentRelationId = relationId;
+
+		if (relationId == InvalidOid)
+		{
+			continue;
+		}
+
+		/* get shard list of first relation and continue for the next relation */
+		if (relationIndex == 0)
+		{
+			firstTableRelationId = relationId;
+			relationIndex++;
+
+			continue;
+		}
+
+		/* check if this table has 1-1 shard partitioning with first table */
+		coPartitionedTables = CoPartitionedTables(firstTableRelationId,
+												  currentRelationId);
+		if (!coPartitionedTables)
+		{
+			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+								 "cannot push down this subquery",
+								 "Shards of relations in subquery need to "
+								 "have 1-to-1 shard partitioning",
+								 NULL);
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
+ * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
+ * partitioning.
+ */
+static bool
+CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
+{
+	bool coPartitionedTables = true;
+	uint32 intervalIndex = 0;
+	DistTableCacheEntry *firstTableCache = DistributedTableCacheEntry(firstRelationId);
+	DistTableCacheEntry *secondTableCache = DistributedTableCacheEntry(secondRelationId);
+	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
+	ShardInterval **sortedSecondIntervalArray =
+		secondTableCache->sortedShardIntervalArray;
+	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
+	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
+	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
+
+	if (firstListShardCount != secondListShardCount)
+	{
+		return false;
+	}
+
+	/* if there are not any shards just return true */
+	if (firstListShardCount == 0)
+	{
+		return true;
+	}
+
+	Assert(comparisonFunction != NULL);
+
+	/*
+	 * Check if the tables have the same colocation ID - if so, we know
+	 * they're colocated.
+	 */
+	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
+		firstTableCache->colocationId == secondTableCache->colocationId)
+	{
+		return true;
+	}
+
+	/*
+	 * If not known to be colocated check if the remaining shards are
+	 * anyway. Do so by comparing the shard interval arrays that are sorted on
+	 * interval minimum values. Then it compares every shard interval in order
+	 * and if any pair of shard intervals are not equal it returns false.
+	 */
+	for (intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
+	{
+		ShardInterval *firstInterval = sortedFirstIntervalArray[intervalIndex];
+		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
+
+		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
+													   firstInterval,
+													   secondInterval);
+		if (!shardIntervalsEqual)
+		{
+			coPartitionedTables = false;
+			break;
+		}
+	}
+
+	return coPartitionedTables;
+}
+
+
+/*
+ * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
+ */
+static bool
+ShardIntervalsEqual(FmgrInfo *comparisonFunction, ShardInterval *firstInterval,
+					ShardInterval *secondInterval)
+{
+	bool shardIntervalsEqual = false;
+	Datum firstMin = 0;
+	Datum firstMax = 0;
+	Datum secondMin = 0;
+	Datum secondMax = 0;
+
+	firstMin = firstInterval->minValue;
+	firstMax = firstInterval->maxValue;
+	secondMin = secondInterval->minValue;
+	secondMax = secondInterval->maxValue;
+
+	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
+		secondInterval->minValueExists && secondInterval->maxValueExists)
+	{
+		Datum minDatum = CompareCall2(comparisonFunction, firstMin, secondMin);
+		Datum maxDatum = CompareCall2(comparisonFunction, firstMax, secondMax);
+		int firstComparison = DatumGetInt32(minDatum);
+		int secondComparison = DatumGetInt32(maxDatum);
+
+		if (firstComparison == 0 && secondComparison == 0)
+		{
+			shardIntervalsEqual = true;
+		}
+	}
+
+	return shardIntervalsEqual;
 }
 
 

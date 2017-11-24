@@ -1066,6 +1066,7 @@ SELECT master_create_worker_shards('test_table', 2, 2);
 --plain statement, needs planning
 SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
 NOTICE:  replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
@@ -1074,11 +1075,13 @@ NOTICE:  replanning
 PREPARE countsome AS SELECT count(*) FROM test_table HAVING COUNT(*) = immutable_bleat('replanning');
 EXECUTE countsome; -- should indicate planning
 NOTICE:  replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
@@ -1090,11 +1093,13 @@ WHERE shardid IN (
     AND nodeport = :worker_1_port;
 EXECUTE countsome; -- should indicate replanning
 NOTICE:  replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
@@ -1113,11 +1118,13 @@ WHERE shardid IN (
 
 EXECUTE countsome; -- should indicate replanning
 NOTICE:  replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
 
 EXECUTE countsome; -- no replanning
+NOTICE:  replanning
  count 
 -------
 (0 rows)
