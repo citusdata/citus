@@ -75,7 +75,12 @@ static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *origin
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
 										   plannerRestrictionContext);
-
+static DistributedPlan * CreateDistributedSelectPlan(Query *originalQuery,
+													 Query *query,
+													 ParamListInfo boundParams,
+													 bool hasUnresolvedParams,
+													 PlannerRestrictionContext *
+													 plannerRestrictionContext);
 static void AssignRTEIdentities(Query *queryTree);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(Query *parse,
@@ -542,103 +547,10 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	}
 	else
 	{
-		List *subPlanList = NIL;
-
-		/*
-		 * For select queries we, if router executor is enabled, first try to
-		 * plan the query as a router query. If not supported, otherwise try
-		 * the full blown plan/optimize/physical planing process needed to
-		 * produce distributed query plans.
-		 */
-		if (EnableRouterExecution)
-		{
-			RelationRestrictionContext *relationRestrictionContext =
-				plannerRestrictionContext->relationRestrictionContext;
-
-			distributedPlan = CreateRouterPlan(originalQuery, query,
-											   relationRestrictionContext);
-
-			/* for debugging it's useful to display why query was not router plannable */
-			if (distributedPlan && distributedPlan->planningError)
-			{
-				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
-			}
-		}
-
-		/*
-		 * Router didn't yield a plan, try the full distributed planner. As
-		 * real-time/task-tracker don't support prepared statement parameters,
-		 * skip planning in that case (we'll later trigger an error in that
-		 * case if necessary).
-		 */
-		if ((!distributedPlan || distributedPlan->planningError) && !hasUnresolvedParams)
-		{
-			MultiTreeRoot *logicalPlan = NULL;
-			DeferredErrorMessage *pullPushError = NULL;
-
-			/*
-			 * The logical planner does not know how to deal with subqueries
-			 * that require a merge step (e.g. aggregates, limit). Plan these
-			 * subqueries separately and replace them with a subquery that
-			 * scans intermediate results.
-			 */
-			pullPushError = PlanPullPushSubqueries(originalQuery, &subPlanList);
-			if (pullPushError != NULL)
-			{
-				RaiseDeferredError(pullPushError, DEBUG1);
-			}
-
-			/*
-			 * If subqueries are executed using pull-push then we need to replan
-			 * the query to get the new planner restriction context (without
-			 * relations that appear in pull-push subqueries) and to apply
-			 * planner transformations.
-			 */
-			if (list_length(subPlanList) > 0)
-			{
-				bool setPartitionedTablesInherited = false;
-				Query *newQuery = copyObject(originalQuery);
-
-				/* remove the pre-transformation planner restrictions context */
-				PopPlannerRestrictionContext();
-
-				/* create a fresh new planner context */
-				plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
-
-				/* run the planner again to rebuild the planner restriction context */
-				AssignRTEIdentities(newQuery);
-				AdjustPartitioningForDistributedPlanning(newQuery,
-														 setPartitionedTablesInherited);
-
-				standard_planner(newQuery, 0, boundParams);
-
-				/* overwrite the old transformed query with the new transformed query */
-				memcpy(query, newQuery, sizeof(Query));
-			}
-
-			logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
-												 plannerRestrictionContext,
-												 boundParams);
-			MultiLogicalPlanOptimize(logicalPlan);
-
-			/*
-			 * This check is here to make it likely that all node types used in
-			 * Citus are dumpable. Explain can dump logical and physical plans
-			 * using the extended outfuncs infrastructure, but it's infeasible to
-			 * test most plans. MultiQueryContainerNode always serializes the
-			 * physical plan, so there's no need to check that separately.
-			 */
-			CheckNodeIsDumpable((Node *) logicalPlan);
-
-			/* Create the physical plan */
-			distributedPlan = CreatePhysicalDistributedPlan(logicalPlan,
-															plannerRestrictionContext);
-
-			/* distributed plan currently should always succeed or error out */
-			Assert(distributedPlan && distributedPlan->planningError == NULL);
-
-			distributedPlan->subPlanList = subPlanList;
-		}
+		distributedPlan =
+			CreateDistributedSelectPlan(originalQuery, query, boundParams,
+										hasUnresolvedParams,
+										plannerRestrictionContext);
 	}
 
 	/*
@@ -699,6 +611,128 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	}
 
 	return resultPlan;
+}
+
+
+/*
+ *
+ */
+static DistributedPlan *
+CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo boundParams,
+							bool hasUnresolvedParams,
+							PlannerRestrictionContext *plannerRestrictionContext)
+{
+	DistributedPlan *distributedPlan = NULL;
+	MultiTreeRoot *logicalPlan = NULL;
+	DeferredErrorMessage *pullPushError = NULL;
+	List *subPlanList = NIL;
+
+	/*
+	 * For select queries we, if router executor is enabled, first try to
+	 * plan the query as a router query. If not supported, otherwise try
+	 * the full blown plan/optimize/physical planing process needed to
+	 * produce distributed query plans.
+	 */
+	if (EnableRouterExecution)
+	{
+		RelationRestrictionContext *relationRestrictionContext =
+			plannerRestrictionContext->relationRestrictionContext;
+
+		distributedPlan = CreateRouterPlan(originalQuery, query,
+										   relationRestrictionContext);
+		if (distributedPlan != NULL)
+		{
+			if (distributedPlan->planningError == NULL)
+			{
+				/* successfully created a router plan */
+				return distributedPlan;
+			}
+			else
+			{
+				/*
+				 * For debugging it's useful to display why query was not
+				 * router plannable.
+				 */
+				RaiseDeferredError(distributedPlan->planningError, DEBUG1);
+			}
+		}
+	}
+
+	if (hasUnresolvedParams)
+	{
+		/* remaining planners do not support unresolved parameters */
+		return NULL;
+	}
+
+	/*
+	 * The logical planner does not know how to deal with subqueries
+	 * that require a merge step (e.g. aggregates, limit). Plan these
+	 * subqueries separately and replace them with a subquery that
+	 * scans intermediate results.
+	 */
+	pullPushError = PlanPullPushSubqueries(originalQuery, &subPlanList);
+	if (pullPushError != NULL)
+	{
+		/* PlanPullPushSubqueries only produces irrecoverable errors at the moment */
+		RaiseDeferredError(pullPushError, ERROR);
+	}
+
+	/*
+	 * If subqueries are executed using pull-push then we need to replan
+	 * the query to get the new planner restriction context (without
+	 * relations that appear in pull-push subqueries) and to apply
+	 * planner transformations.
+	 */
+	if (list_length(subPlanList) > 0)
+	{
+		bool assignRTEIdentities = true;
+		bool setPartitionedTablesInherited = false;
+		Query *newQuery = copyObject(originalQuery);
+
+		/* remove the pre-transformation planner restrictions context */
+		PopPlannerRestrictionContext();
+
+		/* create a fresh new planner context */
+		plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();
+
+		/* run the planner again to rebuild the planner restriction context */
+		AssignRTEIdentities(newQuery);
+		AdjustPartitioningForDistributedPlanning(newQuery, setPartitionedTablesInherited);
+
+		standard_planner(newQuery, 0, boundParams);
+
+		/* overwrite the old transformed query with the new transformed query */
+		memcpy(query, newQuery, sizeof(Query));
+
+		/* recurse into CreateDistributedSelectPlan with subqueries/CTEs replaced */
+		distributedPlan = CreateDistributedSelectPlan(originalQuery, query, NULL, false,
+													  plannerRestrictionContext);
+		distributedPlan->subPlanList = subPlanList;
+
+		return distributedPlan;
+	}
+
+	logicalPlan = MultiLogicalPlanCreate(originalQuery, query, plannerRestrictionContext,
+										 boundParams);
+	MultiLogicalPlanOptimize(logicalPlan);
+
+	/*
+	 * This check is here to make it likely that all node types used in
+	 * Citus are dumpable. Explain can dump logical and physical plans
+	 * using the extended outfuncs infrastructure, but it's infeasible to
+	 * test most plans. MultiQueryContainerNode always serializes the
+	 * physical plan, so there's no need to check that separately
+	 */
+	CheckNodeIsDumpable((Node *) logicalPlan);
+
+	/* Create the physical plan */
+	distributedPlan = CreatePhysicalDistributedPlan(logicalPlan,
+													plannerRestrictionContext);
+
+	/* distributed plan currently should always succeed or error out */
+	Assert(distributedPlan && distributedPlan->planningError == NULL);
+
+	return distributedPlan;
 }
 
 
