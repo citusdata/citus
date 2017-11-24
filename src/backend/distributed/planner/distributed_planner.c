@@ -35,6 +35,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
@@ -782,7 +783,7 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 		/* build a subplan for the CTE */
 		resultQuery = BuildSubPlanResultQuery(subquery, subPlanId);
 
-		/* TODO: remove */
+		if (log_min_messages >= DEBUG1)
 		{
 			StringInfo subPlanString = makeStringInfo();
 			pg_get_query_def(subPlanQuery, subPlanString);
@@ -802,11 +803,11 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 
 			if (strncmp(rangeTableEntry->ctename, cteName, NAMEDATALEN) == 0)
 			{
-				/* TODO: remove */
+				if (log_min_messages >= DEBUG1)
 				{
 					StringInfo resultQueryString = makeStringInfo();
 					pg_get_query_def(resultQuery, resultQueryString);
-					elog(DEBUG1, "replacing reference to CTE %s with result subquery: %s",
+					elog(DEBUG1, "replacing CTE reference %s --> %s",
 						 cteName, resultQueryString->data);
 				}
 
@@ -948,12 +949,17 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 
 			resultQuery = BuildSubPlanResultQuery(query, subPlanId);
 
-			StringInfo s = makeStringInfo();
-			pg_get_query_def(query, s);
+			if (log_min_messages >= DEBUG1)
+			{
+				StringInfo subqueryString = makeStringInfo();
+				StringInfo resultQueryString = makeStringInfo();
 
-			StringInfo r = makeStringInfo();
-			pg_get_query_def(resultQuery, r);
-			elog(DEBUG1, "replacing subquery %s with: %s", s->data, r->data);
+				pg_get_query_def(query, subqueryString);
+				pg_get_query_def(resultQuery, resultQueryString);
+
+				elog(DEBUG1, "replacing subquery %s --> %s", subqueryString->data,
+					 resultQueryString->data);
+			}
 
 			if (ContainsResultFunction((Node *) query))
 			{
