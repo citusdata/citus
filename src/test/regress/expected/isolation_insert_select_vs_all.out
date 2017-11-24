@@ -288,12 +288,11 @@ step s1-initialize:
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
-step s2-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple_shards('DELETE FROM insert_of_insert_select_hash;'); <waiting ...>
-step s1-commit: COMMIT;
-step s2-master-modify-multiple-shards-on-inserted: <... completed>
+step s2-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple_shards('DELETE FROM insert_of_insert_select_hash;');
 master_modify_multiple_shards
 
-15             
+10             
+step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count          
 
@@ -908,9 +907,8 @@ step s1-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple
 master_modify_multiple_shards
 
 10             
-step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
+step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
-step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count          
 
