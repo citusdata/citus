@@ -83,9 +83,8 @@ create_reference_table
 step s1-initialize: COPY reference_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-copy: COPY reference_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
-step s2-insert: INSERT INTO reference_copy VALUES(0, 'k', 0); <waiting ...>
+step s2-insert: INSERT INTO reference_copy VALUES(0, 'k', 0);
 step s1-commit: COMMIT;
-step s2-insert: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM reference_copy;
 count          
 
@@ -410,9 +409,8 @@ create_reference_table
 step s1-initialize: COPY reference_copy FROM PROGRAM 'echo 0, a, 0\\n1, b, 1\\n2, c, 2\\n3, d, 3\\n4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO reference_copy VALUES(0, 'k', 0);
-step s2-copy: COPY reference_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV; <waiting ...>
+step s2-copy: COPY reference_copy FROM PROGRAM 'echo 5, f, 5\\n6, g, 6\\n7, h, 7\\n8, i, 8\\n9, j, 9' WITH CSV;
 step s1-commit: COMMIT;
-step s2-copy: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM reference_copy;
 count          
 
