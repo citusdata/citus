@@ -1000,7 +1000,7 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 				cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
 			}
 
-			subPlan = planner(copyObject(query), 0, NULL);
+			subPlan = planner(copyObject(query), cursorOptions, NULL);
 			(*subPlanList) = lappend(*subPlanList, subPlan);
 
 			memcpy(query, resultQuery, sizeof(Query));
