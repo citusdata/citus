@@ -1179,6 +1179,9 @@ BuildSubPlanResultQuery(Query *subquery, int subPlanId)
 		functionColumnVar->vartypmod = columnTypMod;
 		functionColumnVar->varcollid = columnCollation;
 		functionColumnVar->varlevelsup = 0;
+		functionColumnVar->varnoold = 1;
+		functionColumnVar->varoattno = columnNumber;
+		functionColumnVar->location = -1;
 
 		newTargetEntry = makeNode(TargetEntry);
 		newTargetEntry->expr = (Expr *) functionColumnVar;
