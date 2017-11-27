@@ -1534,43 +1534,39 @@ static bool
 IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 {
 	const char *stmtName = (vacuumStmt->options & VACOPT_VACUUM) ? "VACUUM" : "ANALYZE";
+	bool distributeStmt = false;
 
 	if (vacuumStmt->relation == NULL)
 	{
-		/* WARN and exit early for unqualified VACUUM commands */
+		/* WARN for unqualified VACUUM commands */
 		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
 						  errhint("Provide a specific table in order to %s "
 								  "distributed tables.", stmtName)));
-
-		return false;
 	}
-
-	if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
+	else if (!OidIsValid(relationId) || !IsDistributedTable(relationId))
 	{
-		return false;
+		/* Nothing to do here; relation no longer exists or is not distributed */
 	}
-
-	if (!EnableDDLPropagation)
+	else if (!EnableDDLPropagation)
 	{
-		/* WARN and exit early if DDL propagation is not enabled */
+		/* WARN if DDL propagation is not enabled */
 		ereport(WARNING, (errmsg("not propagating %s command to worker nodes", stmtName),
 						  errhint("Set citus.enable_ddl_propagation to true in order to "
 								  "send targeted %s commands to worker nodes.",
 								  stmtName)));
-
-		return false;
 	}
-
-	if (vacuumStmt->options & VACOPT_VERBOSE)
+	else if (vacuumStmt->options & VACOPT_VERBOSE)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("the VERBOSE option is currently unsupported in "
 							   "distributed %s commands", stmtName)));
-
-		return false;
+	}
+	else
+	{
+		distributeStmt = true;
 	}
 
-	return true;
+	return distributeStmt;
 }
 
 
