@@ -159,6 +159,9 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  * Local functions forward declarations for subquery pushdown. Note that these
  * functions will be removed with upcoming subqery changes.
  */
+static bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
+static bool IsFunctionRTE(Node *node);
+static bool FindNodeCheck(Node *node, bool (*check)(Node *));
 static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
@@ -199,17 +202,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
 
-	/*
-	 * We check the existence of subqueries in FROM clause on the modified query
-	 * given that if postgres already flattened the subqueries, MultiNodeTree()
-	 * can plan corresponding distributed plan.
-	 *
-	 * We also check the existence of subqueries in WHERE clause. Note that
-	 * this check needs to be done on the original query given that
-	 * standard_planner() may replace the sublinks with anti/semi joins and
-	 * MultiNodeTree() cannot plan such queries.
-	 */
-	if (SubqueryEntryList(queryTree) != NIL || SublinkList(originalQuery) != NIL)
+	if (ShouldUseSubqueryPushDown(originalQuery, queryTree))
 	{
 		originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
 														boundParams);
@@ -226,6 +219,101 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 	SetChild((MultiUnaryNode *) rootNode, multiQueryNode);
 
 	return rootNode;
+}
+
+
+/*
+ * ShouldUseSubqueryPushDown determines whether it's desirable to use
+ * subquery pushdown to plan the query based on the original and
+ * rewritten query.
+ */
+static bool
+ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
+{
+	/*
+	 * We check the existence of subqueries in FROM clause on the modified query
+	 * given that if postgres already flattened the subqueries, MultiPlanTree()
+	 * can plan corresponding distributed plan.
+	 */
+	if (SubqueryEntryList(rewrittenQuery) != NIL)
+	{
+		return true;
+	}
+
+	/*
+	 * We also check the existence of subqueries in WHERE clause. Note that
+	 * this check needs to be done on the original query given that
+	 * standard_planner() may replace the sublinks with anti/semi joins and
+	 * MultiPlanTree() cannot plan such queries.
+	 */
+	if (SublinkList(originalQuery) != NIL)
+	{
+		return true;
+	}
+
+	/*
+	 * We process function RTEs as subqueries, since the join order planner
+	 * does not know how to handle them.
+	 */
+	if (FindNodeCheck((Node *) originalQuery, IsFunctionRTE))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * IsFunctionRTE determines whether the given node is a function RTE.
+ */
+static bool
+IsFunctionRTE(Node *node)
+{
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTblEntry = (RangeTblEntry *) node;
+
+		if (rangeTblEntry->rtekind == RTE_FUNCTION)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * FindNodeCheck finds a node for which the check function returns true.
+ *
+ * To call this function directly with an RTE, use:
+ * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES)
+ */
+static bool
+FindNodeCheck(Node *node, bool (*check)(Node *))
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (check(node))
+	{
+		return true;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		/* query_tree_walker descends into RTEs */
+		return false;
+	}
+	else if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, FindNodeCheck, check, QTW_EXAMINE_RTES);
+	}
+
+	return expression_tree_walker(node, FindNodeCheck, check);
 }
 
 
