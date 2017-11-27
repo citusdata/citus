@@ -2634,8 +2634,7 @@ HasComplexRangeTableType(Query *queryTree)
 		 * subquery.
 		 */
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
-			rangeTableEntry->rtekind != RTE_SUBQUERY &&
-			rangeTableEntry->rtekind != RTE_FUNCTION)
+			rangeTableEntry->rtekind != RTE_SUBQUERY)
 		{
 			hasComplexRangeTableType = true;
 		}
