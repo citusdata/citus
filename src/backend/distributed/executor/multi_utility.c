@@ -1557,6 +1557,8 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 						  errhint("Set citus.enable_ddl_propagation to true in order to "
 								  "send targeted %s commands to worker nodes.",
 								  stmtName)));
+
+		return false;
 	}
 
 	if (vacuumStmt->options & VACOPT_VERBOSE)
@@ -1564,6 +1566,8 @@ IsSupportedDistributedVacuumStmt(Oid relationId, VacuumStmt *vacuumStmt)
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("the VERBOSE option is currently unsupported in "
 							   "distributed %s commands", stmtName)));
+
+		return false;
 	}
 
 	return true;
