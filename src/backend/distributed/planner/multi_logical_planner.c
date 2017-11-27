@@ -3385,24 +3385,46 @@ NeedsDistributedPlanning(Query *queryTree)
 
 
 /*
- * ExtractRangeTableRelationWalker gathers all range table entries in a query
- * and filters them to preserve only those of the RTE_RELATION type.
+ * ExtractRangeTableRelationWalker gathers all range table relation entries
+ * in a query.
  */
 bool
 ExtractRangeTableRelationWalker(Node *node, List **rangeTableRelationList)
 {
-	List *rangeTableList = NIL;
-	ListCell *rangeTableCell = NULL;
-	bool walkIsComplete = ExtractRangeTableEntryWalker(node, &rangeTableList);
+	bool walkIsComplete = false;
 
-	foreach(rangeTableCell, rangeTableList)
+	if (node == NULL)
 	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
-		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			rangeTableEntry->relkind != RELKIND_VIEW)
+		return false;
+	}
+
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rangeTable = (RangeTblEntry *) node;
+
+		if (rangeTable->rtekind == RTE_RELATION && rangeTable->relkind != RELKIND_VIEW)
 		{
-			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTableEntry);
+			(*rangeTableRelationList) = lappend(*rangeTableRelationList, rangeTable);
+
+			walkIsComplete = false;
 		}
+		else
+		{
+			walkIsComplete = range_table_walker(list_make1(rangeTable),
+												ExtractRangeTableRelationWalker,
+												rangeTableRelationList, 0);
+		}
+	}
+	else if (IsA(node, Query))
+	{
+		walkIsComplete = query_tree_walker((Query *) node,
+										   ExtractRangeTableRelationWalker,
+										   rangeTableRelationList, QTW_EXAMINE_RTES);
+	}
+	else
+	{
+		walkIsComplete = expression_tree_walker(node, ExtractRangeTableRelationWalker,
+												rangeTableRelationList);
 	}
 
 	return walkIsComplete;
