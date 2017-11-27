@@ -8,8 +8,6 @@
 -- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 
-SET citus.enable_router_execution TO FALSE;
-
 CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('user_buy_test_table', 'user_id');
 INSERT INTO user_buy_test_table VALUES(1,2,1);

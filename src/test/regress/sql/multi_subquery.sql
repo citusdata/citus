@@ -4,7 +4,6 @@
 -- no need to set shardid sequence given that we're not creating any shards
 
 SET citus.next_shard_id TO 570032;
-SET citus.enable_router_execution TO FALSE;
 
 -- Check that we error out if shard min/max values are not exactly same.
 SELECT

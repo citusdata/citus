@@ -865,6 +865,13 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 			cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
 		}
 
+		/* we want to be able to handle queries with only intermediate results */
+		if (!EnableRouterExecution)
+		{
+			ereport(ERROR, (errmsg("cannot handle CTEs when the router executor "
+								   "is disabled")));
+		}
+
 		subPlan = planner(subPlanQuery, cursorOptions, NULL);
 		(*subPlanList) = lappend(*subPlanList, subPlan);
 	}
@@ -998,6 +1005,13 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 			if (ContainsResultFunction((Node *) query))
 			{
 				cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
+			}
+
+			/* we want to be able to handle queries with only intermediate results */
+			if (!EnableRouterExecution)
+			{
+				ereport(ERROR, (errmsg("cannot handle complex subqueries when the "
+									   "router executor is disabled")));
 			}
 
 			subPlan = planner(copyObject(query), cursorOptions, NULL);

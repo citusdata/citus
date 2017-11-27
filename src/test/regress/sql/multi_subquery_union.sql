@@ -6,7 +6,6 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
 
-SET citus.enable_router_execution TO false;
 -- a very simple union query
 SELECT user_id, counter
 FROM (
@@ -886,8 +885,6 @@ FROM
 ) as final_query
 GROUP BY types
 ORDER BY types;
-
-SET citus.enable_router_execution TO true;
 
 DROP TABLE events_reference_table;
 DROP TABLE users_reference_table;
