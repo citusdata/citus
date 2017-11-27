@@ -4585,19 +4585,9 @@ AssignTaskList(List *sqlTaskList)
 	hasMergeTaskDependencies = HasMergeTaskDependencies(sqlTaskList);
 	if (!hasMergeTaskDependencies)
 	{
-		if (hasAnchorShardId)
-		{
-			assignedSqlTaskList = AssignAnchorShardTaskList(sqlTaskList);
-		}
-		else
-		{
-			/*
-			 * A pull-push query has no anchor shard and no merge task dependencies.
-			 * We already assign placements to such queries and can use the original
-			 * list.
-			 */
-			assignedSqlTaskList = sqlTaskList;
-		}
+		Assert(hasAnchorShardId);
+
+		assignedSqlTaskList = AssignAnchorShardTaskList(sqlTaskList);
 
 		return assignedSqlTaskList;
 	}
