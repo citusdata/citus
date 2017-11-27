@@ -1629,6 +1629,8 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 				List **placementList, uint64 *anchorShardId, List **relationShardList,
 				bool replacePrunedQueryWithDummy, bool *multiShardModifyQuery)
 {
+	static uint32 zeroShardQueryRoundRobin = 0;
+
 	bool isMultiShardQuery = false;
 	List *prunedRelationShardList = NIL;
 	DeferredErrorMessage *planningError = NULL;
@@ -1730,7 +1732,10 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 		List *workerNodeList = ActiveReadableNodeList();
 		if (workerNodeList != NIL)
 		{
-			WorkerNode *workerNode = (WorkerNode *) linitial(workerNodeList);
+			int workerNodeCount = list_length(workerNodeList);
+			int workerNodeIndex = zeroShardQueryRoundRobin % workerNodeCount;
+			WorkerNode *workerNode = (WorkerNode *) list_nth(workerNodeList,
+															 workerNodeIndex);
 			ShardPlacement *dummyPlacement =
 				(ShardPlacement *) CitusMakeNode(ShardPlacement);
 			dummyPlacement->nodeName = workerNode->workerName;
@@ -1738,6 +1743,8 @@ PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionCon
 			dummyPlacement->groupId = workerNode->groupId;
 
 			workerList = lappend(workerList, dummyPlacement);
+
+			zeroShardQueryRoundRobin++;
 		}
 	}
 	else
