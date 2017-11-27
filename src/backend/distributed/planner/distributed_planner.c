@@ -17,6 +17,7 @@
 
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/errormessage.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
