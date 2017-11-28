@@ -75,8 +75,8 @@ read_records_file(PG_FUNCTION_ARGS)
 		case TYPEFUNC_COMPOSITE:
 		{
 			/* success */
+			break;
 		}
-		break;
 
 		case TYPEFUNC_RECORD:
 		{
@@ -85,15 +85,15 @@ read_records_file(PG_FUNCTION_ARGS)
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("function returning record called in context "
 							"that cannot accept type record")));
+			break;
 		}
-		break;
 
 		default:
 		{
 			/* result type isn't composite */
 			elog(ERROR, "return type must be a row type");
+			break;
 		}
-		break;
 	}
 
 	tupleDescriptor = CreateTupleDescCopy(tupleDescriptor);
