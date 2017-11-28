@@ -97,7 +97,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 2
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time)
 ) as foo;
 
@@ -115,7 +115,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 2
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo;
@@ -134,7 +134,7 @@ SELECT sub_1.user_id, max(lag_1), max(rank_1), max(rank_2) FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 2
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as sub_1
@@ -146,7 +146,7 @@ JOIN
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 2
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.value_2 ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 50) ORDER BY events_table.time)
 ) as sub_2
@@ -173,7 +173,7 @@ FROM
     WINDOW my_win AS (PARTITION BY user_id ORDER BY count(*) DESC)
 ) as foo
 WHERE
-  my_rank > 5
+  my_rank > 1
 GROUP BY
   my_rank;
 
@@ -267,7 +267,7 @@ SELECT
 FROM
   users_table
 WHERE
-  value_2 > 545 AND
+  value_2 > 1 AND
   value_2 < ALL (
     SELECT
       avg(value_3) OVER (PARTITION BY user_id)
@@ -704,7 +704,7 @@ SELECT
 FROM
   users_table
 WHERE
-  value_2 > 545 AND
+  value_2 > 2 AND
   value_2 < ALL (
     SELECT
       avg(value_3) OVER ()

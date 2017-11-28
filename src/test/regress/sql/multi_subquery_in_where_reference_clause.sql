@@ -145,7 +145,7 @@ LIMIT 3;
 -- should error out since reference table exist on the left side 
 -- of the left lateral join
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
+  value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
   AND user_id IN
   (
@@ -159,7 +159,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		    min(time) AS view_homepage_time
 		  FROM events_reference_table
 		     WHERE
-		     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+		     event_type IN (1, 2)
 		  GROUP BY user_id
 		) e1 LEFT JOIN LATERAL (
 		  SELECT
@@ -169,7 +169,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM events_reference_table
 		  WHERE
 		    user_id = e1.user_id AND
-		       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+		       event_type IN (2, 3)
 		  ORDER BY time
 		) e2 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -179,7 +179,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_reference_table
 		  WHERE
 		    user_id = e2.user_id AND
-		    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+		    event_type IN (3, 4)
 		  ORDER BY time
 		) e3 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -189,7 +189,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_reference_table
 		  WHERE
 		    user_id = e3.user_id AND
-		    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+		    event_type IN (4, 5)
 		  ORDER BY time
 		) e4 ON true LEFT JOIN LATERAL (
 		  SELECT
@@ -197,7 +197,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 		  FROM  events_reference_table
 		  WHERE
 		    user_id = e4.user_id AND
-		    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+		    event_type IN (5, 6)
 		  ORDER BY time
 		) e5 ON true
 		group by e1.user_id
@@ -211,7 +211,7 @@ ORDER BY 1, 2;
 FROM 
   users_table 
 WHERE 
-  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 10 AND value_1 <= 20) 
+  value_3 =ANY(SELECT value_2 FROM users_reference_table WHERE value_1 >= 1 AND value_1 <= 2) 
  GROUP BY 1 ORDER BY 2 DESC, 1 DESC LIMIT 5;
 
 
@@ -227,8 +227,8 @@ WHERE
              FROM 
               events_reference_table as e2
              WHERE
-              value_2 = 15 AND
-              value_3 > 25 AND
+              value_2 = 2 AND
+              value_3 > 3 AND
               e1.value_2 > e2.value_2
             ) 
 GROUP BY 1
@@ -239,7 +239,7 @@ LIMIT 5;
 -- should work since reference table is on the 
 -- inner part of the join 
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
+  value_1 > 1 AND value_1 < 3
   AND value_2 >= 5
   AND user_id IN
   (
@@ -253,7 +253,7 @@ SELECT user_id, value_2 FROM users_table WHERE
         min(time) AS view_homepage_time
       FROM events_table
          WHERE
-         event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+         event_type IN (1, 2)
       GROUP BY user_id
     ) e1 LEFT JOIN LATERAL (
       SELECT
@@ -263,7 +263,7 @@ SELECT user_id, value_2 FROM users_table WHERE
       FROM events_table
       WHERE
         user_id = e1.user_id AND
-           event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+           event_type IN (2, 3)
       ORDER BY time
     ) e2 ON true LEFT JOIN LATERAL (
       SELECT
@@ -273,7 +273,7 @@ SELECT user_id, value_2 FROM users_table WHERE
       FROM  events_table
       WHERE
         user_id = e2.user_id AND
-        event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+        event_type IN (3, 4)
       ORDER BY time
     ) e3 ON true LEFT JOIN LATERAL (
       SELECT
@@ -283,7 +283,7 @@ SELECT user_id, value_2 FROM users_table WHERE
       FROM  events_table
       WHERE
         user_id = e3.user_id AND
-        event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+        event_type IN (4, 5)
       ORDER BY time
     ) e4 ON true LEFT JOIN LATERAL (
       SELECT
@@ -291,7 +291,7 @@ SELECT user_id, value_2 FROM users_table WHERE
       FROM  events_reference_table
       WHERE
         user_id = e4.user_id AND
-        event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+        event_type IN (5, 6)
       ORDER BY time
     ) e5 ON true
     group by e1.user_id
@@ -326,10 +326,10 @@ FROM users_reference_table
 WHERE value_2 > ALL
     (SELECT min(value_2)
      FROM events_table
-     WHERE event_type > 50 AND users_reference_table.user_id = events_table.user_id
+     WHERE event_type > 2 AND users_reference_table.user_id = events_table.user_id
      GROUP BY user_id)
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 3
 ORDER BY 2 DESC,
          1 DESC
 LIMIT 5;
@@ -358,12 +358,12 @@ WHERE
            FROM 
               events_reference_table  
            WHERE 
-              users_table.user_id = events_reference_table.user_id AND event_type = 50
+              users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               users_table.user_id
           )
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 3
 ORDER BY user_id
 LIMIT 5;
 
@@ -380,11 +380,11 @@ WHERE
            FROM 
               events_reference_table  
            WHERE 
-              users_table.user_id = events_reference_table.user_id AND event_type = 50
+              users_table.user_id = events_reference_table.user_id AND event_type = 2
            GROUP BY
               (users_table.user_id * 2)
           )
 GROUP BY user_id
-HAVING count(*) > 66
+HAVING count(*) > 3
 ORDER BY user_id
 LIMIT 5;
