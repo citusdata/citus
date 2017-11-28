@@ -45,9 +45,11 @@ static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *origin
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
 										   plannerRestrictionContext);
-static void AdjustParseTree(Query *parse, bool assignRTEIdentities,
-							bool setPartitionedTablesInherited);
+
+static void AssignRTEIdentities(Query *queryTree);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
+static void AdjustPartitioningForDistributedPlanning(Query *parse,
+													 bool setPartitionedTablesInherited);
 static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 								  DistributedPlan *distributedPlan);
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
@@ -71,20 +73,23 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	bool needsDistributedPlanning = NeedsDistributedPlanning(parse);
 	Query *originalQuery = NULL;
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
-	bool assignRTEIdentities = false;
 	bool setPartitionedTablesInherited = false;
 
 	/*
 	 * standard_planner scribbles on it's input, but for deparsing we need the
-	 * unmodified form. So copy once we're sure it's a distributed query.
+	 * unmodified form. Note that we keep RTE_RELATIONs with their identities
+	 * set, which doesn't break our goals, but, prevents us keeping an extra copy
+	 * of the query tree. Note that we copy the query tree once we're sure it's a
+	 * distributed query.
 	 */
 	if (needsDistributedPlanning)
 	{
-		originalQuery = copyObject(parse);
-		assignRTEIdentities = true;
 		setPartitionedTablesInherited = false;
 
-		AdjustParseTree(parse, assignRTEIdentities, setPartitionedTablesInherited);
+		AssignRTEIdentities(parse);
+		originalQuery = copyObject(parse);
+
+		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
 	}
 
 	/* create a restriction context and put it at the end if context list */
@@ -114,10 +119,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 	if (needsDistributedPlanning)
 	{
-		assignRTEIdentities = false;
 		setPartitionedTablesInherited = true;
 
-		AdjustParseTree(parse, assignRTEIdentities, setPartitionedTablesInherited);
+		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
 	}
 
 	/* remove the context from the context list */
@@ -144,18 +148,15 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 
 /*
- * AdjustParseTree function modifies query tree by adding RTE identities to the
- * RTE_RELATIONs and changing inh flag and relkind of partitioned tables. We
- * perform these operations to ensure PostgreSQL's standard planner behaves as
- * we need.
+ * AssignRTEIdentities function modifies query tree by adding RTE identities to the
+ * RTE_RELATIONs.
  *
  * Please note that, we want to avoid modifying query tree as much as possible
  * because if PostgreSQL changes the way it uses modified fields, that may break
  * our logic.
  */
 static void
-AdjustParseTree(Query *queryTree, bool assignRTEIdentities,
-				bool setPartitionedTablesInherited)
+AssignRTEIdentities(Query *queryTree)
 {
 	List *rangeTableList = NIL;
 	ListCell *rangeTableCell = NULL;
@@ -177,10 +178,38 @@ AdjustParseTree(Query *queryTree, bool assignRTEIdentities,
 		 * Note that we're only interested in RTE_RELATIONs and thus assigning
 		 * identifiers to those RTEs only.
 		 */
-		if (assignRTEIdentities && rangeTableEntry->rtekind == RTE_RELATION)
+		if (rangeTableEntry->rtekind == RTE_RELATION)
 		{
 			AssignRTEIdentity(rangeTableEntry, rteIdentifier++);
 		}
+	}
+}
+
+
+/*
+ * AdjustPartitioningForDistributedPlanning function modifies query tree by
+ * changing inh flag and relkind of partitioned tables. We want Postgres to
+ * treat partitioned tables as regular relations (i.e. we do not want to
+ * expand them to their partitions) since it breaks Citus planning in different
+ * ways. We let anything related to partitioning happen on the shards.
+ *
+ * Please note that, we want to avoid modifying query tree as much as possible
+ * because if PostgreSQL changes the way it uses modified fields, that may break
+ * our logic.
+ */
+static void
+AdjustPartitioningForDistributedPlanning(Query *queryTree,
+										 bool setPartitionedTablesInherited)
+{
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+
+	/* extract range table entries for simple relations only */
+	ExtractRangeTableEntryWalker((Node *) queryTree, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
 
 		/*
 		 * We want Postgres to behave partitioned tables as regular relations
