@@ -686,7 +686,6 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 	 */
 	if (list_length(subPlanList) > 0)
 	{
-		bool assignRTEIdentities = true;
 		bool setPartitionedTablesInherited = false;
 		Query *newQuery = copyObject(originalQuery);
 
