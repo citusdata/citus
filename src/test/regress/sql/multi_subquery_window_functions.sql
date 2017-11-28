@@ -100,7 +100,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time)
 ) as foo
 ORDER BY 3 DESC, 1 DESC, 2 DESC NULLS LAST
@@ -115,7 +115,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo
@@ -131,7 +131,7 @@ SELECT sub_1.user_id, max(lag_1), max(rank_1), max(rank_2) FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as sub_1
@@ -143,7 +143,7 @@ JOIN
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.value_2 ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id, (events_table.value_2 % 50) ORDER BY events_table.time)
 ) as sub_2
@@ -167,7 +167,7 @@ FROM
     WINDOW my_win AS (PARTITION BY user_id ORDER BY count(*) DESC)
 ) as foo
 WHERE
-  my_rank > 5
+  my_rank > 1
 GROUP BY
   my_rank
 ORDER BY
@@ -186,7 +186,7 @@ FROM
     events_table
   GROUP BY
     user_id, date_trunc('day', time)
-    WINDOW my_win AS (PARTITION BY user_id, avg(event_type%10)::int ORDER BY count(*) DESC)
+    WINDOW my_win AS (PARTITION BY user_id, avg(event_type%3)::int ORDER BY count(*) DESC)
 ) as foo
 WHERE
   my_rank > 0
@@ -246,7 +246,7 @@ FROM
       DISTINCT user_id, it_name, count(id) OVER (PARTITION BY user_id, id)
     FROM
       users_table, users_ref_test_table
-    WHERE users_table.value_2=users_ref_test_table.k_no
+    WHERE users_table.value_2 + 40 = users_ref_test_table.k_no
 ) a
 ORDER BY
   1, 2, 3
@@ -308,17 +308,17 @@ SELECT
   max(avg)
 FROM
 (
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2, 3, 4, 5))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (6, 7, 8, 9, 10))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (2, 3))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (11, 12, 13, 14, 15))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (3, 4))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (16, 17, 18, 19, 20))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (4, 5))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (21, 22, 23, 24, 25))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (5, 6))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (26, 27, 28, 29, 30))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 6))
 ) b
 GROUP BY user_id
 ORDER BY 1 DESC
@@ -364,7 +364,7 @@ SELECT
 FROM
   users_table
 WHERE
-  value_2 > 545 AND
+  value_2 > 1 AND
   value_2 < ALL (
     SELECT
       avg(value_3) OVER (PARTITION BY user_id)
@@ -395,7 +395,7 @@ FROM (
 GROUP BY
   user_id, rank
 ORDER BY
-  difference DESC, rank DESC
+  difference DESC, rank DESC, user_id
 LIMIT 20;
 
 SELECT * FROM (
@@ -421,7 +421,7 @@ WHERE
   f3.user_id=f2.user_id
 ) a
 ORDER BY
-  abs DESC
+  abs DESC, user_id
 LIMIT 10;
 
 
@@ -535,7 +535,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (PARTITION BY users_table.user_id+1, (events_table.value_2 % 25) ORDER BY events_table.time)
 ) as foo
@@ -551,7 +551,7 @@ SELECT * FROM
     users_table, events_table
   WHERE
     users_table.user_id = events_table.user_id and
-    event_type < 25
+    event_type < 4
   WINDOW w1 AS (PARTITION BY users_table.user_id, events_table.event_type ORDER BY events_table.time),
   w2 AS (ORDER BY events_table.time)
 ) as foo
@@ -574,7 +574,7 @@ FROM
     WINDOW my_win AS (ORDER BY avg(event_type))
 ) as foo
 WHERE
-  my_rank > 125
+  my_rank > 1
 ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
@@ -594,7 +594,7 @@ FROM
     WINDOW my_win AS (PARTITION BY date_trunc('day', time) ORDER BY avg(event_type))
 ) as foo
 WHERE
-  my_rank > 125
+  my_rank > 1
 ORDER BY
   3 DESC, 1 DESC,2 DESC
 LIMIT
@@ -651,17 +651,17 @@ SELECT
   max(avg)
 FROM
 (
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2, 3, 4, 5))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (1, 2))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (6, 7, 8, 9, 10))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (2, 3))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (11, 12, 13, 14, 15))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (3, 4))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (16, 17, 18, 19, 20))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (4, 5))
     UNION ALL
-  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (21, 22, 23, 24, 25))
+  (SELECT avg(value_3) over (partition by user_id), user_id FROM events_table where event_type IN (5, 6))
     UNION ALL
-  (SELECT avg(value_3) over (partition by event_type), user_id FROM events_table where event_type IN (26, 27, 28, 29, 30))
+  (SELECT avg(value_3) over (partition by event_type), user_id FROM events_table where event_type IN (1, 6))
 ) b
 GROUP BY user_id
 ORDER BY 1 DESC

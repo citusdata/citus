@@ -12,9 +12,9 @@ FROM (
     FROM users_table AS u,
          events_table AS e
     WHERE u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (2, 3)
   ) t
   GROUP BY user_id
 ) q;
@@ -28,8 +28,6 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 --  Funnel grouped by whether or not a user has done an event
 ------------------------------------
 ------------------------------------
-TRUNCATE agg_results;
-
 INSERT INTO agg_results (user_id, value_1_agg, value_2_agg )
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event)
 FROM (
@@ -43,9 +41,9 @@ FROM (
       FROM users_table AS u,
           events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (1, 2)
     )
     UNION
     (
@@ -53,18 +51,17 @@ FROM (
       FROM users_table AS u,
          events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (103, 104, 105)
+      AND u.user_id >= 1
+      AND u.user_id <= 2
+      AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
       SELECT DISTINCT user_id, 
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 2
+      AND e.event_type IN (5, 6)
 
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
@@ -78,9 +75,6 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
 -- Funnel, grouped by the number of times a user has done an event
 ------------------------------------
 ------------------------------------
-
-TRUNCATE agg_results;
-
 INSERT INTO agg_results (user_id, value_1_agg, value_2_agg)
 SELECT
   user_id,
@@ -102,9 +96,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 10 AND events_table.event_type < 12
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 0 AND events_table.event_type < 2
       )
     UNION
     (SELECT
@@ -116,9 +110,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 12 AND events_table.event_type < 14
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 1 AND events_table.event_type < 3
     )
   ) AS subquery_1
   LEFT JOIN
@@ -128,9 +122,9 @@ SELECT
     FROM
       users_table
     WHERE
-      user_id >= 10 AND
-      user_id <= 70 AND    
-      users_table.value_1 > 15 AND users_table.value_1 < 17
+      user_id >= 1 AND
+      user_id <= 3 AND    
+      users_table.value_1 > 3 AND users_table.value_1 < 5
     GROUP BY
       user_id
     HAVING
@@ -174,15 +168,15 @@ FROM (
         SELECT user_id, time
         FROM users_table
         WHERE
-        user_id >= 10 AND
-        user_id <= 70 AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        user_id >= 1 AND
+        user_id <= 3 AND
+        users_table.value_1 > 3 AND users_table.value_1 < 6
 
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
           WHERE user_id = u.user_id AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          events_table.event_type > 3 AND events_table.event_type < 6
         ) t ON true
         GROUP BY user_id
 ) AS shard_union
@@ -202,9 +196,9 @@ TRUNCATE agg_results;
 INSERT INTO agg_results (user_id)
 SELECT DISTINCT user_id
 FROM users_table
-WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
-    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60);
+WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
+    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6);
     
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;    
@@ -219,9 +213,9 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 SELECT user_id
 FROM users_table
-WHERE (value_1 = 10
-       OR value_1 = 11
-       OR value_1 = 12)
+WHERE (value_1 = 1
+       OR value_1 = 2
+       OR value_1 = 3)
 GROUP BY user_id
 HAVING count(distinct value_1) >= 2;
 
@@ -237,9 +231,9 @@ TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>101  AND event_type < 110 AND value_3 > 100 AND user_id=users_table.user_id);
+  value_1 > 1 AND value_1 < 4
+  AND value_2 >= 3
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type>1  AND event_type < 5 AND value_3 > 2 AND user_id=users_table.user_id);
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -253,9 +247,9 @@ TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 = 101
-  AND value_2 >= 5
-  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id=users_table.user_id);
+  value_1 = 1
+  AND value_2 >= 2
+  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=1 AND value_3 > 4 AND user_id=users_table.user_id);
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -269,10 +263,10 @@ TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 100
-  AND value_2 >= 5
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type!=100 AND value_3 > 100 AND user_id=users_table.user_id)
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id=users_table.user_id);
+  value_1 > 1
+  AND value_2 >= 3
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type!=1 AND value_3 > 1 AND user_id=users_table.user_id)
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type=2 AND value_3 > 1 AND user_id=users_table.user_id);
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -286,9 +280,9 @@ TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_2_agg)
 SELECT user_id, value_2 FROM users_table WHERE
-  value_2 >= 5
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id=users_table.user_id)
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id=users_table.user_id);
+  value_2 >= 3
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id=users_table.user_id)
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id=users_table.user_id);
   
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -304,14 +298,14 @@ INSERT INTO agg_results(user_id, value_2_agg)
   SELECT user_id, 
          value_2 
   FROM   users_table
-  WHERE  value_1 > 100 
-         AND value_1 < 124 
-         AND value_2 >= 5 
+  WHERE  value_1 > 1
+         AND value_1 < 3 
+         AND value_2 >= 1
          AND EXISTS (SELECT user_id 
                      FROM   events_table
-                     WHERE  event_type > 100 
-                            AND event_type < 124 
-                            AND value_3 > 100 
+                     WHERE  event_type > 1 
+                            AND event_type < 3 
+                            AND value_3 > 1
                             AND user_id = users_table.user_id 
                      GROUP  BY user_id 
                      HAVING Count(*) > 2);
@@ -330,7 +324,7 @@ INSERT INTO agg_results(user_id, value_1_agg)
 SELECT user_id, value_1 from
 (
   SELECT user_id, value_1 From users_table
-  WHERE value_2 > 100 and user_id = 15 GROUP BY value_1, user_id HAVING count(*) > 1
+  WHERE value_2 > 1 and user_id = 1 GROUP BY value_1, user_id HAVING count(*) > 1 
 ) as a;
 
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -346,13 +340,13 @@ TRUNCATE agg_results;
 INSERT INTO agg_results(user_id)
 Select user_id
 From events_table
-Where event_type = 16
-And value_2 > 50
+Where event_type = 2
+And value_2 > 2
 And user_id in
   (select user_id
    From users_table
-   Where value_1 = 15
-   And value_2 > 25);  
+   Where value_1 = 2
+   And value_2 > 1);  
  
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -366,7 +360,7 @@ TRUNCATE agg_results;
 
 INSERT INTO agg_results(user_id, value_1_agg)
 SELECT user_id, event_type FROM events_table
-WHERE user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
+WHERE user_id in (SELECT user_id from events_table WHERE event_type > 3 and event_type < 5)
 GROUP BY user_id, event_type;
 
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -386,7 +380,7 @@ select user_id from
      user_id
    from 
    	events_table
-where event_type = 901 group by user_id having count(*) > 3
+where event_type = 4 group by user_id having count(*) > 3
 ) as a;
    
 -- get some statistics from the aggregated results to ensure the results are correct
@@ -406,14 +400,14 @@ FROM
    users_table
         JOIN 
    (SELECT  
-      ma.user_id, (GREATEST(coalesce(ma.value_4 / 250, 0.0) + GREATEST(1.0))) / 2 AS prob
+      ma.user_id, (GREATEST(coalesce(ma.value_4, 0.0) / 250 + GREATEST(1.0))) / 2 AS prob
     FROM 
     	users_table AS ma, events_table as short_list
     WHERE 
-    	short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
+    	short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
     ) temp 
   ON users_table.user_id = temp.user_id 
-  WHERE users_table.value_1 < 50;
+  WHERE users_table.value_1 < 3;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -432,10 +426,10 @@ FROM
     FROM 
     	users_table AS ma, events_table as short_list
     WHERE 
-    	short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 3
+    	short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
     ) temp 
   ON users_ids.user_id = temp.user_id 
-  WHERE temp.value_1 < 50;
+  WHERE temp.value_1 < 3;
 
 -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM agg_results;
@@ -454,10 +448,10 @@ FROM
     FROM 
       users_table AS ma, events_table as short_list
     WHERE 
-      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 15
+      short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
     ) temp 
   ON users_ids.user_id = temp.user_id 
-  WHERE temp.value_1 < 50
+  WHERE temp.value_1 < 3
   ORDER BY 1, 2;
 
 SELECT count(*), count(DISTINCT user_id), avg(user_id), avg(value_1_agg) FROM agg_results;
@@ -476,7 +470,7 @@ FROM
     FROM 
       users_table AS ma, events_table as short_list
     WHERE 
-      short_list.user_id = ma.user_id and ma.value_1 < 5000 and short_list.event_type < 3
+      short_list.user_id = ma.user_id and ma.value_1 < 10 and short_list.event_type < 2
     ) temp 
   ON users_ids.user_id = temp.user_id
   ORDER BY 1, 2;

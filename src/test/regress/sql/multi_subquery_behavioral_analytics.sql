@@ -23,9 +23,9 @@ FROM (
     FROM users_table AS u,
          events_table AS e
     WHERE u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
 ) q
@@ -47,9 +47,9 @@ FROM (
       FROM users_table AS u,
           events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (1, 2)
     )
     UNION
     (
@@ -57,17 +57,17 @@ FROM (
       FROM users_table AS u,
          events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (103, 104, 105)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (3, 4)
     )
   ) t1 LEFT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type IN (5, 6)
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
@@ -88,9 +88,9 @@ FROM (
 	      FROM users_table AS u,
 	          events_table AS e
 	      WHERE  u.user_id = e.user_id
-	        AND u.user_id >= 10
-	        AND u.user_id <= 25
-	        AND e.event_type IN (100, 101, 102)
+	        AND u.user_id >= 1
+	        AND u.user_id <= 3
+	        AND e.event_type IN (1, 2)
 	    )
 	    UNION
 	    (
@@ -98,17 +98,17 @@ FROM (
 	      FROM users_table AS u,
 	         events_table AS e
 	      WHERE  u.user_id = e.user_id
-	      AND u.user_id >= 10
-	      AND u.user_id <= 25
-	      AND e.event_type IN (103, 104, 105)
+	      AND u.user_id >= 1
+	      AND u.user_id <= 3
+	      AND e.event_type IN (3, 4)
 	    )
 	  ) t1 LEFT JOIN (
 	      SELECT DISTINCT user_id,
 	        'Has done event'::TEXT AS hasdone_event
 	      FROM  events_table AS e
-	      WHERE  e.user_id >= 10
-	      AND e.user_id <= 25
-	      AND e.event_type IN (106, 107, 108)
+	      WHERE  e.user_id >= 1
+	      AND e.user_id <= 3
+	      AND e.event_type IN (5, 6)
 	  ) t2 ON (t1.user_id = t2.user_id)
 	  GROUP BY  t1.user_id, hasdone_event
 	) t GROUP BY user_id, hasdone_event
@@ -124,22 +124,22 @@ FROM (
   FROM (
       SELECT
       	u.user_id,
-      	CASE WHEN e.event_type IN (100, 101, 102)  THEN 'step=>1'::text else 'step==>2'::text END AS event,
+      	CASE WHEN e.event_type IN (1, 2)  THEN 'step=>1'::text else 'step==>2'::text END AS event,
       	e.time
       FROM users_table AS u,
           events_table AS e
       WHERE  u.user_id = e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102, 103, 104, 105)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (1, 2, 3, 4)
       GROUP BY 1,2,3
   ) t1 LEFT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type IN (5, 6)
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
@@ -157,22 +157,22 @@ FROM (
 	  FROM (
 	      SELECT
 	      	u.user_id,
-	      	CASE WHEN e.event_type in (100, 101, 102)  then 'step=>1'::text else 'step==>2'::text END AS event,
+	      	CASE WHEN e.event_type in (1, 2)  then 'step=>1'::text else 'step==>2'::text END AS event,
 	      	e.time
 	      FROM users_table AS u,
 	          events_table AS e
 	      WHERE  u.user_id = e.user_id
-	      AND u.user_id >= 10
-	      AND u.user_id <= 25
-	      AND e.event_type IN (100, 101, 102, 103, 104, 105)
+	      AND u.user_id >= 1
+	      AND u.user_id <= 3
+	      AND e.event_type IN (1, 2, 3, 4)
 	      GROUP BY 1,2,3
 	  ) t1 LEFT JOIN (
 	      SELECT DISTINCT user_id,
 	        'Has done event'::TEXT AS hasdone_event
 	      FROM  events_table AS e
-	      WHERE  e.user_id >= 10
-	      AND e.user_id <= 25
-	      AND e.event_type IN (106, 107, 108)
+	      WHERE  e.user_id >= 1
+	      AND e.user_id <= 3
+	      AND e.event_type IN (5, 6)
 	  ) t2 ON (t1.user_id = t2.user_id)
 	  GROUP BY  t1.user_id, hasdone_event
 	) t GROUP BY user_id, hasdone_event
@@ -201,9 +201,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 10 AND events_table.event_type < 12
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 1 AND events_table.event_type < 3
       )
     UNION
     (SELECT
@@ -215,9 +215,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 12 AND events_table.event_type < 14
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 1 AND events_table.event_type < 4
     )
   ) AS subquery_1
   LEFT JOIN
@@ -227,9 +227,9 @@ SELECT
     FROM
       users_table
     WHERE
-      user_id >= 10 AND
-      user_id <= 70 AND
-      users_table.value_1 > 15 AND users_table.value_1 < 17
+      user_id >= 1 AND
+      user_id <= 3 AND
+      users_table.value_1 > 2 AND users_table.value_1 < 5
     GROUP BY
       user_id
     HAVING
@@ -266,9 +266,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 10 AND events_table.event_type < 12
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 1 AND events_table.event_type < 3
       )
     UNION
     (SELECT
@@ -280,9 +280,9 @@ SELECT
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      events_table.event_type > 12 AND events_table.event_type < 14
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      events_table.event_type > 1 AND events_table.event_type < 4
     )
   ) AS subquery_1
   LEFT JOIN
@@ -292,9 +292,9 @@ SELECT
     FROM
       users_table
     WHERE
-      user_id >= 10 AND
-      user_id <= 70 AND
-      users_table.value_1 > 15 AND users_table.value_1 < 17
+      user_id >= 1 AND
+      user_id <= 3 AND
+      users_table.value_1 > 2 AND users_table.value_1 < 4
     GROUP BY
       user_id
     HAVING
@@ -329,7 +329,7 @@ ORDER BY
       users_table.user_id,
       CASE 
         WHEN 
-          events_table.event_type > 10 AND events_table.event_type < 12 
+          events_table.event_type > 1 AND events_table.event_type < 3
         THEN 'action=>1' 
         ELSE 'action=>2' 
       END AS event,
@@ -339,11 +339,11 @@ ORDER BY
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      (events_table.event_type > 10 AND events_table.event_type < 12
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      (events_table.event_type > 1 AND events_table.event_type < 3
       	OR
-      events_table.event_type > 12 AND events_table.event_type < 14)
+      events_table.event_type > 2 AND events_table.event_type < 4)
       GROUP BY 1, 2, 3
   ) AS subquery_1
   LEFT JOIN
@@ -353,9 +353,9 @@ ORDER BY
     FROM
       users_table
     WHERE
-      user_id >= 10 AND
-      user_id <= 70 AND
-      users_table.value_1 > 15 AND users_table.value_1 < 17
+      user_id >= 1 AND
+      user_id <= 3 AND
+      users_table.value_1 > 3 AND users_table.value_1 < 5
     GROUP BY
       user_id
     HAVING
@@ -385,18 +385,18 @@ SELECT
   (
    SELECT
       users_table.user_id,
-      CASE WHEN events_table.event_type > 10 AND events_table.event_type < 12 THEN 'action=>1' ELSE 'action=>2' END AS event,
+      CASE WHEN events_table.event_type > 1 AND events_table.event_type < 3 THEN 'action=>1' ELSE 'action=>2' END AS event,
       events_table.time
     FROM
       users_table,
       events_table
     WHERE
       users_table.user_id = events_table.user_id AND
-      users_table.user_id >= 10 AND
-      users_table.user_id <= 70 AND
-      (events_table.event_type > 10 AND events_table.event_type < 12
+      users_table.user_id >= 1 AND
+      users_table.user_id <= 3 AND
+      (events_table.event_type > 1 AND events_table.event_type < 3
       	OR
-      events_table.event_type > 12 AND events_table.event_type < 14)
+      events_table.event_type > 2 AND events_table.event_type < 4)
     GROUP BY 1, 2, 3
   ) AS subquery_1
   LEFT JOIN
@@ -406,9 +406,9 @@ SELECT
     FROM
       users_table
     WHERE
-      user_id >= 10 AND
-      user_id <= 70 AND
-      users_table.value_1 > 15 AND users_table.value_1 < 17
+      user_id >= 1 AND
+      user_id <= 3 AND
+      users_table.value_1 > 3 AND users_table.value_1 < 5
     GROUP BY
       user_id
     HAVING
@@ -445,14 +445,14 @@ FROM (
         SELECT user_id, time
         FROM users_table
         WHERE
-        user_id >= 10 AND
-        user_id <= 70 AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        user_id >= 1 AND
+        user_id <= 3 AND
+        users_table.value_1 > 1 AND users_table.value_1 < 3
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
           WHERE user_id = u.user_id AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          events_table.event_type > 1 AND events_table.event_type < 3
         ) t ON true
         GROUP BY user_id
 ) AS shard_union
@@ -463,9 +463,9 @@ ORDER BY user_lastseen DESC, user_id;
 ------------------------------------
 SELECT user_id
 FROM users_table
-WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 10 AND value_1 <= 20)
-    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 30 AND value_1 <= 40)
-    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 50 AND value_1 <= 60)
+WHERE user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 1 AND value_1 <= 2)
+    AND user_id IN (SELECT user_id FROM users_table WHERE value_1 >= 3 AND value_1 <= 4)
+    AND user_id IN (SELECT user_id FROM users_table WHERE  value_1 >= 5 AND value_1 <= 6)
 GROUP BY 
   user_id
 ORDER BY
@@ -476,9 +476,9 @@ ORDER BY
 -- Find customers who have done X, and satisfy other customer specific criteria
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 > 101 AND value_1 < 110
-  AND value_2 >= 5
-  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 101 AND event_type < 110 AND value_3 > 100 AND user_id = users_table.user_id)
+  value_1 > 1 AND value_1 < 3
+  AND value_2 >= 1
+  AND EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type < 3 AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
 
@@ -486,9 +486,9 @@ LIMIT 5;
 -- Customers who haven’t done X, and satisfy other customer specific criteria
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
-  value_1 = 101
-  AND value_2 >= 5
-  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=101 AND value_3 > 100 AND user_id = users_table.user_id)
+  value_1 = 2
+  AND value_2 >= 1
+  AND NOT EXISTS (SELECT user_id FROM events_table WHERE event_type=2 AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 1 DESC, 2 DESC
 LIMIT 3;
 
@@ -496,10 +496,10 @@ LIMIT 3;
 -- Customers who have done X and Y, and satisfy other customer specific criteria
 ------------------------------------
 SELECT user_id, sum(value_2) as cnt FROM users_table WHERE
-  value_1 > 100
-  AND value_2 >= 5
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type != 100 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 101 AND value_3 > 100 AND user_id = users_table.user_id)
+  value_1 > 1
+  AND value_2 >= 1
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type != 1 AND value_3 > 1 AND user_id = users_table.user_id)
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type = 2 AND value_3 > 1 AND user_id = users_table.user_id)
 GROUP BY
   user_id
 ORDER BY cnt DESC, user_id DESC
@@ -509,9 +509,9 @@ LIMIT 5;
 -- Customers who have done X and haven’t done Y, and satisfy other customer specific criteria
 ------------------------------------
 SELECT user_id, value_2 FROM users_table WHERE
-  value_2 >= 5
-  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 100 AND event_type <= 300 AND value_3 > 100 AND user_id = users_table.user_id)
-  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 300 AND event_type <= 350  AND value_3 > 100 AND user_id = users_table.user_id)
+  value_2 >= 1
+  AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+  AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
 ORDER BY 2 DESC, 1 DESC
 LIMIT 4;
 
@@ -521,14 +521,14 @@ LIMIT 4;
 SELECT user_id,
          avg(value_2)
   FROM   users_table
-  WHERE  value_1 > 100
-         AND value_1 < 124
-         AND value_2 >= 5
+  WHERE  value_1 > 1
+         AND value_1 < 3
+         AND value_2 >= 1
          AND EXISTS (SELECT user_id
                      FROM   events_table
-                     WHERE  event_type > 100
-                            AND event_type < 124
-                            AND value_3 > 100
+                     WHERE  event_type > 1
+                            AND event_type < 3
+                            AND value_3 > 1
                             AND user_id = users_table.user_id
                      GROUP  BY user_id
                      HAVING Count(*) > 2)
@@ -546,7 +546,7 @@ SELECT user_id, value_1 from
   SELECT 
     user_id, value_1 From users_table
   WHERE 
-    value_2 > 100 and user_id = 15 
+    value_2 > 1 and user_id = 2 
   GROUP BY 
     value_1, user_id 
   HAVING 
@@ -561,7 +561,7 @@ SELECT user_id, value_1 from
   SELECT 
     user_id, value_1 From users_table
   WHERE 
-    value_2 > 100 and (user_id = 15 OR user_id = 16) 
+    value_2 > 1 and (user_id = 2 OR user_id = 3) 
   GROUP BY 
     value_1, user_id 
   HAVING count(*) > 1
@@ -575,14 +575,14 @@ ORDER BY
 SELECT user_id
 FROM events_table
 WHERE
-	event_type = 16 AND value_2 > 50 AND 
+	event_type = 3 AND value_2 > 2 AND 
   user_id IN
             (SELECT 
                 user_id
              FROM 
               users_table
              WHERE
-   	          value_1 = 15 AND value_2 > 25
+   	          value_1 = 1 AND value_2 > 2
             )
 ORDER BY 1;
 
@@ -592,7 +592,7 @@ ORDER BY 1;
 SELECT 
   user_id, event_type FROM events_table
 WHERE 
-  user_id in (SELECT user_id from events_table WHERE event_type > 500 and event_type < 505)
+  user_id in (SELECT user_id from events_table WHERE event_type > 3 and event_type < 5)
 GROUP BY 
   user_id, event_type
 ORDER BY 2 DESC, 1 
@@ -608,11 +608,11 @@ SELECT user_id FROM
   FROM
    	events_table
   WHERE 
-    event_type = 901
+    event_type = 2
   GROUP BY 
     user_id 
   HAVING 
-    count(*) > 3
+    count(*) > 1
 ) AS a
 ORDER BY 
   user_id;
@@ -631,11 +631,11 @@ FROM
     FROM
     	users_table AS ma, events_table as short_list
     WHERE
-    	short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
+    	short_list.user_id = ma.user_id and ma.value_1 < 2 and short_list.event_type < 2
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE 
-    users_table.value_1 < 50;
+    users_table.value_1 < 2;
 
   -- get some statistics from the aggregated results to ensure the results are correct
 SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM assets;
@@ -651,8 +651,8 @@ SELECT count(*) FROM
   FROM 
     users_table
   WHERE 
-    (value_1 = '5' OR value_1 = '13') AND 
-    user_id NOT IN (select user_id from users_table where value_1 = '3')
+    (value_1 = '1' OR value_1 = '3') AND 
+    user_id NOT IN (select user_id from users_table where value_1 = '4')
   GROUP BY 
     user_id
   HAVING 
@@ -667,7 +667,7 @@ SELECT subquery_count FROM
         FROM
             users_table
         WHERE
-            (value_1 = '5' OR value_1 = '13')
+            (value_1 = '1' OR value_1 = '3')
         GROUP BY 
           user_id
         HAVING 
@@ -678,7 +678,7 @@ SELECT subquery_count FROM
         FROM
             users_table
         WHERE
-            (value_1 = '3')
+            (value_1 = '2')
         GROUP BY 
           user_id) as b 
         ON a.user_id = b.user_id 
@@ -696,7 +696,7 @@ FROM (
     FROM
 		users_table
 	WHERE
-		(value_1 = '5' OR value_1 = '13')
+		(value_1 = '1' OR value_1 = '3')
 	GROUP BY 
     user_id
 	HAVING 
@@ -708,7 +708,7 @@ FROM (
 	FROM
 		users_table
 	WHERE
-		(value_1 = '3')
+		(value_1 = '2')
 	GROUP BY 
     user_id) AS b
 	ON a.user_id = b.user_id
@@ -739,7 +739,7 @@ FROM (
     min(time) AS view_homepage_time
   FROM events_table
      WHERE user_id = 1 and
-     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+     event_type IN (1, 2)
   GROUP BY user_id
 ) e1 LEFT JOIN LATERAL (
   SELECT
@@ -749,7 +749,7 @@ FROM (
   FROM events_table
   WHERE
     user_id = e1.user_id AND user_id = 1 and
-       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+       event_type IN (2, 3)
   ORDER BY time
   LIMIT 1
 ) e2 ON true LEFT JOIN LATERAL (
@@ -760,7 +760,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e2.user_id AND user_id = 1 and
-    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+    event_type IN (3, 4)
   ORDER BY time
   LIMIT 1
 ) e3 ON true LEFT JOIN LATERAL (
@@ -771,7 +771,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e3.user_id AND user_id = 1 and
-    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+    event_type IN (4, 5)
   ORDER BY time
   LIMIT 1
 ) e4 ON true LEFT JOIN LATERAL (
@@ -780,7 +780,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e4.user_id AND user_id = 1 and
-    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+    event_type IN (5, 6)
   ORDER BY time
   LIMIT 1
 ) e5 ON true
@@ -806,7 +806,7 @@ FROM (
     min(time) AS view_homepage_time
   FROM events_table
      WHERE
-     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+     event_type IN (1, 2)
   GROUP BY user_id
 ) e1 LEFT JOIN LATERAL (
   SELECT
@@ -816,7 +816,7 @@ FROM (
   FROM events_table
   WHERE
     user_id = e1.user_id AND
-       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+       event_type IN (2, 3)
   ORDER BY time
 ) e2 ON true LEFT JOIN LATERAL (
   SELECT
@@ -826,7 +826,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e2.user_id AND
-    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+    event_type IN (3, 4)
   ORDER BY time
 ) e3 ON true LEFT JOIN LATERAL (
   SELECT
@@ -836,7 +836,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e3.user_id AND
-    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+    event_type IN (4, 5)
   ORDER BY time
 ) e4 ON true LEFT JOIN LATERAL (
   SELECT
@@ -844,7 +844,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e4.user_id AND
-    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+    event_type IN (5, 6)
   ORDER BY time
 ) e5 ON true
 GROUP BY e1.user_id
@@ -867,7 +867,7 @@ FROM (
     min(time) AS view_homepage_time
   FROM events_table
      WHERE
-     event_type IN (10, 20, 30, 40, 50, 60, 70, 80, 90)
+     event_type IN (1, 2)
   GROUP BY user_id
 ) e1 LEFT JOIN LATERAL (
   SELECT
@@ -877,7 +877,7 @@ FROM (
   FROM events_table
   WHERE
     user_id = e1.user_id AND
-       event_type IN (11, 21, 31, 41, 51, 61, 71, 81, 91)
+       event_type IN (2, 3)
   ORDER BY time
 ) e2 ON true LEFT JOIN LATERAL (
   SELECT
@@ -887,7 +887,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e2.user_id AND
-    event_type IN (12, 22, 32, 42, 52, 62, 72, 82, 92)
+    event_type IN (3, 4)
   ORDER BY time
 ) e3 ON true LEFT JOIN LATERAL (
   SELECT
@@ -897,7 +897,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e3.user_id AND
-    event_type IN (13, 23, 33, 43, 53, 63, 73, 83, 93)
+    event_type IN (4, 5)
   ORDER BY time
 ) e4 ON true LEFT JOIN LATERAL (
   SELECT
@@ -905,7 +905,7 @@ FROM (
   FROM  events_table
   WHERE
     user_id = e4.user_id AND
-    event_type IN (14, 24, 34, 44, 54, 64, 74, 84, 94)
+    event_type IN (5, 6)
   ORDER BY time
 ) e5 ON true
 group by e1.user_id
@@ -922,11 +922,11 @@ FROM (
     FROM
 		  users_table
 	   WHERE
-		  (value_1 > 5)
+		  (value_1 > 2)
 	   GROUP BY 
       user_id
 	   HAVING 
-      count(distinct value_1) > 88
+      count(distinct value_1) > 2
 	) as a
 	LEFT JOIN (
 	SELECT
@@ -952,9 +952,9 @@ FROM (
     FROM
 		  users_table
 	   WHERE
-		(value_1 > 5)
+		(value_1 > 2)
 	GROUP BY user_id
-	HAVING count(distinct value_1) > 88
+	HAVING count(distinct value_1) > 2
 	) as a
 	LEFT JOIN (
 	SELECT
@@ -969,7 +969,7 @@ WHERE
 GROUP BY 
   a.user_id
 HAVING 
-  sum(b.value_3) > 50000
+  sum(b.value_3) > 5
 ORDER BY 
   avg(b.value_3), 2, 1
 LIMIT 5;
@@ -982,11 +982,11 @@ FROM
     FROM 
       users_table
 	  WHERE 
-      (value_1 > 5)
+      (value_1 > 2)
 	  GROUP BY 
       user_id
 	 HAVING 
-    count(distinct value_1) > 88
+    count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
 	(
@@ -1026,7 +1026,7 @@ FROM
 	LEFT OUTER JOIN events_table e2
 	ON e2.user_id = sub.user_id
 WHERE 
-  e2.value_2 > 10 AND e2.value_2 < 50 AND u.value_2 > 10 AND u.value_2 < 50
+  e2.value_2 > 1 AND e2.value_2 < 5 AND u.value_2 > 1 AND u.value_2 < 5
 GROUP BY 
   u.user_id, sub.value_2, sub.value_3
 ORDER BY 
@@ -1103,11 +1103,11 @@ FROM
    FROM 
     users_table
 	 WHERE 
-    (value_1 > 5)
+    (value_1 > 2)
 	 GROUP BY 
     user_id
 	 HAVING 
-    count(distinct value_1) > 88
+    count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
 	(SELECT 
@@ -1134,11 +1134,11 @@ FROM
    FROM 
       users_table
 	 WHERE 
-      (value_1 > 5)
+      (value_1 > 2)
 	 GROUP BY 
       user_id
 	 HAVING 
-      count(distinct value_1) > 88
+      count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
 	(SELECT 
@@ -1160,11 +1160,11 @@ FROM
    FROM 
       users_table
 	 WHERE 
-      (value_1 > 5)
+      (value_1 > 2)
 	 GROUP BY 
       user_id
 	 HAVING 
-      count(distinct value_1) > 88
+      count(distinct value_1) > 2
 	) as a
 	LEFT JOIN
 	(SELECT 
@@ -1201,19 +1201,19 @@ FROM
        FROM 
           users_table AS ma
        WHERE 
-          (ma.value_2 > 100)
+          (ma.value_2 > 1)
        ORDER BY 
-          prob DESC, user_id DESC
+          prob DESC, value_2 DESC, user_id DESC
         LIMIT 10
         ) AS ma
         ON (a.a_user_id = ma.user_id)
       ) AS inner_sub
   	ORDER BY 
-      prob DESC, user_id DESC
+      prob DESC, value_2 DESC, user_id DESC, event_type DESC
    	LIMIT 10
    	) AS outer_sub
 ORDER BY 
-  prob DESC, event_type DESC, user_id DESC
+  prob DESC, value_2 DESC, user_id DESC, event_type DESC
 LIMIT 10;
 
 -- very similar query but produces different result due to
@@ -1231,7 +1231,7 @@ FROM
       FROM 
         users_table AS ma
       WHERE 
-        (ma.value_2 > 100)
+        (ma.value_2 > 1)
       ORDER BY 
         prob DESC, user_id DESC
       LIMIT 10
@@ -1259,7 +1259,7 @@ FROM
        FROM 
         users_table AS ma
        WHERE 
-          (ma.value_2 > 100)
+          (ma.value_2 > 1)
         ORDER BY 
           prob DESC, user_id DESC
         LIMIT 10
@@ -1332,7 +1332,7 @@ FROM
                         FROM 
                           events_table
                         WHERE 
-                          event_type = ANY(ARRAY [10, 11, 12])
+                          event_type = ANY(ARRAY [4, 5, 6])
                         ORDER BY 
                           value_3 ASC, user_id_ck DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
                         LIMIT 10 ) 
@@ -1406,7 +1406,7 @@ FROM
                     FROM 
                       events_table
                     WHERE 
-                      event_type = ANY(ARRAY [10, 11, 12])
+                      event_type = ANY(ARRAY [4, 5, 6])
                     ORDER BY
                      		value_3 ASC, user_id_ck DESC, array_index(ARRAY [1, 2, 3], (value_2 % 3)) ASC
                     LIMIT 10
@@ -1440,7 +1440,7 @@ FROM (
   FROM
     users_table
   WHERE
-    (value_1 = '5' OR value_1 = '13')
+    (value_1 = '1' OR value_1 = '3')
   GROUP BY user_id                                                                          
   HAVING count(distinct value_1) = 2
   ) as a
@@ -1460,7 +1460,7 @@ FROM (
     FROM
     users_table
   WHERE
-    (value_1 = '5' OR value_1 = '13')
+    (value_1 = '1' OR value_1 = '3')
   GROUP BY user_id                                                                          
   HAVING count(distinct value_1) = 2
   ) as a
@@ -1479,7 +1479,7 @@ FROM (SELECT
       FROM 
         users_table 
       WHERE 
-        (value_1 = '5' OR value_1 = '13' ) 
+        (value_1 = '1' OR value_1 = '3' ) 
       GROUP BY 
         user_id 
       HAVING 
@@ -1508,12 +1508,12 @@ FROM (
       users_table AS u,
       events_table AS e
     WHERE 
-      u.user_id = e.user_id AND e.event_type IN (100, 101, 102)
+      u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
 ) q
 ORDER BY 2 DESC, 1
-LIMIT 3+3 OFFSET 5::smallint;
+LIMIT 1+1 OFFSET 1::smallint;
 
 -- now, lets use implicit coersion in LIMIT and a simple expressions on OFFSET
 SELECT user_id, array_length(events_table, 1)
@@ -1526,17 +1526,17 @@ FROM (
       users_table AS u,
       events_table AS e
     WHERE 
-      u.user_id = e.user_id AND e.event_type IN (100, 101, 102)
+      u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
 ) q
 ORDER BY 2 DESC, 1
-LIMIT '3' OFFSET 27+2;
+LIMIT '3' OFFSET 2+1;
 
 -- create a test function which is marked as volatile
 CREATE OR REPLACE FUNCTION volatile_func_test()
       RETURNS INT AS $$
-        SELECT 5;
+        SELECT 1;
     $$ LANGUAGE sql VOLATILE;
 
 -- Citus should be able to evalute functions/row comparisons on the LIMIT/OFFSET
@@ -1550,7 +1550,7 @@ FROM (
       users_table AS u,
       events_table AS e
     WHERE 
-      u.user_id = e.user_id AND e.event_type IN (100, 101, 102)
+      u.user_id = e.user_id AND e.event_type IN (1, 2, 3, 4)
   ) t
   GROUP BY user_id
 ) q
@@ -1568,7 +1568,7 @@ FROM (
       users_table AS u,
       events_table AS e
     WHERE 
-      u.user_id = e.user_id AND e.event_type IN (100, 101, 102)
+      u.user_id = e.user_id AND e.event_type IN (1, 2)
   ) t
   GROUP BY user_id
 ) q
@@ -1577,7 +1577,7 @@ LIMIT (5 > 4)::int OFFSET
                     CASE
                       WHEN 5 != 5 THEN 27
                       WHEN 1 > 5 THEN 28
-                      ELSE 29
+                      ELSE 2
                   END;
 
 -- we don't allow parameters on the LIMIT/OFFSET clauses
@@ -1590,14 +1590,14 @@ FROM (
      FROM users_table AS u,
           events_table AS e
      WHERE u.user_id = e.user_id
-       AND e.event_type IN (100, 101, 102)
+       AND e.event_type IN (1, 2)
    ) t
    GROUP BY user_id
  ) q
  ORDER BY 2 DESC, 1
  LIMIT $1 OFFSET $2;
 
- EXECUTE parametrized_limit(3,3);
+ EXECUTE parametrized_limit(1,1);
 
 PREPARE parametrized_offset AS
 SELECT user_id, array_length(events_table, 1)
@@ -1608,14 +1608,14 @@ FROM (
      FROM users_table AS u,
           events_table AS e
      WHERE u.user_id = e.user_id
-       AND e.event_type IN (100, 101, 102)
+       AND e.event_type IN (1, 2)
    ) t
    GROUP BY user_id
  ) q
  ORDER BY 2 DESC, 1
- LIMIT 3 OFFSET $1;
+ LIMIT 1 OFFSET $1;
 
- EXECUTE parametrized_offset(3);
+ EXECUTE parametrized_offset(1);
 
 SET client_min_messages TO DEFAULT;
 DROP FUNCTION volatile_func_test();
@@ -1663,11 +1663,11 @@ FROM
     FROM
       users_table AS ma, events_table as short_list
     WHERE
-      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 50
+      short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE 
-    users_table.value_1 < 50 AND test_join_function_2(users_table.user_id, temp.user_id);
+    users_table.value_1 < 3 AND test_join_function_2(users_table.user_id, temp.user_id);
 
 -- we do support the following since there is already an equality on the partition
 -- key and we have an additional join via a function
@@ -1681,12 +1681,12 @@ FROM
     FROM
       users_table AS ma, events_table as short_list
     WHERE
-      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 100 AND
+      short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 4 AND
        test_join_function_2(ma.value_1, short_list.value_2)
     ) temp
   ON users_table.user_id = temp.user_id
   WHERE 
-    users_table.value_1 < 50
+    users_table.value_1 < 3
   ORDER BY 2 DESC, 1 DESC
   LIMIT 10;
 
@@ -1702,7 +1702,7 @@ FROM
   WHERE 
     events_table.user_id = users_table.user_id AND 
     events_table.time > users_table.time AND 
-    events_table.value_2 IN (10, 100)
+    events_table.value_2 IN (0, 4)
   ) as foo;
 
 -- the other way around is not supported
@@ -1716,7 +1716,7 @@ FROM
   WHERE 
     events_table.user_id > users_table.user_id AND 
     events_table.time = users_table.time AND 
-    events_table.value_2 IN (10, 100)
+    events_table.value_2 IN (0, 4)
   ) as foo;
 
 -- we can even allow that on top level joins
@@ -1729,7 +1729,7 @@ FROM
     events_table, users_table 
   WHERE 
     events_table.user_id = users_table.user_id AND 
-    events_table.value_2 IN (10, 100)
+    events_table.value_2 IN (0, 4)
   ) as foo,
 (SELECT 
     event_type, random(), events_table.user_id 
@@ -1737,7 +1737,7 @@ FROM
     events_table, users_table 
   WHERE 
     events_table.user_id = users_table.user_id AND 
-    events_table.value_2 IN (20, 200)
+    events_table.value_2 IN (1, 5)
   ) as bar 
 WHERE foo.event_type > bar.event_type
 AND foo.user_id = bar.user_id;
@@ -1753,7 +1753,7 @@ FROM
     events_table, users_table 
   WHERE 
     events_table.user_id = users_table.user_id AND 
-    events_table.value_2 IN (10, 100)
+    events_table.value_2 IN (0, 4)
   ) as foo,
 (SELECT 
     event_type, random() 
@@ -1761,7 +1761,7 @@ FROM
     events_table, users_table 
   WHERE 
     events_table.user_id = users_table.user_id AND 
-    events_table.value_2 IN (20, 200)
+    events_table.value_2 IN (1, 5)
   ) as bar 
 WHERE foo.event_type = bar.event_type;
 
@@ -1776,10 +1776,10 @@ FROM
     FROM 
       users_table AS ma, events_table as short_list
     WHERE 
-      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 3
+      short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 3
     ) temp 
   ON users_ids.user_id = temp.user_id 
-  WHERE temp.value_1 < 50
+  WHERE temp.value_1 < 3
   ORDER BY 1
   LIMIT 5;
 
@@ -1794,10 +1794,10 @@ FROM
     FROM 
       users_table AS ma, events_table as short_list
     WHERE 
-      short_list.user_id = ma.user_id and ma.value_1 < 50 and short_list.event_type < 15
+      short_list.user_id = ma.user_id and ma.value_1 < 3 and short_list.event_type < 2
     ) temp 
   ON users_ids.user_id = temp.user_id 
-  WHERE temp.value_1 < 50
+  WHERE temp.value_1 < 3
   ORDER BY 1, 2
   LIMIT 5;
 
@@ -1812,7 +1812,7 @@ FROM
     FROM 
       users_table AS ma, events_table as short_list
     WHERE 
-      short_list.user_id = ma.user_id and ma.value_1 < 25 and short_list.event_type < 3
+      short_list.user_id = ma.user_id and ma.value_1 < 2 and short_list.event_type < 3
     ) temp 
   ON users_ids.user_id = temp.user_id 
   ORDER BY 1,2

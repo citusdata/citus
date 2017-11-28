@@ -22,14 +22,14 @@ FROM (
         SELECT user_id, time
         FROM users_table
         WHERE
-        user_id >= 10 AND
-        user_id <= 70 AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        user_id >= 1 AND
+        user_id <= 3 AND
+        users_table.value_1 > 1 AND users_table.value_1 < 3
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
           WHERE user_id = u.user_id AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          events_table.event_type > 1 AND events_table.event_type < 3
         ) t ON true
         GROUP BY user_id
 ) AS shard_union
@@ -54,25 +54,25 @@ FROM (
         WHERE
         user_id >= $1 AND
         user_id <= $2 AND
-        users_table.value_1 > 10 AND users_table.value_1 < 12
+        users_table.value_1 > 1 AND users_table.value_1 < 3
         ) u LEFT JOIN LATERAL (
           SELECT event_type, time
           FROM events_table
           WHERE user_id = u.user_id AND
-          events_table.event_type > 10 AND events_table.event_type < 12
+          events_table.event_type > 1 AND events_table.event_type < 3
         ) t ON true
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC, user_id;
 
 -- should be fine with more than five executions
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
-EXECUTE prepared_subquery_2(10, 70);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
+EXECUTE prepared_subquery_2(1, 3);
 
 -- prepared statements with subqueries in WHERE clause
 PREPARE prepared_subquery_3(int, int, int, int, int, int) AS
@@ -88,12 +88,12 @@ ORDER BY
   LIMIT 5;
 
 -- enough times (6+) to actually use prepared statements
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
-EXECUTE prepared_subquery_3(50, 60, 20, 10, 30, 40);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
+EXECUTE prepared_subquery_3(4, 5, 1, 0, 2, 3);
 
 
 CREATE FUNCTION plpgsql_subquery_test(int, int) RETURNS TABLE(count bigint) AS $$
@@ -110,7 +110,7 @@ BEGIN
 			    FROM
 			    	users_table AS ma, events_table as short_list
 			    WHERE
-			    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 50
+			    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 3
 			    ) temp
 			  ON users_table.user_id = temp.user_id
 			  WHERE 
@@ -120,15 +120,15 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- enough times (6+) to actually use prepared statements
-SELECT plpgsql_subquery_test(10, 20);
-SELECT plpgsql_subquery_test(10, 20);
-SELECT plpgsql_subquery_test(10, 20);
-SELECT plpgsql_subquery_test(10, 20);
-SELECT plpgsql_subquery_test(10, 20);
-SELECT plpgsql_subquery_test(10, 20);
+SELECT plpgsql_subquery_test(1, 2);
+SELECT plpgsql_subquery_test(1, 2);
+SELECT plpgsql_subquery_test(1, 2);
+SELECT plpgsql_subquery_test(1, 2);
+SELECT plpgsql_subquery_test(1, 2);
+SELECT plpgsql_subquery_test(1, 2);
 
 -- this should also work, but should return 0 given that int = NULL is always returns false
-SELECT plpgsql_subquery_test(10, NULL);
+SELECT plpgsql_subquery_test(1, NULL);
 
 CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 		SELECT
@@ -141,7 +141,7 @@ CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 	    FROM
 	    	users_table AS ma, events_table as short_list
 	    WHERE
-	    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 50
+	    	short_list.user_id = ma.user_id and ma.value_1 < $1 and short_list.event_type < 3
 	    ) temp
 	  ON users_table.user_id = temp.user_id
 	  WHERE 
@@ -149,7 +149,7 @@ CREATE FUNCTION sql_subquery_test(int, int) RETURNS bigint AS $$
 $$ LANGUAGE SQL;
 
 -- should error out
-SELECT sql_subquery_test(5,5);
+SELECT sql_subquery_test(1,1);
 
 DROP FUNCTION plpgsql_subquery_test(int, int);
 DROP FUNCTION sql_subquery_test(int, int);
