@@ -1044,8 +1044,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 
 	if (subqueryTree->setOperations)
 	{
-		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree,
-														  outerMostQueryHasLimit);
+		deferredError = DeferErrorIfUnsupportedUnionQuery(subqueryTree);
 		if (deferredError)
 		{
 			return deferredError;
@@ -1154,9 +1153,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
  * DeferErrorIfUnsupportedUnionQuery is a helper function for ErrorIfCannotPushdownSubquery().
  * The function also errors out for set operations INTERSECT and EXCEPT.
  */
-static DeferredErrorMessage *
-DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
-								  bool outerMostQueryHasLimit)
+DeferredErrorMessage *
+DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 {
 	List *setOperationStatementList = NIL;
 	ListCell *setOperationStatmentCell = NULL;
@@ -1172,6 +1170,8 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 		Node *rightArg = setOperation->rarg;
 		int leftArgRTI = 0;
 		int rightArgRTI = 0;
+		bool leftRecurs = false;
+		bool rightRecurs = false;
 
 		if (setOperation->op != SETOP_UNION)
 		{
@@ -1188,7 +1188,7 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 												subqueryTree->rtable)->subquery;
 			if (HasRecurringTuples(leftArgSubquery, &recurType))
 			{
-				break;
+				leftRecurs = true;
 			}
 		}
 
@@ -1200,9 +1200,18 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree,
 												 subqueryTree->rtable)->subquery;
 			if (HasRecurringTuples(rightArgSubquery, &recurType))
 			{
-				break;
+				rightRecurs = true;
 			}
 		}
+
+		/* cannot push down if one side recurs while the other does not */
+		if (leftRecurs != rightRecurs)
+		{
+			break;
+		}
+
+		/* no problem if both or neither side recurs */
+		recurType = RECURRING_TUPLES_INVALID;
 	}
 
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
@@ -3438,6 +3447,7 @@ FindNodesOfType(MultiNode *node, int type)
 
 	return nodeList;
 }
+
 
 /*
  * ExtractRangeTableRelationWalker gathers all range table entries in a query

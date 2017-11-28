@@ -32,6 +32,7 @@
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
@@ -46,7 +47,6 @@
 
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
-
 
 
 /*
@@ -67,6 +67,18 @@ typedef struct VarLevelsUpWalkerContext
 {
 	int level;
 } VarLevelsUpWalkerContext;
+
+/*
+ * PlanPullPushContext is used to recursively plan subqueries
+ * and CTEs, pull results to the coordinator, and push it back into
+ * the workers.
+ */
+typedef struct PlanPullPushContext
+{
+	PlannerRestrictionContext *plannerRestrictionContext;
+	List *subPlanList;
+	int level;
+} PlanPullPushContext;
 
 
 
@@ -91,12 +103,16 @@ static PlannedStmt * FinalizePlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 										   DistributedPlan *distributedPlan,
 										   CustomScan *customScan);
-static DeferredErrorMessage * PlanPullPushCTEs(Query *query, List **subPlanList);
+static DeferredErrorMessage * PlanPullPushCTEs(Query *query,
+											   PlanPullPushContext *context);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
 static bool ContainsResultFunctionWalker(Node *node, void *context);
-static DeferredErrorMessage * PlanPullPushSubqueries(Query *query, List **subPlanList);
-static bool PlanPullPushSubqueriesWalker(Node *node, List **planList);
+static DeferredErrorMessage * PlanPullPushSubqueries(Query *query,
+													 PlanPullPushContext *context);
+static void RecursivelyPlanSetOperations(Query *query, PlanPullPushContext *context);
+static bool PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context);
 static bool ShouldRecursivelyPlanSubquery(Query *query);
+static PlannedStmt * RecursivelyPlanQuery(Query *query, int subPlanId);
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
@@ -623,10 +639,12 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 							bool hasUnresolvedParams,
 							PlannerRestrictionContext *plannerRestrictionContext)
 {
+	PlanPullPushContext pullPushContext = {
+		plannerRestrictionContext, NIL, 0
+	};
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
 	DeferredErrorMessage *pullPushError = NULL;
-	List *subPlanList = NIL;
 
 	/*
 	 * For select queries we, if router executor is enabled, first try to
@@ -671,7 +689,7 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 	 * subqueries separately and replace them with a subquery that
 	 * scans intermediate results.
 	 */
-	pullPushError = PlanPullPushSubqueries(originalQuery, &subPlanList);
+	pullPushError = PlanPullPushSubqueries(originalQuery, &pullPushContext);
 	if (pullPushError != NULL)
 	{
 		/* PlanPullPushSubqueries only produces irrecoverable errors at the moment */
@@ -684,7 +702,7 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 	 * relations that appear in pull-push subqueries) and to apply
 	 * planner transformations.
 	 */
-	if (list_length(subPlanList) > 0)
+	if (list_length(pullPushContext.subPlanList) > 0)
 	{
 		bool setPartitionedTablesInherited = false;
 		Query *newQuery = copyObject(originalQuery);
@@ -707,7 +725,7 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 		/* recurse into CreateDistributedSelectPlan with subqueries/CTEs replaced */
 		distributedPlan = CreateDistributedSelectPlan(originalQuery, query, NULL, false,
 													  plannerRestrictionContext);
-		distributedPlan->subPlanList = subPlanList;
+		distributedPlan->subPlanList = pullPushContext.subPlanList;
 
 		return distributedPlan;
 	}
@@ -737,7 +755,7 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 
 
 static DeferredErrorMessage *
-PlanPullPushSubqueries(Query *query, List **subPlanList)
+PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 {
 	DeferredErrorMessage *error = NULL;
 
@@ -756,21 +774,50 @@ PlanPullPushSubqueries(Query *query, List **subPlanList)
 		return false;
 	}
 
-	error = PlanPullPushCTEs(query, subPlanList);
+	error = PlanPullPushCTEs(query, context);
 	if (error != NULL)
 	{
 		return error;
 	}
 
 	/* descend into subqueries */
-	query_tree_walker(query, PlanPullPushSubqueriesWalker, subPlanList, 0);
+	query_tree_walker(query, PlanPullPushSubqueriesWalker, context, 0);
 
 	return NULL;
 }
 
 
+static void
+RecursivelyPlanSetOperations(Query *query, PlanPullPushContext *context)
+{
+	SetOperationStmt *setOperations = (SetOperationStmt *) query->setOperations;
+	RangeTblRef *leftRef = (RangeTblRef *) setOperations->larg;
+	RangeTblEntry *leftRTE = rt_fetch(leftRef->rtindex, query->rtable);
+	RangeTblRef *rightRef = (RangeTblRef *) setOperations->rarg;
+	RangeTblEntry *rightRTE = rt_fetch(rightRef->rtindex, query->rtable);
+
+	if (leftRTE->rtekind == RTE_SUBQUERY &&
+		NeedsDistributedPlanning(leftRTE->subquery))
+	{
+		Query *subquery = leftRTE->subquery;
+		int subPlanId = list_length(context->subPlanList);
+		PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+		context->subPlanList = lappend(context->subPlanList, subPlan);
+	}
+
+	if (rightRTE->rtekind == RTE_SUBQUERY &&
+		NeedsDistributedPlanning(rightRTE->subquery))
+	{
+		Query *subquery = rightRTE->subquery;
+		int subPlanId = list_length(context->subPlanList);
+		PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+		context->subPlanList = lappend(context->subPlanList, subPlan);
+	}
+}
+
+
 static DeferredErrorMessage *
-PlanPullPushCTEs(Query *query, List **subPlanList)
+PlanPullPushCTEs(Query *query, PlanPullPushContext *pullPushContext)
 {
 	ListCell *cteCell = NULL;
 	CteReferenceWalkerContext context = { -1, NIL };
@@ -801,7 +848,7 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 		char *cteName = cte->ctename;
 		Query *subquery = (Query *) cte->ctequery;
 		Query *subPlanQuery = copyObject(subquery);
-		int subPlanId = list_length(*subPlanList);
+		int subPlanId = list_length(pullPushContext->subPlanList);
 		Query *resultQuery = NULL;
 		PlannedStmt *subPlan = NULL;
 		ListCell *rteCell = NULL;
@@ -873,7 +920,7 @@ PlanPullPushCTEs(Query *query, List **subPlanList)
 		}
 
 		subPlan = planner(subPlanQuery, cursorOptions, NULL);
-		(*subPlanList) = lappend(*subPlanList, subPlan);
+		pullPushContext->subPlanList = lappend(pullPushContext->subPlanList, subPlan);
 	}
 
 	/*
@@ -960,7 +1007,8 @@ ContainsResultFunctionWalker(Node *node, void *context)
 	}
 	else if (IsA(node, Query))
 	{
-		return query_tree_walker((Query *) node, ContainsResultFunctionWalker, context, 0);
+		return query_tree_walker((Query *) node, ContainsResultFunctionWalker, context,
+								 0);
 	}
 
 	return expression_tree_walker(node, ContainsResultFunctionWalker, context);
@@ -968,7 +1016,7 @@ ContainsResultFunctionWalker(Node *node, void *context)
 
 
 static bool
-PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
+PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context)
 {
 	if (node == NULL)
 	{
@@ -979,53 +1027,68 @@ PlanPullPushSubqueriesWalker(Node *node, List **subPlanList)
 	{
 		Query *query = (Query *) node;
 
-		PlanPullPushSubqueries(query, subPlanList);
+		context->level += 1;
+		PlanPullPushSubqueries(query, context);
+		context->level -= 1;
 
 		if (ShouldRecursivelyPlanSubquery(query))
 		{
-			PlannedStmt *subPlan = NULL;
-			int subPlanId = list_length(*subPlanList);
-			Query *resultQuery = NULL;
-			int cursorOptions = 0;
-
-			resultQuery = BuildSubPlanResultQuery(query, subPlanId);
-
-			if (log_min_messages >= DEBUG1)
-			{
-				StringInfo subqueryString = makeStringInfo();
-				StringInfo resultQueryString = makeStringInfo();
-
-				pg_get_query_def(query, subqueryString);
-				pg_get_query_def(resultQuery, resultQueryString);
-
-				elog(DEBUG1, "replacing subquery %s --> %s", subqueryString->data,
-					 resultQueryString->data);
-			}
-
-			if (ContainsResultFunction((Node *) query))
-			{
-				cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
-			}
-
-			/* we want to be able to handle queries with only intermediate results */
-			if (!EnableRouterExecution)
-			{
-				ereport(ERROR, (errmsg("cannot handle complex subqueries when the "
-									   "router executor is disabled")));
-			}
-
-			subPlan = planner(copyObject(query), cursorOptions, NULL);
-			(*subPlanList) = lappend(*subPlanList, subPlan);
-
-			memcpy(query, resultQuery, sizeof(Query));
+			int subPlanId = list_length(context->subPlanList);
+			PlannedStmt *subPlan = RecursivelyPlanQuery(query, subPlanId);
+			context->subPlanList = lappend(context->subPlanList, subPlan);
 		}
 
 		return false;
 	}
 	else
 	{
-		return expression_tree_walker(node, PlanPullPushSubqueriesWalker, subPlanList);
+		return expression_tree_walker(node, PlanPullPushSubqueriesWalker, context);
 	}
+}
+
+
+/*
+ * RecursivelyPlanQuery recursively plans a query, replaces it with a
+ * result query and returns the subplan.
+ */
+static PlannedStmt *
+RecursivelyPlanQuery(Query *query, int subPlanId)
+{
+	PlannedStmt *subPlan = NULL;
+	Query *resultQuery = NULL;
+	int cursorOptions = 0;
+
+	resultQuery = BuildSubPlanResultQuery(query, subPlanId);
+
+	if (log_min_messages >= DEBUG1)
+	{
+		StringInfo subqueryString = makeStringInfo();
+		StringInfo resultQueryString = makeStringInfo();
+
+		pg_get_query_def(query, subqueryString);
+		pg_get_query_def(resultQuery, resultQueryString);
+
+		elog(DEBUG1, "replacing subquery %s --> %s", subqueryString->data,
+			 resultQueryString->data);
+	}
+
+	if (ContainsResultFunction((Node *) query))
+	{
+		cursorOptions |= CURSOR_OPT_FORCE_DISTRIBUTED;
+	}
+
+	/* we want to be able to handle queries with only intermediate results */
+	if (!EnableRouterExecution)
+	{
+		ereport(ERROR, (errmsg("cannot handle complex subqueries when the "
+							   "router executor is disabled")));
+	}
+
+	subPlan = planner(copyObject(query), cursorOptions, NULL);
+
+	memcpy(query, resultQuery, sizeof(Query));
+
+	return subPlan;
 }
 
 
@@ -1141,7 +1204,6 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
 									  context);
 	}
 }
-
 
 
 static Query *
