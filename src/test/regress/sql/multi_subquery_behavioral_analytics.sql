@@ -1203,17 +1203,17 @@ FROM
        WHERE 
           (ma.value_2 > 1)
        ORDER BY 
-          prob DESC, user_id DESC
+          prob DESC, value_2 DESC, user_id DESC
         LIMIT 10
         ) AS ma
         ON (a.a_user_id = ma.user_id)
       ) AS inner_sub
   	ORDER BY 
-      prob DESC, user_id DESC
+      prob DESC, value_2 DESC, user_id DESC, event_type DESC
    	LIMIT 10
    	) AS outer_sub
 ORDER BY 
-  prob DESC, event_type DESC, user_id DESC
+  prob DESC, value_2 DESC, user_id DESC, event_type DESC
 LIMIT 10;
 
 -- very similar query but produces different result due to
