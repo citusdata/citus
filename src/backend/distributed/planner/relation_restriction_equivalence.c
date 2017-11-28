@@ -113,7 +113,13 @@ static bool AttributeEquivalancesAreEqual(AttributeEquivalenceClass *
 										  AttributeEquivalenceClass *
 										  secondAttributeEquivalance);
 static AttributeEquivalenceClass * GenerateCommonEquivalence(List *
-															 attributeEquivalenceList);
+															 attributeEquivalenceList,
+															 RelationRestrictionContext *
+															 relationRestrictionContext);
+static AttributeEquivalenceClass * GenerateEquivalanceClassForRelationRestriction(
+	RelationRestrictionContext
+	*
+	relationRestrictionContext);
 static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass **
 													  firstClass,
 													  AttributeEquivalenceClass *
@@ -478,7 +484,8 @@ EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 	 * common equivalence class. The main goal is to test whether this main class
 	 * contains all partition keys of the existing relations.
 	 */
-	commonEquivalenceClass = GenerateCommonEquivalence(attributeEquivalenceList);
+	commonEquivalenceClass = GenerateCommonEquivalence(attributeEquivalenceList,
+													   restrictionContext);
 
 	/* add the rte indexes of relations to a bitmap */
 	foreach(commonEqClassCell, commonEquivalenceClass->equivalentAttributes)
@@ -707,7 +714,8 @@ GetVarFromAssignedParam(List *parentPlannerParamList, Param *plannerParam)
  *      - Finally, return the common equivalence class.
  */
 static AttributeEquivalenceClass *
-GenerateCommonEquivalence(List *attributeEquivalenceList)
+GenerateCommonEquivalence(List *attributeEquivalenceList,
+						  RelationRestrictionContext *relationRestrictionContext)
 {
 	AttributeEquivalenceClass *commonEquivalenceClass = NULL;
 	AttributeEquivalenceClass *firstEquivalenceClass = NULL;
@@ -718,14 +726,20 @@ GenerateCommonEquivalence(List *attributeEquivalenceList)
 	commonEquivalenceClass = palloc0(sizeof(AttributeEquivalenceClass));
 	commonEquivalenceClass->equivalenceId = 0;
 
-	/* think more on this. */
-	if (equivalenceListSize < 1)
+	/*
+	 * We seed the common equivalence class with a the first distributed
+	 * table since we always want the input distributed relations to be
+	 * on the common class.
+	 */
+	firstEquivalenceClass =
+		GenerateEquivalanceClassForRelationRestriction(relationRestrictionContext);
+
+	/* we skip the calculation if there are not enough information */
+	if (equivalenceListSize < 1 || firstEquivalenceClass == NULL)
 	{
 		return commonEquivalenceClass;
 	}
 
-	/* setup the initial state of the main equivalence class */
-	firstEquivalenceClass = linitial(attributeEquivalenceList);
 	commonEquivalenceClass->equivalentAttributes =
 		firstEquivalenceClass->equivalentAttributes;
 	addedEquivalenceIds = bms_add_member(addedEquivalenceIds,
@@ -775,6 +789,44 @@ GenerateCommonEquivalence(List *attributeEquivalenceList)
 	}
 
 	return commonEquivalenceClass;
+}
+
+
+/*
+ * GenerateEquivalanceClassForRelationRestriction generates an AttributeEquivalenceClass
+ * with a single AttributeEquivalenceClassMember.
+ */
+static AttributeEquivalenceClass *
+GenerateEquivalanceClassForRelationRestriction(
+	RelationRestrictionContext *relationRestrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+	AttributeEquivalenceClassMember *eqMember = NULL;
+	AttributeEquivalenceClass *eqClassForRelation = NULL;
+
+	foreach(relationRestrictionCell, relationRestrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction =
+			(RelationRestriction *) lfirst(relationRestrictionCell);
+		Var *relationPartitionKey = DistPartitionKey(relationRestriction->relationId);
+
+		if (relationPartitionKey)
+		{
+			eqClassForRelation = palloc0(sizeof(AttributeEquivalenceClass));
+			eqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
+			eqMember->relationId = relationRestriction->relationId;
+			eqMember->rteIdentity = GetRTEIdentity(relationRestriction->rte);
+			eqMember->varno = relationRestriction->index;
+			eqMember->varattno = relationPartitionKey->varattno;
+
+			eqClassForRelation->equivalentAttributes =
+				lappend(eqClassForRelation->equivalentAttributes, eqMember);
+
+			break;
+		}
+	}
+
+	return eqClassForRelation;
 }
 
 
