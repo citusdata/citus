@@ -1578,11 +1578,15 @@ AllTargetExpressionsAreColumnReferences(List *targetEntryList)
  *
  * Note that the function doesn't recurse into subqueries, returns false when
  * a subquery is found.
+ *
+ * TODO: change the name of the function
  */
 static bool
 RangeTableListContainsOnlyReferenceTables(List *rangeTableList)
 {
 	ListCell *rangeTableCell = NULL;
+	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+
 	foreach(rangeTableCell, rangeTableList)
 	{
 		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
@@ -1600,6 +1604,11 @@ RangeTableListContainsOnlyReferenceTables(List *rangeTableList)
 			{
 				return false;
 			}
+		}
+		else if (HasRecurringTuples((Node *) rangeTableEntry, &recurType))
+		{
+			/* we should allow GROUP BYs on intermediate results */
+			continue;
 		}
 		else
 		{

@@ -81,7 +81,6 @@ typedef struct PlanPullPushContext
 } PlanPullPushContext;
 
 
-
 /* local function forward declarations */
 static bool NeedsDistributedPlanningWalker(Node *node, void *context);
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
@@ -420,6 +419,7 @@ static void
 AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 {
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
+
 
 	rangeTableEntry->values_lists = list_make1_int(rteIdentifier);
 }
@@ -797,6 +797,67 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 			RecursivelyPlanSetOperations(query, context);
 		}
 	}
+	else
+	{
+		PlannerRestrictionContext *filteredPlannerRestriction =
+			FilterPlannerRestrictionForQuery((*context).plannerRestrictionContext,
+											 query);
+
+		if (ContainsUnionSubquery(query) && !SafeToPushdownUnionSubquery(
+				filteredPlannerRestriction))
+		{
+			/* let it be handled in the next call */
+		}
+		else if (!ContainsUnionSubquery(query) && !RestrictionEquivalenceForPartitionKeys(
+					 filteredPlannerRestriction))
+		{
+			List *queriesInWhere = NIL;
+			List *rangeTableEntries = query->rtable;
+			ListCell *rangeTableCell = NULL;
+
+			ListCell *queryCell = NULL;
+			query_tree_walker(query, PlanPullPushSubqueriesWalker, context, 0);
+
+			/*
+			 * We need to first replace the subqueries in WHERE clause since they
+			 * do not appear in the rtable list.
+			 */
+			ExtractQueryWalker(query->jointree->quals, &queriesInWhere);
+			foreach(queryCell, queriesInWhere)
+			{
+				Query *subquery = (Query *) lfirst(queryCell);
+
+				if (NeedsDistributedPlanning(subquery) && !ContainsReferencesToOuterQuery(
+						subquery))
+				{
+					int subPlanId = list_length(context->subPlanList);
+					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+
+					filteredPlannerRestriction =
+						FilterPlannerRestrictionForQuery(
+							(*context).plannerRestrictionContext,
+							query);
+
+					context->subPlanList = lappend(context->subPlanList, subPlan);
+				}
+			}
+
+			foreach(rangeTableCell, rangeTableEntries)
+			{
+				RangeTblEntry *rte = lfirst(rangeTableCell);
+
+				if (rte->rtekind == RTE_SUBQUERY && NeedsDistributedPlanning(
+						(Query *) rte->subquery) && !ContainsReferencesToOuterQuery(
+						rte->subquery))
+				{
+					Query *subquery = rte->subquery;
+					int subPlanId = list_length(context->subPlanList);
+					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+					context->subPlanList = lappend(context->subPlanList, subPlan);
+				}
+			}
+		}
+	}
 
 	return NULL;
 }
@@ -1119,6 +1180,14 @@ ShouldRecursivelyPlanSubquery(Query *query)
 	if (ContainsReferencesToOuterQuery(query))
 	{
 		/* cannot plan correlated subqueries by themselves */
+
+		if (log_min_messages >= DEBUG1)
+		{
+			/* we cannot deparse queries with references to outer queries */
+			elog(DEBUG1, "query includes reference to outer queries, "
+						 "so not being recursively planned");
+		}
+
 		return false;
 	}
 

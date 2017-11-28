@@ -2,6 +2,8 @@
 -- MULTI_TPCH_QUERY7_NESTED
 --
 
+-- TODO: This query fails since there is no partition key equality among the distributed tables
+
 
 -- Change configuration to treat lineitem AND orders tables AS large
 
