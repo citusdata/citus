@@ -731,8 +731,8 @@ FROM (
     SELECT value_1 as user_id, sum(value_2) AS counter FROM users_table GROUP BY value_1
 ) user_id 
 GROUP BY user_id;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- partition key is not selected
 SELECT sum(counter) 
 FROM (
@@ -747,8 +747,8 @@ FROM (
     SELECT 2 * user_id, sum(value_2) AS counter FROM users_table where value_1 < 5 and value_1 < 6 GROUP BY user_id HAVING sum(value_2) > 25
 ) user_id 
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- excepts within unions are not supported
 SELECT * FROM
 (
@@ -773,7 +773,7 @@ UNION
 ) as ftop;
 ERROR:  cannot push down this subquery
 DETAIL:  Intersect and Except are currently unsupported
--- joins inside unions are not supported
+-- non-equi join are not supported since there is no equivalence between the partition column
 SELECT user_id, sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id
@@ -781,9 +781,19 @@ FROM (
     SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE users_table.user_id > events_table.user_id GROUP BY 1
 ) user_id 
 GROUP BY user_id;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
--- joins inside unions are not supported -- slightly more comlex than the above
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
+-- non-equi join also not supported for UNION ALL
+SELECT user_id, sum(counter)
+FROM (
+    SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id
+      UNION ALL
+    SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE users_table.user_id > events_table.user_id GROUP BY 1
+) user_id 
+GROUP BY user_id;
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
+-- joins inside unions are supported -- slightly more comlex than the above
 SELECT * FROM
 (
 (
@@ -804,9 +814,112 @@ UNION
       SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE (events_table.user_id = users_table.user_id) GROUP BY events_table.user_id
 ) user_id_2
   GROUP BY user_id)
-) as ftop;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+) as ftop
+ORDER BY 2, 1
+LIMIT 10;
+ user_id | sum 
+---------+-----
+       6 |  43
+       1 |  62
+       4 |  91
+       5 |  94
+       3 | 101
+       2 | 107
+       6 | 241
+       1 | 314
+       3 | 837
+       5 | 869
+(10 rows)
+
+-- mix up the joins a bit
+SELECT * FROM
+(
+(
+  SELECT sum(users_table.value_2), events_table.user_id
+  FROM users_table, events_table
+  WHERE users_table.user_id = events_Table.user_id
+  GROUP BY events_table.user_id
+)
+UNION
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table LEFT JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
+ sum  | user_id 
+------+---------
+  300 |       1
+ 1200 |       2
+ 1155 |       3
+  850 |       4
+  882 |       5
+  210 |       6
+(6 rows)
+
+SELECT * FROM
+(
+(
+  SELECT value_2, user_id
+  FROM users_table
+)
+UNION
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table RIGHT JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
+ value_2 | user_id 
+---------+---------
+       0 |       1
+       2 |       1
+       3 |       1
+       4 |       1
+     300 |       1
+       0 |       2
+       1 |       2
+       2 |       2
+       3 |       2
+       4 |       2
+(10 rows)
+
+-- UNION ALL with joins is supported
+SELECT * FROM
+(
+(
+  SELECT sum(users_table.value_2), events_table.user_id
+  FROM users_table, events_table
+  WHERE users_table.user_id = events_Table.user_id
+  GROUP BY events_table.user_id
+)
+UNION ALL
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
+ sum  | user_id 
+------+---------
+  300 |       1
+  300 |       1
+ 1200 |       2
+ 1200 |       2
+ 1155 |       3
+ 1155 |       3
+  850 |       4
+  850 |       4
+  882 |       5
+  882 |       5
+(10 rows)
+
 -- offset inside the union
 SELECT user_id, sum(counter) 
 FROM (
@@ -857,8 +970,8 @@ FROM (
               user_id) user_id_2
          GROUP BY 
             user_id)) AS ftop;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- some UNION all queries that are going to be pulled up
 SELECT 
   count(*)
@@ -868,8 +981,8 @@ FROM
     UNION ALL
   (SELECT 2 * user_id FROM events_table)
 ) b;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- last query does not have partition key
 SELECT 
   user_id, value_3
@@ -889,8 +1002,8 @@ FROM
 ) b
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- we don't allow joins within unions
 SELECT 
   count(*)
@@ -900,8 +1013,8 @@ FROM
     UNION ALL
   (SELECT users_table.user_id FROM events_table, users_table WHERE events_table.user_id = users_table.user_id)
 ) b;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- we don't support subqueries without relations
 SELECT 
   count(*)

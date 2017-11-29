@@ -633,8 +633,6 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	ListCell *subqueryCell = NULL;
 	List *subqueryList = NIL;
 	DeferredErrorMessage *error = NULL;
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
 
 	if (originalQuery->limitCount != NULL)
 	{
@@ -649,15 +647,16 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	 */
 	if (ContainsUnionSubquery(originalQuery))
 	{
-		if (!SafeToPushdownUnionSubquery(relationRestrictionContext))
+		if (!SafeToPushdownUnionSubquery(plannerRestrictionContext))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery since all leaves of "
-								 "the UNION does not include partition key at the "
-								 "same position",
-								 "Each leaf query of the UNION should return "
-								 "partition key at the same position on its "
-								 "target list.", NULL);
+								 "cannot pushdown the subquery since not all subqueries "
+								 "in the UNION have the partition column in the same "
+								 "position",
+								 "Each leaf query of the UNION should return the "
+								 "partition column in the same position and all joins "
+								 "must be on the partition column",
+								 NULL);
 		}
 	}
 	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))

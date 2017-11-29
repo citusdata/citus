@@ -142,15 +142,27 @@ static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
  * safe to push down, the function would fail to return true.
  */
 bool
-SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
+SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext)
 {
+	RelationRestrictionContext *restrictionContext =
+		plannerRestrictionContext->relationRestrictionContext;
+	JoinRestrictionContext *joinRestrictionContext =
+		plannerRestrictionContext->joinRestrictionContext;
 	Index unionQueryPartitionKeyIndex = 0;
 	AttributeEquivalenceClass *attributeEquivalance =
 		palloc0(sizeof(AttributeEquivalenceClass));
 	ListCell *relationRestrictionCell = NULL;
+	List *relationRestrictionAttributeEquivalenceList = NIL;
+	List *joinRestrictionAttributeEquivalenceList = NIL;
+	List *allAttributeEquivalenceList = NIL;
 
 	attributeEquivalance->equivalenceId = attributeEquivalenceId++;
 
+	/*
+	 * Ensure that the partition column is in the same place across all
+	 * leaf queries in the UNION and construct an equivalence class for
+	 * these columns.
+	 */
 	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
@@ -192,7 +204,7 @@ SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
 			/* union does not have partition key in the target list */
 			if (partitionKeyIndex == 0)
 			{
-				return false;
+				continue;
 			}
 		}
 		else
@@ -203,26 +215,24 @@ SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
 			/* union does not have partition key in the target list */
 			if (partitionKeyIndex == 0)
 			{
-				return false;
+				continue;
 			}
 
 			targetEntryToAdd = list_nth(targetList, partitionKeyIndex - 1);
 			if (!IsA(targetEntryToAdd->expr, Var))
 			{
-				return false;
+				continue;
 			}
 
 			varToBeAdded = (Var *) targetEntryToAdd->expr;
 		}
 
 		/*
-		 * If the first relation doesn't have partition key on the target
-		 * list of the query that the relation in, simply not allow to push down
-		 * the query.
+		 * The current relation does not have its partition key in the target list.
 		 */
 		if (partitionKeyIndex == InvalidAttrNumber)
 		{
-			return false;
+			continue;
 		}
 
 		/*
@@ -236,14 +246,33 @@ SafeToPushdownUnionSubquery(RelationRestrictionContext *restrictionContext)
 		}
 		else if (unionQueryPartitionKeyIndex != partitionKeyIndex)
 		{
-			return false;
+			continue;
 		}
 
 		AddToAttributeEquivalenceClass(&attributeEquivalance, relationPlannerRoot,
 									   varToBeAdded);
 	}
 
-	return EquivalenceListContainsRelationsEquality(list_make1(attributeEquivalance),
+	/*
+	 * For queries of the form:
+	 * (SELECT ... FROM a JOIN b ...) UNION (SELECT .. FROM c JOIN d ... )
+	 *
+	 * we determine whether all relations are joined on the partition column
+	 * by adding the equivalence classes that can be inferred from joins.
+	 */
+	relationRestrictionAttributeEquivalenceList =
+		GenerateAttributeEquivalencesForRelationRestrictions(restrictionContext);
+	joinRestrictionAttributeEquivalenceList =
+		GenerateAttributeEquivalencesForJoinRestrictions(joinRestrictionContext);
+
+	allAttributeEquivalenceList =
+		list_concat(relationRestrictionAttributeEquivalenceList,
+					joinRestrictionAttributeEquivalenceList);
+
+	allAttributeEquivalenceList = lappend(allAttributeEquivalenceList,
+										  attributeEquivalance);
+
+	return EquivalenceListContainsRelationsEquality(allAttributeEquivalenceList,
 													restrictionContext);
 }
 

@@ -558,8 +558,8 @@ SELECT count(*)
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- expand view definitions and re-run last 2 queries
 SELECT count(*)
 	FROM (
@@ -584,8 +584,8 @@ SELECT count(*)
 		UNION ALL
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- test distinct
 -- distinct is supported if it is on a partition key
 CREATE VIEW distinct_user_with_value_1_3 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 3;

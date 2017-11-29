@@ -403,8 +403,6 @@ static bool
 SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
 					   Query *originalQuery)
 {
-	RelationRestrictionContext *relationRestrictionContext =
-		plannerRestrictionContext->relationRestrictionContext;
 	bool restrictionEquivalenceForPartitionKeys =
 		RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext);
 
@@ -415,7 +413,7 @@ SafeToPushDownSubquery(PlannerRestrictionContext *plannerRestrictionContext,
 
 	if (ContainsUnionSubquery(originalQuery))
 	{
-		return SafeToPushdownUnionSubquery(relationRestrictionContext);
+		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
 	}
 
 	return false;
