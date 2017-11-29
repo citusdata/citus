@@ -120,9 +120,6 @@ extern Oid FunctionOid(const char *schemaName, const char *functionName,
 extern List * SubqueryMultiTableList(MultiNode *multiNode);
 extern List * GroupTargetEntryList(List *groupClauseList, List *targetEntryList);
 extern bool ExtractQueryWalker(Node *node, List **queryList);
-extern bool LeafQuery(Query *queryTree);
-extern List * PartitionColumnOpExpressionList(Query *query);
-extern List * ReplaceColumnsInOpExpressionList(List *opExpressionList, Var *newColumn);
 extern bool IsPartitionColumn(Expr *columnExpression, Query *query);
 extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList,
 									  Query *query, Oid *relationId, Var **column);
