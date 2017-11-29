@@ -5,10 +5,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -24,10 +24,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -43,10 +43,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -62,10 +62,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -82,10 +82,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -102,10 +102,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -127,10 +127,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -153,10 +153,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -178,10 +178,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -203,10 +203,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -229,10 +229,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -259,10 +259,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -281,10 +281,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -303,10 +303,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -328,10 +328,10 @@ create_distributed_table
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
 step s1-create-non-distributed-table-on-inserted: CREATE TABLE insert_of_insert_select_hash(id integer, data text);
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -351,10 +351,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -370,10 +370,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -389,10 +389,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -409,10 +409,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -427,10 +427,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -451,10 +451,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -477,10 +477,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -502,10 +502,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -527,10 +527,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -553,10 +553,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -578,10 +578,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -600,10 +600,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -622,10 +622,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -647,10 +647,10 @@ create_distributed_table
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
 step s1-create-non-distributed-table-on-selected: CREATE TABLE select_of_insert_select_hash(id integer, data text);
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -669,10 +669,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-update-on-inserted: UPDATE insert_of_insert_select_hash SET data = 'l' WHERE id = 4;
@@ -688,10 +688,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-delete-on-inserted: DELETE FROM insert_of_insert_select_hash WHERE id = 4;
@@ -707,10 +707,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-truncate-on-inserted: TRUNCATE insert_of_insert_select_hash;
@@ -727,10 +727,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
@@ -748,10 +748,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
@@ -773,10 +773,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -799,10 +799,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
@@ -824,10 +824,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -850,10 +850,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-rename-column-on-inserted: ALTER TABLE insert_of_insert_select_hash RENAME data TO new_column;
@@ -875,10 +875,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-table-size-on-inserted: SELECT citus_total_relation_size('insert_of_insert_select_hash');
@@ -897,10 +897,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards-on-inserted: SELECT master_modify_multiple_shards('DELETE FROM insert_of_insert_select_hash;');
@@ -919,10 +919,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards-on-inserted: SELECT master_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash');
@@ -945,10 +945,10 @@ create_distributed_table
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
 step s1-create-non-distributed-table-on-inserted: CREATE TABLE insert_of_insert_select_hash(id integer, data text);
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-distribute-table-on-inserted: SELECT create_distributed_table('insert_of_insert_select_hash', 'id');
@@ -968,10 +968,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-update-on-selected: UPDATE select_of_insert_select_hash SET data = 'l' WHERE id = 4;
@@ -987,10 +987,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-delete-on-selected: DELETE FROM select_of_insert_select_hash WHERE id = 4;
@@ -1006,10 +1006,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-truncate-on-selected: TRUNCATE select_of_insert_select_hash;
@@ -1026,10 +1026,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
@@ -1045,10 +1045,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
@@ -1069,10 +1069,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -1095,10 +1095,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
@@ -1121,10 +1121,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -1147,10 +1147,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-rename-column-on-selected: ALTER TABLE select_of_insert_select_hash RENAME data TO new_column;
@@ -1172,10 +1172,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-table-size-on-selected: SELECT citus_total_relation_size('select_of_insert_select_hash');
@@ -1194,10 +1194,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards-on-selected: SELECT master_modify_multiple_shards('DELETE FROM select_of_insert_select_hash;');
@@ -1216,10 +1216,10 @@ create_distributed_table
 
                
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards-on-selected: SELECT master_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash');
@@ -1241,10 +1241,10 @@ create_distributed_table
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
 step s1-create-non-distributed-table-on-selected: CREATE TABLE select_of_insert_select_hash(id integer, data text);
 step s1-initialize: 
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a\\n6, b\\n7, c\\n8, d\\n9, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-distribute-table-on-selected: SELECT create_distributed_table('select_of_insert_select_hash', 'id');

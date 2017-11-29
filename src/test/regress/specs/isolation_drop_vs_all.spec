@@ -23,7 +23,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-initialize" { COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-drop" { DROP TABLE drop_hash; }
 step "s1-ddl-create-index" { CREATE INDEX drop_hash_index ON drop_hash(id); }
@@ -33,7 +33,7 @@ step "s1-ddl-drop-column" { ALTER TABLE drop_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE drop_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('drop_hash'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DROP FROM drop_hash;'); }
-step "s1-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('drop_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM drop_hash; }
 step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''drop_hash%'''); }
@@ -52,7 +52,7 @@ step "s2-ddl-drop-column" { ALTER TABLE drop_hash DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE drop_hash RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('drop_hash'); }
 step "s2-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DROP FROM drop_hash;'); }
-step "s2-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s2-create-non-distributed-table" { CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s2-distribute-table" { SELECT create_distributed_table('drop_hash', 'id'); }
 step "s2-select" { SELECT * FROM drop_hash ORDER BY 1, 2; }
 step "s2-commit" { COMMIT; }

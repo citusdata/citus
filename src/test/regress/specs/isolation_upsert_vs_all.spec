@@ -23,7 +23,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-initialize" { COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-upsert" { INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k'; }
 step "s1-update" { UPDATE upsert_hash SET data = 'l' WHERE id = 4; }

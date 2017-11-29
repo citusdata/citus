@@ -23,7 +23,7 @@ session "s1"
 # but with copy all placements are cached
 step "s1-load-cache"
 {
-	COPY test_hash_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 }
 
 step "s1-repair-placement"
@@ -53,7 +53,7 @@ step "s2-repair-placement"
 # but with copy all placements are cached
 step "s2-load-cache"
 {
-	COPY test_hash_table FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_hash_table FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 }
 
 step "s2-commit"

@@ -4,7 +4,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-truncate s1
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -24,7 +24,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-truncate s1
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -44,7 +44,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-drop s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -62,7 +62,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-ddl-create-
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -87,7 +87,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-tru
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX truncate_append_index ON truncate_append(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -113,7 +113,7 @@ starting permutation: s1-initialize s1-begin s1-truncate s2-ddl-create-index-con
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY truncate_append_index ON truncate_append(id); <waiting ...>
@@ -136,7 +136,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-ddl-add-col
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -161,7 +161,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-trunc
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE truncate_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -187,7 +187,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-ddl-rename-
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -212,7 +212,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-table-size 
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -235,7 +235,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-master-modi
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -258,7 +258,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-master-appl
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -281,7 +281,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-master-drop
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -328,7 +328,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-truncate s1
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE truncate_append;
@@ -348,7 +348,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-truncate s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE truncate_append;
@@ -367,7 +367,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-tru
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX truncate_append_index ON truncate_append(id);
@@ -392,7 +392,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX truncate_append_index ON truncate_append(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -418,7 +418,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-trunc
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE truncate_append ADD new_column int DEFAULT 0;
@@ -443,7 +443,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-d
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE truncate_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -469,7 +469,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-tr
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE truncate_append RENAME data TO new_column;
@@ -494,7 +494,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-truncate 
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('truncate_append');
@@ -516,7 +516,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM truncate_append;');
@@ -539,7 +539,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-apply-delete-com
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-apply-delete-command: SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;');
@@ -562,7 +562,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-drop-all-shards 
 create_distributed_table
 
                
-step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-drop-all-shards: SELECT master_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append');

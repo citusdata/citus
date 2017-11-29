@@ -18,7 +18,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-initialize" { COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-insert" { INSERT INTO insert_hash VALUES(7, 'k'); }
 step "s1-insert-multi-row" { INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm'); }
@@ -34,7 +34,7 @@ step "s1-ddl-drop-column" { ALTER TABLE insert_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE insert_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('insert_hash'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM insert_hash;'); }
-step "s1-create-non-distributed-table" { CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-create-non-distributed-table" { CREATE TABLE insert_hash(id integer, data text); COPY insert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('insert_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM insert_hash; }
 step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_hash%'''); }

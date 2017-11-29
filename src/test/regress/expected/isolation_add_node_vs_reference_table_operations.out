@@ -5,7 +5,7 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin: 
     BEGIN;
@@ -17,7 +17,7 @@ nodename       nodeport       isactive
 
 localhost      57638          t              
 step s2-copy-to-reference-table: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -45,13 +45,13 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin: 
 	BEGIN;
 
 step s2-copy-to-reference-table: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker: 
 	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
@@ -85,7 +85,7 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin: 
     BEGIN;
@@ -125,7 +125,7 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin: 
 	BEGIN;
@@ -165,7 +165,7 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-begin: 
     BEGIN;
@@ -205,7 +205,7 @@ create_reference_table
 
                
 step s2-load-metadata-cache: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s2-begin: 
 	BEGIN;
@@ -254,7 +254,7 @@ nodename       nodeport       isactive
 
 localhost      57638          t              
 step s2-copy-to-reference-table: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
  <waiting ...>
 step s1-commit: 
     COMMIT;
@@ -285,15 +285,14 @@ step s2-begin:
 	BEGIN;
 
 step s2-copy-to-reference-table: 
-	COPY test_reference_table FROM PROGRAM 'echo "1\n2\n3\n4\n5"';
+	COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker: 
 	SELECT nodename, nodeport, isactive FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
 	COMMIT;
- <waiting ...>
-step s2-commit: <... completed>
+
 step s1-add-second-worker: <... completed>
 nodename       nodeport       isactive       
 

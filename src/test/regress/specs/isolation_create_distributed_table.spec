@@ -22,7 +22,7 @@ step "s1-create_distributed_table"
 
 step "s1-copy_to_local_table"
 {
-	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+	COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
 }
 
 step "s1-commit"
@@ -44,7 +44,7 @@ step "s2-create_distributed_table"
 
 step "s2-copy_to_local_table"
 {
-	COPY table_to_distribute FROM PROGRAM 'echo "0\n1\n2\n3\n4\n5\n6\n7\n8"';
+	COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
 }
 
 step "s2-commit"
