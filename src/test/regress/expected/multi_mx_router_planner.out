@@ -777,9 +777,18 @@ HINT:  Consider using an equality filter on the distributed table's partition co
 SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
 	UNION
-	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu;
-ERROR:  cannot push down this subquery
-DETAIL:  Currently all leaf queries need to have same filters on partition column
+	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu
+ORDER BY 1, 2
+LIMIT 5;
+ id | author_id |   title    | word_count 
+----+-----------+------------+------------
+  1 |         1 | arsenous   |       9572
+  2 |         2 | abducing   |      13642
+ 11 |         1 | alamo      |       1347
+ 12 |         2 | archiblast |      18185
+ 21 |         1 | arcading   |       5890
+(5 rows)
+
 -- error out for queries with repartition jobs
 SELECT *
 	FROM articles_hash_mx a, articles_hash_mx b
