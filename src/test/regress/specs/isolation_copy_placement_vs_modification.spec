@@ -57,7 +57,7 @@ step "s1-ddl"
 
 step "s1-copy"
 {
-	COPY test_copy_placement_vs_modification FROM PROGRAM 'echo "1,1\n2,2\n3,3\n4,4\n5,5"' WITH CSV;
+	COPY test_copy_placement_vs_modification FROM PROGRAM 'echo 1,1 && echo 2,2 && echo 3,3 && echo 4,4 && echo 5,5' WITH CSV;
 }
 
 step "s1-commit"

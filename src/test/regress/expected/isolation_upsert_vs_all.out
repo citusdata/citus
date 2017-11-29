@@ -4,7 +4,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-upsert s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -24,7 +24,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-update s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -44,7 +44,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-delete s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -64,7 +64,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-truncate s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -84,7 +84,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-drop s1-commi
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -102,7 +102,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-create-in
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -127,7 +127,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ups
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX upsert_hash_index ON upsert_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -153,7 +153,7 @@ starting permutation: s1-initialize s1-begin s1-upsert s2-ddl-create-index-concu
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY upsert_hash_index ON upsert_hash(id); <waiting ...>
@@ -176,7 +176,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-add-colum
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -201,7 +201,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-upser
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE upsert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -227,7 +227,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-ddl-rename-co
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -252,7 +252,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-table-size s1
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -274,7 +274,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-upsert s2-master-modify
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -299,7 +299,7 @@ create_distributed_table
                
 step s1-drop: DROP TABLE upsert_hash;
 step s1-create-non-distributed-table: CREATE TABLE upsert_hash(id integer PRIMARY KEY, data text);
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k';
@@ -322,7 +322,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-update s2-upsert s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-update: UPDATE upsert_hash SET data = 'l' WHERE id = 4;
@@ -342,7 +342,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-upsert s1-com
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-delete: DELETE FROM upsert_hash WHERE id = 4;
@@ -362,7 +362,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-upsert s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-truncate: TRUNCATE upsert_hash;
@@ -382,7 +382,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-upsert s1-commi
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE upsert_hash;
@@ -401,7 +401,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-ups
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX upsert_hash_index ON upsert_hash(id);
@@ -426,7 +426,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX upsert_hash_index ON upsert_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -452,7 +452,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-upser
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE upsert_hash ADD new_column int DEFAULT 0;
@@ -477,7 +477,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-d
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE upsert_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -503,7 +503,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-up
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE upsert_hash RENAME data TO new_column;
@@ -529,7 +529,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-upsert s1
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('upsert_hash');
@@ -551,7 +551,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-
 create_distributed_table
 
                
-step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY upsert_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DELETE FROM upsert_hash;');

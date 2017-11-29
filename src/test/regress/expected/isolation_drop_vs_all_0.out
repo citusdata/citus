@@ -4,7 +4,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-drop s1-commit 
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -23,7 +23,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-create-inde
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -47,7 +47,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-dro
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -72,7 +72,7 @@ starting permutation: s1-initialize s1-begin s1-drop s2-ddl-create-index-concurr
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY drop_hash_index ON drop_hash(id); <waiting ...>
@@ -94,7 +94,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-add-column 
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -118,7 +118,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-drop 
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -143,7 +143,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-rename-colu
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -167,7 +167,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-table-size s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -186,7 +186,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-master-modify-m
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -205,8 +205,8 @@ create_distributed_table
 
                
 step s1-drop: DROP TABLE drop_hash;
-step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -225,7 +225,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-dro
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
@@ -248,7 +248,7 @@ starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -272,7 +272,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-drop 
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
@@ -295,7 +295,7 @@ starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-d
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -319,7 +319,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-dr
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE drop_hash RENAME data TO new_column;
@@ -342,7 +342,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-drop s1-c
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('drop_hash');
@@ -362,7 +362,7 @@ starting permutation: s1-initialize s1-begin s2-begin s1-master-modify-multiple-
 create_distributed_table
 
                
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-master-modify-multiple-shards: SELECT master_modify_multiple_shards('DROP FROM drop_hash;');
@@ -381,8 +381,8 @@ create_distributed_table
 
                
 step s1-drop: DROP TABLE drop_hash;
-step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV;
+step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('drop_hash', 'id');

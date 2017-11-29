@@ -23,7 +23,7 @@ teardown
 
 # session 1
 session "s1"
-step "s1-initialize" { COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-initialize" { COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-begin" { BEGIN; }
 step "s1-update" { UPDATE update_hash SET data = 'l' WHERE id = 4; }
 step "s1-delete" { DELETE FROM update_hash WHERE id = 4; }
@@ -36,7 +36,7 @@ step "s1-ddl-drop-column" { ALTER TABLE update_hash DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE update_hash RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('update_hash'); }
 step "s1-master-modify-multiple-shards" { SELECT master_modify_multiple_shards('DELETE FROM update_hash;'); }
-step "s1-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a\\n1, b\\n2, c\\n3, d\\n4, e' WITH CSV; }
+step "s1-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM update_hash; }
 step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%'''); }
