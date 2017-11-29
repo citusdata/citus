@@ -783,6 +783,22 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 	/* descend into subqueries */
 	query_tree_walker(query, PlanPullPushSubqueriesWalker, context, 0);
 
+	if (query->setOperations != NULL)
+	{
+		SetOperationStmt *setOperations = (SetOperationStmt *) query->setOperations;
+
+		PlannerRestrictionContext *filteredRestrictionContext =
+			FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+
+		if (setOperations->op != SETOP_UNION ||
+			context->level == 0 ||
+			DeferErrorIfUnsupportedUnionQuery(query) != NULL ||
+			!SafeToPushdownUnionSubquery(filteredRestrictionContext))
+		{
+			RecursivelyPlanSetOperations(query, context);
+		}
+	}
+
 	return NULL;
 }
 
