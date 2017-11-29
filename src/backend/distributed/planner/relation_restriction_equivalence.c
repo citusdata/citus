@@ -62,7 +62,6 @@ typedef struct AttributeEquivalenceClassMember
 } AttributeEquivalenceClassMember;
 
 
-static uint32 ReferenceRelationCount(RelationRestrictionContext *restrictionContext);
 static Var * FindTranslatedVar(List *appendRelList, Oid relationOid,
 							   Index relationRteIndex, Index *partitionKeyIndex);
 static bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
@@ -408,7 +407,7 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *
  * ReferenceRelationCount iterates over the relations and returns the reference table
  * relation count.
  */
-static uint32
+uint32
 ReferenceRelationCount(RelationRestrictionContext *restrictionContext)
 {
 	ListCell *relationRestrictionCell = NULL;

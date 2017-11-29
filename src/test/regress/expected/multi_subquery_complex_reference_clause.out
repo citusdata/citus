@@ -189,19 +189,14 @@ FROM
       INNER JOIN events_reference_table ON (events_reference_table.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |   sum    
----------+----------
-      12 | 92221920
-      17 | 89192642
-      96 | 85143744
-      45 | 84267456
-      90 | 84157047
-      43 | 82110240
-       1 | 81735612
-      72 | 78992640
-      67 | 72385516
-      97 | 71002659
-(10 rows)
+ user_id |  sum  
+---------+-------
+       2 | 31248
+       3 | 15120
+       4 | 14994
+       5 |  8694
+       1 |  7590
+(5 rows)
 
 -- same query as above, reference table is wrapped into a subquery
 SELECT
@@ -214,19 +209,14 @@ FROM
       INNER JOIN (SELECT *, random() FROM events_reference_table) as ref_all ON (ref_all.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |   sum    
----------+----------
-      12 | 92221920
-      17 | 89192642
-      96 | 85143744
-      45 | 84267456
-      90 | 84157047
-      43 | 82110240
-       1 | 81735612
-      72 | 78992640
-      67 | 72385516
-      97 | 71002659
-(10 rows)
+ user_id |  sum  
+---------+-------
+       2 | 31248
+       3 | 15120
+       4 | 14994
+       5 |  8694
+       1 |  7590
+(5 rows)
 
 -- table function can be the inner relationship in a join
 SELECT count(*) FROM
@@ -251,10 +241,21 @@ SELECT count(*) FROM
     10
 (1 row)
 
+SELECT count(*) FROM user_buy_test_table LEFT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
+ count 
+-------
+     4
+(1 row)
+
 -- table function cannot be the outer relationship in an outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table RIGHT JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a table function in the outer part of the outer join
+SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
+ON user_buy_test_table.item_id = users_ref_test_table.id;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a table function in the outer part of the outer join
 -- volatile functions cannot be used as table expressions
@@ -325,19 +326,15 @@ FROM
       LEFT JOIN events_reference_table ON (events_reference_table.value_2 = users_table.user_id)
   ) as foo
   GROUP BY user_id ORDER BY 2 DESC LIMIT 10;
- user_id |   sum    
----------+----------
-      12 | 92221920
-      17 | 89192642
-      96 | 85143744
-      45 | 84267456
-      90 | 84157047
-      43 | 82110240
-       1 | 81735612
-      72 | 78992640
-      67 | 72385516
-      97 | 71002659
-(10 rows)
+ user_id |  sum  
+---------+-------
+       2 | 31248
+       3 | 15120
+       4 | 14994
+       5 |  8694
+       1 |  7590
+       6 |   210
+(6 rows)
 
 -- should not be able to pushdown since reference table is in the
 -- direct outer part of the left join
@@ -387,19 +384,21 @@ SELECT * FROM
             FROM
               events_reference_table as "events"
             WHERE
-              event_type > 80) as "temp_data_queries"
+              event_type > 2) as "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
+              user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
  user_id 
 ---------
-      89
-(1 row)
+       5
+       3
+       4
+(3 rows)
 
 -- the same query but this time reference table is in the outer part of the query
 SELECT * FROM
@@ -411,14 +410,14 @@ SELECT * FROM
             FROM
               events_reference_table as "events"
             WHERE
-              event_type > 80) as "temp_data_queries"
+              event_type > 2) as "temp_data_queries"
            LEFT JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
+              user_id > 2 and value_2 = 1) as foo_in ON (event_val_2 = user_id)) as foo LEFT JOIN
            (SELECT user_id as user_user_id FROM users_table) as fooo ON (user_id = user_user_id)) as bar;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a reference table in the outer part of the outer join
@@ -431,13 +430,13 @@ FROM
    FROM events_reference_table
    INNER JOIN users_table ON (users_table.user_id = events_reference_table.user_id) GROUP BY users_table.user_id) AS events_all
 LEFT JOIN events_table ON (events_all.usr_id = events_table.user_id) GROUP BY 2 ORDER BY 1 DESC, 2 DESC LIMIT 5;
-  max  | usr_id 
--------+--------
- 14605 |     23
- 13090 |     17
- 12915 |     25
- 12317 |     90
- 12285 |     87
+ max | usr_id 
+-----+--------
+ 432 |      2
+ 391 |      4
+ 364 |      5
+ 357 |      3
+ 105 |      1
 (5 rows)
 
 -- but, we fail to pushdown the following query where join that reference table appears
@@ -475,14 +474,14 @@ FROM
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 12 and user_id < 16 and value_1 > 20) user_where_1_1
+              user_id > 0 and user_id < 5 and value_1 > 1) user_where_1_1
          INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 12 and user_id < 16 and value_2 > 60) user_where_1_join_1
+              user_id > 0 and user_id < 5 and value_2 > 2) user_where_1_join_1
            ON ("user_where_1_1".user_id = "user_where_1_join_1".user_id))
         filter_users_1
       JOIN LATERAL
@@ -491,7 +490,7 @@ FROM
          FROM
           events_reference_table as "events"
          WHERE
-           user_id > 12 and user_id < 16 AND
+           user_id > 0 and user_id < 5 AND
            user_id = filter_users_1.user_id
          ORDER BY
           time DESC
@@ -507,7 +506,7 @@ FROM
         users_reference_table  as "users"
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
-        "users"."value_2" > 70
+        "users"."value_2" > 2
       LIMIT 1) "some_users_data"
     ON TRUE
    ORDER BY
@@ -518,16 +517,16 @@ ORDER BY
 LIMIT 10;
  user_id |            lastseen             
 ---------+---------------------------------
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
-      14 | Tue Jan 21 05:46:51.286381 2014
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
+       1 | Thu Nov 23 21:54:46.924477 2017
 (10 rows)
 
 SET citus.subquery_pushdown to OFF;
@@ -549,7 +548,7 @@ SELECT
             FROM
               events_table as "events"
             WHERE
-              user_id > 10 and user_id < 40 AND event_type IN (40, 41, 42, 43, 44, 45) ) "temp_data_queries"
+              user_id > 0 and user_id < 4 AND event_type IN (4, 5) ) "temp_data_queries"
             INNER  JOIN
            (SELECT
               user_where_1_1.real_user_id
@@ -559,14 +558,14 @@ SELECT
                FROM
                 users_reference_table as "users"
                WHERE
-                 user_id > 10 and user_id < 40 and value_2 > 50 ) user_where_1_1
+                 user_id > 0 and user_id < 4 and value_2 > 3 ) user_where_1_1
             INNER JOIN
               (SELECT
                   "users"."user_id"
                FROM
                 users_reference_table as "users"
                WHERE
-                user_id > 10 and user_id < 40 and value_3 > 50 ) user_where_1_join_1
+                user_id > 0 and user_id < 4 and value_3 > 3 ) user_where_1_join_1
            ON ("user_where_1_1".real_user_id = "user_where_1_join_1".user_id)) "user_filters_1"
       ON ("temp_data_queries".user_id = "user_filters_1".real_user_id)) "eventQuery") "pushedDownQuery") "pushedDownQuery"
 GROUP BY
@@ -575,23 +574,12 @@ ORDER BY
   generated_group_field DESC, value DESC;
  value | generated_group_field 
 -------+-----------------------
-     1 |                   966
-     1 |                   917
-     1 |                   905
-     1 |                   868
-     1 |                   836
-     1 |                   791
-     1 |                   671
-     1 |                   642
-     1 |                   358
-     1 |                   317
-     1 |                   307
-     1 |                   302
-     1 |                   214
-     1 |                   166
-     1 |                   116
-     1 |                     1
-(16 rows)
+     2 |                     5
+     1 |                     3
+     3 |                     2
+     3 |                     1
+     1 |                     0
+(5 rows)
 
 -- single level inner joins with reference tables
 SELECT
@@ -614,7 +602,7 @@ FROM
                  FROM
                   users_reference_table as "users"
                  WHERE
-                  user_id > 10 and user_id < 40 and value_2 > 30
+                  user_id > 1 and user_id < 4 and value_2 > 2
                 ) simple_user_where_1
             ) all_buckets_1
         ) users_in_segment_1
@@ -624,7 +612,7 @@ FROM
          FROM
           users_reference_table as "users"
          WHERE
-          user_id > 10 and user_id < 40 and value_2 > 60
+          user_id > 1 and user_id < 4 and value_2 > 3
         ) some_users_data
         ON ("users_in_segment_1".user_id = "some_users_data".user_id)
     ) segmentalias_1) "tempQuery"
@@ -632,17 +620,13 @@ GROUP BY "value_3"
 ORDER BY cnt, value_3 DESC LIMIT 10;
  value_3 | cnt 
 ---------+-----
-     556 |  75
-     228 |  75
-     146 |  75
-      70 |  75
-    1442 |  79
-    1232 |  79
-    1090 |  79
-    1012 |  79
-     886 |  79
-     674 |  79
-(10 rows)
+       0 |   7
+      10 |  21
+       4 |  21
+       8 |  28
+       6 |  28
+       2 |  35
+(6 rows)
 
 -- nested LATERAL JOINs with reference tables
 SET citus.subquery_pushdown to ON;
@@ -658,14 +642,14 @@ FROM
          FROM
           users_reference_table as "users"
          WHERE
-          user_id > 20 and user_id < 70 and users.value_2 = 200) filter_users_1
+          user_id > 2 and user_id < 5 and users.value_2 = 3) filter_users_1
       JOIN LATERAL
         (SELECT
             user_id, value_3
          FROM
           events_reference_table as "events"
          WHERE
-           user_id > 20 and user_id < 70 AND
+           user_id > 2 and user_id < 5 AND
            ("events".user_id = "filter_users_1".user_id)
          ORDER BY
            value_3 DESC
@@ -679,7 +663,7 @@ FROM
         users_reference_table as "users"
       WHERE
         "users"."user_id" = "some_recent_users"."user_id" AND
-        users.value_2 > 200
+        users.value_2 > 3
       LIMIT 1) "some_users_data" ON true
    ORDER BY
     value_3 DESC
@@ -689,12 +673,12 @@ ORDER BY
 LIMIT 10;
  user_id | value_3 
 ---------+---------
-      44 |     998
-      65 |     996
-      66 |     996
-      37 |     995
-      57 |     989
-      21 |     985
+       3 |       5
+       3 |       5
+       3 |       5
+       4 |       4
+       4 |       4
+       4 |       4
 (6 rows)
 
 SET citus.subquery_pushdown to OFF;
@@ -716,14 +700,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 4) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id = "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         LEFT JOIN
         (SELECT
@@ -738,17 +722,13 @@ count(*) AS cnt, "generated_group_field"
   LIMIT 10;
  cnt | generated_group_field 
 -----+-----------------------
- 176 |                   551
- 176 |                   569
- 176 |                   645
- 176 |                   713
- 176 |                   734
-  88 |                     3
-  88 |                     5
-  88 |                    15
-  88 |                    32
-  88 |                    68
-(10 rows)
+ 336 |                     2
+ 210 |                     1
+ 210 |                     3
+ 126 |                     4
+ 126 |                     5
+  84 |                     0
+(6 rows)
 
   -- RIGHT JOINs used with INNER JOINs should error out since reference table exist in the
 -- right side of the RIGHT JOIN.
@@ -768,14 +748,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id = "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -804,29 +784,27 @@ FROM (
       FROM users_table AS u,
           events_reference_table AS e
       WHERE  u.user_id > e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type IN (100, 101, 102)
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type IN (1, 2)
     )
   ) t1 RIGHT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type IN (106, 107, 108)
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type IN (3, 4)
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
  user_id | sum | length | hasdone_event  
 ---------+-----+--------+----------------
-      11 | 306 |     14 | Has done event
-      12 | 363 |     14 | Has done event
-      14 | 510 |     14 | Has done event
-      18 | 600 |     14 | Has done event
-      19 | 618 |     14 | Has done event
-(5 rows)
+       2 |  72 |     14 | Has done event
+       3 | 238 |     14 | Has done event
+         |   1 |     14 | Has done event
+(3 rows)
 
 -- a similar query as the above, with non-partition key comparison
 SELECT user_id, sum(array_length(events_table, 1)), length(hasdone_event), hasdone_event
@@ -841,28 +819,27 @@ FROM (
       FROM users_table AS u,
           events_reference_table AS e
       WHERE  u.value_1 > e.user_id
-      AND u.user_id >= 10
-      AND u.user_id <= 25
-      AND e.event_type >= 125 AND e.event_type < 130
+      AND u.user_id >= 1
+      AND u.user_id <= 3
+      AND e.event_type >= 2 AND e.event_type < 3
     )
   ) t1 RIGHT JOIN (
       SELECT DISTINCT user_id,
         'Has done event'::TEXT AS hasdone_event
       FROM  events_table AS e
-      WHERE  e.user_id >= 10
-      AND e.user_id <= 25
-      AND e.event_type >= 130 AND e.event_type < 135
+      WHERE  e.user_id >= 1
+      AND e.user_id <= 3
+      AND e.event_type >= 3 AND e.event_type < 4
   ) t2 ON (t1.user_id = t2.user_id)
   GROUP BY  t1.user_id, hasdone_event
 ) t GROUP BY user_id, hasdone_event
 ORDER BY user_id;
- user_id | sum  | length | hasdone_event  
----------+------+--------+----------------
-      10 | 6018 |     14 | Has done event
-      16 | 5373 |     14 | Has done event
-      17 | 5683 |     14 | Has done event
-      18 | 5321 |     14 | Has done event
-(4 rows)
+ user_id | sum | length | hasdone_event  
+---------+-----+--------+----------------
+       1 |  55 |     14 | Has done event
+       2 |  88 |     14 | Has done event
+       3 |  83 |     14 | Has done event
+(3 rows)
 
 -- LEFT JOINs used with INNER JOINs
 -- events_table and users_reference_table joined
@@ -883,14 +860,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id < "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -905,17 +882,13 @@ count(*) AS cnt, "generated_group_field"
   LIMIT 10;
  cnt | generated_group_field 
 -----+-----------------------
- 540 |                   814
- 533 |                   746
- 473 |                   914
- 449 |                   684
- 445 |                   715
- 423 |                   191
- 419 |                    39
- 415 |                   108
- 414 |                   819
- 411 |                   642
-(10 rows)
+ 737 |                     5
+ 679 |                     1
+ 591 |                     2
+ 479 |                     3
+ 374 |                     4
+ 159 |                     0
+(6 rows)
 
   -- Outer subquery with reference table
 SELECT "some_users_data".user_id, lastseen
@@ -929,7 +902,7 @@ FROM
             FROM
               events_reference_table as "events"
             WHERE
-              user_id > 10 and user_id < 40) "events_1"
+              user_id > 1 and user_id < 4) "events_1"
          ORDER BY
            time DESC) "recent_events_1"
       GROUP BY
@@ -942,7 +915,7 @@ FROM
       FROM
         users_table as "users"
       WHERE
-        users.value_2 > 50 and users.value_2 < 55) "some_users_data"
+        users.value_2 > 2 and users.value_2 < 4) "some_users_data"
      ON "some_users_data"."user_id" = "some_recent_users"."user_id"
 ORDER BY
   user_id
@@ -968,7 +941,7 @@ FROM
                     FROM
                       events_table as  "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                  UNION
                  (SELECT
                     *
@@ -978,7 +951,7 @@ FROM
                      FROM
                         events_reference_table as "events"
                      WHERE
-                      event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+                      event_type IN (3, 4) ) events_subquery_2)
                UNION
                  (SELECT
                     *
@@ -988,7 +961,7 @@ FROM
                      FROM
                         events_table as  "events"
                      WHERE
-                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                      event_type IN (5, 6) ) events_subquery_3)
                 UNION
                   (SELECT
                       *
@@ -998,7 +971,7 @@ FROM
                      FROM
                       events_table as "events"
                      WHERE
-                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+                      event_type IN (1, 6)) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT
@@ -1006,7 +979,7 @@ INNER JOIN
       FROM
         users_table as "users"
       WHERE
-        value_1 > 50 and value_1 < 70) AS t
+        value_1 > 2 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
 ORDER BY
   types;
@@ -1032,7 +1005,7 @@ FROM
                     FROM
                       events_table as "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION
                  (SELECT *
                   FROM
@@ -1047,7 +1020,7 @@ FROM
                                 events_reference_table as  "events", users_table as "users"
                               WHERE
                                 events.user_id = users.user_id AND
-                                event_type IN (10, 11, 12, 13, 14, 15)
+                                event_type IN (1, 2)
                                 GROUP BY   "users"."user_id"
                           ) as events_subquery_5
                      ) events_subquery_2)
@@ -1059,7 +1032,7 @@ FROM
                      FROM
                         events_table as  "events"
                      WHERE
-                      event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                      event_type IN (3, 4) ) events_subquery_3)
                UNION
                  (SELECT *
                   FROM
@@ -1068,7 +1041,7 @@ FROM
                      FROM
                       events_table as "events"
                      WHERE
-                      event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)
+                      event_type IN (5, 6)) events_subquery_4)
                  ) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
@@ -1077,7 +1050,7 @@ INNER JOIN
       FROM
         users_table as "users"
       WHERE
-        value_1 > 50 and value_1 < 70) AS t
+        value_1 > 2 and value_1 < 4) AS t
      ON (t.user_id = q.user_id)) as final_query
 GROUP BY
   types
@@ -1103,7 +1076,7 @@ FROM
                     FROM
                       events_table as  "events"
                     WHERE
-                      event_type IN (10, 11, 12, 13, 14, 15) ) events_subquery_1)
+                      event_type IN (1, 2) ) events_subquery_1)
                 UNION ALL
                  (SELECT *
                   FROM
@@ -1112,7 +1085,7 @@ FROM
                      FROM
                         events_table as "events"
                      WHERE
-                        event_type IN (15, 16, 17, 18, 19) ) events_subquery_2)
+                        event_type IN (3, 4) ) events_subquery_2)
                UNION ALL
                  (SELECT *
                   FROM
@@ -1121,7 +1094,7 @@ FROM
                      FROM
                         events_reference_table as  "events"
                      WHERE
-                        event_type IN (20, 21, 22, 23, 24, 25) ) events_subquery_3)
+                        event_type IN (5, 6) ) events_subquery_3)
                UNION ALL
                  (SELECT *
                   FROM
@@ -1130,12 +1103,12 @@ FROM
                      FROM
                         events_table as "events"
                      WHERE
-                        event_type IN (26, 27, 28, 29, 30, 13)) events_subquery_4)) t1
+                        event_type IN (1, 6)) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q"
 INNER JOIN
      (SELECT "users"."user_id"
       FROM users_table as "users"
-      WHERE value_1 > 50 and value_1 < 70) AS t ON (t.user_id = q.user_id)) as final_query
+      WHERE value_1 > 2 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
 ERROR:  cannot push down this subquery
@@ -1174,14 +1147,14 @@ count(*) AS cnt, "generated_group_field"
             FROM
               events_table as "events"
             WHERE
-              user_id > 80) "temp_data_queries"
+              user_id > 2) "temp_data_queries"
            INNER JOIN
            (SELECT
               "users"."user_id"
             FROM
               users_reference_table as "users"
             WHERE
-              user_id > 80 and value_2 = 5) "user_filters_1"
+              user_id > 2 and value_2 = 5) "user_filters_1"
            ON ("temp_data_queries".event_user_id < "user_filters_1".user_id)) AS "multi_group_wrapper_1"
         RIGHT JOIN
         (SELECT
@@ -1210,8 +1183,8 @@ WHERE
              FROM
               events_reference_table as e2
              WHERE
-              value_2 = 15 AND
-              value_3 > 25 AND
+              value_2 = 1 AND
+              value_3 > 3 AND
               e1.value_2 > e2.value_2
             )
             AND u1.user_id > e1.user_id
@@ -1223,7 +1196,7 @@ DETAIL:  Each relation should be joined with at least one another relation using
 SELECT foo.user_id FROM
 (
   SELECT m.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
-  WHERE event_type > 100000
+  WHERE event_type > 100
 ) as foo;
  user_id 
 ---------
@@ -1246,9 +1219,9 @@ SELECT foo.user_id FROM
 ORDER BY 1 LIMIT 3;
  user_id 
 ---------
-       0
        1
        2
+       3
 (3 rows)
 
 -- not supported since distinct is on the reference table column
@@ -1273,9 +1246,9 @@ SELECT foo.user_id FROM
 ORDER BY 1 LIMIT 3;
  user_id 
 ---------
-       0
        1
        2
+       3
 (3 rows)
 
 -- should be able to pushdown since one of the subqueries has distinct on reference tables
@@ -1290,11 +1263,11 @@ LIMIT 5
 OFFSET 0;
  distinct_users | event_type |              time               
 ----------------+------------+---------------------------------
-             78 |        815 | Tue Jan 21 05:59:54.833395 2014
-             92 |        826 | Tue Jan 21 05:57:26.643861 2014
-             65 |        241 | Tue Jan 21 05:56:52.624231 2014
-             23 |        573 | Tue Jan 21 05:55:28.796818 2014
-             98 |         23 | Tue Jan 21 05:54:57.987456 2014
+              1 |          6 | Thu Nov 23 21:54:46.924477 2017
+              4 |          1 | Thu Nov 23 18:10:21.338399 2017
+              3 |          2 | Thu Nov 23 18:08:26.550729 2017
+              2 |          1 | Thu Nov 23 17:26:14.563216 2017
+              3 |          4 | Thu Nov 23 16:44:41.903713 2017
 (5 rows)
 
 -- the same query wuth multiple reference tables in the subquery
@@ -1310,11 +1283,11 @@ LIMIT 5
 OFFSET 0;
  distinct_users | event_type |              time               
 ----------------+------------+---------------------------------
-             65 |        241 | Tue Jan 21 05:56:52.624231 2014
-             98 |         23 | Tue Jan 21 05:54:57.987456 2014
-             26 |        957 | Tue Jan 21 05:43:16.99674 2014
-             44 |        682 | Tue Jan 21 05:43:00.838945 2014
-             81 |        852 | Tue Jan 21 05:34:56.310878 2014
+              1 |          6 | Thu Nov 23 21:54:46.924477 2017
+              4 |          1 | Thu Nov 23 18:10:21.338399 2017
+              3 |          2 | Thu Nov 23 18:08:26.550729 2017
+              2 |          1 | Thu Nov 23 17:26:14.563216 2017
+              3 |          4 | Thu Nov 23 16:44:41.903713 2017
 (5 rows)
 
 -- similar query as the above, but with group bys
@@ -1328,11 +1301,11 @@ LIMIT 5
 OFFSET 0;
  distinct_users | event_type |              time               
 ----------------+------------+---------------------------------
-             78 |        815 | Tue Jan 21 05:59:54.833395 2014
-             92 |        826 | Tue Jan 21 05:57:26.643861 2014
-             65 |        241 | Tue Jan 21 05:56:52.624231 2014
-             23 |        573 | Tue Jan 21 05:55:28.796818 2014
-             98 |         23 | Tue Jan 21 05:54:57.987456 2014
+              1 |          6 | Thu Nov 23 21:54:46.924477 2017
+              4 |          1 | Thu Nov 23 18:10:21.338399 2017
+              3 |          2 | Thu Nov 23 18:08:26.550729 2017
+              2 |          1 | Thu Nov 23 17:26:14.563216 2017
+              3 |          4 | Thu Nov 23 16:44:41.903713 2017
 (5 rows)
 
 -- should not push down this query since there is a distributed table (i.e., events_table)
@@ -1367,10 +1340,10 @@ ORDER BY 1 DESC
 LIMIT 4;
  user_id | user_id 
 ---------+---------
-      98 |      98
-      96 |      96
-      90 |      90
-      81 |      81
+       6 |       6
+       5 |       5
+       4 |       4
+       3 |       3
 (4 rows)
 
 -- should not pushdown since there is a non partition column on the DISTINCT clause
