@@ -605,7 +605,7 @@ UNION
   GROUP BY user_id)
 ) as ftop;
 
--- joins inside unions are not supported
+-- non-equi join are not supported since there is no equivalence between the partition column
 SELECT user_id, sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id
@@ -614,7 +614,16 @@ FROM (
 ) user_id 
 GROUP BY user_id;
 
--- joins inside unions are not supported -- slightly more comlex than the above
+-- non-equi join also not supported for UNION ALL
+SELECT user_id, sum(counter)
+FROM (
+    SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id
+      UNION ALL
+    SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE users_table.user_id > events_table.user_id GROUP BY 1
+) user_id 
+GROUP BY user_id;
+
+-- joins inside unions are supported -- slightly more comlex than the above
 SELECT * FROM
 (
 (
@@ -635,7 +644,63 @@ UNION
       SELECT events_table.user_id, sum(events_table.value_2) AS counter FROM events_table, users_table WHERE (events_table.user_id = users_table.user_id) GROUP BY events_table.user_id
 ) user_id_2
   GROUP BY user_id)
-) as ftop;
+) as ftop
+ORDER BY 2, 1
+LIMIT 10;
+
+-- mix up the joins a bit
+SELECT * FROM
+(
+(
+  SELECT sum(users_table.value_2), events_table.user_id
+  FROM users_table, events_table
+  WHERE users_table.user_id = events_Table.user_id
+  GROUP BY events_table.user_id
+)
+UNION
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table LEFT JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
+
+SELECT * FROM
+(
+(
+  SELECT value_2, user_id
+  FROM users_table
+)
+UNION
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table RIGHT JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
+
+-- UNION ALL with joins is supported
+SELECT * FROM
+(
+(
+  SELECT sum(users_table.value_2), events_table.user_id
+  FROM users_table, events_table
+  WHERE users_table.user_id = events_Table.user_id
+  GROUP BY events_table.user_id
+)
+UNION ALL
+(
+  SELECT sum(users_table.value_2), user_id
+  FROM users_table JOIN events_table USING (user_id)
+  GROUP BY user_id
+)
+) ftop
+ORDER BY 2, 1
+LIMIT 10;
 
 -- offset inside the union
 SELECT user_id, sum(counter) 

@@ -91,8 +91,8 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_partkey FROM lineitem_subquery)
 ) b;
-ERROR:  cannot pushdown the subquery since all leaves of the UNION does not include partition key at the same position
-DETAIL:  Each leaf query of the UNION should return partition key at the same position on its target list.
+ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
+DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
 -- Check that we run union queries if partition column is selected.
 SELECT count(*) FROM
 (
