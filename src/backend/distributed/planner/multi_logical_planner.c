@@ -94,12 +94,6 @@ static Relids QueryRteIdentities(Query *queryTree);
 
 static DeferredErrorMessage * DeferErrorIfUnsupportedSublinkAndReferenceTable(
 	Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
-																 bool
-																 outerMostQueryHasLimit);
-static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree,
-																bool
-																outerMostQueryHasLimit);
 static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
