@@ -420,7 +420,6 @@ static void
 AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier)
 {
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
-	Assert(rangeTableEntry->values_lists == NIL);
 
 	rangeTableEntry->values_lists = list_make1_int(rteIdentifier);
 }
