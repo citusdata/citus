@@ -98,9 +98,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 static Relids QueryRteIdentities(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSublinkAndReferenceTable(
 	Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfUnsupportedFilters(Query *subquery);
-static bool EqualOpExpressionLists(List *firstOpExpressionList,
-								   List *secondOpExpressionList);
 static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
@@ -702,12 +699,6 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 		{
 			return error;
 		}
-
-		error = DeferErrorIfUnsupportedFilters(subquery);
-		if (error)
-		{
-			return error;
-		}
 	}
 
 	return NULL;
@@ -972,129 +963,6 @@ DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
 	}
 
 	return NULL;
-}
-
-
-/*
- * DeferErrorIfUnsupportedFilters checks if all leaf queries in the given query have
- * same filter on the partition column. Note that if there are queries without
- * any filter on the partition column, they don't break this prerequisite.
- */
-static DeferredErrorMessage *
-DeferErrorIfUnsupportedFilters(Query *subquery)
-{
-	List *queryList = NIL;
-	ListCell *queryCell = NULL;
-	List *subqueryOpExpressionList = NIL;
-	List *relationIdList = RelationIdList(subquery);
-	Var *partitionColumn = NULL;
-	Oid relationId = InvalidOid;
-
-	/*
-	 * If there are no appropriate relations, we're going to error out on
-	 * DeferErrorIfCannotPushdownSubquery(). It may happen once the subquery
-	 * does not include a relation.
-	 */
-	if (relationIdList == NIL)
-	{
-		return NULL;
-	}
-
-	/*
-	 * Get relation id of any relation in the subquery and create partiton column
-	 * for this relation. We will use this column to replace columns on operator
-	 * expressions on different tables. Then we compare these operator expressions
-	 * to see if they consist of same operator and constant value.
-	 */
-	relationId = linitial_oid(relationIdList);
-	partitionColumn = PartitionColumn(relationId, 0);
-
-	ExtractQueryWalker((Node *) subquery, &queryList);
-	foreach(queryCell, queryList)
-	{
-		Query *query = (Query *) lfirst(queryCell);
-		List *opExpressionList = NIL;
-		List *newOpExpressionList = NIL;
-
-		bool leafQuery = LeafQuery(query);
-		if (!leafQuery)
-		{
-			continue;
-		}
-
-		opExpressionList = PartitionColumnOpExpressionList(query);
-		if (opExpressionList == NIL)
-		{
-			continue;
-		}
-
-		newOpExpressionList = ReplaceColumnsInOpExpressionList(opExpressionList,
-															   partitionColumn);
-
-		if (subqueryOpExpressionList == NIL)
-		{
-			subqueryOpExpressionList = newOpExpressionList;
-		}
-		else
-		{
-			bool equalOpExpressionLists = EqualOpExpressionLists(subqueryOpExpressionList,
-																 newOpExpressionList);
-			if (!equalOpExpressionLists)
-			{
-				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-									 "cannot push down this subquery",
-									 "Currently all leaf queries need to "
-									 "have same filters on partition column", NULL);
-			}
-		}
-	}
-
-	return NULL;
-}
-
-
-/*
- * EqualOpExpressionLists checks if given two operator expression lists are
- * equal.
- */
-static bool
-EqualOpExpressionLists(List *firstOpExpressionList, List *secondOpExpressionList)
-{
-	bool equalOpExpressionLists = false;
-	ListCell *firstOpExpressionCell = NULL;
-	uint32 equalOpExpressionCount = 0;
-	uint32 firstOpExpressionCount = list_length(firstOpExpressionList);
-	uint32 secondOpExpressionCount = list_length(secondOpExpressionList);
-
-	if (firstOpExpressionCount != secondOpExpressionCount)
-	{
-		return false;
-	}
-
-	foreach(firstOpExpressionCell, firstOpExpressionList)
-	{
-		OpExpr *firstOpExpression = (OpExpr *) lfirst(firstOpExpressionCell);
-		ListCell *secondOpExpressionCell = NULL;
-
-		foreach(secondOpExpressionCell, secondOpExpressionList)
-		{
-			OpExpr *secondOpExpression = (OpExpr *) lfirst(secondOpExpressionCell);
-			bool equalExpressions = equal(firstOpExpression, secondOpExpression);
-
-			if (equalExpressions)
-			{
-				equalOpExpressionCount++;
-				continue;
-			}
-		}
-	}
-
-	if (equalOpExpressionCount == firstOpExpressionCount)
-	{
-		equalOpExpressionLists = true;
-	}
-
-	return equalOpExpressionLists;
 }
 
 

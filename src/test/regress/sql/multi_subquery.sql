@@ -233,6 +233,44 @@ SELECT max(l_orderkey) FROM
   ) z
 ) y;
 
+-- Subqueries filter by 2 different users
+SELECT *
+FROM
+  (SELECT *
+   FROM
+     (SELECT user_id,
+             sum(value_2) AS counter
+      FROM events_table
+      WHERE user_id = 2
+      GROUP BY user_id) AS foo,
+     (SELECT user_id,
+             sum(value_2) AS counter
+      FROM events_table
+      WHERE user_id = 3
+      GROUP BY user_id) AS bar
+   WHERE foo.user_id = bar.user_id ) AS baz;
+
+-- Subqueries filter by different users, one of which overlaps
+SELECT *
+FROM
+  (SELECT *
+   FROM
+     (SELECT user_id,
+             sum(value_2) AS counter
+      FROM events_table
+      WHERE user_id = 2
+        OR user_id = 3
+      GROUP BY user_id) AS foo,
+
+     (SELECT user_id,
+             sum(value_2) AS counter
+      FROM events_table
+      WHERE user_id = 2
+      GROUP BY user_id) AS bar
+   WHERE foo.user_id = bar.user_id ) AS baz
+ORDER BY 1,2
+LIMIT 5;
+
 -- Add one more shard to one relation, then test if we error out because of different
 -- shard counts for joining relations.
 

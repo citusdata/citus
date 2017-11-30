@@ -17,6 +17,16 @@ FROM (
 ORDER BY 2 DESC,1
 LIMIT 5;
 
+-- can use different filters on partition columns
+SELECT *
+FROM (
+    SELECT user_id, max(value_2) FROM users_table WHERE user_id = 1 GROUP BY user_id
+      UNION ALL
+    SELECT user_id, max(value_2) FROM users_table WHERE user_id = 5 GROUP BY user_id
+) user_id
+ORDER BY 2 DESC,1
+LIMIT 5;
+
 -- a very simple union query with reference table
 SELECT user_id, counter
 FROM (

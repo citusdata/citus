@@ -367,7 +367,9 @@ UNION
 SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
 	UNION
-	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu;
+	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu
+ORDER BY 1, 2
+LIMIT 5;
 
 -- error out for queries with repartition jobs
 SELECT *
