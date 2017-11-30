@@ -54,6 +54,9 @@ typedef struct ConnectionReference
 	uint32 colocationGroupId;
 	uint32 representativeValue;
 
+	/* placementId of the placement, used only for append distributed tables */
+	uint64 placementId;
+
 	/* membership in MultiConnection->referencedPlacements */
 	dlist_node connectionNode;
 } ConnectionReference;
@@ -357,6 +360,7 @@ StartPlacementListConnection(uint32 flags, List *placementAccessList,
 			placementConnection->hadDML = false;
 			placementConnection->userName = MemoryContextStrdup(TopTransactionContext,
 																userName);
+			placementConnection->placementId = placementAccess->placement->placementId;
 
 			/* record association with connection */
 			dlist_push_tail(&chosenConnection->referencedPlacements,
@@ -785,6 +789,14 @@ ConnectionAccessedDifferentPlacement(MultiConnection *connection,
 		ConnectionReference *connectionReference =
 			dlist_container(ConnectionReference, connectionNode, placementIter.cur);
 
+		/* handle append and range distributed tables */
+		if (placement->partitionMethod != DISTRIBUTE_BY_HASH &&
+			placement->placementId != connectionReference->placementId)
+		{
+			return true;
+		}
+
+		/* handle hash distributed tables */
 		if (placement->colocationGroupId != INVALID_COLOCATION_ID &&
 			placement->colocationGroupId == connectionReference->colocationGroupId &&
 			placement->representativeValue != connectionReference->representativeValue)

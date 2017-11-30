@@ -315,13 +315,13 @@ DROP FUNCTION log_ddl_tag();
 DROP TABLE ddl_commands;
 
 \c - - - :master_port
--- Distributed SELECTs cannot appear after ALTER
+-- Distributed SELECTs may appear after ALTER
 BEGIN;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
 SELECT count(*) FROM lineitem_alter;
-COMMIT;
+ROLLBACK;
 
--- but are allowed before
+-- and before
 BEGIN;
 SELECT count(*) FROM lineitem_alter;
 CREATE INDEX temp_index_2 ON lineitem_alter(l_orderkey);
