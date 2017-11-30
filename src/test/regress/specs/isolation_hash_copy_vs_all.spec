@@ -50,6 +50,13 @@ step "s1-select-count" { SELECT COUNT(*) FROM hash_copy; }
 step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%'''); }
 step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-commit" { COMMIT; }
+step "s1-recreate-with-replication-2"
+{
+	DROP TABLE hash_copy;
+	SET citus.shard_replication_factor TO 2;
+	CREATE TABLE hash_copy(id integer, data text, int_data int);
+	SELECT create_distributed_table('hash_copy', 'id');
+}
 
 # session 2
 session "s2"
@@ -102,6 +109,12 @@ permutation "s1-initialize" "s1-begin" "s1-copy" "s2-table-size" "s1-commit" "s1
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-master-drop-all-shards" "s1-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s1-copy" "s2-distribute-table" "s1-commit" "s1-select-count"
+
+# permutations - COPY first (replication factor 2)
+permutation "s1-recreate-with-replication-2" "s1-initialize" "s1-begin" "s1-copy" "s2-update" "s1-commit" "s1-select-count"
+permutation "s1-recreate-with-replication-2" "s1-initialize" "s1-begin" "s1-copy" "s2-delete" "s1-commit" "s1-select-count"
+permutation "s1-recreate-with-replication-2" "s1-initialize" "s1-begin" "s1-copy" "s2-insert-select" "s1-commit" "s1-select-count"
+permutation "s1-recreate-with-replication-2" "s1-initialize" "s1-begin" "s1-copy" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
 
 # permutations - COPY second
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-copy" "s1-commit" "s1-select-count"

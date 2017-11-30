@@ -2091,7 +2091,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	/*
 	 * Prevent concurrent UPDATE/DELETE on replication factor >1
-	 * (see multi_router_executor.c)
+	 * (see AcquireExecutorMultiShardLocks() at multi_router_executor.c)
 	 */
 	LockShardListResources(shardIntervalList, RowExclusiveLock);
 
