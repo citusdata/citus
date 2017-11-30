@@ -32,7 +32,6 @@ test: multi_read_from_secondaries
 test: multi_create_table
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_insert_select_window multi_shard_update_delete
-test: multi_real_time_transaction
 
 # ----------
 # Tests for partitioning support
@@ -42,7 +41,7 @@ test: multi_partitioning_utils multi_partitioning
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
-test: multi_deparse_shard_query multi_distributed_transaction_id
+test: multi_deparse_shard_query multi_distributed_transaction_id multi_real_time_transaction
 test: multi_explain
 test: multi_basic_queries multi_complex_expressions multi_subquery multi_subquery_complex_queries multi_subquery_behavioral_analytics
 test: multi_subquery_complex_reference_clause multi_subquery_window_functions multi_view multi_sql_function multi_prepare_sql

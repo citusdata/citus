@@ -135,6 +135,38 @@ ALTER TABLE test_table ADD CONSTRAINT num_check CHECK (col_1 < 50);
 SELECT COUNT(*) FROM test_table;
 ROLLBACK;
 
+-- We don't get a distributed transaction id outside a transaction block
+SELECT (get_current_transaction_id()).transaction_number > 0 FROM test_table LIMIT 1;
+
+-- We should get a distributed transaction id inside a transaction block
+BEGIN;
+SELECT (get_current_transaction_id()).transaction_number > 0 FROM test_table LIMIT 1;
+END;
+
+-- Add a function to insert a row into a table
+SELECT public.run_command_on_master_and_workers($$
+CREATE FUNCTION multi_real_time_transaction.insert_row_test(table_name name)
+RETURNS bool
+AS $BODY$
+BEGIN
+  EXECUTE format('INSERT INTO %s VALUES(100,100,''function'')', table_name);
+  RETURN true;
+END;
+$BODY$ LANGUAGE plpgsql;
+$$);
+
+-- SELECT should be rolled back because we send BEGIN
+BEGIN;
+SELECT count(*) FROM test_table;
+
+-- Sneakily insert directly into shards
+SELECT insert_row_test(pg_typeof(test_table)::name) FROM test_table;
+SELECT count(*) FROM test_table;
+ABORT;
+
+SELECT count(*) FROM test_table;
+
+
 -- Test with foreign key
 ALTER TABLE test_table ADD CONSTRAINT p_key_tt PRIMARY KEY (id);
 ALTER TABLE co_test_table ADD CONSTRAINT f_key_ctt FOREIGN KEY (id) REFERENCES test_table(id) ON DELETE CASCADE;
