@@ -108,7 +108,9 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsResultFunctionWalker(Node *node, void *context);
 static DeferredErrorMessage * PlanPullPushSubqueries(Query *query,
 													 PlanPullPushContext *context);
-static void RecursivelyPlanSetOperations(Query *query, PlanPullPushContext *context);
+static void RecursivelyPlanSetOperations(Query *query, Node *node,
+										 PlanPullPushContext *context);
+static bool IsDistributedTableRTE(Node *node);
 static bool PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context);
 static bool ShouldRecursivelyPlanSubquery(Query *query);
 static PlannedStmt * RecursivelyPlanQuery(Query *query, int subPlanId);
@@ -794,7 +796,9 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 			DeferErrorIfUnsupportedUnionQuery(query) != NULL ||
 			!SafeToPushdownUnionSubquery(filteredRestrictionContext))
 		{
-			RecursivelyPlanSetOperations(query, context);
+			SetOperationStmt *setOperations = (SetOperationStmt *) query->setOperations;
+
+			RecursivelyPlanSetOperations(query, (Node *) setOperations, context);
 		}
 	}
 	else
@@ -864,31 +868,64 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 
 
 static void
-RecursivelyPlanSetOperations(Query *query, PlanPullPushContext *context)
+RecursivelyPlanSetOperations(Query *query, Node *node,
+							 PlanPullPushContext *context)
 {
-	SetOperationStmt *setOperations = (SetOperationStmt *) query->setOperations;
-	RangeTblRef *leftRef = (RangeTblRef *) setOperations->larg;
-	RangeTblEntry *leftRTE = rt_fetch(leftRef->rtindex, query->rtable);
-	RangeTblRef *rightRef = (RangeTblRef *) setOperations->rarg;
-	RangeTblEntry *rightRTE = rt_fetch(rightRef->rtindex, query->rtable);
-
-	if (leftRTE->rtekind == RTE_SUBQUERY &&
-		NeedsDistributedPlanning(leftRTE->subquery))
+	if (IsA(node, SetOperationStmt))
 	{
-		Query *subquery = leftRTE->subquery;
-		int subPlanId = list_length(context->subPlanList);
-		PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
-		context->subPlanList = lappend(context->subPlanList, subPlan);
+		SetOperationStmt *setOperations = (SetOperationStmt *) node;
+
+		RecursivelyPlanSetOperations(query, setOperations->larg, context);
+		RecursivelyPlanSetOperations(query, setOperations->rarg, context);
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTableRef = (RangeTblRef *) node;
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableRef->rtindex,
+												  query->rtable);
+
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY &&
+			FindNodeCheck((Node *) rangeTableEntry->subquery, IsDistributedTableRTE))
+		{
+			Query *subquery = rangeTableEntry->subquery;
+
+			int subPlanId = list_length(context->subPlanList);
+			PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+			context->subPlanList = lappend(context->subPlanList, subPlan);
+		}
+	}
+}
+
+
+static bool
+IsDistributedTableRTE(Node *node)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	Oid relationId = InvalidOid;
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return false;
 	}
 
-	if (rightRTE->rtekind == RTE_SUBQUERY &&
-		NeedsDistributedPlanning(rightRTE->subquery))
+	rangeTableEntry = (RangeTblEntry *) node;
+	if (rangeTableEntry->rtekind != RTE_RELATION)
 	{
-		Query *subquery = rightRTE->subquery;
-		int subPlanId = list_length(context->subPlanList);
-		PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
-		context->subPlanList = lappend(context->subPlanList, subPlan);
+		return false;
 	}
+
+	relationId = rangeTableEntry->relid;
+	if (!IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

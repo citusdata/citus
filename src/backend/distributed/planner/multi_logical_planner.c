@@ -158,7 +158,6 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
  */
 static bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
 static bool IsFunctionRTE(Node *node);
-static bool FindNodeCheck(Node *node, bool (*check)(Node *));
 static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
@@ -287,7 +286,7 @@ IsFunctionRTE(Node *node)
  * To call this function directly with an RTE, use:
  * range_table_walker(rte, FindNodeCheck, check, QTW_EXAMINE_RTES)
  */
-static bool
+bool
 FindNodeCheck(Node *node, bool (*check)(Node *))
 {
 	if (node == NULL)
