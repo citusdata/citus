@@ -181,17 +181,13 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		TargetEntry *targetEntryToAdd = NULL;
 
 		/*
-		 * Although it is not the best place to error out when facing with reference
-		 * tables, we decide to error out here. Otherwise, we need to add equality
-		 * for each reference table and it is more complex to implement. In the
-		 * future implementation all checks will be gathered to single point.
+		 * We don't consider equivalences through reference tables. Callers should
+		 * make sure they consider reference tables (or other types of recurring
+		 * tuples).
 		 */
 		if (PartitionMethod(relationId) == DISTRIBUTE_BY_NONE)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot pushdown this query"),
-							errdetail(
-								"Reference tables are not allowed with set operations")));
+			continue;
 		}
 
 		/*
