@@ -1,3 +1,13 @@
+### citus v7.1.1 (December 1, 2017) ###
+
+* Fixes a bug that could prevent pushing down subqueries with reference tables
+
+* Fixes a bug that could create false positive distributed deadlocks
+
+* Fixes a bug that could prevent running concurrent COPY and multi-shard DDL
+
+* Fixes a bug that could mislead users about `ANALYZE` queries
+
 ### citus v7.1.0 (November 14, 2017) ###
 
 * Adds support for native queries with multi shard `UPDATE`/`DELETE` queries
