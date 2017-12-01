@@ -194,6 +194,9 @@ ExplainSubPlans(List *subPlanList, ExplainState *es)
 		char *queryString = NULL;
 		instr_time planduration;
 
+		INSTR_TIME_SET_CURRENT(planduration);
+		INSTR_TIME_SUBTRACT(planduration, planduration);
+
 #if (PG_VERSION_NUM >= 100000)
 		ExplainOnePlan(subPlan, into, es, queryString, params, NULL,
 					   &planduration);
