@@ -191,6 +191,9 @@ failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-libcurl to disable libcurl support.])])
 fi
 
+# Support runstatedir
+DEFINE_RUNSTATEDIR
+
 # REPORTS_BASE_URL definition
 PGAC_ARG_REQ(with, reports-hostname, [HOSTNAME],
              [Use HOSTNAME as hostname for statistics collection and update checks],
