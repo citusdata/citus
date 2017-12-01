@@ -35,7 +35,7 @@ static Node * DelayedErrorCreateScan(CustomScan *scan);
 
 /* functions that are common to different scans */
 static void CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags);
-static void ExecuteSubPlans(List *subPlanList, EState *estate);
+static void ExecuteSubPlans(uint64 planId, List *subPlanList);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
 
@@ -283,9 +283,10 @@ CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	uint64 planId = distributedPlan->planId;
 	List *subPlanList = distributedPlan->subPlanList;
 
-	ExecuteSubPlans(subPlanList, estate);
+	ExecuteSubPlans(planId, subPlanList);
 }
 
 
@@ -294,7 +295,7 @@ CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
  * by executing each plan from the top.
  */
 static void
-ExecuteSubPlans(List *subPlanList, EState *estate)
+ExecuteSubPlans(uint64 planId, List *subPlanList)
 {
 	ListCell *subPlanCell = NULL;
 	int subPlanId = 0;
@@ -306,14 +307,20 @@ ExecuteSubPlans(List *subPlanList, EState *estate)
 		ParamListInfo params = NULL;
 		StringInfo targetFileName = makeStringInfo();
 		List *nodeList = ActivePrimaryNodeList();
+		EState *estate = NULL;
 
-		appendStringInfo(targetFileName, "base/pgsql_job_cache/%d_%d_%d_%d.data",
-						 GetUserId(), GetLocalGroupId(), MyProcPid, subPlanId);
+		appendStringInfo(targetFileName,
+						 "base/pgsql_job_cache/%d_%d_%d_" UINT64_FORMAT "_%d.data",
+						 GetUserId(), GetLocalGroupId(), MyProcPid, planId, subPlanId);
+
+		estate = CreateExecutorState();
 
 		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(targetFileName->data,
 																 estate, nodeList);
 
 		ExecutePlanIntoDestReceiver(subPlan, params, copyDest);
+
+		FreeExecutorState(estate);
 
 		subPlanId++;
 	}

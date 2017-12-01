@@ -224,6 +224,9 @@ typedef struct DistributedPlan
 {
 	CitusNode type;
 
+	/* unique identifier of the plan within the session */
+	uint64 planId;
+
 	/* type of command to execute (SELECT/INSERT/...) */
 	CmdType operation;
 

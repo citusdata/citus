@@ -199,6 +199,7 @@ ReadDistributedPlan(READFUNC_ARGS)
 {
 	READ_LOCALS(DistributedPlan);
 
+	READ_UINT64_FIELD(planId);
 	READ_INT_FIELD(operation);
 	READ_BOOL_FIELD(hasReturning);
 

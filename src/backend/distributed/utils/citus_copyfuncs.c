@@ -101,6 +101,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(DistributedPlan);
 
+	COPY_SCALAR_FIELD(planId);
 	COPY_SCALAR_FIELD(operation);
 	COPY_SCALAR_FIELD(hasReturning);
 

@@ -47,6 +47,7 @@
 
 static List *plannerRestrictionContextList = NIL;
 int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log level */
+static uint64 NextPlanId = 1;
 
 
 /*
@@ -75,6 +76,7 @@ typedef struct VarLevelsUpWalkerContext
  */
 typedef struct PlanPullPushContext
 {
+	uint64 planId;
 	PlannerRestrictionContext *plannerRestrictionContext;
 	List *subPlanList;
 	int level;
@@ -83,11 +85,12 @@ typedef struct PlanPullPushContext
 
 /* local function forward declarations */
 static bool NeedsDistributedPlanningWalker(Node *node, void *context);
-static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
-										   Query *query, ParamListInfo boundParams,
+static PlannedStmt * CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan,
+										   Query *originalQuery, Query *query,
+										   ParamListInfo boundParams,
 										   PlannerRestrictionContext *
 										   plannerRestrictionContext);
-static DistributedPlan * CreateDistributedSelectPlan(Query *originalQuery,
+static DistributedPlan * CreateDistributedSelectPlan(uint64 planId, Query *originalQuery,
 													 Query *query,
 													 ParamListInfo boundParams,
 													 bool hasUnresolvedParams,
@@ -113,11 +116,11 @@ static void RecursivelyPlanSetOperations(Query *query, Node *node,
 static bool IsDistributedTableRTE(Node *node);
 static bool PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context);
 static bool ShouldRecursivelyPlanSubquery(Query *query);
-static PlannedStmt * RecursivelyPlanQuery(Query *query, int subPlanId);
+static PlannedStmt * RecursivelyPlanQuery(Query *query, uint64 planId, int subPlanId);
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
-static Query * BuildSubPlanResultQuery(Query *subquery, int subPlanId);
+static Query * BuildSubPlanResultQuery(Query *subquery, uint64 planId, int subPlanId);
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
@@ -174,7 +177,9 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 
 		if (needsDistributedPlanning)
 		{
-			result = CreateDistributedPlan(result, originalQuery, parse,
+			uint64 planId = NextPlanId++;
+
+			result = CreateDistributedPlan(planId, result, originalQuery, parse,
 										   boundParams, plannerRestrictionContext);
 		}
 	}
@@ -532,8 +537,8 @@ IsModifyDistributedPlan(DistributedPlan *distributedPlan)
  * query into a distributed plan.
  */
 static PlannedStmt *
-CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query,
-					  ParamListInfo boundParams,
+CreateDistributedPlan(uint64 planId, PlannedStmt *localPlan, Query *originalQuery,
+					  Query *query, ParamListInfo boundParams,
 					  PlannerRestrictionContext *plannerRestrictionContext)
 {
 	DistributedPlan *distributedPlan = NULL;
@@ -566,7 +571,7 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 	else
 	{
 		distributedPlan =
-			CreateDistributedSelectPlan(originalQuery, query, boundParams,
+			CreateDistributedSelectPlan(planId, originalQuery, query, boundParams,
 										hasUnresolvedParams,
 										plannerRestrictionContext);
 	}
@@ -610,6 +615,9 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
 		RaiseDeferredError(distributedPlan->planningError, ERROR);
 	}
 
+	/* remember the plan's identifier for identifying subplans */
+	distributedPlan->planId = planId;
+
 	/* create final plan by combining local plan with distributed plan */
 	resultPlan = FinalizePlan(localPlan, distributedPlan);
 
@@ -636,12 +644,12 @@ CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery, Query *query
  *
  */
 static DistributedPlan *
-CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo boundParams,
-							bool hasUnresolvedParams,
+CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
+							ParamListInfo boundParams, bool hasUnresolvedParams,
 							PlannerRestrictionContext *plannerRestrictionContext)
 {
 	PlanPullPushContext pullPushContext = {
-		plannerRestrictionContext, NIL, 0
+		planId, plannerRestrictionContext, NIL, 0
 	};
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
@@ -724,8 +732,9 @@ CreateDistributedSelectPlan(Query *originalQuery, Query *query, ParamListInfo bo
 		memcpy(query, newQuery, sizeof(Query));
 
 		/* recurse into CreateDistributedSelectPlan with subqueries/CTEs replaced */
-		distributedPlan = CreateDistributedSelectPlan(originalQuery, query, NULL, false,
-													  plannerRestrictionContext);
+		distributedPlan = CreateDistributedSelectPlan(planId, originalQuery, query, NULL,
+													  false, plannerRestrictionContext);
+		distributedPlan->planId = planId;
 		distributedPlan->subPlanList = pullPushContext.subPlanList;
 
 		return distributedPlan;
@@ -759,6 +768,7 @@ static DeferredErrorMessage *
 PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 {
 	DeferredErrorMessage *error = NULL;
+	uint64 planId = context->planId;
 
 	if (SubqueryPushdown)
 	{
@@ -835,7 +845,8 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 						subquery))
 				{
 					int subPlanId = list_length(context->subPlanList);
-					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, planId,
+																subPlanId);
 
 					filteredPlannerRestriction =
 						FilterPlannerRestrictionForQuery(
@@ -856,7 +867,8 @@ PlanPullPushSubqueries(Query *query, PlanPullPushContext *context)
 				{
 					Query *subquery = rte->subquery;
 					int subPlanId = list_length(context->subPlanList);
-					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+					PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, planId,
+																subPlanId);
 					context->subPlanList = lappend(context->subPlanList, subPlan);
 				}
 			}
@@ -888,9 +900,9 @@ RecursivelyPlanSetOperations(Query *query, Node *node,
 			FindNodeCheck((Node *) rangeTableEntry->subquery, IsDistributedTableRTE))
 		{
 			Query *subquery = rangeTableEntry->subquery;
-
+			uint64 planId = context->planId;
 			int subPlanId = list_length(context->subPlanList);
-			PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, subPlanId);
+			PlannedStmt *subPlan = RecursivelyPlanQuery(subquery, planId, subPlanId);
 			context->subPlanList = lappend(context->subPlanList, subPlan);
 		}
 	}
@@ -961,6 +973,7 @@ PlanPullPushCTEs(Query *query, PlanPullPushContext *pullPushContext)
 		char *cteName = cte->ctename;
 		Query *subquery = (Query *) cte->ctequery;
 		Query *subPlanQuery = copyObject(subquery);
+		uint64 planId = pullPushContext->planId;
 		int subPlanId = list_length(pullPushContext->subPlanList);
 		Query *resultQuery = NULL;
 		PlannedStmt *subPlan = NULL;
@@ -975,7 +988,7 @@ PlanPullPushCTEs(Query *query, PlanPullPushContext *pullPushContext)
 		}
 
 		/* build a subplan for the CTE */
-		resultQuery = BuildSubPlanResultQuery(subquery, subPlanId);
+		resultQuery = BuildSubPlanResultQuery(subquery, planId, subPlanId);
 
 		if (log_min_messages >= DEBUG1)
 		{
@@ -1146,8 +1159,9 @@ PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context)
 
 		if (ShouldRecursivelyPlanSubquery(query))
 		{
+			uint64 planId = context->planId;
 			int subPlanId = list_length(context->subPlanList);
-			PlannedStmt *subPlan = RecursivelyPlanQuery(query, subPlanId);
+			PlannedStmt *subPlan = RecursivelyPlanQuery(query, planId, subPlanId);
 			context->subPlanList = lappend(context->subPlanList, subPlan);
 		}
 
@@ -1165,13 +1179,13 @@ PlanPullPushSubqueriesWalker(Node *node, PlanPullPushContext *context)
  * result query and returns the subplan.
  */
 static PlannedStmt *
-RecursivelyPlanQuery(Query *query, int subPlanId)
+RecursivelyPlanQuery(Query *query, uint64 planId, int subPlanId)
 {
 	PlannedStmt *subPlan = NULL;
 	Query *resultQuery = NULL;
 	int cursorOptions = 0;
 
-	resultQuery = BuildSubPlanResultQuery(query, subPlanId);
+	resultQuery = BuildSubPlanResultQuery(query, planId, subPlanId);
 
 	if (log_min_messages >= DEBUG1)
 	{
@@ -1328,7 +1342,7 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
 
 
 static Query *
-BuildSubPlanResultQuery(Query *subquery, int subPlanId)
+BuildSubPlanResultQuery(Query *subquery, uint64 planId, int subPlanId)
 {
 	Query *resultQuery = NULL;
 	StringInfo resultFileName = makeStringInfo();
@@ -1390,8 +1404,9 @@ BuildSubPlanResultQuery(Query *subquery, int subPlanId)
 		columnNumber++;
 	}
 
-	appendStringInfo(resultFileName, "base/pgsql_job_cache/%d_%d_%d_%d.data",
-					 GetUserId(), GetLocalGroupId(), MyProcPid, subPlanId);
+	appendStringInfo(resultFileName,
+					 "base/pgsql_job_cache/%d_%d_%d_" UINT64_FORMAT "_%d.data",
+					 GetUserId(), GetLocalGroupId(), MyProcPid, planId, subPlanId);
 
 	resultFileNameConst = makeNode(Const);
 	resultFileNameConst->consttype = TEXTOID;

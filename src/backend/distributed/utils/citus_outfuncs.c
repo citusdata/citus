@@ -179,6 +179,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_NODE_TYPE("DISTRIBUTEDPLAN");
 
+	WRITE_UINT64_FIELD(planId);
 	WRITE_INT_FIELD(operation);
 	WRITE_BOOL_FIELD(hasReturning);
 
