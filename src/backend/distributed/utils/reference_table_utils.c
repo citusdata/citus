@@ -427,7 +427,8 @@ DeleteAllReferenceTablePlacementsFromNodeGroup(uint32 groupId)
 		DeleteShardPlacementRow(placement->placementId);
 
 		appendStringInfo(deletePlacementCommand,
-						 "DELETE FROM pg_dist_placement WHERE placementid=%lu",
+						 "DELETE FROM pg_dist_placement WHERE placementid = "
+						 UINT64_FORMAT,
 						 placement->placementId);
 		SendCommandToWorkers(WORKERS_WITH_METADATA, deletePlacementCommand->data);
 	}

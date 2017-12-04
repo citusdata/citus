@@ -2398,8 +2398,8 @@ SubqueryTaskCreate(Query *originalQuery, ShardInterval *shardInterval,
 	/* ensure that we do not send queries where select is pruned away completely */
 	if (list_length(selectPlacementList) == 0)
 	{
-		ereport(DEBUG2, (errmsg("Skipping the target shard interval %ld because "
-								"SELECT query is pruned away for the interval",
+		ereport(DEBUG2, (errmsg("Skipping the target shard interval " UINT64_FORMAT
+								" because SELECT query is pruned away for the interval",
 								shardId)));
 
 		return NULL;

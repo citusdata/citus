@@ -85,7 +85,8 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	 */
 	distributedTransactionId = GetCurrentDistributedTransactionId();
 	appendStringInfo(beginAndSetDistributedTransactionId,
-					 "SELECT assign_distributed_transaction_id(%d, %ld, '%s');",
+					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
+					 ", '%s');",
 					 distributedTransactionId->initiatorNodeIdentifier,
 					 distributedTransactionId->transactionNumber,
 					 timestamptz_to_str(distributedTransactionId->timestamp));
