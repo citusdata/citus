@@ -18,6 +18,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -273,12 +274,15 @@ DelayedErrorCreateScan(CustomScan *scan)
 
 
 /*
- * CitusSelectBeginScan is an empty function for BeginCustomScan callback.
+ * CitusSelectBeginScan is called when starting a SELECT statement.
  */
 static void
 CitusSelectBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	/* just an empty function */
+	CitusScanState *scanState = (CitusScanState *) node;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+
+	ExecuteSubPlans(distributedPlan);
 }
 
 
