@@ -41,6 +41,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
@@ -542,6 +543,8 @@ RouterSelectExecScan(CustomScanState *node)
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
+
+		ExecuteSubPlans(distributedPlan);
 
 		if (list_length(taskList) > 0)
 		{

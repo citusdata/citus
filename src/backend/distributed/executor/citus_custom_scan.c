@@ -18,6 +18,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"

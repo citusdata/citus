@@ -173,7 +173,6 @@ static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNo
 static bool ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery);
 static bool IsFunctionRTE(Node *node);
 static bool FindNodeCheck(Node *node, bool (*check)(Node *));
-static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 static MultiNode * SubqueryMultiNodeTree(Query *originalQuery,
 										 Query *queryTree,
 										 PlannerRestrictionContext *
@@ -194,12 +193,6 @@ static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
  * plan and adds a root node to top of it. The  original query is only used for subquery
  * pushdown planning.
  *
- * In order to support external parameters for the queries where planning
- * is done on the original query, we need to replace the external parameters
- * manually. To achive that for subquery pushdown planning, we pass boundParams
- * to this function. We need to do that since Citus currently unable to send
- * parameters to the workers on the execution.
- *
  * We also pass queryTree and plannerRestrictionContext to the planner. They
  * are primarily used to decide whether the subquery is safe to pushdown.
  * If not, it helps to produce meaningful error messages for subquery
@@ -207,16 +200,13 @@ static MultiTable * MultiSubqueryPushdownTable(Query *subquery);
  */
 MultiTreeRoot *
 MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
-					   PlannerRestrictionContext *plannerRestrictionContext,
-					   ParamListInfo boundParams)
+					   PlannerRestrictionContext *plannerRestrictionContext)
 {
 	MultiNode *multiQueryNode = NULL;
 	MultiTreeRoot *rootNode = NULL;
 
 	if (ShouldUseSubqueryPushDown(originalQuery, queryTree))
 	{
-		originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
-														boundParams);
 		multiQueryNode = SubqueryMultiNodeTree(originalQuery, queryTree,
 											   plannerRestrictionContext);
 	}
@@ -325,99 +315,6 @@ FindNodeCheck(Node *node, bool (*check)(Node *))
 	}
 
 	return expression_tree_walker(node, FindNodeCheck, check);
-}
-
-
-/*
- * ResolveExternalParams replaces the external parameters that appears
- * in the query with the corresponding entries in the boundParams.
- *
- * Note that this function is inspired by eval_const_expr() on Postgres.
- * We cannot use that function because it requires access to PlannerInfo.
- */
-static Node *
-ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
-{
-	/* consider resolving external parameters only when boundParams exists */
-	if (!boundParams)
-	{
-		return inputNode;
-	}
-
-	if (inputNode == NULL)
-	{
-		return NULL;
-	}
-
-	if (IsA(inputNode, Param))
-	{
-		Param *paramToProcess = (Param *) inputNode;
-		ParamExternData *correspondingParameterData = NULL;
-		int numberOfParameters = boundParams->numParams;
-		int parameterId = paramToProcess->paramid;
-		int16 typeLength = 0;
-		bool typeByValue = false;
-		Datum constValue = 0;
-		bool paramIsNull = false;
-		int parameterIndex = 0;
-
-		if (paramToProcess->paramkind != PARAM_EXTERN)
-		{
-			return inputNode;
-		}
-
-		if (parameterId < 0)
-		{
-			return inputNode;
-		}
-
-		/* parameterId starts from 1 */
-		parameterIndex = parameterId - 1;
-		if (parameterIndex >= numberOfParameters)
-		{
-			return inputNode;
-		}
-
-		correspondingParameterData = &boundParams->params[parameterIndex];
-
-		if (!(correspondingParameterData->pflags & PARAM_FLAG_CONST))
-		{
-			return inputNode;
-		}
-
-		get_typlenbyval(paramToProcess->paramtype, &typeLength, &typeByValue);
-
-		paramIsNull = correspondingParameterData->isnull;
-		if (paramIsNull)
-		{
-			constValue = 0;
-		}
-		else if (typeByValue)
-		{
-			constValue = correspondingParameterData->value;
-		}
-		else
-		{
-			/*
-			 * Out of paranoia ensure that datum lives long enough,
-			 * although bind params currently should always live
-			 * long enough.
-			 */
-			constValue = datumCopy(correspondingParameterData->value, typeByValue,
-								   typeLength);
-		}
-
-		return (Node *) makeConst(paramToProcess->paramtype, paramToProcess->paramtypmod,
-								  paramToProcess->paramcollid, typeLength, constValue,
-								  paramIsNull, typeByValue);
-	}
-	else if (IsA(inputNode, Query))
-	{
-		return (Node *) query_tree_mutator((Query *) inputNode, ResolveExternalParams,
-										   boundParams, 0);
-	}
-
-	return expression_tree_mutator(inputNode, ResolveExternalParams, boundParams);
 }
 
 
@@ -1340,7 +1237,7 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 		else if (rangeTableEntry->rtekind == RTE_CTE)
 		{
 			unsupportedTableCombination = true;
-			errorDetail = "CTEs in multi-shard queries are currently unsupported";
+			errorDetail = "CTEs in subqueries are currently unsupported";
 			break;
 		}
 		else if (rangeTableEntry->rtekind == RTE_VALUES)

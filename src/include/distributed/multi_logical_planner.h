@@ -185,8 +185,7 @@ extern bool SubqueryPushdown;
 /* Function declarations for building logical plans */
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
-											  plannerRestrictionContext,
-											  ParamListInfo boundParams);
+											  plannerRestrictionContext);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
