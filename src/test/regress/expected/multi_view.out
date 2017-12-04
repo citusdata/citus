@@ -640,12 +640,12 @@ CREATE VIEW cte_view_1 AS
 WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
 SELECT * FROM cte_view_1;
 ERROR:  cannot push down this subquery
-DETAIL:  CTEs in multi-shard queries are currently unsupported
+DETAIL:  CTEs in subqueries are currently unsupported
 -- this is single shard query but still not supported since it has view + cte
 -- router planner can't detect it
 SELECT * FROM cte_view_1 WHERE user_id = 2;
 ERROR:  cannot push down this subquery
-DETAIL:  CTEs in multi-shard queries are currently unsupported
+DETAIL:  CTEs in subqueries are currently unsupported
 -- if CTE itself prunes down to a single shard than the view is supported (router plannable)
 CREATE VIEW cte_view_2 AS
 WITH c1 AS (SELECT * FROM users_table WHERE user_id = 2) SELECT * FROM c1 WHERE value_1 = 3;

@@ -120,9 +120,9 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 SELECT * FROM articles WHERE author_id = 10 UNION
 SELECT * FROM articles WHERE author_id = 2; 
 
--- queries using CTEs are unsupported
+-- queries using CTEs are supported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
-SELECT title FROM articles;
+SELECT title FROM articles ORDER BY 1 LIMIT 5;
 
 -- queries which involve functions in FROM clause are unsupported.
 SELECT * FROM articles, position('om' in 'Thomas');

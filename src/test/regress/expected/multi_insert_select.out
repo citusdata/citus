@@ -679,9 +679,10 @@ SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
        9 |          90
 (9 rows)
 
--- We do not support some CTEs
+-- We support CTEs
+BEGIN;
 WITH fist_table_agg AS
-  (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
+  (SELECT max(value_1)+1 as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
 INSERT INTO agg_events
             (value_1_agg, user_id)
             SELECT
@@ -690,9 +691,11 @@ INSERT INTO agg_events
               fist_table_agg;
 DEBUG:  distributed INSERT ... SELECT can only select from distributed tables
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  could not run distributed query with complex table expressions
-HINT:  Consider using an equality filter on the distributed table's partition column.
--- We don't support CTEs that consist of const values as well
+DEBUG:  generating subplan 51_1 for CTE fist_table_agg: SELECT (max(value_1) + 1) AS v1_agg, user_id FROM public.raw_events_first GROUP BY user_id
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ROLLBACK;
+-- We don't support CTEs that are referenced in the target list
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT
@@ -701,7 +704,8 @@ INSERT INTO agg_events
     raw_events_first;
 DEBUG:  Subqueries without relations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  could not run distributed query with common table expressions
+DEBUG:  generating subplan 54_1 for CTE sub_cte: SELECT 1
+ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- We support set operations via the coordinator
 BEGIN;
