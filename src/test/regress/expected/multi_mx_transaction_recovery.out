@@ -132,7 +132,8 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(0.2);
+-- Sleep 1 second to give Valgrind enough time to clear transactions
+SELECT pg_sleep(1);
  pg_sleep 
 ----------
  
