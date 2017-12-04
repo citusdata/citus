@@ -745,11 +745,14 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 	addedEquivalenceIds = bms_add_member(addedEquivalenceIds,
 										 firstEquivalenceClass->equivalenceId);
 
-	for (; equivalenceClassIndex < equivalenceListSize; ++equivalenceClassIndex)
+	while (equivalenceClassIndex < equivalenceListSize)
 	{
-		AttributeEquivalenceClass *currentEquivalenceClass =
-			list_nth(attributeEquivalenceList, equivalenceClassIndex);
+		AttributeEquivalenceClass *currentEquivalenceClass = NULL;
 		ListCell *equivalenceMemberCell = NULL;
+		bool restartLoop = false;
+
+		currentEquivalenceClass = list_nth(attributeEquivalenceList,
+										   equivalenceClassIndex);
 
 		/*
 		 * This is an optimization. If we already added the same equivalence class,
@@ -758,6 +761,8 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 		 */
 		if (bms_is_member(currentEquivalenceClass->equivalenceId, addedEquivalenceIds))
 		{
+			equivalenceClassIndex++;
+
 			continue;
 		}
 
@@ -781,10 +786,19 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 				 * But, we should somehow restart from the beginning to test that
 				 * whether the already skipped ones are equal or not.
 				 */
-				equivalenceClassIndex = 0;
+				restartLoop = true;
 
 				break;
 			}
+		}
+
+		if (restartLoop)
+		{
+			equivalenceClassIndex = 0;
+		}
+		else
+		{
+			++equivalenceClassIndex;
 		}
 	}
 
