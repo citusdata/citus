@@ -97,22 +97,18 @@ static void OpenCopyConnections(CopyStmt *copyStatement,
 								ShardConnections *shardConnections, bool stopOnFailure,
 								bool useBinaryCopyFormat);
 
-static bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
 static bool BinaryOutputFunctionDefined(Oid typeId);
 static List * MasterShardPlacementList(uint64 shardId);
 static List * RemoteFinalizedShardPlacementList(uint64 shardId);
-
 static void SendCopyBinaryHeaders(CopyOutState copyOutState, int64 shardId,
 								  List *connectionList);
 static void SendCopyBinaryFooters(CopyOutState copyOutState, int64 shardId,
 								  List *connectionList);
-
 static StringInfo ConstructCopyStatement(CopyStmt *copyStatement, int64 shardId,
 										 bool useBinaryCopyFormat);
 static void SendCopyDataToAll(StringInfo dataBuffer, int64 shardId, List *connectionList);
 static void SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId,
 									MultiConnection *connection);
-static void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure);
 static void ReportCopyError(MultiConnection *connection, PGresult *result);
 static uint32 AvailableColumnCount(TupleDesc tupleDescriptor);
 static int64 StartCopyToNewShard(ShardConnections *shardConnections,
@@ -904,7 +900,7 @@ OpenCopyConnections(CopyStmt *copyStatement, ShardConnections *shardConnections,
  * worker nodes for user-defined types. If the function can not detect a binary
  * output function for any of the column, it returns false.
  */
-static bool
+bool
 CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 {
 	bool useBinaryCopyFormat = true;
@@ -1169,7 +1165,7 @@ SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId, MultiConnection *c
  * If stopOnFailure is true, then EndRemoteCopy reports an error on failure,
  * otherwise it reports a warning or continues.
  */
-static void
+void
 EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure)
 {
 	ListCell *connectionCell = NULL;
