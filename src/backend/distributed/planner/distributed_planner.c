@@ -12,8 +12,8 @@
 #include <float.h>
 #include <limits.h>
 
+#include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
-
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/insert_select_planner.h"
@@ -41,6 +41,7 @@ int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log 
 
 
 /* local function forward declarations */
+static bool NeedsDistributedPlanningWalker(Node *node, void *context);
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
@@ -144,6 +145,116 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 
 	return result;
+}
+
+
+/*
+ * NeedsDistributedPlanning returns true if the Citus extension is loaded and
+ * the query contains a distributed table. It also errors out for a few
+ * unsupported cases, namely:
+ *
+ * - INSERT INTO <local table> SELECT ... <distributed table>
+ * - Subqueries that directly join a local table and a distributed table.
+ */
+bool
+NeedsDistributedPlanning(Query *query)
+{
+	CmdType commandType = query->commandType;
+	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+		commandType != CMD_UPDATE && commandType != CMD_DELETE)
+	{
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded())
+	{
+		return false;
+	}
+
+	/*
+	 * We can handle INSERT INTO distributed_table SELECT ... even if the SELECT
+	 * part references local tables, so skip the remaining checks.
+	 */
+	if (InsertSelectIntoDistributedTable(query))
+	{
+		return true;
+	}
+
+	if (!NeedsDistributedPlanningWalker((Node *) query, NULL))
+	{
+		return false;
+	}
+
+	if (InsertSelectIntoLocalTable(query))
+	{
+		ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+							   "local table")));
+	}
+
+	return true;
+}
+
+
+/*
+ * NeedsDistributedPlanningWalker checks if the query contains any distributed
+ * tables. Additionally, it errors out if there is a join between a local and
+ * a distributed table.
+ */
+static bool
+NeedsDistributedPlanningWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		ListCell *rangeTableCell = NULL;
+		bool hasLocalRelation = false;
+		bool hasDistributedRelation = false;
+
+		foreach(rangeTableCell, query->rtable)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+			Oid relationId = InvalidOid;
+
+			if (rangeTableEntry->rtekind != RTE_RELATION ||
+				rangeTableEntry->relkind == RELKIND_VIEW)
+			{
+				/* only consider tables */
+				continue;
+			}
+
+			relationId = rangeTableEntry->relid;
+			if (IsDistributedTable(relationId))
+			{
+				hasDistributedRelation = true;
+			}
+			else
+			{
+				hasLocalRelation = true;
+			}
+		}
+
+		if (hasLocalRelation && hasDistributedRelation)
+		{
+			ereport(ERROR, (errmsg("cannot plan queries which join local and "
+								   "distributed relations")));
+		}
+
+		if (hasDistributedRelation)
+		{
+			return true;
+		}
+
+		return query_tree_walker(query, NeedsDistributedPlanningWalker, NULL, 0);
+	}
+	else
+	{
+		return expression_tree_walker(node, NeedsDistributedPlanningWalker, NULL);
+	}
 }
 
 
