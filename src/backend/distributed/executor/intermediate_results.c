@@ -539,8 +539,14 @@ CreateIntermediateResultsDirectory(void)
 	if (!CreatedResultsDirectory)
 	{
 		makeOK = mkdir(resultDirectory, S_IRWXU);
-		if (makeOK != 0 && errno != EEXIST)
+		if (makeOK != 0)
 		{
+			if (errno == EEXIST)
+			{
+				/* someone else beat us to it, that's ok */
+				return resultDirectory;
+			}
+
 			ereport(ERROR, (errcode_for_file_access(),
 							errmsg("could not create intermediate results directory "
 								   "\"%s\": %m",

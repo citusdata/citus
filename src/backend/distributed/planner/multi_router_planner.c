@@ -162,8 +162,6 @@ DistributedPlan *
 CreateRouterPlan(Query *originalQuery, Query *query,
 				 RelationRestrictionContext *restrictionContext)
 {
-	Assert(EnableRouterExecution);
-
 	if (MultiRouterPlannableQuery(query, restrictionContext))
 	{
 		return CreateSingleTaskRouterPlan(originalQuery, query,
@@ -1623,6 +1621,14 @@ SelectsFromDistributedTable(List *rangeTableList)
  * If the given query is not routable, it fills planningError with the related
  * DeferredErrorMessage. The caller can check this error message to see if query
  * is routable or not.
+ *
+ * Note: If the query prunes down to 0 shards due to filters (e.g. WHERE false),
+ * or the query has only read_intermediate_result calls (no relations left after
+ * recursively planning CTEs and subqueries), then it will be assigned to an
+ * arbitrary worker node in a round-robin fashion.
+ *
+ * Relations that prune down to 0 shards are replaced by subqueries returning
+ * 0 values in UpdateRelationToShardNames.
  */
 DeferredErrorMessage *
 PlanRouterQuery(Query *originalQuery, RelationRestrictionContext *restrictionContext,
