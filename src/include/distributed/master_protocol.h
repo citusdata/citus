@@ -72,9 +72,10 @@
 #define CREATE_SCHEMA_COMMAND "CREATE SCHEMA IF NOT EXISTS %s AUTHORIZATION %s"
 #define CREATE_EMPTY_SHARD_QUERY "SELECT master_create_empty_shard('%s')"
 #define FINALIZED_SHARD_PLACEMENTS_QUERY \
-	"SELECT placementid, nodename, nodeport FROM pg_dist_shard_placement WHERE shardstate = 1 AND shardid = %ld"
+	"SELECT placementid, nodename, nodeport FROM pg_dist_shard_placement WHERE shardstate = 1 AND shardid = " \
+	INT64_FORMAT
 #define UPDATE_SHARD_STATISTICS_QUERY \
-	"SELECT master_update_shard_statistics(%ld)"
+	"SELECT master_update_shard_statistics(" INT64_FORMAT ")"
 #define PARTITION_METHOD_QUERY "SELECT part_method FROM master_get_table_metadata('%s');"
 
 /* Enumeration that defines the shard placement policy to use while staging */
