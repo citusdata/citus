@@ -115,6 +115,7 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   EState *executorState,
 														   bool stopOnFailure);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
+extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
 extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  TupleDesc rowDescriptor,
 							  CopyOutState rowOutputState,
@@ -122,6 +123,7 @@ extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  CopyCoercionData *columnCoercionPaths);
 extern void AppendCopyBinaryHeaders(CopyOutState headerOutputState);
 extern void AppendCopyBinaryFooters(CopyOutState footerOutputState);
+extern void EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure);
 extern void CitusCopyFrom(CopyStmt *copyStatement, char *completionTag);
 extern bool IsCopyFromWorker(CopyStmt *copyStatement);
 extern NodeAddress * MasterNodeAddress(CopyStmt *copyStatement);

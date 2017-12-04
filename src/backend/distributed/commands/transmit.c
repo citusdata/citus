@@ -17,6 +17,7 @@
 
 #include "distributed/relay_utility.h"
 #include "distributed/transmit.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "libpq/libpq.h"
 #include "libpq/pqformat.h"
@@ -24,7 +25,6 @@
 
 
 /* Local functions forward declarations */
-static File FileOpenForTransmit(const char *filename, int fileFlags, int fileMode);
 static void SendCopyInStart(void);
 static void SendCopyOutStart(void);
 static void SendCopyDone(void);
@@ -150,7 +150,7 @@ FreeStringInfo(StringInfo stringInfo)
  * the function returns the internal file handle for the opened file. On failure
  * the function errors out.
  */
-static File
+File
 FileOpenForTransmit(const char *filename, int fileFlags, int fileMode)
 {
 	File fileDesc = -1;
