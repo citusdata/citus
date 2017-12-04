@@ -122,6 +122,8 @@ typedef struct MetadataCacheData
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
 	Oid extensionOwner;
+	Oid binaryCopyFormatId;
+	Oid textCopyFormatId;
 	Oid primaryNodeRoleId;
 	Oid secondaryNodeRoleId;
 	Oid unavailableNodeRoleId;
@@ -197,6 +199,7 @@ static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, ShardCacheEntry *shardEntry);
 static WorkerNode * LookupNodeForGroup(uint32 groupid);
+static Oid LookupEnumValueId(Oid typeId, char *valueName);
 
 
 /* exports for SQL callable functions */
@@ -1872,6 +1875,34 @@ CitusCopyFormatTypeId(void)
 }
 
 
+/* return oid of the 'binary' citus_copy_format enum value */
+Oid
+BinaryCopyFormatId(void)
+{
+	if (MetadataCache.binaryCopyFormatId == InvalidOid)
+	{
+		Oid copyFormatTypeId = CitusCopyFormatTypeId();
+		MetadataCache.binaryCopyFormatId = LookupEnumValueId(copyFormatTypeId, "binary");
+	}
+
+	return MetadataCache.binaryCopyFormatId;
+}
+
+
+/* return oid of the 'text' citus_copy_format enum value */
+Oid
+TextCopyFormatId(void)
+{
+	if (MetadataCache.textCopyFormatId == InvalidOid)
+	{
+		Oid copyFormatTypeId = CitusCopyFormatTypeId();
+		MetadataCache.textCopyFormatId = LookupEnumValueId(copyFormatTypeId, "text");
+	}
+
+	return MetadataCache.textCopyFormatId;
+}
+
+
 /* return oid of the citus_extradata_container(internal) function */
 Oid
 CitusExtraDataContainerFuncId(void)
@@ -2040,14 +2071,24 @@ LookupNodeRoleValueId(char *valueName)
 	}
 	else
 	{
-		Datum nodeRoleIdDatum = ObjectIdGetDatum(nodeRoleTypId);
-		Datum valueDatum = CStringGetDatum(valueName);
-
-		Datum valueIdDatum = DirectFunctionCall2(enum_in, valueDatum, nodeRoleIdDatum);
-
-		Oid valueId = DatumGetObjectId(valueIdDatum);
+		Oid valueId = LookupEnumValueId(nodeRoleTypId, valueName);
 		return valueId;
 	}
+}
+
+
+/*
+ * LookupEnumValueId looks up the OID of an enum value.
+ */
+static Oid
+LookupEnumValueId(Oid typeId, char *valueName)
+{
+	Datum typeIdDatum = ObjectIdGetDatum(typeId);
+	Datum valueDatum = CStringGetDatum(valueName);
+	Datum valueIdDatum = DirectFunctionCall2(enum_in, valueDatum, typeIdDatum);
+	Oid valueId = DatumGetObjectId(valueIdDatum);
+
+	return valueId;
 }
 
 
