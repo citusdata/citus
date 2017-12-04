@@ -2485,8 +2485,15 @@ MultiRouterPlannableQuery(Query *query, RelationRestrictionContext *restrictionC
 		{
 			/* only hash partitioned tables are supported */
 			Oid distributedTableId = rte->relid;
-			char partitionMethod = PartitionMethod(distributedTableId);
+			char partitionMethod = 0;
 
+			if (!IsDistributedTable(distributedTableId))
+			{
+				/* local tables cannot be read from workers */
+				return false;
+			}
+
+			partitionMethod = PartitionMethod(distributedTableId);
 			if (!(partitionMethod == DISTRIBUTE_BY_HASH || partitionMethod ==
 				  DISTRIBUTE_BY_NONE || partitionMethod == DISTRIBUTE_BY_RANGE))
 			{
