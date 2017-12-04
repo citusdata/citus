@@ -172,10 +172,18 @@ SELECT * FROM articles WHERE author_id = 10 UNION
 SELECT * FROM articles WHERE author_id = 2; 
 ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
 HINT:  Consider using an equality filter on the distributed table's partition column.
--- queries using CTEs are unsupported
+-- queries using CTEs are supported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
-SELECT title FROM articles;
-ERROR:  relation authors is not distributed
+SELECT title FROM articles ORDER BY 1 LIMIT 5;
+   title   
+-----------
+ abducing
+ abeyance
+ abhorring
+ abington
+ ablation
+(5 rows)
+
 -- queries which involve functions in FROM clause are unsupported.
 SELECT * FROM articles, position('om' in 'Thomas');
 ERROR:  could not run distributed query with complex table expressions

@@ -30,7 +30,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *subPlanList = distributedPlan->subPlanList;
 	ListCell *subPlanCell = NULL;
 	uint32 subPlanId = 0;
-	List *nodeList = ActivePrimaryNodeList();
+	List *nodeList = ActiveReadableNodeList();
 	bool writeLocalFile = false;
 
 	foreach(subPlanCell, subPlanList)
