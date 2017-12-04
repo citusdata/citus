@@ -614,7 +614,8 @@ ShardListInsertCommand(List *shardIntervalList)
 			}
 
 			appendStringInfo(insertPlacementCommand,
-							 "(%lu, 1, %lu, %d, %lu)",
+							 "(" UINT64_FORMAT ", 1, " UINT64_FORMAT ", %d, "
+							 UINT64_FORMAT ")",
 							 shardId,
 							 placement->shardLength,
 							 placement->groupId,
@@ -664,7 +665,7 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, %lu, '%c', %s, %s)",
+						 "(%s::regclass, " UINT64_FORMAT ", '%c', %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
@@ -700,7 +701,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	/* create command to delete shard placements */
 	deletePlacementCommand = makeStringInfo();
 	appendStringInfo(deletePlacementCommand,
-					 "DELETE FROM pg_dist_placement WHERE shardid = %lu",
+					 "DELETE FROM pg_dist_placement WHERE shardid = " UINT64_FORMAT,
 					 shardId);
 
 	commandList = lappend(commandList, deletePlacementCommand->data);
@@ -708,7 +709,7 @@ ShardDeleteCommandList(ShardInterval *shardInterval)
 	/* create command to delete shard */
 	deleteShardCommand = makeStringInfo();
 	appendStringInfo(deleteShardCommand,
-					 "DELETE FROM pg_dist_shard WHERE shardid = %lu", shardId);
+					 "DELETE FROM pg_dist_shard WHERE shardid = " UINT64_FORMAT, shardId);
 
 	commandList = lappend(commandList, deleteShardCommand->data);
 
