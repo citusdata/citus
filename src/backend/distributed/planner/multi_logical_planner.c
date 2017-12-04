@@ -130,7 +130,6 @@ static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RelOptInfo *relationInfo,
 												RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
-static bool ContainsReadIntermediateResultFunction(Node *node);
 static bool IsReadIntermediateResultFunction(Node *node);
 static void ValidateClauseList(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
@@ -2225,7 +2224,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
  * ContainsReadIntermediateResultFunction determines whether an expresion tree contains
  * a call to the read_intermediate_results function.
  */
-static bool
+bool
 ContainsReadIntermediateResultFunction(Node *node)
 {
 	return FindNodeCheck(node, IsReadIntermediateResultFunction);

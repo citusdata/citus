@@ -76,10 +76,6 @@ typedef struct RemoteFileDestReceiver
 } RemoteFileDestReceiver;
 
 
-static RemoteFileDestReceiver * CreateRemoteFileDestReceiver(char *resultId,
-															 EState *executorState,
-															 List *initialNodeList,
-															 bool writeLocalFile);
 static void RemoteFileDestReceiverStartup(DestReceiver *dest, int operation,
 										  TupleDesc inputTupleDescriptor);
 static StringInfo ConstructCopyResultStatement(const char *resultId);
@@ -123,8 +119,9 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 
 	nodeList = ActivePrimaryNodeList();
 	estate = CreateExecutorState();
-	resultDest = CreateRemoteFileDestReceiver(resultIdString, estate, nodeList,
-											  writeLocalFile);
+	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																		 estate, nodeList,
+																		 writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -155,8 +152,9 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	estate = CreateExecutorState();
-	resultDest = CreateRemoteFileDestReceiver(resultIdString, estate, nodeList,
-											  writeLocalFile);
+	resultDest = (RemoteFileDestReceiver *) CreateRemoteFileDestReceiver(resultIdString,
+																		 estate, nodeList,
+																		 writeLocalFile);
 
 	ExecuteQueryStringIntoDestReceiver(queryString, paramListInfo,
 									   (DestReceiver *) resultDest);
@@ -171,7 +169,7 @@ create_intermediate_result(PG_FUNCTION_ARGS)
  * CreateRemoteFileDestReceiver creates a DestReceiver that streams results
  * to a set of worker nodes.
  */
-static RemoteFileDestReceiver *
+DestReceiver *
 CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 							 List *initialNodeList, bool writeLocalFile)
 {
@@ -193,7 +191,7 @@ CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
 	resultDest->memoryContext = CurrentMemoryContext;
 	resultDest->writeLocalFile = writeLocalFile;
 
-	return resultDest;
+	return (DestReceiver *) resultDest;
 }
 
 
