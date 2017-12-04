@@ -255,8 +255,26 @@ ORDER BY
   2, 1;
 
 
+
 EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+
 EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
 EXECUTE prepared_test_3;
 
 DEALLOCATE ALL;
