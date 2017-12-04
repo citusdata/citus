@@ -175,6 +175,7 @@ OutDistributedPlan(OUTFUNC_ARGS)
 
 	WRITE_NODE_TYPE("DISTRIBUTEDPLAN");
 
+	WRITE_UINT64_FIELD(planId);
 	WRITE_INT_FIELD(operation);
 	WRITE_BOOL_FIELD(hasReturning);
 
@@ -187,7 +188,21 @@ OutDistributedPlan(OUTFUNC_ARGS)
 	WRITE_NODE_FIELD(insertTargetList);
 	WRITE_OID_FIELD(targetRelationId);
 
+	WRITE_NODE_FIELD(subPlanList);
+
 	WRITE_NODE_FIELD(planningError);
+}
+
+
+void
+OutDistributedSubPlan(OUTFUNC_ARGS)
+{
+	WRITE_LOCALS(DistributedSubPlan);
+
+	WRITE_NODE_TYPE("DISTRIBUTEDSUBPLAN");
+
+	WRITE_UINT_FIELD(subPlanId);
+	WRITE_NODE_FIELD(plan);
 }
 
 
