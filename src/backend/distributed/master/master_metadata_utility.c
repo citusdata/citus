@@ -311,8 +311,8 @@ ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId)
 			if (metadataLock == false)
 			{
 				ereport(WARNING, (errcode(ERRCODE_LOCK_NOT_AVAILABLE),
-								  errmsg("lock is not acquired, size of shard %ld "
-										 "will be ignored", shardId)));
+								  errmsg("lock is not acquired, size of shard "
+										 UINT64_FORMAT " will be ignored", shardId)));
 				continue;
 			}
 
@@ -436,8 +436,9 @@ TableShardReplicationFactor(Oid relationId)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot find the replication factor of the "
 								   "table %s", relationName),
-							errdetail("The shard %ld has different shards replication "
-									  "counts from other shards.", shardId)));
+							errdetail("The shard " UINT64_FORMAT
+									  " has different shards replication counts from "
+									  "other shards.", shardId)));
 		}
 	}
 

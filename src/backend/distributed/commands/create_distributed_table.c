@@ -1261,13 +1261,13 @@ CopyLocalDataIntoShards(Oid distributedRelationId)
 
 		if (rowsCopied % 1000000 == 0)
 		{
-			ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
+			ereport(DEBUG1, (errmsg("Copied " UINT64_FORMAT " rows", rowsCopied)));
 		}
 	}
 
 	if (rowsCopied % 1000000 != 0)
 	{
-		ereport(DEBUG1, (errmsg("Copied %ld rows", rowsCopied)));
+		ereport(DEBUG1, (errmsg("Copied " UINT64_FORMAT " rows", rowsCopied)));
 	}
 
 	MemoryContextSwitchTo(oldContext);

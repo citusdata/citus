@@ -585,7 +585,7 @@ TaskHashEnter(HTAB *taskHash, Task *task)
 	/* if same node appears twice, we error-out */
 	if (handleFound)
 	{
-		ereport(ERROR, (errmsg("multiple entries for task: \"%d:%ld:%d\"",
+		ereport(ERROR, (errmsg("multiple entries for task: \"%d:" UINT64_FORMAT ":%u\"",
 							   task->taskType, task->jobId, task->taskId)));
 	}
 

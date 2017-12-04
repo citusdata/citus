@@ -541,8 +541,9 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 	/* ensure that we do not send queries where select is pruned away completely */
 	if (list_length(selectPlacementList) == 0)
 	{
-		ereport(DEBUG2, (errmsg("Skipping target shard interval %ld since "
-								"SELECT query for it pruned away", shardId)));
+		ereport(DEBUG2, (errmsg("Skipping target shard interval " UINT64_FORMAT
+								" since SELECT query for it pruned away",
+								shardId)));
 
 		return NULL;
 	}
@@ -562,7 +563,7 @@ RouterModifyTaskForShardInterval(Query *originalQuery, ShardInterval *shardInter
 						errmsg("cannot perform distributed planning for the given "
 							   "modification"),
 						errdetail("Insert query cannot be executed on all placements "
-								  "for shard %ld", shardId)));
+								  "for shard " UINT64_FORMAT "", shardId)));
 	}
 
 

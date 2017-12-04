@@ -1156,7 +1156,7 @@ SendCopyDataToPlacement(StringInfo dataBuffer, int64 shardId, MultiConnection *c
 	if (!PutRemoteCopyData(connection, dataBuffer->data, dataBuffer->len))
 	{
 		ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-						errmsg("failed to COPY to shard %ld on %s:%d",
+						errmsg("failed to COPY to shard " INT64_FORMAT " on %s:%d",
 							   shardId, connection->hostname, connection->port),
 						errdetail("failed to send %d bytes %s", dataBuffer->len,
 								  dataBuffer->data)));
@@ -1183,12 +1183,14 @@ EndRemoteCopy(int64 shardId, List *connectionList, bool stopOnFailure)
 		/* end the COPY input */
 		if (!PutRemoteCopyEnd(connection, NULL))
 		{
-			if (stopOnFailure)
+			if (!stopOnFailure)
 			{
-				ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
-								errmsg("failed to COPY to shard %ld on %s:%d",
-									   shardId, connection->hostname, connection->port)));
+				continue;
 			}
+
+			ereport(ERROR, (errcode(ERRCODE_IO_ERROR),
+							errmsg("failed to COPY to shard " INT64_FORMAT " on %s:%d",
+								   shardId, connection->hostname, connection->port)));
 
 			continue;
 		}

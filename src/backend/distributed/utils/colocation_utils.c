@@ -275,8 +275,9 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 		{
 			ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
 								   leftRelationName, rightRelationName),
-							errdetail("Shard %ld of %s and shard %ld of %s "
-									  "have different number of shard placements.",
+							errdetail("Shard " UINT64_FORMAT
+									  " of %s and shard " UINT64_FORMAT
+									  " of %s have different number of shard placements.",
 									  leftShardId, leftRelationName,
 									  rightShardId, rightRelationName)));
 		}
@@ -307,8 +308,8 @@ ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 			{
 				ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
 									   leftRelationName, rightRelationName),
-								errdetail("Shard %ld of %s and shard %ld of %s "
-										  "are not colocated.",
+								errdetail("Shard " UINT64_FORMAT " of %s and shard "
+										  UINT64_FORMAT " of %s are not colocated.",
 										  leftShardId, leftRelationName,
 										  rightShardId, rightRelationName)));
 			}

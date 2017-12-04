@@ -1380,10 +1380,10 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName)
 		 * DefElem->arg can only hold literal ints up to int4, in order to represent
 		 * larger numbers we need to construct a float represented as a string.
 		 */
-		appendStringInfo(startNumericString, "%lu", startValue);
+		appendStringInfo(startNumericString, INT64_FORMAT, startValue);
 		startFloatArg = (Node *) makeFloat(startNumericString->data);
 
-		appendStringInfo(maxNumericString, "%lu", maxValue);
+		appendStringInfo(maxNumericString, INT64_FORMAT, maxValue);
 		maxFloatArg = (Node *) makeFloat(maxNumericString->data);
 
 		SetDefElemArg(alterSequenceStatement, "start", startFloatArg);
