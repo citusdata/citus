@@ -24,276 +24,6 @@ ORDER BY
 LIMIT
   20;
 
--- Nested CTEs
-WITH users_events AS (
-  WITH users_events_2 AS (
-    SELECT
-        users_table.user_id as user_id,
-        events_table.event_type as event_type
-    FROM
-        users_table,
-        events_table
-    WHERE
-        users_table.user_id = events_table.user_id
-    GROUP BY
-        users_table.user_id,
-        events_table.event_type
-  )
-  SELECT
-      u_events.user_id, events_table.event_type
-  FROM
-    users_events_2 as u_events,
-    events_table
-  WHERE
-    u_events.user_id = events_table.user_id
-  )
-SELECT 
-  * 
-FROM 
-  users_events
-ORDER BY
-  1, 2
-LIMIT 20;
-
--- Nested CTEs
-WITH users_events AS (
-  WITH users_events AS (
-    WITH users_events AS (
-      WITH users_events AS (
-        WITH users_events AS (
-          WITH users_events AS (
-            WITH users_events AS (
-              SELECT
-                  users_table.user_id as user_id,
-                  events_table.event_type as event_type
-              FROM
-                  users_table,
-                  events_table
-              WHERE
-                  users_table.user_id = events_table.user_id
-              GROUP BY
-                  users_table.user_id,
-                  events_table.event_type
-            
-            )
-            SELECT 
-                uid, event_type, value_2, value_3
-            FROM
-               (
-                (
-                  SELECT 
-                    user_id as uid
-                  FROM 
-                    users_events 
-                ) users
-                join
-                  events_table
-                on
-                  users.uid = events_table.event_type
-                ) a
-            )
-          SELECT 
-            * 
-          FROM 
-            users_events
-          ORDER BY
-            1, 3, 2, 4
-          LIMIT 100
-        )
-        SELECT 
-          * 
-        FROM 
-          users_events
-        LIMIT 90
-      )
-      SELECT 
-        * 
-      FROM 
-        users_events
-      LIMIT 50
-    )
-    SELECT 
-      uid, event_type, value_2, sum(value_3) as sum_3
-    FROM 
-      users_events
-    GROUP BY
-      1, 2, 3
-    LIMIT 40
-  )
-  SELECT 
-    uid, event_type, sum(value_2) as sum_2, sum(sum_3) as sum_3
-  FROM 
-    users_events
-  GROUP BY
-    1, 2
-  LIMIT 30   
-)
-SELECT 
-  uid, avg(event_type), sum(sum_2), sum(sum_3)
-FROM 
-  users_events
-GROUP BY
-  1;
-
-
--- Nested CTEs - joined with local table. Not supported yet.
-WITH users_events AS (
-  -- router select query
-  WITH users_events_1 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 1
-  ),
-  -- real-time select query
-  users_events_2_3 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 2
-      OR
-      user_id = 3
-  ),
-  -- router select query
-  -- sub CTE is a real-time executor query but the top level is router select
-  users_events_4 AS (
-    WITH users_events_4_5 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 4
-      OR
-      user_id = 5
-    )
-    SELECT
-        *
-    FROM
-        users_events_4_5
-    WHERE
-        user_id = 4
-  ),
-  -- merge all the results from CTEs
-  merged_users AS (
-      SELECT
-        *
-      FROM
-        users_events_1
-    UNION
-      SELECT
-        *
-      FROM
-        users_events_2_3
-    UNION 
-      SELECT
-        *
-      FROM
-        users_events_4
-  ),
-  -- join with a local table 
-  local_users AS (
-    SELECT
-      *
-    FROM
-      (SELECT user_id as uid
-      FROM local_users) l_users
-      join
-      merged_users
-      on (l_users.uid = merged_users.user_id)
-  )
-  SELECT
-    *
-  FROM
-    local_users
-)
-SELECT 
-  * 
-FROM
-  users_events
-ORDER BY
-  1, 2, 3, 4, 5, 6
-LIMIT
-  20;
-
-
--- Nested CTEs
-WITH users_events AS (
-  -- router select query
-  WITH users_events_1 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 1
-  ),
-  -- real-time select query
-  users_events_2_3 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 2
-      OR
-      user_id = 3
-  ),
-  -- router select query
-  -- sub CTE is a real-time executor query but the top level is router select
-  users_events_4 AS (
-    WITH users_events_4_5 AS (
-    SELECT
-      *
-    FROM
-      users_table
-    WHERE
-      user_id = 4
-      OR
-      user_id = 5
-    )
-    SELECT
-        *
-    FROM
-        users_events_4_5
-    WHERE
-        user_id = 4
-  ),
-  -- merge all the results from CTEs
-  merged_users AS (
-      SELECT
-        *
-      FROM
-        users_events_1
-    UNION
-      SELECT
-        *
-      FROM
-        users_events_2_3
-    UNION 
-      SELECT
-        *
-      FROM
-        users_events_4
-  )
-  SELECT
-    *
-  FROM
-    merged_users
-)
-SELECT 
-  * 
-FROM
-  users_events
-ORDER BY
-  1, 2, 3, 4, 5, 6
-LIMIT
-  20;
-
 
 SET citus.task_executor_type TO 'task-tracker';
 -- Co-location tests
@@ -326,6 +56,7 @@ GROUP BY
 ORDER BY
   2 DESC, 1;
 
+
 SET citus.task_executor_type TO 'real-time';
 -- Two colocated CTE under a non-colocated join 
 WITH colocated_1 AS (
@@ -353,6 +84,48 @@ GROUP BY
   1
 ORDER BY
   2 DESC, 1;
+
+
+WITH non_colocated AS (
+  WITH colocated AS (
+    SELECT 
+      users_table.user_id as uid, events_table.value_2
+    FROM 
+      users_table, events_table
+    WHERE
+      users_table.user_id = events_table.user_id AND event_type IN (1, 2)
+  ),
+  colocated_2 AS (
+    SELECT 
+      users_table.user_id as uid, events_table.value_2
+    FROM 
+      users_table, events_table
+    WHERE
+      users_table.user_id = events_table.user_id AND event_type IN (3, 4)
+  )
+  SELECT
+    colocated.uid, colocated.value_2
+  FROM
+    colocated, colocated_2
+  WHERE
+    colocated.value_2 = colocated_2.value_2
+),
+non_colocated_2 AS (
+  SELECT 
+    users_table.user_id as uid, events_table.value_2
+  FROM
+    users_table, events_table
+  WHERE
+    users_table.user_id = events_table.event_type AND event_type IN (5, 6)
+)
+SELECT
+  sum(non_colocated.uid), sum(non_colocated.value_2), sum(non_colocated_2.value_2)
+FROM
+  non_colocated, non_colocated_2
+WHERE 
+  non_colocated.uid = non_colocated_2.uid
+;
+
 
 
 -- CTE in WHERE basic
