@@ -31,6 +31,7 @@ test: multi_read_from_secondaries
 # ----------
 test: multi_create_table
 test: multi_create_table_constraints multi_master_protocol multi_load_data multi_behavioral_analytics_create_table
+test: multi_with_prepare multi_with_join multi_with_nested multi_with_where
 test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_insert_select_window multi_shard_update_delete
 
 # ----------
