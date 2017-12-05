@@ -56,7 +56,7 @@ ORDER BY
   2, 1;
 
 
-PREPARE prepared_test_3 AS
+PREPARE prepared_test_3(integer) AS
 WITH users_events AS(
   -- events 1 and 2 only
   WITH spec_events AS(
@@ -108,7 +108,7 @@ user_coolness AS(
     users_events
     join
     event_attendee_count
-    on (users_events.event_type = event_attendee_count.event_type)
+    on (users_events.event_type = $1)
   GROUP BY
     user_id
 )
@@ -120,6 +120,65 @@ ORDER BY
   2, 1;
 
 
+PREPARE prepared_test_4(integer, integer, integer) AS
+WITH basic AS(
+  SELECT * FROM users_table WHERE value_2 IN ($1, $2, $3)
+)
+SELECT
+  * 
+FROM
+  basic
+ORDER BY
+  1, 2, 3, 4, 5, 6
+LIMIT 10;
+
+
+-- prepared statement which inserts in a CTE should fail
+PREPARE prepared_partition_column_insert(integer) AS
+WITH prepared_insert AS (
+  INSERT INTO users_table VALUES ($1) RETURNING *
+)
+SELECT * FROM prepared_insert;
+
+
+PREPARE prepared_test_5(integer, integer, integer) AS
+-- router select query
+WITH users_events_1 AS (
+  SELECT
+    *
+  FROM
+    users_table
+  WHERE
+    user_id = $1
+),
+-- real-time select query
+users_events_2_3 AS (
+  SELECT
+    *
+  FROM
+    users_table
+  WHERE
+    user_id = $2
+    OR
+    user_id = $3
+),
+merged_users AS (
+    SELECT
+      *
+    FROM
+      users_events_1
+  UNION
+    SELECT
+      *
+    FROM
+      users_events_2_3
+)
+SELECT
+  *
+FROM
+  merged_users;
+
+
 
 EXECUTE prepared_test_1;
 EXECUTE prepared_test_1;
@@ -135,11 +194,32 @@ EXECUTE prepared_test_2;
 EXECUTE prepared_test_2;
 EXECUTE prepared_test_2;
 
-EXECUTE prepared_test_3;
-EXECUTE prepared_test_3;
-EXECUTE prepared_test_3;
-EXECUTE prepared_test_3;
-EXECUTE prepared_test_3;
-EXECUTE prepared_test_3;
+EXECUTE prepared_test_3(1);
+EXECUTE prepared_test_3(2);
+EXECUTE prepared_test_3(3);
+EXECUTE prepared_test_3(4);
+EXECUTE prepared_test_3(5);
+EXECUTE prepared_test_3(6);
+
+EXECUTE prepared_test_4(1, 2, 3);
+EXECUTE prepared_test_4(2, 3, 4);
+EXECUTE prepared_test_4(3, 4, 5);
+EXECUTE prepared_test_4(4, 5, 6);
+EXECUTE prepared_test_4(5, 6, 7);
+EXECUTE prepared_test_4(6, 7, 8);
+
+EXECUTE prepared_test_5(1, 2, 3);
+EXECUTE prepared_test_5(2, 3, 4);
+EXECUTE prepared_test_5(3, 4, 5);
+EXECUTE prepared_test_5(4, 5, 6);
+EXECUTE prepared_test_5(5, 6, 7);
+EXECUTE prepared_test_5(6, 7, 8);
+
+EXECUTE prepared_partition_column_insert(1);
+EXECUTE prepared_partition_column_insert(2);
+EXECUTE prepared_partition_column_insert(3);
+EXECUTE prepared_partition_column_insert(4);
+EXECUTE prepared_partition_column_insert(5);
+EXECUTE prepared_partition_column_insert(6);
 
 DEALLOCATE ALL;
