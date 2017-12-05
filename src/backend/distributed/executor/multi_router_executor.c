@@ -615,6 +615,9 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		connection = GetPlacementListConnection(connectionFlags, placementAccessList,
 												NULL);
 
+		/* send BEGIN and assign distributed transaction ID */
+		RemoteTransactionBeginIfNecessary(connection);
+
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
