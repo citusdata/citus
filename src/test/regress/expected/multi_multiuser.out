@@ -170,6 +170,35 @@ COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
 SET citus.task_executor_type TO 'real-time';
+-- should be able to use intermediate results as any user
+BEGIN;
+SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');
+ create_intermediate_result 
+----------------------------
+                         10
+(1 row)
+
+SELECT * FROM read_intermediate_result('topten', 'binary'::citus_copy_format) AS res (s int) ORDER BY s;
+ s  
+----
+  1
+  2
+  3
+  4
+  5
+  6
+  7
+  8
+  9
+ 10
+(10 rows)
+
+END;
+-- as long as we don't read from a table
+BEGIN;
+SELECT create_intermediate_result('topten', 'SELECT count(*) FROM test');
+ERROR:  permission denied for relation test
+ABORT;
 RESET ROLE;
 DROP TABLE test;
 DROP USER full_access;
