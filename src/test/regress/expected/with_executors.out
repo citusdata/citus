@@ -1,0 +1,385 @@
+-- Confirm we can use local, router, real-time, and task-tracker execution
+CREATE SCHEMA with_executors;
+SET search_path TO with_executors, public;
+SET citus.enable_repartition_joins TO on;
+CREATE TABLE with_executors.local_table (id int);
+INSERT INTO local_table VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (10); 
+-- CTEs should be able to use local queries
+WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM local_table
+	),
+	dist_cte AS (
+		SELECT user_id FROM events_table
+	)
+	SELECT * FROM local_cte join dist_cte on dist_cte.user_id=local_cte.id
+)
+SELECT count(*) FROM cte;
+ count 
+-------
+   101
+(1 row)
+
+WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM local_table
+	),
+	dist_cte AS (
+		SELECT user_id FROM events_table
+	),
+	merger_cte AS (
+		SELECT id as user_id FROM local_cte UNION (SELECT * FROM dist_cte)
+	)
+	SELECT * FROM merger_cte WHERE user_id IN (1, 2, 3)
+)
+SELECT * FROM cte ORDER BY 1;
+ user_id 
+---------
+       1
+       2
+       3
+(3 rows)
+
+WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM local_table WHERE id < 5
+	),
+	local_cte_2 AS (
+		SELECT * FROM local_table WHERE id > 5
+	)
+	SELECT local_cte.id as id_1, local_cte_2.id as id_2 FROM local_cte,local_cte_2
+)
+SELECT 
+	* 
+FROM 
+	cte 
+join 
+	users_table 
+on 
+	cte.id_1 = users_table.user_id 
+WHERE 
+	cte.id_1 IN (3, 4, 5)
+ORDER BY
+	1,2,3,4,5,6,7
+LIMIT
+	10;
+ id_1 | id_2 | user_id |              time               | value_1 | value_2 | value_3 | value_4 
+------+------+---------+---------------------------------+---------+---------+---------+---------
+    3 |    6 |       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |       4 |        
+    3 |    6 |       3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |        
+    3 |    6 |       3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |        
+    3 |    6 |       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |       4 |        
+    3 |    6 |       3 | Thu Nov 23 03:23:24.702501 2017 |       1 |       2 |       5 |        
+    3 |    6 |       3 | Thu Nov 23 03:52:32.008895 2017 |       4 |       2 |       0 |        
+    3 |    6 |       3 | Thu Nov 23 04:01:08.04806 2017  |       5 |       5 |       3 |        
+    3 |    6 |       3 | Thu Nov 23 05:01:44.885505 2017 |       3 |       5 |       4 |        
+    3 |    6 |       3 | Thu Nov 23 06:20:05.854857 2017 |       1 |       4 |       2 |        
+    3 |    6 |       3 | Thu Nov 23 09:57:41.540228 2017 |       2 |       2 |       3 |        
+(10 rows)
+
+-- CTEs should be able to use router queries
+WITH cte AS (
+	WITH router_cte AS (
+		SELECT user_id, value_2 FROM users_table WHERE user_id = 1
+	),
+	router_cte_2 AS (
+		SELECT user_id, event_type, value_2 FROM events_table WHERE user_id = 1
+	)
+	SELECT 
+		router_cte.user_id as uid, event_type 
+	FROM 
+		router_cte, router_cte_2
+)
+SELECT * FROM cte ORDER BY 2 LIMIT 5;
+ uid | event_type 
+-----+------------
+   1 |          0
+   1 |          0
+   1 |          0
+   1 |          0
+   1 |          0
+(5 rows)
+
+-- CTEs should be able to use real-time queries
+WITH real_time_cte AS (
+	SELECT * FROM users_table WHERE value_2 IN (1, 2, 3)
+)
+SELECT * FROM real_time_cte ORDER BY 1, 2, 3, 4, 5, 6 LIMIT 10;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+-- router & real-time together
+WITH cte AS (
+	WITH router_cte AS (
+		SELECT user_id, value_2 FROM users_table WHERE user_id = 1
+	),
+	real_time AS (
+		SELECT user_id, event_type, value_2 FROM events_table
+	)
+	SELECT 
+		router_cte.user_id as uid, event_type 
+	FROM 
+		router_cte, real_time 
+	WHERE 
+		router_cte.user_id=real_time.user_id
+)
+SELECT * FROM cte WHERE uid=1 ORDER BY 2 LIMIT 5;
+ uid | event_type 
+-----+------------
+   1 |          0
+   1 |          0
+   1 |          0
+   1 |          0
+   1 |          0
+(5 rows)
+
+-- CTEs should be able to use task-tracker queries
+WITH cte AS (
+	WITH task_tracker_1 AS (
+		SELECT 
+			users_table.user_id as uid_1, users_table.value_2 
+		FROM 
+			users_table 
+		JOIN
+			events_table 
+		ON 
+			users_table.value_2=events_table.value_2
+	),
+	task_tracker_2 AS (
+		SELECT 
+			users_table.user_id as uid_2, users_table.value_3 
+		FROM 
+			users_table 
+		JOIN 
+			events_table 
+		ON 
+			users_table.value_3=events_table.value_3
+	)
+	SELECT 
+		uid_1, uid_2, value_2, value_3
+	FROM 
+		task_tracker_1
+	JOIN
+		task_tracker_2
+	ON 
+		value_2 = value_3
+)
+SELECT 
+	uid_1, uid_2, cte.value_2, cte.value_3 
+FROM 
+	cte 
+JOIN 
+	events_table
+ON
+	cte.value_2 = events_table.event_type
+ORDER BY 
+	1, 2, 3, 4 
+LIMIT 10;
+ uid_1 | uid_2 | value_2 | value_3 
+-------+-------+---------+---------
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+     1 |     1 |       0 |       0
+(10 rows)
+
+-- All combined
+WITH cte AS (
+	WITH task_tracker AS (
+		SELECT 
+			users_table.user_id as uid_1, users_table.value_2 as val_2
+		FROM 
+			users_table 
+		JOIN
+			events_table 
+		ON 
+			users_table.value_2=events_table.value_2
+	),
+	real_time AS (
+		SELECT * FROM users_table
+	),
+	router_exec AS (
+		SELECT * FROM events_table WHERE user_id = 1
+	),
+	local_table AS (
+		SELECT * FROM local_table
+	),
+	join_first_two AS (
+		SELECT uid_1, time, value_3 FROM task_tracker JOIN real_time ON val_2=value_3
+	),
+	join_last_two AS (
+		SELECT 
+			router_exec.user_id, local_table.id 
+		FROM 
+			router_exec 
+		JOIN 
+			local_table 
+		ON 
+			router_exec.user_id=local_table.id
+	)
+	SELECT * FROM join_first_two JOIN join_last_two ON id = value_3 ORDER BY 1,2,3,4,5 LIMIT 10
+)
+SELECT DISTINCT uid_1, time, value_3 FROM cte ORDER BY 1, 2, 3 LIMIT 20;
+ uid_1 |              time               | value_3 
+-------+---------------------------------+---------
+     2 | Wed Nov 22 18:19:49.944985 2017 |       1
+(1 row)
+
+-- All combined with outer join
+WITH cte AS (
+	WITH task_tracker AS (
+		SELECT 
+			users_table.user_id as uid_1, users_table.value_2 as val_2
+		FROM 
+			users_table 
+		JOIN
+			events_table 
+		ON 
+			users_table.value_2=events_table.value_2
+	),
+	real_time AS (
+		SELECT * FROM users_table
+	),
+	router_exec AS (
+		SELECT * FROM events_table WHERE user_id = 1
+	),
+	local_table AS (
+		SELECT * FROM local_table
+	),
+	join_first_two AS (
+		SELECT uid_1, time, value_3 FROM task_tracker JOIN real_time ON val_2=value_3
+	),
+	join_last_two AS (
+		SELECT 
+			router_exec.user_id, local_table.id 
+		FROM 
+			router_exec 
+		JOIN 
+			local_table 
+		ON 
+			router_exec.user_id=local_table.id
+	)
+	SELECT uid_1, value_3 as val_3 FROM join_first_two JOIN join_last_two ON id = value_3 ORDER BY 1,2 LIMIT 10
+)
+SELECT DISTINCT uid_1, val_3 FROM cte join events_table on cte.val_3=events_table.event_type ORDER BY 1, 2;
+ uid_1 | val_3 
+-------+-------
+     2 |     1
+(1 row)
+
+-- CTEs should not be able to terminate (the last SELECT) in a local query
+WITH cte AS (
+	SELECT * FROM users_table
+)
+SELECT count(*) FROM cte JOIN local_table ON (user_id = id);
+ERROR:  relation local_table is not distributed
+-- CTEs should be able to terminate a router query
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT
+  row_number() OVER (), count(*)
+FROM
+  cte, users_table
+WHERE
+  cte.count=user_id and user_id=5;
+ row_number | count 
+------------+-------
+          1 |     0
+(1 row)
+
+-- CTEs should be able to terminate a real-time query
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id;
+ count 
+-------
+     0
+(1 row)
+
+SET citus.task_executor_type='task-tracker';
+-- CTEs shouldn't be able to terminate a task-tracker query
+WITH cte_1 AS (
+	SELECT 
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id < 7
+),
+cte_2 AS (
+	SELECT
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id > 3
+),
+cte_merge AS (
+	SELECT
+		cte_1.u_id, cte_2.event_type
+	FROM
+		cte_1
+	join
+		cte_2
+	on cte_1.event_type=cte_2.u_id
+)
+SELECT
+	count(*)
+FROM
+	users_table, cte_merge
+WHERE
+	users_table.user_id = cte_merge.u_id;
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
+DROP SCHEMA with_executors CASCADE;
+NOTICE:  drop cascades to table local_table
