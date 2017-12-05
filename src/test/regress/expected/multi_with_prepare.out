@@ -205,135 +205,27 @@ EXECUTE prepared_test_1;
 (10 rows)
 
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_2;
- user_id | sum 
----------+-----
-       1 |  29
-       3 |  29
-       6 |  29
-       2 |  33
-       4 |  33
-       5 |  33
-(6 rows)
-
+ERROR:  result "3_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 EXECUTE prepared_test_3;
- user_id | sum  
----------+------
-       1 |  168
-       6 |  240
-       5 |  936
-       2 | 1080
-       4 | 1104
-       3 | 1122
-(6 rows)
-
+ERROR:  result "5_0" does not exist
 DEALLOCATE ALL;
