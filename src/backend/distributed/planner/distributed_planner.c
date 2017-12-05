@@ -32,6 +32,7 @@
 #include "parser/parsetree.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 
@@ -54,6 +55,7 @@ static DistributedPlan * CreateDistributedSelectPlan(uint64 planId, Query *origi
 													 bool hasUnresolvedParams,
 													 PlannerRestrictionContext *
 													 plannerRestrictionContext);
+static Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 
 static void AssignRTEIdentities(Query *queryTree);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
@@ -637,6 +639,10 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 		return NULL;
 	}
 
+	/* resolve parameters so we can split up and reason about the original query */
+	originalQuery = (Query *) ResolveExternalParams((Node *) originalQuery,
+													boundParams);
+
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and add the resulting plans to subPlanList.
@@ -678,8 +684,8 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 		return distributedPlan;
 	}
 
-	logicalPlan = MultiLogicalPlanCreate(originalQuery, query, plannerRestrictionContext,
-										 boundParams);
+	logicalPlan = MultiLogicalPlanCreate(originalQuery, query,
+										 plannerRestrictionContext);
 	MultiLogicalPlanOptimize(logicalPlan);
 
 	/*
@@ -699,6 +705,99 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 	Assert(distributedPlan && distributedPlan->planningError == NULL);
 
 	return distributedPlan;
+}
+
+
+/*
+ * ResolveExternalParams replaces the external parameters that appears
+ * in the query with the corresponding entries in the boundParams.
+ *
+ * Note that this function is inspired by eval_const_expr() on Postgres.
+ * We cannot use that function because it requires access to PlannerInfo.
+ */
+static Node *
+ResolveExternalParams(Node *inputNode, ParamListInfo boundParams)
+{
+	/* consider resolving external parameters only when boundParams exists */
+	if (!boundParams)
+	{
+		return inputNode;
+	}
+
+	if (inputNode == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(inputNode, Param))
+	{
+		Param *paramToProcess = (Param *) inputNode;
+		ParamExternData *correspondingParameterData = NULL;
+		int numberOfParameters = boundParams->numParams;
+		int parameterId = paramToProcess->paramid;
+		int16 typeLength = 0;
+		bool typeByValue = false;
+		Datum constValue = 0;
+		bool paramIsNull = false;
+		int parameterIndex = 0;
+
+		if (paramToProcess->paramkind != PARAM_EXTERN)
+		{
+			return inputNode;
+		}
+
+		if (parameterId < 0)
+		{
+			return inputNode;
+		}
+
+		/* parameterId starts from 1 */
+		parameterIndex = parameterId - 1;
+		if (parameterIndex >= numberOfParameters)
+		{
+			return inputNode;
+		}
+
+		correspondingParameterData = &boundParams->params[parameterIndex];
+
+		if (!(correspondingParameterData->pflags & PARAM_FLAG_CONST))
+		{
+			return inputNode;
+		}
+
+		get_typlenbyval(paramToProcess->paramtype, &typeLength, &typeByValue);
+
+		paramIsNull = correspondingParameterData->isnull;
+		if (paramIsNull)
+		{
+			constValue = 0;
+		}
+		else if (typeByValue)
+		{
+			constValue = correspondingParameterData->value;
+		}
+		else
+		{
+			/*
+			 * Out of paranoia ensure that datum lives long enough,
+			 * although bind params currently should always live
+			 * long enough.
+			 */
+			constValue = datumCopy(correspondingParameterData->value, typeByValue,
+								   typeLength);
+		}
+
+		return (Node *) makeConst(paramToProcess->paramtype, paramToProcess->paramtypmod,
+								  paramToProcess->paramcollid, typeLength, constValue,
+								  paramIsNull, typeByValue);
+	}
+	else if (IsA(inputNode, Query))
+	{
+		return (Node *) query_tree_mutator((Query *) inputNode, ResolveExternalParams,
+										   boundParams, 0);
+	}
+
+	return expression_tree_mutator(inputNode, ResolveExternalParams, boundParams);
 }
 
 
