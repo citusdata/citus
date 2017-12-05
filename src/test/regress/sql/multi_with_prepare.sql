@@ -1,0 +1,145 @@
+-- prepared statements
+PREPARE prepared_test_1 AS
+WITH basic AS(
+  SELECT * FROM users_table
+)
+SELECT
+  * 
+FROM
+  basic
+WHERE
+  basic.value_2 IN (1, 2, 3)
+ORDER BY
+  1, 2, 3, 4, 5, 6
+LIMIT 10;
+
+
+PREPARE prepared_test_2 AS
+WITH users_events AS(
+  SELECT
+      users_table.user_id as user_id,
+      events_table.event_type as event_type
+  FROM
+      users_table,
+      events_table
+  WHERE
+      users_table.user_id = events_table.user_id
+  GROUP BY
+      users_table.user_id,
+      events_table.event_type
+),
+event_attendee_count AS(
+  SELECT
+    event_type, count(user_id)
+  FROM
+    users_events
+  GROUP BY
+    1
+),
+user_coolness AS(
+  SELECT
+    user_id,
+    sum(count)
+  FROM
+    users_events
+    join
+    event_attendee_count
+    on (users_events.event_type = event_attendee_count.event_type)
+  GROUP BY
+    user_id
+)
+SELECT
+  * 
+FROM
+  user_coolness
+ORDER BY
+  2, 1;
+
+
+PREPARE prepared_test_3 AS
+WITH users_events AS(
+  -- events 1 and 2 only
+  WITH spec_events AS(
+    SELECT 
+      *
+    FROM
+      events_table
+    WHERE
+      event_type IN (1, 2)
+  )
+  -- users who have done 1 or 2
+  SELECT
+      users_table.user_id,
+      spec_events.event_type
+  FROM
+    users_table
+    join
+    spec_events
+    on (users_table.user_id = spec_events.user_id)
+  ORDER BY
+    1,
+    event_type
+),
+event_attendee_count AS(
+  -- distinct attendee count of each event in users_event
+  WITH event_attendee_count AS(
+    SELECT
+      event_type, count(user_id)
+    FROM
+      users_events
+    GROUP BY
+      1
+  )
+  -- distinct attendee count of first 3 events
+  SELECT
+    *
+  FROM
+    event_attendee_count
+  ORDER BY
+    event_type
+  LIMIT 3
+),
+-- measure how cool an attendee is by checking the number of events he attended
+user_coolness AS(
+  SELECT
+    user_id,
+    sum(count)
+  FROM
+    users_events
+    join
+    event_attendee_count
+    on (users_events.event_type = event_attendee_count.event_type)
+  GROUP BY
+    user_id
+)
+SELECT
+  * 
+FROM
+  user_coolness
+ORDER BY
+  2, 1;
+
+
+
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+EXECUTE prepared_test_1;
+
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+EXECUTE prepared_test_2;
+
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+EXECUTE prepared_test_3;
+
+DEALLOCATE ALL;
