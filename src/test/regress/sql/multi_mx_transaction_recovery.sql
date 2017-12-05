@@ -76,7 +76,8 @@ SELECT count(*) FROM pg_dist_transaction;
 -- Test whether auto-recovery runs
 ALTER SYSTEM SET citus.recover_2pc_interval TO 10;
 SELECT pg_reload_conf();
-SELECT pg_sleep(0.2);
+-- Sleep 1 second to give Valgrind enough time to clear transactions
+SELECT pg_sleep(1);
 SELECT count(*) FROM pg_dist_transaction;
 ALTER SYSTEM RESET citus.recover_2pc_interval;
 SELECT pg_reload_conf();
