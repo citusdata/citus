@@ -615,6 +615,20 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		connection = GetPlacementListConnection(connectionFlags, placementAccessList,
 												NULL);
 
+		/*
+		 * Make sure we open a transaction block and assign a distributed transaction
+		 * ID if we are in a coordinated transaction.
+		 *
+		 * This can happen when the SELECT goes to a node that was not involved in
+		 * the transaction so far, or when existing connections to the node are
+		 * claimed exclusively, e.g. the connection might be claimed to copy the
+		 * intermediate result of a CTE to the node. Especially in the latter case,
+		 * we want to make sure that we open a transaction block and assign a
+		 * distributed transaction ID, such that the query can read intermediate
+		 * results.
+		 */
+		RemoteTransactionBeginIfNecessary(connection);
+
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)
 		{
