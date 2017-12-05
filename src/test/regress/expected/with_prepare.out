@@ -1,0 +1,547 @@
+-- prepared statements
+PREPARE prepared_test_1 AS
+WITH basic AS(
+  SELECT * FROM users_table
+)
+SELECT
+  * 
+FROM
+  basic
+WHERE
+  basic.value_2 IN (1, 2, 3)
+ORDER BY
+  1, 2, 3, 4, 5, 6
+LIMIT 10;
+PREPARE prepared_test_2 AS
+WITH users_events AS(
+  SELECT
+      users_table.user_id as user_id,
+      events_table.event_type as event_type
+  FROM
+      users_table,
+      events_table
+  WHERE
+      users_table.user_id = events_table.user_id
+  GROUP BY
+      users_table.user_id,
+      events_table.event_type
+),
+event_attendee_count AS(
+  SELECT
+    event_type, count(user_id)
+  FROM
+    users_events
+  GROUP BY
+    1
+),
+user_coolness AS(
+  SELECT
+    user_id,
+    sum(count)
+  FROM
+    users_events
+    join
+    event_attendee_count
+    on (users_events.event_type = event_attendee_count.event_type)
+  GROUP BY
+    user_id
+)
+SELECT
+  * 
+FROM
+  user_coolness
+ORDER BY
+  2, 1
+LIMIT
+  10;
+PREPARE prepared_test_3(integer) AS
+WITH users_events AS(
+  -- events 1 and 2 only
+  WITH spec_events AS(
+    SELECT 
+      *
+    FROM
+      events_table
+    WHERE
+      event_type IN (1, 2)
+  )
+  -- users who have done 1 or 2
+  SELECT
+      users_table.user_id,
+      spec_events.event_type
+  FROM
+    users_table
+    join
+    spec_events
+    on (users_table.user_id = spec_events.user_id)
+  ORDER BY
+    1,
+    event_type
+),
+event_attendee_count AS(
+  -- distinct attendee count of each event in users_event
+  WITH event_attendee_count AS(
+    SELECT
+      event_type, count(user_id)
+    FROM
+      users_events
+    GROUP BY
+      1
+  )
+  -- distinct attendee count of first 3 events
+  SELECT
+    *
+  FROM
+    event_attendee_count
+  ORDER BY
+    event_type
+  LIMIT 3
+),
+-- measure how cool an attendee is by checking the number of events he attended
+user_coolness AS(
+  SELECT
+    user_id,
+    sum(count)
+  FROM
+    users_events
+    join
+    event_attendee_count
+    on (users_events.event_type = $1)
+  GROUP BY
+    user_id
+)
+SELECT
+  * 
+FROM
+  user_coolness
+ORDER BY
+  2, 1
+LIMIT
+  10;
+PREPARE prepared_test_4(integer, integer, integer) AS
+WITH basic AS(
+  SELECT * FROM users_table WHERE value_2 IN ($1, $2, $3)
+)
+SELECT
+  * 
+FROM
+  basic
+ORDER BY
+  1, 2, 3, 4, 5, 6
+LIMIT 10;
+-- prepared statement which inserts in a CTE should fail
+PREPARE prepared_partition_column_insert(integer) AS
+WITH prepared_insert AS (
+  INSERT INTO users_table VALUES ($1) RETURNING *
+)
+SELECT * FROM prepared_insert;
+PREPARE prepared_test_5(integer, integer, integer) AS
+-- router select query
+WITH users_events_1 AS (
+  SELECT
+    *
+  FROM
+    users_table
+  WHERE
+    user_id = $1
+),
+-- real-time select query
+users_events_2_3 AS (
+  SELECT
+    *
+  FROM
+    users_table
+  WHERE
+    user_id = $2
+    OR
+    user_id = $3
+),
+merged_users AS (
+    SELECT
+      *
+    FROM
+      users_events_1
+  UNION
+    SELECT
+      *
+    FROM
+      users_events_2_3
+)
+SELECT
+  *
+FROM
+  merged_users
+ORDER BY
+  1, 2, 3, 4, 5, 6
+LIMIT 10;
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_1;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_2;
+ user_id | sum 
+---------+-----
+       1 |  29
+       3 |  29
+       6 |  29
+       2 |  33
+       4 |  33
+       5 |  33
+(6 rows)
+
+EXECUTE prepared_test_3(1);
+ user_id |  sum   
+---------+--------
+       1 |  10850
+       6 |  15500
+       3 |  52700
+       4 |  71300
+       2 |  97650
+       5 | 100750
+(6 rows)
+
+EXECUTE prepared_test_3(2);
+ user_id |  sum  
+---------+-------
+       1 | 10850
+       6 | 15500
+       5 | 20150
+       2 | 41850
+       4 | 71300
+       3 | 92225
+(6 rows)
+
+EXECUTE prepared_test_3(3);
+ user_id | sum 
+---------+-----
+(0 rows)
+
+EXECUTE prepared_test_3(4);
+ user_id | sum 
+---------+-----
+(0 rows)
+
+EXECUTE prepared_test_3(5);
+ user_id | sum 
+---------+-----
+(0 rows)
+
+EXECUTE prepared_test_3(6);
+ user_id | sum 
+---------+-----
+(0 rows)
+
+EXECUTE prepared_test_4(1, 2, 3);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_4(2, 3, 4);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:14:27.658529 2017 |       4 |       4 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+(10 rows)
+
+EXECUTE prepared_test_4(3, 4, 5);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:14:27.658529 2017 |       4 |       4 |       4 |        
+       2 | Thu Nov 23 06:01:08.148777 2017 |       2 |       4 |       2 |        
+(10 rows)
+
+EXECUTE prepared_test_4(4, 5, 6);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:14:27.658529 2017 |       4 |       4 |       4 |        
+       2 | Thu Nov 23 06:01:08.148777 2017 |       2 |       4 |       2 |        
+       2 | Thu Nov 23 06:23:53.572592 2017 |       4 |       4 |       5 |        
+       2 | Thu Nov 23 11:41:04.042936 2017 |       3 |       4 |       1 |        
+       2 | Thu Nov 23 11:48:24.943542 2017 |       0 |       5 |       5 |        
+(10 rows)
+
+EXECUTE prepared_test_4(5, 6, 7);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 11:48:24.943542 2017 |       0 |       5 |       5 |        
+       3 | Thu Nov 23 04:01:08.04806 2017  |       5 |       5 |       3 |        
+       3 | Thu Nov 23 05:01:44.885505 2017 |       3 |       5 |       4 |        
+       3 | Thu Nov 23 11:31:17.403189 2017 |       4 |       5 |       3 |        
+       3 | Thu Nov 23 11:41:21.157066 2017 |       3 |       5 |       3 |        
+       3 | Thu Nov 23 12:56:49.29191 2017  |       0 |       5 |       1 |        
+       3 | Thu Nov 23 17:18:51.048758 2017 |       1 |       5 |       5 |        
+       4 | Thu Nov 23 07:28:42.537255 2017 |       3 |       5 |       3 |        
+       4 | Thu Nov 23 11:45:39.744961 2017 |       4 |       5 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_4(6, 7, 8);
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+(0 rows)
+
+EXECUTE prepared_test_5(1, 2, 3);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+(10 rows)
+
+EXECUTE prepared_test_5(2, 3, 4);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:14:27.658529 2017 |       4 |       4 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:01:08.148777 2017 |       2 |       4 |       2 |        
+       2 | Thu Nov 23 06:23:53.572592 2017 |       4 |       4 |       5 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+(10 rows)
+
+EXECUTE prepared_test_5(3, 4, 5);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       3 | Wed Nov 22 18:43:51.450263 2017 |       1 |       1 |       4 |        
+       3 | Wed Nov 22 20:43:31.008625 2017 |       1 |       3 |       2 |        
+       3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |        
+       3 | Thu Nov 23 00:15:45.610845 2017 |       1 |       1 |       4 |        
+       3 | Thu Nov 23 03:23:24.702501 2017 |       1 |       2 |       5 |        
+       3 | Thu Nov 23 03:52:32.008895 2017 |       4 |       2 |       0 |        
+       3 | Thu Nov 23 04:01:08.04806 2017  |       5 |       5 |       3 |        
+       3 | Thu Nov 23 05:01:44.885505 2017 |       3 |       5 |       4 |        
+       3 | Thu Nov 23 06:20:05.854857 2017 |       1 |       4 |       2 |        
+       3 | Thu Nov 23 09:57:41.540228 2017 |       2 |       2 |       3 |        
+(10 rows)
+
+EXECUTE prepared_test_5(4, 5, 6);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       4 | Wed Nov 22 21:33:03.616802 2017 |       5 |       4 |       1 |        
+       4 | Wed Nov 22 23:48:11.949567 2017 |       2 |       0 |       0 |        
+       4 | Wed Nov 22 23:59:46.493416 2017 |       3 |       1 |       3 |        
+       4 | Thu Nov 23 00:28:45.060248 2017 |       4 |       4 |       3 |        
+       4 | Thu Nov 23 01:55:21.824618 2017 |       3 |       1 |       4 |        
+       4 | Thu Nov 23 02:14:35.047974 2017 |       4 |       4 |       1 |        
+       4 | Thu Nov 23 03:34:40.419294 2017 |       1 |       0 |       4 |        
+       4 | Thu Nov 23 05:42:12.89386 2017  |       2 |       3 |       3 |        
+       4 | Thu Nov 23 06:39:06.287818 2017 |       3 |       3 |       2 |        
+       4 | Thu Nov 23 06:50:08.101207 2017 |       2 |       1 |       5 |        
+(10 rows)
+
+EXECUTE prepared_test_5(5, 6, 7);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       5 | Wed Nov 22 20:43:18.667473 2017 |       0 |       3 |       2 |        
+       5 | Wed Nov 22 21:02:07.575129 2017 |       2 |       0 |       2 |        
+       5 | Wed Nov 22 22:10:24.315371 2017 |       1 |       2 |       1 |        
+       5 | Wed Nov 22 22:31:47.62577 2017  |       3 |       1 |       4 |        
+       5 | Wed Nov 22 23:10:42.777699 2017 |       3 |       4 |       5 |        
+       5 | Thu Nov 23 00:46:13.498577 2017 |       3 |       2 |       2 |        
+       5 | Thu Nov 23 00:54:44.192608 2017 |       1 |       3 |       2 |        
+       5 | Thu Nov 23 02:09:42.27857 2017  |       3 |       2 |       4 |        
+       5 | Thu Nov 23 02:50:32.678074 2017 |       4 |       2 |       4 |        
+       5 | Thu Nov 23 06:35:05.166535 2017 |       5 |       5 |       1 |        
+(10 rows)
+
+EXECUTE prepared_test_5(6, 7, 8);
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       6 | Wed Nov 22 20:15:53.317797 2017 |       1 |       1 |       1 |        
+       6 | Wed Nov 22 23:01:24.82289 2017  |       2 |       4 |       1 |        
+       6 | Thu Nov 23 00:07:11.068353 2017 |       1 |       1 |       4 |        
+       6 | Thu Nov 23 00:09:44.19812 2017  |       5 |       2 |       0 |        
+       6 | Thu Nov 23 01:13:50.526322 2017 |       2 |       4 |       1 |        
+       6 | Thu Nov 23 01:14:55.769581 2017 |       0 |       0 |       5 |        
+       6 | Thu Nov 23 10:22:11.02918 2017  |       5 |       0 |       5 |        
+       6 | Thu Nov 23 11:08:04.244582 2017 |       2 |       3 |       2 |        
+       6 | Thu Nov 23 13:51:16.92838 2017  |       0 |       4 |       2 |        
+       6 | Thu Nov 23 14:43:18.024104 2017 |       3 |       2 |       5 |        
+(10 rows)
+
+EXECUTE prepared_partition_column_insert(1);
+ERROR:  data-modifying statements are not supported in the WITH clauses of distributed queries
+DEALLOCATE ALL;
