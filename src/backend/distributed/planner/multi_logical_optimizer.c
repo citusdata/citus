@@ -3300,6 +3300,8 @@ static Node *
 WorkerLimitCount(MultiExtendedOp *originalOpNode,
 				 bool groupedByDisjointPartitionColumn)
 {
+	Node *limitCountNode = strip_implicit_coercions(originalOpNode->limitCount);
+	Node *limitOffsetNode = strip_implicit_coercions(originalOpNode->limitOffset);
 	Node *workerLimitNode = NULL;
 	List *groupClauseList = originalOpNode->groupClauseList;
 	List *sortClauseList = originalOpNode->sortClauseList;
@@ -3309,7 +3311,7 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 	bool canApproximate = false;
 
 	/* no limit node to push down */
-	if (originalOpNode->limitCount == NULL)
+	if (limitCountNode == NULL)
 	{
 		return NULL;
 	}
@@ -3319,9 +3321,8 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 	 * certain expressions such as parameters are not evaluated and converted
 	 * into Consts on the op node.
 	 */
-	Assert(IsA(originalOpNode->limitCount, Const));
-	Assert(originalOpNode->limitOffset == NULL ||
-		   IsA(originalOpNode->limitOffset, Const));
+	Assert(IsA(limitCountNode, Const));
+	Assert(limitOffsetNode == NULL || IsA(originalOpNode->limitOffset, Const));
 
 	/*
 	 * If we don't have group by clauses, or we have group by partition column,
@@ -3349,11 +3350,11 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 	/* create the workerLimitNode according to the decisions above */
 	if (canPushDownLimit)
 	{
-		workerLimitNode = (Node *) copyObject(originalOpNode->limitCount);
+		workerLimitNode = (Node *) copyObject(limitCountNode);
 	}
 	else if (canApproximate)
 	{
-		Const *workerLimitConst = (Const *) copyObject(originalOpNode->limitCount);
+		Const *workerLimitConst = (Const *) copyObject(limitCountNode);
 		int64 workerLimitCount = (int64) LimitClauseRowFetchCount;
 		workerLimitConst->constvalue = Int64GetDatum(workerLimitCount);
 
@@ -3364,10 +3365,10 @@ WorkerLimitCount(MultiExtendedOp *originalOpNode,
 	 * If offset clause is present and limit can be pushed down (whether exactly or
 	 * approximately), add the offset value to limit on workers
 	 */
-	if (workerLimitNode != NULL && originalOpNode->limitOffset != NULL)
+	if (workerLimitNode != NULL && limitOffsetNode != NULL)
 	{
 		Const *workerLimitConst = (Const *) workerLimitNode;
-		Const *workerOffsetConst = (Const *) originalOpNode->limitOffset;
+		Const *workerOffsetConst = (Const *) limitOffsetNode;
 		int64 workerLimitCount = DatumGetInt64(workerLimitConst->constvalue);
 		int64 workerOffsetCount = DatumGetInt64(workerOffsetConst->constvalue);
 
