@@ -85,7 +85,11 @@ WHERE
       FROM
         users
     );
-ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
+ count 
+-------
+   101
+(1 row)
+
 -- CTE with non-colocated join in WHERE
 WITH users AS (
     SELECT
@@ -112,7 +116,11 @@ WHERE
       FROM
         users
     );
-ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
+ count 
+-------
+   101
+(1 row)
+
 SET citus.task_executor_type = 'real-time';
 -- CTE in WHERE basic
 SELECT
@@ -134,8 +142,11 @@ IN
       1)
     SELECT * FROM events LIMIT 10
   );
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ count 
+-------
+   101
+(1 row)
+
 SET citus.task_executor_type = 'task-tracker';
 -- CTE with non-colocated join in WHERE
 SELECT
@@ -158,5 +169,8 @@ WHERE
       )
       SELECT * FROM users LIMIT 10
     );
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ count 
+-------
+   101
+(1 row)
+

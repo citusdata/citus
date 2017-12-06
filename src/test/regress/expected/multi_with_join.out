@@ -255,6 +255,32 @@ WITH users_events AS (
 SELECT
   *
 FROM
-  users_events;
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause
+  users_events
+ORDER BY 
+  1, 2
+LIMIT 
+  20;
+ uid | event_type 
+-----+------------
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+   1 |          1
+(20 rows)
+

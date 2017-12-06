@@ -176,7 +176,9 @@ merged_users AS (
 SELECT
   *
 FROM
-  merged_users;
+  merged_users
+ORDER BY
+  1, 2, 3, 4, 5, 6;
 
 
 

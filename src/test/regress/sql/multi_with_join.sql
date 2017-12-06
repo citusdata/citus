@@ -213,4 +213,8 @@ WITH users_events AS (
 SELECT
   *
 FROM
-  users_events;
+  users_events
+ORDER BY 
+  1, 2
+LIMIT 
+  20;
