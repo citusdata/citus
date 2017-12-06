@@ -59,7 +59,7 @@ SELECT user_id = (
 	WITH users_done_event_3 AS (
 		SELECT users_table.user_id FROM users_table, events_table WHERE users_table.user_id=events_table.user_id AND event_type=3
 	)
-	SELECT * FROM users_done_event_3 WHERE user_id < 4
+	SELECT user_id FROM users_done_event_3 WHERE user_id < 4 ORDER BY user_id LIMIT 1
 )
 FROM users_table 
 ORDER BY 1
@@ -151,3 +151,51 @@ WITH users_events AS (
 	SELECT users_done_2_3.user_id, users_done_2_3.value_2 as value_2_3 FROM users_done_2_3
 )
 SELECT * FROM (SELECT * FROM users_events WHERE value_2_3 IN (2, 5)) a ORDER BY 1, 2 LIMIT 10;
+
+
+
+-- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM distributed_table) a; should error out
+WITH cte AS (
+	SELECT * FROM users_table
+)
+SELECT * FROM (
+	SELECT * FROM cte UNION (SELECT * FROM events_table)
+	) a
+ORDER BY 
+	1,2,3,4,5,6
+LIMIT 
+	10;
+
+
+SELECT * FROM (
+	SELECT * FROM (WITH cte AS (
+			SELECT * FROM users_table
+		)
+		SELECT * FROM cte
+	)b UNION (SELECT * FROM events_table)) a
+ORDER BY 
+1,2,3,4,5,6
+LIMIT 
+10;
+
+-- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
+WITH cte AS (
+	SELECT * FROM users_table WHERE user_id = 1
+)
+SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte)) a
+ORDER BY 
+	1,2,3,4,5,6
+LIMIT 
+	10;
+
+WITH cte AS (
+	SELECT * FROM users_table WHERE user_id = 1
+), 
+cte_2 AS (
+	SELECT * FROM users_table WHERE user_id = 2
+)
+SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte_2)) a
+ORDER BY 
+	1,2,3,4,5,6
+LIMIT 
+	10;

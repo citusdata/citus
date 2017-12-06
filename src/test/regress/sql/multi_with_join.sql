@@ -218,3 +218,68 @@ ORDER BY
   1, 2
 LIMIT 
   20;
+
+
+-- cte LEFT JOIN distributed_table should error out
+WITH cte AS (
+  SELECT * FROM users_table WHERE user_id = 1
+)
+SELECT cte.user_id, cte.time, events_table.event_type FROM cte LEFT JOIN events_table on cte.user_id=events_table.user_id
+ORDER BY 
+  1,2,3
+LIMIT 
+  10;
+
+
+SELECT a.user_id, a.time, events_table.event_type FROM 
+  (
+    WITH cte AS (
+      SELECT * FROM users_table WHERE user_id = 1
+    )
+    SELECT * FROM cte
+  ) a
+  LEFT JOIN 
+    events_table 
+  on 
+    a.user_id=events_table.user_id
+ORDER BY 
+  1,2,3
+LIMIT 
+  10;
+
+-- cte LEFT JOIN cte should work
+WITH cte AS (
+  SELECT * FROM users_table WHERE user_id IN (1, 2)
+),
+cte_2 AS (
+  SELECT * FROM users_table WHERE user_id IN (2, 3)
+)
+SELECT cte.user_id, cte.time, cte_2.value_2 FROM cte LEFT JOIN cte_2 on cte.user_id=cte_2.user_id
+ORDER BY 
+  1,2,3
+LIMIT 
+  10;
+
+
+-- cte as a subquery in left join errors out
+SELECT a.user_id, a.time, b.value_2 FROM 
+  (
+    WITH cte AS (
+      SELECT * FROM users_table WHERE user_id IN (1, 2)
+    )
+    SELECT * FROM cte
+  ) a
+  LEFT JOIN 
+  (
+    WITH cte_2 AS (
+      SELECT * FROM users_table WHERE user_id IN (2, 3)
+    )
+    SELECT * FROM cte_2
+  ) b
+  on 
+    a.user_id=b.user_id
+ORDER BY 
+  1,2,3
+LIMIT 
+  10;
+
