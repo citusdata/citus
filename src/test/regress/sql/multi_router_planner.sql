@@ -445,6 +445,12 @@ SELECT *
 	FROM articles_hash a, articles_hash b
 	WHERE a.id = b.id  AND a.author_id = 1;
 
+-- by setting enable_repartition_joins we can make this query run
+SET citus.enable_repartition_joins TO ON;
+SELECT *
+	FROM articles_hash a, articles_hash b
+	WHERE a.id = b.id  AND a.author_id = 1;
+SET citus.enable_repartition_joins TO OFF;
 -- queries which hit more than 1 shards are not router plannable or executable
 -- handled by real-time executor
 SELECT *

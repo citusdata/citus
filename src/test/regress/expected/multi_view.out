@@ -173,8 +173,8 @@ SELECT o_orderkey, l_linenumber FROM priority_orders left join air_shipped_linei
 -- repartition query on view join
 -- it passes planning, fails at execution stage
 SELECT * FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
-ERROR:  cannot use real time executor with repartition jobs
-HINT:  Set citus.task_executor_type to "task-tracker".
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SET citus.task_executor_type to "task-tracker";
 SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = l_suppkey);
  count 
