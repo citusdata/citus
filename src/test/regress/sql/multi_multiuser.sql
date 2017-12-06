@@ -116,6 +116,17 @@ COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 
 SET citus.task_executor_type TO 'real-time';
 
+-- should be able to use intermediate results as any user
+BEGIN;
+SELECT create_intermediate_result('topten', 'SELECT s FROM generate_series(1,10) s');
+SELECT * FROM read_intermediate_result('topten', 'binary'::citus_copy_format) AS res (s int) ORDER BY s;
+END;
+
+-- as long as we don't read from a table
+BEGIN;
+SELECT create_intermediate_result('topten', 'SELECT count(*) FROM test');
+ABORT;
+
 RESET ROLE;
 
 DROP TABLE test;
