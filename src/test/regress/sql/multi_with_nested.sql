@@ -272,3 +272,102 @@ ORDER BY
 LIMIT
   20;
 
+
+-- nested CTEs should not be able to reference outer CTEs even if the query doesn't call CTE
+WITH users_events AS (
+  WITH users_events_2 AS (
+    SELECT
+        *
+    FROM
+        users_events
+  )
+  SELECT
+      *
+  FROM
+    users_table
+)
+SELECT 
+  * 
+FROM 
+  users_events
+ORDER BY
+  1, 2
+LIMIT 20;
+
+WITH users_events AS (
+  WITH users_events_2 AS (
+    SELECT
+        *
+    FROM
+        users_events
+  )
+  SELECT
+      *
+  FROM
+    users_table
+)
+SELECT 
+  * 
+FROM 
+  users_table
+ORDER BY
+  1, 2
+LIMIT 20;
+
+
+-- Even if it is not called, nested CTEs should not be able to reference outer CTE
+WITH nested1 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM users_table
+  ),
+  nested2_2 AS (
+    SELECT * FROM nested1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested1;
+
+
+-- Outer CTE cannot reference the inner CTE in another CTE.
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM users_table
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  SELECT * FROM nested1_1
+)
+SELECT * FROM nested2;
+
+-- inner CTE cannot reference another inner CTE if they are in two different outer CTEs
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM users_table
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM nested1_1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested2;
+
+
+-- inner CTE cannot reference the outer CTE
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM nested2
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM nested1_1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested2;
+

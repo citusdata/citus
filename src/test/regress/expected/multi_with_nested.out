@@ -210,7 +210,30 @@ ORDER BY
   1, 2, 3, 4, 5, 6
 LIMIT
   20;
-ERROR:  result "13_0" does not exist
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+       2 | Thu Nov 23 01:14:27.658529 2017 |       4 |       4 |       4 |        
+       2 | Thu Nov 23 03:27:50.327051 2017 |       2 |       2 |       0 |        
+       2 | Thu Nov 23 06:01:08.148777 2017 |       2 |       4 |       2 |        
+       2 | Thu Nov 23 06:23:53.572592 2017 |       4 |       4 |       5 |        
+       2 | Thu Nov 23 06:50:30.797805 2017 |       1 |       1 |       1 |        
+       2 | Thu Nov 23 06:56:38.46819 2017  |       0 |       1 |       3 |        
+       2 | Thu Nov 23 08:22:22.169158 2017 |       4 |       2 |       5 |        
+       2 | Thu Nov 23 08:49:47.029236 2017 |       4 |       2 |       4 |        
+       2 | Thu Nov 23 09:54:28.13665 2017  |       0 |       3 |       4 |        
+       2 | Thu Nov 23 09:59:08.975079 2017 |       2 |       2 |       4 |        
+(20 rows)
+
 -- Nested CTEs - joined with local table. Not supported yet.
 WITH users_events AS (
   -- router select query
@@ -294,4 +317,119 @@ ORDER BY
   1, 2, 3, 4, 5, 6
 LIMIT
   20;
-ERROR:  result "19_0" does not exist
+ERROR:  relation local_users is not distributed
+-- nested CTEs should not be able to reference outer CTEs even if the query doesn't call CTE
+WITH users_events AS (
+  WITH users_events_2 AS (
+    SELECT
+        *
+    FROM
+        users_events
+  )
+  SELECT
+      *
+  FROM
+    users_table
+)
+SELECT 
+  * 
+FROM 
+  users_events
+ORDER BY
+  1, 2
+LIMIT 20;
+ERROR:  relation "users_events" does not exist
+LINE 6:         users_events
+                ^
+DETAIL:  There is a WITH item named "users_events", but it cannot be referenced from this part of the query.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
+WITH users_events AS (
+  WITH users_events_2 AS (
+    SELECT
+        *
+    FROM
+        users_events
+  )
+  SELECT
+      *
+  FROM
+    users_table
+)
+SELECT 
+  * 
+FROM 
+  users_table
+ORDER BY
+  1, 2
+LIMIT 20;
+ERROR:  relation "users_events" does not exist
+LINE 6:         users_events
+                ^
+DETAIL:  There is a WITH item named "users_events", but it cannot be referenced from this part of the query.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
+-- Even if it is not called, nested CTEs should not be able to reference outer CTE
+WITH nested1 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM users_table
+  ),
+  nested2_2 AS (
+    SELECT * FROM nested1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested1;
+ERROR:  relation "nested1" does not exist
+LINE 6:     SELECT * FROM nested1
+                          ^
+DETAIL:  There is a WITH item named "nested1", but it cannot be referenced from this part of the query.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.
+-- Outer CTE cannot reference the inner CTE in another CTE.
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM users_table
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  SELECT * FROM nested1_1
+)
+SELECT * FROM nested2;
+ERROR:  relation "nested1_1" does not exist
+LINE 8:   SELECT * FROM nested1_1
+                        ^
+-- inner CTE cannot reference another inner CTE if they are in two different outer CTEs
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM users_table
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM nested1_1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested2;
+ERROR:  relation "nested1_1" does not exist
+LINE 9:     SELECT * FROM nested1_1
+                          ^
+-- inner CTE cannot reference the outer CTE
+WITH nested1 AS (
+  WITH nested1_1 AS (
+    SELECT * FROM nested2
+  )
+  SELECT * FROM nested1_1
+),
+nested2 AS (
+  WITH nested2_1 AS (
+    SELECT * FROM nested1_1
+  )
+  SELECT * FROM nested2_1
+)
+SELECT * FROM nested2;
+ERROR:  relation "nested2" does not exist
+LINE 3:     SELECT * FROM nested2
+                          ^
+DETAIL:  There is a WITH item named "nested2", but it cannot be referenced from this part of the query.
+HINT:  Use WITH RECURSIVE, or re-order the WITH items to remove forward references.

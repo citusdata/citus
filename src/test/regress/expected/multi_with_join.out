@@ -155,9 +155,11 @@ FROM
 WHERE 
   non_colocated.uid = non_colocated_2.uid
 ;
-WARNING:  result "10_0" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+   sum    |   sum   |   sum   
+----------+---------+---------
+ 19059280 | 8567392 | 8267120
+(1 row)
+
 -- this query doesn't make much sense though but tests colocated join and non-colocated join together
 WITH users_events AS (
   WITH colocated_join AS (
@@ -192,9 +194,11 @@ SELECT
   sum(uid), sum(event_type)
 FROM
   users_events;
-WARNING:  result "15_0" does not exist
-CONTEXT:  while executing command on localhost:57637
-ERROR:  could not receive query results
+  sum   |  sum   
+--------+--------
+ 972702 | 648967
+(1 row)
+
 SET citus.task_executor_type = 'real-time';
 -- Subqueries in WHERE and FROM are mixed
 -- In this query, only subquery in WHERE is not a colocated join

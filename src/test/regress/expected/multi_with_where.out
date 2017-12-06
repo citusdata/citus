@@ -85,7 +85,7 @@ WHERE
       FROM
         users
     );
-ERROR:  failed to execute task 0
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
 -- CTE with non-colocated join in WHERE
 WITH users AS (
     SELECT
@@ -112,7 +112,7 @@ WHERE
       FROM
         users
     );
-ERROR:  failed to execute task 4
+ERROR:  Complex subqueries and CTEs are not supported when task_executor_type is set to 'task-tracker'
 SET citus.task_executor_type = 'real-time';
 -- CTE in WHERE basic
 SELECT
