@@ -1,3 +1,7 @@
+CREATE TABLE reference_table(user_id int);
+SELECT create_reference_table('reference_table');
+INSERT INTO reference_table VALUES (6), (7);
+
 WITH users_events AS (
   SELECT 
       users_table.user_id as user_id,
@@ -283,3 +287,38 @@ ORDER BY
 LIMIT 
   10;
 
+
+-- cte JOIN reference_table should be router plannable
+EXPLAIN (COSTS false, VERBOSE true)
+WITH cte AS (
+  SELECT * FROM users_table
+)
+SELECT * FROM cte join reference_table ON cte.user_id + 1 = reference_table.user_id;
+
+
+-- the most outer query is router plannable
+EXPLAIN (COSTS false, VERBOSE true)
+WITH cte_1 AS (
+  WITH cte_1_1 AS (
+    SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
+  ),
+  cte_1_2 AS (
+    SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
+  )
+  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+)
+SELECT * FROM cte_1;
+
+
+-- Inner CTE should be router plannable
+EXPLAIN (COSTS false, VERBOSE true)
+WITH cte_1 AS (
+  WITH cte_1_1 AS (
+    SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
+  ),
+  cte_1_2 AS (
+    SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
+  )
+  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+)
+SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type;
