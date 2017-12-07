@@ -165,7 +165,7 @@ CREATE TABLE bidders ( name text, id bigint );
 DELETE FROM limit_orders_mx USING bidders WHERE limit_orders_mx.id = 246 AND
 											 limit_orders_mx.bidder_id = bidders.id AND
 											 bidders.name = 'Bernie Madoff';
-ERROR:  cannot plan queries which join local and distributed relations
+ERROR:  cannot plan queries which include both local and distributed relations
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders_mx DEFAULT VALUES RETURNING *)
 DELETE FROM limit_orders_mx;
@@ -235,7 +235,7 @@ UPDATE limit_orders_mx SET limit_price = 0.00 FROM bidders
 					WHERE limit_orders_mx.id = 246 AND
 						  limit_orders_mx.bidder_id = bidders.id AND
 						  bidders.name = 'Bernie Madoff';
-ERROR:  cannot plan queries which join local and distributed relations
+ERROR:  cannot plan queries which include both local and distributed relations
 -- commands containing a CTE are unsupported
 WITH deleted_orders AS (INSERT INTO limit_orders_mx DEFAULT VALUES RETURNING *)
 UPDATE limit_orders_mx SET symbol = 'GM';
