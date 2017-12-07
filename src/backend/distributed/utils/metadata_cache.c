@@ -117,6 +117,7 @@ typedef struct MetadataCacheData
 	Oid distTransactionRelationId;
 	Oid distTransactionGroupIndexId;
 	Oid distTransactionRecordIndexId;
+	Oid copyFormatTypeId;
 	Oid readIntermediateResultFuncId;
 	Oid extraDataContainerFuncId;
 	Oid workerHashFunctionId;
@@ -1835,28 +1836,39 @@ DistPlacementGroupidIndexId(void)
 }
 
 
-/* return oid of the read_intermediate_result(text,citus.copy_format) function */
+/* return oid of the read_intermediate_result(text,citus_copy_format) function */
 Oid
 CitusReadIntermediateResultFuncId(void)
 {
 	if (MetadataCache.readIntermediateResultFuncId == InvalidOid)
 	{
-		bool missingOK = false;
-
-		List *copyFormatTypeNameList = list_make2(makeString("citus"),
-												  makeString("copy_format"));
-		TypeName *copyFormatTypeName = makeTypeNameFromNameList(copyFormatTypeNameList);
-		Oid copyFormatTypeOid = LookupTypeNameOid(NULL, copyFormatTypeName, missingOK);
-
 		List *functionNameList = list_make2(makeString("pg_catalog"),
 											makeString("read_intermediate_result"));
+		Oid copyFormatTypeOid = CitusCopyFormatTypeId();
 		Oid paramOids[2] = { TEXTOID, copyFormatTypeOid };
+		bool missingOK = false;
 
 		MetadataCache.readIntermediateResultFuncId =
 			LookupFuncName(functionNameList, 2, paramOids, missingOK);
 	}
 
 	return MetadataCache.readIntermediateResultFuncId;
+}
+
+
+/* return oid of the citus.copy_format enum type */
+Oid
+CitusCopyFormatTypeId(void)
+{
+	if (MetadataCache.copyFormatTypeId == InvalidOid)
+	{
+		char *typeName = "citus_copy_format";
+		MetadataCache.copyFormatTypeId = GetSysCacheOid2(TYPENAMENSP,
+														 PointerGetDatum(typeName),
+														 PG_CATALOG_NAMESPACE);
+	}
+
+	return MetadataCache.copyFormatTypeId;
 }
 
 

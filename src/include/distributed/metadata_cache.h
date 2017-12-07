@@ -123,6 +123,9 @@ extern Oid DistTransactionGroupIndexId(void);
 extern Oid DistTransactionRecordIndexId(void);
 extern Oid DistPlacementGroupidIndexId(void);
 
+/* type oids */
+extern Oid CitusCopyFormatTypeId(void);
+
 /* function oids */
 extern Oid CitusReadIntermediateResultFuncId(void);
 extern Oid CitusExtraDataContainerFuncId(void);
