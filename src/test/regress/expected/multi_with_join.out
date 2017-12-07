@@ -404,47 +404,28 @@ LIMIT
        2 | Wed Nov 22 18:19:49.944985 2017 |       1
        2 | Wed Nov 22 18:19:49.944985 2017 |       1
 (10 rows)
+
+SET client_min_messages TO 'DEBUG2';
 -- cte JOIN reference_table should be router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte AS (
   SELECT * FROM users_table
 )
-SELECT * FROM cte join reference_table ON cte.user_id + 1 = reference_table.user_id;
-                                                                                                             QUERY PLAN                                                                                                             
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Router)
-   Output: remote_scan.user_id, remote_scan."time", remote_scan.value_1, remote_scan.value_2, remote_scan.value_3, remote_scan.value_4, remote_scan.user_id_1
-   ->  Distributed Subplan
-         ->  Custom Scan (Citus Real-Time)
-               Output: remote_scan.user_id, remote_scan."time", remote_scan.value_1, remote_scan.value_2, remote_scan.value_3, remote_scan.value_4
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=57637 dbname=regression
-                     ->  Seq Scan on public.users_table_1400000 users_table
-                           Output: user_id, "time", value_1, value_2, value_3, value_4
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Merge Join
-               Output: read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4, reference_table.user_id
-               Merge Cond: (((read_records_file.user_id + 1)) = reference_table.user_id)
-               ->  Sort
-                     Output: read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4, ((read_records_file.user_id + 1))
-                     Sort Key: ((read_records_file.user_id + 1))
-                     ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                           Output: read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4, (read_records_file.user_id + 1)
-                           Function Call: read_intermediate_result('30_0'::text, 'binary'::citus_copy_format)
-               ->  Sort
-                     Output: reference_table.user_id
-                     Sort Key: reference_table.user_id
-                     ->  Seq Scan on public.reference_table_360137 reference_table
-                           Output: reference_table.user_id
-(29 rows)
+SELECT * FROM cte join reference_table ON cte.user_id + 1 = reference_table.user_id
+ORDER BY 1, 2, 3, 4, 5, 6, 7
+LIMIT 5;
+DEBUG:  recursively planning CTE cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 | user_id 
+---------+---------------------------------+---------+---------+---------+---------+---------
+       5 | Wed Nov 22 20:43:18.667473 2017 |       0 |       3 |       2 |         |       6
+       5 | Wed Nov 22 21:02:07.575129 2017 |       2 |       0 |       2 |         |       6
+       5 | Wed Nov 22 22:10:24.315371 2017 |       1 |       2 |       1 |         |       6
+       5 | Wed Nov 22 22:31:47.62577 2017  |       3 |       1 |       4 |         |       6
+       5 | Wed Nov 22 23:10:42.777699 2017 |       3 |       4 |       5 |         |       6
+(5 rows)
 
 -- the most outer query is router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte_1 AS (
   WITH cte_1_1 AS (
     SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
@@ -452,71 +433,28 @@ WITH cte_1 AS (
   cte_1_2 AS (
     SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
   )
-  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+  SELECT cte_1_2.user_id as uid, event_type, reference_table.user_id FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1;
-                                                                                                     QUERY PLAN                                                                                                      
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Router)
-   Output: remote_scan.user_id, remote_scan.event_type, remote_scan.user_id_1
-   ->  Distributed Subplan
-         ->  Custom Scan (Citus Router)
-               Output: remote_scan.user_id, remote_scan.event_type, remote_scan.user_id_1
-               ->  Distributed Subplan
-                     ->  Custom Scan (Citus Real-Time)
-                           Output: remote_scan.user_id, remote_scan."time", remote_scan.value_1, remote_scan.value_2, remote_scan.value_3, remote_scan.value_4
-                           Task Count: 4
-                           Tasks Shown: One of 4
-                           ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
-                                 ->  Seq Scan on public.users_table_1400000 users_table
-                                       Output: user_id, "time", value_1, value_2, value_3, value_4
-                                       Filter: (users_table.value_2 = ANY ('{2,3,4}'::integer[]))
-                     ->  Custom Scan (Citus Real-Time)
-                           Output: remote_scan.user_id, remote_scan.event_type
-                           Task Count: 4
-                           Tasks Shown: One of 4
-                           ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
-                                 ->  Hash Join
-                                       Output: read_records_file.user_id, events_table.event_type
-                                       Hash Cond: (read_records_file.user_id = events_table.user_id)
-                                       ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                                             Output: read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4
-                                             Function Call: read_intermediate_result('33_0'::text, 'binary'::citus_copy_format)
-                                       ->  Hash
-                                             Output: events_table.event_type, events_table.user_id
-                                             ->  Seq Scan on public.events_table_1400004 events_table
-                                                   Output: events_table.event_type, events_table.user_id
-               Task Count: 1
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  Merge Join
-                           Output: read_records_file.user_id, read_records_file.event_type, reference_table.user_id
-                           Merge Cond: (read_records_file.user_id = reference_table.user_id)
-                           ->  Sort
-                                 Output: read_records_file.user_id, read_records_file.event_type
-                                 Sort Key: read_records_file.user_id
-                                 ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                                       Output: read_records_file.user_id, read_records_file.event_type
-                                       Function Call: read_intermediate_result('33_1'::text, 'binary'::citus_copy_format)
-                           ->  Sort
-                                 Output: reference_table.user_id
-                                 Sort Key: reference_table.user_id
-                                 ->  Seq Scan on public.reference_table_360137 reference_table
-                                       Output: reference_table.user_id
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=57638 dbname=regression
-         ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-               Output: read_records_file.user_id, read_records_file.event_type, read_records_file.user_id_1
-               Function Call: read_intermediate_result('32_0'::text, 'binary'::citus_copy_format)
-(56 rows)
+SELECT * FROM cte_1
+ORDER BY 1, 2, 3
+LIMIT 5;
+DEBUG:  recursively planning CTE cte_1: WITH cte_1_1 AS (SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM public.users_table WHERE (users_table.value_2 = ANY (ARRAY[2, 3, 4]))), cte_1_2 AS (SELECT cte_1_1.user_id, events_table.event_type FROM cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)) SELECT cte_1_2.user_id AS uid, cte_1_2.event_type, reference_table.user_id FROM (cte_1_2 JOIN public.reference_table ON ((cte_1_2.user_id = reference_table.user_id)))
+DEBUG:  recursively planning CTE cte_1_1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_2 = ANY (ARRAY[2, 3, 4]))
+DEBUG:  recursively planning CTE cte_1_2: SELECT cte_1_1.user_id, events_table.event_type FROM (SELECT read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4 FROM read_intermediate_result('33_0'::text, 'binary'::citus_copy_format) read_records_file(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ uid | event_type | user_id 
+-----+------------+---------
+   6 |          1 |       6
+   6 |          1 |       6
+   6 |          1 |       6
+   6 |          1 |       6
+   6 |          1 |       6
+(5 rows)
 
 -- Inner CTE should be router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte_1 AS (
   WITH cte_1_1 AS (
     SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
@@ -524,73 +462,21 @@ WITH cte_1 AS (
   cte_1_2 AS (
     SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
   )
-  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+  SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id as uid FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type;
-                                                                                                                    QUERY PLAN                                                                                                                    
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- Custom Scan (Citus Real-Time)
-   Output: remote_scan.user_id, remote_scan.event_type, remote_scan.user_id_1, remote_scan.user_id_2, remote_scan."time", remote_scan.event_type_1, remote_scan.value_2, remote_scan.value_3, remote_scan.value_4
-   ->  Distributed Subplan
-         ->  Custom Scan (Citus Router)
-               Output: remote_scan.user_id, remote_scan.event_type, remote_scan.user_id_1
-               ->  Distributed Subplan
-                     ->  Custom Scan (Citus Real-Time)
-                           Output: remote_scan.user_id, remote_scan."time", remote_scan.value_1, remote_scan.value_2, remote_scan.value_3, remote_scan.value_4
-                           Task Count: 4
-                           Tasks Shown: One of 4
-                           ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
-                                 ->  Seq Scan on public.users_table_1400000 users_table
-                                       Output: user_id, "time", value_1, value_2, value_3, value_4
-                                       Filter: (users_table.value_2 = ANY ('{2,3,4}'::integer[]))
-                     ->  Custom Scan (Citus Real-Time)
-                           Output: remote_scan.user_id, remote_scan.event_type
-                           Task Count: 4
-                           Tasks Shown: One of 4
-                           ->  Task
-                                 Node: host=localhost port=57637 dbname=regression
-                                 ->  Hash Join
-                                       Output: read_records_file.user_id, events_table.event_type
-                                       Hash Cond: (read_records_file.user_id = events_table.user_id)
-                                       ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                                             Output: read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4
-                                             Function Call: read_intermediate_result('37_0'::text, 'binary'::citus_copy_format)
-                                       ->  Hash
-                                             Output: events_table.event_type, events_table.user_id
-                                             ->  Seq Scan on public.events_table_1400004 events_table
-                                                   Output: events_table.event_type, events_table.user_id
-               Task Count: 1
-               Tasks Shown: All
-               ->  Task
-                     Node: host=localhost port=57638 dbname=regression
-                     ->  Merge Join
-                           Output: read_records_file.user_id, read_records_file.event_type, reference_table.user_id
-                           Merge Cond: (read_records_file.user_id = reference_table.user_id)
-                           ->  Sort
-                                 Output: read_records_file.user_id, read_records_file.event_type
-                                 Sort Key: read_records_file.user_id
-                                 ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                                       Output: read_records_file.user_id, read_records_file.event_type
-                                       Function Call: read_intermediate_result('37_1'::text, 'binary'::citus_copy_format)
-                           ->  Sort
-                                 Output: reference_table.user_id
-                                 Sort Key: reference_table.user_id
-                                 ->  Seq Scan on public.reference_table_360137 reference_table
-                                       Output: reference_table.user_id
-   Task Count: 4
-   Tasks Shown: One of 4
-   ->  Task
-         Node: host=localhost port=57637 dbname=regression
-         ->  Hash Join
-               Output: read_records_file.user_id, read_records_file.event_type, read_records_file.user_id_1, events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4
-               Hash Cond: (read_records_file.event_type = events_table.event_type)
-               ->  Function Scan on pg_catalog.read_intermediate_result read_records_file
-                     Output: read_records_file.user_id, read_records_file.event_type, read_records_file.user_id_1
-                     Function Call: read_intermediate_result('36_0'::text, 'binary'::citus_copy_format)
-               ->  Hash
-                     Output: events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4
-                     ->  Seq Scan on public.events_table_1400004 events_table
-                           Output: events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4
-(63 rows)
+SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3 LIMIT 5;
+DEBUG:  recursively planning CTE cte_1: WITH cte_1_1 AS (SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM public.users_table WHERE (users_table.value_2 = ANY (ARRAY[2, 3, 4]))), cte_1_2 AS (SELECT cte_1_1.user_id, events_table.event_type FROM cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)) SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id AS uid FROM (cte_1_2 JOIN public.reference_table ON ((cte_1_2.user_id = reference_table.user_id)))
+DEBUG:  recursively planning CTE cte_1_1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_2 = ANY (ARRAY[2, 3, 4]))
+DEBUG:  recursively planning CTE cte_1_2: SELECT cte_1_1.user_id, events_table.event_type FROM (SELECT read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4 FROM read_intermediate_result('37_0'::text, 'binary'::citus_copy_format) read_records_file(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  push down of limit count: 5
+ user_id | event_type | uid | user_id |              time               | event_type | value_2 | value_3 | value_4 
+---------+------------+-----+---------+---------------------------------+------------+---------+---------+---------
+       6 |          1 |   6 |       5 | Thu Nov 23 04:16:29.402814 2017 |          1 |       3 |       3 |        
+       6 |          1 |   6 |       5 | Thu Nov 23 03:23:09.888244 2017 |          1 |       3 |       2 |        
+       6 |          1 |   6 |       5 | Thu Nov 23 02:27:02.996588 2017 |          1 |       4 |       1 |        
+       6 |          1 |   6 |       5 | Thu Nov 23 14:40:40.467511 2017 |          1 |       4 |       1 |        
+       6 |          1 |   6 |       5 | Wed Nov 22 20:45:35.99031 2017  |          1 |       2 |       3 |        
+(5 rows)
 

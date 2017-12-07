@@ -288,16 +288,17 @@ LIMIT
   10;
 
 
+SET client_min_messages TO 'DEBUG2';
 -- cte JOIN reference_table should be router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte AS (
   SELECT * FROM users_table
 )
-SELECT * FROM cte join reference_table ON cte.user_id + 1 = reference_table.user_id;
+SELECT * FROM cte join reference_table ON cte.user_id + 1 = reference_table.user_id
+ORDER BY 1, 2, 3, 4, 5, 6, 7
+LIMIT 5;
 
 
 -- the most outer query is router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte_1 AS (
   WITH cte_1_1 AS (
     SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
@@ -305,13 +306,14 @@ WITH cte_1 AS (
   cte_1_2 AS (
     SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
   )
-  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+  SELECT cte_1_2.user_id as uid, event_type, reference_table.user_id FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1;
+SELECT * FROM cte_1
+ORDER BY 1, 2, 3
+LIMIT 5;
 
 
 -- Inner CTE should be router plannable
-EXPLAIN (COSTS false, VERBOSE true)
 WITH cte_1 AS (
   WITH cte_1_1 AS (
     SELECT * FROM users_table WHERE value_2 IN (2, 3, 4)
@@ -319,6 +321,6 @@ WITH cte_1 AS (
   cte_1_2 AS (
     SELECT cte_1_1.user_id, event_type FROM cte_1_1, events_table where cte_1_1.user_id = events_table.user_id
   )
-  SELECT * FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
+  SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id as uid FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type;
+SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3 LIMIT 5;

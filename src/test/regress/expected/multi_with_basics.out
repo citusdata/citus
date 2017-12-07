@@ -1,11 +1,17 @@
 -- CTE cannot be outside of FROM/WHERE clause
+WITH cte AS (
+	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
+)
+SELECT (SELECT * FROM cte);
+WARNING:  more than one row returned by a subquery used as an expression
+CONTEXT:  while executing command on localhost:57638
+ERROR:  could not receive query results
 WITH cte_basic AS (
 	SELECT * FROM users_table
 )
-SELECT cte_basic, user_id FROM users_table;
-ERROR:  column "cte_basic" does not exist
-LINE 4: SELECT cte_basic, user_id FROM users_table;
-               ^
+SELECT (SELECT user_id FROM cte_basic), user_id FROM users_table;
+ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
+HINT:  Consider using an equality filter on the distributed table's partition column.
 WITH cte_1 AS (
 	WITH cte_1_1 AS (
 		SELECT * FROM users_table
@@ -184,60 +190,60 @@ LIMIT
 
 -- CTEs in FROM should work
 WITH cte AS (
-	SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+	SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 )
 SELECT * FROM cte;
  user_id | value_2 
 ---------+---------
        1 |       0
-       1 |       2
-       1 |       3
-       1 |       3
-       1 |       4
+       2 |       0
+       2 |       1
+       2 |       1
+       2 |       1
 (5 rows)
 
 -- create and use CTE in FROM should work
 SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 	)
 SELECT * FROM cte) a;
  user_id | value_2 
 ---------+---------
        1 |       0
-       1 |       2
-       1 |       3
-       1 |       3
-       1 |       4
+       2 |       0
+       2 |       1
+       2 |       1
+       2 |       1
 (5 rows)
 
 --CTEs in FROM in a subquery should work
 SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 	)
 SELECT * FROM cte) b;
  user_id | value_2 
 ---------+---------
        1 |       0
-       1 |       2
-       1 |       3
-       1 |       3
-       1 |       4
+       2 |       0
+       2 |       1
+       2 |       1
+       2 |       1
 (5 rows)
 
 --CTEs in FROM in a subquery should work even when we create it there
 SELECT * FROM (
 	SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 		)
 		SELECT * FROM cte
 	) a) b;
  user_id | value_2 
 ---------+---------
        1 |       0
-       1 |       2
-       1 |       3
-       1 |       3
-       1 |       4
+       2 |       0
+       2 |       1
+       2 |       1
+       2 |       1
 (5 rows)
 
 -- CTEs in FROM and as a subquery in FROM should work
@@ -313,7 +319,7 @@ LIMIT
 
 -- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
 WITH cte AS (
-	SELECT * FROM users_table WHERE user_id = 1
+	SELECT * FROM users_table WHERE user_id IN (1, 2)
 )
 SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte)) a
 ORDER BY 
@@ -329,13 +335,16 @@ LIMIT
        1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
        1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
        1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
-(7 rows)
+       2 | Wed Nov 22 18:19:49.944985 2017 |       3 |       5 |       1 |        
+       2 | Thu Nov 23 00:19:14.138058 2017 |       3 |       4 |       0 |        
+       2 | Thu Nov 23 01:04:26.198826 2017 |       4 |       3 |       4 |        
+(10 rows)
 
 WITH cte AS (
-	SELECT * FROM users_table WHERE user_id = 1
+	SELECT * FROM users_table WHERE user_id IN (1, 2)
 ), 
 cte_2 AS (
-	SELECT * FROM users_table WHERE user_id = 2
+	SELECT * FROM users_table WHERE user_id  IN (3, 4)
 )
 SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte_2)) a
 ORDER BY 

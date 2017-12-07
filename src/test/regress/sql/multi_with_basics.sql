@@ -1,8 +1,14 @@
 -- CTE cannot be outside of FROM/WHERE clause
+WITH cte AS (
+	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
+)
+SELECT (SELECT * FROM cte);
+
+
 WITH cte_basic AS (
 	SELECT * FROM users_table
 )
-SELECT cte_basic, user_id FROM users_table;
+SELECT (SELECT user_id FROM cte_basic), user_id FROM users_table;
 
 
 WITH cte_1 AS (
@@ -119,26 +125,26 @@ LIMIT
 
 -- CTEs in FROM should work
 WITH cte AS (
-	SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+	SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 )
 SELECT * FROM cte;
 
 -- create and use CTE in FROM should work
 SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 	)
 SELECT * FROM cte) a;
 
 --CTEs in FROM in a subquery should work
 SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 	)
 SELECT * FROM cte) b;
 
 --CTEs in FROM in a subquery should work even when we create it there
 SELECT * FROM (
 	SELECT * FROM (WITH cte AS (
-		SELECT user_id, value_2 from users_table WHERE user_id = 1 ORDER BY 2 LIMIT 5
+		SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
 		)
 		SELECT * FROM cte
 	) a) b;
@@ -180,7 +186,7 @@ LIMIT
 
 -- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
 WITH cte AS (
-	SELECT * FROM users_table WHERE user_id = 1
+	SELECT * FROM users_table WHERE user_id IN (1, 2)
 )
 SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte)) a
 ORDER BY 
@@ -189,10 +195,10 @@ LIMIT
 	10;
 
 WITH cte AS (
-	SELECT * FROM users_table WHERE user_id = 1
+	SELECT * FROM users_table WHERE user_id IN (1, 2)
 ), 
 cte_2 AS (
-	SELECT * FROM users_table WHERE user_id = 2
+	SELECT * FROM users_table WHERE user_id  IN (3, 4)
 )
 SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte_2)) a
 ORDER BY 
