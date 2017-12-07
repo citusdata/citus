@@ -3479,6 +3479,71 @@ FindNodesOfType(MultiNode *node, int type)
 
 
 /*
+ * NeedsDistributedPlanning checks if the passed in query is a query running
+ * on a distributed table. If it is, we start distributed planning.
+ *
+ * For distributed relations it also assigns identifiers to the relevant RTEs.
+ */
+bool
+NeedsDistributedPlanning(Query *queryTree)
+{
+	CmdType commandType = queryTree->commandType;
+	List *rangeTableList = NIL;
+	ListCell *rangeTableCell = NULL;
+	bool hasLocalRelation = false;
+	bool hasDistributedRelation = false;
+
+	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+		commandType != CMD_UPDATE && commandType != CMD_DELETE)
+	{
+		return false;
+	}
+
+	/*
+	 * We can handle INSERT INTO distributed_table SELECT ... even if the SELECT
+	 * part references local tables, so skip the remaining checks.
+	 */
+	if (InsertSelectIntoDistributedTable(queryTree))
+	{
+		return true;
+	}
+
+	/* extract range table entries for simple relations only */
+	ExtractRangeTableRelationWalker((Node *) queryTree, &rangeTableList);
+
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+		/* check if relation is local or distributed */
+		Oid relationId = rangeTableEntry->relid;
+
+		if (IsDistributedTable(relationId))
+		{
+			hasDistributedRelation = true;
+		}
+		else
+		{
+			hasLocalRelation = true;
+		}
+	}
+
+	if (hasLocalRelation && hasDistributedRelation)
+	{
+		if (InsertSelectIntoLocalTable(queryTree))
+		{
+			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+								   "local table")));
+		}
+		ereport(ERROR, (errmsg("cannot plan queries which include both local and "
+							   "distributed relations")));
+	}
+
+	return hasDistributedRelation;
+}
+
+
+/*
  * ExtractRangeTableRelationWalker gathers all range table relation entries
  * in a query.
  */
