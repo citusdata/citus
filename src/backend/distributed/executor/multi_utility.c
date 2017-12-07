@@ -2108,6 +2108,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_EnableTrigAll:
 			case AT_DisableTrigAll:
 			case AT_ReplicaIdentity:
+			case AT_SetRelOptions:
+			case AT_ResetRelOptions:
 			{
 				/*
 				 * We will not perform any special check for ALTER TABLE DROP CONSTRAINT
