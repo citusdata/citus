@@ -183,6 +183,7 @@ SELECT count(*) FROM priority_orders JOIN air_shipped_lineitems ON (o_custkey = 
 (1 row)
 
 SET citus.task_executor_type to DEFAULT;
+-- materialized views work
 -- insert into... select works with views
 CREATE TABLE temp_lineitem(LIKE lineitem_hash_part);
 SELECT create_distributed_table('temp_lineitem', 'l_orderkey', 'hash', 'lineitem_hash_part');
@@ -206,6 +207,35 @@ SELECT count(*) FROM temp_lineitem;
   1706
 (1 row)
 
+-- can create and query materialized views
+CREATE MATERIALIZED VIEW mode_counts
+AS SELECT l_shipmode, count(*) FROM temp_lineitem GROUP BY l_shipmode;
+SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
+ l_shipmode | count 
+------------+-------
+ AIR        |  1706
+(1 row)
+
+-- materialized views are local, cannot join with distributed tables
+SELECT count(*) FROM mode_counts JOIN temp_lineitem USING (l_shipmode);
+ERROR:  relation mode_counts is not distributed
+-- new data is not immediately reflected in the view
+INSERT INTO temp_lineitem SELECT * FROM air_shipped_lineitems;
+SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
+ l_shipmode | count 
+------------+-------
+ AIR        |  1706
+(1 row)
+
+-- refresh updates the materialised view with new data
+REFRESH MATERIALIZED VIEW mode_counts;
+SELECT * FROM mode_counts WHERE l_shipmode = 'AIR' ORDER BY 2 DESC, 1 LIMIT 10;
+ l_shipmode | count 
+------------+-------
+ AIR        |  3412
+(1 row)
+
+DROP MATERIALIZED VIEW mode_counts;
 SET citus.task_executor_type to "task-tracker";
 -- single view repartition subqueries are not supported
 SELECT l_suppkey, count(*) FROM
