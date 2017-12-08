@@ -12,8 +12,8 @@
 #include <float.h>
 #include <limits.h>
 
+#include "catalog/pg_class.h"
 #include "catalog/pg_type.h"
-
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/insert_select_planner.h"
@@ -41,6 +41,7 @@ int MultiTaskQueryLogLevel = MULTI_TASK_QUERY_INFO_OFF; /* multi-task query log 
 
 
 /* local function forward declarations */
+static bool NeedsDistributedPlanningWalker(Node *node, void *context);
 static PlannedStmt * CreateDistributedPlan(PlannedStmt *localPlan, Query *originalQuery,
 										   Query *query, ParamListInfo boundParams,
 										   PlannerRestrictionContext *
@@ -75,20 +76,34 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	PlannerRestrictionContext *plannerRestrictionContext = NULL;
 	bool setPartitionedTablesInherited = false;
 
-	/*
-	 * standard_planner scribbles on it's input, but for deparsing we need the
-	 * unmodified form. Note that we keep RTE_RELATIONs with their identities
-	 * set, which doesn't break our goals, but, prevents us keeping an extra copy
-	 * of the query tree. Note that we copy the query tree once we're sure it's a
-	 * distributed query.
-	 */
 	if (needsDistributedPlanning)
 	{
-		setPartitionedTablesInherited = false;
+		/*
+		 * Inserting into a local table needs to go through the regular postgres
+		 * planner/executor, but the SELECT needs to go through Citus. We currently
+		 * don't have a way of doing both things and therefore error out, but do
+		 * have a handy tip for users.
+		 */
+		if (InsertSelectIntoLocalTable(parse))
+		{
+			ereport(ERROR, (errmsg("cannot INSERT rows from a distributed query into a "
+								   "local table"),
+							errhint("Consider using CREATE TEMPORARY TABLE tmp AS "
+									"SELECT ... and inserting from the temporary "
+									"table.")));
+		}
 
+		/*
+		 * standard_planner scribbles on it's input, but for deparsing we need the
+		 * unmodified form. Note that we keep RTE_RELATIONs with their identities
+		 * set, which doesn't break our goals, but, prevents us keeping an extra copy
+		 * of the query tree. Note that we copy the query tree once we're sure it's a
+		 * distributed query.
+		 */
 		AssignRTEIdentities(parse);
 		originalQuery = copyObject(parse);
 
+		setPartitionedTablesInherited = false;
 		AdjustPartitioningForDistributedPlanning(parse, setPartitionedTablesInherited);
 	}
 
@@ -144,6 +159,75 @@ distributed_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	}
 
 	return result;
+}
+
+
+/*
+ * NeedsDistributedPlanning returns true if the Citus extension is loaded and
+ * the query contains a distributed table.
+ *
+ * This function allows queries containing local tables to pass through the
+ * distributed planner. How to handle local tables is a decision that should
+ * be made within the planner
+ */
+bool
+NeedsDistributedPlanning(Query *query)
+{
+	CmdType commandType = query->commandType;
+	if (commandType != CMD_SELECT && commandType != CMD_INSERT &&
+		commandType != CMD_UPDATE && commandType != CMD_DELETE)
+	{
+		return false;
+	}
+
+	if (!CitusHasBeenLoaded())
+	{
+		return false;
+	}
+
+	if (!NeedsDistributedPlanningWalker((Node *) query, NULL))
+	{
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * NeedsDistributedPlanningWalker checks if the query contains any distributed
+ * tables.
+ */
+static bool
+NeedsDistributedPlanningWalker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		ListCell *rangeTableCell = NULL;
+
+		foreach(rangeTableCell, query->rtable)
+		{
+			RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+
+			Oid relationId = rangeTableEntry->relid;
+			if (IsDistributedTable(relationId))
+			{
+				return true;
+			}
+		}
+
+		return query_tree_walker(query, NeedsDistributedPlanningWalker, NULL, 0);
+	}
+	else
+	{
+		return expression_tree_walker(node, NeedsDistributedPlanningWalker, NULL);
+	}
 }
 
 
