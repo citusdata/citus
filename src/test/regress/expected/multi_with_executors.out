@@ -334,3 +334,374 @@ SELECT DISTINCT uid_1, val_3 FROM cte join events_table on cte.val_3=events_tabl
      2 |     1
 (1 row)
 
+SET citus.task_executor_type='real-time';
+set citus.explain_distributed_queries TO on;
+SET client_min_messages TO 'DEBUG2';
+-- CTEs should not be able to terminate (the last SELECT) in a local query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	SELECT * FROM users_table
+), cte_local AS (
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte_local;
+DEBUG:  recursively planning CTE cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table
+DEBUG:  recursively planning CTE cte_local: SELECT id FROM public.local_table
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Custom Scan (Citus Router)
+   ->  Distributed Subplan
+         ->  Custom Scan (Citus Real-Time)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Seq Scan on users_table_1400000 users_table
+         ->  Seq Scan on local_table
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57638 dbname=regression
+         ->  Aggregate
+               ->  Function Scan on read_intermediate_result read_records_file
+(15 rows)
+
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		WITH cte_dist AS (
+			SELECT * FROM events_table
+		)
+		SELECT * FROM cte_dist WHERE user_id > 3
+	)
+	SELECT cte_1.id FROM cte_1 join cte_2 on TRUE
+),
+cte_local AS (
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte_local;
+DEBUG:  recursively planning CTE cte: WITH cte_1 AS (SELECT local_table.id FROM public.local_table WHERE (local_table.id < 7)), cte_2 AS (WITH cte_dist AS (SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM public.events_table) SELECT cte_dist.user_id, cte_dist."time", cte_dist.event_type, cte_dist.value_2, cte_dist.value_3, cte_dist.value_4 FROM cte_dist WHERE (cte_dist.user_id > 3)) SELECT cte_1.id FROM (cte_1 JOIN cte_2 ON (true))
+DEBUG:  recursively planning CTE cte_1: SELECT id FROM public.local_table WHERE (id < 7)
+DEBUG:  recursively planning CTE cte_2: WITH cte_dist AS (SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM public.events_table) SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM cte_dist WHERE (user_id > 3)
+DEBUG:  recursively planning CTE cte_dist: SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  recursively planning CTE cte_local: SELECT id FROM public.local_table
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                           QUERY PLAN                                            
+-------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)
+   ->  Distributed Subplan
+         ->  Custom Scan (Citus Router)
+               ->  Distributed Subplan
+                     ->  Seq Scan on local_table
+                           Filter: (id < 7)
+                     ->  Custom Scan (Citus Router)
+                           ->  Distributed Subplan
+                                 ->  Custom Scan (Citus Real-Time)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  Seq Scan on events_table_1400004 events_table
+                           Task Count: 1
+                           Tasks Shown: All
+                           ->  Task
+                                 Node: host=localhost port=57637 dbname=regression
+                                 ->  Function Scan on read_intermediate_result read_records_file
+                                       Filter: (user_id > 3)
+               Task Count: 1
+               Tasks Shown: All
+               ->  Task
+                     Node: host=localhost port=57638 dbname=regression
+                     ->  Nested Loop
+                           ->  Function Scan on read_intermediate_result read_records_file
+                           ->  Function Scan on read_intermediate_result read_records_file_1
+         ->  Seq Scan on local_table
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Aggregate
+               ->  Function Scan on read_intermediate_result read_records_file
+(34 rows)
+
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		WITH cte_1_1 AS (
+			SELECT * FROM events_table
+		)
+		SELECT * FROM local_table
+	)
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte;
+DEBUG:  recursively planning CTE cte: WITH cte_1 AS (WITH cte_1_1 AS (SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM public.events_table) SELECT local_table_1.id FROM public.local_table local_table_1) SELECT id FROM public.local_table
+DEBUG:  recursively planning CTE cte_1: WITH cte_1_1 AS (SELECT events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM public.events_table) SELECT id FROM public.local_table
+DEBUG:  recursively planning CTE cte_1_1: SELECT user_id, "time", event_type, value_2, value_3, value_4 FROM public.events_table
+ERROR:  relation local_table is not distributed
+-- CTEs should be able to terminate a router query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id and user_id=5;
+DEBUG:  recursively planning CTE cte: WITH cte_1 AS (SELECT local_table.id FROM public.local_table WHERE (local_table.id < 7)), cte_2 AS (SELECT local_table.id FROM public.local_table WHERE (local_table.id > 3)), cte_dist AS (SELECT count(*) AS u_id FROM public.users_table users_table_1), cte_merge AS (SELECT cte_1.id FROM (cte_1 JOIN cte_2 ON (true))) SELECT count(*) AS count FROM (public.users_table JOIN cte_merge ON ((cte_merge.id = users_table.user_id)))
+DEBUG:  recursively planning CTE cte_1: SELECT id FROM public.local_table WHERE (id < 7)
+DEBUG:  recursively planning CTE cte_2: SELECT id FROM public.local_table WHERE (id > 3)
+DEBUG:  recursively planning CTE cte_dist: SELECT count(*) AS u_id FROM public.users_table
+DEBUG:  recursively planning CTE cte_merge: SELECT cte_1.id FROM ((SELECT read_records_file.id FROM read_intermediate_result('49_0'::text, 'binary'::citus_copy_format) read_records_file(id integer)) cte_1 JOIN (SELECT read_records_file.id FROM read_intermediate_result('49_1'::text, 'binary'::citus_copy_format) read_records_file(id integer)) cte_2 ON (true))
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                                  QUERY PLAN                                                   
+---------------------------------------------------------------------------------------------------------------
+ Custom Scan (Citus Router)
+   ->  Distributed Subplan
+         ->  Aggregate
+               ->  Custom Scan (Citus Real-Time)
+                     ->  Distributed Subplan
+                           ->  Seq Scan on local_table
+                                 Filter: (id < 7)
+                           ->  Seq Scan on local_table
+                                 Filter: (id > 3)
+                           ->  Aggregate
+                                 ->  Custom Scan (Citus Real-Time)
+                                       Task Count: 4
+                                       Tasks Shown: One of 4
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  Aggregate
+                                                   ->  Seq Scan on users_table_1400000 users_table
+                           ->  Custom Scan (Citus Router)
+                                 Task Count: 1
+                                 Tasks Shown: All
+                                 ->  Task
+                                       Node: host=localhost port=57638 dbname=regression
+                                       ->  Nested Loop
+                                             ->  Function Scan on read_intermediate_result read_records_file
+                                             ->  Function Scan on read_intermediate_result read_records_file_1
+                     Task Count: 4
+                     Tasks Shown: One of 4
+                     ->  Task
+                           Node: host=localhost port=57637 dbname=regression
+                           ->  Aggregate
+                                 ->  Hash Join
+                                       Hash Cond: (read_records_file.id = users_table.user_id)
+                                       ->  Function Scan on read_intermediate_result read_records_file
+                                       ->  Hash
+                                             ->  Seq Scan on users_table_1400000 users_table
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=57637 dbname=regression
+         ->  Aggregate
+               ->  Nested Loop
+                     ->  Seq Scan on users_table_1400000 users_table
+                           Filter: (user_id = 5)
+                     ->  Function Scan on read_intermediate_result read_records_file
+                           Filter: (count = 5)
+(45 rows)
+
+-- CTEs should be able to terminate a real-time query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id;
+DEBUG:  recursively planning CTE cte: WITH cte_1 AS (SELECT local_table.id FROM public.local_table WHERE (local_table.id < 7)), cte_2 AS (SELECT local_table.id FROM public.local_table WHERE (local_table.id > 3)), cte_dist AS (SELECT count(*) AS u_id FROM public.users_table users_table_1), cte_merge AS (SELECT cte_1.id FROM (cte_1 JOIN cte_2 ON (true))) SELECT count(*) AS count FROM (public.users_table JOIN cte_merge ON ((cte_merge.id = users_table.user_id)))
+DEBUG:  recursively planning CTE cte_1: SELECT id FROM public.local_table WHERE (id < 7)
+DEBUG:  recursively planning CTE cte_2: SELECT id FROM public.local_table WHERE (id > 3)
+DEBUG:  recursively planning CTE cte_dist: SELECT count(*) AS u_id FROM public.users_table
+DEBUG:  recursively planning CTE cte_merge: SELECT cte_1.id FROM ((SELECT read_records_file.id FROM read_intermediate_result('53_0'::text, 'binary'::citus_copy_format) read_records_file(id integer)) cte_1 JOIN (SELECT read_records_file.id FROM read_intermediate_result('53_1'::text, 'binary'::citus_copy_format) read_records_file(id integer)) cte_2 ON (true))
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Real-Time)
+         ->  Distributed Subplan
+               ->  Aggregate
+                     ->  Custom Scan (Citus Real-Time)
+                           ->  Distributed Subplan
+                                 ->  Seq Scan on local_table
+                                       Filter: (id < 7)
+                                 ->  Seq Scan on local_table
+                                       Filter: (id > 3)
+                                 ->  Aggregate
+                                       ->  Custom Scan (Citus Real-Time)
+                                             Task Count: 4
+                                             Tasks Shown: One of 4
+                                             ->  Task
+                                                   Node: host=localhost port=57637 dbname=regression
+                                                   ->  Aggregate
+                                                         ->  Seq Scan on users_table_1400000 users_table
+                                 ->  Custom Scan (Citus Router)
+                                       Task Count: 1
+                                       Tasks Shown: All
+                                       ->  Task
+                                             Node: host=localhost port=57637 dbname=regression
+                                             ->  Nested Loop
+                                                   ->  Function Scan on read_intermediate_result read_records_file
+                                                   ->  Function Scan on read_intermediate_result read_records_file_1
+                           Task Count: 4
+                           Tasks Shown: One of 4
+                           ->  Task
+                                 Node: host=localhost port=57637 dbname=regression
+                                 ->  Aggregate
+                                       ->  Hash Join
+                                             Hash Cond: (read_records_file.id = users_table.user_id)
+                                             ->  Function Scan on read_intermediate_result read_records_file
+                                             ->  Hash
+                                                   ->  Seq Scan on users_table_1400000 users_table
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=57637 dbname=regression
+               ->  Aggregate
+                     ->  Hash Join
+                           Hash Cond: (read_records_file.count = users_table.user_id)
+                           ->  Function Scan on read_intermediate_result read_records_file
+                           ->  Hash
+                                 ->  Seq Scan on users_table_1400000 users_table
+(46 rows)
+
+SET citus.task_executor_type='task-tracker';
+-- CTEs shouldn't be able to terminate a task-tracker query
+EXPLAIN (COSTS false)
+WITH cte_1 AS (
+	SELECT 
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id < 7
+),
+cte_2 AS (
+	SELECT
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id > 3
+),
+cte_merge AS (
+	SELECT
+		cte_1.u_id, cte_2.event_type
+	FROM
+		cte_1
+	join
+		cte_2
+	on cte_1.event_type=cte_2.u_id
+)
+SELECT
+	count(*)
+FROM
+	users_table, events_table, cte_merge
+WHERE
+	users_table.user_id=events_table.value_2 AND events_table.value_2 =  cte_merge.u_id;
+DEBUG:  recursively planning CTE cte_1: SELECT u_table.user_id AS u_id, e_table.event_type FROM (public.users_table u_table JOIN public.events_table e_table ON ((u_table.value_2 = e_table.event_type))) WHERE (u_table.user_id < 7)
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 24
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 24
+DEBUG:  recursively planning CTE cte_2: SELECT u_table.user_id AS u_id, e_table.event_type FROM (public.users_table u_table JOIN public.events_table e_table ON ((u_table.value_2 = e_table.event_type))) WHERE (u_table.user_id > 3)
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
+DEBUG:  pruning merge fetch taskId 1
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 9
+DEBUG:  pruning merge fetch taskId 4
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 5
+DETAIL:  Creating dependency on merge taskId 14
+DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 19
+DEBUG:  pruning merge fetch taskId 10
+DETAIL:  Creating dependency on merge taskId 24
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 24
+DEBUG:  recursively planning CTE cte_merge: SELECT cte_1.u_id, cte_2.event_type FROM ((SELECT read_records_file.u_id, read_records_file.event_type FROM read_intermediate_result('56_0'::text, 'binary'::citus_copy_format) read_records_file(u_id integer, event_type integer)) cte_1 JOIN (SELECT read_records_file.u_id, read_records_file.event_type FROM read_intermediate_result('56_1'::text, 'binary'::citus_copy_format) read_records_file(u_id integer, event_type integer)) cte_2 ON ((cte_1.event_type = cte_2.u_id)))
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.

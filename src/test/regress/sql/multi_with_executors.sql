@@ -258,3 +258,134 @@ WITH cte AS (
 )
 SELECT DISTINCT uid_1, val_3 FROM cte join events_table on cte.val_3=events_table.event_type ORDER BY 1, 2;
 
+
+SET citus.task_executor_type='real-time';
+set citus.explain_distributed_queries TO on;
+SET client_min_messages TO 'DEBUG2';
+-- CTEs should not be able to terminate (the last SELECT) in a local query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	SELECT * FROM users_table
+), cte_local AS (
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte_local;
+
+
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		WITH cte_dist AS (
+			SELECT * FROM events_table
+		)
+		SELECT * FROM cte_dist WHERE user_id > 3
+	)
+	SELECT cte_1.id FROM cte_1 join cte_2 on TRUE
+),
+cte_local AS (
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte_local;
+
+
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		WITH cte_1_1 AS (
+			SELECT * FROM events_table
+		)
+		SELECT * FROM local_table
+	)
+	SELECT * FROM local_table
+)
+SELECT count(*) FROM cte;
+
+
+-- CTEs should be able to terminate a router query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id and user_id=5;
+
+
+-- CTEs should be able to terminate a real-time query
+EXPLAIN (COSTS false)
+WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM local_table WHERE id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM local_table WHERE id > 3
+	),
+	cte_dist AS (
+		SELECT count(*) as u_id FROM users_table
+	),
+	cte_merge AS (
+		SELECT cte_1.id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id;
+
+
+SET citus.task_executor_type='task-tracker';
+-- CTEs shouldn't be able to terminate a task-tracker query
+EXPLAIN (COSTS false)
+WITH cte_1 AS (
+	SELECT 
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id < 7
+),
+cte_2 AS (
+	SELECT
+		u_table.user_id as u_id, e_table.event_type
+	FROM
+		users_table as u_table
+	join
+		events_table as e_table
+	on
+		u_table.value_2=e_table.event_type
+	WHERE
+		u_table.user_id > 3
+),
+cte_merge AS (
+	SELECT
+		cte_1.u_id, cte_2.event_type
+	FROM
+		cte_1
+	join
+		cte_2
+	on cte_1.event_type=cte_2.u_id
+)
+SELECT
+	count(*)
+FROM
+	users_table, events_table, cte_merge
+WHERE
+	users_table.user_id=events_table.value_2 AND events_table.value_2 =  cte_merge.u_id;
+
+
+
