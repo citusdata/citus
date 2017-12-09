@@ -152,7 +152,7 @@ ERROR:  cannot push down this subquery
 DETAIL:  Limit in subquery without limit in the outermost query is unsupported
 -- reset the flag for next query
 SET citus.subquery_pushdown to OFF;
--- Check that we error out if the outermost query is a distinct clause.
+-- Check that we support count distinct with a subquery
 SELECT
 	count(DISTINCT a)
 FROM (
@@ -163,8 +163,36 @@ FROM (
 	GROUP BY
 	   l_orderkey
 ) z;
-ERROR:  cannot push down this subquery
-DETAIL:  distinct in the outermost query is unsupported
+ count 
+-------
+     7
+(1 row)
+
+-- We do not support distinct aggregates other than count distinct with a subquery
+SELECT
+	sum(DISTINCT a)
+FROM (
+	SELECT
+		count(*) a
+	FROM
+		lineitem_subquery
+	GROUP BY
+	   l_orderkey
+) z;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  Only count(distinct) aggregate is supported in subqueries
+SELECT
+	avg(DISTINCT a)
+FROM (
+	SELECT
+		count(*) a
+	FROM
+		lineitem_subquery
+	GROUP BY
+	   l_orderkey
+) z;
+ERROR:  cannot compute aggregate (distinct)
+DETAIL:  Only count(distinct) aggregate is supported in subqueries
 -- Check supported subquery types.
 SELECT
 	o_custkey,
