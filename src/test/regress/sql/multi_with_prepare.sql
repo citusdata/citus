@@ -1,16 +1,14 @@
 -- prepared statements
 PREPARE prepared_test_1 AS
 WITH basic AS(
-  SELECT * FROM users_table
+  SELECT * FROM (SELECT user_id, avg(value_3) OVER w1 FROM users_table GROUP BY 1, value_3 WINDOW w1 AS (PARTITION BY user_id)) a
 )
 SELECT
   * 
 FROM
   basic
-WHERE
-  basic.value_2 IN (1, 2, 3)
 ORDER BY
-  1, 2, 3, 4, 5, 6
+  1, 2
 LIMIT 10;
 
 

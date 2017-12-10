@@ -271,3 +271,61 @@ ORDER BY
   1, 2, 3, 4, 5, 6
 LIMIT
   20;
+
+
+-- access to uncle, use window function, apply aggregates, use group by, LIMIT/OFFSET
+WITH cte1 AS (
+  WITH cte1_1 AS (
+    WITH cte1_1_1 AS (
+      SELECT user_id, time, value_2 FROM users_table
+    ),
+    cte1_1_2 AS (
+      SELECT
+        user_id, count
+      FROM (
+              SELECT
+                      user_id,
+                      count(value_2) OVER (PARTITION BY user_id)
+              FROM
+                      users_table
+              GROUP BY 1, users_table.value_2
+      )aa
+      GROUP BY 
+        1,2
+      ORDER BY 
+        1,2
+      LIMIT 
+        4
+      OFFSET 
+        2
+    )
+    SELECT cte1_1_1.user_id, cte1_1_1.time, cte1_1_2.count FROM cte1_1_1 join cte1_1_2 on cte1_1_1.user_id=cte1_1_2.user_id
+  ),
+  cte1_2 AS (
+    WITH cte1_2_1 AS (
+      SELECT 
+        user_id, time, avg(value_1)::real as value_1, min(value_2) as value_2
+      FROM 
+        users_table
+      GROUP BY
+        1, 2
+    ),
+    cte1_2_2 AS (
+      SELECT cte1_2_1.user_id, cte1_1.time, cte1_2_1.value_1, cte1_1.count FROM cte1_2_1 join cte1_1 on cte1_2_1.time=cte1_1.time and cte1_2_1.user_id=cte1_1.user_id
+    )
+    SELECT * FROM cte1_2_2
+  )
+  SELECT * FROM cte1_2
+),
+cte2 AS (
+  WITH cte2_1 AS (
+    WITH cte2_1_1 AS (
+      SELECT * FROM cte1 
+    )
+    SELECT user_id, time, value_1, min(count) FROM cte2_1_1 GROUP BY 1, 2, 3 ORDER BY 1,2,3
+  )
+  SELECT * FROM cte2_1 LIMIT 3 OFFSET 2
+)
+SELECT * FROM cte2;
+
+

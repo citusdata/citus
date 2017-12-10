@@ -125,7 +125,7 @@ LIMIT
 
 -- CTEs in FROM should work
 WITH cte AS (
-	SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
+	SELECT DISTINCT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5 OFFSET 5
 )
 SELECT * FROM cte;
 
@@ -195,13 +195,13 @@ LIMIT
 	10;
 
 WITH cte AS (
-	SELECT * FROM users_table WHERE user_id IN (1, 2)
+	SELECT user_id, min(value_2) as val_2 FROM users_table WHERE user_id IN (1, 2, 3) GROUP BY user_id ORDER BY 2 DESC, 1 LIMIT 3 OFFSET 2
 ), 
 cte_2 AS (
-	SELECT * FROM users_table WHERE user_id  IN (3, 4)
+	SELECT user_id, max(value_2) as val_2 FROM users_table WHERE user_id IN (3, 4, 5) GROUP BY user_id
 )
-SELECT * FROM (SELECT * FROM cte UNION (SELECT * FROM cte_2)) a
+SELECT DISTINCT ON (user_id) user_id, sum(val_2) OVER () FROM (SELECT * FROM cte UNION (SELECT * FROM cte_2)) a
 ORDER BY 
-	1,2,3,4,5,6
+	1,2
 LIMIT 
 	10;

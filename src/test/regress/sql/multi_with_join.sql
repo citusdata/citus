@@ -83,6 +83,7 @@ ORDER BY
   2 DESC, 1;
   
 
+-- colocated/noncolocated joins with using window functions
 WITH non_colocated AS (
   WITH colocated AS (
     SELECT 
@@ -94,18 +95,21 @@ WITH non_colocated AS (
   ),
   colocated_2 AS (
     SELECT 
-      users_table.user_id as uid, events_table.value_2
+      users_table.user_id as uid, sum(events_table.value_2)
     FROM 
       users_table, events_table
     WHERE
       users_table.user_id = events_table.user_id AND event_type IN (3, 4)
+    GROUP BY 1
   )
   SELECT
-    colocated.uid, colocated.value_2
+    colocated.uid, colocated.value_2, lag(colocated_2.sum, 1) OVER (PARTITION BY colocated.uid)
   FROM
     colocated, colocated_2
   WHERE
-    colocated.value_2 = colocated_2.value_2
+    colocated.value_2 = colocated_2.uid
+  GROUP BY
+    1, 2, colocated_2.sum
 ),
 non_colocated_2 AS (
   SELECT 
@@ -116,7 +120,7 @@ non_colocated_2 AS (
     users_table.user_id = events_table.event_type AND event_type IN (5, 6)
 )
 SELECT
-  sum(non_colocated.uid), sum(non_colocated.value_2), sum(non_colocated_2.value_2)
+  sum(non_colocated.uid), sum(non_colocated.value_2), sum(non_colocated_2.value_2), sum(lag)
 FROM
   non_colocated, non_colocated_2
 WHERE 
