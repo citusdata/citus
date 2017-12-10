@@ -1555,10 +1555,18 @@ ProcessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand)
 
 	taskList = VacuumTaskList(relationId, vacuumStmt);
 
-	/* save old commit protocol to restore at xact end */
-	Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
-	SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
-	MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	/*
+	 * VACUUM commands cannot run inside a transaction block, so we use
+	 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
+	 * commands can run inside a transaction block.
+	 */
+	if ((vacuumStmt->options & VACOPT_VACUUM) != 0)
+	{
+		/* save old commit protocol to restore at xact end */
+		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
+		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
+		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
+	}
 
 	ExecuteModifyTasksWithoutResults(taskList);
 }
