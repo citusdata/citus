@@ -20,6 +20,12 @@ COPY sharded_table TO STDOUT;
 COPY (SELECT COUNT(*) FROM sharded_table) TO STDOUT;
 COMMIT;
 
+-- ANALYZE is supported in a transaction block
+BEGIN;
+ANALYZE sharded_table;
+ANALYZE sharded_table;
+END;
+
 -- cursors may not involve distributed tables
 DECLARE all_sharded_rows CURSOR FOR SELECT * FROM sharded_table;
 
