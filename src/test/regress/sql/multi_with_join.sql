@@ -327,4 +327,4 @@ WITH cte_1 AS (
   )
   SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id as uid FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3 LIMIT 5;
+SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3, 4, 5, 6, 7, 8 LIMIT 5;

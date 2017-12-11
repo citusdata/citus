@@ -124,6 +124,7 @@ ORDER BY
 (5 rows)
 
   
+-- colocated/noncolocated joins with using window functions
 WITH non_colocated AS (
   WITH colocated AS (
     SELECT 

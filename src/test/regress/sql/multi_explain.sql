@@ -139,6 +139,37 @@ EXPLAIN (COSTS FALSE, VERBOSE TRUE)
 	HAVING l_quantity > (100 * random());
 
 
+-- Test explain works with CTEs as well
+SELECT true AS valid FROM explain_json($$WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM events_table WHERE user_id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM events_table WHERE user_id > 3
+	),
+	cte_merge AS (
+		SELECT cte_1.user_id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id$$);
+
+
+SELECT true AS valid FROM explain_xml($$WITH cte AS (
+	WITH cte_1 AS (
+		SELECT * FROM events_table WHERE user_id < 7
+	),
+	cte_2 AS (
+		SELECT * FROM events_table WHERE user_id > 3
+	),
+	cte_merge AS (
+		SELECT cte_1.user_id as id FROM cte_1 join cte_2 on TRUE
+	)
+	SELECT count(*) FROM users_table join cte_merge on id=user_id
+)
+SELECT count(*) FROM cte, users_table where cte.count=user_id$$);
+
+
 -- Subquery pushdown tests with explain
 EXPLAIN (COSTS OFF)
 SELECT
@@ -355,6 +386,7 @@ ORDER BY
 	user_lastseen DESC
 LIMIT
 	10;
+
 
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
