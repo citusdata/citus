@@ -401,4 +401,3 @@ SELECT * FROM cte2;
        3 | Thu Nov 23 03:23:24.702501 2017 |       1 |   5
 (3 rows)
 
-

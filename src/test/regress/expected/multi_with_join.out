@@ -468,7 +468,7 @@ WITH cte_1 AS (
   )
   SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id as uid FROM cte_1_2 JOIN reference_table on cte_1_2.user_id = reference_table.user_id
 )
-SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3 LIMIT 5;
+SELECT * FROM cte_1 JOIN events_table on cte_1.event_type=events_table.event_type ORDER BY 1, 2, 3, 4, 5, 6, 7, 8 LIMIT 5;
 DEBUG:  recursively planning CTE cte_1: WITH cte_1_1 AS (SELECT users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM public.users_table WHERE (users_table.value_2 = ANY (ARRAY[2, 3, 4]))), cte_1_2 AS (SELECT cte_1_1.user_id, events_table.event_type FROM cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)) SELECT cte_1_2.user_id, cte_1_2.event_type, reference_table.user_id AS uid FROM (cte_1_2 JOIN public.reference_table ON ((cte_1_2.user_id = reference_table.user_id)))
 DEBUG:  recursively planning CTE cte_1_1: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM public.users_table WHERE (value_2 = ANY (ARRAY[2, 3, 4]))
 DEBUG:  recursively planning CTE cte_1_2: SELECT cte_1_1.user_id, events_table.event_type FROM (SELECT read_records_file.user_id, read_records_file."time", read_records_file.value_1, read_records_file.value_2, read_records_file.value_3, read_records_file.value_4 FROM read_intermediate_result('37_0'::text, 'binary'::citus_copy_format) read_records_file(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) cte_1_1, public.events_table WHERE (cte_1_1.user_id = events_table.user_id)
@@ -477,10 +477,10 @@ DEBUG:  Plan is router executable
 DEBUG:  push down of limit count: 5
  user_id | event_type | uid | user_id |              time               | event_type | value_2 | value_3 | value_4 
 ---------+------------+-----+---------+---------------------------------+------------+---------+---------+---------
-       6 |          1 |   6 |       5 | Thu Nov 23 04:16:29.402814 2017 |          1 |       3 |       3 |        
-       6 |          1 |   6 |       5 | Thu Nov 23 03:23:09.888244 2017 |          1 |       3 |       2 |        
-       6 |          1 |   6 |       5 | Thu Nov 23 02:27:02.996588 2017 |          1 |       4 |       1 |        
-       6 |          1 |   6 |       5 | Thu Nov 23 14:40:40.467511 2017 |          1 |       4 |       1 |        
-       6 |          1 |   6 |       5 | Wed Nov 22 20:45:35.99031 2017  |          1 |       2 |       3 |        
+       6 |          1 |   6 |       1 | Wed Nov 22 19:07:03.846437 2017 |          1 |       2 |       5 |        
+       6 |          1 |   6 |       1 | Wed Nov 22 19:07:03.846437 2017 |          1 |       2 |       5 |        
+       6 |          1 |   6 |       1 | Wed Nov 22 19:07:03.846437 2017 |          1 |       2 |       5 |        
+       6 |          1 |   6 |       1 | Wed Nov 22 19:07:03.846437 2017 |          1 |       2 |       5 |        
+       6 |          1 |   6 |       1 | Wed Nov 22 19:07:03.846437 2017 |          1 |       2 |       5 |        
 (5 rows)
 

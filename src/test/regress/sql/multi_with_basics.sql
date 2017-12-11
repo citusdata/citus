@@ -205,3 +205,32 @@ ORDER BY
 	1,2
 LIMIT 
 	10;
+
+-- CTEs should work with VIEWs as well
+CREATE VIEW basic_view AS 
+SELECT * FROM users_table;
+
+
+CREATE VIEW cte_view AS
+WITH cte AS (
+	SELECT * FROM users_table
+)
+SELECT user_id, max(value_1) as value_1 FROM cte GROUP BY 1;
+
+
+WITH cte_user AS (
+	SELECT basic_view.user_id,events_table.value_2 FROM basic_view join events_table on (basic_view.user_id = events_table.user_id)
+)
+SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
+
+SELECT * FROM cte_view;
+
+
+WITH cte_user_with_view AS 
+(
+	SELECT * FROM cte_view WHERE user_id < 3
+)
+SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 3;
+
+DROP VIEW basic_view;
+DROP VIEW cte_view;

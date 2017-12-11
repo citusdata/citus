@@ -359,3 +359,47 @@ LIMIT
        5 |  15
 (4 rows)
 
+-- CTEs should work with VIEWs as well
+CREATE VIEW basic_view AS 
+SELECT * FROM users_table;
+CREATE VIEW cte_view AS
+WITH cte AS (
+	SELECT * FROM users_table
+)
+SELECT user_id, max(value_1) as value_1 FROM cte GROUP BY 1;
+WITH cte_user AS (
+	SELECT basic_view.user_id,events_table.value_2 FROM basic_view join events_table on (basic_view.user_id = events_table.user_id)
+)
+SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
+ user_id | sum  
+---------+------
+       1 |  294
+       2 | 1026
+       3 |  782
+       4 |  943
+       5 |  806
+       6 |  220
+(6 rows)
+
+SELECT * FROM cte_view;
+ user_id | value_1 
+---------+---------
+       5 |       5
+       2 |       4
+       6 |       5
+       1 |       5
+       4 |       5
+       3 |       5
+(6 rows)
+
+WITH cte_user_with_view AS 
+(
+	SELECT * FROM cte_view WHERE user_id < 3
+)
+SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 3;
+ user_id | value_1 
+---------+---------
+(0 rows)
+
+DROP VIEW basic_view;
+DROP VIEW cte_view;
