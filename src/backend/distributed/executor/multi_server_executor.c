@@ -29,6 +29,7 @@
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
 bool BinaryMasterCopyFormat = false; /* copy data from workers in binary format */
+bool EnableRepartitionJoins = false;
 
 
 /*
@@ -98,13 +99,25 @@ JobExecutorType(DistributedPlan *distributedPlan)
 									  "\"task-tracker\".")));
 		}
 
-		/* if we have repartition jobs with real time executor, error out */
+		/* if we have repartition jobs with real time executor and repartition
+		 * joins are not enabled, error out. Otherwise, switch to task-tracker
+		 */
 		dependedJobCount = list_length(job->dependedJobList);
 		if (dependedJobCount > 0)
 		{
-			ereport(ERROR, (errmsg("cannot use real time executor with repartition jobs"),
-							errhint("Set citus.task_executor_type to "
-									"\"task-tracker\".")));
+			if (!EnableRepartitionJoins)
+			{
+				ereport(ERROR, (errmsg(
+									"the query contains a join that requires repartitioning"),
+								errhint("Set citus.enable_repartition_joins to on "
+										"to enable repartitioning")));
+			}
+
+			ereport(DEBUG1, (errmsg(
+								 "cannot use real time executor with repartition jobs"),
+							 errhint("Since you enabled citus.enable_repartition_joins "
+									 "Citus chose to use task-tracker.")));
+			return MULTI_EXECUTOR_TASK_TRACKER;
 		}
 	}
 	else
