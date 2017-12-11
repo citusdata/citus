@@ -746,6 +746,16 @@ RegisterCitusConfigVariables(void)
 		0,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_repartition_joins",
+		gettext_noop("Allows Citus to use task-tracker executor when necessary."),
+		NULL,
+		&EnableRepartitionJoins,
+		false,
+		PGC_USERSET,
+		0,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),

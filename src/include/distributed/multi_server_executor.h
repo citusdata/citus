@@ -190,6 +190,7 @@ typedef struct WorkerNodeState
 extern int RemoteTaskCheckInterval;
 extern int MaxAssignTaskBatchSize;
 extern int TaskExecutorType;
+extern bool EnableRepartitionJoins;
 extern bool BinaryMasterCopyFormat;
 extern int MultiTaskQueryLogLevel;
 
