@@ -25,6 +25,11 @@ COPY sharded_table TO STDOUT;
 COPY (SELECT COUNT(*) FROM sharded_table) TO STDOUT;
 0
 COMMIT;
+-- ANALYZE is supported in a transaction block
+BEGIN;
+ANALYZE sharded_table;
+ANALYZE sharded_table;
+END;
 -- cursors may not involve distributed tables
 DECLARE all_sharded_rows CURSOR FOR SELECT * FROM sharded_table;
 ERROR:  DECLARE CURSOR can only be used in transaction blocks
