@@ -74,19 +74,6 @@
 
 
 /*
- * RecursivePlanningContext is used to recursively plan subqueries
- * and CTEs, pull results to the coordinator, and push it back into
- * the workers.
- */
-typedef struct RecursivePlanningContext
-{
-	int level;
-	uint64 planId;
-	List *subPlanList;
-	PlannerRestrictionContext *plannerRestrictionContext;
-} RecursivePlanningContext;
-
-/*
  * CteReferenceWalkerContext is used to collect CTE references in
  * CteReferenceListWalker.
  */
@@ -133,17 +120,9 @@ static Query * BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 su
  * subplans will be added to subPlanList.
  */
 DeferredErrorMessage *
-RecursivelyPlanSubqueriesAndCTEs(Query *query,
-								 PlannerRestrictionContext *plannerRestrictionContext,
-								 uint64 planId, List **subPlanList)
+RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context)
 {
 	DeferredErrorMessage *error = NULL;
-	RecursivePlanningContext context;
-
-	context.level = 0;
-	context.planId = planId;
-	context.subPlanList = NIL;
-	context.plannerRestrictionContext = plannerRestrictionContext;
 
 	error = RecursivelyPlanCTEs(query, &context);
 	if (error != NULL)
@@ -166,9 +145,8 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query,
 		return NULL;
 	}
 
-	/* XXX: plan subqueries */
-
-	*subPlanList = context.subPlanList;
+	/* descend into subqueries */
+	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
 
 	return NULL;
 }

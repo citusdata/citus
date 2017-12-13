@@ -595,6 +595,7 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 	MultiTreeRoot *logicalPlan = NULL;
 	DeferredErrorMessage *error = NULL;
 	List *subPlanList = NIL;
+	RecursivePlanningContext context;
 
 	/*
 	 * For select queries we, if router executor is enabled, first try to
@@ -648,8 +649,12 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
 	 * calling the planner and add the resulting plans to subPlanList.
 	 */
-	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, plannerRestrictionContext,
-											 planId, &subPlanList);
+	context.level = 0;
+	context.planId = planId;
+	context.subPlanList = NIL;
+	context.plannerRestrictionContext = plannerRestrictionContext;
+
+	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, &context);
 	if (error != NULL)
 	{
 		RaiseDeferredError(error, ERROR);
@@ -663,6 +668,7 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 	 * with an original query. In that case, we would only have to filter the
 	 * planner restriction context.
 	 */
+	subPlanList = context.subPlanList;
 	if (list_length(subPlanList) > 0)
 	{
 		Query *newQuery = copyObject(originalQuery);
