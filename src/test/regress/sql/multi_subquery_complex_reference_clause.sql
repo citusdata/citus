@@ -1172,7 +1172,7 @@ FROM
 ORDER BY 1
 LIMIT 5;
 
--- should error out since there is a distributed table and 
+-- should recursively plan since
 -- there are no columns on the GROUP BY from the distributed table
 SELECT 
   DISTINCT user_id 
@@ -1206,7 +1206,7 @@ ORDER BY 1
 LIMIT 5;
 
 
--- should not work since we're 
+-- should recursively plan since we're 
 -- using an immutable function as recurring tuple
 -- along with a distributed table, where GROUP BY is 
 -- on the recurring tuple

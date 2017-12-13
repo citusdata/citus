@@ -124,8 +124,8 @@ SELECT * FROM articles WHERE author_id = 2;
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
 SELECT title FROM articles ORDER BY 1 LIMIT 5;
 
--- queries which involve functions in FROM clause are unsupported.
-SELECT * FROM articles, position('om' in 'Thomas');
+-- queries which involve functions in FROM clause are recursively planned
+SELECT * FROM articles, position('om' in 'Thomas') ORDER BY 2 DESC, 1 DESC, 3 DESC LIMIT 5;
 
 -- subqueries are not supported in WHERE clause in Citus
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');

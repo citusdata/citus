@@ -230,8 +230,11 @@ SELECT count(*) FROM
 -- table function cannot be used without subquery pushdown
 SELECT count(*) FROM user_buy_test_table JOIN generate_series(1,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id = users_ref_test_table.id;
-ERROR:  could not run distributed query with complex table expressions
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ count 
+-------
+     4
+(1 row)
+
 -- table function can be the inner relationship in an outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table LEFT JOIN generate_series(1,10) AS users_ref_test_table(id)
@@ -262,21 +265,19 @@ DETAIL:  There exist a table function in the outer part of the outer join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot push down this subquery
-DETAIL:  Only immutable functions can be used as a table expressions in a multi-shard query
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- cannot sneak in a volatile function as a parameter
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot push down this subquery
-DETAIL:  Only immutable functions can be used as a table expressions in a multi-shard query
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- cannot perform a union with table function
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
-ERROR:  cannot push down this subquery
-DETAIL:  Table functions are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- subquery without FROM can be the inner relationship in a join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN (SELECT 4 AS id) users_ref_test_table
@@ -312,8 +313,8 @@ SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
 SELECT
@@ -983,8 +984,8 @@ INNER JOIN
     ON (t.user_id = q.user_id)) as final_query
 ORDER BY
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Reference tables are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
   -- reference table exist in the subquery of union, should error out
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -1056,8 +1057,8 @@ GROUP BY
   types
 ORDER BY
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Reference tables are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 --
 -- Should error out with UNION ALL Queries on reference tables
 --
@@ -1111,8 +1112,8 @@ INNER JOIN
       WHERE value_1 > 2 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
-ERROR:  cannot push down this subquery
-DETAIL:  Reference tables are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- just a sanity check that we don't allow this if the reference table is on the
 -- left part of the left join
 SELECT count(*) FROM
@@ -1483,7 +1484,7 @@ LIMIT 5;
        5
 (5 rows)
 
--- should error out since there is a distributed table and 
+-- should recursively plan since
 -- there are no columns on the GROUP BY from the distributed table
 SELECT 
   DISTINCT user_id 
@@ -1499,8 +1500,12 @@ JOIN
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+ user_id 
+---------
+       1
+       4
+(2 rows)
+
 ROLLBACK;
 -- should work since we're using an immutable function as recurring tuple
 SELECT 
@@ -1521,7 +1526,7 @@ LIMIT 5;
        6
 (2 rows)
 
--- should not work since we're 
+-- should recursively plan since we're 
 -- using an immutable function as recurring tuple
 -- along with a distributed table, where GROUP BY is 
 -- on the recurring tuple
@@ -1539,8 +1544,11 @@ JOIN
  ON (mx = user_id)
 ORDER BY 1
 LIMIT 5;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+ user_id 
+---------
+       6
+(1 row)
+
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;

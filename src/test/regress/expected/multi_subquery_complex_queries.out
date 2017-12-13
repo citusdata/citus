@@ -2270,8 +2270,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- not supported due to offset
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2333,8 +2333,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- not supported due to non relation rte
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2393,8 +2393,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- similar to the above, but constant rte is on the right side of the query
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2448,6 +2448,6 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SET citus.enable_router_execution TO TRUE;

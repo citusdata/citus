@@ -187,11 +187,16 @@ extern bool SubqueryPushdown;
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
 											  plannerRestrictionContext);
+extern bool SingleRelationRepartitionSubquery(Query *queryTree);
+extern DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
+																 bool
+																 outerMostQueryHasLimit);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
+extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);

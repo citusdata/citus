@@ -83,8 +83,7 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
    (SELECT 1::bigint)
 ) b;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
 -- Check that we error out if queries in union do not include partition columns.
 SELECT count(*) FROM
 (
