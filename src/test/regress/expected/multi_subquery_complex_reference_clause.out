@@ -1361,6 +1361,186 @@ ORDER BY 1 DESC
 LIMIT 4;
 ERROR:  cannot push down this subquery
 DETAIL:  Distinct on columns without partition column is currently unsupported
+-- test the read_intermediate_result() for GROUP BYs
+BEGIN;
+ 
+SELECT broadcast_intermediate_result('squares', 'SELECT s, s*s FROM generate_series(1,200) s');
+ broadcast_intermediate_result 
+-------------------------------
+                           200
+(1 row)
+
+-- single appereance of read_intermediate_result
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_table 
+JOIN 
+(SELECT 
+  max(res.val) as mx 
+FROM 
+  read_intermediate_result('squares', 'binary') AS res (val int, val_square int) 
+GROUP BY res.val_square) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+(5 rows)
+
+-- similar to the above, with DISTINCT on intermediate result
+SELECT DISTINCT user_id
+FROM users_table
+JOIN
+  (SELECT DISTINCT res.val AS mx
+   FROM read_intermediate_result('squares', 'binary') AS res (val int, val_square int)) squares ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+(5 rows)
+
+-- single appereance of read_intermediate_result but inside a subquery
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_table 
+JOIN (
+  SELECT *,random() FROM (SELECT 
+    max(res.val) as mx 
+  FROM 
+      (SELECT val, val_square FROM read_intermediate_result('squares', 'binary') AS res (val int, val_square int)) res 
+  GROUP BY res.val_square) foo)
+squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+(5 rows)
+
+-- multiple read_intermediate_results in the same subquery is OK
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_table 
+JOIN 
+(SELECT 
+  max(res.val) as mx 
+FROM 
+  read_intermediate_result('squares', 'binary') AS res (val int, val_square int),
+  read_intermediate_result('squares', 'binary') AS res2 (val int, val_square int) 
+WHERE res.val = res2.val_square
+GROUP BY res2.val_square) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       1
+       4
+(2 rows)
+
+-- mixed recurring tuples should be supported
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_table 
+JOIN 
+(SELECT 
+  max(res.val) as mx 
+FROM 
+  read_intermediate_result('squares', 'binary') AS res (val int, val_square int), 
+  generate_series(0, 10) i
+  WHERE
+  res.val = i
+  GROUP BY 
+    i) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+(5 rows)
+
+-- should error out since there is a distributed table and 
+-- there are no columns on the GROUP BY from the distributed table
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_reference_table
+JOIN 
+  (SELECT 
+    max(val_square) as mx 
+  FROM 
+    read_intermediate_result('squares', 'binary') AS res (val int, val_square int), events_table 
+  WHERE 
+    events_table.user_id = res.val GROUP BY res.val) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ERROR:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported
+ROLLBACK;
+-- should work since we're using an immutable function as recurring tuple
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_table 
+JOIN 
+(SELECT 
+  max(i+5)as mx 
+FROM 
+  generate_series(0, 10) as i GROUP BY i) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ user_id 
+---------
+       5
+       6
+(2 rows)
+
+-- should not work since we're 
+-- using an immutable function as recurring tuple
+-- along with a distributed table, where GROUP BY is 
+-- on the recurring tuple
+SELECT 
+  DISTINCT user_id 
+FROM 
+  users_reference_table
+JOIN 
+  (SELECT 
+    max(i+5)as mx 
+  FROM 
+     generate_series(0, 10) as i, events_table 
+  WHERE 
+    events_table.user_id = i GROUP BY i) squares
+ ON (mx = user_id)
+ORDER BY 1
+LIMIT 5;
+ERROR:  cannot push down this subquery
+DETAIL:  Group by list without partition column is currently unsupported
 DROP TABLE user_buy_test_table;
 DROP TABLE users_ref_test_table;
 DROP TABLE users_return_test_table;
