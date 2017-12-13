@@ -11,6 +11,7 @@
 #define ERRORMESSAGE_H
 
 
+#include "c.h"
 #include "distributed/citus_nodes.h"
 
 
@@ -34,7 +35,8 @@ typedef struct DeferredErrorMessage
  * serialized/copied/deserialized, i.e. can be embedded in plans and such.
  */
 #define DeferredError(code, message, detail, hint) \
-	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, __func__)
+	DeferredErrorInternal(code, message, detail, hint, __FILE__, __LINE__, \
+						  PG_FUNCNAME_MACRO)
 
 DeferredErrorMessage * DeferredErrorInternal(int code, const char *message, const
 											 char *detail, const char *hint,
