@@ -654,6 +654,28 @@ RemoveIntermediateResultsDirectory(void)
 
 
 /*
+ * IntermediateResultSize returns the file size of the intermediate result
+ * or -1 if the file does not exist.
+ */
+int64
+IntermediateResultSize(char *resultId)
+{
+	char *resultFileName = NULL;
+	struct stat fileStat;
+	int statOK = 0;
+
+	resultFileName = QueryResultFileName(resultId);
+	statOK = stat(resultFileName, &fileStat);
+	if (statOK < 0)
+	{
+		return -1;
+	}
+
+	return (int64) fileStat.st_size;
+}
+
+
+/*
  * read_intermediate_result is a UDF that returns a COPY-formatted intermediate
  * result file as a set of records. The file is parsed according to the columns
  * definition list specified by the user, e.g.:
