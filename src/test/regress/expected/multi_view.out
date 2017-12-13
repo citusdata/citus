@@ -794,6 +794,7 @@ EXPLAIN (COSTS FALSE) SELECT *
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
 ERROR:  cannot push down this subquery
 DETAIL:  Limit in subquery is currently unsupported
+               ->  Distributed Subplan 83_1
 SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
                                                      QUERY PLAN                                                      

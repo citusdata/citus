@@ -726,8 +726,8 @@ INSERT INTO
   (SELECT user_id FROM raw_events_first);
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- If the query is router plannable then it is executed via the coordinator
 INSERT INTO
   raw_events_first(user_id)
@@ -1066,6 +1066,7 @@ DEBUG:  Group by list without distribution column is not allowed  in distributed
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot push down this subquery
 DETAIL:  Group by list without partition column is currently unsupported
+DEBUG:  generating subplan 86_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.value_3 AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_3
 -- error cases
 -- no part column at all
 INSERT INTO raw_events_second
@@ -1183,6 +1184,7 @@ DEBUG:  Group by list without distribution column is not allowed  in distributed
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+DEBUG:  generating subplan 105_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) > (10)::numeric)
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
@@ -1212,6 +1214,7 @@ DEBUG:  Group by list without distribution column is not allowed  in distributed
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+DEBUG:  generating subplan 108_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) > (10)::numeric)
 -- cannot pushdown the query since the JOIN is not equi JOIN
 INSERT INTO agg_events
             (user_id, value_4_agg)

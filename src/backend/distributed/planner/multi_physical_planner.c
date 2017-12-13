@@ -2093,7 +2093,19 @@ SubquerySqlTaskList(Job *job, PlannerRestrictionContext *plannerRestrictionConte
 	 */
 	if (targetCacheEntry == NULL)
 	{
-		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(rangeTableList);
+		RangeTblEntry *rangeTableEntry = NULL;
+
+		if (list_length(rangeTableList) == 0)
+		{
+			/*
+			 * User disabled the router planner and forced planner go through
+			 * subquery pushdown, but we cannot continue anymore.
+			 */
+			ereport(ERROR, (errmsg("cannot handle complex subqueries when the "
+								   "router executor is disabled")));
+		}
+
+		rangeTableEntry = (RangeTblEntry *) linitial(rangeTableList);
 		relationId = rangeTableEntry->relid;
 		targetCacheEntry = DistributedTableCacheEntry(relationId);
 	}

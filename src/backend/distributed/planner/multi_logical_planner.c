@@ -80,7 +80,6 @@ typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNo
 static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
-static bool SingleRelationRepartitionSubquery(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  originalQuery,
 																	  PlannerRestrictionContext
@@ -98,9 +97,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
-																 bool
-																 outerMostQueryHasLimit);
 static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree,
 																bool
 																outerMostQueryHasLimit);
@@ -108,7 +104,6 @@ static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationLis
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
-static bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
@@ -472,7 +467,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
  * to ensure that Citus supports the subquery. Also, this function is designed to run
  * on the original query.
  */
-static bool
+bool
 SingleRelationRepartitionSubquery(Query *queryTree)
 {
 	List *rangeTableIndexList = NULL;
@@ -930,7 +925,7 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
  * limit, we let this query to run, but results could be wrong depending on the
  * features of underlying tables.
  */
-static DeferredErrorMessage *
+DeferredErrorMessage *
 DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
@@ -1517,7 +1512,7 @@ AllTargetExpressionsAreColumnReferences(List *targetEntryList)
  * FindNodeCheckInRangeTableList relies on FindNodeCheck() but only
  * considers the range table entries.
  */
-static bool
+bool
 FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
 {
 	return range_table_walker(rtable, FindNodeCheck, check, QTW_EXAMINE_RTES);
@@ -2259,8 +2254,12 @@ DeferErrorIfQueryNotSupported(Query *queryTree)
 	if (queryTree->hasWindowFuncs)
 	{
 		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with window functions";
-		errorHint = filterHint;
+		errorMessage = "could not run distributed query because the window "
+					   "function that is used cannot be pushed down";
+		errorHint = "Window functions are supported in two ways. Either add "
+					"an equality filter on the distributed tables' partition "
+					"column or use the window functions inside a subquery with "
+					"a PARTITION BY clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -2642,10 +2641,12 @@ HasComplexRangeTableType(Query *queryTree)
 
 		/*
 		 * Check if the range table in the join tree is a simple relation or a
-		 * subquery.
+		 * subquery or a function. Note that RTE_FUNCTIONs are handled via (sub)query
+		 * pushdown.
 		 */
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
-			rangeTableEntry->rtekind != RTE_SUBQUERY)
+			rangeTableEntry->rtekind != RTE_SUBQUERY &&
+			rangeTableEntry->rtekind != RTE_FUNCTION)
 		{
 			hasComplexRangeTableType = true;
 		}

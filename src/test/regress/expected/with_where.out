@@ -141,8 +141,11 @@ IN
       1)
     SELECT * FROM events LIMIT 10
   );
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ count 
+-------
+   101
+(1 row)
+
 -- CTE with non-colocated join in WHERE
 SELECT
   count(*)
@@ -164,5 +167,8 @@ WHERE
       )
       SELECT * FROM users LIMIT 10
     );
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ count 
+-------
+   101
+(1 row)
+
