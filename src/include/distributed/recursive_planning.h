@@ -18,11 +18,23 @@
 #include "nodes/relation.h"
 
 
+/*
+ * RecursivePlanningContext is used to recursively plan subqueries
+ * and CTEs, pull results to the coordinator, and push it back into
+ * the workers.
+ */
+typedef struct RecursivePlanningContext
+{
+	int level;
+	uint64 planId;
+	List *subPlanList;
+	PlannerRestrictionContext *plannerRestrictionContext;
+} RecursivePlanningContext;
+
+
 extern DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
-															   PlannerRestrictionContext *
-															   plannerRestrictionContext,
-															   uint64 planId,
-															   List **subPlanList);
+															   RecursivePlanningContext *
+															   context);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 
 

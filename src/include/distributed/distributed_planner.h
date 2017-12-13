@@ -92,9 +92,6 @@ extern bool IsModifyDistributedPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern bool IsMultiShardModifyPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
-extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
-
-
 extern int GetRTEIdentity(RangeTblEntry *rte);
 
 #endif /* DISTRIBUTED_PLANNER_H */
