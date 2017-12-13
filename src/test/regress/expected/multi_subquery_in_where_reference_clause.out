@@ -98,6 +98,73 @@ WHERE
 LIMIT 3;
 ERROR:  cannot pushdown the subquery
 DETAIL:  Subqueries without FROM are not allowed in FROM clause when the outer query has subqueries in WHERE clause
+-- join with distributed table prevents FROM from recurring
+SELECT
+  DISTINCT user_id
+FROM
+  (SELECT s FROM generate_series(1,10) s) series,
+  (SELECT DISTINCT user_id FROM users_table) users_table,
+  (SELECT 1 AS one) one
+WHERE
+  s = user_id AND user_id > one AND
+  user_id IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+ user_id 
+---------
+       2
+       3
+       4
+(3 rows)
+
+-- inner join between distributed prevents FROM from recurring
+SELECT
+  DISTINCT user_id
+FROM
+  users_table JOIN users_reference_table USING (user_id)
+WHERE
+  users_table.value_2 IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+ user_id 
+---------
+       1
+       2
+       3
+(3 rows)
+
+-- outer join could still recur
+SELECT
+  DISTINCT user_id
+FROM
+  users_table RIGHT JOIN users_reference_table USING (user_id)
+WHERE
+  users_table.value_2 IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+ERROR:  cannot pushdown the subquery
+DETAIL:  There exist a reference table in the outer part of the outer join
 -- subqueries in WHERE with IN operator without equality
 SELECT 
   users_table.user_id, count(*)
@@ -393,9 +460,18 @@ WHERE user_id IN
           users_reference_table
      WHERE users_reference_table.user_id NOT IN
          (SELECT value_2
-          FROM users_reference_table AS u2));
-ERROR:  cannot push down this subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
+          FROM users_reference_table AS u2))
+ORDER BY 1,2,3
+LIMIT 5;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
+       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
+       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
+(5 rows)
+
 -- not supported since GROUP BY references to an upper level query
 SELECT 
   user_id
