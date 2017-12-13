@@ -15,6 +15,7 @@
 #define MULTI_LOGICAL_PLANNER_H
 
 #include "distributed/citus_nodes.h"
+#include "distributed/errormessage.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "nodes/nodes.h"
@@ -205,6 +206,7 @@ extern List * FindNodesOfType(MultiNode *node, int type);
 extern List * JoinClauseList(List *whereClauseList);
 extern bool IsJoinClause(Node *clause);
 extern List * SubqueryEntryList(Query *queryTree);
+extern DeferredErrorMessage * DeferErrorIfQueryNotSupported(Query *queryTree);
 extern bool ExtractRangeTableIndexWalker(Node *node, List **rangeTableIndexList);
 extern List * WhereClauseList(FromExpr *fromExpr);
 extern List * QualifierList(FromExpr *fromExpr);

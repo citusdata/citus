@@ -113,7 +113,6 @@ static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiNodeTree(Query *queryTree);
-static void ErrorIfQueryNotSupported(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo);
@@ -396,12 +395,17 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 {
 	MultiNode *multiQueryNode = NULL;
 	DeferredErrorMessage *subqueryPushdownError = NULL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/*
 	 * This is a generic error check that applies to both subquery pushdown
 	 * and single table repartition subquery.
 	 */
-	ErrorIfQueryNotSupported(originalQuery);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(originalQuery);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/*
 	 * In principle, we're first trying subquery pushdown planner. If it fails
@@ -916,7 +920,7 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
  * the join condition must be partition columns.
  * c. If there is a distinct clause, it must be on the partition column.
  *
- * This function is very similar to ErrorIfQueryNotSupported() in logical
+ * This function is very similar to DeferErrorIfQueryNotSupported() in logical
  * planner, but we don't reuse it, because differently for subqueries we support
  * a subset of distinct, union and left joins.
  *
@@ -1760,9 +1764,14 @@ MultiNodeTree(Query *queryTree)
 	MultiProject *projectNode = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/* extract where clause qualifiers and verify we can plan for them */
 	whereClauseList = WhereClauseList(queryTree->jointree);
@@ -2220,8 +2229,8 @@ IsReadIntermediateResultFunction(Node *node)
  * the given query. The checks in this function will be removed as we support
  * more functionality in our distributed planning.
  */
-static void
-ErrorIfQueryNotSupported(Query *queryTree)
+DeferredErrorMessage *
+DeferErrorIfQueryNotSupported(Query *queryTree)
 {
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
@@ -2329,10 +2338,12 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	if (!preconditionsSatisfied)
 	{
 		bool showHint = ErrorHintRequired(errorHint, queryTree);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s", errorMessage),
-						showHint ? errhint("%s", errorHint) : 0));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 errorMessage, NULL,
+							 showHint ? errorHint : NULL);
 	}
+
+	return NULL;
 }
 
 
@@ -3847,9 +3858,14 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	Query *pushedDownQuery = NULL;
 	List *subqueryTargetEntryList = NIL;
 	List *havingClauseColumnList = NIL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/*
 	 * We would be creating a new Query and pushing down top level query's
