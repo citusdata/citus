@@ -32,6 +32,7 @@ static const char *CitusNodeTagNamesD[] = {
 	"Job",
 	"MapMergeJob",
 	"DistributedPlan",
+	"DistributedSubPlan",
 	"Task",
 	"TaskExecution",
 	"ShardInterval",
@@ -384,6 +385,7 @@ EqualUnsupportedCitusNode(const struct ExtensibleNode *a,
 const ExtensibleNodeMethods nodeMethods[] =
 {
 	DEFINE_NODE_METHODS(DistributedPlan),
+	DEFINE_NODE_METHODS(DistributedSubPlan),
 	DEFINE_NODE_METHODS(Job),
 	DEFINE_NODE_METHODS(ShardInterval),
 	DEFINE_NODE_METHODS(MapMergeJob),

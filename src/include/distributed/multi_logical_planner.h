@@ -185,13 +185,13 @@ extern bool SubqueryPushdown;
 /* Function declarations for building logical plans */
 extern MultiTreeRoot * MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 											  PlannerRestrictionContext *
-											  plannerRestrictionContext,
-											  ParamListInfo boundParams);
+											  plannerRestrictionContext);
 extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 	PlannerRestrictionContext *plannerRestrictionContext,
 	Query *query);
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
+extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
 extern MultiNode * GrandChildNode(MultiUnaryNode *multiNode);

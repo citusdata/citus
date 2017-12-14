@@ -224,6 +224,9 @@ typedef struct DistributedPlan
 {
 	CitusNode type;
 
+	/* unique identifier of the plan within the session */
+	uint64 planId;
+
 	/* type of command to execute (SELECT/INSERT/...) */
 	CmdType operation;
 
@@ -251,6 +254,9 @@ typedef struct DistributedPlan
 	/* target relation of an INSERT ... SELECT via the coordinator */
 	Oid targetRelationId;
 
+	/* list of subplans to execute before the distributed query */
+	List *subPlanList;
+
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
@@ -258,6 +264,21 @@ typedef struct DistributedPlan
 	 */
 	DeferredErrorMessage *planningError;
 } DistributedPlan;
+
+
+/*
+ * DistributedSubPlan contains a subplan of a distributed plan. Subplans are
+ * executed before the distributed query and their results are written to
+ * temporary files. This is used to execute CTEs and subquery joins that
+ * cannot be distributed.
+ */
+typedef struct DistributedSubPlan
+{
+	CitusNode type;
+
+	uint32 subPlanId;
+	PlannedStmt *plan;
+} DistributedSubPlan;
 
 
 /* OperatorCacheEntry contains information for each element in OperatorCache */

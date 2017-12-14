@@ -83,6 +83,12 @@ test: multi_join_order_tpch_large
 # ----------
 test: multi_large_table_join_planning multi_large_table_pruning multi_large_table_task_assignment
 
+# ---------
+# Tests for recursive planning.
+# ---------
+
+test: with_nested with_where with_basics with_prepare with_modifying with_executors with_join with_partitioning
+
 # ----------
 # Tests to check our large record loading and shard deletion behavior
 # ----------

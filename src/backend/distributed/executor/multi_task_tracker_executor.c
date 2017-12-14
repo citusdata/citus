@@ -3025,6 +3025,13 @@ TaskTrackerExecScan(CustomScanState *node)
 	{
 		DistributedPlan *distributedPlan = scanState->distributedPlan;
 		Job *workerJob = distributedPlan->workerJob;
+		Query *jobQuery = workerJob->jobQuery;
+
+		if (ContainsReadIntermediateResultFunction((Node *) jobQuery))
+		{
+			ereport(ERROR, (errmsg("Complex subqueries and CTEs are not supported when "
+								   "task_executor_type is set to 'task-tracker'")));
+		}
 
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);

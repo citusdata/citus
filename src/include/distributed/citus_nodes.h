@@ -56,6 +56,7 @@ typedef enum CitusNodeTag
 	T_Job,
 	T_MapMergeJob,
 	T_DistributedPlan,
+	T_DistributedSubPlan,
 	T_Task,
 	T_TaskExecution,
 	T_ShardInterval,

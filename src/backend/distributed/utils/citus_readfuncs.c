@@ -199,6 +199,7 @@ ReadDistributedPlan(READFUNC_ARGS)
 {
 	READ_LOCALS(DistributedPlan);
 
+	READ_UINT64_FIELD(planId);
 	READ_INT_FIELD(operation);
 	READ_BOOL_FIELD(hasReturning);
 
@@ -211,7 +212,21 @@ ReadDistributedPlan(READFUNC_ARGS)
 	READ_NODE_FIELD(insertTargetList);
 	READ_OID_FIELD(targetRelationId);
 
+	READ_NODE_FIELD(subPlanList);
+
 	READ_NODE_FIELD(planningError);
+
+	READ_DONE();
+}
+
+
+READFUNC_RET
+ReadDistributedSubPlan(READFUNC_ARGS)
+{
+	READ_LOCALS(DistributedSubPlan);
+
+	READ_UINT_FIELD(subPlanId);
+	READ_NODE_FIELD(plan);
 
 	READ_DONE();
 }
