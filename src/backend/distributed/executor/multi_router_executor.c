@@ -100,7 +100,6 @@ static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connect
 							 bool failOnError, int64 *rows);
 static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 							   int64 *rows);
-static LOCKMODE LockModeForModifyTask(Task *task);
 
 
 /*
@@ -752,12 +751,13 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 	/*
 	 * If we are dealing with a partitioned table, we also need to lock its
 	 * partitions.
+	 *
+	 * For DDL commands, we already obtained the appropriate locks in
+	 * ProcessUtility, so we only need to do this for DML commands.
 	 */
-	if (PartitionedTable(relationId))
+	if (PartitionedTable(relationId) && task->taskType == MODIFY_TASK)
 	{
-		LOCKMODE lockMode = LockModeForModifyTask(task);
-
-		LockPartitionRelations(relationId, lockMode);
+		LockPartitionRelations(relationId, RowExclusiveLock);
 	}
 
 	/* prevent replicas of the same shard from diverging */
@@ -1042,14 +1042,16 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 	 * In multi shard modification, we expect that all tasks operates on the
 	 * same relation, so it is enough to acquire a lock on the first task's
 	 * anchor relation's partitions.
+	 *
+	 * For DDL commands, we already obtained the appropriate locks in
+	 * ProcessUtility, so we only need to do this for DML commands.
 	 */
 	firstTask = (Task *) linitial(taskList);
 	firstShardInterval = LoadShardInterval(firstTask->anchorShardId);
-	if (PartitionedTable(firstShardInterval->relationId))
+	if (PartitionedTable(firstShardInterval->relationId) &&
+		firstTask->taskType == MODIFY_TASK)
 	{
-		LOCKMODE lockMode = LockModeForModifyTask(firstTask);
-
-		LockPartitionRelations(firstShardInterval->relationId, lockMode);
+		LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
 	}
 
 	/* ensure that there are no concurrent modifications on the same shards */
@@ -1558,30 +1560,4 @@ ConsumeQueryResult(MultiConnection *connection, bool failOnError, int64 *rows)
 	}
 
 	return gotResponse && !commandFailed;
-}
-
-
-/*
- * LockModeForRouterModifyTask returns appropriate LOCKMODE for given router
- * modify task.
- */
-static LOCKMODE
-LockModeForModifyTask(Task *task)
-{
-	LOCKMODE lockMode = NoLock;
-	if (task->taskType == DDL_TASK)
-	{
-		lockMode = AccessExclusiveLock;
-	}
-	else if (task->taskType == MODIFY_TASK)
-	{
-		lockMode = RowExclusiveLock;
-	}
-	else
-	{
-		/* we do not allow any other task type in these code path */
-		Assert(false);
-	}
-
-	return lockMode;
 }
