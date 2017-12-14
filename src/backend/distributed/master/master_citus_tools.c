@@ -271,12 +271,7 @@ ExecuteCommandsInParallelAndStoreResults(StringInfo *nodeNameArray, int *nodePor
 			continue;
 		}
 
-		/*
-		 * NB: this intentionally uses PQsendQuery rather than
-		 * SendRemoteCommand as multiple commands are allowed.
-		 */
-		querySent = PQsendQuery(connection->pgConn, queryString);
-
+		querySent = SendRemoteCommand(connection, queryString);
 		if (querySent == 0)
 		{
 			StoreErrorMessage(connection, queryResultString);
