@@ -719,6 +719,9 @@ AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit)
 			ResetRemoteTransaction(connection);
 			ResetShardPlacementAssociation(connection);
 
+			/* reset copy state */
+			connection->copyBytesWrittenSinceLastFlush = 0;
+
 			UnclaimConnection(connection);
 		}
 	}
