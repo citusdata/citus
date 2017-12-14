@@ -116,6 +116,7 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   bool stopOnFailure);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
+extern bool CanUseBinaryCopyFormatForType(Oid typeId);
 extern void AppendCopyRowData(Datum *valueArray, bool *isNullArray,
 							  TupleDesc rowDescriptor,
 							  CopyOutState rowOutputState,

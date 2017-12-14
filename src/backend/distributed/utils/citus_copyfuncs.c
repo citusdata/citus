@@ -101,6 +101,7 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 {
 	DECLARE_FROM_AND_NEW_NODE(DistributedPlan);
 
+	COPY_SCALAR_FIELD(planId);
 	COPY_SCALAR_FIELD(operation);
 	COPY_SCALAR_FIELD(hasReturning);
 
@@ -112,7 +113,20 @@ CopyNodeDistributedPlan(COPYFUNC_ARGS)
 	COPY_NODE_FIELD(insertSelectSubquery);
 	COPY_NODE_FIELD(insertTargetList);
 	COPY_SCALAR_FIELD(targetRelationId);
+
+	COPY_NODE_FIELD(subPlanList);
+
 	COPY_NODE_FIELD(planningError);
+}
+
+
+void
+CopyNodeDistributedSubPlan(COPYFUNC_ARGS)
+{
+	DECLARE_FROM_AND_NEW_NODE(DistributedSubPlan);
+
+	COPY_SCALAR_FIELD(subPlanId);
+	COPY_NODE_FIELD(plan);
 }
 
 

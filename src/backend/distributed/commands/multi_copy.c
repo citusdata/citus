@@ -911,9 +911,6 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 	{
 		Form_pg_attribute currentColumn = TupleDescAttr(tupleDescription, columnIndex);
 		Oid typeId = InvalidOid;
-		char typeCategory = '\0';
-		bool typePreferred = false;
-		bool binaryOutputFunctionDefined = false;
 
 		if (currentColumn->attisdropped)
 		{
@@ -921,28 +918,45 @@ CanUseBinaryCopyFormat(TupleDesc tupleDescription)
 		}
 
 		typeId = currentColumn->atttypid;
-
-		/* built-in types may also don't have binary output function */
-		binaryOutputFunctionDefined = BinaryOutputFunctionDefined(typeId);
-		if (!binaryOutputFunctionDefined)
+		if (!CanUseBinaryCopyFormatForType(typeId))
 		{
 			useBinaryCopyFormat = false;
 			break;
 		}
-
-		if (typeId >= FirstNormalObjectId)
-		{
-			get_type_category_preferred(typeId, &typeCategory, &typePreferred);
-			if (typeCategory == TYPCATEGORY_ARRAY ||
-				typeCategory == TYPCATEGORY_COMPOSITE)
-			{
-				useBinaryCopyFormat = false;
-				break;
-			}
-		}
 	}
 
 	return useBinaryCopyFormat;
+}
+
+
+/*
+ * CanUseBinaryCopyFormatForType determines whether it is safe to use the
+ * binary copy format for the given type. The binary copy format cannot
+ * be used for arrays or composite types that contain user-defined types,
+ * or when there is no binary output function defined.
+ */
+bool
+CanUseBinaryCopyFormatForType(Oid typeId)
+{
+	if (!BinaryOutputFunctionDefined(typeId))
+	{
+		return false;
+	}
+
+	if (typeId >= FirstNormalObjectId)
+	{
+		char typeCategory = '\0';
+		bool typePreferred = false;
+
+		get_type_category_preferred(typeId, &typeCategory, &typePreferred);
+		if (typeCategory == TYPCATEGORY_ARRAY ||
+			typeCategory == TYPCATEGORY_COMPOSITE)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 

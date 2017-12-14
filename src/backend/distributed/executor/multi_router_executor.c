@@ -41,6 +41,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/placement_connection.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/relay_utility.h"
 #include "distributed/remote_commands.h"
 #include "distributed/remote_transaction.h"
@@ -543,6 +544,8 @@ RouterSelectExecScan(CustomScanState *node)
 		/* we are taking locks on partitions of partitioned tables */
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
+		ExecuteSubPlans(distributedPlan);
+
 		if (list_length(taskList) > 0)
 		{
 			Task *task = (Task *) linitial(taskList);
@@ -614,6 +617,20 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 
 		connection = GetPlacementListConnection(connectionFlags, placementAccessList,
 												NULL);
+
+		/*
+		 * Make sure we open a transaction block and assign a distributed transaction
+		 * ID if we are in a coordinated transaction.
+		 *
+		 * This can happen when the SELECT goes to a node that was not involved in
+		 * the transaction so far, or when existing connections to the node are
+		 * claimed exclusively, e.g. the connection might be claimed to copy the
+		 * intermediate result of a CTE to the node. Especially in the latter case,
+		 * we want to make sure that we open a transaction block and assign a
+		 * distributed transaction ID, such that the query can read intermediate
+		 * results.
+		 */
+		RemoteTransactionBeginIfNecessary(connection);
 
 		queryOK = SendQueryInSingleRowMode(connection, queryString, paramListInfo);
 		if (!queryOK)

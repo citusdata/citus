@@ -176,7 +176,7 @@ WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1)
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 3)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
 
--- CTE joins are not supported if table shards are at different workers
+-- CTE joins are supported because they are both planned recursively
 WITH id_author AS ( SELECT id, author_id FROM articles_hash WHERE author_id = 1),
 id_title AS (SELECT id, title from articles_hash WHERE author_id = 2)
 SELECT * FROM id_author, id_title WHERE id_author.id = id_title.id;
@@ -338,8 +338,8 @@ SELECT a.author_id as first_author, b.word_count as second_word_count
 	LIMIT 3;
 	
 -- following join is not router plannable since there are no
--- workers containing both shards, added a CTE to make this fail
--- at logical planner
+-- workers containing both shards, but will work through recursive
+-- planning
 WITH single_shard as (SELECT * FROM articles_single_shard_hash)
 SELECT a.author_id as first_author, b.word_count as second_word_count
 	FROM articles_hash a, single_shard b

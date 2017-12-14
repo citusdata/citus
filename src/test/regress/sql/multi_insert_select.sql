@@ -505,17 +505,19 @@ INSERT INTO agg_events (value_1_agg, user_id)
 
 SELECT user_id, value_1_agg FROM agg_events ORDER BY 1,2;
 
--- We do not support some CTEs
+-- We support CTEs
+BEGIN;
 WITH fist_table_agg AS
-  (SELECT sum(value_1) as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
+  (SELECT max(value_1)+1 as v1_agg, user_id FROM raw_events_first GROUP BY user_id)
 INSERT INTO agg_events
             (value_1_agg, user_id)
             SELECT
               v1_agg, user_id
             FROM
               fist_table_agg;
+ROLLBACK;
 
--- We don't support CTEs that consist of const values as well
+-- We don't support CTEs that are referenced in the target list
 INSERT INTO agg_events
   WITH sub_cte AS (SELECT 1)
   SELECT

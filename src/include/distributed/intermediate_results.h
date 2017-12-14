@@ -16,12 +16,14 @@
 
 #include "distributed/multi_copy.h"
 #include "nodes/execnodes.h"
-#include "nodes/execnodes.h"
 #include "nodes/pg_list.h"
 #include "tcop/dest.h"
 #include "utils/palloc.h"
 
 
+extern DestReceiver * CreateRemoteFileDestReceiver(char *resultId, EState *executorState,
+												   List *initialNodeList, bool
+												   writeLocalFile);
 extern void ReceiveQueryResultViaCopy(const char *resultId);
 extern void RemoveIntermediateResultsDirectory(void);
 

@@ -33,6 +33,7 @@
 #include "distributed/multi_router_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/resource_lock.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "storage/fd.h"
@@ -1046,6 +1047,8 @@ RealTimeExecScan(CustomScanState *node)
 		LockPartitionsInRelationList(distributedPlan->relationIdList, AccessShareLock);
 
 		PrepareMasterJobDirectory(workerJob);
+
+		ExecuteSubPlans(distributedPlan);
 		MultiRealTimeExecute(workerJob);
 
 		LoadTuplesIntoTupleStore(scanState, workerJob);
