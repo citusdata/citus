@@ -1079,3 +1079,15 @@ SELECT relname FROM pg_class WHERE relname LIKE 'tt1%';
 (0 rows)
 
 \c - - - :master_port
+-- copy >8MB to a single worker to trigger a flush in PutRemoteCopyData
+BEGIN;
+CREATE UNLOGGED TABLE trigger_flush AS
+SELECT 1 AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM generate_series(1,150000) s;
+SELECT create_distributed_table('trigger_flush','a');
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ABORT;

@@ -21,6 +21,9 @@
 #include "utils/palloc.h"
 
 
+#define MAX_PUT_COPY_DATA_BUFFER_SIZE (8 * 1024 * 1024)
+
+
 /* GUC, determining whether statements sent to remote nodes are logged */
 bool LogRemoteCommands = false;
 
@@ -580,11 +583,20 @@ PutRemoteCopyData(MultiConnection *connection, const char *buffer, int nbytes)
 	 * until the socket is writable to prevent the internal libpq buffers
 	 * from growing excessively.
 	 *
-	 * In the future, we could reduce the frequency of these pushbacks to
-	 * achieve higher throughput.
+	 * We currently allow the internal buffer to grow to 8MB before
+	 * providing back pressure based on experimentation that showed
+	 * throughput get worse at 4MB and lower due to the number of CPU
+	 * cycles spent in networking system calls.
 	 */
 
-	return FinishConnectionIO(connection, allowInterrupts);
+	connection->copyBytesWrittenSinceLastFlush += nbytes;
+	if (connection->copyBytesWrittenSinceLastFlush > MAX_PUT_COPY_DATA_BUFFER_SIZE)
+	{
+		connection->copyBytesWrittenSinceLastFlush = 0;
+		return FinishConnectionIO(connection, allowInterrupts);
+	}
+
+	return true;
 }
 
 
@@ -615,6 +627,8 @@ PutRemoteCopyEnd(MultiConnection *connection, const char *errormsg)
 	}
 
 	/* see PutRemoteCopyData() */
+
+	connection->copyBytesWrittenSinceLastFlush = 0;
 
 	return FinishConnectionIO(connection, allowInterrupts);
 }
