@@ -79,6 +79,9 @@ typedef struct MultiConnection
 
 	/* list of all placements referenced by this connection */
 	dlist_head referencedPlacements;
+
+	/* number of bytes sent to PQputCopyData() since last flush */
+	uint64 copyBytesWrittenSinceLastFlush;
 } MultiConnection;
 
 
