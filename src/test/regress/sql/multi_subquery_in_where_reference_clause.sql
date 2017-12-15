@@ -87,6 +87,60 @@ WHERE
       )
 LIMIT 3;
 
+-- join with distributed table prevents FROM from recurring
+SELECT
+  DISTINCT user_id
+FROM
+  (SELECT s FROM generate_series(1,10) s) series,
+  (SELECT DISTINCT user_id FROM users_table) users_table,
+  (SELECT 1 AS one) one
+WHERE
+  s = user_id AND user_id > one AND
+  user_id IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+
+-- inner join between distributed prevents FROM from recurring
+SELECT
+  DISTINCT user_id
+FROM
+  users_table JOIN users_reference_table USING (user_id)
+WHERE
+  users_table.value_2 IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+
+-- outer join could still recur
+SELECT
+  DISTINCT user_id
+FROM
+  users_table RIGHT JOIN users_reference_table USING (user_id)
+WHERE
+  users_table.value_2 IN
+      (SELECT
+          value_2
+       FROM
+          events_table
+       WHERE
+          users_table.user_id = events_table.user_id
+      )
+ORDER BY user_id
+LIMIT 3;
+
 -- subqueries in WHERE with IN operator without equality
 SELECT 
   users_table.user_id, count(*)
@@ -344,7 +398,9 @@ WHERE user_id IN
           users_reference_table
      WHERE users_reference_table.user_id NOT IN
          (SELECT value_2
-          FROM users_reference_table AS u2));
+          FROM users_reference_table AS u2))
+ORDER BY 1,2,3
+LIMIT 5;
 
 -- not supported since GROUP BY references to an upper level query
 SELECT 

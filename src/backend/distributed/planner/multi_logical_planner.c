@@ -97,8 +97,7 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfUnsupportedSublinkAndReferenceTable(
-	Query *queryTree);
+static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
 																 bool
 																 outerMostQueryHasLimit);
@@ -130,6 +129,9 @@ static bool HasComplexRangeTableType(Query *queryTree);
 static bool RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo,
 												RelOptInfo *relationInfo,
 												RecurringTuplesType *recurType);
+static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
+						   RecurringTuplesType *recurType);
+static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static bool IsReadIntermediateResultFunction(Node *node);
 static void ValidateClauseList(List *clauseList);
@@ -567,7 +569,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	}
 
 	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
-	error = DeferErrorIfUnsupportedSublinkAndReferenceTable(originalQuery);
+	error = DeferErrorIfFromClauseRecurs(originalQuery);
 	if (error)
 	{
 		return error;
@@ -810,7 +812,7 @@ QueryRteIdentities(Query *queryTree)
 
 
 /*
- * DeferErrorIfUnsupportedSublinkAndReferenceTable returns a deferred error if the
+ * DeferErrorIfFromClauseRecurs returns a deferred error if the
  * given query is not suitable for subquery pushdown.
  *
  * While planning sublinks, we rely on Postgres in the sense that it converts some of
@@ -819,13 +821,13 @@ QueryRteIdentities(Query *queryTree)
  * In some cases, sublinks are pulled up and converted into outer joins. Those cases
  * are already handled with DeferredErrorIfUnsupportedRecurringTuplesJoin().
  *
- * If the sublinks are not pulled up, we should still error out in if any reference table
- * appears in the FROM clause of a subquery.
+ * If the sublinks are not pulled up, we should still error out in if the expression
+ * in the FROM clause would recur for every shard in a subquery on the WHERE clause.
  *
  * Otherwise, the result would include duplicate rows.
  */
 static DeferredErrorMessage *
-DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
+DeferErrorIfFromClauseRecurs(Query *queryTree)
 {
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 
@@ -834,41 +836,69 @@ DeferErrorIfUnsupportedSublinkAndReferenceTable(Query *queryTree)
 		return NULL;
 	}
 
-	if (HasRecurringTuples((Node *) queryTree->rtable, &recurType))
+	if (FindNodeCheckInRangeTableList(queryTree->rtable, IsDistributedTableRTE))
 	{
-		if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Reference tables are not allowed in FROM "
-								 "clause when the query has subqueries in "
-								 "WHERE clause", NULL);
-		}
-		else if (recurType == RECURRING_TUPLES_FUNCTION)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Functions are not allowed in FROM "
-								 "clause when the query has subqueries in "
-								 "WHERE clause", NULL);
-		}
-		else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Complex subqueries and CTEs are not allowed in "
-								 "the FROM clause when the query has subqueries in the "
-								 "WHERE clause", NULL);
-		}
-		else
-		{
-			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-								 "cannot pushdown the subquery",
-								 "Subqueries without FROM are not allowed in FROM "
-								 "clause when the outer query has subqueries in "
-								 "WHERE clause", NULL);
-		}
+		/*
+		 * There is a distributed table somewhere in the FROM clause.
+		 *
+		 * In the typical case this means that the query does not recur,
+		 * but there are two exceptions:
+		 *
+		 * - outer joins such as reference_table LEFT JOIN distributed_table
+		 * - FROM reference_table WHERE .. (SELECT .. FROM distributed_table) ..
+		 *
+		 * However, we check all subqueries and joins separately, so we would
+		 * find such conditions in other calls.
+		 */
+		return NULL;
 	}
+
+
+	/*
+	 * Try to figure out which type of recurring tuples we have to produce a
+	 * relevant error message. If there are several we'll pick the first one.
+	 */
+	IsRecurringRangeTable(queryTree->rtable, &recurType);
+
+	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Reference tables are not allowed in FROM "
+							 "clause when the query has subqueries in "
+							 "WHERE clause", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Functions are not allowed in FROM "
+							 "clause when the query has subqueries in "
+							 "WHERE clause", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_RESULT_FUNCTION)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Complex subqueries and CTEs are not allowed in "
+							 "the FROM clause when the query has subqueries in the "
+							 "WHERE clause", NULL);
+	}
+	else if (recurType == RECURRING_TUPLES_EMPTY_JOIN_TREE)
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "cannot pushdown the subquery",
+							 "Subqueries without FROM are not allowed in FROM "
+							 "clause when the outer query has subqueries in "
+							 "WHERE clause", NULL);
+	}
+
+	/*
+	 * We get here when there is neither a distributed table, nor recurring tuples.
+	 * That usually means that there isn't a FROM at all (only sublinks), this
+	 * implies that queryTree is recurring, but whether this is a problem depends
+	 * on outer queries, not on queryTree itself.
+	 */
 
 	return NULL;
 }
@@ -1030,7 +1060,7 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		}
 	}
 
-	deferredError = DeferErrorIfUnsupportedSublinkAndReferenceTable(subqueryTree);
+	deferredError = DeferErrorIfFromClauseRecurs(subqueryTree);
 	if (deferredError)
 	{
 		preconditionsSatisfied = false;
@@ -2040,13 +2070,38 @@ RelationInfoContainsRecurringTuples(PlannerInfo *plannerInfo, RelOptInfo *relati
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
 		/* relationInfo has this range table entry */
-		if (HasRecurringTuples((Node *) rangeTableEntry, recurType))
+		if (IsRecurringRTE(rangeTableEntry, recurType))
 		{
 			return true;
 		}
 	}
 
 	return false;
+}
+
+
+/*
+ * IsRecurringRTE returns whether the range table entry will generate
+ * the same set of tuples when repeating it in a query on different
+ * shards.
+ */
+static bool
+IsRecurringRTE(RangeTblEntry *rangeTableEntry, RecurringTuplesType *recurType)
+{
+	return IsRecurringRangeTable(list_make1(rangeTableEntry), recurType);
+}
+
+
+/*
+ * IsRecurringRangeTable returns whether the range table will generate
+ * the same set of tuples when repeating it in a query on different
+ * shards.
+ */
+static bool
+IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType)
+{
+	return range_table_walker(rangeTable, HasRecurringTuples, recurType,
+							  QTW_EXAMINE_RTES);
 }
 
 
@@ -2103,8 +2158,7 @@ HasRecurringTuples(Node *node, RecurringTuplesType *recurType)
 			return true;
 		}
 
-		return range_table_walker(list_make1(rangeTableEntry), HasRecurringTuples,
-								  recurType, 0);
+		return false;
 	}
 	else if (IsA(node, Query))
 	{
