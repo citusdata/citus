@@ -19,6 +19,11 @@
 #include "executor/executor.h"
 
 
+int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
+/* when this is true, we enforce intermediate result size limit in all executors */
+int SubPlanLevel = 0;
+
+
 /*
  * ExecuteSubPlans executes a list of subplans from a distributed plan
  * by sequentially executing each plan from the top.
@@ -43,6 +48,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		char *resultId = GenerateResultId(planId, subPlanId);
 
+		SubPlanLevel++;
 		estate = CreateExecutorState();
 		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
 																 nodeList,
@@ -50,6 +56,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
+		SubPlanLevel--;
 		FreeExecutorState(estate);
 	}
 }
