@@ -14,6 +14,9 @@
 
 #include "distributed/multi_physical_planner.h"
 
+extern int MaxIntermediateResult;
+extern uint64 currentIntermediateResult;
+extern bool SetResultLimit;
 
 extern void ExecuteSubPlans(DistributedPlan *distributedPlan);
 

@@ -19,6 +19,11 @@
 #include "executor/executor.h"
 
 
+int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
+uint64 currentIntermediateResult = 0;
+bool SetResultLimit = false;
+
+
 /*
  * ExecuteSubPlans executes a list of subplans from a distributed plan
  * by sequentially executing each plan from the top.
@@ -31,6 +36,12 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	ListCell *subPlanCell = NULL;
 	List *nodeList = ActiveReadableNodeList();
 	bool writeLocalFile = false;
+
+	if (subPlanList && subPlanList->length)
+	{
+		SetResultLimit = true;
+		currentIntermediateResult = 0;
+	}
 
 	foreach(subPlanCell, subPlanList)
 	{

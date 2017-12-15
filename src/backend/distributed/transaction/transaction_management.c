@@ -26,6 +26,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
+#include "distributed/subplan_execution.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -176,6 +177,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
 
+			currentIntermediateResult = 0;
+			SetResultLimit = false;
+
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -213,6 +217,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+			currentIntermediateResult = 0;
+			SetResultLimit = false;
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -225,6 +231,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PREPARE:
 		{
+			currentIntermediateResult = 0;
+			SetResultLimit = false;
 			UnSetDistributedTransactionId();
 			break;
 		}

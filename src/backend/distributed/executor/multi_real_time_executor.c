@@ -43,6 +43,7 @@
 /* Local functions forward declarations */
 static ConnectAction ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 										 TaskExecutionStatus *executionStatus);
+static bool checkIfSizeLimitIsExceeded(Task *task);
 static bool TaskExecutionReadyToStart(TaskExecution *taskExecution);
 static bool TaskExecutionCompleted(TaskExecution *taskExecution);
 static void CancelTaskExecutionIfActive(TaskExecution *taskExecution);
@@ -83,6 +84,7 @@ MultiRealTimeExecute(Job *job)
 	bool allTasksCompleted = false;
 	bool taskCompleted = false;
 	bool taskFailed = false;
+	bool sizeLimitIsExceeded = false;
 
 	List *workerNodeList = NIL;
 	HTAB *workerHash = NULL;
@@ -107,7 +109,8 @@ MultiRealTimeExecute(Job *job)
 	}
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
-	while (!(allTasksCompleted || taskFailed || QueryCancelPending))
+	while (!(allTasksCompleted || taskFailed || QueryCancelPending ||
+			 sizeLimitIsExceeded))
 	{
 		uint32 taskCount = list_length(taskList);
 		uint32 completedTaskCount = 0;
@@ -134,6 +137,14 @@ MultiRealTimeExecute(Job *job)
 				 MasterConnectionsExhausted(workerHash)))
 			{
 				continue;
+			}
+
+			sizeLimitIsExceeded = checkIfSizeLimitIsExceeded(task);
+			if (sizeLimitIsExceeded)
+			{
+				failedTaskId = taskExecution->taskId;
+				taskFailed = true;
+				break;
 			}
 
 			/* call the function that performs the core task execution logic */
@@ -235,7 +246,14 @@ MultiRealTimeExecute(Job *job)
 	 * user cancellation request, we can now safely emit an error message (all
 	 * client-side resources have been cleared).
 	 */
-	if (taskFailed)
+	if (taskFailed && sizeLimitIsExceeded)
+	{
+		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId),
+						errhint("the max intermediate result size is exceeded "
+								"consider increasing citus.max_intermediate_result_size to "
+								"a higher value.")));
+	}
+	else if (taskFailed)
 	{
 		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
@@ -243,6 +261,37 @@ MultiRealTimeExecute(Job *job)
 	{
 		CHECK_FOR_INTERRUPTS();
 	}
+}
+
+
+static bool
+checkIfSizeLimitIsExceeded(Task *task)
+{
+	struct stat stat;
+
+	StringInfo jobDirectoryName = MasterJobDirectoryName(task->jobId);
+	StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
+
+	char *filename = taskFilename->data;
+	int fileFlags = (O_RDONLY);
+	int fileMode = (S_IRUSR);
+
+	int32 fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
+
+	uint64 MaxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+
+	int statOK = fstat(fileDescriptor, &stat);
+	close(fileDescriptor);
+	if (statOK == 0 && SetResultLimit && MaxIntermediateResult > -1)
+	{
+		currentIntermediateResult += (uint64) stat.st_size;
+		if (currentIntermediateResult > MaxIntermediateResultInBytes)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 

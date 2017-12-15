@@ -24,6 +24,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
+#include "distributed/subplan_execution.h"
 
 #include <errno.h>
 #include <unistd.h>
