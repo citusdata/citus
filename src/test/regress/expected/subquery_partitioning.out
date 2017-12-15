@@ -1,0 +1,283 @@
+-- ===================================================================
+-- test recursive planning functionality on partitioned tables
+-- ===================================================================
+CREATE SCHEMA subquery_and_partitioning;
+SET search_path TO subquery_and_partitioning, public;
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+CREATE TABLE events_table_local AS SELECT * FROM events_table;
+CREATE TABLE partitioning_test(id int, value_1 int, time date) PARTITION BY RANGE (time);
+ 
+-- create its partitions
+CREATE TABLE partitioning_test_2017 PARTITION OF partitioning_test FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
+CREATE TABLE partitioning_test_2010 PARTITION OF partitioning_test FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
+-- load some data and distribute tables
+INSERT INTO partitioning_test VALUES (1, 1, '2017-11-23');
+INSERT INTO partitioning_test VALUES (2, 1, '2010-07-07');
+INSERT INTO partitioning_test_2017 VALUES (3, 3, '2017-11-22');
+INSERT INTO partitioning_test_2010 VALUES (4, 4, '2010-03-03');
+-- distribute partitioned table
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('partitioning_test', 'id');
+NOTICE:  Copying data from local table...
+NOTICE:  Copying data from local table...
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+-- subplan for partitioned tables
+SELECT
+   id
+FROM
+    (SELECT 
+    	DISTINCT partitioning_test.id 
+     FROM 
+     	partitioning_test
+     LIMIT 5
+     ) as foo
+    ORDER BY 1 DESC;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test LIMIT 5
+ id 
+----
+  4
+  3
+  2
+  1
+(4 rows)
+
+-- final query is router on partitioned tables
+SELECT
+   *
+FROM
+    (SELECT 
+    	DISTINCT partitioning_test.id 
+     FROM 
+     	partitioning_test
+     LIMIT 5
+     ) as foo,
+	(SELECT 
+    	DISTINCT partitioning_test.time 
+     FROM 
+     	partitioning_test
+     LIMIT 5
+     ) as bar
+	WHERE foo.id = date_part('day', bar.time)
+	ORDER BY 2 DESC, 1;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT id FROM subquery_and_partitioning.partitioning_test LIMIT 5
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 5_2 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test LIMIT 5
+ id |    time    
+----+------------
+  3 | 03-03-2010
+(1 row)
+
+-- final query is real-time
+SELECT
+   *
+FROM
+    (SELECT 
+    	DISTINCT partitioning_test.time 
+     FROM 
+     	partitioning_test
+ 	 ORDER BY 1 DESC
+     LIMIT 5
+     ) as foo,
+	(
+		SELECT 
+	    	DISTINCT partitioning_test.id 
+	     FROM 
+	     	partitioning_test
+     ) as bar
+	WHERE  date_part('day', foo.time) = bar.id
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 3;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 8_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
+DEBUG:  push down of limit count: 3
+    time    | id 
+------------+----
+ 03-03-2010 |  3
+(1 row)
+
+-- final query is real-time that is joined with partitioned table
+SELECT
+   *
+FROM
+    (SELECT 
+    	DISTINCT partitioning_test.time 
+     FROM 
+     	partitioning_test
+ 	 ORDER BY 1 DESC
+     LIMIT 5
+     ) as foo,
+	(
+		SELECT 
+	    	DISTINCT partitioning_test.id 
+	     FROM 
+	     	partitioning_test
+     ) as bar, 
+	partitioning_test
+	WHERE  date_part('day', foo.time) = bar.id AND partitioning_test.id = bar.id
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 3;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 10_1 for subquery SELECT DISTINCT "time" FROM subquery_and_partitioning.partitioning_test ORDER BY "time" DESC LIMIT 5
+DEBUG:  push down of limit count: 3
+    time    | id | id | value_1 |    time    
+------------+----+----+---------+------------
+ 03-03-2010 |  3 |  3 |       3 | 11-22-2017
+(1 row)
+
+-- subquery in WHERE clause
+SELECT DISTINCT id
+FROM partitioning_test
+WHERE 
+	id IN (SELECT DISTINCT date_part('day', time) FROM partitioning_test);
+DEBUG:  generating subplan 12_1 for subquery SELECT DISTINCT date_part('day'::text, "time") AS date_part FROM subquery_and_partitioning.partitioning_test
+ id 
+----
+  3
+(1 row)
+
+-- repartition subquery
+SET citus.enable_repartition_joins to ON;
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT DISTINCT p1.value_1 FROM partitioning_test as p1, partitioning_test as p2 WHERE p1.id = p2.value_1
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.value_1 = bar.user_id; 
+DEBUG:  cannot use real time executor with repartition jobs
+HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
+DEBUG:  generating subplan 14_1 for subquery SELECT DISTINCT p1.value_1 FROM subquery_and_partitioning.partitioning_test p1, subquery_and_partitioning.partitioning_test p2 WHERE (p1.id = p2.value_1)
+ count 
+-------
+    47
+(1 row)
+
+SET citus.enable_repartition_joins to OFF;
+-- subquery, cte, view and non-partitioned tables
+CREATE VIEW subquery_and_ctes AS 
+SELECT 
+	* 
+FROM 
+(
+	WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS (
+		SELECT 
+			user_id
+		FROM 
+			events_table, 
+			(SELECT DISTINCT value_1 FROM partitioning_test OFFSET 0) as foo
+		WHERE 
+			events_table.user_id = foo.value_1 AND
+			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
+	)
+	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+)
+SELECT 
+	count(*)  as cnt
+FROM 
+	cte,
+	  (SELECT 
+    	DISTINCT events_table.user_id 
+     FROM 
+     	partitioning_test, events_table
+     WHERE 
+     	events_table.user_id = partitioning_test.id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo 
+	  WHERE foo.user_id = cte.user_id
+) as foo, users_table WHERE foo.cnt > users_table.value_2;
+SELECT * FROM subquery_and_ctes
+ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
+LIMIT 5;
+DEBUG:  generating subplan 16_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_partitioning.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT partitioning_test.value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0) foo WHERE ((events_table.user_id = foo.value_1) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 17_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_partitioning.users_table_local
+DEBUG:  generating subplan 17_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT partitioning_test.value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0) foo WHERE ((events_table.user_id = foo.value_1) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  push down of limit count: 3
+DEBUG:  generating subplan 18_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  generating subplan 18_2 for subquery SELECT DISTINCT value_1 FROM subquery_and_partitioning.partitioning_test OFFSET 0
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 16_2 for subquery SELECT DISTINCT events_table.user_id FROM subquery_and_partitioning.partitioning_test, public.events_table WHERE ((events_table.user_id = partitioning_test.id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY events_table.user_id DESC LIMIT 5
+DEBUG:  generating subplan 16_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('16_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('16_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
+DEBUG:  push down of limit count: 5
+ cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
+-----+---------+---------------------------------+---------+---------+---------+---------
+ 105 |       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+ 105 |       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+ 105 |       3 | Thu Nov 23 17:18:51.048758 2017 |       1 |       5 |       5 |        
+ 105 |       3 | Thu Nov 23 17:10:35.959913 2017 |       4 |       3 |       1 |        
+ 105 |       5 | Thu Nov 23 16:48:32.08896 2017  |       5 |       2 |       1 |        
+(5 rows)
+
+-- deep subquery, partitioned and non-partitioned tables together
+SELECT count(*)
+FROM
+(
+	SELECT avg(min) FROM 
+	(
+		SELECT min(partitioning_test.value_1) FROM
+		(
+			SELECT avg(event_type) as avg_ev_type FROM 
+			(
+				SELECT 
+					max(value_1) as mx_val_1 
+					FROM (
+							SELECT 
+								avg(event_type) as avg
+							FROM
+							(
+								SELECT 
+									cnt 
+								FROM 
+									(SELECT count(*) as cnt, value_1 FROM partitioning_test GROUP BY value_1) as level_1, users_table
+								WHERE 
+									users_table.user_id = level_1.cnt
+							) as level_2, events_table
+							WHERE events_table.user_id = level_2.cnt 
+							GROUP BY level_2.cnt
+						) as level_3, users_table
+					WHERE user_id = level_3.avg
+					GROUP BY level_3.avg
+					) as level_4, events_table
+				WHERE level_4.mx_val_1 = events_table.user_id
+				GROUP BY level_4.mx_val_1
+				) as level_5, partitioning_test
+				WHERE 
+					level_5.avg_ev_type = partitioning_test.id
+				GROUP BY 
+					level_5.avg_ev_type
+		) as level_6, users_table WHERE users_table.user_id = level_6.min
+	GROUP BY users_table.value_1
+	) as bar;
+DEBUG:  generating subplan 23_1 for subquery SELECT count(*) AS cnt, value_1 FROM subquery_and_partitioning.partitioning_test GROUP BY value_1
+DEBUG:  generating subplan 23_2 for subquery SELECT avg(events_table.event_type) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value_1 FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value_1 integer)) level_1, public.users_table WHERE (users_table.user_id = level_1.cnt)) level_2, public.events_table WHERE (events_table.user_id = level_2.cnt) GROUP BY level_2.cnt
+DEBUG:  generating subplan 23_3 for subquery SELECT max(users_table.value_1) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('23_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, public.users_table WHERE ((users_table.user_id)::numeric = level_3.avg) GROUP BY level_3.avg
+DEBUG:  generating subplan 23_4 for subquery SELECT avg(events_table.event_type) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('23_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 integer)) level_4, public.events_table WHERE (level_4.mx_val_1 = events_table.user_id) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 23_5 for subquery SELECT min(partitioning_test.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('23_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, subquery_and_partitioning.partitioning_test WHERE (level_5.avg_ev_type = (partitioning_test.id)::numeric) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 23_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('23_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id = level_6.min) GROUP BY users_table.value_1
+ count 
+-------
+     0
+(1 row)
+
+SET client_min_messages TO DEFAULT;
+DROP SCHEMA subquery_and_partitioning CASCADE;
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table users_table_local
+drop cascades to table events_table_local
+drop cascades to table partitioning_test
+drop cascades to view subquery_and_ctes
+SET search_path TO public;

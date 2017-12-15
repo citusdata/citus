@@ -66,6 +66,7 @@ ORDER BY
 
 -- Subqueries in WHERE and FROM are mixed
 -- In this query, only subquery in WHERE is not a colocated join
+-- but we're able to recursively plan that as well
 WITH users_events AS (
   WITH colocated_join AS (
     SELECT
@@ -117,13 +118,13 @@ WITH users_events AS (
   )
 )
 SELECT
-  *
+  DISTINCT uid
 FROM
   users_events
 ORDER BY 
-  1, 2
+  1 DESC
 LIMIT 
-  20;
+  5;
 
 -- cte LEFT JOIN distributed_table should error out
 WITH cte AS (

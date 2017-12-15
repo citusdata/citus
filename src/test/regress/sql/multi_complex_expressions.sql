@@ -157,12 +157,11 @@ SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
 
 -- Check that we can issue limit/offset queries
 
--- OFFSET in subqueries are not supported
--- Error in the planner when single repartition subquery
-SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq;
+-- the subquery is recursively planned since it contains OFFSET, which is not pushdownable
+SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq ORDER BY 1 LIMIT 5;
 
--- Error in the optimizer when subquery pushdown is on
-SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq;
+-- the subquery is recursively planned since it contains OFFSET, which is not pushdownable
+SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq ORDER BY 1 LIMIT 5;
 
 -- Simple LIMIT/OFFSET with ORDER BY
 SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;

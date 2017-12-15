@@ -86,22 +86,27 @@ LIMIT
    6 |       5
 (5 rows)
 
--- CTE in subquery errors out
+-- CTE in subquery recursively planned
 SELECT user_id FROM (
   WITH cte AS (
     SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
   )
   SELECT user_id FROM cte WHERE value_2 > 0
-) a;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+) a ORDER BY 1 LIMIT 3;
+ user_id 
+---------
+       2
+       2
+       2
+(3 rows)
+
 -- CTE outside of FROM/WHERE errors out
 WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
 )
 SELECT (SELECT * FROM cte);
 WARNING:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive query results
 WITH cte_basic AS (
 	SELECT user_id FROM users_table WHERE user_id = 1
@@ -541,8 +546,7 @@ FROM
       SELECT * FROM users_table WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1) cte_rec;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+ERROR:  recursive CTEs are not supported in distributed queries
 -- basic_recursive in WHERE with UNION ALL
 SELECT
   *
@@ -615,15 +619,24 @@ SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
        6 |  220
 (6 rows)
 
-SELECT * FROM cte_view;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+SELECT * FROM cte_view ORDER BY 1, 2 LIMIT 5;
+ user_id | value_1 
+---------+---------
+       1 |       5
+       2 |       4
+       3 |       5
+       4 |       5
+       5 |       5
+(5 rows)
+
 WITH cte_user_with_view AS 
 (
 	SELECT * FROM cte_view WHERE user_id < 3
 )
-SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 3;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 2;
+ user_id | value_1 
+---------+---------
+(0 rows)
+
 DROP VIEW basic_view;
 DROP VIEW cte_view;

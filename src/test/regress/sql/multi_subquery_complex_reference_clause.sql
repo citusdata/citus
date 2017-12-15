@@ -980,14 +980,16 @@ SELECT foo.user_id FROM
   WHERE event_type > 100
 ) as foo;
 
--- not supported since group by is on the reference table column
+-- not pushdownable since group by is on the reference table column
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   GROUP BY r.user_id
 ) as foo;
 
--- supported since the group by contains at least one distributed table
+-- not pushdownable since the group by contains at least one distributed table
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -995,7 +997,8 @@ SELECT foo.user_id FROM
 ) as foo
 ORDER BY 1 LIMIT 3;
 
--- not supported since distinct is on the reference table column
+-- not pushdownable since distinct is on the reference table column
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -1048,7 +1051,8 @@ LIMIT 5
 OFFSET 0;
 
 -- should not push down this query since there is a distributed table (i.e., events_table)
--- which is not in the DISTINCT clause
+-- which is not in the DISTINCT clause. Recursive planning also fails since router execution
+-- is disabled
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
@@ -1076,6 +1080,8 @@ ORDER BY 1 DESC
 LIMIT 4;
 
 -- should not pushdown since there is a non partition column on the DISTINCT clause
+-- Recursive planning also fails since router execution
+-- is disabled
 SELECT * FROM
 (
   SELECT 

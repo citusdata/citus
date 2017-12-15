@@ -110,6 +110,10 @@ WHERE
     );
 
 -- CTE in WHERE basic
+-- this is a tricky query that hits an aggresive
+-- check in subquery puwhdown after the recursive planning
+-- where LIMIT should be allowed
+-- if the query contains only intermediate results
 SELECT
   count(*)
 FROM
@@ -131,6 +135,10 @@ IN
   );
 
 -- CTE with non-colocated join in WHERE
+-- this is a tricky query that hits an aggresive
+-- check in subquery puwhdown after the recursive planning
+-- where LIMIT should be allowed
+-- if the query contains only intermediate results
 SELECT
   count(*)
 FROM

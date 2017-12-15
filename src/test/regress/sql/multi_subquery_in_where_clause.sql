@@ -489,13 +489,14 @@ ORDER BY 1 ASC
 LIMIT 2;
 
 -- subquery in where clause has a volatile function and no relation
+-- thus we recursively plan it
 SELECT
   user_id
 FROM
   users_table
 WHERE
   value_2 >
-          (SELECT random())
+          (SELECT random()) AND user_id < 0
 ORDER BY 1 ASC
 LIMIT 2;
 
@@ -519,7 +520,8 @@ WHERE
 
 -- we can detect unsupported subquerues even if they appear
 -- in WHERE subquery -> FROM subquery -> WHERE subquery
-SELECT user_id 
+-- but we can recursively plan that anyway
+SELECT DISTINCT user_id 
 FROM   users_table 
 WHERE  user_id 
   IN (SELECT 
@@ -543,7 +545,7 @@ WHERE  user_id
                 AND e1.user_id IN (SELECT user_id FROM users_table LIMIT 3 )
              ) as f_outer
 		WHERE f_inner.user_id = f_outer.user_id
-          );
+          ) ORDER BY 1 LIMIT 3;
 
 -- semi join is not on the partition key for the third subquery
 SELECT user_id
