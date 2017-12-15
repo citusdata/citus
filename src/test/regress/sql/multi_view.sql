@@ -146,8 +146,8 @@ SET citus.task_executor_type to DEFAULT;
 CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
 
--- following will fail due to non GROUP BY of partition key
-SELECT * FROM  lineitems_by_shipping_method;
+-- following will be supported via recursive planning
+SELECT * FROM  lineitems_by_shipping_method ORDER BY 1,2 LIMIT 5;
 
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
@@ -348,18 +348,19 @@ CREATE VIEW distinct_user_with_value_1_3 AS SELECT DISTINCT user_id FROM users_t
 SELECT * FROM distinct_user_with_value_1_3 ORDER BY user_id;
 
 -- distinct is not supported if it is on a non-partition key
+-- but will be supported via recursive planning
 CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 3;
-SELECT * FROM distinct_value_1;
+SELECT * FROM distinct_value_1 ORDER BY 1 DESC LIMIT 5;
 
--- CTEs are not supported even if they are on views
+-- CTEs are supported even if they are on views
 CREATE VIEW cte_view_1 AS
 WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
 
-SELECT * FROM cte_view_1;
+SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
 
--- this is single shard query but still not supported since it has view + cte
+-- this is single shard query and still not supported since it has view + cte
 -- router planner can't detect it
-SELECT * FROM cte_view_1 WHERE user_id = 2;
+SELECT * FROM cte_view_1 WHERE user_id = 2 ORDER BY 1,2,3,4,5;
 
 -- if CTE itself prunes down to a single shard than the view is supported (router plannable)
 CREATE VIEW cte_view_2 AS

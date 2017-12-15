@@ -30,8 +30,7 @@ SET
 WHERE 
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'orders_subquery'::regclass ORDER BY shardid DESC LIMIT 1);
 
--- If group by is not on partition column then we error out from single table
--- repartition code path
+-- If group by is not on partition column then we recursively plan
 SELECT
 	avg(order_count)
 FROM
@@ -70,9 +69,9 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
--- Subqueries without relation with a volatile functions (non-constant)
+-- Subqueries without relation with a volatile functions (non-constant) are planned recursively
 SELECT count(*) FROM (
-   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r)
+   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
 ) b;
 
 -- Check that we error out if there is non relation subqueries
@@ -98,7 +97,8 @@ SELECT count(*) FROM
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
--- Check that we error out if inner query has Limit but subquery_pushdown is not set
+-- we'd error out if inner query has Limit but subquery_pushdown is not set
+-- but we recursively plan the query
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM

@@ -1,0 +1,347 @@
+-- ===================================================================
+-- test recursive planning functionality
+-- ===================================================================
+SET client_min_messages TO DEBUG1;
+-- subqueries in FROM clause with LIMIT should be recursively planned
+SELECT
+   user_id
+FROM
+    (SELECT 
+    	DISTINCT users_table.user_id 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo
+    ORDER BY 1 DESC;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 1_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+ user_id 
+---------
+       6
+       5
+       4
+       3
+       2
+(5 rows)
+
+-- subqueries in FROM clause with DISTINCT on non-partition key
+-- should be recursively planned
+SELECT
+   *
+FROM
+    (SELECT 
+    	DISTINCT users_table.value_1 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1
+     ) as foo
+     ORDER BY 1 DESC;
+DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.value_1
+ value_1 
+---------
+       5
+       4
+       3
+       2
+       1
+       0
+(6 rows)
+
+-- subqueries in FROM clause with GROUP BY on non-partition key
+-- should be recursively planned
+SELECT
+   *
+FROM
+    (SELECT 
+    	users_table.value_2, avg(value_1)
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo
+    ORDER BY 2 DESC, 1;
+DEBUG:  generating subplan 5_1 for subquery SELECT users_table.value_2, avg(users_table.value_1) AS avg FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+ value_2 |        avg         
+---------+--------------------
+       4 | 2.8453608247422680
+       2 | 2.6833855799373041
+       5 | 2.6238938053097345
+       1 | 2.3569131832797428
+       3 | 2.3424124513618677
+       0 | 2.0940170940170940
+(6 rows)
+
+-- multiple subqueries in FROM clause should be replaced
+-- and the final query is router query
+SELECT
+   *
+FROM
+    (SELECT 
+    	users_table.value_2
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo,
+	(SELECT 
+    	users_table.value_3
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (5,6,7,8)
+     GROUP BY users_table.value_3
+     ORDER BY 1 DESC
+     ) as bar
+	WHERE foo.value_2 = bar.value_3
+	ORDER BY 2 DESC, 1;
+DEBUG:  generating subplan 7_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+DEBUG:  generating subplan 7_2 for subquery SELECT users_table.value_3 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8]))) GROUP BY users_table.value_3 ORDER BY users_table.value_3 DESC
+ value_2 | value_3 
+---------+---------
+       5 |       5
+       4 |       4
+       3 |       3
+       2 |       2
+       1 |       1
+       0 |       0
+(6 rows)
+
+-- same query with alias in the subquery
+SELECT
+   DISTINCT ON (citus) citus, postgres, citus + 1 as c1, postgres-1 as p1
+FROM
+    (SELECT 
+        users_table.value_2
+     FROM 
+        users_table, events_table 
+     WHERE 
+        users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo(postgres),
+    (SELECT 
+        users_table.user_id
+     FROM 
+        users_table, events_table 
+     WHERE 
+        users_table.user_id = events_table.user_id AND 
+     event_type IN (5,6,7,8)
+     ORDER BY 1 DESC
+     ) as bar (citus)
+    WHERE foo.postgres = bar.citus
+    ORDER BY 1 DESC, 2 DESC
+    LIMIT 3;
+DEBUG:  generating subplan 10_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+DEBUG:  push down of limit count: 3
+ citus | postgres | c1 | p1 
+-------+----------+----+----
+     5 |        5 |  6 |  4
+     4 |        4 |  5 |  3
+     3 |        3 |  4 |  2
+(3 rows)
+
+-- foo is replaced
+-- and the final query is real-time
+SELECT
+   *
+FROM
+    (SELECT 
+    	users_table.value_2
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo,
+	(SELECT 
+    	users_table.user_id
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (5,6,7,8)
+     ORDER BY 1 DESC
+     ) as bar
+	WHERE foo.value_2 = bar.user_id
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 3;
+DEBUG:  generating subplan 12_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+DEBUG:  push down of limit count: 3
+ value_2 | user_id 
+---------+---------
+       5 |       5
+       5 |       5
+       5 |       5
+(3 rows)
+
+-- subqueries in WHERE should be replaced
+SELECT DISTINCT user_id
+FROM users_table
+WHERE 
+	user_id IN (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5)
+    ORDER BY 1 DESC;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 14_1 for subquery SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
+ user_id 
+---------
+       4
+       3
+       2
+       1
+(4 rows)
+
+-- subquery in FROM -> FROM -> FROM should be replaced due to OFFSET
+SELECT 
+	DISTINCT user_id 
+FROM 
+	(
+		SELECT users_table.user_id FROM users_table, 
+							(
+								SELECT 
+									event_type, user_id
+								FROM
+									(SELECT event_type, users_table.user_id FROM users_table, 
+															(SELECT user_id, event_type FROM events_table WHERE value_2 < 3 OFFSET 3) as foo
+															WHERE foo.user_id = users_table.user_id
+															) bar
+							) as baz
+									WHERE baz.user_id = users_table.user_id
+	) as sub1
+	ORDER BY 1 DESC 
+	LIMIT 3;
+DEBUG:  generating subplan 16_1 for subquery SELECT user_id, event_type FROM public.events_table WHERE (value_2 < 3) OFFSET 3
+DEBUG:  push down of limit count: 3
+ user_id 
+---------
+       6
+       5
+       4
+(3 rows)
+
+-- subquery in FROM -> FROM -> WHERE should be replaced due to LIMIT
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT 
+    	u.user_id, e.event_type::text AS event, e.time
+    FROM 
+    	users_table AS u,
+        events_table AS e
+    WHERE u.user_id = e.user_id AND 
+    		u.user_id IN 
+    		(
+    			SELECT 
+    				user_id 
+    			FROM 
+    				users_table 
+    			WHERE value_2 >= 5
+			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
+				LIMIT 5
+    		)
+  ) t
+  GROUP BY user_id
+) q
+ORDER BY 2 DESC, 1;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 18_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 >= 5) AND (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 1) AND (events_table.event_type <= 3) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 3) AND (events_table.event_type <= 4) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))))) LIMIT 5
+ user_id | array_length 
+---------+--------------
+       5 |          364
+(1 row)
+
+-- subquery (i.e., subquery_2) in WHERE->FROM should be replaced due to LIMIT
+SELECT 
+	user_id 
+FROM 
+	users_table 
+WHERE
+ user_id IN
+(
+	SELECT
+	  user_id
+	 FROM (
+	  SELECT
+	 	 subquery_1.user_id, count_pay
+	  FROM
+	  (
+	    (SELECT
+	      users_table.user_id,
+	      'action=>1' AS event,
+	      events_table.time
+	    FROM
+	      users_table,
+	      events_table
+	    WHERE
+	      users_table.user_id = events_table.user_id AND
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 1 AND events_table.event_type < 3
+	      )
+	    UNION
+	    (SELECT
+	      users_table.user_id,
+	      'action=>2' AS event,
+	      events_table.time
+	    FROM
+	      users_table,
+	      events_table
+	    WHERE
+	      users_table.user_id = events_table.user_id AND
+	      users_table.user_id >= 1 AND
+	      users_table.user_id <= 3 AND
+	      events_table.event_type > 2 AND events_table.event_type < 4
+	    )
+	  ) AS subquery_1
+	  LEFT JOIN
+	    (SELECT
+	       user_id,
+	      COUNT(*) AS count_pay
+	    FROM
+	      users_table
+	    WHERE
+	      user_id >= 1 AND
+	      user_id <= 3 AND
+	      users_table.value_1 > 3 AND users_table.value_1 < 5
+	    GROUP BY
+	      user_id
+	    HAVING
+	      COUNT(*) > 1
+	      LIMIT 10
+	      ) AS subquery_2
+	  ON
+	    subquery_1.user_id = subquery_2.user_id
+	  GROUP BY
+	    subquery_1.user_id,
+	    count_pay) AS subquery_top
+	GROUP BY
+	  count_pay, user_id
+)
+GROUP BY user_id
+HAVING count(*) > 1 AND sum(value_2) > 29
+ORDER BY 1;
+DEBUG:  push down of limit count: 10
+DEBUG:  generating subplan 20_1 for subquery SELECT user_id, count(*) AS count_pay FROM public.users_table WHERE ((user_id >= 1) AND (user_id <= 3) AND (value_1 > 3) AND (value_1 < 5)) GROUP BY user_id HAVING (count(*) > 1) LIMIT 10
+ user_id 
+---------
+       2
+       3
+(2 rows)
+

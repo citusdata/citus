@@ -795,7 +795,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.user_id) AS foo;
 
 
--- INSERT partition column does not match with SELECT partition column
+-- INSERT returns NULL partition key value via coordinator
 INSERT INTO agg_events
             (value_4_agg,
              value_1_agg,
@@ -874,8 +874,7 @@ SELECT
 FROM
   reference_table;
 
--- unsupported joins between subqueries
--- we do not return bare partition column on the inner query
+-- foo2 is recursively planned and INSERT...SELECT is done via coordinator
 INSERT INTO agg_events
             (user_id)
 SELECT f2.id FROM
@@ -903,6 +902,7 @@ ON (f.id = f2.id);
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
+-- but we still recursively plan foo2 and run the query
 INSERT INTO agg_events
             (user_id)
 SELECT f.id FROM
@@ -1315,8 +1315,8 @@ SET client_min_messages TO INFO;
 -- avoid constraint violations
 TRUNCATE raw_events_first;
 
--- we don't support LIMIT even if it exists in the subqueries 
--- in where clause
+-- we don't support LIMIT for subquery pushdown, but
+-- we recursively plan the query and run it via coordinator
 INSERT INTO agg_events(user_id)
 SELECT user_id 
 FROM   users_table 

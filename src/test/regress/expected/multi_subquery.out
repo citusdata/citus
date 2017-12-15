@@ -28,8 +28,7 @@ SET
 	shardmaxvalue = '14947' 
 WHERE 
 	shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'orders_subquery'::regclass ORDER BY shardid DESC LIMIT 1);
--- If group by is not on partition column then we error out from single table
--- repartition code path
+-- If group by is not on partition column then we recursively plan
 SELECT
 	avg(order_count)
 FROM
@@ -40,8 +39,7 @@ FROM
 		lineitem_subquery
 	GROUP BY
 		l_suppkey) AS order_counts;
-ERROR:  the query contains a join that requires repartitioning
-HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- Check that we error out if join is not on partition columns.
 SELECT
 	avg(unit_price)
@@ -71,12 +69,15 @@ FROM
 		l_orderkey) AS unit_prices;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- Subqueries without relation with a volatile functions (non-constant)
+-- Subqueries without relation with a volatile functions (non-constant) are planned recursively
 SELECT count(*) FROM (
-   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r)
+   SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
 ) b;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause can only contain immutable functions
+ count 
+-------
+     0
+(1 row)
+
 -- Check that we error out if there is non relation subqueries
 SELECT count(*) FROM
 (
@@ -103,7 +104,8 @@ SELECT count(*) FROM
   2985
 (1 row)
 
--- Check that we error out if inner query has Limit but subquery_pushdown is not set
+-- we'd error out if inner query has Limit but subquery_pushdown is not set
+-- but we recursively plan the query
 SELECT
 	avg(o_totalprice/l_quantity)
 FROM
@@ -123,8 +125,11 @@ FROM
 			orders_subquery
 		WHERE
 			lineitem_quantities.l_orderkey = o_orderkey) orders_price ON true;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+           avg           
+-------------------------
+ 129027.1270000000000000
+(1 row)
+
 -- Limit is only supported when subquery_pushdown is set
 -- Check that we error out if inner query has limit but outer query has not.
 SET citus.subquery_pushdown to ON;

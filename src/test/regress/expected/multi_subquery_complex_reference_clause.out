@@ -1203,15 +1203,16 @@ SELECT foo.user_id FROM
 ---------
 (0 rows)
 
--- not supported since group by is on the reference table column
+-- not pushdownable since group by is on the reference table column
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   GROUP BY r.user_id
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
--- supported since the group by contains at least one distributed table
+ERROR:  unsupported clause type
+-- not pushdownable since the group by contains at least one distributed table
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -1225,20 +1226,19 @@ ORDER BY 1 LIMIT 3;
        3
 (3 rows)
 
--- not supported since distinct is on the reference table column
+-- not pushdownable since distinct is on the reference table column
+-- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+ERROR:  unsupported clause type
 -- not supported since distinct on is on the reference table column
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+ERROR:  unsupported clause type
 -- supported since the distinct on contains at least one distributed table
 SELECT foo.user_id FROM
 (
@@ -1310,28 +1310,26 @@ OFFSET 0;
 (5 rows)
 
 -- should not push down this query since there is a distributed table (i.e., events_table)
--- which is not in the DISTINCT clause
+-- which is not in the DISTINCT clause. Recursive planning also fails since router execution
+-- is disabled
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 SELECT * FROM
 (
   SELECT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
   GROUP BY 1
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- similiar to the above examples, this time there is a subquery 
 -- whose output is not in the DISTINCT clause
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
 ) as foo;
-ERROR:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- the following query is safe to push down since the DISTINCT clause include distribution column
 SELECT * FROM
 (
@@ -1348,6 +1346,8 @@ LIMIT 4;
 (4 rows)
 
 -- should not pushdown since there is a non partition column on the DISTINCT clause
+-- Recursive planning also fails since router execution
+-- is disabled
 SELECT * FROM
 (
   SELECT 
@@ -1360,8 +1360,7 @@ SELECT * FROM
 ) as foo 
 ORDER BY 1 DESC 
 LIMIT 4;
-ERROR:  cannot push down this subquery
-DETAIL:  Distinct on columns without partition column is currently unsupported
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- test the read_intermediate_result() for GROUP BYs
 BEGIN;
  

@@ -1,0 +1,566 @@
+-- ===================================================================
+-- test recursive planning functionality on views
+-- ===================================================================
+CREATE SCHEMA subquery_view;
+SET search_path TO subquery_view, public;
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+CREATE TABLE events_table_local AS SELECT * FROM events_table;
+SET client_min_messages TO DEBUG1;
+CREATE VIEW view_without_subquery AS
+SELECT 
+    	DISTINCT users_table.value_1 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC;
+SELECT 
+	* 
+FROM 
+	view_without_subquery 
+ORDER BY 1 DESC LIMIT 5;
+DEBUG:  generating subplan 3_1 for subquery SELECT DISTINCT users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.value_1 DESC
+ value_1 
+---------
+       5
+       4
+       3
+       2
+       1
+(5 rows)
+
+CREATE VIEW view_without_subquery_second AS
+SELECT 
+    	DISTINCT users_table.user_id 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC
+     LIMIT 5;
+SELECT 
+	* 
+FROM 
+	view_without_subquery_second 
+ORDER BY 1;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 5_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+ user_id 
+---------
+       2
+       3
+       4
+       5
+       6
+(5 rows)
+
+-- subqueries in FROM clause with LIMIT should be recursively planned
+CREATE VIEW subquery_limit AS
+SELECT
+   user_id
+FROM
+    (SELECT 
+    	DISTINCT users_table.user_id 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo
+    ORDER BY 1 DESC;
+SELECT * FROM subquery_limit ORDER BY 1 DESC;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 7_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+ user_id 
+---------
+       6
+       5
+       4
+       3
+       2
+(5 rows)
+
+-- subqueries in FROM clause with GROUP BY non-distribution column should be recursively planned
+CREATE VIEW subquery_non_p_key_group_by AS 
+SELECT
+   *
+FROM
+    (SELECT 
+    	DISTINCT users_table.value_1 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1
+     ) as foo
+     ORDER BY 1 DESC;
+SELECT * FROM subquery_non_p_key_group_by ORDER BY 1 DESC;
+DEBUG:  generating subplan 9_1 for subquery SELECT DISTINCT users_table.value_1 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.value_1
+ value_1 
+---------
+       5
+       4
+       3
+       2
+       1
+       0
+(6 rows)
+
+CREATE VIEW final_query_router AS 
+SELECT
+   *
+FROM
+    (SELECT 
+    	users_table.value_2
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo,
+	(SELECT 
+    	users_table.value_3
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (5,6,7,8)
+     GROUP BY users_table.value_3
+     ORDER BY 1 DESC
+     ) as bar
+	WHERE foo.value_2 = bar.value_3
+	ORDER BY 2 DESC, 1;
+SELECT * FROM final_query_router ORDER BY 1;
+DEBUG:  generating subplan 11_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+DEBUG:  generating subplan 11_2 for subquery SELECT users_table.value_3 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8]))) GROUP BY users_table.value_3 ORDER BY users_table.value_3 DESC
+ value_2 | value_3 
+---------+---------
+       0 |       0
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(6 rows)
+
+CREATE VIEW final_query_realtime AS
+SELECT
+   *
+FROM
+    (SELECT 
+    	users_table.value_2
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     GROUP BY users_table.value_2
+     ORDER BY 1 DESC
+     ) as foo,
+	(SELECT 
+    	users_table.user_id
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (5,6,7,8)
+     ORDER BY 1 DESC
+     ) as bar
+	WHERE foo.value_2 = bar.user_id
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 3;
+SELECT 
+	DISTINCT ON (users_table.value_2) users_table.value_2, time, value_3 
+FROM 
+	final_query_realtime, users_table
+WHERE 
+	users_table.user_id = final_query_realtime.user_id
+ORDER BY 1 DESC, 2 DESC, 3 DESC
+LIMIT 3;
+DEBUG:  generating subplan 14_1 for subquery SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) GROUP BY users_table.value_2 ORDER BY users_table.value_2 DESC
+DEBUG:  push down of limit count: 3
+DEBUG:  generating subplan 14_2 for subquery SELECT foo.value_2, bar.user_id FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8]))) ORDER BY users_table.user_id DESC) bar WHERE (foo.value_2 = bar.user_id) ORDER BY bar.user_id DESC, foo.value_2 DESC LIMIT 3
+DEBUG:  push down of limit count: 3
+ value_2 |              time               | value_3 
+---------+---------------------------------+---------
+       5 | Thu Nov 23 16:28:38.455322 2017 |       4
+       4 | Thu Nov 23 10:22:39.468816 2017 |       3
+       3 | Thu Nov 23 15:55:08.493462 2017 |       3
+(3 rows)
+
+CREATE VIEW subquery_in_where AS
+SELECT DISTINCT user_id
+FROM users_table
+WHERE 
+	user_id IN (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5);
+SELECT 
+	* 
+FROM 
+	subquery_in_where
+ORDER BY 1 DESC;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 17_1 for subquery SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
+ user_id 
+---------
+       4
+       3
+       2
+       1
+(4 rows)
+
+-- subquery in FROM -> FROM -> WHERE should be replaced due to LIMIT
+CREATE VIEW subquery_from_from_where AS 
+SELECT user_id, array_length(events_table, 1)
+FROM (
+  SELECT user_id, array_agg(event ORDER BY time) AS events_table
+  FROM (
+    SELECT 
+    	u.user_id, e.event_type::text AS event, e.time
+    FROM 
+    	users_table AS u,
+        events_table AS e
+    WHERE u.user_id = e.user_id AND 
+    		u.user_id IN 
+    		(
+    			SELECT 
+    				user_id 
+    			FROM 
+    				users_table 
+    			WHERE value_2 >= 5
+			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
+				LIMIT 5
+    		)
+  ) t
+  GROUP BY user_id
+) q;
+SELECT 
+	* 
+FROM 
+	subquery_from_from_where
+ORDER BY 
+2 DESC, 1;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 19_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 >= 5) AND (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 1) AND (events_table.event_type <= 3) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 3) AND (events_table.event_type <= 4) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))))) LIMIT 5
+ user_id | array_length 
+---------+--------------
+       5 |          364
+(1 row)
+
+-- subquery in FROM -> FROM -> FROM should be replaced if 
+-- it contains onle local tables
+CREATE VIEW subquery_from_from_where_local_table AS 
+SELECT 
+	DISTINCT user_id 
+FROM 
+	(
+		SELECT users_table.user_id FROM users_table, 
+							(
+								SELECT 
+									event_type, user_id
+								FROM
+									(SELECT event_type, users_table.user_id FROM users_table, 
+															(SELECT user_id, event_type FROM events_table_local WHERE value_2 < 3 OFFSET 3) as foo
+															WHERE foo.user_id = users_table.user_id
+															) bar
+							) as baz
+									WHERE baz.user_id = users_table.user_id
+	) as sub1;
+SELECT 
+	* 
+FROM 
+	subquery_from_from_where
+ORDER BY 1 DESC 
+	LIMIT 3;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 21_1 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 >= 5) AND (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 1) AND (events_table.event_type <= 3) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 3) AND (events_table.event_type <= 4) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))))) LIMIT 5
+DEBUG:  push down of limit count: 3
+ user_id | array_length 
+---------+--------------
+       5 |          364
+(1 row)
+
+SET citus.enable_repartition_joins to ON;
+CREATE VIEW repartition_view AS
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT DISTINCT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND users_table.user_id < 2
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+SELECT 
+	* 
+FROM 
+	repartition_view;
+DEBUG:  cannot use real time executor with repartition jobs
+HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
+DEBUG:  generating subplan 23_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (users_table.user_id < 2))
+DEBUG:  generating subplan 23_2 for subquery SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('23_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT users_table.user_id FROM public.users_table) bar WHERE (foo.value_2 = bar.user_id)
+ count 
+-------
+    58
+(1 row)
+
+CREATE VIEW all_executors_view AS
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id = 15 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table OFFSET 0
+) as bar,
+(
+	SELECT DISTINCT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND users_table.user_id < 2
+) baz,
+(
+	SELECT user_id FROM users_table_local WHERE user_id = 2
+) baw
+WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id; 
+SELECT 
+	* 
+FROM 
+	all_executors_view;
+DEBUG:  generating subplan 26_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id = 15) OFFSET 0
+DEBUG:  generating subplan 26_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
+DEBUG:  cannot use real time executor with repartition jobs
+HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
+DEBUG:  generating subplan 26_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (users_table.user_id < 2))
+DEBUG:  generating subplan 26_4 for subquery SELECT user_id FROM subquery_view.users_table_local WHERE (user_id = 2)
+DEBUG:  generating subplan 26_5 for subquery SELECT count(*) AS count FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo, (SELECT intermediate_result.user_id FROM read_intermediate_result('26_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) bar, (SELECT intermediate_result.value_2 FROM read_intermediate_result('26_3'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) baz, (SELECT intermediate_result.user_id FROM read_intermediate_result('26_4'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) baw WHERE ((foo.value_2 = bar.user_id) AND (baz.value_2 = bar.user_id) AND (bar.user_id = baw.user_id))
+ count 
+-------
+     0
+(1 row)
+
+SET citus.enable_repartition_joins to OFF;
+-- the same query, but this time the CTEs also live inside a subquery
+CREATE VIEW subquery_and_ctes AS 
+SELECT 
+	* 
+FROM 
+(
+	WITH cte AS (
+	WITH local_cte AS (
+		SELECT * FROM users_table_local
+	),
+	dist_cte AS (
+		SELECT 
+			user_id
+		FROM 
+			events_table, 
+			(SELECT DISTINCT value_2 FROM users_table OFFSET 0) as foo
+		WHERE 
+			events_table.user_id = foo.value_2 AND
+			events_table.user_id IN (SELECT DISTINCT value_1 FROM users_table ORDER BY 1 LIMIT 3)
+	)
+	SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+)
+SELECT 
+	count(*)  as cnt
+FROM 
+	cte,
+	  (SELECT 
+    	DISTINCT users_table.user_id 
+     FROM 
+     	users_table, events_table
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo 
+	  WHERE foo.user_id = cte.user_id
+) as foo, users_table WHERE foo.cnt > users_table.value_2;
+SELECT * FROM subquery_and_ctes
+ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
+LIMIT 5;
+DEBUG:  generating subplan 31_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_view.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 32_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_view.users_table_local
+DEBUG:  generating subplan 32_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  push down of limit count: 3
+DEBUG:  generating subplan 33_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  generating subplan 33_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 31_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  generating subplan 31_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
+DEBUG:  push down of limit count: 5
+ cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
+-----+---------+---------------------------------+---------+---------+---------+---------
+ 432 |       1 | Thu Nov 23 17:30:34.635085 2017 |       3 |       4 |       4 |        
+ 432 |       1 | Thu Nov 23 17:23:03.441394 2017 |       5 |       4 |       3 |        
+ 432 |       3 | Thu Nov 23 17:18:51.048758 2017 |       1 |       5 |       5 |        
+ 432 |       3 | Thu Nov 23 17:10:35.959913 2017 |       4 |       3 |       1 |        
+ 432 |       5 | Thu Nov 23 16:48:32.08896 2017  |       5 |       2 |       1 |        
+(5 rows)
+
+CREATE VIEW subquery_and_ctes_second AS 
+SELECT time, event_type, value_2, value_3 FROM 
+(
+	WITH cte AS (
+		WITH local_cte AS (
+			SELECT * FROM users_table_local
+		),
+		dist_cte AS (
+			SELECT user_id FROM events_table
+		)
+		SELECT dist_cte.user_id FROM local_cte join dist_cte on dist_cte.user_id=local_cte.user_id
+	)
+	SELECT DISTINCT cte.user_id
+	FROM users_table, cte
+	WHERE 
+		users_table.user_id = cte.user_id AND
+		users_table.user_id IN 
+			(WITH cte_in_where AS (SELECT DISTINCT value_2 FROM users_table WHERE value_1 >= 1 AND value_1 <= 20 ORDER BY 1 LIMIT 5) SELECT * FROM cte_in_where)
+	    ORDER BY 1 DESC
+	    ) as foo, 
+			events_table 
+		WHERE 
+			foo.user_id = events_table.value_2;
+SELECT * FROM subquery_and_ctes_second
+ORDER BY 3 DESC, 2 DESC, 1 DESC 
+LIMIT 5;
+DEBUG:  generating subplan 38_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_view.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 39_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_view.users_table_local
+DEBUG:  generating subplan 39_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  generating subplan 38_2 for CTE cte_in_where: SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 38_3 for subquery SELECT DISTINCT cte.user_id FROM public.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id = cte.user_id) AND (users_table.user_id IN (SELECT cte_in_where.value_2 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('38_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) cte_in_where))) ORDER BY cte.user_id DESC
+DEBUG:  push down of limit count: 5
+              time               | event_type | value_2 | value_3 
+---------------------------------+------------+---------+---------
+ Thu Nov 23 21:54:46.924477 2017 |          6 |       4 |       5
+ Wed Nov 22 21:24:22.849224 2017 |          5 |       4 |       1
+ Wed Nov 22 21:05:25.194441 2017 |          5 |       4 |       1
+ Thu Nov 23 04:01:12.29256 2017  |          4 |       4 |       3
+ Thu Nov 23 09:33:16.992454 2017 |          3 |       4 |       1
+(5 rows)
+
+CREATE VIEW deep_subquery AS
+SELECT count(*)
+FROM
+(
+	SELECT avg(min) FROM 
+	(
+		SELECT min(users_table.value_1) FROM
+		(
+			SELECT avg(event_type) as avg_ev_type FROM 
+			(
+				SELECT 
+					max(value_1) as mx_val_1 
+					FROM (
+							SELECT 
+								avg(event_type) as avg
+							FROM
+							(
+								SELECT 
+									cnt 
+								FROM 
+									(SELECT count(*) as cnt, value_2 FROM users_table GROUP BY value_2) as level_1, users_table
+								WHERE 
+									users_table.user_id = level_1.cnt
+							) as level_2, events_table
+							WHERE events_table.user_id = level_2.cnt 
+							GROUP BY level_2.cnt
+						) as level_3, users_table
+					WHERE user_id = level_3.avg
+					GROUP BY level_3.avg
+					) as level_4, events_table
+				WHERE level_4.mx_val_1 = events_table.user_id
+				GROUP BY level_4.mx_val_1
+				) as level_5, users_table
+				WHERE 
+					level_5.avg_ev_type = users_table.user_id
+				GROUP BY 
+					level_5.avg_ev_type
+		) as level_6, users_table WHERE users_table.user_id = level_6.min
+	GROUP BY users_table.value_1
+	) as bar;
+SELECT 
+	* 
+FROM 
+	deep_subquery;
+DEBUG:  generating subplan 43_1 for subquery SELECT count(*) AS cnt, value_2 FROM public.users_table GROUP BY value_2
+DEBUG:  generating subplan 43_2 for subquery SELECT avg(events_table.event_type) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value_2 FROM read_intermediate_result('43_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value_2 integer)) level_1, public.users_table WHERE (users_table.user_id = level_1.cnt)) level_2, public.events_table WHERE (events_table.user_id = level_2.cnt) GROUP BY level_2.cnt
+DEBUG:  generating subplan 43_3 for subquery SELECT max(users_table.value_1) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('43_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, public.users_table WHERE ((users_table.user_id)::numeric = level_3.avg) GROUP BY level_3.avg
+DEBUG:  generating subplan 43_4 for subquery SELECT avg(events_table.event_type) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('43_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 integer)) level_4, public.events_table WHERE (level_4.mx_val_1 = events_table.user_id) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 43_5 for subquery SELECT min(users_table.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('43_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, public.users_table WHERE (level_5.avg_ev_type = (users_table.user_id)::numeric) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 43_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('43_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id = level_6.min) GROUP BY users_table.value_1
+DEBUG:  generating subplan 43_7 for subquery SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('43_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+ count 
+-------
+     0
+(1 row)
+
+CREATE VIEW result_of_view_is_also_recursively_planned AS
+SELECT
+   user_id
+FROM
+    (SELECT 
+    	DISTINCT users_table.user_id 
+     FROM 
+     	users_table, events_table 
+     WHERE 
+     	users_table.user_id = events_table.user_id AND 
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC LIMIT 5
+     ) as foo
+    ORDER BY 1 DESC;
+SELECT 
+	*
+FROM
+	(SELECT 
+		* 
+	 FROM
+		result_of_view_is_also_recursively_planned, events_table 
+	 WHERE 
+	 	events_table.value_2 = result_of_view_is_also_recursively_planned.user_id
+	  ORDER BY time DESC
+	  LIMIT 5
+	  OFFSET 4
+	  ) as foo
+ORDER BY time DESC LIMIT 5;
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 51_1 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  push down of limit count: 9
+DEBUG:  generating subplan 51_2 for subquery SELECT result_of_view_is_also_recursively_planned.user_id, events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM (SELECT foo.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('51_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo ORDER BY foo.user_id DESC) result_of_view_is_also_recursively_planned, public.events_table WHERE (events_table.value_2 = result_of_view_is_also_recursively_planned.user_id) ORDER BY events_table."time" DESC OFFSET 4 LIMIT 5
+ user_id | user_id |              time               | event_type | value_2 | value_3 | value_4 
+---------+---------+---------------------------------+------------+---------+---------+---------
+       2 |       3 | Thu Nov 23 16:44:41.903713 2017 |          4 |       2 |       2 |        
+       2 |       5 | Thu Nov 23 16:11:02.929469 2017 |          4 |       2 |       0 |        
+       4 |       5 | Thu Nov 23 14:40:40.467511 2017 |          1 |       4 |       1 |        
+       3 |       2 | Thu Nov 23 14:02:47.738901 2017 |          1 |       3 |       2 |        
+       3 |       6 | Thu Nov 23 14:00:13.20013 2017  |          3 |       3 |       3 |        
+(5 rows)
+
+SET client_min_messages TO DEFAULT;
+DROP SCHEMA subquery_view CASCADE;
+NOTICE:  drop cascades to 17 other objects
+DETAIL:  drop cascades to table users_table_local
+drop cascades to table events_table_local
+drop cascades to view view_without_subquery
+drop cascades to view view_without_subquery_second
+drop cascades to view subquery_limit
+drop cascades to view subquery_non_p_key_group_by
+drop cascades to view final_query_router
+drop cascades to view final_query_realtime
+drop cascades to view subquery_in_where
+drop cascades to view subquery_from_from_where
+drop cascades to view subquery_from_from_where_local_table
+drop cascades to view repartition_view
+drop cascades to view all_executors_view
+drop cascades to view subquery_and_ctes
+drop cascades to view subquery_and_ctes_second
+drop cascades to view deep_subquery
+drop cascades to view result_of_view_is_also_recursively_planned
+SET search_path TO public;

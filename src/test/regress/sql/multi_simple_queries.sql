@@ -127,7 +127,7 @@ SELECT title FROM articles ORDER BY 1 LIMIT 5;
 -- queries which involve functions in FROM clause are recursively planned
 SELECT * FROM articles, position('om' in 'Thomas') ORDER BY 2 DESC, 1 DESC, 3 DESC LIMIT 5;
 
--- subqueries are not supported in WHERE clause in Citus
+-- subqueries are supported in WHERE clause in Citus even if the relations are not distributed
 SELECT * FROM articles WHERE author_id IN (SELECT id FROM authors WHERE name LIKE '%a');
 
 -- subqueries are supported in FROM clause
