@@ -145,10 +145,34 @@ FROM
 -- reset the flag for next query
 SET citus.subquery_pushdown to OFF;
 
--- Check that we error out if the outermost query is a distinct clause.
+-- Check that we support count distinct with a subquery
 
 SELECT
 	count(DISTINCT a)
+FROM (
+	SELECT
+		count(*) a
+	FROM
+		lineitem_subquery
+	GROUP BY
+	   l_orderkey
+) z;
+
+-- We do not support distinct aggregates other than count distinct with a subquery
+
+SELECT
+	sum(DISTINCT a)
+FROM (
+	SELECT
+		count(*) a
+	FROM
+		lineitem_subquery
+	GROUP BY
+	   l_orderkey
+) z;
+
+SELECT
+	avg(DISTINCT a)
 FROM (
 	SELECT
 		count(*) a
