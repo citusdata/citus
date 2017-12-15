@@ -41,6 +41,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/task_tracker.h"
 #include "distributed/transaction_management.h"
 #include "distributed/transaction_recovery.h"
@@ -543,6 +544,17 @@ RegisterCitusConfigVariables(void)
 					 "creation time, and later reuse the initially read value."),
 		&ShardMaxSize,
 		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
+		PGC_USERSET,
+		GUC_UNIT_KB,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_intermediate_result_size",
+		gettext_noop("Sets the maximum size of the intermediate results in KB for "
+					 "CTEs and complex subqueries."),
+		NULL,
+		&MaxIntermediateResult,
+		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
 		GUC_UNIT_KB,
 		NULL, NULL, NULL);

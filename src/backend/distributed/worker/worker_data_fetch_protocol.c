@@ -343,7 +343,7 @@ ReceiveRegularFile(const char *nodeName, uint32 nodePort, const char *nodeUser,
 	/* loop until we receive and append all the data from remote node */
 	while (!copyDone)
 	{
-		CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDescriptor);
+		CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDescriptor, NULL);
 		if (copyStatus == CLIENT_COPY_DONE)
 		{
 			copyDone = true;
