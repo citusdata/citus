@@ -713,6 +713,7 @@ Limit
                                                               Sort Key: events.event_time DESC
                                                               ->  Seq Scan on events_1400029 events
                                                                     Filter: (composite_id = users.composite_id)
+RESET citus.subquery_pushdown;
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 EXPLAIN (COSTS FALSE)
@@ -1115,3 +1116,85 @@ Custom Scan (Citus INSERT ... SELECT via coordinator)
         ->  Append
               ->  Function Scan on generate_series s
               ->  Function Scan on generate_series s_1
+-- explain with recursive planning
+EXPLAIN (COSTS OFF, VERBOSE true)
+WITH keys AS (
+  SELECT DISTINCT l_orderkey FROM lineitem_hash_part
+),
+series AS (
+  SELECT s FROM generate_series(1,10) s
+)
+SELECT * FROM series JOIN keys ON (s = l_orderkey) JOIN orders_hash_part ON (s = o_orderkey)
+ORDER BY s;
+Sort
+  Output: remote_scan.s, remote_scan.l_orderkey, remote_scan.o_orderkey, remote_scan.o_custkey, remote_scan.o_orderstatus, remote_scan.o_totalprice, remote_scan.o_orderdate, remote_scan.o_orderpriority, remote_scan.o_clerk, remote_scan.o_shippriority, remote_scan.o_comment
+  Sort Key: remote_scan.s
+  ->  Custom Scan (Citus Real-Time)
+        Output: remote_scan.s, remote_scan.l_orderkey, remote_scan.o_orderkey, remote_scan.o_custkey, remote_scan.o_orderstatus, remote_scan.o_totalprice, remote_scan.o_orderdate, remote_scan.o_orderpriority, remote_scan.o_clerk, remote_scan.o_shippriority, remote_scan.o_comment
+        ->  Distributed Subplan 54_1
+              ->  HashAggregate
+                    Output: remote_scan.l_orderkey
+                    Group Key: remote_scan.l_orderkey
+                    ->  Custom Scan (Citus Real-Time)
+                          Output: remote_scan.l_orderkey
+                          Task Count: 4
+                          Tasks Shown: One of 4
+                          ->  Task
+                                Node: host=localhost port=57637 dbname=regression
+                                ->  HashAggregate
+                                      Output: l_orderkey
+                                      Group Key: lineitem_hash_part.l_orderkey
+                                      ->  Seq Scan on public.lineitem_hash_part_360038 lineitem_hash_part
+                                            Output: l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment
+        ->  Distributed Subplan 54_2
+              ->  Function Scan on pg_catalog.generate_series s
+                    Output: s
+                    Function Call: generate_series(1, 10)
+        Task Count: 4
+        Tasks Shown: One of 4
+        ->  Task
+              Node: host=localhost port=57637 dbname=regression
+              ->  Merge Join
+                    Output: intermediate_result.s, intermediate_result_1.l_orderkey, orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment
+                    Merge Cond: (intermediate_result.s = intermediate_result_1.l_orderkey)
+                    ->  Sort
+                          Output: intermediate_result.s, orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment
+                          Sort Key: intermediate_result.s
+                          ->  Hash Join
+                                Output: intermediate_result.s, orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment
+                                Hash Cond: (intermediate_result.s = orders_hash_part.o_orderkey)
+                                ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result
+                                      Output: intermediate_result.s
+                                      Function Call: read_intermediate_result('54_2'::text, 'binary'::citus_copy_format)
+                                ->  Hash
+                                      Output: orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment
+                                      ->  Seq Scan on public.orders_hash_part_360043 orders_hash_part
+                                            Output: orders_hash_part.o_orderkey, orders_hash_part.o_custkey, orders_hash_part.o_orderstatus, orders_hash_part.o_totalprice, orders_hash_part.o_orderdate, orders_hash_part.o_orderpriority, orders_hash_part.o_clerk, orders_hash_part.o_shippriority, orders_hash_part.o_comment
+                    ->  Sort
+                          Output: intermediate_result_1.l_orderkey
+                          Sort Key: intermediate_result_1.l_orderkey
+                          ->  Function Scan on pg_catalog.read_intermediate_result intermediate_result_1
+                                Output: intermediate_result_1.l_orderkey
+                                Function Call: read_intermediate_result('54_1'::text, 'binary'::citus_copy_format)
+SELECT true AS valid FROM explain_json($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = count_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
+t
+SELECT true AS valid FROM explain_xml($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
+t
