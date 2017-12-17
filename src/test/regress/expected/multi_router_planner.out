@@ -906,15 +906,35 @@ DEBUG:  Plan is router executable
  az
 (4 rows)
 
--- top-level union queries are not supported if not router plannable
--- there is an inconsistency on shard pruning between
--- ubuntu/mac disabling log messages for this queries only
+-- top-level union queries are supported through recursive planning
 SET client_min_messages to 'NOTICE';
-(SELECT * FROM articles_hash WHERE author_id = 1)
+(
+  (SELECT * FROM articles_hash WHERE author_id = 1)
+  UNION
+  (SELECT * FROM articles_hash WHERE author_id = 3)
+)
 UNION
-(SELECT * FROM articles_hash WHERE author_id = 2);
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+(SELECT * FROM articles_hash WHERE author_id = 2)
+ORDER BY 1,2,3;
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+  2 |         2 | abducing     |      13642
+  3 |         3 | asternal     |      10480
+ 11 |         1 | alamo        |       1347
+ 12 |         2 | archiblast   |      18185
+ 13 |         3 | aseyev       |       2255
+ 21 |         1 | arcading     |       5890
+ 22 |         2 | antipope     |       2728
+ 23 |         3 | abhorring    |       6799
+ 31 |         1 | athwartships |       7271
+ 32 |         2 | amazon       |      11342
+ 33 |         3 | autochrome   |       8180
+ 41 |         1 | aznavour     |      11814
+ 42 |         2 | ausable      |      15885
+ 43 |         3 | affixal      |      12723
+(15 rows)
+
 -- unions in subqueries are supported with subquery pushdown
 SELECT * FROM (
 	(SELECT * FROM articles_hash WHERE author_id = 1)

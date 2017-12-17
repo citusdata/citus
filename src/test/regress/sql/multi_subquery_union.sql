@@ -6,7 +6,6 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
 
-SET citus.enable_router_execution TO false;
 -- a very simple union query
 SELECT user_id, counter
 FROM (
@@ -568,18 +567,17 @@ LIMIT 5;
 
 -- now lets also have some unsupported queries
 
--- group by is not on the partition key
--- but we can still recursively plan it, though that is not suffient for pushdown
--- of the whole query
+-- group by is not on the partition key, supported through recursive planning
 SELECT user_id, sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM events_table GROUP BY user_id
       UNION
     SELECT value_1 as user_id, sum(value_2) AS counter FROM users_table GROUP BY value_1
 ) user_id 
-GROUP BY user_id;
+GROUP BY user_id
+ORDER BY 1,2;
 
--- partition key is not selected
+-- partition key is not selected, supported through recursive planning
 SELECT sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM users_table where value_1 < 1 GROUP BY user_id HAVING sum(value_2) > 25
@@ -594,7 +592,7 @@ FROM (
 ) user_id 
 GROUP BY user_id ORDER BY 1 DESC LIMIT 5;
 
--- excepts within unions are not supported
+-- excepts within unions are supported through recursive planning
 SELECT * FROM
 (
 (
@@ -615,7 +613,8 @@ UNION
       SELECT user_id, sum(value_2) AS counter FROM events_table GROUP BY user_id
 ) user_id_2
   GROUP BY user_id)
-) as ftop;
+) as ftop
+ORDER BY 1,2;
 
 -- non-equi join are not supported since there is no equivalence between the partition column
 SELECT user_id, sum(counter) 
@@ -719,9 +718,10 @@ SELECT user_id, sum(counter)
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM events_table GROUP BY user_id
       UNION
-    SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id OFFSET 4
+    SELECT user_id, sum(value_2) AS counter FROM users_table GROUP BY user_id ORDER BY user_id OFFSET 4
 ) user_id 
-GROUP BY user_id;
+GROUP BY user_id
+ORDER BY 1,2;
 
 -- lower level union does not return partition key with the other relations
 SELECT *
@@ -762,7 +762,8 @@ FROM (
             GROUP BY 
               user_id) user_id_2
          GROUP BY 
-            user_id)) AS ftop;
+            user_id)) AS ftop
+ORDER BY 1,2;
 
 
 -- some UNION all queries that are going to be pulled up
@@ -795,7 +796,7 @@ FROM
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
 
--- we don't allow joins within unions
+-- we allow joins within unions
 SELECT 
   count(*)
 FROM 
@@ -805,9 +806,7 @@ FROM
   (SELECT users_table.user_id FROM events_table, users_table WHERE events_table.user_id = users_table.user_id)
 ) b;
 
--- we don't support pushing down subqueries without relations
--- recursive planning can replace that query, though the whole
--- query is not safe to pushdown
+-- we support unions on subqueries without relations through recursive planning
 SELECT 
   count(*)
 FROM 
@@ -817,11 +816,9 @@ FROM
   (SELECT 1)
 ) b;
 
--- we don't support pushing down subqueries without relations
--- recursive planning can replace that query, though the whole
--- query is not safe to pushdown
+-- we support pushing down subqueries without relations through recursive planning
 SELECT 
-  *
+  count(*)
 FROM 
 (
   (SELECT user_id FROM users_table)
@@ -829,7 +826,7 @@ FROM
   (SELECT (random() * 100)::int)
 ) b;
 
--- we don't support subqueries without relations
+-- we support subqueries without relations within a union
 SELECT 
   user_id, value_3
 FROM 
@@ -849,9 +846,7 @@ FROM
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
 
--- we don't support pushing down subqueries without relations
--- recursive planning can replace that query, though the whole
--- query is not safe to pushdown
+-- we support pushing down subqueries without relations through recursive planning
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -894,8 +889,6 @@ FROM
 ) as final_query
 GROUP BY types
 ORDER BY types;
-
-SET citus.enable_router_execution TO true;
 
 DROP TABLE events_reference_table;
 DROP TABLE users_reference_table;

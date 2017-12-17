@@ -6,7 +6,6 @@
 -- We don't need shard id sequence here, so commented out to prevent conflicts with concurrent tests
 -- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
-SET citus.enable_router_execution TO FALSE;
 CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('user_buy_test_table', 'user_id');
  create_distributed_table 
@@ -261,23 +260,52 @@ SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_seri
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a table function in the outer part of the outer join
--- volatile functions cannot be used as table expressions
+-- volatile functions can be used as table expressions through recursive planning
+SET client_min_messages TO DEBUG;
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
--- cannot sneak in a volatile function as a parameter
+DEBUG:  generating subplan 30_1 for subquery SELECT random() AS random FROM (public.user_buy_test_table JOIN random() users_ref_test_table(id) ON (((user_buy_test_table.item_id)::double precision > users_ref_test_table.id)))
+DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.random FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(random double precision)) subquery_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     4
+(1 row)
+
+-- can sneak in a volatile function as a parameter
 SELECT count(*) FROM
-  (SELECT random() FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
-  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
--- cannot perform a union with table function
+  (SELECT item_id FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1
+WHERE item_id = 6;
+DEBUG:  generating subplan 32_1 for subquery SELECT user_buy_test_table.item_id FROM (public.user_buy_test_table JOIN generate_series((random())::integer, 10) users_ref_test_table(id) ON ((user_buy_test_table.item_id > users_ref_test_table.id)))
+DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.item_id FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(item_id integer)) subquery_1 WHERE (item_id = 6)
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+     0
+(1 row)
+
+-- can perform a union with table function through recursive planning
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+DEBUG:  generating subplan 34_1 for subquery SELECT user_id FROM public.user_buy_test_table
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+DEBUG:  generating subplan 34_2 for subquery SELECT intermediate_result.user_id FROM read_intermediate_result('34_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer) UNION ALL SELECT users_ref_test_table.id FROM generate_series(1, 10) users_ref_test_table(id)
+DEBUG:  Plan 34 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('34_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) subquery_1
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ count 
+-------
+    14
+(1 row)
+
+RESET client_min_messages;
 -- subquery without FROM can be the inner relationship in a join
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN (SELECT 4 AS id) users_ref_test_table
@@ -308,13 +336,16 @@ SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_t
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 ERROR:  cannot pushdown the subquery
 DETAIL:  There exist a subquery without FROM in the outer part of the outer join
--- cannot perform a union with subquery without FROM
+-- can perform a union with subquery without FROM
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM (SELECT 5 AS id) users_ref_test_table) subquery_1;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ count 
+-------
+     5
+(1 row)
+
 -- should be able to pushdown since reference table is in the
 -- inner part of the left join
 SELECT
@@ -983,10 +1014,18 @@ INNER JOIN
         value_1 > 2 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
 ORDER BY
-  types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
-  -- reference table exist in the subquery of union, should error out
+  types
+LIMIT 5;
+ types 
+-------
+     0
+     0
+     0
+     0
+     0
+(5 rows)
+
+  -- reference table exist in the subquery of union
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT
@@ -1057,8 +1096,13 @@ GROUP BY
   types
 ORDER BY
   types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ types | sumofeventtype 
+-------+----------------
+     0 |            217
+     2 |            191
+     3 |             31
+(3 rows)
+
 --
 -- Should error out with UNION ALL Queries on reference tables
 --
@@ -1112,8 +1156,14 @@ INNER JOIN
       WHERE value_1 > 2 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ types | sumofeventtype 
+-------+----------------
+     0 |            191
+     1 |            191
+     2 |             31
+     3 |            120
+(4 rows)
+
 -- just a sanity check that we don't allow this if the reference table is on the
 -- left part of the left join
 SELECT count(*) FROM
@@ -1201,15 +1251,25 @@ SELECT foo.user_id FROM
 (0 rows)
 
 -- not pushdownable since group by is on the reference table column
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   GROUP BY r.user_id
-) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+) as foo
+ORDER BY 1 DESC;
+ user_id 
+---------
+       6
+       5
+       4
+       3
+       2
+       1
+(6 rows)
+
 -- not pushdownable since the group by contains at least one distributed table
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -1224,18 +1284,38 @@ ORDER BY 1 LIMIT 3;
 (3 rows)
 
 -- not pushdownable since distinct is on the reference table column
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
-) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+) as foo
+ORDER BY 1 DESC
+LIMIT 5;
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 -- not supported since distinct on is on the reference table column
+-- but recursively planned
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+       6
+(6 rows)
+
 -- supported since the distinct on contains at least one distributed table
 SELECT foo.user_id FROM
 (
@@ -1313,20 +1393,36 @@ SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
 ) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+ user_id 
+---------
+(0 rows)
+
 SELECT * FROM
 (
   SELECT users_reference_table.user_id FROM users_reference_table, events_table WHERE users_reference_table.user_id = events_table.value_4
   GROUP BY 1
 ) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+ user_id 
+---------
+(0 rows)
+
 -- similiar to the above examples, this time there is a subquery 
 -- whose output is not in the DISTINCT clause
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
-) as foo;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+) as foo
+ORDER BY 1;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+       6
+(6 rows)
+
 -- the following query is safe to push down since the DISTINCT clause include distribution column
 SELECT * FROM
 (
@@ -1357,7 +1453,14 @@ SELECT * FROM
 ) as foo 
 ORDER BY 1 DESC 
 LIMIT 4;
-ERROR:  cannot handle complex subqueries when the router executor is disabled
+ user_id | value_4 
+---------+---------
+       6 |        
+       5 |        
+       4 |        
+       3 |        
+(4 rows)
+
 -- test the read_intermediate_result() for GROUP BYs
 BEGIN;
  

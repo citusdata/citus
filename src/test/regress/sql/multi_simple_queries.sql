@@ -116,9 +116,10 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
 	HAVING sum(word_count) > 40000
 	ORDER BY sum(word_count) DESC;
 
--- UNION/INTERSECT queries are unsupported if on multiple shards
+-- UNION/INTERSECT queries are supported if on multiple shards
 SELECT * FROM articles WHERE author_id = 10 UNION
-SELECT * FROM articles WHERE author_id = 2; 
+SELECT * FROM articles WHERE author_id = 2
+ORDER BY 1,2,3;
 
 -- queries using CTEs are supported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )

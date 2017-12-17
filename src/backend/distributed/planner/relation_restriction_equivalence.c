@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "distributed/distributed_planner.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/multi_logical_planner.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/pg_dist_partition.h"
@@ -1215,7 +1216,15 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass **
 {
 	AttributeEquivalenceClassMember *attributeEqMember = NULL;
 	Oid relationId = rangeTableEntry->relid;
-	Var *relationPartitionKey = DistPartitionKey(relationId);
+	Var *relationPartitionKey = NULL;
+
+	/* we don't consider local tables in the equality on columns */
+	if (!IsDistributedTable(relationId))
+	{
+		return;
+	}
+
+	relationPartitionKey = DistPartitionKey(relationId);
 
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 

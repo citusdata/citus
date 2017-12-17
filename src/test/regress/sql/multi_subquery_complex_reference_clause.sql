@@ -8,8 +8,6 @@
 -- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 
-SET citus.enable_router_execution TO FALSE;
-
 CREATE TABLE user_buy_test_table(user_id int, item_id int, buy_count int);
 SELECT create_distributed_table('user_buy_test_table', 'user_id');
 INSERT INTO user_buy_test_table VALUES(1,2,1);
@@ -161,21 +159,26 @@ SELECT count(*) FROM
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT * FROM generate_series(1,10) id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 
--- volatile functions cannot be used as table expressions
+-- volatile functions can be used as table expressions through recursive planning
+SET client_min_messages TO DEBUG;
+
 SELECT count(*) FROM
   (SELECT random() FROM user_buy_test_table JOIN random() AS users_ref_test_table(id)
   ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
 
--- cannot sneak in a volatile function as a parameter
+-- can sneak in a volatile function as a parameter
 SELECT count(*) FROM
-  (SELECT random() FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
-  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1;
+  (SELECT item_id FROM user_buy_test_table JOIN generate_series(random()::int,10) AS users_ref_test_table(id)
+  ON user_buy_test_table.item_id > users_ref_test_table.id) subquery_1
+WHERE item_id = 6;
 
--- cannot perform a union with table function
+-- can perform a union with table function through recursive planning
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
    SELECT id FROM generate_series(1,10) AS users_ref_test_table(id)) subquery_1;
+
+RESET client_min_messages;
 
 -- subquery without FROM can be the inner relationship in a join
 SELECT count(*) FROM
@@ -194,7 +197,7 @@ ON user_buy_test_table.item_id = users_ref_test_table.id;
 SELECT count(*) FROM user_buy_test_table RIGHT JOIN (SELECT 5 AS id) users_ref_test_table
 ON user_buy_test_table.item_id = users_ref_test_table.id;
 
--- cannot perform a union with subquery without FROM
+-- can perform a union with subquery without FROM
 SELECT count(*) FROM
   (SELECT user_id FROM user_buy_test_table
    UNION ALL
@@ -770,9 +773,10 @@ INNER JOIN
         value_1 > 2 and value_1 < 4) AS t
     ON (t.user_id = q.user_id)) as final_query
 ORDER BY
-  types;
+  types
+LIMIT 5;
 
-  -- reference table exist in the subquery of union, should error out
+  -- reference table exist in the subquery of union
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT
@@ -981,15 +985,16 @@ SELECT foo.user_id FROM
 ) as foo;
 
 -- not pushdownable since group by is on the reference table column
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   GROUP BY r.user_id
-) as foo;
+) as foo
+ORDER BY 1 DESC;
 
 -- not pushdownable since the group by contains at least one distributed table
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -998,13 +1003,16 @@ SELECT foo.user_id FROM
 ORDER BY 1 LIMIT 3;
 
 -- not pushdownable since distinct is on the reference table column
--- recursively planned, but hits unsupported clause type error on the top level query
+-- recursively planned
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
-) as foo;
+) as foo
+ORDER BY 1 DESC
+LIMIT 5;
 
 -- not supported since distinct on is on the reference table column
+-- but recursively planned
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -1069,7 +1077,8 @@ SELECT * FROM
 SELECT * FROM
 (
   SELECT DISTINCT users_reference_table.user_id FROM users_reference_table, (SELECT user_id, random() FROM events_table) as us_events WHERE users_reference_table.user_id = us_events.user_id
-) as foo;
+) as foo
+ORDER BY 1;
 
 -- the following query is safe to push down since the DISTINCT clause include distribution column
 SELECT * FROM

@@ -42,7 +42,7 @@ test: multi_partitioning_utils multi_partitioning
 # ----------
 # Tests for recursive subquery planning
 # ----------
-test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte
+test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
 test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported  
 test: subquery_prepared_statements
 
@@ -95,7 +95,8 @@ test: multi_large_table_join_planning multi_large_table_pruning multi_large_tabl
 # Tests for recursive planning.
 # ---------
 
-test: with_nested with_where with_basics with_prepare with_modifying with_executors with_join with_partitioning
+test: with_nested with_where with_basics with_prepare with_set_operations
+test: with_modifying with_executors with_join with_partitioning
 
 # ----------
 # Tests to check our large record loading and shard deletion behavior

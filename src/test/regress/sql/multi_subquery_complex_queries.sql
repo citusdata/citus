@@ -8,8 +8,6 @@
 -- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
-SET citus.enable_router_execution TO FALSE;
-
  -- 
  -- UNIONs and JOINs mixed
  --
@@ -132,7 +130,7 @@ GROUP BY
 ORDER BY 
   types;
 
--- not supported since events_subquery_2 doesn't have partition key on the target list
+-- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
 -- within the shuffled target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -191,7 +189,7 @@ GROUP BY
 ORDER BY 
   types;
 
--- not supported since events_subquery_2 doesn't have partition key on the target list
+-- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -711,7 +709,7 @@ ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
 
--- not supported since subquery 3 does not have partition key
+-- supported through recursive planning since subquery 3 does not have partition key
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -763,7 +761,7 @@ INNER JOIN
 GROUP BY types
 ORDER BY types;
 
--- not supported since events_subquery_4 does not have partition key on the 
+-- supported through recursive planning since events_subquery_4 does not have partition key on the 
 -- target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2105,10 +2103,10 @@ GROUP BY
 ORDER BY 
   types;
 
--- not supported due to offset
+-- supported through recursive planning
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
-  ( SELECT *, random()
+  ( SELECT *
    FROM
      ( SELECT "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
       FROM
@@ -2152,7 +2150,7 @@ FROM
                      FROM 
                       events_table as "events"
                      WHERE 
-                      event_type IN (4, 5)) events_subquery_4) OFFSET 3) t1
+                      event_type IN (4, 5)) events_subquery_4) ORDER BY 1, 2 OFFSET 3) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
      (SELECT 
@@ -2273,11 +2271,9 @@ FROM
                     ) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
-     (SELECT random()::int as user_id) AS t 
+     (SELECT 1 as user_id) AS t 
     ON (t.user_id = q.user_id)) as final_query
 GROUP BY 
   types
 ORDER BY 
   types;
-
-SET citus.enable_router_execution TO TRUE;
