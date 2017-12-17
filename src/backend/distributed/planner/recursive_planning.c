@@ -140,17 +140,6 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query,
 	DeferredErrorMessage *error = NULL;
 	RecursivePlanningContext context;
 
-	context.level = 0;
-	context.planId = planId;
-	context.subPlanList = NIL;
-	context.plannerRestrictionContext = plannerRestrictionContext;
-
-	error = RecursivelyPlanCTEs(query, &context);
-	if (error != NULL)
-	{
-		return error;
-	}
-
 	if (SubqueryPushdown)
 	{
 		/*
@@ -164,6 +153,17 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query,
 		 * subquery_pushdown is enabled.
 		 */
 		return NULL;
+	}
+
+	context.level = 0;
+	context.planId = planId;
+	context.subPlanList = NIL;
+	context.plannerRestrictionContext = plannerRestrictionContext;
+
+	error = RecursivelyPlanCTEs(query, &context);
+	if (error != NULL)
+	{
+		return error;
 	}
 
 	/* XXX: plan subqueries */
