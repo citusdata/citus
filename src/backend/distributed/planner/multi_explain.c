@@ -72,7 +72,7 @@ typedef struct RemoteExplainPlan
 
 
 /* Explain functions for distributed queries */
-static void ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es);
+static void ExplainSubPlans(List *subPlanList, ExplainState *es);
 static void ExplainJob(Job *job, ExplainState *es);
 static void ExplainMapMergeJob(MapMergeJob *mapMergeJob, ExplainState *es);
 static void ExplainTaskList(List *taskList, ExplainState *es);
@@ -127,7 +127,7 @@ CitusExplainScan(CustomScanState *node, List *ancestors, struct ExplainState *es
 
 	if (distributedPlan->subPlanList != NIL)
 	{
-		ExplainSubPlans(distributedPlan, es);
+		ExplainSubPlans(distributedPlan->subPlanList, es);
 	}
 
 	ExplainJob(distributedPlan->workerJob, es);
@@ -179,14 +179,20 @@ CoordinatorInsertSelectExplainScan(CustomScanState *node, List *ancestors,
  * planning time and set it to 0.
  */
 static void
-ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
+ExplainSubPlans(List *subPlanList, ExplainState *es)
 {
 	ListCell *subPlanCell = NULL;
-	uint64 planId = distributedPlan->planId;
 
 	ExplainOpenGroup("Subplans", "Subplans", false, es);
 
-	foreach(subPlanCell, distributedPlan->subPlanList)
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		appendStringInfoSpaces(es->str, es->indent * 2);
+		appendStringInfo(es->str, "->  Distributed Subplan\n");
+		es->indent += 3;
+	}
+
+	foreach(subPlanCell, subPlanList)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
 		PlannedStmt *plan = subPlan->plan;
@@ -194,15 +200,6 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		ParamListInfo params = NULL;
 		char *queryString = NULL;
 		instr_time planduration;
-
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-		{
-			char *resultId = GenerateResultId(planId, subPlan->subPlanId);
-
-			appendStringInfoSpaces(es->str, es->indent * 2);
-			appendStringInfo(es->str, "->  Distributed Subplan %s\n", resultId);
-			es->indent += 3;
-		}
 
 		/* set the planning time to 0 */
 		INSTR_TIME_SET_CURRENT(planduration);
@@ -213,11 +210,11 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 #else
 		ExplainOnePlan(plan, into, es, queryString, params, &planduration);
 #endif
+	}
 
-		if (es->format == EXPLAIN_FORMAT_TEXT)
-		{
-			es->indent -= 3;
-		}
+	if (es->format == EXPLAIN_FORMAT_TEXT)
+	{
+		es->indent -= 3;
 	}
 
 	ExplainCloseGroup("Subplans", "Subplans", false, es);
