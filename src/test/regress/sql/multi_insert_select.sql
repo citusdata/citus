@@ -538,11 +538,14 @@ FROM
 
 ROLLBACK;
 
--- We do not support any set operations
+-- We do support set operations through recursive planning
+BEGIN;
+SET LOCAL client_min_messages TO DEBUG;
 INSERT INTO
   raw_events_first(user_id)
   (SELECT user_id FROM raw_events_first) INTERSECT
   (SELECT user_id FROM raw_events_first);
+ROLLBACK;
 
 -- If the query is router plannable then it is executed via the coordinator
 INSERT INTO

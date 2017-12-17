@@ -563,7 +563,7 @@ LIMIT
        1 |  90
 (5 rows)
 
--- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM distributed_table) a; should error out
+-- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM distributed_table) a; should work
 WITH cte AS (
 	SELECT * FROM users_table
 )
@@ -574,8 +574,20 @@ ORDER BY
 	1,2,3,4,5,6
 LIMIT 
 	10;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 18:49:42.327403 2017 |       3 |       2 |       1 |        
+       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |        
+       1 | Wed Nov 22 19:07:03.846437 2017 |       1 |       2 |       5 |        
+       1 | Wed Nov 22 20:56:21.122638 2017 |       2 |       4 |       4 |        
+       1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |        
+       1 | Wed Nov 22 21:47:04.188168 2017 |       4 |       2 |       0 |        
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Wed Nov 22 23:22:09.957743 2017 |       1 |       1 |       1 |        
+       1 | Thu Nov 23 00:42:37.237615 2017 |       2 |       4 |       3 |        
+       1 | Thu Nov 23 02:59:23.620864 2017 |       4 |       5 |       4 |        
+(10 rows)
+
 SELECT * FROM (
 	SELECT * FROM (WITH cte AS (
 			SELECT * FROM users_table
@@ -586,8 +598,20 @@ ORDER BY
 1,2,3,4,5,6
 LIMIT 
 10;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Wed Nov 22 18:49:42.327403 2017 |       3 |       2 |       1 |        
+       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |        
+       1 | Wed Nov 22 19:07:03.846437 2017 |       1 |       2 |       5 |        
+       1 | Wed Nov 22 20:56:21.122638 2017 |       2 |       4 |       4 |        
+       1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |        
+       1 | Wed Nov 22 21:47:04.188168 2017 |       4 |       2 |       0 |        
+       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Wed Nov 22 23:22:09.957743 2017 |       1 |       1 |       1 |        
+       1 | Thu Nov 23 00:42:37.237615 2017 |       2 |       4 |       3 |        
+       1 | Thu Nov 23 02:59:23.620864 2017 |       4 |       5 |       4 |        
+(10 rows)
+
 -- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
 WITH cte AS (
 	SELECT * FROM users_table WHERE user_id IN (1, 2)
