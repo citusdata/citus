@@ -23,8 +23,8 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_resowner.h"
 #include "distributed/multi_server_executor.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
-
 
 int RemoteTaskCheckInterval = 100; /* per cycle sleep interval in millisecs */
 int TaskExecutorType = MULTI_EXECUTOR_REAL_TIME; /* distributed executor type */
@@ -280,4 +280,31 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 
 	taskExecution->dataFetchTaskIndex = -1; /* reset data fetch counter */
 	taskExecution->failureCount++;          /* record failure */
+}
+
+
+/*
+ * CheckIfSizeLimitIsExceeded checks if the limit is exceeded by intermediate
+ * results, if there is any.
+ */
+bool
+CheckIfSizeLimitIsExceeded()
+{
+	uint64 MaxIntermediateResultInBytes = 0;
+	if (!SetResultLimit)
+	{
+		return false;
+	}
+
+	MaxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+
+	if (MaxIntermediateResult > -1)
+	{
+		if (currentIntermediateResult > MaxIntermediateResultInBytes)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

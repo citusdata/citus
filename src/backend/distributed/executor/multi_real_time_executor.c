@@ -19,7 +19,6 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include "access/xact.h"
@@ -43,7 +42,6 @@
 /* Local functions forward declarations */
 static ConnectAction ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 										 TaskExecutionStatus *executionStatus);
-static bool checkIfSizeLimitIsExceeded(Task *task);
 static bool TaskExecutionReadyToStart(TaskExecution *taskExecution);
 static bool TaskExecutionCompleted(TaskExecution *taskExecution);
 static void CancelTaskExecutionIfActive(TaskExecution *taskExecution);
@@ -139,11 +137,12 @@ MultiRealTimeExecute(Job *job)
 				continue;
 			}
 
-			sizeLimitIsExceeded = checkIfSizeLimitIsExceeded(task);
-			if (sizeLimitIsExceeded)
+			/* in case the task has intermediate results */
+			if (CheckIfSizeLimitIsExceeded())
 			{
 				failedTaskId = taskExecution->taskId;
 				taskFailed = true;
+				sizeLimitIsExceeded = true;
 				break;
 			}
 
@@ -261,37 +260,6 @@ MultiRealTimeExecute(Job *job)
 	{
 		CHECK_FOR_INTERRUPTS();
 	}
-}
-
-
-static bool
-checkIfSizeLimitIsExceeded(Task *task)
-{
-	struct stat stat;
-
-	StringInfo jobDirectoryName = MasterJobDirectoryName(task->jobId);
-	StringInfo taskFilename = TaskFilename(jobDirectoryName, task->taskId);
-
-	char *filename = taskFilename->data;
-	int fileFlags = (O_RDONLY);
-	int fileMode = (S_IRUSR);
-
-	int32 fileDescriptor = BasicOpenFilePerm(filename, fileFlags, fileMode);
-
-	uint64 MaxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
-
-	int statOK = fstat(fileDescriptor, &stat);
-	close(fileDescriptor);
-	if (statOK == 0 && SetResultLimit && MaxIntermediateResult > -1)
-	{
-		currentIntermediateResult += (uint64) stat.st_size;
-		if (currentIntermediateResult > MaxIntermediateResultInBytes)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 

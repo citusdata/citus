@@ -736,6 +736,11 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		int appended = -1;
 		errno = 0;
 
+		if (SetResultLimit)
+		{
+			currentIntermediateResult += receiveLength;
+		}
+
 		appended = write(fileDescriptor, receiveBuffer, receiveLength);
 		if (appended != receiveLength)
 		{

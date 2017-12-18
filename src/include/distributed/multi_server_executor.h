@@ -203,6 +203,7 @@ extern void MultiTaskTrackerExecute(Job *job);
 extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
 extern void RemoveJobDirectory(uint64 jobId);
 extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
+extern bool CheckIfSizeLimitIsExceeded(void);
 extern void CleanupTaskExecution(TaskExecution *taskExecution);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);

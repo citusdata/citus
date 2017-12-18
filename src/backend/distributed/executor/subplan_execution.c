@@ -37,11 +37,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *nodeList = ActiveReadableNodeList();
 	bool writeLocalFile = false;
 
-	if (subPlanList && subPlanList->length)
-	{
-		SetResultLimit = true;
-		currentIntermediateResult = 0;
-	}
+	SetResultLimit = (subPlanList && subPlanList->length);
 
 	foreach(subPlanCell, subPlanList)
 	{

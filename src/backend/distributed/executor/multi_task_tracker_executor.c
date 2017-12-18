@@ -161,6 +161,7 @@ MultiTaskTrackerExecute(Job *job)
 	bool taskFailed = false;
 	bool taskTransmitFailed = false;
 	bool clusterFailed = false;
+	bool sizeLimitIsExceeded = false;
 
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
@@ -219,7 +220,7 @@ MultiTaskTrackerExecute(Job *job)
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
 	while (!(allTasksCompleted || taskFailed || taskTransmitFailed ||
-			 clusterFailed || QueryCancelPending))
+			 clusterFailed || QueryCancelPending || sizeLimitIsExceeded))
 	{
 		TaskTracker *taskTracker = NULL;
 		TaskTracker *transmitTracker = NULL;
@@ -243,6 +244,15 @@ MultiTaskTrackerExecute(Job *job)
 			TaskTracker *mapTaskTracker = ResolveMapTaskTracker(taskTrackerHash,
 																task, taskExecution);
 			Assert(execTaskTracker != NULL);
+
+			/* in case the task has intermediate results */
+			if (CheckIfSizeLimitIsExceeded())
+			{
+				failedTaskId = taskExecution->taskId;
+				taskFailed = true;
+				sizeLimitIsExceeded = true;
+				break;
+			}
 
 			/* call the function that performs the core task execution logic */
 			taskExecutionStatus = ManageTaskExecution(execTaskTracker, mapTaskTracker,
@@ -428,7 +438,14 @@ MultiTaskTrackerExecute(Job *job)
 	 * If we previously broke out of the execution loop due to a task failure or
 	 * user cancellation request, we can now safely emit an error message.
 	 */
-	if (taskFailed)
+	if (taskFailed && sizeLimitIsExceeded)
+	{
+		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId),
+						errhint("the max intermediate result size is exceeded "
+								"consider increasing citus.max_intermediate_result_size to "
+								"a higher value.")));
+	}
+	else if (taskFailed)
 	{
 		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
