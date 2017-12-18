@@ -2006,9 +2006,9 @@ FROM (
 ORDER BY 2 DESC, 1;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- note that the following query has joins on the partition keys
--- however we fail to push down it due to the function call on the
--- where clause. We probably need to relax that check
+-- note that the following query has both equi-joins on the partition keys
+-- and non-equi-joins on other columns. We now support query filters
+-- having non-equi-joins as long as they have equi-joins on partition keys.
 SELECT
     users_table.user_id, users_table.value_1, prob
 FROM
@@ -2024,7 +2024,10 @@ FROM
   ON users_table.user_id = temp.user_id
   WHERE 
     users_table.value_1 < 3 AND test_join_function_2(users_table.user_id, temp.user_id);
-ERROR:  unsupported clause type
+ user_id | value_1 | prob 
+---------+---------+------
+(0 rows)
+
 -- we do support the following since there is already an equality on the partition
 -- key and we have an additional join via a function
 SELECT

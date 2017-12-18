@@ -145,6 +145,88 @@ FROM
 -- reset the flag for next query
 SET citus.subquery_pushdown to OFF;
 
+-- some queries without a subquery uses subquery planner
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- query is not supported if does not have equi-join clause
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey < o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+
+-- distinct queries work
+SELECT DISTINCT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- count(distinct) queries work
+SELECT COUNT(DISTINCT l_orderkey)
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity);
+
+-- the same queries returning a non-partition column
+SELECT l_quantity
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_quantity DESC
+LIMIT 10;
+
+-- distinct queries work
+SELECT DISTINCT l_quantity
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_quantity DESC
+LIMIT 10;
+
+-- count(distinct) queries work
+SELECT COUNT(DISTINCT l_quantity)
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity);
+
+
 -- Check that we support count distinct with a subquery
 
 SELECT
