@@ -128,7 +128,7 @@ static bool IsRecurringRTE(RangeTblEntry *rangeTableEntry,
 static bool IsRecurringRangeTable(List *rangeTable, RecurringTuplesType *recurType);
 static bool HasRecurringTuples(Node *node, RecurringTuplesType *recurType);
 static bool IsReadIntermediateResultFunction(Node *node);
-static DeferredErrorMessage * ValidateClauseList(List *clauseList);
+static DeferredErrorMessage * DeferErrorIfUnsupportedClause(List *clauseList);
 static bool ExtractFromExpressionWalker(Node *node,
 										QualifierWalkerContext *walkerContext);
 static List * MultiTableNodeList(List *tableEntryList, List *rangeTableList);
@@ -259,8 +259,12 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 		return true;
 	}
 
+	/*
+	 * Some unsupported join clauses in logical planner
+	 * may be supported by subquery pushdown planner.
+	 */
 	whereClauseList = WhereClauseList(rewrittenQuery->jointree);
-	if (ValidateClauseList(whereClauseList) != NULL)
+	if (DeferErrorIfUnsupportedClause(whereClauseList) != NULL)
 	{
 		return true;
 	}
@@ -568,11 +572,9 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	else if (!RestrictionEquivalenceForPartitionKeys(plannerRestrictionContext))
 	{
 		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
-							 "cannot pushdown the subquery since all relations are not "
-							 "joined using distribution keys",
-							 "Each relation should be joined with at least "
-							 "one another relation using distribution keys and "
-							 "equality operator.", NULL);
+							 "complex joins are only supported when all distributed tables are "
+							 "joined on their distribution columns with equal operator",
+							 NULL, NULL);
 	}
 
 	/* we shouldn't allow reference tables in the FROM clause when the query has sublinks */
@@ -1778,7 +1780,7 @@ MultiNodeTree(Query *queryTree)
 
 	/* extract where clause qualifiers and verify we can plan for them */
 	whereClauseList = WhereClauseList(queryTree->jointree);
-	unsupportedQueryError = ValidateClauseList(whereClauseList);
+	unsupportedQueryError = DeferErrorIfUnsupportedClause(whereClauseList);
 	if (unsupportedQueryError)
 	{
 		RaiseDeferredErrorInternal(unsupportedQueryError, ERROR);
@@ -2754,12 +2756,15 @@ QualifierList(FromExpr *fromExpr)
 
 
 /*
- * ValidateClauseList walks over the given list of clauses, and checks that we
- * can recognize all the clauses. This function ensures that we do not drop an
- * unsupported clause type on the floor, and thus prevents erroneous results.
+ * DeferErrorIfUnsupportedClause walks over the given list of clauses, and
+ * checks that we can recognize all the clauses. This function ensures that
+ * we do not drop an unsupported clause type on the floor, and thus prevents
+ * erroneous results.
+ *
+ * Returns a deferred error, caller is responsible for raising the error.
  */
 static DeferredErrorMessage *
-ValidateClauseList(List *clauseList)
+DeferErrorIfUnsupportedClause(List *clauseList)
 {
 	ListCell *clauseCell = NULL;
 	foreach(clauseCell, clauseList)
@@ -2920,8 +2925,8 @@ IsJoinClause(Node *clause)
 	List *argumentList = NIL;
 	Node *leftArgument = NULL;
 	Node *rightArgument = NULL;
-	List *leftColumnList = NIL;
-	List *rightColumnList = NIL;
+	Node *strippedLeftArgument = NULL;
+	Node *strippedRightArgument = NULL;
 
 	if (!IsA(clause, OpExpr))
 	{
@@ -2941,14 +2946,14 @@ IsJoinClause(Node *clause)
 	leftArgument = (Node *) linitial(argumentList);
 	rightArgument = (Node *) lsecond(argumentList);
 
-	leftColumnList = pull_var_clause_default(leftArgument);
-	rightColumnList = pull_var_clause_default(rightArgument);
+	strippedLeftArgument = strip_implicit_coercions(leftArgument);
+	strippedRightArgument = strip_implicit_coercions(rightArgument);
 
 	/* each side of the expression should have only one column */
-	if ((list_length(leftColumnList) == 1) && (list_length(rightColumnList) == 1))
+	if (IsA(strippedLeftArgument, Var) && IsA(strippedRightArgument, Var))
 	{
-		Var *leftColumn = (Var *) linitial(leftColumnList);
-		Var *rightColumn = (Var *) linitial(rightColumnList);
+		Var *leftColumn = (Var *) strippedLeftArgument;
+		Var *rightColumn = (Var *) strippedRightArgument;
 		bool equiJoin = false;
 		bool joinBetweenDifferentTables = false;
 

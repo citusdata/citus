@@ -52,8 +52,7 @@ FROM
 		orders_subquery
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 SELECT
 	avg(unit_price)
 FROM
@@ -67,8 +66,7 @@ FROM
 		l_orderkey = o_custkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- Subqueries without relation with a volatile functions (non-constant) are planned recursively
 SELECT count(*) FROM (
    SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
@@ -181,6 +179,178 @@ LIMIT 10;
          33
 (10 rows)
 
+-- query is still supported if contains additional join
+-- clauses that includes arithmetic expressions
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ l_orderkey 
+------------
+         39
+         39
+         39
+         39
+         38
+         37
+         37
+         37
+         36
+         35
+(10 rows)
+
+-- implicit typecasts in joins is supported
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int8)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ l_orderkey 
+------------
+         39
+         39
+         39
+         39
+         38
+         37
+         37
+         37
+         36
+         35
+(10 rows)
+
+-- non-implicit typecasts in joins is not supported
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int4)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- implicit typecast supported in equi-join
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int8)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ l_orderkey 
+------------
+      14946
+      14946
+      14945
+      14945
+      14945
+      14945
+      14945
+      14945
+      14944
+      14944
+(10 rows)
+
+-- non-implicit typecast is not supported in equi-join
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int4 = o_orderkey::int8)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- type casts in filters are supported as long as
+-- a valid equi-join exists
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey::int8 < l_quantity::int8 + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ l_orderkey 
+------------
+         39
+         39
+         39
+         39
+         38
+         37
+         37
+         37
+         36
+         35
+(10 rows)
+
+-- even if type cast is non-implicit
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey::int4 < l_quantity::int8 + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ l_orderkey 
+------------
+         39
+         39
+         39
+         39
+         38
+         37
+         37
+         37
+         36
+         35
+(10 rows)
+
+-- query is not supported if contains an partition column
+-- equi join that includes arithmetic expressions
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey + 1)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+-- query is not supported if there is a single
+-- join clause with arithmetic expression. It fails
+-- with a different error message
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey + 1)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- query is not supported if does not have equi-join clause
 SELECT l_orderkey
 FROM
@@ -192,8 +362,7 @@ WHERE
 	(o_orderkey < l_quantity)
 ORDER BY l_orderkey DESC
 LIMIT 10;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- distinct queries work
 SELECT DISTINCT l_orderkey
 FROM

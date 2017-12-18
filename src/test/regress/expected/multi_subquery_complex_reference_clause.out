@@ -1128,8 +1128,7 @@ SELECT count(*) FROM
 (SELECT user_buy_test_table.user_id, random() FROM user_buy_test_table LEFT JOIN users_ref_test_table
   ON user_buy_test_table.user_id > users_ref_test_table.id) subquery_2
 WHERE subquery_1.user_id != subquery_2.user_id ;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- we cannot push this query since hash partitioned tables
 -- are not joined on partition keys with equality
 SELECT
@@ -1168,8 +1167,7 @@ count(*) AS cnt, "generated_group_field"
   ORDER BY
     cnt DESC, generated_group_field ASC
   LIMIT 10;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 -- two hash partitioned relations are not joined
 -- on partiton keys although reference table is fine
 -- to push down
@@ -1192,8 +1190,7 @@ WHERE
 GROUP BY 1
 ORDER BY 2 DESC, 1 DESC
 LIMIT 5;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
 SELECT foo.user_id FROM
 (
   SELECT m.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
@@ -1210,7 +1207,7 @@ SELECT foo.user_id FROM
   SELECT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
   GROUP BY r.user_id
 ) as foo;
-ERROR:  unsupported clause type
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- not pushdownable since the group by contains at least one distributed table
 -- recursively planned, but hits unsupported clause type error on the top level query
 SELECT foo.user_id FROM
@@ -1232,13 +1229,13 @@ SELECT foo.user_id FROM
 (
   SELECT DISTINCT r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
-ERROR:  unsupported clause type
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- not supported since distinct on is on the reference table column
 SELECT foo.user_id FROM
 (
   SELECT DISTINCT ON(r.user_id) r.user_id, random() FROM users_table m JOIN events_reference_table r ON int4eq(m.user_id, r.user_id)
 ) as foo;
-ERROR:  unsupported clause type
+ERROR:  cannot handle complex subqueries when the router executor is disabled
 -- supported since the distinct on contains at least one distributed table
 SELECT foo.user_id FROM
 (
