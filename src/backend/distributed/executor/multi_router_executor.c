@@ -639,6 +639,16 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 
 		queryOK = StoreQueryResult(scanState, connection, dontFailOnError,
 								   &currentAffectedTupleCount);
+
+		if (CheckIfSizeLimitIsExceeded())
+		{
+			ereport(ERROR, (errmsg(
+								"query result exceeds the allowed intermediate result size"),
+							errhint(
+								"consider increasing citus.max_intermediate_result_size to "
+								"a higher value.")));
+		}
+
 		if (queryOK)
 		{
 			return;
@@ -1442,6 +1452,11 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				else
 				{
 					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
+					if (UseResultSizeLimit)
+					{
+						TotalIntermediateResultSize += PQgetlength(result, rowIndex,
+																   columnIndex);
+					}
 				}
 			}
 

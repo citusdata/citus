@@ -35,6 +35,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "storage/fd.h"
@@ -245,15 +246,6 @@ MultiTaskTrackerExecute(Job *job)
 																task, taskExecution);
 			Assert(execTaskTracker != NULL);
 
-			/* in case the task has intermediate results */
-			if (CheckIfSizeLimitIsExceeded())
-			{
-				failedTaskId = taskExecution->taskId;
-				taskFailed = true;
-				sizeLimitIsExceeded = true;
-				break;
-			}
-
 			/* call the function that performs the core task execution logic */
 			taskExecutionStatus = ManageTaskExecution(execTaskTracker, mapTaskTracker,
 													  task, taskExecution);
@@ -307,6 +299,12 @@ MultiTaskTrackerExecute(Job *job)
 			if (taskFailed)
 			{
 				failedTaskId = taskExecution->taskId;
+				break;
+			}
+
+			if (CheckIfSizeLimitIsExceeded())
+			{
+				sizeLimitIsExceeded = true;
 				break;
 			}
 		}
@@ -438,12 +436,11 @@ MultiTaskTrackerExecute(Job *job)
 	 * If we previously broke out of the execution loop due to a task failure or
 	 * user cancellation request, we can now safely emit an error message.
 	 */
-	if (taskFailed && sizeLimitIsExceeded)
+	if (sizeLimitIsExceeded)
 	{
-		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId),
-						errhint("the max intermediate result size is exceeded "
-								"consider increasing citus.max_intermediate_result_size to "
-								"a higher value.")));
+		ereport(ERROR, (errmsg("the max intermediate result size is exceeded, "
+							   "consider increasing citus.max_intermediate_result_size "
+							   "to a higher value.")));
 	}
 	else if (taskFailed)
 	{
@@ -1414,12 +1411,20 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 			int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
 			CopyStatus copyStatus = CLIENT_INVALID_COPY;
 			int closed = -1;
+			int returnBytesReceived = 0;
 
 			/* the open connection belongs to this task */
 			int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);
 			Assert(connectionId != INVALID_CONNECTION_ID);
 
-			copyStatus = MultiClientCopyData(connectionId, fileDescriptor);
+			copyStatus = MultiClientCopyData(connectionId, fileDescriptor,
+											 &returnBytesReceived);
+
+			if (UseResultSizeLimit)
+			{
+				TotalIntermediateResultSize += returnBytesReceived;
+			}
+
 			if (copyStatus == CLIENT_COPY_MORE)
 			{
 				/* worker node continues to send more data, keep reading */

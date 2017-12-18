@@ -677,9 +677,16 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			int32 connectionId = connectionIdArray[currentIndex];
 			int32 fileDesc = fileDescriptorArray[currentIndex];
 			int closed = -1;
+			int returnBytesReceived = 0;
 
 			/* copy data from worker node, and write to local file */
-			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc);
+			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc,
+														&returnBytesReceived);
+
+			if (UseResultSizeLimit)
+			{
+				TotalIntermediateResultSize += returnBytesReceived;
+			}
 
 			/* if worker node will continue to send more data, keep reading */
 			if (copyStatus == CLIENT_COPY_MORE)

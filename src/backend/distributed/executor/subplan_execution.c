@@ -20,8 +20,8 @@
 
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
-uint64 currentIntermediateResult = 0;
-bool SetResultLimit = false;
+uint64 TotalIntermediateResultSize = 0;
+bool UseResultSizeLimit = false;
 
 
 /*
@@ -37,7 +37,9 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *nodeList = ActiveReadableNodeList();
 	bool writeLocalFile = false;
 
-	SetResultLimit = (subPlanList && subPlanList->length);
+
+	UseResultSizeLimit = UseResultSizeLimit || (subPlanList != NIL &&
+												MaxIntermediateResult >= 0);
 
 	foreach(subPlanCell, subPlanList)
 	{

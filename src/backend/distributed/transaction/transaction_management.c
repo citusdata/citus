@@ -177,8 +177,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
 
-			currentIntermediateResult = 0;
-			SetResultLimit = false;
+			TotalIntermediateResultSize = 0;
+			UseResultSizeLimit = false;
 
 			UnSetDistributedTransactionId();
 			break;
@@ -217,8 +217,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
-			currentIntermediateResult = 0;
-			SetResultLimit = false;
+			TotalIntermediateResultSize = 0;
+			UseResultSizeLimit = false;
 			UnSetDistributedTransactionId();
 			break;
 		}
@@ -231,8 +231,8 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 		case XACT_EVENT_PREPARE:
 		{
-			currentIntermediateResult = 0;
-			SetResultLimit = false;
+			TotalIntermediateResultSize = 0;
+			UseResultSizeLimit = false;
 			UnSetDistributedTransactionId();
 			break;
 		}

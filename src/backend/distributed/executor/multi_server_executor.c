@@ -291,20 +291,13 @@ bool
 CheckIfSizeLimitIsExceeded()
 {
 	uint64 MaxIntermediateResultInBytes = 0;
-	if (!SetResultLimit)
+	if (!UseResultSizeLimit)
 	{
 		return false;
 	}
 
 	MaxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
 
-	if (MaxIntermediateResult > -1)
-	{
-		if (currentIntermediateResult > MaxIntermediateResultInBytes)
-		{
-			return true;
-		}
-	}
-
-	return false;
+	return (MaxIntermediateResult > -1 && TotalIntermediateResultSize >
+			MaxIntermediateResultInBytes);
 }

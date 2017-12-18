@@ -117,7 +117,8 @@ extern bool MultiClientSendQuery(int32 connectionId, const char *query);
 extern bool MultiClientCancel(int32 connectionId);
 extern ResultStatus MultiClientResultStatus(int32 connectionId);
 extern QueryStatus MultiClientQueryStatus(int32 connectionId);
-extern CopyStatus MultiClientCopyData(int32 connectionId, int32 fileDescriptor);
+extern CopyStatus MultiClientCopyData(int32 connectionId, int32 fileDescriptor,
+									  int *returnBytesReceived);
 extern bool MultiClientQueryResult(int32 connectionId, void **queryResult,
 								   int *rowCount, int *columnCount);
 extern BatchQueryStatus MultiClientBatchResult(int32 connectionId, void **queryResult,
