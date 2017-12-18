@@ -17,6 +17,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/insert_select_planner.h"
+#include "distributed/intermediate_results.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
 #include "distributed/distributed_planner.h"
@@ -31,11 +32,15 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
+#include "parser/parse_type.h"
+#include "optimizer/cost.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/planner.h"
+#include "utils/builtins.h"
 #include "utils/datum.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
+#include "utils/syscache.h"
 
 
 static List *plannerRestrictionContextList = NIL;
@@ -70,6 +75,8 @@ static PlannedStmt * FinalizeNonRouterPlan(PlannedStmt *localPlan,
 static PlannedStmt * FinalizeRouterPlan(PlannedStmt *localPlan, CustomScan *customScan);
 static void CheckNodeIsDumpable(Node *node);
 static Node * CheckNodeCopyAndSerialization(Node *node);
+static void AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry,
+											 RelOptInfo *relOptInfo);
 static List * CopyPlanParamList(List *originalPlanParamList);
 static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
@@ -1159,6 +1166,8 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 	bool distributedTable = false;
 	bool localTable = false;
 
+	AdjustReadIntermediateResultCost(rte, relOptInfo);
+
 	if (rte->rtekind != RTE_RELATION)
 	{
 		return;
@@ -1212,6 +1221,136 @@ multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo, Index
 		lappend(relationRestrictionContext->relationRestrictionList, relationRestriction);
 
 	MemoryContextSwitchTo(oldMemoryContext);
+}
+
+
+/*
+ * AdjustReadIntermediateResultCost adjusts the row count and total cost
+ * of a read_intermediate_result call based on the file size.
+ */
+static void
+AdjustReadIntermediateResultCost(RangeTblEntry *rangeTableEntry, RelOptInfo *relOptInfo)
+{
+	PathTarget *reltarget = relOptInfo->reltarget;
+	List *pathList = relOptInfo->pathlist;
+	Path *path = NULL;
+	RangeTblFunction *rangeTableFunction = NULL;
+	FuncExpr *funcExpression = NULL;
+	Const *resultFormatConst = NULL;
+	Datum resultFormatDatum = 0;
+	Oid resultFormatId = InvalidOid;
+	Const *resultIdConst = NULL;
+	Datum resultIdDatum = 0;
+	char *resultId = NULL;
+	int64 resultSize = 0;
+	ListCell *typeCell = NULL;
+	bool binaryFormat = false;
+	double rowCost = 0.;
+	double rowSizeEstimate = 0;
+	double rowCountEstimate = 0.;
+	double ioCost = 0.;
+
+	if (rangeTableEntry->rtekind != RTE_FUNCTION ||
+		list_length(rangeTableEntry->functions) != 1)
+	{
+		/* avoid more expensive checks below for non-functions */
+		return;
+	}
+
+	if (!CitusHasBeenLoaded() || !CheckCitusVersion(DEBUG5))
+	{
+		/* read_intermediate_result may not exist */
+		return;
+	}
+
+	if (!ContainsReadIntermediateResultFunction((Node *) rangeTableEntry->functions))
+	{
+		return;
+	}
+
+	rangeTableFunction = (RangeTblFunction *) linitial(rangeTableEntry->functions);
+	funcExpression = (FuncExpr *) rangeTableFunction->funcexpr;
+	resultIdConst = (Const *) linitial(funcExpression->args);
+	if (!IsA(resultIdConst, Const))
+	{
+		/* not sure how to interpret non-const */
+		return;
+	}
+
+	resultIdDatum = resultIdConst->constvalue;
+	resultId = TextDatumGetCString(resultIdDatum);
+
+	resultSize = IntermediateResultSize(resultId);
+	if (resultSize < 0)
+	{
+		/* result does not exist, will probably error out later on */
+		return;
+	}
+
+	resultFormatConst = (Const *) lsecond(funcExpression->args);
+	if (!IsA(resultFormatConst, Const))
+	{
+		/* not sure how to interpret non-const */
+		return;
+	}
+
+	resultFormatDatum = resultFormatConst->constvalue;
+	resultFormatId = DatumGetObjectId(resultFormatDatum);
+
+	if (resultFormatId == BinaryCopyFormatId())
+	{
+		binaryFormat = true;
+
+		/* subtract 11-byte signature + 8 byte header + 2-byte footer */
+		resultSize -= 21;
+	}
+
+	/* start with the cost of evaluating quals */
+	rowCost += relOptInfo->baserestrictcost.per_tuple;
+
+	/* postgres' estimate for the width of the rows */
+	rowSizeEstimate += reltarget->width;
+
+	/* add 2 bytes for column count (binary) or line separator (text) */
+	rowSizeEstimate += 2;
+
+	foreach(typeCell, rangeTableFunction->funccoltypes)
+	{
+		Oid columnTypeId = lfirst_oid(typeCell);
+		Oid inputFunctionId = InvalidOid;
+		Oid typeIOParam = InvalidOid;
+
+		if (binaryFormat)
+		{
+			getTypeBinaryInputInfo(columnTypeId, &inputFunctionId, &typeIOParam);
+
+			/* binary format: 4 bytes for field size */
+			rowSizeEstimate += 4;
+		}
+		else
+		{
+			getTypeInputInfo(columnTypeId, &inputFunctionId, &typeIOParam);
+
+			/* text format: 1 byte for tab separator */
+			rowSizeEstimate += 1;
+		}
+
+		/* add the cost of parsing a column */
+		rowCost += get_func_cost(inputFunctionId) * cpu_operator_cost;
+	}
+
+	/* estimate the number of rows based on the file size and estimated row size */
+	rowCountEstimate = Max(1, (double) resultSize / rowSizeEstimate);
+
+	/* cost of reading the data */
+	ioCost = seq_page_cost * resultSize / BLCKSZ;
+
+	Assert(pathList != NIL);
+
+	/* tell the planner about the cost and row count of the function */
+	path = (Path *) linitial(pathList);
+	path->rows = rowCountEstimate;
+	path->total_cost = rowCountEstimate * rowCost + ioCost;
 }
 
 
