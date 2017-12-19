@@ -704,7 +704,7 @@ MultiClientQueryStatus(int32 connectionId)
 
 /* MultiClientCopyData copies data from the file. */
 CopyStatus
-MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *returnBytesReceived)
+MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *bytesReceived)
 {
 	MultiConnection *connection = NULL;
 	char *receiveBuffer = NULL;
@@ -736,9 +736,9 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *returnByte
 		int appended = -1;
 		errno = 0;
 
-		if (returnBytesReceived)
+		if (bytesReceived)
 		{
-			*returnBytesReceived += receiveLength;
+			*bytesReceived += receiveLength;
 		}
 
 		appended = write(fileDescriptor, receiveBuffer, receiveLength);

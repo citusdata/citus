@@ -82,7 +82,8 @@ static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
 													ShardPlacementAccessType accessType);
 static void ExecuteSingleModifyTask(CitusScanState *scanState, Task *task,
 									bool multipleTasks, bool expectResults);
-static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task);
+static void ExecuteSingleSelectTask(CitusScanState *scanState, Task *task,
+									uint64 *totalIntermediateResultSize);
 static List * GetModifyConnections(Task *task, bool markCritical);
 static void ExecuteMultipleTasks(CitusScanState *scanState, List *taskList,
 								 bool isModificationQuery, bool expectResults);
@@ -97,7 +98,8 @@ static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
-							 bool failOnError, int64 *rows);
+							 bool failOnError, int64 *rows,
+							 uint64 *totalIntermediateResultSize);
 static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 							   int64 *rows);
 
@@ -533,6 +535,7 @@ RouterSelectExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 	TupleTableSlot *resultSlot = NULL;
+	uint64 totalIntermediateResultSize = 0;
 
 	if (!scanState->finishedRemoteScan)
 	{
@@ -549,7 +552,15 @@ RouterSelectExecScan(CustomScanState *node)
 		{
 			Task *task = (Task *) linitial(taskList);
 
-			ExecuteSingleSelectTask(scanState, task);
+			ExecuteSingleSelectTask(scanState, task, &totalIntermediateResultSize);
+
+			if (CheckIfSizeLimitIsExceeded(totalIntermediateResultSize))
+			{
+				ereport(ERROR, (errmsg(
+									"query result exceeds the allowed intermediate result size "
+									"consider increasing citus.max_intermediate_result_size to "
+									"a higher value.")));
+			}
 		}
 
 		scanState->finishedRemoteScan = true;
@@ -569,7 +580,8 @@ RouterSelectExecScan(CustomScanState *node)
  * other placements or errors out if the query fails on all placements.
  */
 static void
-ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
+ExecuteSingleSelectTask(CitusScanState *scanState, Task *task,
+						uint64 *totalIntermediateResultSize)
 {
 	ParamListInfo paramListInfo =
 		scanState->customScanState.ss.ps.state->es_param_list_info;
@@ -638,15 +650,8 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		}
 
 		queryOK = StoreQueryResult(scanState, connection, dontFailOnError,
-								   &currentAffectedTupleCount);
-
-		if (CheckIfSizeLimitIsExceeded())
-		{
-			ereport(ERROR, (errmsg(
-								"query result exceeds the allowed intermediate result size "
-								"consider increasing citus.max_intermediate_result_size to "
-								"a higher value.")));
-		}
+								   &currentAffectedTupleCount,
+								   totalIntermediateResultSize);
 
 		if (queryOK)
 		{
@@ -830,7 +835,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 		if (!gotResults && expectResults)
 		{
 			queryOK = StoreQueryResult(scanState, connection, failOnError,
-									   &currentAffectedTupleCount);
+									   &currentAffectedTupleCount, NULL);
 		}
 		else
 		{
@@ -1165,7 +1170,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				Assert(scanState != NULL);
 
 				queryOK = StoreQueryResult(scanState, connection, failOnError,
-										   &currentAffectedTupleCount);
+										   &currentAffectedTupleCount, NULL);
 			}
 			else
 			{
@@ -1351,7 +1356,8 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
  */
 static bool
 StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
-				 bool failOnError, int64 *rows)
+				 bool failOnError, int64 *rows,
+				 uint64 *totalIntermediateResultSize)
 {
 	TupleDesc tupleDescriptor =
 		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
@@ -1453,7 +1459,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
 					if (UseResultSizeLimit)
 					{
-						TotalIntermediateResultSize += PQgetlength(result, rowIndex,
+						totalIntermediateResultSize += PQgetlength(result, rowIndex,
 																   columnIndex);
 					}
 				}

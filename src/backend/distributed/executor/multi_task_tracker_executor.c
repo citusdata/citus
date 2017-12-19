@@ -97,7 +97,8 @@ static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
 										  Task *task, TaskExecution *taskExecution);
 static TransmitExecStatus ManageTransmitExecution(TaskTracker *transmitTracker,
 												  Task *task,
-												  TaskExecution *taskExecution);
+												  TaskExecution *taskExecution,
+												  uint64 *totalIntermediateResultSize);
 static bool TaskExecutionsCompleted(List *taskList);
 static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
 static void TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task);
@@ -163,6 +164,7 @@ MultiTaskTrackerExecute(Job *job)
 	bool taskTransmitFailed = false;
 	bool clusterFailed = false;
 	bool sizeLimitIsExceeded = false;
+	uint64 totalIntermediateResultSize = 0;
 
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
@@ -301,12 +303,6 @@ MultiTaskTrackerExecute(Job *job)
 				failedTaskId = taskExecution->taskId;
 				break;
 			}
-
-			if (CheckIfSizeLimitIsExceeded())
-			{
-				sizeLimitIsExceeded = true;
-				break;
-			}
 		}
 
 		/* second, loop around "top level" tasks to fetch their results */
@@ -336,7 +332,8 @@ MultiTaskTrackerExecute(Job *job)
 
 			/* call the function that fetches results for completed SQL tasks */
 			transmitExecutionStatus = ManageTransmitExecution(execTransmitTracker,
-															  task, taskExecution);
+															  task, taskExecution,
+															  &totalIntermediateResultSize);
 
 			/*
 			 * If we cannot transmit SQL task's results to the master, we first
@@ -369,6 +366,13 @@ MultiTaskTrackerExecute(Job *job)
 			{
 				completedTransmitCount++;
 			}
+		}
+
+
+		if (CheckIfSizeLimitIsExceeded(totalIntermediateResultSize))
+		{
+			sizeLimitIsExceeded = true;
+			break;
 		}
 
 		/* third, loop around task trackers and manage them */
@@ -1287,7 +1291,8 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
  */
 static TransmitExecStatus
 ManageTransmitExecution(TaskTracker *transmitTracker,
-						Task *task, TaskExecution *taskExecution)
+						Task *task, TaskExecution *taskExecution,
+						uint64 *totalIntermediateResultSize)
 {
 	int32 *fileDescriptorArray = taskExecution->fileDescriptorArray;
 	uint32 currentNodeIndex = taskExecution->currentNodeIndex;
@@ -1422,7 +1427,7 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 
 			if (UseResultSizeLimit)
 			{
-				TotalIntermediateResultSize += returnBytesReceived;
+				*totalIntermediateResultSize += returnBytesReceived;
 			}
 
 			if (copyStatus == CLIENT_COPY_MORE)

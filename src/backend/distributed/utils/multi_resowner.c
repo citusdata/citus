@@ -62,8 +62,6 @@ MultiResourceOwnerReleaseCallback(ResourceReleasePhase phase,
 			if (entry->owner == CurrentResourceOwner)
 			{
 				RemoveJobDirectory(entry->jobId);
-				UseResultSizeLimit = false;
-				TotalIntermediateResultSize = 0;
 			}
 		}
 	}

@@ -20,7 +20,6 @@
 
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
-uint64 TotalIntermediateResultSize = 0;
 bool UseResultSizeLimit = false;
 
 
@@ -37,10 +36,6 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 	List *nodeList = ActiveReadableNodeList();
 	bool writeLocalFile = false;
 
-
-	UseResultSizeLimit = UseResultSizeLimit || (subPlanList != NIL &&
-												MaxIntermediateResult >= 0);
-
 	foreach(subPlanCell, subPlanList)
 	{
 		DistributedSubPlan *subPlan = (DistributedSubPlan *) lfirst(subPlanCell);
@@ -52,6 +47,11 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		char *resultId = GenerateResultId(planId, subPlanId);
 
+		if (MaxIntermediateResult >= 0)
+		{
+			UseResultSizeLimit = true;
+		}
+
 		estate = CreateExecutorState();
 		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
 																 nodeList,
@@ -59,6 +59,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
+		UseResultSizeLimit = false;
 		FreeExecutorState(estate);
 	}
 }
