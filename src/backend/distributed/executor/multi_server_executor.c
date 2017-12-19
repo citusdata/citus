@@ -288,7 +288,7 @@ AdjustStateForFailure(TaskExecution *taskExecution)
  * results, if there is any.
  */
 bool
-CheckIfSizeLimitIsExceeded(uint64 totalIntermediateResultSize)
+CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats)
 {
 	uint64 maxIntermediateResultInBytes = 0;
 
@@ -298,7 +298,7 @@ CheckIfSizeLimitIsExceeded(uint64 totalIntermediateResultSize)
 	}
 
 	maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
-	if (totalIntermediateResultSize < maxIntermediateResultInBytes)
+	if (executionStats->totalIntermediateResultSize < maxIntermediateResultInBytes)
 	{
 		return false;
 	}

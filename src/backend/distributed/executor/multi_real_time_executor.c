@@ -42,7 +42,7 @@
 /* Local functions forward declarations */
 static ConnectAction ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 										 TaskExecutionStatus *executionStatus,
-										 uint64 *totalIntermediateResultSize);
+										 DistributedExecutionStats *executionStats);
 static bool TaskExecutionReadyToStart(TaskExecution *taskExecution);
 static bool TaskExecutionCompleted(TaskExecution *taskExecution);
 static void CancelTaskExecutionIfActive(TaskExecution *taskExecution);
@@ -84,7 +84,8 @@ MultiRealTimeExecute(Job *job)
 	bool taskCompleted = false;
 	bool taskFailed = false;
 	bool sizeLimitIsExceeded = false;
-	uint64 totalIntermediateResultSize = 0;
+	DistributedExecutionStats *executionStats = palloc0(
+		sizeof(DistributedExecutionStats));
 
 	List *workerNodeList = NIL;
 	HTAB *workerHash = NULL;
@@ -141,7 +142,7 @@ MultiRealTimeExecute(Job *job)
 
 			/* call the function that performs the core task execution logic */
 			connectAction = ManageTaskExecution(task, taskExecution, &executionStatus,
-												&totalIntermediateResultSize);
+												executionStats);
 
 			/* update the connection counter for throttling */
 			UpdateConnectionCounter(workerNodeState, connectAction);
@@ -178,7 +179,7 @@ MultiRealTimeExecute(Job *job)
 		}
 
 		/* in case the task has intermediate results */
-		if (CheckIfSizeLimitIsExceeded(totalIntermediateResultSize))
+		if (CheckIfSizeLimitIsExceeded(executionStats))
 		{
 			sizeLimitIsExceeded = true;
 			break;
@@ -248,9 +249,16 @@ MultiRealTimeExecute(Job *job)
 	 */
 	if (sizeLimitIsExceeded)
 	{
-		ereport(ERROR, (errmsg("the max intermediate result size is exceeded, "
-							   "consider to set citus.max_intermediate_result_size to "
-							   "a higher value")));
+		ereport(ERROR, (errmsg("the intermediate result size exceeds "
+							   "citus.max_intermediate_result_size (currently %d kB)",
+							   MaxIntermediateResult),
+						errdetail("Citus restricts the size of intermediate "
+								  "results of complex subqueries and CTEs to "
+								  "avoid accidentally pulling large result sets "
+								  "into once place."),
+						errhint("To run the current query, set "
+								"citus.max_intermediate_result_size to a higher"
+								" value or -1 to disable.")));
 	}
 	else if (taskFailed)
 	{
@@ -276,7 +284,7 @@ MultiRealTimeExecute(Job *job)
 static ConnectAction
 ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 					TaskExecutionStatus *executionStatus,
-					uint64 *totalIntermediateResultSize)
+					DistributedExecutionStats *executionStats)
 {
 	TaskExecStatus *taskStatusArray = taskExecution->taskStatusArray;
 	int32 *connectionIdArray = taskExecution->connectionIdArray;
@@ -686,7 +694,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 
 			if (UseResultSizeLimit && bytesReceived != 0)
 			{
-				*totalIntermediateResultSize += bytesReceived;
+				executionStats->totalIntermediateResultSize += bytesReceived;
 			}
 
 			/* if worker node will continue to send more data, keep reading */

@@ -20,6 +20,7 @@
 
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
+/* when this is true, we enforce intermediate result size limit in all executors */
 bool UseResultSizeLimit = false;
 
 

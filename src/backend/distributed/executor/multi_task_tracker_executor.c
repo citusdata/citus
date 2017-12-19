@@ -98,7 +98,8 @@ static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
 static TransmitExecStatus ManageTransmitExecution(TaskTracker *transmitTracker,
 												  Task *task,
 												  TaskExecution *taskExecution,
-												  uint64 *totalIntermediateResultSize);
+												  DistributedExecutionStats *
+												  executionStats);
 static bool TaskExecutionsCompleted(List *taskList);
 static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
 static void TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task);
@@ -164,8 +165,9 @@ MultiTaskTrackerExecute(Job *job)
 	bool taskTransmitFailed = false;
 	bool clusterFailed = false;
 	bool sizeLimitIsExceeded = false;
-	uint64 totalIntermediateResultSize = 0;
 
+	DistributedExecutionStats *executionStats = palloc0(
+		sizeof(DistributedExecutionStats));
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
 	HTAB *transmitTrackerHash = NULL;
@@ -333,7 +335,7 @@ MultiTaskTrackerExecute(Job *job)
 			/* call the function that fetches results for completed SQL tasks */
 			transmitExecutionStatus = ManageTransmitExecution(execTransmitTracker,
 															  task, taskExecution,
-															  &totalIntermediateResultSize);
+															  executionStats);
 
 			/*
 			 * If we cannot transmit SQL task's results to the master, we first
@@ -369,7 +371,7 @@ MultiTaskTrackerExecute(Job *job)
 		}
 
 
-		if (CheckIfSizeLimitIsExceeded(totalIntermediateResultSize))
+		if (CheckIfSizeLimitIsExceeded(executionStats))
 		{
 			sizeLimitIsExceeded = true;
 			break;
@@ -442,9 +444,16 @@ MultiTaskTrackerExecute(Job *job)
 	 */
 	if (sizeLimitIsExceeded)
 	{
-		ereport(ERROR, (errmsg("the max intermediate result size is exceeded, "
-							   "consider increasing citus.max_intermediate_result_size "
-							   "to a higher value.")));
+		ereport(ERROR, (errmsg("the intermediate result size exceeds "
+							   "citus.max_intermediate_result_size (currently %d kB)",
+							   MaxIntermediateResult),
+						errdetail("Citus restricts the size of intermediate "
+								  "results of complex subqueries and CTEs to "
+								  "avoid accidentally pulling large result sets "
+								  "into once place."),
+						errhint("To run the current query, set "
+								"citus.max_intermediate_result_size to a higher"
+								" value or -1 to disable.")));
 	}
 	else if (taskFailed)
 	{
@@ -1292,7 +1301,7 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
 static TransmitExecStatus
 ManageTransmitExecution(TaskTracker *transmitTracker,
 						Task *task, TaskExecution *taskExecution,
-						uint64 *totalIntermediateResultSize)
+						DistributedExecutionStats *executionStats)
 {
 	int32 *fileDescriptorArray = taskExecution->fileDescriptorArray;
 	uint32 currentNodeIndex = taskExecution->currentNodeIndex;
@@ -1416,18 +1425,18 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 			int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
 			CopyStatus copyStatus = CLIENT_INVALID_COPY;
 			int closed = -1;
-			uint64 returnBytesReceived = 0;
+			uint64 bytesReceived = 0;
 
 			/* the open connection belongs to this task */
 			int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);
 			Assert(connectionId != INVALID_CONNECTION_ID);
 
 			copyStatus = MultiClientCopyData(connectionId, fileDescriptor,
-											 &returnBytesReceived);
+											 &bytesReceived);
 
 			if (UseResultSizeLimit)
 			{
-				*totalIntermediateResultSize += returnBytesReceived;
+				(executionStats->totalIntermediateResultSize) += bytesReceived;
 			}
 
 			if (copyStatus == CLIENT_COPY_MORE)
