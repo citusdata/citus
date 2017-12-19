@@ -22,6 +22,11 @@ step "s1-assign-transaction-id"
     SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
 }
 
+step "s1-has-transaction-number"
+{
+    SELECT transaction_number > 0 FROM get_current_transaction_id();
+}
+
 step "s1-commit"
 {
     COMMIT;
@@ -55,6 +60,11 @@ step "s2-begin"
 step "s2-assign-transaction-id"
 {
     SELECT assign_distributed_transaction_id(2, 2, '2015-01-02 00:00:00+0');
+}
+
+step "s2-vacuum"
+{
+    VACUUM FULL pg_dist_partition;
 }
 
 step "s2-commit"
@@ -103,5 +113,7 @@ permutation "s1-begin" "s1-assign-transaction-id" "s4-get-all-transactions" "s2-
 
 # now show that distributed transaction id on the coordinator
 # is the same with the one on the worker
-permutation "s1-create-table" "s1-begin" "s1-insert" "s1-get-current-transaction-id" "s2-get-first-worker-active-transactions"
+permutation "s1-create-table" "s1-begin" "s1-insert" "s1-get-current-transaction-id" "s2-get-first-worker-active-transactions" "s1-commit"
 
+# we would initially forget the distributed transaction ID on pg_dist_partition invalidations
+permutation "s1-begin" "s1-assign-transaction-id" "s1-has-transaction-number" "s2-vacuum" "s1-has-transaction-number" "s1-commit"
