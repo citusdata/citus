@@ -1411,7 +1411,7 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 			int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
 			CopyStatus copyStatus = CLIENT_INVALID_COPY;
 			int closed = -1;
-			int returnBytesReceived = 0;
+			uint64 returnBytesReceived = 0;
 
 			/* the open connection belongs to this task */
 			int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);

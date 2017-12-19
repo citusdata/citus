@@ -290,14 +290,18 @@ AdjustStateForFailure(TaskExecution *taskExecution)
 bool
 CheckIfSizeLimitIsExceeded()
 {
-	uint64 MaxIntermediateResultInBytes = 0;
-	if (!UseResultSizeLimit)
+	uint64 maxIntermediateResultInBytes = 0;
+
+	if (MaxIntermediateResult == -1)
 	{
 		return false;
 	}
 
-	MaxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+	maxIntermediateResultInBytes = MaxIntermediateResult * 1024L;
+	if (TotalIntermediateResultSize < maxIntermediateResultInBytes)
+	{
+		return false;
+	}
 
-	return (MaxIntermediateResult > -1 && TotalIntermediateResultSize >
-			MaxIntermediateResultInBytes);
+	return true;
 }

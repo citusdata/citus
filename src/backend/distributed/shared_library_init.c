@@ -554,7 +554,7 @@ RegisterCitusConfigVariables(void)
 			"Sets the maximum size of the intermediate results during the execution."),
 		NULL,
 		&MaxIntermediateResult,
-		1048576, -1, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
+		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
 		GUC_UNIT_KB,
 		NULL, NULL, NULL);

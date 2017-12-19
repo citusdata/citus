@@ -643,8 +643,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		if (CheckIfSizeLimitIsExceeded())
 		{
 			ereport(ERROR, (errmsg(
-								"query result exceeds the allowed intermediate result size"),
-							errhint(
+								"query result exceeds the allowed intermediate result size "
 								"consider increasing citus.max_intermediate_result_size to "
 								"a higher value.")));
 		}

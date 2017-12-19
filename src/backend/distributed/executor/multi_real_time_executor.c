@@ -137,15 +137,6 @@ MultiRealTimeExecute(Job *job)
 				continue;
 			}
 
-			/* in case the task has intermediate results */
-			if (CheckIfSizeLimitIsExceeded())
-			{
-				failedTaskId = taskExecution->taskId;
-				taskFailed = true;
-				sizeLimitIsExceeded = true;
-				break;
-			}
-
 			/* call the function that performs the core task execution logic */
 			connectAction = ManageTaskExecution(task, taskExecution, &executionStatus);
 
@@ -181,6 +172,13 @@ MultiRealTimeExecute(Job *job)
 				 */
 				MultiClientRegisterWait(waitInfo, executionStatus, connectionId);
 			}
+		}
+
+		/* in case the task has intermediate results */
+		if (CheckIfSizeLimitIsExceeded())
+		{
+			sizeLimitIsExceeded = true;
+			break;
 		}
 
 		/*
@@ -245,12 +243,11 @@ MultiRealTimeExecute(Job *job)
 	 * user cancellation request, we can now safely emit an error message (all
 	 * client-side resources have been cleared).
 	 */
-	if (taskFailed && sizeLimitIsExceeded)
+	if (sizeLimitIsExceeded)
 	{
-		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId),
-						errhint("the max intermediate result size is exceeded "
-								"consider increasing citus.max_intermediate_result_size to "
-								"a higher value.")));
+		ereport(ERROR, (errmsg("the max intermediate result size is exceeded, "
+							   "consider to set citus.max_intermediate_result_size to "
+							   "a higher value")));
 	}
 	else if (taskFailed)
 	{
@@ -677,13 +674,13 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			int32 connectionId = connectionIdArray[currentIndex];
 			int32 fileDesc = fileDescriptorArray[currentIndex];
 			int closed = -1;
-			int returnBytesReceived = 0;
+			uint64 returnBytesReceived = 0;
 
 			/* copy data from worker node, and write to local file */
 			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc,
 														&returnBytesReceived);
 
-			if (UseResultSizeLimit)
+			if (UseResultSizeLimit && returnBytesReceived != 0)
 			{
 				TotalIntermediateResultSize += returnBytesReceived;
 			}

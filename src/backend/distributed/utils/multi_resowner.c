@@ -20,6 +20,7 @@
 #include "utils/memutils.h"
 #include "utils/resowner_private.h"
 #include "distributed/multi_resowner.h"
+#include "distributed/subplan_execution.h"
 
 
 typedef struct JobDirectoryEntry
@@ -61,6 +62,8 @@ MultiResourceOwnerReleaseCallback(ResourceReleasePhase phase,
 			if (entry->owner == CurrentResourceOwner)
 			{
 				RemoveJobDirectory(entry->jobId);
+				UseResultSizeLimit = false;
+				TotalIntermediateResultSize = 0;
 			}
 		}
 	}
