@@ -356,6 +356,8 @@ ORDER BY
 LIMIT
 	10;
 
+RESET citus.subquery_pushdown;
+
 -- Test all tasks output
 SET citus.explain_all_tasks TO on;
 
@@ -519,3 +521,36 @@ EXPLAIN (COSTS OFF)
 INSERT INTO lineitem_hash_part
 ( SELECT s FROM generate_series(1,5) s) UNION
 ( SELECT s FROM generate_series(5,10) s);
+
+-- explain with recursive planning
+EXPLAIN (COSTS OFF, VERBOSE true)
+WITH keys AS (
+  SELECT DISTINCT l_orderkey FROM lineitem_hash_part
+),
+series AS (
+  SELECT s FROM generate_series(1,10) s
+)
+SELECT l_orderkey FROM series JOIN keys ON (s = l_orderkey)
+ORDER BY s;
+
+SELECT true AS valid FROM explain_json($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = count_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
+
+SELECT true AS valid FROM explain_xml($$
+  WITH result AS (
+    SELECT l_quantity, count(*) count_quantity FROM lineitem
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity
+  ),
+  series AS (
+    SELECT s FROM generate_series(1,10) s
+  )
+  SELECT * FROM result JOIN series ON (s = l_quantity) JOIN orders_hash_part ON (s = o_orderkey)
+$$);
