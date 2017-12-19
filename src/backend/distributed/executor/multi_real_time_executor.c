@@ -84,8 +84,7 @@ MultiRealTimeExecute(Job *job)
 	bool taskCompleted = false;
 	bool taskFailed = false;
 	bool sizeLimitIsExceeded = false;
-	DistributedExecutionStats *executionStats = palloc0(
-		sizeof(DistributedExecutionStats));
+	DistributedExecutionStats executionStats = { 0 };
 
 	List *workerNodeList = NIL;
 	HTAB *workerHash = NULL;
@@ -142,7 +141,7 @@ MultiRealTimeExecute(Job *job)
 
 			/* call the function that performs the core task execution logic */
 			connectAction = ManageTaskExecution(task, taskExecution, &executionStatus,
-												executionStats);
+												&executionStats);
 
 			/* update the connection counter for throttling */
 			UpdateConnectionCounter(workerNodeState, connectAction);
@@ -179,7 +178,7 @@ MultiRealTimeExecute(Job *job)
 		}
 
 		/* in case the task has intermediate results */
-		if (CheckIfSizeLimitIsExceeded(executionStats))
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
 		{
 			sizeLimitIsExceeded = true;
 			break;
@@ -692,7 +691,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc,
 														&bytesReceived);
 
-			if (UseResultSizeLimit && bytesReceived != 0)
+			if (SubPlanLevel > 0 && bytesReceived != 0)
 			{
 				executionStats->totalIntermediateResultSize += bytesReceived;
 			}

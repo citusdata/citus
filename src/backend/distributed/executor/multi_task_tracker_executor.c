@@ -166,8 +166,7 @@ MultiTaskTrackerExecute(Job *job)
 	bool clusterFailed = false;
 	bool sizeLimitIsExceeded = false;
 
-	DistributedExecutionStats *executionStats = palloc0(
-		sizeof(DistributedExecutionStats));
+	DistributedExecutionStats executionStats = { 0 };
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
 	HTAB *transmitTrackerHash = NULL;
@@ -335,7 +334,7 @@ MultiTaskTrackerExecute(Job *job)
 			/* call the function that fetches results for completed SQL tasks */
 			transmitExecutionStatus = ManageTransmitExecution(execTransmitTracker,
 															  task, taskExecution,
-															  executionStats);
+															  &executionStats);
 
 			/*
 			 * If we cannot transmit SQL task's results to the master, we first
@@ -371,7 +370,7 @@ MultiTaskTrackerExecute(Job *job)
 		}
 
 
-		if (CheckIfSizeLimitIsExceeded(executionStats))
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
 		{
 			sizeLimitIsExceeded = true;
 			break;
@@ -1434,7 +1433,7 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 			copyStatus = MultiClientCopyData(connectionId, fileDescriptor,
 											 &bytesReceived);
 
-			if (UseResultSizeLimit)
+			if (SubPlanLevel > 0)
 			{
 				(executionStats->totalIntermediateResultSize) += bytesReceived;
 			}

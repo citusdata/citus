@@ -21,7 +21,7 @@
 
 int MaxIntermediateResult = 1048576; /* maximum size in KB the intermediate result can grow to */
 /* when this is true, we enforce intermediate result size limit in all executors */
-bool UseResultSizeLimit = false;
+int SubPlanLevel = 0;
 
 
 /*
@@ -50,7 +50,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		if (MaxIntermediateResult >= 0)
 		{
-			UseResultSizeLimit = true;
+			SubPlanLevel++;
 		}
 
 		estate = CreateExecutorState();
@@ -60,7 +60,10 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
-		UseResultSizeLimit = false;
+		if (MaxIntermediateResult >= 0)
+		{
+			SubPlanLevel--;
+		}
 		FreeExecutorState(estate);
 	}
 }

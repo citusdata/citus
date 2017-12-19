@@ -214,6 +214,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+			SubPlanLevel = 0;
 			UnSetDistributedTransactionId();
 			break;
 		}

@@ -578,8 +578,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
 	List *relationShardList = task->relationShardList;
-	DistributedExecutionStats *executionStats = palloc0(
-		sizeof(DistributedExecutionStats));
+	DistributedExecutionStats executionStats = { 0 };
 
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
@@ -642,9 +641,9 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 
 		queryOK = StoreQueryResult(scanState, connection, dontFailOnError,
 								   &currentAffectedTupleCount,
-								   executionStats);
+								   &executionStats);
 
-		if (CheckIfSizeLimitIsExceeded(executionStats))
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
 		{
 			ereport(ERROR, (errmsg("the intermediate result size exceeds "
 								   "citus.max_intermediate_result_size (currently %d kB)",
@@ -1462,7 +1461,7 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				else
 				{
 					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
-					if (UseResultSizeLimit)
+					if (SubPlanLevel > 0)
 					{
 						executionStats->totalIntermediateResultSize += PQgetlength(result,
 																				   rowIndex,
