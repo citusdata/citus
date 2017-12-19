@@ -398,27 +398,39 @@ BackendManagementShmemSize(void)
 
 
 /*
- *  InitializeBackendData is called per backend and does the
- *  required initialization.
+ * InitializeBackendData initialises MyBackendData to the shared memory segment
+ * belonging to the current backend.
+ *
+ * The function is called through CitusHasBeenLoaded when we first detect that
+ * the Citus extension is present, and after any subsequent invalidation of
+ * pg_dist_partition (see InvalidateMetadataSystemCache()).
+ *
+ * We only need to initialise MyBackendData once. The only goal here is to make
+ * sure that we don't use the backend data from a previous backend with the same
+ * pgprocno. Resetting the backend data after a distributed transaction happens
+ * on COMMIT/ABORT through transaction callbacks.
  */
 void
 InitializeBackendData(void)
 {
+	if (MyBackendData != NULL)
+	{
+		/*
+		 * We already initialized MyBackendData before. We definitely should
+		 * not initialise it again, because we might be in the middle of a
+		 * distributed transaction.
+		 */
+		return;
+	}
+
 	MyBackendData = &backendManagementShmemData->backends[MyProc->pgprocno];
 
 	Assert(MyBackendData);
 
 	LockBackendSharedMemory(LW_EXCLUSIVE);
 
-	SpinLockAcquire(&MyBackendData->mutex);
-
-	MyBackendData->databaseId = MyDatabaseId;
-	MyBackendData->transactionId.initiatorNodeIdentifier = 0;
-	MyBackendData->transactionId.transactionOriginator = false;
-	MyBackendData->transactionId.transactionNumber = 0;
-	MyBackendData->transactionId.timestamp = 0;
-
-	SpinLockRelease(&MyBackendData->mutex);
+	/* zero out the backend data */
+	UnSetDistributedTransactionId();
 
 	UnlockBackendSharedMemory();
 }
