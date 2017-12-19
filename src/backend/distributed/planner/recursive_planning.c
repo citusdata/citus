@@ -126,7 +126,8 @@ static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *contex
 static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
-static Query * BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 subPlanId);
+static Query * BuildSubPlanResultQuery(Query *subquery, List *columnAliasList,
+									   uint64 planId, uint32 subPlanId);
 
 
 /*
@@ -295,7 +296,8 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 		planningContext->subPlanList = lappend(planningContext->subPlanList, subPlan);
 
 		/* replace references to the CTE with a subquery that reads results */
-		resultQuery = BuildSubPlanResultQuery(subquery, planId, subPlanId);
+		resultQuery = BuildSubPlanResultQuery(subquery, cte->aliascolnames, planId,
+											  subPlanId);
 
 		foreach(rteCell, context.cteReferenceList)
 		{
@@ -528,7 +530,11 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 	subPlan = CreateDistributedSubPlan(subPlanId, subquery);
 	planningContext->subPlanList = lappend(planningContext->subPlanList, subPlan);
 
-	resultQuery = BuildSubPlanResultQuery(subquery, planId, subPlanId);
+	/*
+	 * BuildSubPlanResultQuery() can optionally use provided column aliases.
+	 * We do not need to send additional alias list for subqueries.
+	 */
+	resultQuery = BuildSubPlanResultQuery(subquery, NIL, planId, subPlanId);
 
 	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
 	{
@@ -712,13 +718,15 @@ ContainsReferencesToOuterQueryWalker(Node *node, VarLevelsUpWalkerContext *conte
  *   read_intermediate_result('<planId>_<subPlanId>', '<copy format'>)
  *   AS res (<column definition list>);
  *
- * The target list and column definition list are derived from the given subquery.
+ * The target list and column definition list are derived from the given subquery
+ * and columm name alias list.
  *
  * If any of the types in the target list cannot be used in the binary copy format,
  * then the copy format 'text' is used, otherwise 'binary' is used.
  */
 static Query *
-BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 subPlanId)
+BuildSubPlanResultQuery(Query *subquery, List *columnAliasList, uint64 planId,
+						uint32 subPlanId)
 {
 	Query *resultQuery = NULL;
 	char *resultIdString = NULL;
@@ -739,6 +747,7 @@ BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 subPlanId)
 	int columnNumber = 1;
 	bool useBinaryCopyFormat = true;
 	Oid copyFormatId = BinaryCopyFormatId();
+	int columnAliasCount = list_length(columnAliasList);
 
 	/* build the target list and column definition list */
 	foreach(targetEntryCell, subquery->targetList)
@@ -776,7 +785,23 @@ BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 subPlanId)
 		newTargetEntry = makeNode(TargetEntry);
 		newTargetEntry->expr = (Expr *) functionColumnVar;
 		newTargetEntry->resno = columnNumber;
-		newTargetEntry->resname = columnName;
+
+		/*
+		 * Rename the column only if a column alias is defined.
+		 * Notice that column alias count could be less than actual
+		 * column count. We only use provided aliases and keep the
+		 * original column names if no alias is defined.
+		 */
+		if (columnAliasCount >= columnNumber)
+		{
+			Value *columnAlias = (Value *) list_nth(columnAliasList, columnNumber - 1);
+			Assert(IsA(columnAlias, String));
+			newTargetEntry->resname = strVal(columnAlias);
+		}
+		else
+		{
+			newTargetEntry->resname = columnName;
+		}
 		newTargetEntry->resjunk = false;
 
 		targetList = lappend(targetList, newTargetEntry);

@@ -156,6 +156,44 @@ FROM
 JOIN
   users_table USING (user_id);
 
+-- column aliases in CTE
+WITH top_ten(id, val1) AS (
+	SELECT user_id, value_1 FROM users_table ORDER BY value_1 DESC, user_id DESC LIMIT 10
+)
+SELECT * FROM top_ten;
+
+-- verify old name is not valid anymore
+WITH top_ten(id, val1) AS (
+	SELECT user_id, value_1 FROM users_table ORDER BY value_1 DESC, user_id DESC LIMIT 10
+)
+SELECT * FROM top_ten ORDER BY user_id DESC;
+
+-- verify original name is used if alias is missing
+WITH top_ten(id) AS (
+	SELECT user_id, value_1 FROM users_table ORDER BY value_1 DESC, user_id DESC LIMIT 10
+)
+SELECT * FROM top_ten ORDER BY value_1 DESC;
+
+-- computed targets from columns also work
+WITH top_ten(id, val, val_mul, val_sum) AS (
+	SELECT user_id, value_1, value_1*2, value_1 + value_2 FROM users_table ORDER BY value_1 DESC, user_id DESC, value_2 DESC LIMIT 10
+)
+SELECT * FROM top_ten ORDER BY id DESC, val_mul DESC, (val_sum + 1) DESC;
+
+-- computed targets from columns in outer query
+WITH top_ten(id, val, val_mul, val_sum) AS (
+	SELECT user_id, value_1, value_1*2, value_1 + value_2 FROM users_table ORDER BY value_1 DESC, value_2 DESC, user_id DESC LIMIT 10
+)
+SELECT id, val, id * val, val_sum * 2, val_sum + val_sum FROM top_ten ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+
+-- computed targets from columns and group by outside
+WITH top_ten(id, val, val_mul, val_sum) AS (
+	SELECT user_id, value_1, value_1*2, value_1 + value_2 FROM users_table ORDER BY value_1 DESC, user_id DESC
+)
+SELECT id, count(*), avg(val), max(val_mul), min(val_sum) FROM top_ten
+GROUP BY id
+ORDER BY 2 DESC, 1 DESC;
+
 -- FOR UPDATE in subquery on CTE
 WITH top_users AS (
 	SELECT user_id, value_2 FROM users_table ORDER BY user_id DESC LIMIT 10

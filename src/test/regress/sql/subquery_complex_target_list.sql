@@ -19,6 +19,13 @@ GROUP BY
 ORDER BY 1 DESC, 2 DESC
 LIMIT 3;
 
+-- column renaming in a subquery
+SELECT *
+FROM
+	(
+	SELECT user_id, value_1, value_2 FROM users_table OFFSET 0
+	) as foo(x, y)
+ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 5;
 
 -- aggregate distinct in the subqueries
 	-- avg distinct on partition key
