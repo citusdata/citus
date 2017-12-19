@@ -482,25 +482,27 @@ UnlockBackendSharedMemory(void)
 /*
  * GetCurrentDistributedTransactionId reads the backend's distributed transaction id and
  * returns a copy of it.
+ *
+ * When called from a parallel worker, it uses the parent's transaction ID per the logic
+ * in GetBackendDataForProc.
  */
 DistributedTransactionId *
 GetCurrentDistributedTransactionId(void)
 {
 	DistributedTransactionId *currentDistributedTransactionId =
 		(DistributedTransactionId *) palloc(sizeof(DistributedTransactionId));
+	BackendData backendData;
 
-	SpinLockAcquire(&MyBackendData->mutex);
+	GetBackendDataForProc(MyProc, &backendData);
 
 	currentDistributedTransactionId->initiatorNodeIdentifier =
-		MyBackendData->transactionId.initiatorNodeIdentifier;
+		backendData.transactionId.initiatorNodeIdentifier;
 	currentDistributedTransactionId->transactionOriginator =
-		MyBackendData->transactionId.transactionOriginator;
+		backendData.transactionId.transactionOriginator;
 	currentDistributedTransactionId->transactionNumber =
-		MyBackendData->transactionId.transactionNumber;
+		backendData.transactionId.transactionNumber;
 	currentDistributedTransactionId->timestamp =
-		MyBackendData->transactionId.timestamp;
-
-	SpinLockRelease(&MyBackendData->mutex);
+		backendData.transactionId.timestamp;
 
 	return currentDistributedTransactionId;
 }
