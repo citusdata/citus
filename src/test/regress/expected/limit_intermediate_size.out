@@ -143,8 +143,8 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 3 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
@@ -162,8 +162,8 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 ERROR:  the intermediate result size exceeds citus.max_intermediate_result_size (currently 1 kB)
 DETAIL:  Citus restricts the size of intermediate results of complex subqueries and CTEs to avoid accidentally pulling large result sets into once place.
 HINT:  To run the current query, set citus.max_intermediate_result_size to a higher value or -1 to disable.
@@ -182,21 +182,16 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
  user_id |              time               | value_1 | value_2 | value_3 | value_4 
 ---------+---------------------------------+---------+---------+---------+---------
        1 | Wed Nov 22 18:49:42.327403 2017 |       3 |       2 |       1 |        
-       1 | Thu Nov 23 09:26:42.145043 2017 |       1 |       3 |       3 |        
-       1 | Wed Nov 22 22:51:43.132261 2017 |       4 |       0 |       3 |        
+       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |        
        1 | Wed Nov 22 19:07:03.846437 2017 |       1 |       2 |       5 |        
        1 | Wed Nov 22 20:56:21.122638 2017 |       2 |       4 |       4 |        
-       1 | Wed Nov 22 19:03:01.772353 2017 |       4 |       1 |       2 |        
-       1 | Thu Nov 23 11:44:57.515981 2017 |       4 |       3 |       4 |        
-       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
        1 | Wed Nov 22 21:06:57.457147 2017 |       4 |       3 |       2 |        
-       1 | Thu Nov 23 11:11:24.40789 2017  |       3 |       4 |       0 |        
-(10 rows)
+(5 rows)
 
 -- regular task-tracker CTE, should work since -1 disables the limit
 WITH cte AS 

@@ -292,7 +292,7 @@ CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats)
 {
 	uint64 maxIntermediateResultInBytes = 0;
 
-	if (!SubPlanLevel)
+	if (!SubPlanLevel || MaxIntermediateResult < 0)
 	{
 		return false;
 	}

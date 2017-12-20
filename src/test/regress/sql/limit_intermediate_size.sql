@@ -127,8 +127,8 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 
 
 SET citus.max_intermediate_result_size TO 1;
@@ -145,8 +145,8 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 
 
 -- Below that, all should pass since -1 disables the limit
@@ -165,8 +165,8 @@ WITH cte AS (
 cte4 AS (
 	SELECT * FROM events_table
 )
-(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
-(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+SELECT * FROM cte UNION ALL
+SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5;
 
 -- regular task-tracker CTE, should work since -1 disables the limit
 WITH cte AS 

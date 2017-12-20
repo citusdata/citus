@@ -48,11 +48,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		char *resultId = GenerateResultId(planId, subPlanId);
 
-		if (MaxIntermediateResult >= 0)
-		{
-			SubPlanLevel++;
-		}
-
+		SubPlanLevel++;
 		estate = CreateExecutorState();
 		copyDest = (DestReceiver *) CreateRemoteFileDestReceiver(resultId, estate,
 																 nodeList,
@@ -60,10 +56,7 @@ ExecuteSubPlans(DistributedPlan *distributedPlan)
 
 		ExecutePlanIntoDestReceiver(plannedStmt, params, copyDest);
 
-		if (MaxIntermediateResult >= 0)
-		{
-			SubPlanLevel--;
-		}
+		SubPlanLevel--;
 		FreeExecutorState(estate);
 	}
 }
