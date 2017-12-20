@@ -1,0 +1,229 @@
+SET citus.enable_repartition_joins to ON;
+
+
+SET citus.max_intermediate_result_size TO 3;
+-- should fail because the copy size is ~4kB for each cte
+WITH cte AS 
+(
+	SELECT * FROM users_table
+),
+cte2 AS (
+	SELECT * FROM events_table
+) 
+SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
+
+
+SET citus.max_intermediate_result_size TO 9;
+-- regular task-tracker CTE should fail
+WITH cte AS 
+(
+	SELECT 
+		users_table.user_id, users_table.value_1, users_table.value_2
+	FROM 
+		users_table
+		join 
+		events_table
+	on 
+		(users_table.value_3=events_table.value_3)
+),
+cte2 AS (
+	SELECT * FROM events_table
+) 
+SELECT 
+	cte.user_id, cte2.value_2 
+FROM 
+	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
+ORDER BY 
+	1,2 
+LIMIT 10;
+
+
+-- router queries should be able to get limitted too
+SET citus.max_intermediate_result_size TO 3;
+-- this should pass, since we fetch small portions in each subplan
+with cte as (select * from users_table where user_id=1),
+cte2 as (select * from users_table where user_id=2),
+cte3 as (select * from users_table where user_id=3),
+cte4 as (select * from users_table where user_id=4),
+cte5 as (select * from users_table where user_id=5)
+SELECT * FROM (
+(select * from cte)
+UNION
+(select * from cte2)
+UNION
+(select * from cte3)
+UNION
+(select * from cte4)
+UNION
+(select * from cte5)
+)a ORDER BY 1,2,3,4,5 LIMIT 10;
+
+
+-- if we fetch the same amount of data at once, it should fail
+WITH cte AS (SELECT * FROM users_table WHERE user_id IN (1,2,3,4,5))
+SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;
+
+
+SET citus.max_intermediate_result_size TO 0;
+-- this should fail
+WITH cte AS (SELECT * FROM users_table WHERE user_id=1),
+cte2 AS (SELECT * FROM users_table WHERE user_id=2),
+cte3 AS (SELECT * FROM users_table WHERE user_id=3),
+cte4 AS (SELECT * FROM users_table WHERE user_id=4),
+cte5 AS (SELECT * FROM users_table WHERE user_id=5)
+SELECT * FROM (
+(SELECT * FROM cte)
+UNION
+(SELECT * FROM cte2)
+UNION
+(SELECT * FROM cte3)
+UNION
+(SELECT * FROM cte4)
+UNION
+(SELECT * FROM cte5)
+)a ORDER BY 1,2,3,4,5 LIMIT 10;
+
+
+-- this should fail since the cte-subplan exceeds the limit even if the
+-- cte2 and cte3 does not
+SET citus.max_intermediate_result_size TO 4;
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table
+	),
+	cte3 AS (
+		SELECT * FROM events_table
+	)
+	SELECT * FROM cte2, cte3 WHERE cte2.user_id = cte3.user_id AND cte2.user_id = 1
+)
+SELECT * FROM cte;
+
+
+SET citus.max_intermediate_result_size TO 3;
+-- this should fail since the cte-subplan exceeds the limit even if the
+-- cte2 and cte3 does not
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table WHERE user_id IN (3,4,5,6)
+	),
+	cte3 AS (
+		SELECT * FROM events_table WHERE event_type = 1
+	)
+	SELECT * FROM cte2, cte3 WHERE cte2.value_1 IN (SELECT value_2 FROM cte3) 
+)
+SELECT * FROM cte;
+
+
+-- this will fail in real_time_executor
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table WHERE user_id IN (1, 2)
+	),
+	cte3 AS (
+		SELECT * FROM users_table WHERE user_id = 3
+	)
+	SELECT * FROM cte2 UNION (SELECT * FROM cte3)
+),
+cte4 AS (
+	SELECT * FROM events_table
+)
+(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
+(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+
+
+SET citus.max_intermediate_result_size TO 1;
+-- this will fail in router_executor
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table WHERE user_id IN (1, 2)
+	),
+	cte3 AS (
+		SELECT * FROM users_table WHERE user_id = 3
+	)
+	SELECT * FROM cte2 UNION (SELECT * FROM cte3)
+),
+cte4 AS (
+	SELECT * FROM events_table
+)
+(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
+(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+
+
+-- Below that, all should pass since -1 disables the limit
+SET citus.max_intermediate_result_size TO -1;
+
+-- real_time_executor + router_executor + real_time_executor will pass
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table WHERE user_id IN (1, 2)
+	),
+	cte3 AS (
+		SELECT * FROM users_table WHERE user_id = 3
+	)
+	SELECT * FROM cte2 UNION (SELECT * FROM cte3)
+),
+cte4 AS (
+	SELECT * FROM events_table
+)
+(SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 5) UNION
+(SELECT * FROM cte4 ORDER BY 1,2,3,4,5 LIMIT 5);
+
+-- regular task-tracker CTE, should work since -1 disables the limit
+WITH cte AS 
+(
+	SELECT 
+		users_table.user_id, users_table.value_1, users_table.value_2
+	FROM 
+		users_table
+		join 
+		events_table
+	on 
+		(users_table.value_2=events_table.value_2)
+),
+cte2 AS (
+	SELECT * FROM events_table
+) 
+SELECT 
+	cte.user_id, cte2.value_2 
+FROM 
+	cte JOIN cte2 ON (cte.value_1 = cte2.event_type)
+ORDER BY 
+	1,2 
+LIMIT 10;
+
+
+-- regular real-time CTE fetches around ~4kb data in each subplan
+WITH cte AS 
+(
+	SELECT * FROM users_table
+),
+cte2 AS (
+	SELECT * FROM events_table
+) 
+SELECT cte.user_id, cte.value_2 FROM cte,cte2 ORDER BY 1,2 LIMIT 10;
+
+
+-- regular real-time query fetches ~4kB
+WITH cte AS 
+(
+	SELECT * FROM users_table WHERE user_id IN (1,2,3,4,5)
+)
+SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;
+
+
+-- nested CTEs
+WITH cte AS (
+	WITH cte2 AS (
+		SELECT * FROM users_table
+	),
+	cte3 AS (
+		SELECT * FROM events_table
+	)
+	SELECT 
+		cte2.user_id, cte2.time, cte3.event_type, cte3.value_2, cte3.value_3
+	FROM 
+		cte2, cte3 
+	WHERE 
+		cte2.user_id = cte3.user_id AND cte2.user_id = 1
+)
+SELECT * FROM cte ORDER BY 1,2,3,4,5 LIMIT 10;
