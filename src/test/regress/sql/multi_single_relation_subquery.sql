@@ -74,7 +74,7 @@ from
 group by
     suppkey_bin
 order by
-    avg_count desc
+    avg_count desc, suppkey_bin DESC
 limit 20;
 
 select
@@ -122,8 +122,7 @@ from
         (l_orderkey/4)::int,
         l_suppkey )  as distributed_table;
 
--- Check that we don't support subqueries with limit.
-
+-- we don't support subqueries with limit.
 select
     l_suppkey,
     sum(suppkey_count) as total_suppkey_count
@@ -139,19 +138,23 @@ from
         l_suppkey
     limit 100) as distributed_table
 group by
-    l_suppkey;
+    l_suppkey
+    ORDER BY 2 DESC, 1 DESC 
+LIMIT 5;
 
 -- Check that we don't support subqueries without aggregates.
 
 select
-    rounded_tax
+    DISTINCT rounded_tax
 from
     (select
         round(l_tax) as rounded_tax
     from
         lineitem
     group by
-        l_tax) as distributed_table;
+        l_tax) as distributed_table
+    ORDER BY 1 DESC
+    LIMIT 5;
 
 -- Check that we support subqueries with count(distinct).
 

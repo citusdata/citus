@@ -52,6 +52,7 @@
 #include "postgres.h"
 
 #include "catalog/pg_type.h"
+#include "catalog/pg_class.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/distributed_planner.h"
@@ -62,6 +63,7 @@
 #include "distributed/multi_router_planner.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/recursive_planning.h"
+#include "distributed/multi_server_executor.h"
 #include "distributed/relation_restriction_equivalence.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
@@ -86,6 +88,7 @@ typedef struct RecursivePlanningContext
 	PlannerRestrictionContext *plannerRestrictionContext;
 } RecursivePlanningContext;
 
+
 /*
  * CteReferenceWalkerContext is used to collect CTE references in
  * CteReferenceListWalker.
@@ -107,8 +110,16 @@ typedef struct VarLevelsUpWalkerContext
 
 
 /* local function forward declarations */
+static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
+															   RecursivePlanningContext *
+															   context);
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
+static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
+static bool ShouldRecursivelyPlanSubquery(Query *subquery);
+static bool IsLocalTableRTE(Node *node);
+static void RecursivelyPlanSubquery(Query *subquery,
+									RecursivePlanningContext *planningContext);
 static DistributedSubPlan * CreateDistributedSubPlan(uint32 subPlanId,
 													 Query *subPlanQuery);
 static bool CteReferenceListWalker(Node *node, CteReferenceWalkerContext *context);
@@ -116,6 +127,39 @@ static bool ContainsReferencesToOuterQuery(Query *query);
 static bool ContainsReferencesToOuterQueryWalker(Node *node,
 												 VarLevelsUpWalkerContext *context);
 static Query * BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 subPlanId);
+
+
+/*
+ * GenerateSubplansForSubqueriesAndCTEs is a wrapper around RecursivelyPlanSubqueriesAndCTEs.
+ * The function returns the subplans if necessary. For the details of when/how subplans are
+ * generated, see RecursivelyPlanSubqueriesAndCTEs().
+ *
+ * Note that the input originalQuery query is modified if any subplans are generated.
+ */
+List *
+GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
+									 PlannerRestrictionContext *plannerRestrictionContext)
+{
+	RecursivePlanningContext context;
+	DeferredErrorMessage *error = NULL;
+
+	/*
+	 * Plan subqueries and CTEs that cannot be pushed down by recursively
+	 * calling the planner and add the resulting plans to subPlanList.
+	 */
+	context.level = 0;
+	context.planId = planId;
+	context.subPlanList = NIL;
+	context.plannerRestrictionContext = plannerRestrictionContext;
+
+	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, &context);
+	if (error != NULL)
+	{
+		RaiseDeferredError(error, ERROR);
+	}
+
+	return context.subPlanList;
+}
 
 
 /*
@@ -132,20 +176,12 @@ static Query * BuildSubPlanResultQuery(Query *subquery, uint64 planId, uint32 su
  * If recursive planning results in an error then the error is returned. Otherwise, the
  * subplans will be added to subPlanList.
  */
-DeferredErrorMessage *
-RecursivelyPlanSubqueriesAndCTEs(Query *query,
-								 PlannerRestrictionContext *plannerRestrictionContext,
-								 uint64 planId, List **subPlanList)
+static DeferredErrorMessage *
+RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context)
 {
 	DeferredErrorMessage *error = NULL;
-	RecursivePlanningContext context;
 
-	context.level = 0;
-	context.planId = planId;
-	context.subPlanList = NIL;
-	context.plannerRestrictionContext = plannerRestrictionContext;
-
-	error = RecursivelyPlanCTEs(query, &context);
+	error = RecursivelyPlanCTEs(query, context);
 	if (error != NULL)
 	{
 		return error;
@@ -166,9 +202,8 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query,
 		return NULL;
 	}
 
-	/* XXX: plan subqueries */
-
-	*subPlanList = context.subPlanList;
+	/* descend into subqueries */
+	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
 
 	return NULL;
 }
@@ -246,7 +281,7 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 
 		subPlanId = list_length(planningContext->subPlanList) + 1;
 
-		if (log_min_messages >= DEBUG1)
+		if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
 		{
 			StringInfo subPlanString = makeStringInfo();
 			pg_get_query_def(subquery, subPlanString);
@@ -313,6 +348,201 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 	query->cteList = NIL;
 
 	return NULL;
+}
+
+
+/*
+ * RecursivelyPlanSubqueryWalker recursively finds all the Query nodes and
+ * recursively plans if necessary.
+ */
+static bool
+RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		DeferredErrorMessage *error = NULL;
+
+		context->level += 1;
+
+		/*
+		 * First, make sure any subqueries and CTEs within this subquery
+		 * are recursively planned if necessary.
+		 */
+		error = RecursivelyPlanSubqueriesAndCTEs(query, context);
+		if (error != NULL)
+		{
+			RaiseDeferredError(error, ERROR);
+		}
+		context->level -= 1;
+
+		/*
+		 * Recursively plan this subquery if it cannot be pushed down and is
+		 * eligible for recursive planning.
+		 */
+		if (ShouldRecursivelyPlanSubquery(query))
+		{
+			RecursivelyPlanSubquery(query, context);
+		}
+
+		/* we're done, no need to recurse anymore for this query */
+		return false;
+	}
+
+	return expression_tree_walker(node, RecursivelyPlanSubqueryWalker, context);
+}
+
+
+/*
+ * ShouldRecursivelyPlanSubquery decides whether the input subquery should be recursively
+ * planned or not.
+ *
+ * For the details, see the cases in the function.
+ */
+static bool
+ShouldRecursivelyPlanSubquery(Query *subquery)
+{
+	if (FindNodeCheckInRangeTableList(subquery->rtable, IsLocalTableRTE))
+	{
+		/*
+		 * Postgres can always plan queries that don't require distributed planning.
+		 * Note that we need to check this first, otherwise the calls to the many other
+		 * Citus planner functions would error our due to local relations.
+		 *
+		 * TODO: We could only successfully create distributed plans with local tables
+		 * when the local tables are on the leaf queries and the upper level queries
+		 * do not contain any other local tables.
+		 */
+	}
+	else if (DeferErrorIfCannotPushdownSubquery(subquery, false) == NULL)
+	{
+		/*
+		 * Citus can pushdown this subquery, no need to recursively
+		 * plan which is much expensive than pushdown.
+		 */
+		return false;
+	}
+	else if (TaskExecutorType == MULTI_EXECUTOR_TASK_TRACKER &&
+			 SingleRelationRepartitionSubquery(subquery))
+	{
+		/*
+		 * Citus can plan this and execute via repartitioning. Thus,
+		 * no need to recursively plan.
+		 */
+		return false;
+	}
+
+	/*
+	 * Even if we could recursively plan the subquery, we should ensure
+	 * that the subquery doesn't contain any references to the outer
+	 * queries.
+	 */
+	if (ContainsReferencesToOuterQuery(subquery))
+	{
+		elog(DEBUG2, "skipping recursive planning for the subquery since it "
+					 "contains references to outer queries");
+
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * IsLocalTableRTE gets a node and returns true if the node
+ * is a range table relation entry that points to a local
+ * relation (i.e., not a distributed relation).
+ */
+static bool
+IsLocalTableRTE(Node *node)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	Oid relationId = InvalidOid;
+
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return false;
+	}
+
+	rangeTableEntry = (RangeTblEntry *) node;
+	if (rangeTableEntry->rtekind != RTE_RELATION)
+	{
+		return false;
+	}
+
+	if (rangeTableEntry->relkind == RELKIND_VIEW)
+	{
+		return false;
+	}
+
+	relationId = rangeTableEntry->relid;
+	if (IsDistributedTable(relationId))
+	{
+		return false;
+	}
+
+	/* local table found */
+	return true;
+}
+
+
+/*
+ * RecursivelyPlanQuery recursively plans a query, replaces it with a
+ * result query and returns the subplan.
+ */
+static void
+RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningContext)
+{
+	DistributedSubPlan *subPlan = NULL;
+	uint64 planId = planningContext->planId;
+	int subPlanId = 0;
+
+	Query *resultQuery = NULL;
+	Query *debugQuery = NULL;
+
+	/*
+	 * Subquery will go through the standard planner, thus to properly deparse it
+	 * we keep its copy: debugQuery.
+	 */
+	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+	{
+		debugQuery = copyObject(subquery);
+	}
+
+	/*
+	 * Create the subplan and append it to the list in the planning context.
+	 */
+	subPlanId = list_length(planningContext->subPlanList) + 1;
+
+	subPlan = CreateDistributedSubPlan(subPlanId, subquery);
+	planningContext->subPlanList = lappend(planningContext->subPlanList, subPlan);
+
+	resultQuery = BuildSubPlanResultQuery(subquery, planId, subPlanId);
+
+	if (log_min_messages <= DEBUG1 || client_min_messages <= DEBUG1)
+	{
+		StringInfo subqueryString = makeStringInfo();
+
+		pg_get_query_def(debugQuery, subqueryString);
+
+		ereport(DEBUG1, (errmsg("generating subplan " UINT64_FORMAT "_%u for "
+																	"subquery %s",
+								planId, subPlanId, subqueryString->data)));
+	}
+
+	/* finally update the input subquery to point the result query */
+	memcpy(subquery, resultQuery, sizeof(Query));
 }
 
 

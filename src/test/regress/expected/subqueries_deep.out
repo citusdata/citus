@@ -1,0 +1,194 @@
+-- ===================================================================
+-- test recursive planning functionality with subqueries and CTEs
+-- ===================================================================
+CREATE SCHEMA subquery_deep;
+SET search_path TO subquery_and_ctes, public;
+SET client_min_messages TO DEBUG1;
+-- subquery in FROM -> FROM -> FROM should be replaced due to OFFSET
+-- one level up subquery should be replaced due to GROUP BY on non partition key
+-- one level up subquery should be replaced due to LIMUT
+SELECT 
+	DISTINCT user_id 
+FROM 
+	(
+		SELECT users_table.user_id FROM users_table, 
+							(
+								SELECT 
+									avg(event_type) as avg_val
+								FROM
+									(SELECT event_type, users_table.user_id FROM users_table, 
+															(SELECT user_id, event_type FROM events_table WHERE value_2 < 3 OFFSET 3) as foo
+															WHERE foo.user_id = users_table.user_id
+															) bar, users_table WHERE bar.user_id = users_table.user_id GROUP BY users_table.value_1
+							) as baz
+									WHERE baz.avg_val < users_table.user_id
+								    LIMIT 3
+	) as sub1
+	ORDER BY 1 DESC;
+DEBUG:  generating subplan 1_1 for subquery SELECT user_id, event_type FROM public.events_table WHERE (value_2 < 3) OFFSET 3
+DEBUG:  generating subplan 1_2 for subquery SELECT avg(bar.event_type) AS avg_val FROM (SELECT foo.event_type, users_table_1.user_id FROM public.users_table users_table_1, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('1_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) foo WHERE (foo.user_id = users_table_1.user_id)) bar, public.users_table WHERE (bar.user_id = users_table.user_id) GROUP BY users_table.value_1
+DEBUG:  push down of limit count: 3
+DEBUG:  generating subplan 1_3 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT intermediate_result.avg_val FROM read_intermediate_result('1_2'::text, 'binary'::citus_copy_format) intermediate_result(avg_val numeric)) baz WHERE (baz.avg_val < (users_table.user_id)::numeric) LIMIT 3
+ user_id 
+---------
+       5
+(1 row)
+
+-- subquery in FROM -> FROM -> WHERE ->  WHERE should be replaced due to CTE
+-- subquery in FROM -> FROM -> WHERE should be replaced due to LIMIT
+-- one level above should be replaced due to DISTINCT on non-partition key
+-- one level above should be replaced due to GROUP BY on non-partition key
+SELECT event, array_length(events_table, 1)
+FROM (
+  SELECT event, array_agg(t.user_id) AS events_table
+  FROM (
+    SELECT 
+    	DISTINCT ON(e.event_type::text) e.event_type::text as event, e.time, e.user_id
+    FROM 
+    	users_table AS u,
+        events_table AS e
+    WHERE u.user_id = e.user_id AND 
+    		u.user_id IN 
+    		(
+    			SELECT 
+    				user_id 
+    			FROM 
+    				users_table 
+    			WHERE value_2 >= 5
+			    AND  EXISTS (SELECT user_id FROM events_table WHERE event_type > 1 AND event_type <= 3 AND value_3 > 1 AND user_id = users_table.user_id)
+				AND  NOT EXISTS (SELECT user_id FROM events_table WHERE event_type > 3 AND event_type <= 4  AND value_3 > 1 AND user_id = users_table.user_id)
+				AND EXISTS (WITH cte AS (SELECT count(*) FROM users_table) SELECT * FROM cte)
+				LIMIT 5
+    		)
+  ) t, users_table WHERE users_table.value_1 = t.event::int
+  GROUP BY event
+) q
+ORDER BY 2 DESC, 1;
+DEBUG:  generating subplan 5_1 for CTE cte: SELECT count(*) AS count FROM public.users_table
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 5_2 for subquery SELECT user_id FROM public.users_table WHERE ((value_2 >= 5) AND (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 1) AND (events_table.event_type <= 3) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id)))) AND (NOT (EXISTS (SELECT events_table.user_id FROM public.events_table WHERE ((events_table.event_type > 3) AND (events_table.event_type <= 4) AND (events_table.value_3 > (1)::double precision) AND (events_table.user_id = users_table.user_id))))) AND (EXISTS (SELECT cte.count FROM (SELECT intermediate_result.count FROM read_intermediate_result('5_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) cte))) LIMIT 5
+DEBUG:  generating subplan 5_3 for subquery SELECT DISTINCT ON ((e.event_type)::text) (e.event_type)::text AS event, e."time", e.user_id FROM public.users_table u, public.events_table e WHERE ((u.user_id = e.user_id) AND (u.user_id IN (SELECT intermediate_result.user_id FROM read_intermediate_result('5_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer))))
+DEBUG:  generating subplan 5_4 for subquery SELECT t.event, array_agg(t.user_id) AS events_table FROM (SELECT intermediate_result.event, intermediate_result."time", intermediate_result.user_id FROM read_intermediate_result('5_3'::text, 'binary'::citus_copy_format) intermediate_result(event text, "time" timestamp without time zone, user_id integer)) t, public.users_table WHERE (users_table.value_1 = (t.event)::integer) GROUP BY t.event
+ event | array_length 
+-------+--------------
+ 3     |           26
+ 4     |           21
+ 2     |           18
+ 1     |           15
+ 0     |           12
+ 5     |            9
+(6 rows)
+
+-- this test probably doesn't add too much value, 
+-- but recurse 6 times for fun
+SELECT count(*)
+FROM
+(
+	SELECT avg(min) FROM 
+	(
+		SELECT min(users_table.value_1) FROM
+		(
+			SELECT avg(event_type) as avg_ev_type FROM 
+			(
+				SELECT 
+					max(value_1) as mx_val_1 
+					FROM (
+							SELECT 
+								avg(event_type) as avg
+							FROM
+							(
+								SELECT 
+									cnt 
+								FROM 
+									(SELECT count(*) as cnt, value_2 FROM users_table GROUP BY value_2) as level_1, users_table
+								WHERE 
+									users_table.user_id = level_1.cnt
+							) as level_2, events_table
+							WHERE events_table.user_id = level_2.cnt 
+							GROUP BY level_2.cnt
+						) as level_3, users_table
+					WHERE user_id = level_3.avg
+					GROUP BY level_3.avg
+					) as level_4, events_table
+				WHERE level_4.mx_val_1 = events_table.user_id
+				GROUP BY level_4.mx_val_1
+				) as level_5, users_table
+				WHERE 
+					level_5.avg_ev_type = users_table.user_id
+				GROUP BY 
+					level_5.avg_ev_type
+		) as level_6, users_table WHERE users_table.user_id = level_6.min
+	GROUP BY users_table.value_1
+	) as bar;
+DEBUG:  generating subplan 10_1 for subquery SELECT count(*) AS cnt, value_2 FROM public.users_table GROUP BY value_2
+DEBUG:  generating subplan 10_2 for subquery SELECT avg(events_table.event_type) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value_2 FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value_2 integer)) level_1, public.users_table WHERE (users_table.user_id = level_1.cnt)) level_2, public.events_table WHERE (events_table.user_id = level_2.cnt) GROUP BY level_2.cnt
+DEBUG:  generating subplan 10_3 for subquery SELECT max(users_table.value_1) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, public.users_table WHERE ((users_table.user_id)::numeric = level_3.avg) GROUP BY level_3.avg
+DEBUG:  generating subplan 10_4 for subquery SELECT avg(events_table.event_type) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('10_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 integer)) level_4, public.events_table WHERE (level_4.mx_val_1 = events_table.user_id) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 10_5 for subquery SELECT min(users_table.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('10_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, public.users_table WHERE (level_5.avg_ev_type = (users_table.user_id)::numeric) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 10_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('10_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id = level_6.min) GROUP BY users_table.value_1
+ count 
+-------
+     0
+(1 row)
+
+-- same query happening in the subqueries in WHERE
+-- this test probably doesn't add too much value, 
+-- but recurse 6 times for fun
+SELECT 
+	* 
+FROM 
+	users_table 
+WHERE user_id IN (
+			SELECT count(*)
+			FROM
+			(
+				SELECT avg(min) FROM 
+				(
+					SELECT min(users_table.value_1) FROM
+					(
+						SELECT avg(event_type) as avg_ev_type FROM 
+						(
+							SELECT 
+								max(value_1) as mx_val_1 
+								FROM (
+										SELECT 
+											avg(event_type) as avg
+										FROM
+										(
+											SELECT 
+												cnt 
+											FROM 
+												(SELECT count(*) as cnt, value_2 FROM users_table GROUP BY value_2) as level_1, users_table
+											WHERE 
+												users_table.user_id = level_1.cnt
+										) as level_2, events_table
+										WHERE events_table.user_id = level_2.cnt 
+										GROUP BY level_2.cnt
+									) as level_3, users_table
+								WHERE user_id = level_3.avg
+								GROUP BY level_3.avg
+								) as level_4, events_table
+							WHERE level_4.mx_val_1 = events_table.user_id
+							GROUP BY level_4.mx_val_1
+							) as level_5, users_table
+							WHERE 
+								level_5.avg_ev_type = users_table.user_id
+							GROUP BY 
+								level_5.avg_ev_type
+					) as level_6, users_table WHERE users_table.user_id = level_6.min
+				GROUP BY users_table.value_1
+				) as bar);
+DEBUG:  generating subplan 17_1 for subquery SELECT count(*) AS cnt, value_2 FROM public.users_table GROUP BY value_2
+DEBUG:  generating subplan 17_2 for subquery SELECT avg(events_table.event_type) AS avg FROM (SELECT level_1.cnt FROM (SELECT intermediate_result.cnt, intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint, value_2 integer)) level_1, public.users_table WHERE (users_table.user_id = level_1.cnt)) level_2, public.events_table WHERE (events_table.user_id = level_2.cnt) GROUP BY level_2.cnt
+DEBUG:  generating subplan 17_3 for subquery SELECT max(users_table.value_1) AS mx_val_1 FROM (SELECT intermediate_result.avg FROM read_intermediate_result('17_2'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) level_3, public.users_table WHERE ((users_table.user_id)::numeric = level_3.avg) GROUP BY level_3.avg
+DEBUG:  generating subplan 17_4 for subquery SELECT avg(events_table.event_type) AS avg_ev_type FROM (SELECT intermediate_result.mx_val_1 FROM read_intermediate_result('17_3'::text, 'binary'::citus_copy_format) intermediate_result(mx_val_1 integer)) level_4, public.events_table WHERE (level_4.mx_val_1 = events_table.user_id) GROUP BY level_4.mx_val_1
+DEBUG:  generating subplan 17_5 for subquery SELECT min(users_table.value_1) AS min FROM (SELECT intermediate_result.avg_ev_type FROM read_intermediate_result('17_4'::text, 'binary'::citus_copy_format) intermediate_result(avg_ev_type numeric)) level_5, public.users_table WHERE (level_5.avg_ev_type = (users_table.user_id)::numeric) GROUP BY level_5.avg_ev_type
+DEBUG:  generating subplan 17_6 for subquery SELECT avg(level_6.min) AS avg FROM (SELECT intermediate_result.min FROM read_intermediate_result('17_5'::text, 'binary'::citus_copy_format) intermediate_result(min integer)) level_6, public.users_table WHERE (users_table.user_id = level_6.min) GROUP BY users_table.value_1
+DEBUG:  generating subplan 17_7 for subquery SELECT count(*) AS count FROM (SELECT intermediate_result.avg FROM read_intermediate_result('17_6'::text, 'binary'::citus_copy_format) intermediate_result(avg numeric)) bar
+ user_id | time | value_1 | value_2 | value_3 | value_4 
+---------+------+---------+---------+---------+---------
+(0 rows)
+
+SET client_min_messages TO DEFAULT;
+DROP SCHEMA subquery_deep CASCADE;
+SET search_path TO public;

@@ -582,17 +582,20 @@ LIMIT 2;
 (2 rows)
 
 -- subquery in where clause has a volatile function and no relation
+-- thus we recursively plan it
 SELECT
   user_id
 FROM
   users_table
 WHERE
   value_2 >
-          (SELECT random())
+          (SELECT random()) AND user_id < 0
 ORDER BY 1 ASC
 LIMIT 2;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause can only contain immutable functions
+ user_id 
+---------
+(0 rows)
+
 -- OFFSET is not supported in the subquey
 SELECT 
   user_id
@@ -614,7 +617,8 @@ ERROR:  cannot push down this subquery
 DETAIL:  Offset clause is currently unsupported
 -- we can detect unsupported subquerues even if they appear
 -- in WHERE subquery -> FROM subquery -> WHERE subquery
-SELECT user_id 
+-- but we can recursively plan that anyway
+SELECT DISTINCT user_id 
 FROM   users_table 
 WHERE  user_id 
   IN (SELECT 
@@ -638,9 +642,13 @@ WHERE  user_id
                 AND e1.user_id IN (SELECT user_id FROM users_table LIMIT 3 )
              ) as f_outer
 		WHERE f_inner.user_id = f_outer.user_id
-          );
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+          ) ORDER BY 1 LIMIT 3;
+ user_id 
+---------
+       1
+       5
+(2 rows)
+
 -- semi join is not on the partition key for the third subquery
 SELECT user_id
 FROM users_table

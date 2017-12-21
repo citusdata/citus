@@ -216,8 +216,8 @@ SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1;
 
 SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 3;
 
--- they are not supported if multiple workers are involved
-SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
+-- they are supported via (sub)query pushdown if multiple workers are involved
+SELECT * FROM articles_hash_mx, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2 ORDER BY 4 DESC, 1 DESC, 2 DESC LIMIT 5;
 
 -- subqueries are supported in FROM clause but they are not router plannable
 SELECT articles_hash_mx.id,test.word_count

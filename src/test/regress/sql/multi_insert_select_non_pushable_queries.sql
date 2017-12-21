@@ -662,7 +662,7 @@ FROM
   ON users_table.user_id = temp.user_id 
   WHERE users_table.value_1 < 50;
 
--- not supported since one of the queries doesn't have a relation
+-- supported via recursive planning
 INSERT INTO agg_results (user_id, agg_time, value_2_agg)
 SELECT
     user_id,

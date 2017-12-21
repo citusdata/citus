@@ -38,6 +38,14 @@ test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_
 # ----------
 test: multi_partitioning_utils multi_partitioning
 
+
+# ----------
+# Tests for recursive subquery planning
+# ----------
+test: subquery_basics subquery_local_tables subquery_executors subquery_and_cte
+test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported  
+test: subquery_prepared_statements
+
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
