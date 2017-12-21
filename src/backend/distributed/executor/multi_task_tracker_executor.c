@@ -443,16 +443,7 @@ MultiTaskTrackerExecute(Job *job)
 	 */
 	if (sizeLimitIsExceeded)
 	{
-		ereport(ERROR, (errmsg("the intermediate result size exceeds "
-							   "citus.max_intermediate_result_size (currently %d kB)",
-							   MaxIntermediateResult),
-						errdetail("Citus restricts the size of intermediate "
-								  "results of complex subqueries and CTEs to "
-								  "avoid accidentally pulling large result sets "
-								  "into once place."),
-						errhint("To run the current query, set "
-								"citus.max_intermediate_result_size to a higher"
-								" value or -1 to disable.")));
+		ErrorSizeLimitIsExceeded();
 	}
 	else if (taskFailed)
 	{
@@ -1435,7 +1426,7 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 
 			if (SubPlanLevel > 0)
 			{
-				(executionStats->totalIntermediateResultSize) += bytesReceived;
+				executionStats->totalIntermediateResultSize += bytesReceived;
 			}
 
 			if (copyStatus == CLIENT_COPY_MORE)

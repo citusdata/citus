@@ -218,6 +218,7 @@ extern void RemoveJobDirectory(uint64 jobId);
 extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
 extern bool CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats);
 extern void CleanupTaskExecution(TaskExecution *taskExecution);
+extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
