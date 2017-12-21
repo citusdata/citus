@@ -24,6 +24,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/placement_connection.h"
 #include "distributed/remote_commands.h"
+#include "distributed/subplan_execution.h"
 
 #include <errno.h>
 #include <unistd.h>
@@ -703,7 +704,7 @@ MultiClientQueryStatus(int32 connectionId)
 
 /* MultiClientCopyData copies data from the file. */
 CopyStatus
-MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
+MultiClientCopyData(int32 connectionId, int32 fileDescriptor, uint64 *returnBytesReceived)
 {
 	MultiConnection *connection = NULL;
 	char *receiveBuffer = NULL;
@@ -734,6 +735,11 @@ MultiClientCopyData(int32 connectionId, int32 fileDescriptor)
 		/* received copy data; append these data to file */
 		int appended = -1;
 		errno = 0;
+
+		if (returnBytesReceived)
+		{
+			*returnBytesReceived += receiveLength;
+		}
 
 		appended = write(fileDescriptor, receiveBuffer, receiveLength);
 		if (appended != receiveLength)

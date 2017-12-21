@@ -97,7 +97,8 @@ static void ExtractParametersFromParamListInfo(ParamListInfo paramListInfo,
 static bool SendQueryInSingleRowMode(MultiConnection *connection, char *query,
 									 ParamListInfo paramListInfo);
 static bool StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
-							 bool failOnError, int64 *rows);
+							 bool failOnError, int64 *rows,
+							 DistributedExecutionStats *executionStats);
 static bool ConsumeQueryResult(MultiConnection *connection, bool failOnError,
 							   int64 *rows);
 
@@ -577,6 +578,7 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 	ListCell *taskPlacementCell = NULL;
 	char *queryString = task->queryString;
 	List *relationShardList = task->relationShardList;
+	DistributedExecutionStats executionStats = { 0 };
 
 	/*
 	 * Try to run the query to completion on one placement. If the query fails
@@ -638,7 +640,14 @@ ExecuteSingleSelectTask(CitusScanState *scanState, Task *task)
 		}
 
 		queryOK = StoreQueryResult(scanState, connection, dontFailOnError,
-								   &currentAffectedTupleCount);
+								   &currentAffectedTupleCount,
+								   &executionStats);
+
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
+		{
+			ErrorSizeLimitIsExceeded();
+		}
+
 		if (queryOK)
 		{
 			return;
@@ -821,7 +830,7 @@ ExecuteSingleModifyTask(CitusScanState *scanState, Task *task, bool multipleTask
 		if (!gotResults && expectResults)
 		{
 			queryOK = StoreQueryResult(scanState, connection, failOnError,
-									   &currentAffectedTupleCount);
+									   &currentAffectedTupleCount, NULL);
 		}
 		else
 		{
@@ -1156,7 +1165,7 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 				Assert(scanState != NULL);
 
 				queryOK = StoreQueryResult(scanState, connection, failOnError,
-										   &currentAffectedTupleCount);
+										   &currentAffectedTupleCount, NULL);
 			}
 			else
 			{
@@ -1342,7 +1351,8 @@ ExtractParametersFromParamListInfo(ParamListInfo paramListInfo, Oid **parameterT
  */
 static bool
 StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
-				 bool failOnError, int64 *rows)
+				 bool failOnError, int64 *rows,
+				 DistributedExecutionStats *executionStats)
 {
 	TupleDesc tupleDescriptor =
 		scanState->customScanState.ss.ps.ps_ResultTupleSlot->tts_tupleDescriptor;
@@ -1442,6 +1452,12 @@ StoreQueryResult(CitusScanState *scanState, MultiConnection *connection,
 				else
 				{
 					columnArray[columnIndex] = PQgetvalue(result, rowIndex, columnIndex);
+					if (SubPlanLevel > 0)
+					{
+						executionStats->totalIntermediateResultSize += PQgetlength(result,
+																				   rowIndex,
+																				   columnIndex);
+					}
 				}
 			}
 

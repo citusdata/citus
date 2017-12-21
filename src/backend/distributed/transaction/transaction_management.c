@@ -26,6 +26,7 @@
 #include "distributed/multi_shard_transaction.h"
 #include "distributed/transaction_management.h"
 #include "distributed/placement_connection.h"
+#include "distributed/subplan_execution.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -213,6 +214,16 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			XactModificationLevel = XACT_MODIFICATION_NONE;
 			dlist_init(&InProgressTransactions);
 			CoordinatedTransactionUses2PC = false;
+
+			/*
+			 * We should reset SubPlanLevel in case a transaction is aborted,
+			 * otherwise this variable would stay +ve if the transaction is
+			 * aborted in the middle of a CTE/complex subquery execution
+			 * which would cause the subsequent queries to error out in
+			 * case the copy size is greater than
+			 * citus.max_intermediate_result_size
+			 */
+			SubPlanLevel = 0;
 			UnSetDistributedTransactionId();
 			break;
 		}

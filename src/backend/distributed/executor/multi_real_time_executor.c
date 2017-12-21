@@ -19,7 +19,6 @@
 #include "postgres.h"
 #include "miscadmin.h"
 
-#include <sys/stat.h>
 #include <unistd.h>
 
 #include "access/xact.h"
@@ -42,7 +41,8 @@
 
 /* Local functions forward declarations */
 static ConnectAction ManageTaskExecution(Task *task, TaskExecution *taskExecution,
-										 TaskExecutionStatus *executionStatus);
+										 TaskExecutionStatus *executionStatus,
+										 DistributedExecutionStats *executionStats);
 static bool TaskExecutionReadyToStart(TaskExecution *taskExecution);
 static bool TaskExecutionCompleted(TaskExecution *taskExecution);
 static void CancelTaskExecutionIfActive(TaskExecution *taskExecution);
@@ -83,6 +83,8 @@ MultiRealTimeExecute(Job *job)
 	bool allTasksCompleted = false;
 	bool taskCompleted = false;
 	bool taskFailed = false;
+	bool sizeLimitIsExceeded = false;
+	DistributedExecutionStats executionStats = { 0 };
 
 	List *workerNodeList = NIL;
 	HTAB *workerHash = NULL;
@@ -107,7 +109,8 @@ MultiRealTimeExecute(Job *job)
 	}
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
-	while (!(allTasksCompleted || taskFailed || QueryCancelPending))
+	while (!(allTasksCompleted || taskFailed || QueryCancelPending ||
+			 sizeLimitIsExceeded))
 	{
 		uint32 taskCount = list_length(taskList);
 		uint32 completedTaskCount = 0;
@@ -137,7 +140,8 @@ MultiRealTimeExecute(Job *job)
 			}
 
 			/* call the function that performs the core task execution logic */
-			connectAction = ManageTaskExecution(task, taskExecution, &executionStatus);
+			connectAction = ManageTaskExecution(task, taskExecution, &executionStatus,
+												&executionStats);
 
 			/* update the connection counter for throttling */
 			UpdateConnectionCounter(workerNodeState, connectAction);
@@ -171,6 +175,13 @@ MultiRealTimeExecute(Job *job)
 				 */
 				MultiClientRegisterWait(waitInfo, executionStatus, connectionId);
 			}
+		}
+
+		/* in case the task has intermediate results */
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
+		{
+			sizeLimitIsExceeded = true;
+			break;
 		}
 
 		/*
@@ -235,7 +246,11 @@ MultiRealTimeExecute(Job *job)
 	 * user cancellation request, we can now safely emit an error message (all
 	 * client-side resources have been cleared).
 	 */
-	if (taskFailed)
+	if (sizeLimitIsExceeded)
+	{
+		ErrorSizeLimitIsExceeded();
+	}
+	else if (taskFailed)
 	{
 		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
@@ -258,7 +273,8 @@ MultiRealTimeExecute(Job *job)
  */
 static ConnectAction
 ManageTaskExecution(Task *task, TaskExecution *taskExecution,
-					TaskExecutionStatus *executionStatus)
+					TaskExecutionStatus *executionStatus,
+					DistributedExecutionStats *executionStats)
 {
 	TaskExecStatus *taskStatusArray = taskExecution->taskStatusArray;
 	int32 *connectionIdArray = taskExecution->connectionIdArray;
@@ -660,9 +676,16 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			int32 connectionId = connectionIdArray[currentIndex];
 			int32 fileDesc = fileDescriptorArray[currentIndex];
 			int closed = -1;
+			uint64 bytesReceived = 0;
 
 			/* copy data from worker node, and write to local file */
-			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc);
+			CopyStatus copyStatus = MultiClientCopyData(connectionId, fileDesc,
+														&bytesReceived);
+
+			if (SubPlanLevel > 0)
+			{
+				executionStats->totalIntermediateResultSize += bytesReceived;
+			}
 
 			/* if worker node will continue to send more data, keep reading */
 			if (copyStatus == CLIENT_COPY_MORE)
