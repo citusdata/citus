@@ -197,6 +197,7 @@ extern PlannerRestrictionContext * FilterPlannerRestrictionForQuery(
 extern bool SafeToPushdownWindowFunction(Query *query, StringInfo *errorDetail);
 extern bool TargetListOnPartitionColumn(Query *query, List *targetEntryList);
 extern bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
+extern bool IsDistributedTableRTE(Node *node);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern MultiNode * ParentNode(MultiNode *multiNode);
 extern MultiNode * ChildNode(MultiUnaryNode *multiNode);
