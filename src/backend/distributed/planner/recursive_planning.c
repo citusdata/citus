@@ -158,6 +158,14 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 		RaiseDeferredError(error, ERROR);
 	}
 
+	if (context.subPlanList && (log_min_messages <= DEBUG1 || client_min_messages <=
+								DEBUG1))
+	{
+		StringInfo subPlanString = makeStringInfo();
+		pg_get_query_def(originalQuery, subPlanString);
+		ereport(DEBUG1, (errmsg("Plan " UINT64_FORMAT " query: %s", planId, subPlanString->data)));
+	}
+
 	return context.subPlanList;
 }
 
@@ -182,6 +190,7 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	DeferredErrorMessage *error = NULL;
 
 	error = RecursivelyPlanCTEs(query, context);
+
 	if (error != NULL)
 	{
 		return error;
