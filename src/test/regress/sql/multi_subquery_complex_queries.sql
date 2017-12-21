@@ -1120,7 +1120,9 @@ limit 50;
 -- reset subquery_pushdown
 SET citus.subquery_pushdown to OFF;
 
--- not supported since JOIN is not on the partition key
+-- we recursively plan recent_events_1
+-- but not some_users_data since it has a reference
+-- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT user_id, max(time) AS lastseen
@@ -1154,8 +1156,9 @@ ORDER BY
   user_id
 limit 50;
 
--- not supported since JOIN is not on the partition key
--- see (2 * user_id as user_id) target list element
+-- we recursively plan some queries but fail in the end 
+-- since some_users_data since it has a reference
+-- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT 2 * user_id as user_id, max(time) AS lastseen
@@ -1465,7 +1468,9 @@ ORDER BY
   user_id DESC
 LIMIT 10;
 
--- not supported since lower LATERAL JOIN is not on the partition key
+-- not pushdownable since lower LATERAL JOIN is not on the partition key
+-- not recursively plannable due to LATERAL join where there is a reference
+-- from an outer query
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1995,7 +2000,9 @@ ORDER BY
 LIMIT 10;
 SET citus.subquery_pushdown to OFF;
 
--- not supported since join is not on the partition key
+-- not pushdownable since lower LATERAL JOIN is not on the partition key
+-- not recursively plannable due to LATERAL join where there is a reference
+-- from an outer query
 SELECT *
 FROM
   (SELECT 

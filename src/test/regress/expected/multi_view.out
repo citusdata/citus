@@ -287,9 +287,17 @@ SET citus.task_executor_type to DEFAULT;
 -- create a view with aggregate
 CREATE VIEW lineitems_by_shipping_method AS
 	SELECT l_shipmode, count(*) as cnt FROM lineitem_hash_part GROUP BY 1;
--- following will fail due to non GROUP BY of partition key
-SELECT * FROM  lineitems_by_shipping_method;
-ERROR:  Unrecognized range table id 1
+-- following will be supported via recursive planning
+SELECT * FROM  lineitems_by_shipping_method ORDER BY 1,2 LIMIT 5;
+ l_shipmode | cnt  
+------------+------
+ AIR        | 1706
+ FOB        | 1709
+ MAIL       | 1739
+ RAIL       | 1706
+ REG AIR    | 1679
+(5 rows)
+
 -- create a view with group by on partition column
 CREATE VIEW lineitems_by_orderkey AS
 	SELECT 
@@ -631,21 +639,39 @@ SELECT * FROM distinct_user_with_value_1_3 ORDER BY user_id;
 (6 rows)
 
 -- distinct is not supported if it is on a non-partition key
+-- but will be supported via recursive planning
 CREATE VIEW distinct_value_1 AS SELECT DISTINCT value_1 FROM users_table WHERE value_2 = 3;
-SELECT * FROM distinct_value_1;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries without group by clause are not supported yet
--- CTEs are not supported even if they are on views
+SELECT * FROM distinct_value_1 ORDER BY 1 DESC LIMIT 5;
+ value_1 
+---------
+       5
+       4
+       3
+       2
+       1
+(5 rows)
+
+-- CTEs are supported even if they are on views
 CREATE VIEW cte_view_1 AS
 WITH c1 AS (SELECT * FROM users_table WHERE value_1 = 3) SELECT * FROM c1 WHERE value_2 < 4;
-SELECT * FROM cte_view_1;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
--- this is single shard query but still not supported since it has view + cte
+SELECT * FROM cte_view_1 ORDER BY 1,2,3,4,5 LIMIT 5;
+ user_id |              time               | value_1 | value_2 | value_3 | value_4 
+---------+---------------------------------+---------+---------+---------+---------
+       1 | Thu Nov 23 03:32:50.803031 2017 |       3 |       2 |       1 |        
+       2 | Thu Nov 23 13:52:54.83829 2017  |       3 |       1 |       4 |        
+       3 | Wed Nov 22 23:24:32.080584 2017 |       3 |       2 |       5 |        
+       4 | Wed Nov 22 23:59:46.493416 2017 |       3 |       1 |       3 |        
+       4 | Thu Nov 23 01:55:21.824618 2017 |       3 |       1 |       4 |        
+(5 rows)
+
+-- this is single shard query and still not supported since it has view + cte
 -- router planner can't detect it
-SELECT * FROM cte_view_1 WHERE user_id = 2;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+SELECT * FROM cte_view_1 WHERE user_id = 2 ORDER BY 1,2,3,4,5;
+ user_id |              time              | value_1 | value_2 | value_3 | value_4 
+---------+--------------------------------+---------+---------+---------+---------
+       2 | Thu Nov 23 13:52:54.83829 2017 |       3 |       1 |       4 |        
+(1 row)
+
 -- if CTE itself prunes down to a single shard than the view is supported (router plannable)
 CREATE VIEW cte_view_2 AS
 WITH c1 AS (SELECT * FROM users_table WHERE user_id = 2) SELECT * FROM c1 WHERE value_1 = 3;
@@ -687,8 +713,16 @@ CREATE VIEW recent_10_users AS
 	LIMIT 10;
 -- this is not supported since it has limit in it and subquery_pushdown is not set
 SELECT * FROM recent_10_users;
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Subqueries with limit are not supported yet
+ user_id |            lastseen             
+---------+---------------------------------
+       1 | Thu Nov 23 17:30:34.635085 2017
+       3 | Thu Nov 23 17:18:51.048758 2017
+       5 | Thu Nov 23 16:48:32.08896 2017
+       4 | Thu Nov 23 15:32:02.360969 2017
+       6 | Thu Nov 23 14:43:18.024104 2017
+       2 | Thu Nov 23 13:52:54.83829 2017
+(6 rows)
+
 SET citus.subquery_pushdown to ON;
 -- still not supported since outer query does not have limit
 -- it shows a different (subquery with single relation) error message
@@ -792,8 +826,43 @@ EXPLAIN (COSTS FALSE) SELECT *
 (23 rows)
 
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+                                                     QUERY PLAN                                                      
+---------------------------------------------------------------------------------------------------------------------
+ Limit
+   ->  Sort
+         Sort Key: remote_scan."time" DESC
+         ->  Custom Scan (Citus Real-Time)
+               ->  Distributed Subplan 83_1
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: max((max(remote_scan.lastseen))) DESC
+                                 ->  HashAggregate
+                                       Group Key: remote_scan.user_id
+                                       ->  Custom Scan (Citus Real-Time)
+                                             Task Count: 4
+                                             Tasks Shown: One of 4
+                                             ->  Task
+                                                   Node: host=localhost port=57637 dbname=regression
+                                                   ->  Limit
+                                                         ->  Sort
+                                                               Sort Key: (max("time")) DESC
+                                                               ->  HashAggregate
+                                                                     Group Key: user_id
+                                                                     ->  Seq Scan on users_table_1400000 users_table
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=57637 dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: et."time" DESC
+                                 ->  Hash Join
+                                       Hash Cond: (intermediate_result.user_id = et.user_id)
+                                       ->  Function Scan on read_intermediate_result intermediate_result
+                                       ->  Hash
+                                             ->  Seq Scan on events_table_1400004 et
+(33 rows)
+
 SET citus.subquery_pushdown to ON;
 EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USING(user_id) ORDER BY et.time DESC LIMIT 10;
                                                      QUERY PLAN                                                      

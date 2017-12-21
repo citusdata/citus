@@ -593,7 +593,6 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 
 	DistributedPlan *distributedPlan = NULL;
 	MultiTreeRoot *logicalPlan = NULL;
-	DeferredErrorMessage *error = NULL;
 	List *subPlanList = NIL;
 
 	/*
@@ -646,14 +645,10 @@ CreateDistributedSelectPlan(uint64 planId, Query *originalQuery, Query *query,
 
 	/*
 	 * Plan subqueries and CTEs that cannot be pushed down by recursively
-	 * calling the planner and add the resulting plans to subPlanList.
+	 * calling the planner and return the resulting plans to subPlanList.
 	 */
-	error = RecursivelyPlanSubqueriesAndCTEs(originalQuery, plannerRestrictionContext,
-											 planId, &subPlanList);
-	if (error != NULL)
-	{
-		RaiseDeferredError(error, ERROR);
-	}
+	subPlanList = GenerateSubplansForSubqueriesAndCTEs(planId, originalQuery,
+													   plannerRestrictionContext);
 
 	/*
 	 * If subqueries were recursively planned then we need to replan the query

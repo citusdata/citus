@@ -676,7 +676,7 @@ FROM
   WHERE users_table.value_1 < 50;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
--- not supported since one of the queries doesn't have a relation
+-- supported via recursive planning
 INSERT INTO agg_results (user_id, agg_time, value_2_agg)
 SELECT
     user_id,
@@ -702,5 +702,3 @@ FROM (
         GROUP BY user_id
 ) AS shard_union
 ORDER BY user_lastseen DESC;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause can only contain immutable functions

@@ -569,6 +569,8 @@ LIMIT 5;
 -- now lets also have some unsupported queries
 
 -- group by is not on the partition key
+-- but we can still recursively plan it, though that is not suffient for pushdown
+-- of the whole query
 SELECT user_id, sum(counter) 
 FROM (
     SELECT user_id, sum(value_2) AS counter FROM events_table GROUP BY user_id
@@ -803,7 +805,9 @@ FROM
   (SELECT users_table.user_id FROM events_table, users_table WHERE events_table.user_id = users_table.user_id)
 ) b;
 
--- we don't support subqueries without relations
+-- we don't support pushing down subqueries without relations
+-- recursive planning can replace that query, though the whole
+-- query is not safe to pushdown
 SELECT 
   count(*)
 FROM 
@@ -813,7 +817,9 @@ FROM
   (SELECT 1)
 ) b;
 
--- we don't support subqueries without relations
+-- we don't support pushing down subqueries without relations
+-- recursive planning can replace that query, though the whole
+-- query is not safe to pushdown
 SELECT 
   *
 FROM 
@@ -843,6 +849,9 @@ FROM
 ORDER BY 1 DESC, 2 DESC
 LIMIT 5;
 
+-- we don't support pushing down subqueries without relations
+-- recursive planning can replace that query, though the whole
+-- query is not safe to pushdown
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()

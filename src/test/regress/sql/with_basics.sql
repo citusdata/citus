@@ -54,13 +54,13 @@ ORDER BY
 LIMIT
   5;
 
--- CTE in subquery errors out
+-- CTE in subquery recursively planned
 SELECT user_id FROM (
   WITH cte AS (
     SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
   )
   SELECT user_id FROM cte WHERE value_2 > 0
-) a;
+) a ORDER BY 1 LIMIT 3;
 
 -- CTE outside of FROM/WHERE errors out
 WITH cte AS (
@@ -458,14 +458,14 @@ WITH cte_user AS (
 )
 SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
 
-SELECT * FROM cte_view;
+SELECT * FROM cte_view ORDER BY 1, 2 LIMIT 5;
 
 
 WITH cte_user_with_view AS 
 (
 	SELECT * FROM cte_view WHERE user_id < 3
 )
-SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 3;
+SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 2;
 
 DROP VIEW basic_view;
 DROP VIEW cte_view;

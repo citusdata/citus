@@ -86,22 +86,27 @@ LIMIT
    6 |       5
 (5 rows)
 
--- CTE in subquery errors out
+-- CTE in subquery recursively planned
 SELECT user_id FROM (
   WITH cte AS (
     SELECT user_id, value_2 from users_table WHERE user_id IN (1, 2) ORDER BY 2 LIMIT 5
   )
   SELECT user_id FROM cte WHERE value_2 > 0
-) a;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+) a ORDER BY 1 LIMIT 3;
+ user_id 
+---------
+       2
+       2
+       2
+(3 rows)
+
 -- CTE outside of FROM/WHERE errors out
 WITH cte AS (
 	SELECT user_id FROM users_table WHERE value_2 IN (1, 2)
 )
 SELECT (SELECT * FROM cte);
 WARNING:  more than one row returned by a subquery used as an expression
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 ERROR:  could not receive query results
 WITH cte_basic AS (
 	SELECT user_id FROM users_table WHERE user_id = 1
@@ -218,8 +223,20 @@ FROM
   (SELECT min(user_id) AS user_id FROM top_users) top_users
 JOIN
   users_table USING (user_id);
-ERROR:  cannot push down this subquery
-DETAIL:  Aggregates without group by are currently unsupported
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+       6
+(10 rows)
+
 -- FOR UPDATE in subquery on CTE
 WITH top_users AS (
 	SELECT user_id, value_2 FROM users_table ORDER BY user_id DESC LIMIT 10
@@ -257,8 +274,15 @@ ORDER BY
   user_id
 LIMIT
   5;
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 -- OFFSET in subquery on CTE
 WITH top_users AS (
 	SELECT user_id, value_2 FROM users_table ORDER BY user_id DESC LIMIT 10
@@ -273,8 +297,15 @@ ORDER BY
   user_id
 LIMIT
   5;
-ERROR:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 -- Unsupported join in CTE
 WITH top_users AS (
 	SELECT DISTINCT e.user_id FROM users_table u JOIN events_table e ON (u.user_id = e.user_id AND u.value_1 > e.value_2)
@@ -330,8 +361,8 @@ ORDER BY
   user_id
 LIMIT
   5;
-ERROR:  could not run distributed query with window functions
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ERROR:  could not run distributed query because the window function that is used cannot be pushed down
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
 -- Window functions that partition by the distribution column in subqueries in CTEs are ok
 WITH top_users AS
   (SELECT *
@@ -434,8 +465,8 @@ ORDER BY
 	1,2,3,4,5,6
 LIMIT 
 	10;
-ERROR:  cannot push down this subquery
-DETAIL:  Complex subqueries and CTEs are not supported within a UNION
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SELECT * FROM (
 	SELECT * FROM (WITH cte AS (
 			SELECT * FROM users_table
@@ -446,8 +477,8 @@ ORDER BY
 1,2,3,4,5,6
 LIMIT 
 10;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM cte) a; should work
 WITH cte AS (
 	SELECT * FROM users_table WHERE user_id IN (1, 2)
@@ -515,8 +546,7 @@ FROM
       SELECT * FROM users_table WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1) cte_rec;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+ERROR:  recursive CTEs are not supported in distributed queries
 -- basic_recursive in WHERE with UNION ALL
 SELECT
   *
@@ -530,8 +560,7 @@ WHERE
       SELECT user_id FROM users_table WHERE user_id>1
   )
   SELECT * FROM basic_recursive ORDER BY user_id LIMIT 1);
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  recursive CTEs are not supported in distributed queries
 -- one recursive one regular CTE should error out
 WITH RECURSIVE basic_recursive(x) AS(
     VALUES (1)
@@ -590,15 +619,24 @@ SELECT user_id, sum(value_2) FROM cte_user GROUP BY 1 ORDER BY 1, 2;
        6 |  220
 (6 rows)
 
-SELECT * FROM cte_view;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+SELECT * FROM cte_view ORDER BY 1, 2 LIMIT 5;
+ user_id | value_1 
+---------+---------
+       1 |       5
+       2 |       4
+       3 |       5
+       4 |       5
+       5 |       5
+(5 rows)
+
 WITH cte_user_with_view AS 
 (
 	SELECT * FROM cte_view WHERE user_id < 3
 )
-SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 3;
-ERROR:  cannot push down this subquery
-DETAIL:  CTEs in subqueries are currently unsupported
+SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 2;
+ user_id | value_1 
+---------+---------
+(0 rows)
+
 DROP VIEW basic_view;
 DROP VIEW cte_view;

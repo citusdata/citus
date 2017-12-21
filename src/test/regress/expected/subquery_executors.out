@@ -1,0 +1,143 @@
+-- ===================================================================
+-- test recursive planning functionality with different executors
+-- ===================================================================
+CREATE SCHEMA subquery_executor;
+SET search_path TO subquery_executor, public;
+CREATE TABLE users_table_local AS SELECT * FROM users_table;
+SET client_min_messages TO DEBUG1;
+-- subquery with router planner
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id = 15 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+DEBUG:  generating subplan 2_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id = 15) OFFSET 0
+ count 
+-------
+     0
+(1 row)
+
+-- subquery with router but not logical plannable
+-- should fail
+SELECT
+	count(*) 
+FROM
+(
+	SELECT  user_id, sum(value_2) over (partition by user_id) AS counter FROM users_table WHERE user_id = 15
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.counter = bar.user_id; 
+ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
+DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+-- subquery with real-time query
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id != 15 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+DEBUG:  generating subplan 5_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id <> 15) OFFSET 0
+ count 
+-------
+  1612
+(1 row)
+
+-- subquery with repartition query
+SET citus.enable_repartition_joins to ON;
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT DISTINCT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND users_table.user_id < 2
+) as foo, 
+(
+	SELECT user_id FROM users_table
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+DEBUG:  cannot use real time executor with repartition jobs
+HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
+DEBUG:  generating subplan 7_1 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (users_table.user_id < 2))
+ count 
+-------
+    58
+(1 row)
+
+-- mixed of all executors (including local execution)
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id = 15 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table OFFSET 0
+) as bar,
+(
+	SELECT DISTINCT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.value_2 AND users_table.user_id < 2
+) baz,
+(
+	SELECT user_id FROM users_table_local WHERE user_id = 2
+) baw
+WHERE foo.value_2 = bar.user_id AND baz.value_2 = bar.user_id AND bar.user_id = baw.user_id; 
+DEBUG:  generating subplan 9_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id = 15) OFFSET 0
+DEBUG:  generating subplan 9_2 for subquery SELECT user_id FROM public.users_table OFFSET 0
+DEBUG:  cannot use real time executor with repartition jobs
+HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
+DEBUG:  generating subplan 9_3 for subquery SELECT DISTINCT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.value_2) AND (users_table.user_id < 2))
+DEBUG:  generating subplan 9_4 for subquery SELECT user_id FROM subquery_executor.users_table_local WHERE (user_id = 2)
+ count 
+-------
+     0
+(1 row)
+
+SET citus.enable_repartition_joins to OFF;
+-- final query is router 
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id = 1 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table  WHERE user_id = 2 OFFSET 0
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+DEBUG:  generating subplan 13_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id = 1) OFFSET 0
+DEBUG:  generating subplan 13_2 for subquery SELECT user_id FROM public.users_table WHERE (user_id = 2) OFFSET 0
+ count 
+-------
+    18
+(1 row)
+
+-- final query is real-time
+SELECT 
+	count(*) 
+FROM
+(
+	SELECT value_2 FROM users_table WHERE user_id = 1 OFFSET 0
+) as foo, 
+(
+	SELECT user_id FROM users_table  WHERE user_id != 2
+) as bar
+WHERE foo.value_2 = bar.user_id; 
+DEBUG:  generating subplan 16_1 for subquery SELECT value_2 FROM public.users_table WHERE (user_id = 1) OFFSET 0
+ count 
+-------
+   103
+(1 row)
+
+SET client_min_messages TO DEFAULT;
+DROP SCHEMA subquery_executor CASCADE;
+NOTICE:  drop cascades to table users_table_local
+SET search_path TO public;

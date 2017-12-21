@@ -18,11 +18,9 @@
 #include "nodes/relation.h"
 
 
-extern DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
-															   PlannerRestrictionContext *
-															   plannerRestrictionContext,
-															   uint64 planId,
-															   List **subPlanList);
+extern List * GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
+												   PlannerRestrictionContext *
+												   plannerRestrictionContext);
 extern char * GenerateResultId(uint64 planId, uint32 subPlanId);
 
 

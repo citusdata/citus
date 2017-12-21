@@ -1,0 +1,507 @@
+--
+-- MULTI_COMPLEX_EXPRESSIONS
+--
+-- Check that we can correctly handle complex expressions and aggregates.
+SELECT sum(l_quantity) / avg(l_quantity) FROM lineitem;
+        ?column?        
+------------------------
+ 12000.0000000000000000
+(1 row)
+
+SELECT sum(l_quantity) / (10 * avg(l_quantity)) FROM lineitem;
+       ?column?        
+-----------------------
+ 1200.0000000000000000
+(1 row)
+
+SELECT (sum(l_quantity) / (10 * avg(l_quantity))) + 11 FROM lineitem;
+       ?column?        
+-----------------------
+ 1211.0000000000000000
+(1 row)
+
+SELECT avg(l_quantity) as average FROM lineitem;
+       average       
+---------------------
+ 25.4462500000000000
+(1 row)
+
+SELECT 100 * avg(l_quantity) as average_times_hundred FROM lineitem;
+ average_times_hundred 
+-----------------------
+ 2544.6250000000000000
+(1 row)
+
+SELECT 100 * avg(l_quantity) / 10 as average_times_ten FROM lineitem;
+  average_times_ten   
+----------------------
+ 254.4625000000000000
+(1 row)
+
+SELECT l_quantity, 10 * count(*) count_quantity FROM lineitem 
+	GROUP BY l_quantity ORDER BY count_quantity, l_quantity;
+ l_quantity | count_quantity 
+------------+----------------
+      44.00 |           2150
+      38.00 |           2160
+      45.00 |           2180
+      13.00 |           2190
+      47.00 |           2200
+      29.00 |           2220
+      36.00 |           2230
+      49.00 |           2230
+       3.00 |           2270
+      35.00 |           2280
+      18.00 |           2290
+      31.00 |           2290
+      43.00 |           2290
+      14.00 |           2300
+      16.00 |           2300
+      17.00 |           2300
+      26.00 |           2300
+       7.00 |           2320
+      10.00 |           2340
+      34.00 |           2340
+      15.00 |           2350
+      25.00 |           2360
+      33.00 |           2360
+      42.00 |           2360
+       2.00 |           2370
+      12.00 |           2410
+      37.00 |           2410
+       6.00 |           2420
+      22.00 |           2420
+       1.00 |           2430
+      19.00 |           2430
+       4.00 |           2440
+      20.00 |           2460
+      48.00 |           2460
+      41.00 |           2470
+      24.00 |           2490
+      27.00 |           2490
+       8.00 |           2500
+      11.00 |           2500
+       5.00 |           2540
+      21.00 |           2550
+      32.00 |           2550
+       9.00 |           2580
+      39.00 |           2600
+      46.00 |           2600
+      50.00 |           2600
+      23.00 |           2610
+      30.00 |           2640
+      40.00 |           2690
+      28.00 |           2730
+(50 rows)
+
+-- Check that we can handle complex select clause expressions.
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment || l_comment) > 40;
+ count 
+-------
+  8148
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(concat(l_comment, l_comment)) > 40;
+ count 
+-------
+  8148
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment) + octet_length('randomtext'::text) > 40;
+ count 
+-------
+  4611
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE octet_length(l_comment) + 10 > 40;
+ count 
+-------
+  4611
+(1 row)
+
+SELECT count(*) FROM lineitem
+	WHERE (l_receiptdate::timestamp - l_shipdate::timestamp) > interval '5 days';
+ count 
+-------
+ 10008
+(1 row)
+
+-- can push down queries where no columns present on the WHERE clause
+SELECT count(*) FROM lineitem WHERE random() = -0.1;
+ count 
+-------
+     0
+(1 row)
+
+-- boolean tests can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (l_partkey > 10000) is true;
+ count 
+-------
+ 11423
+(1 row)
+
+-- scalar array operator expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE l_partkey = ANY(ARRAY[19353, 19354, 19355]);
+ count 
+-------
+     1
+(1 row)
+
+-- some more scalar array operator expressions
+SELECT count(*) FROM lineitem
+	WHERE l_partkey = ALL(ARRAY[19353]);
+ count 
+-------
+     1
+(1 row)
+
+-- operator expressions involving arrays
+SELECT count(*) FROM lineitem
+	WHERE ARRAY[19353, 19354, 19355] @> ARRAY[l_partkey];
+ count 
+-------
+     1
+(1 row)
+
+-- coerced via io expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (l_quantity/100)::int::bool::text::bool;
+ count 
+-------
+   260
+(1 row)
+
+-- case expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE (CASE WHEN l_orderkey > 4000 THEN l_partkey / 100 > 1 ELSE false END);
+ count 
+-------
+  7948
+(1 row)
+
+-- coalesce expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE COALESCE((l_partkey/50000)::bool, false);
+ count 
+-------
+  9122
+(1 row)
+
+-- nullif expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE NULLIF((l_partkey/50000)::bool, false);
+ count 
+-------
+  9122
+(1 row)
+
+-- null test expressions can be pushed down
+SELECT count(*) FROM orders
+	WHERE o_comment IS NOT null;
+ count 
+-------
+  2984
+(1 row)
+
+-- functions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE isfinite(l_shipdate);
+ count 
+-------
+ 12000
+(1 row)
+
+-- constant expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE 0 != 0;
+ count 
+-------
+     0
+(1 row)
+
+-- distinct expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE l_partkey IS DISTINCT FROM 50040;
+ count 
+-------
+ 11999
+(1 row)
+
+-- row compare expression can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE row(l_partkey, 2, 3) > row(2000, 2, 3);
+ count 
+-------
+ 11882
+(1 row)
+
+-- combination of different expressions can be pushed down
+SELECT count(*) FROM lineitem
+	WHERE
+		  (l_quantity/100)::int::bool::text::bool AND
+		  CASE WHEN l_orderkey > 4000 THEN l_partkey / 100 > 1 ELSE false END AND
+		  COALESCE((l_partkey/50000)::bool, false) AND
+		  NULLIF((l_partkey/50000)::bool, false) AND
+		  isfinite(l_shipdate) AND
+		  l_partkey IS DISTINCT FROM 50040 AND
+		  row(l_partkey, 2, 3) > row(2000, 2, 3);
+ count 
+-------
+   137
+(1 row)
+
+-- constant expression in the WHERE clause with a column in the target list
+SELECT l_linenumber FROM lineitem
+	WHERE
+		1!=0
+	ORDER BY
+		l_linenumber
+	LIMIT 1;
+ l_linenumber 
+--------------
+            1
+(1 row)
+
+-- constant expression in the WHERE clause with expressions and a column the target list
+SELECT count(*) * l_discount as total_discount, count(*), sum(l_tax), l_discount FROM lineitem
+	WHERE
+		1!=0
+	GROUP BY
+		l_discount
+	ORDER BY
+		total_discount DESC, sum(l_tax) DESC;
+ total_discount | count |  sum  | l_discount 
+----------------+-------+-------+------------
+         104.80 |  1048 | 41.08 |       0.10
+          98.55 |  1095 | 44.15 |       0.09
+          90.64 |  1133 | 45.94 |       0.08
+          71.05 |  1015 | 41.19 |       0.07
+          69.42 |  1157 | 45.75 |       0.06
+          53.60 |  1072 | 42.82 |       0.05
+          43.64 |  1091 | 44.40 |       0.04
+          32.55 |  1085 | 43.30 |       0.03
+          22.22 |  1111 | 45.07 |       0.02
+          11.22 |  1122 | 44.54 |       0.01
+           0.00 |  1071 | 44.00 |       0.00
+(11 rows)
+
+-- distinct expressions in the WHERE clause with a column in the target list
+SELECT l_linenumber FROM lineitem
+	WHERE
+		l_linenumber IS DISTINCT FROM 1 AND
+		l_orderkey IS DISTINCT FROM 8997
+	ORDER BY
+		l_linenumber
+	LIMIT 1;
+ l_linenumber 
+--------------
+            2
+(1 row)
+
+-- distinct expressions in the WHERE clause with expressions and a column the target list
+SELECT max(l_linenumber), min(l_discount), l_receiptdate FROM lineitem
+	WHERE
+		l_linenumber IS DISTINCT FROM 1 AND
+		l_orderkey IS DISTINCT FROM 8997
+	GROUP BY
+		l_receiptdate
+	ORDER BY
+		l_receiptdate
+	LIMIT 1;
+ max | min  | l_receiptdate 
+-----+------+---------------
+   3 | 0.07 | 01-09-1992
+(1 row)
+
+-- Check that we can handle implicit and explicit join clause definitions.
+SELECT count(*) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+SELECT count(*) FROM lineitem
+	JOIN orders ON l_orderkey = o_orderkey AND l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+SELECT count(*) FROM lineitem JOIN orders ON l_orderkey = o_orderkey
+	WHERE l_quantity < 5;
+ count 
+-------
+   951
+(1 row)
+
+-- Check that we make sure local joins are between columns only.
+SELECT count(*) FROM lineitem, orders WHERE l_orderkey + 1 = o_orderkey;
+ERROR:  cannot perform local joins that involve expressions
+DETAIL:  local joins can be performed between columns only
+-- Check that we can issue limit/offset queries
+-- the subquery is recursively planned since it contains OFFSET, which is not pushdownable
+SELECT * FROM (SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey OFFSET 20) sq ORDER BY 1 LIMIT 5;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries with offset are not supported yet
+-- the subquery is recursively planned since it contains OFFSET, which is not pushdownable
+SELECT * FROM (SELECT o_orderkey FROM orders ORDER BY o_orderkey OFFSET 20) sq ORDER BY 1 LIMIT 5;
+ERROR:  cannot perform distributed planning on this query
+DETAIL:  Subqueries with offset are not supported yet
+-- Simple LIMIT/OFFSET with ORDER BY
+SELECT o_orderkey FROM orders ORDER BY o_orderkey LIMIT 10 OFFSET 20;
+ o_orderkey 
+------------
+         69
+         70
+         71
+         96
+         97
+         98
+         99
+        100
+        101
+        102
+(10 rows)
+
+-- LIMIT/OFFSET with a subquery
+SET citus.task_executor_type TO 'task-tracker';
+SELECT 
+	customer_keys.o_custkey,
+	SUM(order_count) AS total_order_count 
+FROM 
+	(SELECT o_custkey, o_orderstatus, COUNT(*) AS order_count 
+	 FROM orders GROUP BY o_custkey, o_orderstatus ) customer_keys
+GROUP BY 
+	customer_keys.o_custkey
+ORDER BY 
+	customer_keys.o_custkey DESC
+LIMIT 10 OFFSET 20;
+ o_custkey | total_order_count 
+-----------+-------------------
+      1466 |                 1
+      1465 |                 2
+      1463 |                 4
+      1462 |                10
+      1460 |                 1
+      1459 |                 6
+      1457 |                 1
+      1456 |                 3
+      1454 |                 2
+      1453 |                 5
+(10 rows)
+
+SET citus.task_executor_type TO 'real-time';
+SET client_min_messages TO DEBUG1;
+-- Ensure that we push down LIMIT and OFFSET properly
+-- No Group-By -> Push Down
+CREATE TEMP TABLE temp_limit_test_1 AS
+SELECT o_custkey FROM orders LIMIT 10 OFFSET 15;
+DEBUG:  push down of limit count: 25
+-- GROUP BY without ORDER BY -> No push-down
+CREATE TEMP TABLE temp_limit_test_2 AS
+SELECT o_custkey FROM orders GROUP BY o_custkey LIMIT 10 OFFSET 15;
+-- GROUP BY and ORDER BY non-aggregate -> push-down
+CREATE TEMP TABLE temp_limit_test_3 AS
+SELECT o_custkey FROM orders GROUP BY o_custkey ORDER BY o_custkey LIMIT 10 OFFSET 15;
+DEBUG:  push down of limit count: 25
+-- GROUP BY and ORDER BY aggregate -> No push-down
+CREATE TEMP TABLE temp_limit_test_4 AS
+SELECT o_custkey, COUNT(*) AS ccnt FROM orders GROUP BY o_custkey ORDER BY ccnt DESC LIMIT 10 OFFSET 15;
+-- OFFSET without LIMIT
+SELECT o_custkey FROM orders ORDER BY o_custkey OFFSET 2980;
+ o_custkey 
+-----------
+      1498
+      1499
+      1499
+      1499
+(4 rows)
+
+-- LIMIT/OFFSET with Joins
+SELECT 
+	li.l_partkey,
+	o.o_custkey,
+	li.l_quantity
+FROM 
+	lineitem li JOIN orders o ON li.l_orderkey = o.o_orderkey
+WHERE 
+	li.l_quantity > 25
+ORDER BY 1, 2, 3
+LIMIT 10 OFFSET 20;
+DEBUG:  push down of limit count: 30
+ l_partkey | o_custkey | l_quantity 
+-----------+-----------+------------
+       655 |        58 |      50.00
+       669 |       319 |      34.00
+       699 |      1255 |      50.00
+       716 |        61 |      45.00
+       723 |        14 |      36.00
+       802 |       754 |      50.00
+       831 |       589 |      32.00
+       835 |        67 |      33.00
+       864 |       439 |      32.00
+       875 |        13 |      43.00
+(10 rows)
+
+RESET client_min_messages;
+-- FILTERs
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey |    sum    |    sum    | count | count |    max    |   max    
+------------+-----------+-----------+-------+-------+-----------+----------
+      12804 | 440012.71 |  45788.16 |     7 |     1 |  94398.00 | 45788.16
+       9863 | 412560.63 | 175647.63 |     7 |     3 |  85723.77 | 50769.14
+       2567 | 412076.77 |  59722.26 |     7 |     1 |  94894.00 |  9784.02
+      11142 | 410502.38 |  44965.95 |     7 |     1 |  83989.44 | 44965.95
+      12039 | 407048.94 |  76406.30 |     7 |     2 |  94471.02 | 19679.30
+       2306 | 405629.96 |  28032.60 |     7 |     1 |  92838.00 | 44384.50
+       5606 | 403595.91 |  36531.51 |     7 |     2 |  94890.18 | 30582.75
+      11296 | 399079.89 |           |     6 |     0 | 102449.00 | 33122.93
+      11046 | 391163.26 |  31436.34 |     7 |     2 |  94506.24 | 47519.76
+       4421 | 387313.12 |           |     7 |     0 |  67301.52 | 23783.40
+(10 rows)
+
+SELECT
+	l_orderkey,
+	sum(l_extendedprice),
+	sum(l_extendedprice) FILTER (WHERE l_shipmode = 'AIR'),
+	count(*),
+	count(*) FILTER (WHERE l_shipmode = 'AIR'),
+	max(l_extendedprice),
+	max(l_extendedprice) FILTER (WHERE l_quantity < 30)
+	FROM lineitem
+	GROUP BY l_orderkey
+	HAVING count(*) FILTER (WHERE l_shipmode = 'AIR') > 1
+	ORDER BY 2 DESC, 1 DESC
+	LIMIT 10;
+ l_orderkey |    sum    |    sum    | count | count |   max    |   max    
+------------+-----------+-----------+-------+-------+----------+----------
+       9863 | 412560.63 | 175647.63 |     7 |     3 | 85723.77 | 50769.14
+      12039 | 407048.94 |  76406.30 |     7 |     2 | 94471.02 | 19679.30
+       5606 | 403595.91 |  36531.51 |     7 |     2 | 94890.18 | 30582.75
+      11046 | 391163.26 |  31436.34 |     7 |     2 | 94506.24 | 47519.76
+      14499 | 384140.30 |  67867.08 |     7 |     2 | 84335.36 | 46169.75
+      11623 | 380598.48 | 133709.82 |     7 |     2 | 93701.54 | 21487.65
+      10787 | 375688.09 |  99424.78 |     7 |     2 | 76732.67 | 50946.91
+      12902 | 358191.24 |  76891.00 |     7 |     2 | 82008.08 | 35602.08
+       3747 | 353701.23 |  68592.23 |     7 |     2 | 67181.10 | 46252.77
+       5158 | 349889.05 | 159753.19 |     7 |     3 | 78714.67 | 29729.20
+(10 rows)
+

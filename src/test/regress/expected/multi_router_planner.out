@@ -525,10 +525,18 @@ DEBUG:  Plan is router executable
  43 |         3 | affixal      |      12723 |        3
 (10 rows)
 
--- they are not supported if multiple workers are involved
-SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2;
-ERROR:  could not run distributed query with complex table expressions
-HINT:  Consider using an equality filter on the distributed table's partition column.
+-- they are supported via (sub)query pushdown if multiple workers are involved
+SELECT * FROM articles_hash, position('om' in 'Thomas') WHERE author_id = 1 or author_id = 2 ORDER BY 4 DESC, 1 DESC, 2 DESC LIMIT 5;
+DEBUG:  push down of limit count: 5
+ id | author_id |   title    | word_count | position 
+----+-----------+------------+------------+----------
+ 12 |         2 | archiblast |      18185 |        3
+ 42 |         2 | ausable    |      15885 |        3
+  2 |         2 | abducing   |      13642 |        3
+ 41 |         1 | aznavour   |      11814 |        3
+ 32 |         2 | amazon     |      11342 |        3
+(5 rows)
+
 -- unless the query can be transformed into a join
 SELECT * FROM articles_hash
 WHERE author_id IN (SELECT author_id FROM articles_hash WHERE author_id = 2)
@@ -615,6 +623,7 @@ HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- subqueries are not supported in SELECT clause
 SELECT a.title AS name, (SELECT a2.id FROM articles_single_shard_hash a2 WHERE a.id = a2.id  LIMIT 1)
 						 AS special_price FROM articles_hash a;
+DEBUG:  skipping recursive planning for the subquery since it contains references to outer queries
 ERROR:  could not run distributed query with subquery outside the FROM and WHERE clauses
 HINT:  Consider using an equality filter on the distributed table's partition column.
 -- simple lookup query
@@ -1267,13 +1276,13 @@ DEBUG:  Plan is router executable
 SELECT id, MIN(id) over (order by word_count)
 	FROM articles_hash
 	WHERE author_id = 1 or author_id = 2;
-ERROR:  could not run distributed query with window functions
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ERROR:  could not run distributed query because the window function that is used cannot be pushed down
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
 SELECT LAG(title, 1) over (ORDER BY word_count) prev, title, word_count 
 	FROM articles_hash
 	WHERE author_id = 5 or author_id = 2;
-ERROR:  could not run distributed query with window functions
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ERROR:  could not run distributed query because the window function that is used cannot be pushed down
+HINT:  Window functions are supported in two ways. Either add an equality filter on the distributed tables' partition column or use the window functions inside a subquery with a PARTITION BY clause containing the distribution column
 -- where false queries are router plannable
 SELECT * 
 	FROM articles_hash

@@ -80,7 +80,6 @@ typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNo
 static RuleApplyFunction RuleApplyFunctionArray[JOIN_RULE_LAST] = { 0 }; /* join rules */
 
 /* Local functions forward declarations */
-static bool SingleRelationRepartitionSubquery(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfUnsupportedSubqueryPushdown(Query *
 																	  originalQuery,
 																	  PlannerRestrictionContext
@@ -98,9 +97,6 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfFromClauseRecurs(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfCannotPushdownSubquery(Query *subqueryTree,
-																 bool
-																 outerMostQueryHasLimit);
 static DeferredErrorMessage * DeferErrorIfUnsupportedUnionQuery(Query *queryTree,
 																bool
 																outerMostQueryHasLimit);
@@ -108,12 +104,10 @@ static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationLis
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
-static bool FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *));
 static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiNodeTree(Query *queryTree);
-static void ErrorIfQueryNotSupported(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static bool ShouldRecurseForRecurringTuplesJoinChecks(RelOptInfo *relOptInfo);
@@ -396,12 +390,17 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
 {
 	MultiNode *multiQueryNode = NULL;
 	DeferredErrorMessage *subqueryPushdownError = NULL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/*
 	 * This is a generic error check that applies to both subquery pushdown
 	 * and single table repartition subquery.
 	 */
-	ErrorIfQueryNotSupported(originalQuery);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(originalQuery);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/*
 	 * In principle, we're first trying subquery pushdown planner. If it fails
@@ -468,7 +467,7 @@ SubqueryMultiNodeTree(Query *originalQuery, Query *queryTree,
  * to ensure that Citus supports the subquery. Also, this function is designed to run
  * on the original query.
  */
-static bool
+bool
 SingleRelationRepartitionSubquery(Query *queryTree)
 {
 	List *rangeTableIndexList = NULL;
@@ -916,7 +915,7 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
  * the join condition must be partition columns.
  * c. If there is a distinct clause, it must be on the partition column.
  *
- * This function is very similar to ErrorIfQueryNotSupported() in logical
+ * This function is very similar to DeferErrorIfQueryNotSupported() in logical
  * planner, but we don't reuse it, because differently for subqueries we support
  * a subset of distinct, union and left joins.
  *
@@ -926,7 +925,7 @@ DeferErrorIfFromClauseRecurs(Query *queryTree)
  * limit, we let this query to run, but results could be wrong depending on the
  * features of underlying tables.
  */
-static DeferredErrorMessage *
+DeferredErrorMessage *
 DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLimit)
 {
 	bool preconditionsSatisfied = true;
@@ -1513,7 +1512,7 @@ AllTargetExpressionsAreColumnReferences(List *targetEntryList)
  * FindNodeCheckInRangeTableList relies on FindNodeCheck() but only
  * considers the range table entries.
  */
-static bool
+bool
 FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
 {
 	return range_table_walker(rtable, FindNodeCheck, check, QTW_EXAMINE_RTES);
@@ -1760,9 +1759,14 @@ MultiNodeTree(Query *queryTree)
 	MultiProject *projectNode = NULL;
 	MultiExtendedOp *extendedOpNode = NULL;
 	MultiNode *currentTopNode = NULL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/* extract where clause qualifiers and verify we can plan for them */
 	whereClauseList = WhereClauseList(queryTree->jointree);
@@ -2220,8 +2224,8 @@ IsReadIntermediateResultFunction(Node *node)
  * the given query. The checks in this function will be removed as we support
  * more functionality in our distributed planning.
  */
-static void
-ErrorIfQueryNotSupported(Query *queryTree)
+DeferredErrorMessage *
+DeferErrorIfQueryNotSupported(Query *queryTree)
 {
 	char *errorMessage = NULL;
 	bool hasTablesample = false;
@@ -2250,8 +2254,12 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	if (queryTree->hasWindowFuncs)
 	{
 		preconditionsSatisfied = false;
-		errorMessage = "could not run distributed query with window functions";
-		errorHint = filterHint;
+		errorMessage = "could not run distributed query because the window "
+					   "function that is used cannot be pushed down";
+		errorHint = "Window functions are supported in two ways. Either add "
+					"an equality filter on the distributed tables' partition "
+					"column or use the window functions inside a subquery with "
+					"a PARTITION BY clause containing the distribution column";
 	}
 
 	if (queryTree->setOperations)
@@ -2329,10 +2337,12 @@ ErrorIfQueryNotSupported(Query *queryTree)
 	if (!preconditionsSatisfied)
 	{
 		bool showHint = ErrorHintRequired(errorHint, queryTree);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("%s", errorMessage),
-						showHint ? errhint("%s", errorHint) : 0));
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 errorMessage, NULL,
+							 showHint ? errorHint : NULL);
 	}
+
+	return NULL;
 }
 
 
@@ -2631,10 +2641,12 @@ HasComplexRangeTableType(Query *queryTree)
 
 		/*
 		 * Check if the range table in the join tree is a simple relation or a
-		 * subquery.
+		 * subquery or a function. Note that RTE_FUNCTIONs are handled via (sub)query
+		 * pushdown.
 		 */
 		if (rangeTableEntry->rtekind != RTE_RELATION &&
-			rangeTableEntry->rtekind != RTE_SUBQUERY)
+			rangeTableEntry->rtekind != RTE_SUBQUERY &&
+			rangeTableEntry->rtekind != RTE_FUNCTION)
 		{
 			hasComplexRangeTableType = true;
 		}
@@ -3847,9 +3859,14 @@ SubqueryPushdownMultiNodeTree(Query *queryTree)
 	Query *pushedDownQuery = NULL;
 	List *subqueryTargetEntryList = NIL;
 	List *havingClauseColumnList = NIL;
+	DeferredErrorMessage *unsupportedQueryError = NULL;
 
 	/* verify we can perform distributed planning on this query */
-	ErrorIfQueryNotSupported(queryTree);
+	unsupportedQueryError = DeferErrorIfQueryNotSupported(queryTree);
+	if (unsupportedQueryError != NULL)
+	{
+		RaiseDeferredError(unsupportedQueryError, ERROR);
+	}
 
 	/*
 	 * We would be creating a new Query and pushing down top level query's

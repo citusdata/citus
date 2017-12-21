@@ -726,8 +726,8 @@ INSERT INTO
   (SELECT user_id FROM raw_events_first);
 DEBUG:  Set operations are not allowed in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- If the query is router plannable then it is executed via the coordinator
 INSERT INTO
   raw_events_first(user_id)
@@ -1047,7 +1047,7 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.user_id) AS foo;
 ERROR:  cannot perform distributed planning for the given modification
 DETAIL:  Select query cannot be pushed down to the worker.
--- INSERT partition column does not match with SELECT partition column
+-- INSERT returns NULL partition key value via coordinator
 INSERT INTO agg_events
             (value_4_agg,
              value_1_agg,
@@ -1064,8 +1064,22 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
         GROUP  BY raw_events_second.value_3) AS foo;
 DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  generating subplan 86_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, sum(raw_events_first.value_1) AS v1, raw_events_second.value_3 AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_3
+DEBUG:  Creating router plan
+DEBUG:  Plan is router executable
+ERROR:  the partition column of table public.agg_events cannot be NULL
 -- error cases
 -- no part column at all
 INSERT INTO raw_events_second
@@ -1155,8 +1169,7 @@ DETAIL:  The target table's partition column should correspond to a partition co
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
 DEBUG:  Creating router plan
 DEBUG:  Plan is router executable
--- unsupported joins between subqueries
--- we do not return bare partition column on the inner query
+-- foo2 is recursively planned and INSERT...SELECT is done via coordinator
 INSERT INTO agg_events
             (user_id)
 SELECT f2.id FROM
@@ -1181,11 +1194,23 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id);
 DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  generating subplan 105_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) > (10)::numeric)
 -- the second part of the query is not routable since
 -- GROUP BY not on the partition column (i.e., value_1) and thus join
 -- on f.id = f2.id is not on the partition key (instead on the sum of partition key)
+-- but we still recursively plan foo2 and run the query
 INSERT INTO agg_events
             (user_id)
 SELECT f.id FROM
@@ -1210,8 +1235,19 @@ FROM   (SELECT SUM(raw_events_second.value_4) AS v4,
 ON (f.id = f2.id);
 DEBUG:  Group by list without distribution column is not allowed  in distributed INSERT ... SELECT queries
 DEBUG:  Collecting INSERT ... SELECT results on coordinator
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [0,1073741823]
+DEBUG:  join prunable for intervals [-2147483648,-1073741825] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [0,1073741823]
+DEBUG:  join prunable for intervals [-1073741824,-1] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [0,1073741823] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [0,1073741823] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [0,1073741823] and [1073741824,2147483647]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-2147483648,-1073741825]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [-1073741824,-1]
+DEBUG:  join prunable for intervals [1073741824,2147483647] and [0,1073741823]
+DEBUG:  generating subplan 108_1 for subquery SELECT sum(raw_events_second.value_4) AS v4, raw_events_second.value_1 AS v1, sum(raw_events_second.user_id) AS id FROM public.raw_events_first, public.raw_events_second WHERE (raw_events_first.user_id = raw_events_second.user_id) GROUP BY raw_events_second.value_1 HAVING (sum(raw_events_second.value_4) > (10)::numeric)
 -- cannot pushdown the query since the JOIN is not equi JOIN
 INSERT INTO agg_events
             (user_id, value_4_agg)
@@ -1627,8 +1663,8 @@ HINT:  Consider using an equality filter on the distributed table's partition co
 SET client_min_messages TO INFO;
 -- avoid constraint violations
 TRUNCATE raw_events_first;
--- we don't support LIMIT even if it exists in the subqueries 
--- in where clause
+-- we don't support LIMIT for subquery pushdown, but
+-- we recursively plan the query and run it via coordinator
 INSERT INTO agg_events(user_id)
 SELECT user_id 
 FROM   users_table 
@@ -1650,8 +1686,6 @@ WHERE  user_id
                      ) as f_inner
                   )
           ) AS f2); 
-ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
 -- Altering a table and selecting from it using a multi-shard statement
 -- in the same transaction is allowed because we will use the same
 -- connections for all co-located placements.

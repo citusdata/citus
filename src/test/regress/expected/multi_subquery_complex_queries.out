@@ -1185,7 +1185,9 @@ limit 50;
 
 -- reset subquery_pushdown
 SET citus.subquery_pushdown to OFF;
--- not supported since JOIN is not on the partition key
+-- we recursively plan recent_events_1
+-- but not some_users_data since it has a reference
+-- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT user_id, max(time) AS lastseen
@@ -1218,10 +1220,11 @@ FROM
 ORDER BY 
   user_id
 limit 50;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- not supported since JOIN is not on the partition key
--- see (2 * user_id as user_id) target list element
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery is currently unsupported
+-- we recursively plan some queries but fail in the end 
+-- since some_users_data since it has a reference
+-- from an outer query which is not recursively planned
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT 2 * user_id as user_id, max(time) AS lastseen
@@ -1254,8 +1257,8 @@ FROM
 ORDER BY 
   user_id
 limit 50;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery is currently unsupported
 -- LATERAL JOINs used with INNER JOINs
 SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
@@ -1550,7 +1553,9 @@ ORDER BY
 LIMIT 10;
 ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
 DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
--- not supported since lower LATERAL JOIN is not on the partition key
+-- not pushdownable since lower LATERAL JOIN is not on the partition key
+-- not recursively plannable due to LATERAL join where there is a reference
+-- from an outer query
 SELECT user_id, lastseen
 FROM
   (SELECT 
@@ -1603,8 +1608,8 @@ FROM
 ORDER BY 
   user_id DESC
 LIMIT 10;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery is currently unsupported
 -- NESTED INNER JOINs
 SELECT 
  count(*) AS value, "generated_group_field" 
@@ -2168,7 +2173,9 @@ LIMIT 10;
 (1 row)
 
 SET citus.subquery_pushdown to OFF;
--- not supported since join is not on the partition key
+-- not pushdownable since lower LATERAL JOIN is not on the partition key
+-- not recursively plannable due to LATERAL join where there is a reference
+-- from an outer query
 SELECT *
 FROM
   (SELECT 
@@ -2206,8 +2213,8 @@ FROM
 ORDER BY 
     value_2 DESC, user_id DESC
 LIMIT 10;
-ERROR:  cannot pushdown the subquery since all relations are not joined using distribution keys
-DETAIL:  Each relation should be joined with at least one another relation using distribution keys and equality operator.
+ERROR:  cannot push down this subquery
+DETAIL:  Limit in subquery is currently unsupported
 -- lets test some unsupported set operations
 -- not supported since we use INTERSECT
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
@@ -2270,8 +2277,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Intersect and Except are currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- not supported due to offset
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2333,8 +2340,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- not supported due to non relation rte
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2393,8 +2400,8 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 -- similar to the above, but constant rte is on the right side of the query
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2448,6 +2455,6 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  cannot push down this subquery
-DETAIL:  Subqueries without a FROM clause are not supported with union operator
+ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
+HINT:  Consider using an equality filter on the distributed table's partition column.
 SET citus.enable_router_execution TO TRUE;
