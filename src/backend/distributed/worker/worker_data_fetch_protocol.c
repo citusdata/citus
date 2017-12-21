@@ -784,19 +784,14 @@ ExtractShardId(const char *tableName)
 	}
 	shardIdString++;
 
-#ifdef HAVE_STRTOULL
 	errno = 0;
-	shardId = strtoull(shardIdString, &shardIdStringEnd, 0);
+	shardId = pg_strtouint64(shardIdString, &shardIdStringEnd, 0);
 
 	if (errno != 0 || (*shardIdStringEnd != '\0'))
 	{
 		ereport(ERROR, (errmsg("could not extract shardId from table name \"%s\"",
 							   tableName)));
 	}
-#else
-	ereport(ERROR, (errmsg("could not extract shardId from table name"),
-					errhint("Your platform does not support strtoull()")));
-#endif
 
 	return shardId;
 }

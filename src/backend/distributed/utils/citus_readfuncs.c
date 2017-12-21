@@ -19,6 +19,7 @@
 #include "distributed/multi_server_executor.h"
 #include "nodes/parsenodes.h"
 #include "nodes/readfuncs.h"
+#include "utils/builtins.h"
 
 
 /*
@@ -158,7 +159,7 @@ CitusSetTag(Node *node, int tag)
 #define atooid(x)  ((Oid) strtoul((x), NULL, 10))
 
 /* XXX: Citus */
-#define atoull(x)  ((uint64) strtoull((x), NULL, 10))
+#define atoull(x)  ((uint64) pg_strtouint64((x), NULL, 10))
 
 #define strtobool(x)  ((*(x) == 't') ? true : false)
 
