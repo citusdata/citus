@@ -35,6 +35,7 @@
 #include "distributed/multi_server_executor.h"
 #include "distributed/pg_dist_partition.h"
 #include "distributed/resource_lock.h"
+#include "distributed/subplan_execution.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "storage/fd.h"
@@ -96,7 +97,9 @@ static TaskExecStatus ManageTaskExecution(TaskTracker *taskTracker,
 										  Task *task, TaskExecution *taskExecution);
 static TransmitExecStatus ManageTransmitExecution(TaskTracker *transmitTracker,
 												  Task *task,
-												  TaskExecution *taskExecution);
+												  TaskExecution *taskExecution,
+												  DistributedExecutionStats *
+												  executionStats);
 static bool TaskExecutionsCompleted(List *taskList);
 static StringInfo MapFetchTaskQueryString(Task *mapFetchTask, Task *mapTask);
 static void TrackerQueueSqlTask(TaskTracker *taskTracker, Task *task);
@@ -161,7 +164,9 @@ MultiTaskTrackerExecute(Job *job)
 	bool taskFailed = false;
 	bool taskTransmitFailed = false;
 	bool clusterFailed = false;
+	bool sizeLimitIsExceeded = false;
 
+	DistributedExecutionStats executionStats = { 0 };
 	List *workerNodeList = NIL;
 	HTAB *taskTrackerHash = NULL;
 	HTAB *transmitTrackerHash = NULL;
@@ -219,7 +224,7 @@ MultiTaskTrackerExecute(Job *job)
 
 	/* loop around until all tasks complete, one task fails, or user cancels */
 	while (!(allTasksCompleted || taskFailed || taskTransmitFailed ||
-			 clusterFailed || QueryCancelPending))
+			 clusterFailed || QueryCancelPending || sizeLimitIsExceeded))
 	{
 		TaskTracker *taskTracker = NULL;
 		TaskTracker *transmitTracker = NULL;
@@ -328,7 +333,8 @@ MultiTaskTrackerExecute(Job *job)
 
 			/* call the function that fetches results for completed SQL tasks */
 			transmitExecutionStatus = ManageTransmitExecution(execTransmitTracker,
-															  task, taskExecution);
+															  task, taskExecution,
+															  &executionStats);
 
 			/*
 			 * If we cannot transmit SQL task's results to the master, we first
@@ -361,6 +367,13 @@ MultiTaskTrackerExecute(Job *job)
 			{
 				completedTransmitCount++;
 			}
+		}
+
+
+		if (CheckIfSizeLimitIsExceeded(&executionStats))
+		{
+			sizeLimitIsExceeded = true;
+			break;
 		}
 
 		/* third, loop around task trackers and manage them */
@@ -428,7 +441,11 @@ MultiTaskTrackerExecute(Job *job)
 	 * If we previously broke out of the execution loop due to a task failure or
 	 * user cancellation request, we can now safely emit an error message.
 	 */
-	if (taskFailed)
+	if (sizeLimitIsExceeded)
+	{
+		ErrorSizeLimitIsExceeded();
+	}
+	else if (taskFailed)
 	{
 		ereport(ERROR, (errmsg("failed to execute task %u", failedTaskId)));
 	}
@@ -1273,7 +1290,8 @@ ManageTaskExecution(TaskTracker *taskTracker, TaskTracker *sourceTaskTracker,
  */
 static TransmitExecStatus
 ManageTransmitExecution(TaskTracker *transmitTracker,
-						Task *task, TaskExecution *taskExecution)
+						Task *task, TaskExecution *taskExecution,
+						DistributedExecutionStats *executionStats)
 {
 	int32 *fileDescriptorArray = taskExecution->fileDescriptorArray;
 	uint32 currentNodeIndex = taskExecution->currentNodeIndex;
@@ -1397,12 +1415,20 @@ ManageTransmitExecution(TaskTracker *transmitTracker,
 			int32 fileDescriptor = fileDescriptorArray[currentNodeIndex];
 			CopyStatus copyStatus = CLIENT_INVALID_COPY;
 			int closed = -1;
+			uint64 bytesReceived = 0;
 
 			/* the open connection belongs to this task */
 			int32 connectionId = TransmitTrackerConnectionId(transmitTracker, task);
 			Assert(connectionId != INVALID_CONNECTION_ID);
 
-			copyStatus = MultiClientCopyData(connectionId, fileDescriptor);
+			copyStatus = MultiClientCopyData(connectionId, fileDescriptor,
+											 &bytesReceived);
+
+			if (SubPlanLevel > 0)
+			{
+				executionStats->totalIntermediateResultSize += bytesReceived;
+			}
+
 			if (copyStatus == CLIENT_COPY_MORE)
 			{
 				/* worker node continues to send more data, keep reading */

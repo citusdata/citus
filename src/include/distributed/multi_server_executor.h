@@ -111,6 +111,19 @@ typedef enum
 
 
 /*
+ * DistributedExecutionStats holds the execution related stats.
+ *
+ * totalIntermediateResultSize is a counter to keep the size
+ * of the intermediate results of complex subqueries and CTEs
+ * so that we can put a limit on the size.
+ */
+typedef struct DistributedExecutionStats
+{
+	uint64 totalIntermediateResultSize;
+} DistributedExecutionStats;
+
+
+/*
  * TaskExecution holds state that relates to a task's execution. In the case of
  * the real-time executor, this struct encapsulates all information necessary to
  * run the task. The task tracker executor however manages its connection logic
@@ -203,7 +216,9 @@ extern void MultiTaskTrackerExecute(Job *job);
 extern MultiExecutorType JobExecutorType(DistributedPlan *distributedPlan);
 extern void RemoveJobDirectory(uint64 jobId);
 extern TaskExecution * InitTaskExecution(Task *task, TaskExecStatus initialStatus);
+extern bool CheckIfSizeLimitIsExceeded(DistributedExecutionStats *executionStats);
 extern void CleanupTaskExecution(TaskExecution *taskExecution);
+extern void ErrorSizeLimitIsExceeded(void);
 extern bool TaskExecutionFailed(TaskExecution *taskExecution);
 extern void AdjustStateForFailure(TaskExecution *taskExecution);
 extern int MaxMasterConnectionCount(void);
