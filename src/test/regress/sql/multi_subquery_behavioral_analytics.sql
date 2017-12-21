@@ -643,7 +643,6 @@ SELECT count(*), count(DISTINCT user_id), avg(user_id) FROM assets;
 DROP TABLE assets;
 
 -- count number of distinct users who have value_1 equal to 5 or 13 but not 3
--- original query that fails
 SELECT count(*) FROM
 (
   SELECT 

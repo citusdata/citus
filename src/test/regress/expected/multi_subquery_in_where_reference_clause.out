@@ -413,7 +413,7 @@ ORDER BY 1, 2;
        5 |       5
 (2 rows)
 
--- reference tables are not allowed if there is sublink
+-- reference tables are allowed if the sublink is recursively planned
 SELECT
   count(*) 
 FROM 
@@ -421,9 +421,12 @@ FROM
 WHERE user_id 
   NOT IN
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
--- reference tables are not allowed if there is sublink
+ count 
+-------
+    10
+(1 row)
+
+-- reference tables are allowed if the sublink is recursively planned
 SELECT count(*)
 FROM
   (SELECT 
@@ -432,8 +435,11 @@ FROM
     (SELECT users_table.value_2
      FROM users_table
      JOIN users_reference_table AS u2 ON users_table.value_2 = u2.value_2);
-ERROR:  cannot pushdown the subquery
-DETAIL:  Reference tables are not allowed in FROM clause when the query has subqueries in WHERE clause
+ count 
+-------
+    10
+(1 row)
+
 -- reference tables are not allowed if there is sublink
 SELECT user_id,
        count(*)

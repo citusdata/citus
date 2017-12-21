@@ -353,7 +353,7 @@ SELECT user_id, value_2 FROM users_table WHERE
 )
 ORDER BY 1, 2;
 
--- reference tables are not allowed if there is sublink
+-- reference tables are allowed if the sublink is recursively planned
 SELECT
   count(*) 
 FROM 
@@ -363,7 +363,7 @@ WHERE user_id
 (SELECT users_table.value_2 FROM users_table JOIN users_reference_table as u2 ON users_table.value_2 = u2.value_2);
 
 
--- reference tables are not allowed if there is sublink
+-- reference tables are allowed if the sublink is recursively planned
 SELECT count(*)
 FROM
   (SELECT 
