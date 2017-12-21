@@ -108,9 +108,7 @@ DEBUG:  generating subplan 10_2 for subquery SELECT DISTINCT value_2 FROM public
 (4 rows)
 
 -- a very similar query as the above, but this time errors 
--- out since we don't support subqueries in WHERE clause
--- when there is only intermediate results on the range table
--- note that this time subquery in WHERE clause is not replaced
+-- out because the FROM clause is recurring, the WHERE clause is automatically replaced
 WITH cte AS (
 	WITH local_cte AS (
 		SELECT * FROM users_table_local
@@ -128,8 +126,17 @@ WHERE
 DEBUG:  generating subplan 14_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 15_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 15_2 for CTE dist_cte: SELECT user_id FROM public.events_table
-ERROR:  cannot pushdown the subquery
-DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause
+DEBUG:  generating subplan 14_2 for subquery SELECT DISTINCT user_id FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20))
+ user_id 
+---------
+       6
+       5
+       4
+       3
+       2
+       1
+(6 rows)
+
 -- CTEs inside a subquery and the final query becomes a router
 -- query
 SELECT
@@ -146,7 +153,7 @@ FROM
 	     event_type IN (1,2,3,4)
 	     ) SELECT * FROM cte ORDER BY 1 DESC
      ) as foo;
-DEBUG:  generating subplan 17_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan 18_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
  user_id 
 ---------
        6
@@ -184,7 +191,7 @@ FROM
 	    
      ) as bar  
 WHERE foo.user_id = bar.user_id;
-DEBUG:  generating subplan 19_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan 20_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
  user_id 
 ---------
        5
@@ -236,10 +243,10 @@ FROM
      ) as bar  
 WHERE foo.user_id = bar.user_id
 ORDER BY 1 DESC LIMIT 5;
-DEBUG:  generating subplan 21_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
-DEBUG:  generating subplan 21_2 for CTE cte: SELECT events_table.event_type, users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.value_1 = ANY (ARRAY[1, 2])))
+DEBUG:  generating subplan 22_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  generating subplan 22_2 for CTE cte: SELECT events_table.event_type, users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.value_1 = ANY (ARRAY[1, 2])))
 DEBUG:  push down of limit count: 2
-DEBUG:  generating subplan 21_3 for subquery SELECT users_table.user_id, some_events.event_type FROM public.users_table, (SELECT cte.event_type, cte.user_id FROM (SELECT intermediate_result.event_type, intermediate_result.user_id FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer, user_id integer)) cte ORDER BY cte.event_type DESC) some_events WHERE ((users_table.user_id = some_events.user_id) AND (some_events.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY some_events.event_type, users_table.user_id LIMIT 2
+DEBUG:  generating subplan 22_3 for subquery SELECT users_table.user_id, some_events.event_type FROM public.users_table, (SELECT cte.event_type, cte.user_id FROM (SELECT intermediate_result.event_type, intermediate_result.user_id FROM read_intermediate_result('22_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer, user_id integer)) cte ORDER BY cte.event_type DESC) some_events WHERE ((users_table.user_id = some_events.user_id) AND (some_events.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY some_events.event_type, users_table.user_id LIMIT 2
  user_id 
 ---------
        1
@@ -272,12 +279,12 @@ SELECT * FROM
 			foo.user_id = events_table.value_2
 ORDER BY 3 DESC, 2 DESC, 1 DESC 
 LIMIT 5;
-DEBUG:  generating subplan 25_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
-DEBUG:  generating subplan 26_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
-DEBUG:  generating subplan 26_2 for CTE dist_cte: SELECT user_id FROM public.events_table
-DEBUG:  generating subplan 25_2 for CTE cte_in_where: SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
+DEBUG:  generating subplan 26_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 27_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
+DEBUG:  generating subplan 27_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  generating subplan 26_2 for CTE cte_in_where: SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 25_3 for subquery SELECT DISTINCT cte.user_id FROM public.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id = cte.user_id) AND (users_table.user_id IN (SELECT cte_in_where.value_2 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('25_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) cte_in_where))) ORDER BY cte.user_id DESC
+DEBUG:  generating subplan 26_3 for subquery SELECT DISTINCT cte.user_id FROM public.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id = cte.user_id) AND (users_table.user_id IN (SELECT cte_in_where.value_2 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('26_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) cte_in_where))) ORDER BY cte.user_id DESC
 DEBUG:  push down of limit count: 5
  user_id | user_id |              time               | event_type | value_2 | value_3 | value_4 
 ---------+---------+---------------------------------+------------+---------+---------+---------
@@ -319,14 +326,14 @@ FROM
      ORDER BY 1 DESC LIMIT 5
      ) as foo 
 	  WHERE foo.user_id = cte.user_id;
-DEBUG:  generating subplan 30_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
-DEBUG:  generating subplan 31_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
-DEBUG:  generating subplan 31_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  generating subplan 31_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 32_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
+DEBUG:  generating subplan 32_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
 DEBUG:  push down of limit count: 3
-DEBUG:  generating subplan 32_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
-DEBUG:  generating subplan 32_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
+DEBUG:  generating subplan 33_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  generating subplan 33_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 30_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  generating subplan 31_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
  count 
 -------
    432
@@ -370,15 +377,15 @@ FROM
 ) as foo, users_table WHERE foo.cnt > users_table.value_2 
 ORDER BY 3 DESC, 1 DESC, 2 DESC, 4 DESC
 LIMIT 5;
-DEBUG:  generating subplan 36_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
-DEBUG:  generating subplan 37_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
-DEBUG:  generating subplan 37_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
+DEBUG:  generating subplan 37_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  generating subplan 38_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
+DEBUG:  generating subplan 38_2 for CTE dist_cte: SELECT events_table.user_id FROM public.events_table, (SELECT DISTINCT users_table.value_2 FROM public.users_table OFFSET 0) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT DISTINCT users_table.value_1 FROM public.users_table ORDER BY users_table.value_1 LIMIT 3)))
 DEBUG:  push down of limit count: 3
-DEBUG:  generating subplan 38_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
-DEBUG:  generating subplan 38_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
+DEBUG:  generating subplan 39_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
+DEBUG:  generating subplan 39_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
 DEBUG:  push down of limit count: 5
-DEBUG:  generating subplan 36_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
-DEBUG:  generating subplan 36_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('36_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
+DEBUG:  generating subplan 37_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  generating subplan 37_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('37_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
 DEBUG:  push down of limit count: 5
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
 -----+---------+---------------------------------+---------+---------+---------+---------
