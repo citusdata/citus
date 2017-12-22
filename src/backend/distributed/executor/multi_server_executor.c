@@ -249,6 +249,11 @@ CleanupTaskExecution(TaskExecution *taskExecution)
 bool
 TaskExecutionFailed(TaskExecution *taskExecution)
 {
+	if (taskExecution->criticalErrorOccurred)
+	{
+		return true;
+	}
+
 	if (taskExecution->failureCount >= MAX_TASK_EXECUTION_FAILURES)
 	{
 		return true;
