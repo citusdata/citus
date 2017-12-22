@@ -82,9 +82,7 @@ WHERE
     ORDER BY 1 DESC;
 
 -- a very similar query as the above, but this time errors 
--- out since we don't support subqueries in WHERE clause
--- when there is only intermediate results on the range table
--- note that this time subquery in WHERE clause is not replaced
+-- out because the FROM clause is recurring, the WHERE clause is automatically replaced
 WITH cte AS (
 	WITH local_cte AS (
 		SELECT * FROM users_table_local

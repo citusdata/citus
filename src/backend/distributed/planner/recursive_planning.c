@@ -113,6 +113,9 @@ typedef struct VarLevelsUpWalkerContext
 static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 															   RecursivePlanningContext *
 															   context);
+static bool ShouldRecursivelyPlanWhereClauseSubqueries(Query *query);
+static bool RecursivelyPlanAllSubqueries(Node *node,
+										 RecursivePlanningContext *planningContext);
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
@@ -206,7 +209,81 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
 
+	/*
+	 * If the FROM clause is recurring (does not contain a distributed table),
+	 * then we cannot have any distributed tables appearing in subqueries in
+	 * the WHERE clause.
+	 */
+	if (ShouldRecursivelyPlanWhereClauseSubqueries(query))
+	{
+		/* replace all subqueries in the WHERE clause */
+		RecursivelyPlanAllSubqueries((Node *) query->jointree->quals, context);
+	}
+
 	return NULL;
+}
+
+
+/*
+ * ShouldRecursivelyPlanWhereClauseSubqueries returns whether the query has
+ * a WHERE clause and a recurring FROM clause (does not contain a distributed
+ * table).
+ */
+static bool
+ShouldRecursivelyPlanWhereClauseSubqueries(Query *query)
+{
+	FromExpr *joinTree = NULL;
+	Node *whereClause = NULL;
+
+	joinTree = query->jointree;
+	if (joinTree == NULL)
+	{
+		/* there is no FROM clause */
+		return false;
+	}
+
+	whereClause = joinTree->quals;
+	if (whereClause == NULL)
+	{
+		/* there is no WHERE clause */
+		return false;
+	}
+
+	if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	{
+		/* there is a distributed table in the FROM clause */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * RecursivelyPlanAllSubqueries descends into an expression tree and recursively
+ * plans all subqueries found from the top.
+ */
+static bool
+RecursivelyPlanAllSubqueries(Node *node, RecursivePlanningContext *planningContext)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+
+		if (FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+		{
+			RecursivelyPlanSubquery(query, planningContext);
+		}
+
+		return false;
+	}
+
+	return expression_tree_walker(node, RecursivelyPlanAllSubqueries, planningContext);
 }
 
 
@@ -439,19 +516,6 @@ ShouldRecursivelyPlanSubquery(Query *subquery)
 		return false;
 	}
 
-	/*
-	 * Even if we could recursively plan the subquery, we should ensure
-	 * that the subquery doesn't contain any references to the outer
-	 * queries.
-	 */
-	if (ContainsReferencesToOuterQuery(subquery))
-	{
-		elog(DEBUG2, "skipping recursive planning for the subquery since it "
-					 "contains references to outer queries");
-
-		return false;
-	}
-
 	return true;
 }
 
@@ -512,6 +576,19 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 	Query *resultQuery = NULL;
 	Query *debugQuery = NULL;
+
+	/*
+	 * Even if we could recursively plan the subquery, we should ensure
+	 * that the subquery doesn't contain any references to the outer
+	 * queries.
+	 */
+	if (ContainsReferencesToOuterQuery(subquery))
+	{
+		elog(DEBUG2, "skipping recursive planning for the subquery since it "
+					 "contains references to outer queries");
+
+		return;
+	}
 
 	/*
 	 * Subquery will go through the standard planner, thus to properly deparse it

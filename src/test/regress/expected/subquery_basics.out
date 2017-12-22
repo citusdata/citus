@@ -345,3 +345,23 @@ DEBUG:  generating subplan 20_1 for subquery SELECT user_id, count(*) AS count_p
        3
 (2 rows)
 
+-- we support queries with recurring tuples in the FROM
+-- clause and subquery in WHERE clause
+SELECT
+	*
+FROM
+	(
+		SELECT
+			users_table.user_id
+		FROM
+			users_table, (SELECT user_id FROM events_table) as evs
+		WHERE users_table.user_id = evs.user_id
+		LIMIT 5
+	) as foo WHERE user_id IN (SELECT count(*) FROM users_table GROUP BY user_id);
+DEBUG:  push down of limit count: 5
+DEBUG:  generating subplan 22_1 for subquery SELECT users_table.user_id FROM public.users_table, (SELECT events_table.user_id FROM public.events_table) evs WHERE (users_table.user_id = evs.user_id) LIMIT 5
+DEBUG:  generating subplan 22_2 for subquery SELECT count(*) AS count FROM public.users_table GROUP BY user_id
+ user_id 
+---------
+(0 rows)
+
