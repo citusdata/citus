@@ -960,14 +960,16 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	if (subqueryTree->limitOffset)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Offset clause is currently unsupported";
+		errorDetail = "Offset clause is currently unsupported when a subquery "
+					  "references a column from another query";
 	}
 
 	/* limit is not supported when SubqueryPushdown is not set */
 	if (subqueryTree->limitCount && !SubqueryPushdown)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Limit in subquery is currently unsupported";
+		errorDetail = "Limit in subquery is currently unsupported when a "
+					  "subquery references a column from another query";
 	}
 
 	/*
@@ -1022,7 +1024,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		{
 			preconditionsSatisfied = false;
 			errorDetail = "Group by list without partition column is currently "
-						  "unsupported";
+						  "unsupported when a subquery references a column "
+						  "from another query";
 		}
 	}
 
@@ -1041,7 +1044,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Aggregates without group by are currently unsupported";
+		errorDetail = "Aggregates without group by are currently unsupported "
+					  "when a subquery references a column from another query";
 	}
 
 	/* having clause without group by on partition column is not supported */
@@ -1049,7 +1053,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	{
 		preconditionsSatisfied = false;
 		errorDetail = "Having qual without group by on partition column is "
-					  "currently unsupported";
+					  "currently unsupported when a subquery references "
+					  "a column from another query";
 	}
 
 	/* distinct clause list must include partition column */

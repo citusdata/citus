@@ -131,6 +131,46 @@ FROM
     	(SELECT users_table.value_2 FROM users_table, events_table WHERE users_table.user_id = events_table.user_id AND event_type IN (5,6,7,8)) as bar
 	ON(foo.value_2 = bar.value_2);
 
+
+-- Aggregates in subquery without partition column can be planned recursively
+-- unless there is a reference to an outer query
+SELECT
+    * 
+FROM
+    users_table 
+WHERE
+    user_id IN 
+    (
+        SELECT
+            SUM(events_table.user_id) 
+        FROM
+            events_table 
+        WHERE
+            users_table.user_id = events_table.user_id 
+    )
+;
+
+
+-- Having qual without group by on partition column can be planned recursively
+-- unless there is a reference to an outer query
+SELECT
+    * 
+FROM
+    users_table 
+WHERE
+    user_id IN 
+    (
+        SELECT
+            SUM(events_table.user_id) 
+        FROM
+            events_table 
+        WHERE
+            events_table.user_id = users_table.user_id 
+        HAVING
+            MIN(value_2) > 2 
+    )
+;
+
 SET client_min_messages TO DEFAULT;
 
 DROP SCHEMA not_supported CASCADE;

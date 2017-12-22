@@ -610,7 +610,7 @@ WHERE
            OFFSET 3
           );
 ERROR:  cannot push down this subquery
-DETAIL:  Offset clause is currently unsupported
+DETAIL:  Offset clause is currently unsupported when a subquery references a column from another query
 -- we can detect unsupported subquerues even if they appear
 -- in WHERE subquery -> FROM subquery -> WHERE subquery
 -- but we can recursively plan that anyway
