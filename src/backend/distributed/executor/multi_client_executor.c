@@ -397,7 +397,7 @@ MultiClientSendQuery(int32 connectionId, const char *query)
 	connection = ClientConnectionArray[connectionId];
 	Assert(connection != NULL);
 
-	querySent = PQsendQuery(connection->pgConn, query);
+	querySent = SendRemoteCommand(connection, query);
 	if (querySent == 0)
 	{
 		char *errorMessage = pchomp(PQerrorMessage(connection->pgConn));
