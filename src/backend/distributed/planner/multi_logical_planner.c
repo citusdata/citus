@@ -104,7 +104,6 @@ static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationLis
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static bool WindowPartitionOnDistributionColumn(Query *query);
 static bool AllTargetExpressionsAreColumnReferences(List *targetEntryList);
-static bool IsDistributedTableRTE(Node *node);
 static FieldSelect * CompositeFieldRecursive(Expr *expression, Query *query);
 static bool FullCompositeFieldList(List *compositeFieldList);
 static MultiNode * MultiNodeTree(Query *queryTree);
@@ -1524,7 +1523,7 @@ FindNodeCheckInRangeTableList(List *rtable, bool (*check)(Node *))
  * is a range table relation entry that points to a distributed
  * relation (i.e., excluding reference tables).
  */
-static bool
+bool
 IsDistributedTableRTE(Node *node)
 {
 	RangeTblEntry *rangeTableEntry = NULL;

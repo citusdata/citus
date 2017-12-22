@@ -116,6 +116,7 @@ static DeferredErrorMessage * RecursivelyPlanSubqueriesAndCTEs(Query *query,
 static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
+static bool ShouldRecursivelyPlanSubLink(SubLink *subLink, bool subLinkIsNegated);
 static bool ShouldRecursivelyPlanSubquery(Query *subquery);
 static bool IsLocalTableRTE(Node *node);
 static void RecursivelyPlanSubquery(Query *subquery,
@@ -360,15 +361,40 @@ RecursivelyPlanCTEs(Query *query, RecursivePlanningContext *planningContext)
 static bool
 RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 {
+	bool expressionIsNegated = false;
+	SubLink *subLink = NULL;
+
 	if (node == NULL)
 	{
 		return false;
 	}
 
+	if (IsA(node, BoolExpr))
+	{
+		BoolExpr *boolExpr = (BoolExpr *) node;
+
+		if (boolExpr->boolop == NOT_EXPR)
+		{
+			expressionIsNegated = true;
+
+			/* in case of a NOT IN, drop into sublink logic below */
+			node = (Node *) linitial(boolExpr->args);
+		}
+	}
+
+	if (IsA(node, SubLink))
+	{
+		subLink = (SubLink *) node;
+		node = subLink->subselect;
+	}
+
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
+
 		DeferredErrorMessage *error = NULL;
+
+		Assert(IsA(query, Query));
 
 		context->level += 1;
 
@@ -383,12 +409,13 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 		}
 		context->level -= 1;
 
-		/*
-		 * Recursively plan this subquery if it cannot be pushed down and is
-		 * eligible for recursive planning.
-		 */
-		if (ShouldRecursivelyPlanSubquery(query))
+		if (ShouldRecursivelyPlanSubLink(subLink, expressionIsNegated) ||
+			ShouldRecursivelyPlanSubquery(query))
 		{
+			/*
+			 * Recursively plan this subquery if it cannot be pushed down and is
+			 * eligible for recursive planning.
+			 */
 			RecursivelyPlanSubquery(query, context);
 		}
 
@@ -397,6 +424,44 @@ RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context)
 	}
 
 	return expression_tree_walker(node, RecursivelyPlanSubqueryWalker, context);
+}
+
+
+/*
+ * ShouldRecursivelyPlanSubLink checks whether a sublink should be recursively planned.
+ * This is the case when it contains a distributed table, does not have references to
+ * outer queries, and is not of the form partition_column IN
+ */
+static bool
+ShouldRecursivelyPlanSubLink(SubLink *subLink, bool subLinkIsNegated)
+{
+	Query *query = NULL;
+
+	if (subLink == NULL || !IsA(subLink, SubLink))
+	{
+		/* there is no sublink to recursively plan */
+		return false;
+	}
+
+	query = (Query *) subLink->subselect;
+	Assert(IsA(query, Query));
+
+	if (subLink->subLinkType == ANY_SUBLINK && !subLinkIsNegated)
+	{
+		/*
+		 * IN (SELECT partition_column FROM distributed_table) query may be
+		 * pushed down.
+		 */
+		return false;
+	}
+
+	if (!FindNodeCheckInRangeTableList(query->rtable, IsDistributedTableRTE))
+	{
+		/* sublinks without distributed tables can be pushed down */
+		return false;
+	}
+
+	return true;
 }
 
 
@@ -436,19 +501,6 @@ ShouldRecursivelyPlanSubquery(Query *subquery)
 		 * Citus can plan this and execute via repartitioning. Thus,
 		 * no need to recursively plan.
 		 */
-		return false;
-	}
-
-	/*
-	 * Even if we could recursively plan the subquery, we should ensure
-	 * that the subquery doesn't contain any references to the outer
-	 * queries.
-	 */
-	if (ContainsReferencesToOuterQuery(subquery))
-	{
-		elog(DEBUG2, "skipping recursive planning for the subquery since it "
-					 "contains references to outer queries");
-
 		return false;
 	}
 
@@ -512,6 +564,19 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 	Query *resultQuery = NULL;
 	Query *debugQuery = NULL;
+
+	/*
+	 * Even if we could recursively plan the subquery, we should ensure
+	 * that the subquery doesn't contain any references to the outer
+	 * queries.
+	 */
+	if (ContainsReferencesToOuterQuery(subquery))
+	{
+		elog(DEBUG2, "skipping recursive planning for the subquery since it "
+					 "contains references to outer queries");
+
+		return;
+	}
 
 	/*
 	 * Subquery will go through the standard planner, thus to properly deparse it
