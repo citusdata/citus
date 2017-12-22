@@ -1213,7 +1213,7 @@ ORDER BY
   user_id
 limit 50;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
 -- we recursively plan some queries but fail in the end 
 -- since some_users_data since it has a reference
 -- from an outer query which is not recursively planned
@@ -1250,7 +1250,7 @@ ORDER BY
   user_id
 limit 50;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
 -- LATERAL JOINs used with INNER JOINs
 SET citus.subquery_pushdown to ON;
 SELECT user_id, lastseen
@@ -1598,7 +1598,7 @@ ORDER BY
   user_id DESC
 LIMIT 10;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
 -- NESTED INNER JOINs
 SELECT 
  count(*) AS value, "generated_group_field" 
@@ -2200,7 +2200,7 @@ ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported
+DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
 -- lets test some unsupported set operations
 -- not supported since we use INTERSECT
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
