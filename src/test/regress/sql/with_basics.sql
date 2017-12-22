@@ -239,7 +239,7 @@ ORDER BY
 LIMIT
   5;
 
--- Unsupported join in CTE
+-- non-equi joins in CTE are supported if accompanied with an equi-join
 WITH top_users AS (
 	SELECT DISTINCT e.user_id FROM users_table u JOIN events_table e ON (u.user_id = e.user_id AND u.value_1 > e.value_2)
 )
