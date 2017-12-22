@@ -1063,8 +1063,15 @@ ExecuteModifyTasks(List *taskList, bool expectResults, ParamListInfo paramListIn
 		LockPartitionRelations(firstShardInterval->relationId, RowExclusiveLock);
 	}
 
-	/* ensure that there are no concurrent modifications on the same shards */
-	AcquireExecutorMultiShardLocks(taskList);
+	/*
+	 * Ensure that there are no concurrent modifications on the same
+	 * shards. For DDL commands, we already obtained the appropriate
+	 * locks in ProcessUtility.
+	 */
+	if (firstTask->taskType == MODIFY_TASK)
+	{
+		AcquireExecutorMultiShardLocks(taskList);
+	}
 
 	BeginOrContinueCoordinatedTransaction();
 
