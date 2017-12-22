@@ -407,7 +407,7 @@ LIMIT
        6
 (5 rows)
 
--- Unsupported join in CTE
+-- non-equi joins in CTE are supported if accompanied with an equi-join
 WITH top_users AS (
 	SELECT DISTINCT e.user_id FROM users_table u JOIN events_table e ON (u.user_id = e.user_id AND u.value_1 > e.value_2)
 )
@@ -421,7 +421,15 @@ ORDER BY
   user_id
 LIMIT
   5;
-ERROR:  unsupported clause type
+ user_id 
+---------
+       6
+       6
+       6
+       6
+       6
+(5 rows)
+
 -- Join can be supported with another CTE
 WITH events_table AS (
   SELECT * FROM events_table

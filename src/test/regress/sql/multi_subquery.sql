@@ -145,6 +145,194 @@ FROM
 -- reset the flag for next query
 SET citus.subquery_pushdown to OFF;
 
+-- some queries without a subquery uses subquery planner
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- query is still supported if contains additional join
+-- clauses that includes arithmetic expressions
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- implicit typecasts in joins is supported
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int8)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- non-implicit typecasts in joins is not supported
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int4)
+WHERE
+	(o_orderkey < l_quantity + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- implicit typecast supported in equi-join
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int8 = o_orderkey::int8)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- non-implicit typecast is not supported in equi-join
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey::int4 = o_orderkey::int8)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- type casts in filters are supported as long as
+-- a valid equi-join exists
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey::int8 < l_quantity::int8 + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- even if type cast is non-implicit
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey::int4 < l_quantity::int8 + 3)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- query is not supported if contains an partition column
+-- equi join that includes arithmetic expressions
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey + 1)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- query is not supported if there is a single
+-- join clause with arithmetic expression. It fails
+-- with a different error message
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey + 1)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- query is not supported if does not have equi-join clause
+SELECT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey < o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- distinct queries work
+SELECT DISTINCT l_orderkey
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_orderkey DESC
+LIMIT 10;
+
+-- count(distinct) queries work
+SELECT COUNT(DISTINCT l_orderkey)
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity);
+
+-- the same queries returning a non-partition column
+SELECT l_quantity
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_quantity DESC
+LIMIT 10;
+
+-- distinct queries work
+SELECT DISTINCT l_quantity
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity)
+ORDER BY l_quantity DESC
+LIMIT 10;
+
+-- count(distinct) queries work
+SELECT COUNT(DISTINCT l_quantity)
+FROM
+	lineitem_subquery l
+JOIN
+	orders_subquery o
+ON (l_orderkey = o_orderkey)
+WHERE
+	(o_orderkey < l_quantity);
+
+
 -- Check that we support count distinct with a subquery
 
 SELECT

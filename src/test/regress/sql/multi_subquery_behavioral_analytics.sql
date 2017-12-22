@@ -1650,9 +1650,9 @@ FROM (
 ) q
 ORDER BY 2 DESC, 1;
 
--- note that the following query has joins on the partition keys
--- however we fail to push down it due to the function call on the
--- where clause. We probably need to relax that check
+-- note that the following query has both equi-joins on the partition keys
+-- and non-equi-joins on other columns. We now support query filters
+-- having non-equi-joins as long as they have equi-joins on partition keys.
 SELECT
     users_table.user_id, users_table.value_1, prob
 FROM
