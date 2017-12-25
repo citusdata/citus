@@ -73,9 +73,6 @@
 /* controls use of locks to enforce safe commutativity */
 bool AllModificationsCommutative = false;
 
-/* we've deprecated this flag, keeping here for some time not to break existing users */
-bool EnableDeadlockPrevention = true;
-
 /* functions needed during run phase */
 static void AcquireMetadataLocks(List *taskList);
 static ShardPlacementAccess * CreatePlacementAccess(ShardPlacement *placement,
