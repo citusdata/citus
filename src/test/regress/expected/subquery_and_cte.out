@@ -33,8 +33,10 @@ FROM
 DEBUG:  generating subplan 2_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 3_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 3_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  Plan 3 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('3_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('3_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 2_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan 2 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('2_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('2_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
  count 
 -------
   1644
@@ -69,8 +71,10 @@ FROM
 DEBUG:  generating subplan 6_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 7_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 7_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  Plan 7 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('7_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('7_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 6_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan 6 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('6_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('6_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, public.events_table WHERE ((foo.user_id = cte.user_id) AND (events_table.user_id = cte.user_id))
  count 
 -------
  30608
@@ -97,8 +101,10 @@ WHERE
 DEBUG:  generating subplan 10_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 11_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 11_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  Plan 11 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('11_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('11_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 10_2 for subquery SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
+DEBUG:  Plan 10 query after replacing subqueries and CTEs: SELECT DISTINCT cte.user_id FROM public.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('10_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id = cte.user_id) AND (users_table.user_id IN (SELECT intermediate_result.value_2 FROM read_intermediate_result('10_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)))) ORDER BY cte.user_id DESC
  user_id 
 ---------
        4
@@ -128,6 +134,8 @@ WHERE
 DEBUG:  generating subplan 14_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 15_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 15_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  Plan 15 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('15_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('15_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
+DEBUG:  Plan 14 query after replacing subqueries and CTEs: SELECT DISTINCT user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('14_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE (user_id IN (SELECT DISTINCT users_table.user_id FROM public.users_table WHERE ((users_table.value_1 >= 1) AND (users_table.value_1 <= 20)))) ORDER BY user_id DESC
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs are not allowed in the FROM clause when the query has subqueries in the WHERE clause
 -- CTEs inside a subquery and the final query becomes a router
@@ -147,6 +155,7 @@ FROM
 	     ) SELECT * FROM cte ORDER BY 1 DESC
      ) as foo;
 DEBUG:  generating subplan 17_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo
  user_id 
 ---------
        6
@@ -185,6 +194,7 @@ FROM
      ) as bar  
 WHERE foo.user_id = bar.user_id;
 DEBUG:  generating subplan 19_1 for CTE cte: SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))
+DEBUG:  Plan 19 query after replacing subqueries and CTEs: SELECT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('19_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4])))) bar WHERE (foo.user_id = bar.user_id)
  user_id 
 ---------
        5
@@ -240,6 +250,7 @@ DEBUG:  generating subplan 21_1 for CTE cte: SELECT DISTINCT users_table.user_id
 DEBUG:  generating subplan 21_2 for CTE cte: SELECT events_table.event_type, users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (users_table.value_1 = ANY (ARRAY[1, 2])))
 DEBUG:  push down of limit count: 2
 DEBUG:  generating subplan 21_3 for subquery SELECT users_table.user_id, some_events.event_type FROM public.users_table, (SELECT cte.event_type, cte.user_id FROM (SELECT intermediate_result.event_type, intermediate_result.user_id FROM read_intermediate_result('21_2'::text, 'binary'::citus_copy_format) intermediate_result(event_type integer, user_id integer)) cte ORDER BY cte.event_type DESC) some_events WHERE ((users_table.user_id = some_events.user_id) AND (some_events.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY some_events.event_type, users_table.user_id LIMIT 2
+DEBUG:  Plan 21 query after replacing subqueries and CTEs: SELECT DISTINCT bar.user_id FROM (SELECT cte.user_id FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('21_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte ORDER BY cte.user_id DESC) foo, (SELECT intermediate_result.user_id, intermediate_result.event_type FROM read_intermediate_result('21_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, event_type integer)) bar WHERE (foo.user_id = bar.user_id) ORDER BY bar.user_id DESC LIMIT 5
  user_id 
 ---------
        1
@@ -275,9 +286,11 @@ LIMIT 5;
 DEBUG:  generating subplan 25_1 for CTE cte: WITH local_cte AS (SELECT users_table_local.user_id, users_table_local."time", users_table_local.value_1, users_table_local.value_2, users_table_local.value_3, users_table_local.value_4 FROM subquery_and_ctes.users_table_local), dist_cte AS (SELECT events_table.user_id FROM public.events_table) SELECT dist_cte.user_id FROM (local_cte JOIN dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 26_1 for CTE local_cte: SELECT user_id, "time", value_1, value_2, value_3, value_4 FROM subquery_and_ctes.users_table_local
 DEBUG:  generating subplan 26_2 for CTE dist_cte: SELECT user_id FROM public.events_table
+DEBUG:  Plan 26 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('26_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('26_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  generating subplan 25_2 for CTE cte_in_where: SELECT DISTINCT value_2 FROM public.users_table WHERE ((value_1 >= 1) AND (value_1 <= 20)) ORDER BY value_2 LIMIT 5
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 25_3 for subquery SELECT DISTINCT cte.user_id FROM public.users_table, (SELECT intermediate_result.user_id FROM read_intermediate_result('25_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte WHERE ((users_table.user_id = cte.user_id) AND (users_table.user_id IN (SELECT cte_in_where.value_2 FROM (SELECT intermediate_result.value_2 FROM read_intermediate_result('25_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) cte_in_where))) ORDER BY cte.user_id DESC
+DEBUG:  Plan 25 query after replacing subqueries and CTEs: SELECT foo.user_id, events_table.user_id, events_table."time", events_table.event_type, events_table.value_2, events_table.value_3, events_table.value_4 FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('25_3'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo, public.events_table WHERE (foo.user_id = events_table.value_2) ORDER BY events_table."time" DESC, events_table.user_id DESC, foo.user_id DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  user_id | user_id |              time               | event_type | value_2 | value_3 | value_4 
 ---------+---------+---------------------------------+------------+---------+---------+---------
@@ -325,8 +338,11 @@ DEBUG:  generating subplan 31_2 for CTE dist_cte: SELECT events_table.user_id FR
 DEBUG:  push down of limit count: 3
 DEBUG:  generating subplan 32_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
 DEBUG:  generating subplan 32_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
+DEBUG:  Plan 32 query after replacing subqueries and CTEs: SELECT events_table.user_id FROM public.events_table, (SELECT intermediate_result.value_2 FROM read_intermediate_result('32_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT intermediate_result.value_1 FROM read_intermediate_result('32_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))))
+DEBUG:  Plan 31 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('31_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('31_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 30_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
+DEBUG:  Plan 30 query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('30_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('30_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
  count 
 -------
    432
@@ -376,9 +392,12 @@ DEBUG:  generating subplan 37_2 for CTE dist_cte: SELECT events_table.user_id FR
 DEBUG:  push down of limit count: 3
 DEBUG:  generating subplan 38_1 for subquery SELECT DISTINCT value_1 FROM public.users_table ORDER BY value_1 LIMIT 3
 DEBUG:  generating subplan 38_2 for subquery SELECT DISTINCT value_2 FROM public.users_table OFFSET 0
+DEBUG:  Plan 38 query after replacing subqueries and CTEs: SELECT events_table.user_id FROM public.events_table, (SELECT intermediate_result.value_2 FROM read_intermediate_result('38_2'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo WHERE ((events_table.user_id = foo.value_2) AND (events_table.user_id IN (SELECT intermediate_result.value_1 FROM read_intermediate_result('38_1'::text, 'binary'::citus_copy_format) intermediate_result(value_1 integer))))
+DEBUG:  Plan 37 query after replacing subqueries and CTEs: SELECT dist_cte.user_id FROM ((SELECT intermediate_result.user_id, intermediate_result."time", intermediate_result.value_1, intermediate_result.value_2, intermediate_result.value_3, intermediate_result.value_4 FROM read_intermediate_result('37_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer, "time" timestamp without time zone, value_1 integer, value_2 integer, value_3 double precision, value_4 bigint)) local_cte JOIN (SELECT intermediate_result.user_id FROM read_intermediate_result('37_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) dist_cte ON ((dist_cte.user_id = local_cte.user_id)))
 DEBUG:  push down of limit count: 5
 DEBUG:  generating subplan 36_2 for subquery SELECT DISTINCT users_table.user_id FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[1, 2, 3, 4]))) ORDER BY users_table.user_id DESC LIMIT 5
 DEBUG:  generating subplan 36_3 for subquery SELECT count(*) AS cnt FROM (SELECT intermediate_result.user_id FROM read_intermediate_result('36_1'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) cte, (SELECT intermediate_result.user_id FROM read_intermediate_result('36_2'::text, 'binary'::citus_copy_format) intermediate_result(user_id integer)) foo WHERE (foo.user_id = cte.user_id)
+DEBUG:  Plan 36 query after replacing subqueries and CTEs: SELECT foo.cnt, users_table.user_id, users_table."time", users_table.value_1, users_table.value_2, users_table.value_3, users_table.value_4 FROM (SELECT intermediate_result.cnt FROM read_intermediate_result('36_3'::text, 'binary'::citus_copy_format) intermediate_result(cnt bigint)) foo, public.users_table WHERE (foo.cnt > users_table.value_2) ORDER BY users_table."time" DESC, foo.cnt DESC, users_table.user_id DESC, users_table.value_1 DESC LIMIT 5
 DEBUG:  push down of limit count: 5
  cnt | user_id |              time               | value_1 | value_2 | value_3 | value_4 
 -----+---------+---------------------------------+---------+---------+---------+---------
