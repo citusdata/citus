@@ -476,19 +476,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_deadlock_prevention",
-		gettext_noop("Prevents transactions from expanding to multiple nodes"),
-		gettext_noop("When enabled, consecutive DML statements that write to "
-					 "shards on different nodes are prevented to avoid creating "
-					 "undetectable distributed deadlocks when performed "
-					 "concurrently."),
-		&EnableDeadlockPrevention,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_ddl_propagation",
 		gettext_noop("Enables propagating DDL statements to worker shards"),
 		NULL,
