@@ -493,7 +493,7 @@ HAVING count(*) > 3
 ORDER BY user_id
 LIMIT 5;
 ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query
 -- similar query with slightly more complex group by
 -- though the error message is a bit confusing
 SELECT 
@@ -516,4 +516,4 @@ HAVING count(*) > 3
 ORDER BY user_id
 LIMIT 5;
 ERROR:  cannot push down this subquery
-DETAIL:  Group by list without partition column is currently unsupported
+DETAIL:  Group by list without partition column is currently unsupported when a subquery references a column from another query

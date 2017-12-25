@@ -143,6 +143,46 @@ DEBUG:  generating subplan 17_1 for subquery SELECT users_table.value_2 FROM pub
 DEBUG:  Plan 17 query after replacing subqueries and CTEs: SELECT foo.value_2 FROM ((SELECT intermediate_result.value_2 FROM read_intermediate_result('17_1'::text, 'binary'::citus_copy_format) intermediate_result(value_2 integer)) foo LEFT JOIN (SELECT users_table.value_2 FROM public.users_table, public.events_table WHERE ((users_table.user_id = events_table.user_id) AND (events_table.event_type = ANY (ARRAY[5, 6, 7, 8])))) bar ON ((foo.value_2 = bar.value_2)))
 ERROR:  cannot pushdown the subquery
 DETAIL:  Complex subqueries and CTEs cannot be in the outer part of the outer join
+-- Aggregates in subquery without partition column can be planned recursively
+-- unless there is a reference to an outer query
+SELECT
+    * 
+FROM
+    users_table 
+WHERE
+    user_id IN 
+    (
+        SELECT
+            SUM(events_table.user_id) 
+        FROM
+            events_table 
+        WHERE
+            users_table.user_id = events_table.user_id 
+    )
+;
+ERROR:  cannot push down this subquery
+DETAIL:  Aggregates without group by are currently unsupported when a subquery references a column from another query
+-- Having qual without group by on partition column can be planned recursively
+-- unless there is a reference to an outer query
+SELECT
+    * 
+FROM
+    users_table 
+WHERE
+    user_id IN 
+    (
+        SELECT
+            SUM(events_table.user_id) 
+        FROM
+            events_table 
+        WHERE
+            events_table.user_id = users_table.user_id 
+        HAVING
+            MIN(value_2) > 2 
+    )
+;
+ERROR:  cannot push down this subquery
+DETAIL:  Having qual without group by on partition column is currently unsupported when a subquery references a column from another query
 SET client_min_messages TO DEFAULT;
 DROP SCHEMA not_supported CASCADE;
 NOTICE:  drop cascades to table users_table_local
