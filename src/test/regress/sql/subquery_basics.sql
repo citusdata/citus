@@ -53,6 +53,51 @@ FROM
      ) as foo
     ORDER BY 2 DESC, 1;
 
+-- subqueries with only generate_series
+SELECT
+   *
+FROM
+    (SELECT 
+        events_table.value_2
+     FROM 
+        events_table 
+    WHERE
+     event_type IN (1,2,3,4)
+     ORDER BY 1 DESC
+     LIMIT 5
+     ) as foo,
+    (
+        SELECT i FROM generate_series(0, 100) i
+    ) as bar
+    WHERE foo.value_2 = bar.i
+    ORDER BY 2 DESC, 1;
+
+-- subquery with aggregates without GROUP BY
+SELECT
+   *
+FROM
+    (SELECT 
+        count(*)
+     FROM 
+        events_table 
+    WHERE
+     event_type IN (1,2,3,4)
+     ) as foo;
+
+-- subquery having without GROUP BY
+SELECT
+   *
+FROM
+    (SELECT 
+          SUM(events_table.user_id) 
+     FROM 
+        events_table 
+    WHERE
+     event_type IN (1,2,3,4)
+    HAVING 
+        MIN(value_2) > 2
+     ) as foo;
+
 -- multiple subqueries in FROM clause should be replaced
 -- and the final query is router query
 SELECT
