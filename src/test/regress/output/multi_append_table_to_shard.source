@@ -51,11 +51,11 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
 
 \copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 \copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
--- Place 'right' table only on the primary worker
-SELECT set_config('citus.shard_replication_factor', '1', false);
+-- Place 'right' table on both workers
+SELECT set_config('citus.shard_replication_factor', '2', false);
  set_config 
 ------------
- 1
+ 2
 (1 row)
 
 \copy multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
@@ -82,48 +82,7 @@ CREATE TABLE multi_append_table_to_shard_stage
 	number INTEGER not null,
 	text TEXT not null
 );
-COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/agg.data';
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
-FROM
-		pg_dist_shard
-WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
- master_append_table_to_shard 
-------------------------------
-                    0.0533333
-(1 row)
-
--- Only the primary worker will see the new matches, as the secondary still uses a cached shard
-SELECT	COUNT(*)
-FROM	multi_append_table_to_shard_left,
-		multi_append_table_to_shard_right
-WHERE	left_number = right_number;
- count 
--------
-    12
-(1 row)
-
--- Now add a lot of data to ensure we increase the size on disk
-DELETE FROM multi_append_table_to_shard_stage;
 COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
-SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage', 'localhost', 57636)
-FROM
-		pg_dist_shard
-WHERE	'multi_append_table_to_shard_right'::regclass::oid = logicalrelid;
- master_append_table_to_shard 
-------------------------------
-                     0.106667
-(1 row)
-
--- This join will refresh the shard on the secondary, all 8 rows in the left table will match twice (16)
-SELECT	COUNT(*)
-FROM	multi_append_table_to_shard_left,
-		multi_append_table_to_shard_right
-WHERE	left_number = right_number;
- count 
--------
-    16
-(1 row)
-
 -- Check that we error out if we try to append data to a hash partitioned table.
 SELECT master_create_empty_shard('multi_append_table_to_shard_right_hash');
 ERROR:  relation "multi_append_table_to_shard_right_hash" is a hash partitioned table

@@ -47,14 +47,8 @@
 #define COPY_OUT_COMMAND "COPY %s TO STDOUT"
 #define COPY_IN_COMMAND "COPY %s FROM '%s'"
 
-/* Defines that relate to fetching foreign tables */
-#define FOREIGN_CACHED_FILE_PATH "pg_foreign_file/cached/%s"
-#define GET_TABLE_OWNER \
-	"SELECT rolname FROM pg_class JOIN pg_roles ON (pg_roles.oid = pg_class.relowner) " \
-	"WHERE pg_class.oid = '%s'::regclass"
+/* Defines that relate to creating tables */
 #define GET_TABLE_DDL_EVENTS "SELECT master_get_table_ddl_events('%s')"
-#define SET_FOREIGN_TABLE_FILENAME "ALTER FOREIGN TABLE %s OPTIONS (SET filename '%s')"
-#define FOREIGN_FILE_PATH_COMMAND "SELECT worker_foreign_file_path('%s')"
 #define SET_SEARCH_PATH_COMMAND "SET search_path TO %s"
 #define CREATE_TABLE_COMMAND "CREATE TABLE %s (%s)"
 #define CREATE_TABLE_AS_COMMAND "CREATE TABLE %s (%s) AS (%s)"
@@ -99,7 +93,6 @@ typedef struct FileOutputStream
 
 /* Config variables managed via guc.c */
 extern int PartitionBufferSize;
-extern bool ExpireCachedShards;
 extern bool BinaryWorkerCopyFormat;
 
 

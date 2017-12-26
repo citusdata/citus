@@ -44,13 +44,10 @@ typedef enum
 	EXEC_TASK_CONNECT_START = 1,
 	EXEC_TASK_CONNECT_POLL = 2,
 	EXEC_TASK_FAILED = 3,
-	EXEC_FETCH_TASK_LOOP = 4,
-	EXEC_FETCH_TASK_START = 5,
-	EXEC_FETCH_TASK_RUNNING = 6,
-	EXEC_COMPUTE_TASK_START = 7,
-	EXEC_COMPUTE_TASK_RUNNING = 8,
-	EXEC_COMPUTE_TASK_COPYING = 9,
-	EXEC_TASK_DONE = 10,
+	EXEC_COMPUTE_TASK_START = 4,
+	EXEC_COMPUTE_TASK_RUNNING = 5,
+	EXEC_COMPUTE_TASK_COPYING = 6,
+	EXEC_TASK_DONE = 7,
 
 	/* used for task tracker executor */
 	EXEC_TASK_UNASSIGNED = 11,
@@ -143,7 +140,6 @@ struct TaskExecution
 	uint32 nodeCount;
 	uint32 currentNodeIndex;
 	uint32 querySourceNodeIndex; /* only applies to map fetch tasks */
-	int32 dataFetchTaskIndex;
 	uint32 failureCount;
 	bool criticalErrorOccurred;
 };

@@ -55,38 +55,6 @@ FROM
 	GROUP BY
 		l_orderkey) AS unit_prices;
 
--- this query is only required to execute
--- the following query given that recursive planning
--- (in general real-time queries in transactions)
--- do not execute shard fetch tasks and the next
--- query relies on that
-SELECT
-		l_orderkey,
-		avg(o_totalprice / l_quantity) AS unit_price
-	FROM
-		lineitem_subquery,
-		orders_subquery
-	WHERE
-		l_orderkey = o_custkey
-	GROUP BY
-		l_orderkey
-	ORDER BY 2 DESC, 1 DESC
-	LIMIT 5;
-
-SELECT
-	avg(unit_price)
-FROM
-	(SELECT
-		l_orderkey,
-		avg(o_totalprice / l_quantity) AS unit_price
-	FROM
-		lineitem_subquery,
-		orders_subquery
-	WHERE
-		l_orderkey = o_custkey
-	GROUP BY
-		l_orderkey) AS unit_prices;
-
 RESET client_min_messages;
 
 -- Subqueries without relation with a volatile functions (non-constant) are planned recursively

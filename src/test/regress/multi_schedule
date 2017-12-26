@@ -159,7 +159,8 @@ test: multi_transaction_recovery
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy multi_router_planner
+test: multi_copy
+test: multi_router_planner
 
 # ----------
 # multi_large_shardid loads more lineitem data using high shard identifiers
@@ -197,11 +198,6 @@ test: multi_function_evaluation
 # multi_truncate tests truncate functionality for distributed tables
 # ----------
 test: multi_truncate
-
-# ----------
-# multi_expire_table_cache tests for broadcast tables
-# ----------
-test: multi_expire_table_cache
 
 # ----------
 # multi_colocation_utils tests utility functions written for co-location feature & internal API

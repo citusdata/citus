@@ -297,21 +297,21 @@ DEBUG:  join prunable for task partitionId 3 and 0
 DEBUG:  join prunable for task partitionId 3 and 1
 DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
-DETAIL:  Creating dependency on merge taskId 9
+DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 2
-DETAIL:  Creating dependency on merge taskId 9
+DETAIL:  Creating dependency on merge taskId 5
 DEBUG:  pruning merge fetch taskId 4
-DETAIL:  Creating dependency on merge taskId 14
+DETAIL:  Creating dependency on merge taskId 10
 DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 14
+DETAIL:  Creating dependency on merge taskId 10
 DEBUG:  pruning merge fetch taskId 7
-DETAIL:  Creating dependency on merge taskId 19
+DETAIL:  Creating dependency on merge taskId 15
 DEBUG:  pruning merge fetch taskId 8
-DETAIL:  Creating dependency on merge taskId 19
+DETAIL:  Creating dependency on merge taskId 15
 DEBUG:  pruning merge fetch taskId 10
-DETAIL:  Creating dependency on merge taskId 24
+DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  pruning merge fetch taskId 11
-DETAIL:  Creating dependency on merge taskId 24
+DETAIL:  Creating dependency on merge taskId 20
 DEBUG:  cannot use real time executor with repartition jobs
 HINT:  Since you enabled citus.enable_repartition_joins Citus chose to use task-tracker.
 DEBUG:  generating subplan 53_1 for subquery SELECT t1.x FROM recursive_set_local.test t1, recursive_set_local.test t2 WHERE (t1.x = t2.y) LIMIT 2

@@ -111,7 +111,7 @@ INSERT INTO researchers VALUES (8, 5, 'Douglas Engelbart');
 INSERT INTO labs VALUES (5, 'Los Alamos');
 COMMIT;
 
-SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id;
+SELECT * FROM researchers, labs WHERE labs.id = researchers.lab_id AND researchers.lab_id = 5;
 
 -- and the other way around is also allowed
 BEGIN;

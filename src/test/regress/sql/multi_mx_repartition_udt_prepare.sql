@@ -192,10 +192,12 @@ INSERT INTO repartition_udt_other values (12, '(2,3)'::test_udt, 'foo');
 
 SET client_min_messages = LOG;
 
--- Query that should result in a repartition join on int column, and be empty.
+-- This query was intended to test "Query that should result in a repartition
+-- join on int column, and be empty." While removing broadcast logic, we
+-- manually make the query router plannable.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk
-	WHERE repartition_udt.pk > 1;
+	WHERE repartition_udt.pk = 1;
 
 -- Query that should result in a repartition join on UDT column.
 SET citus.large_table_shard_count = 1;

@@ -157,8 +157,6 @@ static bool JoinPrunable(RangeTableFragment *leftFragment,
 static ShardInterval * FragmentInterval(RangeTableFragment *fragment);
 static StringInfo FragmentIntervalString(ShardInterval *fragmentInterval);
 static List * DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList);
-static StringInfo NodeNameArrayString(List *workerNodeList);
-static StringInfo NodePortArrayString(List *workerNodeList);
 static StringInfo DatumArrayString(Datum *datumArray, uint32 datumCount, Oid datumTypeId);
 static List * BuildRelationShardList(List *rangeTableList, List *fragmentList);
 static void UpdateRangeTableAlias(List *rangeTableList, List *fragmentList);
@@ -3759,8 +3757,9 @@ FragmentIntervalString(ShardInterval *fragmentInterval)
 
 
 /*
- * DataFetchTaskList builds a data fetch task for every shard in the given shard
- * list, appends these data fetch tasks into a list, and returns this list.
+ * DataFetchTaskList builds a merge fetch task for every remote query result
+ * in the given fragment list, appends these merge fetch tasks into a list,
+ * and returns this list.
  */
 static List *
 DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
@@ -3771,20 +3770,7 @@ DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
 	foreach(fragmentCell, fragmentList)
 	{
 		RangeTableFragment *fragment = (RangeTableFragment *) lfirst(fragmentCell);
-		if (fragment->fragmentType == CITUS_RTE_RELATION)
-		{
-			ShardInterval *shardInterval = fragment->fragmentReference;
-			uint64 shardId = shardInterval->shardId;
-			StringInfo shardFetchQueryString = ShardFetchQueryString(shardId);
-
-			Task *shardFetchTask = CreateBasicTask(jobId, taskIdIndex, SHARD_FETCH_TASK,
-												   shardFetchQueryString->data);
-			shardFetchTask->shardId = shardId;
-
-			dataFetchTaskList = lappend(dataFetchTaskList, shardFetchTask);
-			taskIdIndex++;
-		}
-		else if (fragment->fragmentType == CITUS_RTE_REMOTE_QUERY)
+		if (fragment->fragmentType == CITUS_RTE_REMOTE_QUERY)
 		{
 			Task *mergeTask = (Task *) fragment->fragmentReference;
 			char *undefinedQueryString = NULL;
@@ -3800,136 +3786,6 @@ DataFetchTaskList(uint64 jobId, uint32 taskIdIndex, List *fragmentList)
 	}
 
 	return dataFetchTaskList;
-}
-
-
-/*
- * ShardFetchQueryString constructs a query string to fetch the given shard from
- * the shards' placements.
- */
-StringInfo
-ShardFetchQueryString(uint64 shardId)
-{
-	StringInfo shardFetchQuery = NULL;
-	uint64 shardLength = ShardLength(shardId);
-
-	/* construct two array strings for node names and port numbers */
-	List *shardPlacements = FinalizedShardPlacementList(shardId);
-	StringInfo nodeNameArrayString = NodeNameArrayString(shardPlacements);
-	StringInfo nodePortArrayString = NodePortArrayString(shardPlacements);
-
-	/* check storage type to create the correct query string */
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	char storageType = shardInterval->storageType;
-	char *shardSchemaName = NULL;
-	char *shardTableName = NULL;
-
-	/* construct the shard name */
-	Oid shardSchemaId = get_rel_namespace(shardInterval->relationId);
-	char *tableName = get_rel_name(shardInterval->relationId);
-
-	shardSchemaName = get_namespace_name(shardSchemaId);
-	shardTableName = pstrdup(tableName);
-	AppendShardIdToName(&shardTableName, shardId);
-
-	shardFetchQuery = makeStringInfo();
-	if (storageType == SHARD_STORAGE_TABLE || storageType == SHARD_STORAGE_RELAY ||
-		storageType == SHARD_STORAGE_COLUMNAR)
-	{
-		if (strcmp(shardSchemaName, "public") != 0)
-		{
-			char *qualifiedTableName = quote_qualified_identifier(shardSchemaName,
-																  shardTableName);
-
-			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, qualifiedTableName,
-							 shardLength, nodeNameArrayString->data,
-							 nodePortArrayString->data);
-		}
-		else
-		{
-			appendStringInfo(shardFetchQuery, TABLE_FETCH_COMMAND, shardTableName,
-							 shardLength, nodeNameArrayString->data,
-							 nodePortArrayString->data);
-		}
-	}
-	else if (storageType == SHARD_STORAGE_FOREIGN)
-	{
-		if (strcmp(shardSchemaName, "public") != 0)
-		{
-			char *qualifiedTableName = quote_qualified_identifier(shardSchemaName,
-																  shardTableName);
-
-			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, qualifiedTableName,
-							 shardLength, nodeNameArrayString->data,
-							 nodePortArrayString->data);
-		}
-		else
-		{
-			appendStringInfo(shardFetchQuery, FOREIGN_FETCH_COMMAND, shardTableName,
-							 shardLength, nodeNameArrayString->data,
-							 nodePortArrayString->data);
-		}
-	}
-
-	return shardFetchQuery;
-}
-
-
-/*
- * NodeNameArrayString extracts the node names from the given node list, stores
- * these node names in an array, and returns the array's string representation.
- */
-static StringInfo
-NodeNameArrayString(List *shardPlacementList)
-{
-	StringInfo nodeNameArrayString = NULL;
-	ListCell *shardPlacementCell = NULL;
-
-	uint32 nodeNameCount = (uint32) list_length(shardPlacementList);
-	Datum *nodeNameArray = palloc0(nodeNameCount * sizeof(Datum));
-	uint32 nodeNameIndex = 0;
-
-	foreach(shardPlacementCell, shardPlacementList)
-	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		Datum nodeName = CStringGetDatum(shardPlacement->nodeName);
-
-		nodeNameArray[nodeNameIndex] = nodeName;
-		nodeNameIndex++;
-	}
-
-	nodeNameArrayString = DatumArrayString(nodeNameArray, nodeNameCount, CSTRINGOID);
-
-	return nodeNameArrayString;
-}
-
-
-/*
- * NodePortArrayString extracts the node ports from the given node list, stores
- * these node ports in an array, and returns the array's string representation.
- */
-static StringInfo
-NodePortArrayString(List *shardPlacementList)
-{
-	StringInfo nodePortArrayString = NULL;
-	ListCell *shardPlacementCell = NULL;
-
-	uint32 nodePortCount = (uint32) list_length(shardPlacementList);
-	Datum *nodePortArray = palloc0(nodePortCount * sizeof(Datum));
-	uint32 nodePortIndex = 0;
-
-	foreach(shardPlacementCell, shardPlacementList)
-	{
-		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		Datum nodePort = UInt32GetDatum(shardPlacement->nodePort);
-
-		nodePortArray[nodePortIndex] = nodePort;
-		nodePortIndex++;
-	}
-
-	nodePortArrayString = DatumArrayString(nodePortArray, nodePortCount, INT4OID);
-
-	return nodePortArrayString;
 }
 
 
@@ -4153,10 +4009,8 @@ AnchorShardId(List *fragmentList, uint32 anchorRangeTableId)
 
 /*
  * PruneSqlTaskDependencies iterates over each sql task from the given sql task
- * list, and prunes away any data fetch tasks which are redundant or not needed
- * for the completion of that task. Specifically the function prunes away data
- * fetch tasks for the anchor shard and any merge-fetch tasks, as the task
- * assignment algorithm ensures co-location of these tasks.
+ * list, and prunes away merge-fetch tasks, as the task assignment algorithm
+ * ensures co-location of these tasks.
  */
 static List *
 PruneSqlTaskDependencies(List *sqlTaskList)
@@ -4174,17 +4028,11 @@ PruneSqlTaskDependencies(List *sqlTaskList)
 			Task *dataFetchTask = (Task *) lfirst(dependedTaskCell);
 
 			/*
-			 * If we have a shard fetch task for the anchor shard, or if we have
-			 * a merge fetch task, our task assignment algorithm makes sure that
-			 * the sql task is colocated with the anchor shard / merge task. We
-			 * can therefore prune out this data fetch task.
+			 * If we have a merge fetch task, our task assignment algorithm makes
+			 * sure that the sql task is colocated with the anchor shard / merge
+			 * task. We can therefore prune out this data fetch task.
 			 */
-			if (dataFetchTask->taskType == SHARD_FETCH_TASK &&
-				dataFetchTask->shardId != sqlTask->anchorShardId)
-			{
-				prunedDependedTaskList = lappend(prunedDependedTaskList, dataFetchTask);
-			}
-			else if (dataFetchTask->taskType == MERGE_FETCH_TASK)
+			if (dataFetchTask->taskType == MERGE_FETCH_TASK)
 			{
 				Task *mergeTaskReference = NULL;
 				List *mergeFetchDependencyList = dataFetchTask->dependedTaskList;
@@ -4828,31 +4676,6 @@ TaskListDifference(const List *list1, const List *list2)
 
 
 /*
- * TaskListUnion generate the union of two tasks lists. This is calculated by
- * copying list1 via list_copy(), then adding to it all the members of list2
- * that aren't already in list1.
- */
-List *
-TaskListUnion(const List *list1, const List *list2)
-{
-	const ListCell *taskCell = NULL;
-	List *resultList = NIL;
-
-	resultList = list_copy(list1);
-
-	foreach(taskCell, list2)
-	{
-		if (!TaskListMember(resultList, lfirst(taskCell)))
-		{
-			resultList = lappend(resultList, lfirst(taskCell));
-		}
-	}
-
-	return resultList;
-}
-
-
-/*
  * AssignAnchorShardTaskList assigns locations to the given tasks based on the
  * configured task assignment policy. The distributed executor later sends these
  * tasks to their assigned locations for remote execution.
@@ -5409,8 +5232,7 @@ AssignDataFetchDependencies(List *taskList)
 		foreach(dependedTaskCell, dependedTaskList)
 		{
 			Task *dependedTask = (Task *) lfirst(dependedTaskCell);
-			if (dependedTask->taskType == SHARD_FETCH_TASK ||
-				dependedTask->taskType == MAP_OUTPUT_FETCH_TASK)
+			if (dependedTask->taskType == MAP_OUTPUT_FETCH_TASK)
 			{
 				dependedTask->taskPlacementList = task->taskPlacementList;
 			}

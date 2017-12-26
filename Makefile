@@ -29,7 +29,6 @@ OBJS = src/backend/distributed/shared_library_init.o \
      src/backend/distributed/master/master_citus_tools.o \
      src/backend/distributed/master/master_create_shards.o \
      src/backend/distributed/master/master_delete_protocol.o \
-     src/backend/distributed/master/master_expire_table_cache.o \
      src/backend/distributed/master/master_metadata_utility.o \
      src/backend/distributed/master/master_modify_multiple_shards.o \
      src/backend/distributed/master/master_node_protocol.o \
