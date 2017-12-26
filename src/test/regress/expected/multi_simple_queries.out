@@ -167,11 +167,24 @@ SELECT author_id, sum(word_count) AS corpus_size FROM articles
          8 |       55410
 (3 rows)
 
--- UNION/INTERSECT queries are unsupported if on multiple shards
+-- UNION/INTERSECT queries are supported if on multiple shards
 SELECT * FROM articles WHERE author_id = 10 UNION
-SELECT * FROM articles WHERE author_id = 2; 
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+SELECT * FROM articles WHERE author_id = 2
+ORDER BY 1,2,3;
+ id | author_id |   title    | word_count 
+----+-----------+------------+------------
+  2 |         2 | abducing   |      13642
+ 10 |        10 | aggrandize |      17277
+ 12 |         2 | archiblast |      18185
+ 20 |        10 | absentness |       1820
+ 22 |         2 | antipope   |       2728
+ 30 |        10 | andelee    |       6363
+ 32 |         2 | amazon     |      11342
+ 40 |        10 | attemper   |      14976
+ 42 |         2 | ausable    |      15885
+ 50 |        10 | anjanette  |      19519
+(10 rows)
+
 -- queries using CTEs are supported
 WITH long_names AS ( SELECT id FROM authors WHERE char_length(name) > 15 )
 SELECT title FROM articles ORDER BY 1 LIMIT 5;

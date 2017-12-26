@@ -543,12 +543,21 @@ SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM re
     15
 (1 row)
 
--- expected this to work but it did not
+-- union between views is supported through recursive planning
 (SELECT user_id FROM recent_users) 
 UNION
-(SELECT user_id FROM selected_users);
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+(SELECT user_id FROM selected_users)
+ORDER BY 1;
+ user_id 
+---------
+       1
+       2
+       3
+       4
+       5
+       6
+(6 rows)
+
 -- wrapping it inside a SELECT * works
 SELECT *
 	FROM (
@@ -587,15 +596,18 @@ SELECT count(*)
      1
 (1 row)
 
--- expected this to work but it does not
+-- UNION ALL between views is supported through recursive planning
 SELECT count(*)
 	FROM (
 		(SELECT user_id FROM recent_users) 
 		UNION ALL
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
-ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
-DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
+ count 
+-------
+     2
+(1 row)
+
 -- expand view definitions and re-run last 2 queries
 SELECT count(*)
 	FROM (
@@ -620,8 +632,11 @@ SELECT count(*)
 		UNION ALL
 		(SELECT user_id FROM (SELECT * FROM users_table WHERE value_1 >= 1 and value_1 < 3) bb) ) u
 	WHERE user_id < 2 AND user_id > 0;
-ERROR:  cannot pushdown the subquery since not all subqueries in the UNION have the partition column in the same position
-DETAIL:  Each leaf query of the UNION should return the partition column in the same position and all joins must be on the partition column
+ count 
+-------
+     2
+(1 row)
+
 -- test distinct
 -- distinct is supported if it is on a partition key
 CREATE VIEW distinct_user_with_value_1_3 AS SELECT DISTINCT user_id FROM users_table WHERE value_1 = 3;
@@ -830,7 +845,7 @@ EXPLAIN (COSTS FALSE) SELECT et.* FROM recent_10_users JOIN events_table et USIN
    ->  Sort
          Sort Key: remote_scan."time" DESC
          ->  Custom Scan (Citus Real-Time)
-               ->  Distributed Subplan 83_1
+               ->  Distributed Subplan 91_1
                      ->  Limit
                            ->  Sort
                                  Sort Key: max((max(remote_scan.lastseen))) DESC

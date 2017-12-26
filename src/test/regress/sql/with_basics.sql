@@ -354,7 +354,7 @@ ORDER BY
 LIMIT
   5;
 
--- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM distributed_table) a; should error out
+-- SELECT * FROM (SELECT * FROM cte UNION SELECT * FROM distributed_table) a; should work
 WITH cte AS (
 	SELECT * FROM users_table
 )

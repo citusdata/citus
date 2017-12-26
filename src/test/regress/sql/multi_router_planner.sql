@@ -422,15 +422,18 @@ SELECT * FROM (
 ) AS combination
 ORDER BY 1;
 
--- top-level union queries are not supported if not router plannable
--- there is an inconsistency on shard pruning between
--- ubuntu/mac disabling log messages for this queries only
+-- top-level union queries are supported through recursive planning
 
 SET client_min_messages to 'NOTICE';
 
-(SELECT * FROM articles_hash WHERE author_id = 1)
+(
+  (SELECT * FROM articles_hash WHERE author_id = 1)
+  UNION
+  (SELECT * FROM articles_hash WHERE author_id = 3)
+)
 UNION
-(SELECT * FROM articles_hash WHERE author_id = 2);
+(SELECT * FROM articles_hash WHERE author_id = 2)
+ORDER BY 1,2,3;
 
 -- unions in subqueries are supported with subquery pushdown
 SELECT * FROM (

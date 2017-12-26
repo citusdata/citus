@@ -792,21 +792,36 @@ DEBUG:  Plan is router executable
  az
 (4 rows)
 
--- union queries are not supported if not router plannable
--- there is an inconsistency on shard pruning between
--- ubuntu/mac disabling log messages for this queries only
-SET client_min_messages to 'NOTICE';
+-- union queries are supported through recursive planning
+SET client_min_messages TO DEBUG1;
 (SELECT * FROM articles_hash_mx WHERE author_id = 1)
 UNION
-(SELECT * FROM articles_hash_mx WHERE author_id = 2);
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+(SELECT * FROM articles_hash_mx WHERE author_id = 2)
+ORDER BY 1,2;
+DEBUG:  generating subplan 108_1 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id = 1)
+DEBUG:  generating subplan 108_2 for subquery SELECT id, author_id, title, word_count FROM public.articles_hash_mx WHERE (author_id = 2)
+DEBUG:  Plan 108 query after replacing subqueries and CTEs: SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('108_1'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) UNION SELECT intermediate_result.id, intermediate_result.author_id, intermediate_result.title, intermediate_result.word_count FROM read_intermediate_result('108_2'::text, 'binary'::citus_copy_format) intermediate_result(id bigint, author_id bigint, title character varying(20), word_count integer) ORDER BY 1, 2
+ id | author_id |    title     | word_count 
+----+-----------+--------------+------------
+  1 |         1 | arsenous     |       9572
+  2 |         2 | abducing     |      13642
+ 11 |         1 | alamo        |       1347
+ 12 |         2 | archiblast   |      18185
+ 21 |         1 | arcading     |       5890
+ 22 |         2 | antipope     |       2728
+ 31 |         1 | athwartships |       7271
+ 32 |         2 | amazon       |      11342
+ 41 |         1 | aznavour     |      11814
+ 42 |         2 | ausable      |      15885
+(10 rows)
+
 SELECT * FROM (
 	(SELECT * FROM articles_hash_mx WHERE author_id = 1)
 	UNION
 	(SELECT * FROM articles_hash_mx WHERE author_id = 2)) uu
 ORDER BY 1, 2
 LIMIT 5;
+DEBUG:  push down of limit count: 5
  id | author_id |   title    | word_count 
 ----+-----------+------------+------------
   1 |         1 | arsenous   |       9572

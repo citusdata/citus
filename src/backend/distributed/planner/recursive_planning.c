@@ -67,10 +67,12 @@
 #include "distributed/relation_restriction_equivalence.h"
 #include "lib/stringinfo.h"
 #include "optimizer/planner.h"
+#include "parser/parsetree.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/primnodes.h"
+#include "nodes/relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 
@@ -117,6 +119,10 @@ static DeferredErrorMessage * RecursivelyPlanCTEs(Query *query,
 												  RecursivePlanningContext *context);
 static bool RecursivelyPlanSubqueryWalker(Node *node, RecursivePlanningContext *context);
 static bool ShouldRecursivelyPlanSubquery(Query *subquery);
+static bool ShouldRecursivelyPlanSetOperation(Query *query,
+											  RecursivePlanningContext *context);
+static void RecursivelyPlanSetOperations(Query *query, Node *node,
+										 RecursivePlanningContext *context);
 static bool IsLocalTableRTE(Node *node);
 static void RecursivelyPlanSubquery(Query *subquery,
 									RecursivePlanningContext *planningContext);
@@ -216,6 +222,21 @@ RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context
 
 	/* descend into subqueries */
 	query_tree_walker(query, RecursivelyPlanSubqueryWalker, context, 0);
+
+	/*
+	 * At this point, all CTEs, leaf subqueries containing local tables and
+	 * non-pushdownable subqueries have been replaced. We now check for
+	 * combinations of subqueries that cannot be pushed down (e.g.
+	 * <subquery on reference table> UNION <subquery on distributed table>).
+	 *
+	 * This code also runs for the top-level query, which allows us to support
+	 * top-level set operations.
+	 */
+
+	if (ShouldRecursivelyPlanSetOperation(query, context))
+	{
+		RecursivelyPlanSetOperations(query, (Node *) query->setOperations, context);
+	}
 
 	return NULL;
 }
@@ -450,20 +471,104 @@ ShouldRecursivelyPlanSubquery(Query *subquery)
 		return false;
 	}
 
-	/*
-	 * Even if we could recursively plan the subquery, we should ensure
-	 * that the subquery doesn't contain any references to the outer
-	 * queries.
-	 */
-	if (ContainsReferencesToOuterQuery(subquery))
-	{
-		elog(DEBUG2, "skipping recursive planning for the subquery since it "
-					 "contains references to outer queries");
+	return true;
+}
 
+
+/*
+ * ShouldRecursivelyPlanSetOperation determines whether the leaf queries of a
+ * set operations tree need to be recursively planned in order to support the
+ * query as a whole.
+ */
+static bool
+ShouldRecursivelyPlanSetOperation(Query *query, RecursivePlanningContext *context)
+{
+	PlannerRestrictionContext *filteredRestrictionContext = NULL;
+
+	SetOperationStmt *setOperations = (SetOperationStmt *) query->setOperations;
+	if (setOperations == NULL)
+	{
 		return false;
 	}
 
-	return true;
+	if (context->level == 0)
+	{
+		/*
+		 * We cannot push down top-level set operation. Recursively plan the
+		 * leaf nodes such that it becomes a router query.
+		 */
+		return true;
+	}
+
+	if (setOperations->op != SETOP_UNION)
+	{
+		/*
+		 * We can only push down UNION operaionts, plan other set operations
+		 * recursively.
+		 */
+		return true;
+	}
+
+	if (DeferErrorIfUnsupportedUnionQuery(query) != NULL)
+	{
+		/*
+		 * If at least one leaf query in the union is recurring, then all
+		 * leaf nodes need to be recurring.
+		 */
+		return true;
+	}
+
+	filteredRestrictionContext =
+		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
+	if (!SafeToPushdownUnionSubquery(filteredRestrictionContext))
+	{
+		/*
+		 * The distribution column is not in the same place in all sides
+		 * of the union, meaning we cannot determine distribution column
+		 * equivalence. Recursive planning is necessary.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
+ * RecursivelyPlanSetOperations descends into a tree of set operations
+ * (e.g. UNION, INTERSECTS) and recursively plans all leaf nodes that
+ * contain distributed tables.
+ */
+static void
+RecursivelyPlanSetOperations(Query *query, Node *node,
+							 RecursivePlanningContext *context)
+{
+	if (IsA(node, SetOperationStmt))
+	{
+		SetOperationStmt *setOperations = (SetOperationStmt *) node;
+
+		RecursivelyPlanSetOperations(query, setOperations->larg, context);
+		RecursivelyPlanSetOperations(query, setOperations->rarg, context);
+	}
+	else if (IsA(node, RangeTblRef))
+	{
+		RangeTblRef *rangeTableRef = (RangeTblRef *) node;
+		RangeTblEntry *rangeTableEntry = rt_fetch(rangeTableRef->rtindex,
+												  query->rtable);
+		Query *subquery = rangeTableEntry->subquery;
+
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY &&
+			QueryContainsDistributedTableRTE(subquery))
+		{
+			RecursivelyPlanSubquery(subquery, context);
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errmsg("unexpected node type (%d) while "
+							   "expecting set operations or "
+							   "range table references", nodeTag(node))));
+	}
 }
 
 
@@ -513,6 +618,13 @@ IsLocalTableRTE(Node *node)
 /*
  * RecursivelyPlanQuery recursively plans a query, replaces it with a
  * result query and returns the subplan.
+ *
+ * Before we recursively plan the given subquery, we should ensure
+ * that the subquery doesn't contain any references to the outer
+ * queries (i.e., such queries cannot be separately planned). In
+ * that case, the function doesn't recursively plan the input query
+ * and immediately returns. Later, the planner decides on what to do
+ * with the query.
  */
 static void
 RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningContext)
@@ -523,6 +635,14 @@ RecursivelyPlanSubquery(Query *subquery, RecursivePlanningContext *planningConte
 
 	Query *resultQuery = NULL;
 	Query *debugQuery = NULL;
+
+	if (ContainsReferencesToOuterQuery(subquery))
+	{
+		elog(DEBUG2, "skipping recursive planning for the subquery since it "
+					 "contains references to outer queries");
+
+		return;
+	}
 
 	/*
 	 * Subquery will go through the standard planner, thus to properly deparse it

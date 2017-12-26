@@ -353,15 +353,12 @@ SELECT * FROM (
 ) AS combination
 ORDER BY 1;
 
--- union queries are not supported if not router plannable
--- there is an inconsistency on shard pruning between
--- ubuntu/mac disabling log messages for this queries only
-
-SET client_min_messages to 'NOTICE';
-
+-- union queries are supported through recursive planning
+SET client_min_messages TO DEBUG1;
 (SELECT * FROM articles_hash_mx WHERE author_id = 1)
 UNION
-(SELECT * FROM articles_hash_mx WHERE author_id = 2);
+(SELECT * FROM articles_hash_mx WHERE author_id = 2)
+ORDER BY 1,2;
 
 
 SELECT * FROM (
