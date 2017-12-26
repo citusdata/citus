@@ -121,7 +121,6 @@ static List * ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task);
 static List * MergeTaskList(List *taskList);
 static void ReassignTaskList(List *taskList);
 static void ReassignMapFetchTaskList(List *mapFetchTaskList);
-static List * ShardFetchTaskList(List *taskList);
 
 /* Local functions forward declarations to manage task trackers */
 static void ManageTaskTracker(TaskTracker *taskTracker);
@@ -1923,14 +1922,6 @@ ConstrainedNonMergeTaskList(List *taskAndExecutionList, Task *task)
 		upstreamTask = task;
 		dependedTaskList = upstreamTask->dependedTaskList;
 	}
-	else if (taskType == SHARD_FETCH_TASK)
-	{
-		List *upstreamTaskList = UpstreamDependencyList(taskAndExecutionList, task);
-		Assert(list_length(upstreamTaskList) == 1);
-
-		upstreamTask = (Task *) linitial(upstreamTaskList);
-		dependedTaskList = upstreamTask->dependedTaskList;
-	}
 	Assert(upstreamTask != NULL);
 
 	constrainedTaskList = list_make1(upstreamTask);
@@ -2007,20 +1998,6 @@ ConstrainedMergeTaskList(List *taskAndExecutionList, Task *task)
 	if (taskType == SQL_TASK || taskType == MAP_TASK)
 	{
 		constrainedMergeTaskList = MergeTaskList(task->dependedTaskList);
-	}
-	else if (taskType == SHARD_FETCH_TASK)
-	{
-		Task *upstreamTask = NULL;
-		List *upstreamTaskList = UpstreamDependencyList(taskAndExecutionList, task);
-
-		/*
-		 * A shard fetch task can only have one SQL/map task parent. We now get
-		 * that parent. From the parent, we find any merge task dependencies.
-		 */
-		Assert(list_length(upstreamTaskList) == 1);
-		upstreamTask = (Task *) linitial(upstreamTaskList);
-
-		constrainedMergeTaskList = MergeTaskList(upstreamTask->dependedTaskList);
 	}
 	else if (taskType == MAP_OUTPUT_FETCH_TASK)
 	{
@@ -2104,10 +2081,7 @@ ReassignTaskList(List *taskList)
 		bool transmitCompleted = TransmitExecutionCompleted(taskExecution);
 		if ((task->taskType == SQL_TASK) && transmitCompleted)
 		{
-			List *shardFetchTaskList = ShardFetchTaskList(task->dependedTaskList);
-
 			completedTaskList = lappend(completedTaskList, task);
-			completedTaskList = TaskListUnion(completedTaskList, shardFetchTaskList);
 		}
 	}
 
@@ -2159,29 +2133,6 @@ ReassignMapFetchTaskList(List *mapFetchTaskList)
 		 */
 		taskStatusArray[currentNodeIndex] = EXEC_TASK_UNASSIGNED;
 	}
-}
-
-
-/*
- * ShardFetchTaskList walks over the given task list, finds the shard fetch tasks
- * in the list, and returns the found tasks in a new list.
- */
-static List *
-ShardFetchTaskList(List *taskList)
-{
-	List *shardFetchTaskList = NIL;
-	ListCell *taskCell = NULL;
-
-	foreach(taskCell, taskList)
-	{
-		Task *task = (Task *) lfirst(taskCell);
-		if (task->taskType == SHARD_FETCH_TASK)
-		{
-			shardFetchTaskList = lappend(shardFetchTaskList, task);
-		}
-	}
-
-	return shardFetchTaskList;
 }
 
 

@@ -359,19 +359,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.expire_cached_shards",
-		gettext_noop("Enables shard cache expiration if a shard's size on disk has "
-					 "changed."),
-		gettext_noop("When appending to an existing shard, old data may still be cached "
-					 "on other workers. This configuration entry activates automatic "
-					 "expiration, but should not be used with manual updates to shards."),
-		&ExpireCachedShards,
-		false,
-		PGC_SIGHUP,
-		0,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.subquery_pushdown",
 		gettext_noop("Enables supported subquery pushdown to workers."),
 		NULL,

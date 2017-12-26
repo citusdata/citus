@@ -55,7 +55,6 @@ typedef FormData_pg_dist_shard *Form_pg_dist_shard;
  * Valid values for shard storage types include relay file, foreign table,
  * (standard) table and columnar table. Relay file types are currently unused.
  */
-#define SHARD_STORAGE_RELAY 'r'
 #define SHARD_STORAGE_FOREIGN 'f'
 #define SHARD_STORAGE_TABLE 't'
 #define SHARD_STORAGE_COLUMNAR 'c'

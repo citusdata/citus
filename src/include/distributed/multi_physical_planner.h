@@ -33,10 +33,6 @@
 #define NON_PRUNABLE_JOIN -1
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
 #define MERGE_COLUMN_FORMAT "merge_column_%u"
-#define TABLE_FETCH_COMMAND "SELECT worker_fetch_regular_table \
- ('%s', " UINT64_FORMAT ", '%s', '%s')"
-#define FOREIGN_FETCH_COMMAND "SELECT worker_fetch_foreign_file \
- ('%s', " UINT64_FORMAT ", '%s', '%s')"
 #define MAP_OUTPUT_FETCH_COMMAND "SELECT worker_fetch_partition_file \
  (" UINT64_FORMAT ", %u, %u, %u, '%s', %u)"
 #define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table \
@@ -84,12 +80,11 @@ typedef enum
 	SQL_TASK = 1,
 	MAP_TASK = 2,
 	MERGE_TASK = 3,
-	SHARD_FETCH_TASK = 4,
-	MAP_OUTPUT_FETCH_TASK = 5,
-	MERGE_FETCH_TASK = 6,
-	MODIFY_TASK = 7,
-	ROUTER_TASK = 8,
-	DDL_TASK = 9
+	MAP_OUTPUT_FETCH_TASK = 4,
+	MERGE_FETCH_TASK = 5,
+	MODIFY_TASK = 6,
+	ROUTER_TASK = 7,
+	DDL_TASK = 8
 } TaskType;
 
 
@@ -180,7 +175,6 @@ typedef struct Task
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
-	uint64 shardId;                /* only applies to shard fetch tasks */
 	TaskExecution *taskExecution;  /* used by task tracker executor */
 	bool upsertQuery;              /* only applies to modify tasks */
 	char replicationModel;         /* only applies to modify tasks */
@@ -303,7 +297,6 @@ extern bool EnableUniqueJobIds;
 extern DistributedPlan * CreatePhysicalDistributedPlan(MultiTreeRoot *multiTree,
 													   PlannerRestrictionContext *
 													   plannerRestrictionContext);
-extern StringInfo ShardFetchQueryString(uint64 shardId);
 extern Task * CreateBasicTask(uint64 jobId, uint32 taskId, TaskType taskType,
 							  char *queryString);
 

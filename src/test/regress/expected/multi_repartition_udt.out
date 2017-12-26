@@ -168,10 +168,23 @@ SET client_min_messages = LOG;
 SELECT * FROM repartition_udt JOIN repartition_udt_other
     ON repartition_udt.pk = repartition_udt_other.pk
 	WHERE repartition_udt.pk > 1;
- pk | udtcol | txtcol | pk | udtcol | txtcol 
-----+--------+--------+----+--------+--------
-(0 rows)
-
+WARNING:  relation "repartition_udt_540027" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "repartition_udt_540028" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "repartition_udt_540029" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "repartition_udt_540027" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "repartition_udt_540028" does not exist
+CONTEXT:  while executing command on localhost:57637
+WARNING:  relation "repartition_udt_540029" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "repartition_udt_540027" does not exist
+CONTEXT:  while executing command on localhost:57638
+WARNING:  relation "repartition_udt_540028" does not exist
+CONTEXT:  while executing command on localhost:57637
+ERROR:  failed to execute task 2
 -- Query that should result in a repartition join on UDT column.
 SET citus.large_table_shard_count = 1;
 SET citus.task_executor_type = 'task-tracker';

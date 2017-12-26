@@ -343,7 +343,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 				}
 				else
 				{
-					taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
+					taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
 				}
 			}
 			else if (pollStatus == CLIENT_CONNECTION_BUSY)
@@ -489,91 +489,6 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
 				break;
 			}
-		}
-
-		case EXEC_FETCH_TASK_LOOP:
-		{
-			List *dataFetchTaskList = task->dependedTaskList;
-			int32 dataFetchTaskCount = list_length(dataFetchTaskList);
-
-			/* move to the next data fetch task */
-			taskExecution->dataFetchTaskIndex++;
-
-			if (taskExecution->dataFetchTaskIndex < dataFetchTaskCount)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_START;
-			}
-			else
-			{
-				taskStatusArray[currentIndex] = EXEC_COMPUTE_TASK_START;
-			}
-
-			break;
-		}
-
-		case EXEC_FETCH_TASK_START:
-		{
-			List *dataFetchTaskList = task->dependedTaskList;
-			int32 dataFetchTaskIndex = taskExecution->dataFetchTaskIndex;
-			Task *dataFetchTask = (Task *) list_nth(dataFetchTaskList,
-													dataFetchTaskIndex);
-
-			char *dataFetchQuery = dataFetchTask->queryString;
-			int32 connectionId = connectionIdArray[currentIndex];
-
-			bool querySent = MultiClientSendQuery(connectionId, dataFetchQuery);
-			if (querySent)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-			}
-			else
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			}
-
-			break;
-		}
-
-		case EXEC_FETCH_TASK_RUNNING:
-		{
-			int32 connectionId = connectionIdArray[currentIndex];
-			ResultStatus resultStatus = MultiClientResultStatus(connectionId);
-			QueryStatus queryStatus = CLIENT_INVALID_QUERY;
-
-			/* check if query results are in progress or unavailable */
-			if (resultStatus == CLIENT_RESULT_BUSY)
-			{
-				*executionStatus = TASK_STATUS_SOCKET_READ;
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_RUNNING;
-				break;
-			}
-			else if (resultStatus == CLIENT_RESULT_UNAVAILABLE)
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-				break;
-			}
-
-			Assert(resultStatus == CLIENT_RESULT_READY);
-
-			/*
-			 * If the query executed successfully, loop onto the next data fetch
-			 * task. Else if the query failed, try data fetching on another node.
-			 */
-			queryStatus = MultiClientQueryStatus(connectionId);
-			if (queryStatus == CLIENT_QUERY_DONE)
-			{
-				taskStatusArray[currentIndex] = EXEC_FETCH_TASK_LOOP;
-			}
-			else if (queryStatus == CLIENT_QUERY_FAILED)
-			{
-				taskStatusArray[currentIndex] = EXEC_TASK_FAILED;
-			}
-			else
-			{
-				ereport(FATAL, (errmsg("invalid query status: %d", queryStatus)));
-			}
-
-			break;
 		}
 
 		case EXEC_COMPUTE_TASK_START:

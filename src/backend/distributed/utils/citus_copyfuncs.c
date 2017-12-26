@@ -241,7 +241,6 @@ CopyNodeTask(COPYFUNC_ARGS)
 	COPY_SCALAR_FIELD(upstreamTaskId);
 	COPY_NODE_FIELD(shardInterval);
 	COPY_SCALAR_FIELD(assignmentConstrained);
-	COPY_SCALAR_FIELD(shardId);
 	COPY_NODE_FIELD(taskExecution);
 	COPY_SCALAR_FIELD(upsertQuery);
 	COPY_SCALAR_FIELD(replicationModel);

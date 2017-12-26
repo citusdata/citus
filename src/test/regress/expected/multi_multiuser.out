@@ -90,11 +90,7 @@ SELECT count(*) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
- count 
--------
-     0
-(1 row)
-
+ERROR:  failed to execute task 1
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed
@@ -137,11 +133,7 @@ SELECT count(*) FROM test;
 
 -- test re-partition query (needs to transmit intermediate results)
 SELECT count(*) FROM test a JOIN test b ON (a.val = b.val) WHERE a.id = 1 AND b.id = 2;
- count 
--------
-     0
-(1 row)
-
+ERROR:  failed to execute task 1
 -- should not be able to transmit directly
 COPY "postgresql.conf" TO STDOUT WITH (format transmit);
 ERROR:  operation is not allowed

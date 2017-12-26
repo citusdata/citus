@@ -99,7 +99,6 @@ typedef struct FileOutputStream
 
 /* Config variables managed via guc.c */
 extern int PartitionBufferSize;
-extern bool ExpireCachedShards;
 extern bool BinaryWorkerCopyFormat;
 
 
