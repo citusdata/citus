@@ -4,7 +4,6 @@
 -- no need to set shardid sequence given that we're not creating any shards
 
 SET citus.next_shard_id TO 570032;
-SET citus.enable_router_execution TO FALSE;
 
 -- Check that we error out if shard min/max values are not exactly same.
 SELECT
@@ -74,7 +73,9 @@ SELECT count(*) FROM (
    SELECT l_orderkey FROM lineitem_subquery JOIN (SELECT random()::int r) sub ON (l_orderkey = r) WHERE r > 10
 ) b;
 
--- Check that we error out if there is non relation subqueries
+SET client_min_messages TO DEBUG;
+
+-- If there is non relation subqueries then we recursively plan
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION ALL
@@ -82,21 +83,23 @@ SELECT count(*) FROM
 ) b;
 
 
--- Check that we error out if queries in union do not include partition columns.
-
+-- If queries in union do not include partition columns then we recursively plan
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_partkey FROM lineitem_subquery)
 ) b;
 
--- Check that we run union queries if partition column is selected.
+-- Check that we push down union queries if partition column is selected (no DEBUG messages)
 
 SELECT count(*) FROM
 (
    (SELECT l_orderkey FROM lineitem_subquery) UNION
    (SELECT l_orderkey FROM lineitem_subquery)
 ) b;
+
+RESET client_min_messages;
+
 -- we'd error out if inner query has Limit but subquery_pushdown is not set
 -- but we recursively plan the query
 SELECT
@@ -516,6 +519,8 @@ CREATE TABLE subquery_pruning_varchar_test_table
 SELECT master_create_distributed_table('subquery_pruning_varchar_test_table', 'a', 'hash');
 SELECT master_create_worker_shards('subquery_pruning_varchar_test_table', 4, 1);
 
+-- temporarily disable router executor to test pruning behaviour of subquery pushdown
+SET citus.enable_router_execution TO off;
 SET client_min_messages TO DEBUG2;
 
 SELECT * FROM
@@ -559,6 +564,8 @@ SELECT * FROM
 AS foo;
 
 DROP TABLE subquery_pruning_varchar_test_table;
+
+RESET citus.enable_router_execution;
 
 -- Simple join subquery pushdown
 SELECT
@@ -793,4 +800,3 @@ DROP FUNCTION run_command_on_master_and_workers(p_sql text);
 SET client_min_messages TO DEFAULT;
 
 SET citus.subquery_pushdown to OFF;
-SET citus.enable_router_execution TO 'true';

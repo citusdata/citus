@@ -7,7 +7,6 @@
 -- SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
  
-SET citus.enable_router_execution TO FALSE;
  -- 
  -- UNIONs and JOINs mixed
  --
@@ -144,7 +143,7 @@ ORDER BY
      3 |            268
 (4 rows)
 
--- not supported since events_subquery_2 doesn't have partition key on the target list
+-- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
 -- within the shuffled target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -202,8 +201,15 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
--- not supported since events_subquery_2 doesn't have partition key on the target list
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            234
+     2 |             75
+     3 |            268
+(4 rows)
+
+-- supported through recursive planning since events_subquery_2 doesn't have partition key on the target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -260,7 +266,14 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            369
+     2 |             75
+     3 |            268
+(4 rows)
+
 -- we can support arbitrary subqueries within UNIONs
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -749,7 +762,7 @@ ORDER BY types;
      3 |            268
 (4 rows)
 
--- not supported since subquery 3 does not have partition key
+-- supported through recursive planning since subquery 3 does not have partition key
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
   ( SELECT *, random()
@@ -800,8 +813,15 @@ INNER JOIN
       WHERE value_1 > 0 and value_1 < 4) AS t ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
--- not supported since events_subquery_4 does not have partition key on the 
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            433
+     2 |             62
+     3 |            268
+(4 rows)
+
+-- supported through recursive planning since events_subquery_4 does not have partition key on the 
 -- target list
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -857,7 +877,14 @@ INNER JOIN
 ON (t.user_id = q.user_id)) as final_query
 GROUP BY types
 ORDER BY types;
-ERROR:  complex joins are only supported when all distributed tables are joined on their distribution columns with equal operator
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            433
+     2 |             75
+     3 |            124
+(4 rows)
+
 -- union all with inner and left joins
 SELECT user_id, count(*) as cnt
 FROM
@@ -2263,12 +2290,16 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
--- not supported due to offset
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            433
+(2 rows)
+
+-- supported through recursive planning
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
-  ( SELECT *, random()
+  ( SELECT *
    FROM
      ( SELECT "t"."user_id", "t"."time", unnest("t"."collected_events") AS "event_types"
       FROM
@@ -2312,7 +2343,7 @@ FROM
                      FROM 
                       events_table as "events"
                      WHERE 
-                      event_type IN (4, 5)) events_subquery_4) OFFSET 3) t1
+                      event_type IN (4, 5)) events_subquery_4) ORDER BY 1, 2 OFFSET 3) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
      (SELECT 
@@ -2326,8 +2357,14 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            425
+     2 |             75
+     3 |            251
+(4 rows)
+
 -- not supported due to non relation rte
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2386,8 +2423,14 @@ GROUP BY
   types
 ORDER BY 
   types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
+ types | sumofeventtype 
+-------+----------------
+     0 |            449
+     1 |            433
+     2 |             75
+     3 |              4
+(4 rows)
+
 -- similar to the above, but constant rte is on the right side of the query
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType
 FROM
@@ -2435,12 +2478,17 @@ FROM
                     ) events_subquery_4)) t1
          GROUP BY "t1"."user_id") AS t) "q" 
 INNER JOIN
-     (SELECT random()::int as user_id) AS t 
+     (SELECT 1 as user_id) AS t 
     ON (t.user_id = q.user_id)) as final_query
 GROUP BY 
   types
 ORDER BY 
   types;
-ERROR:  could not run distributed query with UNION, INTERSECT, or EXCEPT
-HINT:  Consider using an equality filter on the distributed table's partition column.
-SET citus.enable_router_execution TO TRUE;
+ types | sumofeventtype 
+-------+----------------
+     0 |              4
+     1 |              8
+     2 |              1
+     3 |              1
+(4 rows)
+

@@ -283,10 +283,11 @@ SELECT et.user_id, et.time FROM events_table et WHERE et.user_id IN (SELECT user
 -- it is supported when it is a router query
 SELECT count(*) FROM events_table et WHERE et.user_id IN (SELECT user_id FROM recent_selected_users WHERE user_id = 1);
 
--- expected this to work but it did not
+-- union between views is supported through recursive planning
 (SELECT user_id FROM recent_users) 
 UNION
-(SELECT user_id FROM selected_users);
+(SELECT user_id FROM selected_users)
+ORDER BY 1;
 
 -- wrapping it inside a SELECT * works
 SELECT *
@@ -313,7 +314,7 @@ SELECT count(*)
 		(SELECT user_id FROM selected_users) ) u
 	WHERE user_id < 2 AND user_id > 0;
 
--- expected this to work but it does not
+-- UNION ALL between views is supported through recursive planning
 SELECT count(*)
 	FROM (
 		(SELECT user_id FROM recent_users) 
