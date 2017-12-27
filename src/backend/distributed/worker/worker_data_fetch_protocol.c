@@ -21,7 +21,7 @@
 
 #include "access/xact.h"
 #include "catalog/dependency.h"
-#include "catalog/namespace.h"
+#include "catalog/namespace.h"sss
 #include "commands/copy.h"
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
