@@ -498,20 +498,24 @@ EXPLAIN (COSTS FALSE)
 	AND l_suppkey = s_suppkey;
 Aggregate
   ->  Custom Scan (Citus Task-Tracker)
-        Task Count: 4
-        Tasks Shown: None, not supported for re-partition queries
-        ->  MapMergeJob
-              Map Task Count: 4
-              Merge Task Count: 4
-              ->  MapMergeJob
-                    Map Task Count: 16
-                    Merge Task Count: 4
-              ->  MapMergeJob
-                    Map Task Count: 1
-                    Merge Task Count: 4
-        ->  MapMergeJob
-              Map Task Count: 1
-              Merge Task Count: 4
+        Task Count: 16
+        Tasks Shown: One of 16
+        ->  Task
+              Node: host=localhost port=57637 dbname=regression
+              ->  Aggregate
+                    ->  Hash Join
+                          Hash Cond: (orders_mx.o_orderkey = lineitem_mx.l_orderkey)
+                          ->  Hash Join
+                                Hash Cond: (customer_mx.c_custkey = orders_mx.o_custkey)
+                                ->  Seq Scan on customer_mx_1220084 customer_mx
+                                ->  Hash
+                                      ->  Seq Scan on orders_mx_1220068 orders_mx
+                          ->  Hash
+                                ->  Hash Join
+                                      Hash Cond: (supplier_mx.s_suppkey = lineitem_mx.l_suppkey)
+                                      ->  Seq Scan on supplier_mx_1220087 supplier_mx
+                                      ->  Hash
+                                            ->  Seq Scan on lineitem_mx_1220052 lineitem_mx
 EXPLAIN (COSTS FALSE, FORMAT JSON)
 	SELECT count(*)
 	FROM lineitem_mx, orders_mx, customer_mx, supplier_mx
@@ -533,26 +537,105 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Parallel Aware": false,
           "Distributed Query": {
             "Job": {
-              "Task Count": 4,
-              "Tasks Shown": "None, not supported for re-partition queries",
-              "Depended Jobs": [
+              "Task Count": 16,
+              "Tasks Shown": "One of 16",
+              "Tasks": [
                 {
-                  "Map Task Count": 4,
-                  "Merge Task Count": 4,
-                  "Depended Jobs": [
-                    {
-                      "Map Task Count": 16,
-                      "Merge Task Count": 4
-                    },
-                    {
-                      "Map Task Count": 1,
-                      "Merge Task Count": 4
-                    }
+                  "Node": "host=localhost port=57637 dbname=regression",
+                  "Remote Plan": [
+                    [
+                      {
+                        "Plan": {
+                          "Node Type": "Aggregate",
+                          "Strategy": "Plain",
+                          "Partial Mode": "Simple",
+                          "Parallel Aware": false,
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Parallel Aware": false,
+                              "Join Type": "Inner",
+                              "Inner Unique": false,
+                              "Hash Cond": "(orders_mx.o_orderkey = lineitem_mx.l_orderkey)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Parallel Aware": false,
+                                  "Join Type": "Inner",
+                                  "Inner Unique": false,
+                                  "Hash Cond": "(customer_mx.c_custkey = orders_mx.o_custkey)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Parallel Aware": false,
+                                      "Relation Name": "customer_mx_1220084",
+                                      "Alias": "customer_mx"
+                                    },
+                                    {
+                                      "Node Type": "Hash",
+                                      "Parent Relationship": "Inner",
+                                      "Parallel Aware": false,
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Parallel Aware": false,
+                                          "Relation Name": "orders_mx_1220068",
+                                          "Alias": "orders_mx"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Parallel Aware": false,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Parallel Aware": false,
+                                      "Join Type": "Inner",
+                                      "Inner Unique": false,
+                                      "Hash Cond": "(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Parallel Aware": false,
+                                          "Relation Name": "supplier_mx_1220087",
+                                          "Alias": "supplier_mx"
+                                        },
+                                        {
+                                          "Node Type": "Hash",
+                                          "Parent Relationship": "Inner",
+                                          "Parallel Aware": false,
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Seq Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Parallel Aware": false,
+                                              "Relation Name": "lineitem_mx_1220052",
+                                              "Alias": "lineitem_mx"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    ]
+
                   ]
-                },
-                {
-                  "Map Task Count": 1,
-                  "Merge Task Count": 4
                 }
               ]
             }
@@ -590,28 +673,106 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
             <Job>
-              <Task-Count>4</Task-Count>
-              <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
-              <Depended-Jobs>
-                <MapMergeJob>
-                  <Map-Task-Count>4</Map-Task-Count>
-                  <Merge-Task-Count>4</Merge-Task-Count>
-                  <Depended-Jobs>
-                    <MapMergeJob>
-                      <Map-Task-Count>16</Map-Task-Count>
-                      <Merge-Task-Count>4</Merge-Task-Count>
-                    </MapMergeJob>
-                    <MapMergeJob>
-                      <Map-Task-Count>1</Map-Task-Count>
-                      <Merge-Task-Count>4</Merge-Task-Count>
-                    </MapMergeJob>
-                  </Depended-Jobs>
-                </MapMergeJob>
-                <MapMergeJob>
-                  <Map-Task-Count>1</Map-Task-Count>
-                  <Merge-Task-Count>4</Merge-Task-Count>
-                </MapMergeJob>
-              </Depended-Jobs>
+              <Task-Count>16</Task-Count>
+              <Tasks-Shown>One of 16</Tasks-Shown>
+              <Tasks>
+                <Task>
+                  <Node>host=localhost port=57637 dbname=regression</Node>
+                  <Remote-Plan>
+                    <explain xmlns="http://www.postgresql.org/2009/explain">
+                      <Query>
+                        <Plan>
+                          <Node-Type>Aggregate</Node-Type>
+                          <Strategy>Plain</Strategy>
+                          <Partial-Mode>Simple</Partial-Mode>
+                          <Parallel-Aware>false</Parallel-Aware>
+                          <Plans>
+                            <Plan>
+                              <Node-Type>Hash Join</Node-Type>
+                              <Parent-Relationship>Outer</Parent-Relationship>
+                              <Parallel-Aware>false</Parallel-Aware>
+                              <Join-Type>Inner</Join-Type>
+                              <Inner-Unique>false</Inner-Unique>
+                              <Hash-Cond>(orders_mx.o_orderkey = lineitem_mx.l_orderkey)</Hash-Cond>
+                              <Plans>
+                                <Plan>
+                                  <Node-Type>Hash Join</Node-Type>
+                                  <Parent-Relationship>Outer</Parent-Relationship>
+                                  <Parallel-Aware>false</Parallel-Aware>
+                                  <Join-Type>Inner</Join-Type>
+                                  <Inner-Unique>false</Inner-Unique>
+                                  <Hash-Cond>(customer_mx.c_custkey = orders_mx.o_custkey)</Hash-Cond>
+                                  <Plans>
+                                    <Plan>
+                                      <Node-Type>Seq Scan</Node-Type>
+                                      <Parent-Relationship>Outer</Parent-Relationship>
+                                      <Parallel-Aware>false</Parallel-Aware>
+                                      <Relation-Name>customer_mx_1220084</Relation-Name>
+                                      <Alias>customer_mx</Alias>
+                                    </Plan>
+                                    <Plan>
+                                      <Node-Type>Hash</Node-Type>
+                                      <Parent-Relationship>Inner</Parent-Relationship>
+                                      <Parallel-Aware>false</Parallel-Aware>
+                                      <Plans>
+                                        <Plan>
+                                          <Node-Type>Seq Scan</Node-Type>
+                                          <Parent-Relationship>Outer</Parent-Relationship>
+                                          <Parallel-Aware>false</Parallel-Aware>
+                                          <Relation-Name>orders_mx_1220068</Relation-Name>
+                                          <Alias>orders_mx</Alias>
+                                        </Plan>
+                                      </Plans>
+                                    </Plan>
+                                  </Plans>
+                                </Plan>
+                                <Plan>
+                                  <Node-Type>Hash</Node-Type>
+                                  <Parent-Relationship>Inner</Parent-Relationship>
+                                  <Parallel-Aware>false</Parallel-Aware>
+                                  <Plans>
+                                    <Plan>
+                                      <Node-Type>Hash Join</Node-Type>
+                                      <Parent-Relationship>Outer</Parent-Relationship>
+                                      <Parallel-Aware>false</Parallel-Aware>
+                                      <Join-Type>Inner</Join-Type>
+                                      <Inner-Unique>false</Inner-Unique>
+                                      <Hash-Cond>(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)</Hash-Cond>
+                                      <Plans>
+                                        <Plan>
+                                          <Node-Type>Seq Scan</Node-Type>
+                                          <Parent-Relationship>Outer</Parent-Relationship>
+                                          <Parallel-Aware>false</Parallel-Aware>
+                                          <Relation-Name>supplier_mx_1220087</Relation-Name>
+                                          <Alias>supplier_mx</Alias>
+                                        </Plan>
+                                        <Plan>
+                                          <Node-Type>Hash</Node-Type>
+                                          <Parent-Relationship>Inner</Parent-Relationship>
+                                          <Parallel-Aware>false</Parallel-Aware>
+                                          <Plans>
+                                            <Plan>
+                                              <Node-Type>Seq Scan</Node-Type>
+                                              <Parent-Relationship>Outer</Parent-Relationship>
+                                              <Parallel-Aware>false</Parallel-Aware>
+                                              <Relation-Name>lineitem_mx_1220052</Relation-Name>
+                                              <Alias>lineitem_mx</Alias>
+                                            </Plan>
+                                          </Plans>
+                                        </Plan>
+                                      </Plans>
+                                    </Plan>
+                                  </Plans>
+                                </Plan>
+                              </Plans>
+                            </Plan>
+                          </Plans>
+                        </Plan>
+                      </Query>
+                    </explain>
+                  </Remote-Plan>
+                </Task>
+              </Tasks>
             </Job>
           </Distributed-Query>
         </Plan>
@@ -644,15 +805,68 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
         Parallel Aware: false
         Distributed Query: 
           Job: 
-            Task Count: 4
-            Tasks Shown: "None, not supported for re-partition queries"
-            Depended Jobs: 
-              - Map Task Count: 4
-                Merge Task Count: 4
-                Depended Jobs: 
-                  - Map Task Count: 16
-                    Merge Task Count: 4
-                  - Map Task Count: 1
-                    Merge Task Count: 4
-              - Map Task Count: 1
-                Merge Task Count: 4
+            Task Count: 16
+            Tasks Shown: "One of 16"
+            Tasks: 
+              - Node: "host=localhost port=57637 dbname=regression"
+                Remote Plan: 
+                  - Plan: 
+                      Node Type: "Aggregate"
+                      Strategy: "Plain"
+                      Partial Mode: "Simple"
+                      Parallel Aware: false
+                      Plans: 
+                        - Node Type: "Hash Join"
+                          Parent Relationship: "Outer"
+                          Parallel Aware: false
+                          Join Type: "Inner"
+                          Inner Unique: false
+                          Hash Cond: "(orders_mx.o_orderkey = lineitem_mx.l_orderkey)"
+                          Plans: 
+                            - Node Type: "Hash Join"
+                              Parent Relationship: "Outer"
+                              Parallel Aware: false
+                              Join Type: "Inner"
+                              Inner Unique: false
+                              Hash Cond: "(customer_mx.c_custkey = orders_mx.o_custkey)"
+                              Plans: 
+                                - Node Type: "Seq Scan"
+                                  Parent Relationship: "Outer"
+                                  Parallel Aware: false
+                                  Relation Name: "customer_mx_1220084"
+                                  Alias: "customer_mx"
+                                - Node Type: "Hash"
+                                  Parent Relationship: "Inner"
+                                  Parallel Aware: false
+                                  Plans: 
+                                    - Node Type: "Seq Scan"
+                                      Parent Relationship: "Outer"
+                                      Parallel Aware: false
+                                      Relation Name: "orders_mx_1220068"
+                                      Alias: "orders_mx"
+                            - Node Type: "Hash"
+                              Parent Relationship: "Inner"
+                              Parallel Aware: false
+                              Plans: 
+                                - Node Type: "Hash Join"
+                                  Parent Relationship: "Outer"
+                                  Parallel Aware: false
+                                  Join Type: "Inner"
+                                  Inner Unique: false
+                                  Hash Cond: "(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)"
+                                  Plans: 
+                                    - Node Type: "Seq Scan"
+                                      Parent Relationship: "Outer"
+                                      Parallel Aware: false
+                                      Relation Name: "supplier_mx_1220087"
+                                      Alias: "supplier_mx"
+                                    - Node Type: "Hash"
+                                      Parent Relationship: "Inner"
+                                      Parallel Aware: false
+                                      Plans: 
+                                        - Node Type: "Seq Scan"
+                                          Parent Relationship: "Outer"
+                                          Parallel Aware: false
+                                          Relation Name: "lineitem_mx_1220052"
+                                          Alias: "lineitem_mx"
+

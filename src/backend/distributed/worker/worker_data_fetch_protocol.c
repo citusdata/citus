@@ -76,6 +76,7 @@ PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_fetch_regular_table);
 PG_FUNCTION_INFO_V1(worker_fetch_foreign_file);
+PG_FUNCTION_INFO_V1(master_expire_table_cache);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
 
 
@@ -538,6 +539,17 @@ Datum
 worker_fetch_foreign_file(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errmsg("worker_fetch_foreign_file UDF is dropped")));
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * master_expire_table_cache UDF is dropped on SQL files.
+ */
+Datum
+master_expire_table_cache(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errmsg("master_expire_table_cache UDF is dropped")));
 	PG_RETURN_VOID();
 }
 

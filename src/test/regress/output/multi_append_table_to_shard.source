@@ -3,14 +3,14 @@
 --
 SET citus.next_shard_id TO 230000;
 -- Initialize tables to join
-CREATE TABLE multi_append_table_to_shard_right_reference
+CREATE TABLE multi_append_table_to_shard_right
 (
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT create_reference_table('multi_append_table_to_shard_right_reference');
- create_reference_table 
-------------------------
+SELECT master_create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
+ master_create_distributed_table 
+---------------------------------
  
 (1 row)
 
@@ -51,14 +51,14 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
 
 \copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
 \copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
--- Place 'right' table only on the primary worker
-SELECT set_config('citus.shard_replication_factor', '1', false);
+-- Place 'right' table on both workers
+SELECT set_config('citus.shard_replication_factor', '2', false);
  set_config 
 ------------
- 1
+ 2
 (1 row)
 
-\copy multi_append_table_to_shard_right_reference FROM '@abs_srcdir@/data/agg.data'
+\copy multi_append_table_to_shard_right FROM '@abs_srcdir@/data/agg.data'
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
  set_config 
@@ -69,13 +69,20 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
 -- All 8 rows in left table match a row in right table
 SELECT	COUNT(*)
 FROM	multi_append_table_to_shard_left,
-		multi_append_table_to_shard_right_reference
+		multi_append_table_to_shard_right
 WHERE	left_number = right_number;
  count 
 -------
      8
 (1 row)
 
+-- Now append more data to the 'right' table
+CREATE TABLE multi_append_table_to_shard_stage
+(
+	number INTEGER not null,
+	text TEXT not null
+);
+COPY multi_append_table_to_shard_stage FROM '@abs_srcdir@/data/large_records.data' with delimiter '|';
 -- Check that we error out if we try to append data to a hash partitioned table.
 SELECT master_create_empty_shard('multi_append_table_to_shard_right_hash');
 ERROR:  relation "multi_append_table_to_shard_right_hash" is a hash partitioned table
@@ -84,9 +91,15 @@ SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage'
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right_hash'::regclass::oid = logicalrelid;
-ERROR:  cannot append to shardId 230001
+ERROR:  cannot append to shardId 230000
 DETAIL:  We currently don't support appending to shards in hash-partitioned or reference tables
 -- Clean up after test
+SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_right');
+ master_apply_delete_command 
+-----------------------------
+                           1
+(1 row)
+
 SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
  master_apply_delete_command 
 -----------------------------
@@ -94,8 +107,7 @@ SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left
 (1 row)
 
 DROP TABLE multi_append_table_to_shard_stage;
-ERROR:  table "multi_append_table_to_shard_stage" does not exist
-DROP TABLE multi_append_table_to_shard_right_reference;
+DROP TABLE multi_append_table_to_shard_right;
 DROP TABLE multi_append_table_to_shard_left;
 -- Check partitioning by date
 CREATE TABLE multi_append_table_to_shard_date

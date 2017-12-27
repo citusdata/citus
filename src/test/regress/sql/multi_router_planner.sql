@@ -778,13 +778,18 @@ SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 1 and au.id = 2;
 
--- multi-shard join is not router plannable
-SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id)
+-- This query was intended to test "multi-shard join is not router plannable"
+-- To run it using repartition join logic we change the join columns
+SET citus.task_executor_type to "task-tracker";
+SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name)
 	WHERE ar.author_id = 35;
 
--- this is a bug, it is a single shard join query but not router plannable
-SELECT * FROM articles_range ar join authors_range au on (ar.author_id = au.id) 
+-- This query was intended to test "this is a bug, it is a single shard join 
+-- query but not router plannable". To run it using repartition join logic we 
+-- change the join columns  
+SELECT * FROM articles_range ar join authors_range au on (ar.title = au.name) 
 	WHERE ar.author_id = 1 or au.id = 5;
+RESET citus.task_executor_type;
 
 -- bogus query, join on non-partition column, but router plannable due to filters
 SELECT * FROM articles_range ar join authors_range au on (ar.id = au.id) 

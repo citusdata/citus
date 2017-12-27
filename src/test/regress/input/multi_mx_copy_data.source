@@ -17,11 +17,16 @@ SET search_path TO public;
 \COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 
+\c - - - :worker_2_port
+-- and use second worker as well
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
 
--- and use second worker as well
-\c - - - :worker_2_port
+-- These copies were intended to test copying data to single sharded table from 
+-- worker nodes, yet in order to remove broadcast logic related codes we change
+-- the the table to reference table and copy data from master. Should be updated
+-- when worker nodes gain capability to run dml commands on reference tables.
+\c - - - :master_port
 SET search_path TO public;
 
 \COPY customer_mx FROM '@abs_srcdir@/data/customer.1.data' with delimiter '|'

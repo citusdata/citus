@@ -296,9 +296,9 @@ CREATE TABLE customer_mx (
     c_mktsegment char(10) not null,
     c_comment varchar(117) not null);
 SET citus.shard_count TO 1;
-SELECT create_distributed_table('customer_mx', 'c_custkey');
- create_distributed_table 
---------------------------
+SELECT create_reference_table('customer_mx');
+ create_reference_table 
+------------------------
  
 (1 row)
 
@@ -307,9 +307,9 @@ CREATE TABLE nation_mx (
     n_name char(25) not null,
     n_regionkey integer not null,
     n_comment varchar(152));
-SELECT create_distributed_table('nation_mx', 'n_nationkey');
- create_distributed_table 
---------------------------
+SELECT create_reference_table('nation_mx');
+ create_reference_table 
+------------------------
  
 (1 row)
 
@@ -323,9 +323,9 @@ CREATE TABLE part_mx (
     p_container char(10) not null,
     p_retailprice decimal(15,2) not null,
     p_comment varchar(23) not null);
-SELECT create_distributed_table('part_mx', 'p_partkey');
- create_distributed_table 
---------------------------
+SELECT create_reference_table('part_mx');
+ create_reference_table 
+------------------------
  
 (1 row)
 
@@ -339,9 +339,9 @@ CREATE TABLE supplier_mx
     s_acctbal decimal(15,2) not null,
     s_comment varchar(101) not null
 );
-SELECT create_distributed_table('supplier_mx', 's_suppkey');
- create_distributed_table 
---------------------------
+SELECT create_reference_table('supplier_mx');
+ create_reference_table 
+------------------------
  
 (1 row)
 
@@ -478,10 +478,10 @@ ORDER BY colocationid, logicalrelid;
  company_employees_mx                                   |            3 |           4 | h          | s
  lineitem_mx                                            |            4 |          16 | h          | s
  orders_mx                                              |            4 |          16 | h          | s
- customer_mx                                            |            5 |           1 | h          | s
- nation_mx                                              |            5 |           1 | h          | s
- part_mx                                                |            5 |           1 | h          | s
- supplier_mx                                            |            5 |           1 | h          | s
+ customer_mx                                            |            5 |           1 | n          | t
+ nation_mx                                              |            5 |           1 | n          | t
+ part_mx                                                |            5 |           1 | n          | t
+ supplier_mx                                            |            5 |           1 | n          | t
  limit_orders_mx                                        |            6 |           2 | h          | s
  articles_hash_mx                                       |            6 |           2 | h          | s
  multiple_hash_mx                                       |            7 |           2 | h          | s

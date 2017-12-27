@@ -307,7 +307,7 @@ CREATE TABLE customer_mx (
     c_comment varchar(117) not null);
 
 SET citus.shard_count TO 1;
-SELECT create_distributed_table('customer_mx', 'c_custkey');
+SELECT create_reference_table('customer_mx');
 
 CREATE TABLE nation_mx (
     n_nationkey integer not null,
@@ -315,7 +315,7 @@ CREATE TABLE nation_mx (
     n_regionkey integer not null,
     n_comment varchar(152));
 
-SELECT create_distributed_table('nation_mx', 'n_nationkey');
+SELECT create_reference_table('nation_mx');
 
 CREATE TABLE part_mx (
     p_partkey integer not null,
@@ -328,7 +328,7 @@ CREATE TABLE part_mx (
     p_retailprice decimal(15,2) not null,
     p_comment varchar(23) not null);
 
-SELECT create_distributed_table('part_mx', 'p_partkey');
+SELECT create_reference_table('part_mx');
 
 CREATE TABLE supplier_mx
 (
@@ -341,7 +341,7 @@ CREATE TABLE supplier_mx
     s_comment varchar(101) not null
 );
 
-SELECT create_distributed_table('supplier_mx', 's_suppkey');
+SELECT create_reference_table('supplier_mx');
 
 -- Create test table for ddl
 CREATE TABLE mx_ddl_table (
