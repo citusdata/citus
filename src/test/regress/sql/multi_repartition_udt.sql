@@ -188,6 +188,8 @@ INSERT INTO repartition_udt_other values (11, '(2,2)'::test_udt, 'foo');
 INSERT INTO repartition_udt_other values (12, '(2,3)'::test_udt, 'foo');
 
 SET client_min_messages = LOG;
+SET citus.large_table_shard_count = 1;
+SET citus.task_executor_type = 'task-tracker';
 
 -- Query that should result in a repartition join on int column, and be empty.
 SELECT * FROM repartition_udt JOIN repartition_udt_other
@@ -195,8 +197,6 @@ SELECT * FROM repartition_udt JOIN repartition_udt_other
 	WHERE repartition_udt.pk > 1;
 
 -- Query that should result in a repartition join on UDT column.
-SET citus.large_table_shard_count = 1;
-SET citus.task_executor_type = 'task-tracker';
 SET citus.log_multi_join_order = true;
 
 EXPLAIN SELECT * FROM repartition_udt JOIN repartition_udt_other

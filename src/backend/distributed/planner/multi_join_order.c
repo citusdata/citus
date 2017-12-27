@@ -18,6 +18,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/pg_am.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_physical_planner.h"
@@ -1228,6 +1229,12 @@ LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 	{
 		return NULL;
 	}
+
+	/* tables must be colocated, note that this check works for the HEAP's use case */
+	/*if (!TablesColocated(relationId, currentJoinNode->tableEntry->relationId)) */
+	/*{ */
+	/*	return NULL; */
+	/*} */
 
 	joinOnPartitionColumns = JoinOnColumns(currentPartitionColumn,
 										   candidatePartitionColumn,

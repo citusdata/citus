@@ -196,11 +196,6 @@ test: multi_function_evaluation
 test: multi_truncate
 
 # ----------
-# multi_expire_table_cache tests for broadcast tables
-# ----------
-test: multi_expire_table_cache
-
-# ----------
 # multi_colocation_utils tests utility functions written for co-location feature & internal API
 # multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
 # ----------

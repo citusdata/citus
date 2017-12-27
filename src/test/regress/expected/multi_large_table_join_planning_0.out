@@ -12,13 +12,20 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 9 AS version_above_nine;
  version_above_nine 
 --------------------
- t
+ f
 (1 row)
 
 BEGIN;
 SET client_min_messages TO DEBUG4;
+DEBUG:  CommitTransactionCommand
 SET citus.large_table_shard_count TO 2;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
 SET citus.task_executor_type TO 'task-tracker';
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
+DEBUG:  CommitTransactionCommand
 -- Debug4 log messages display jobIds within them. We explicitly set the jobId
 -- sequence here so that the regression output becomes independent of the number
 -- of jobs executed prior to running this test.
@@ -27,20 +34,21 @@ SET citus.task_executor_type TO 'task-tracker';
 -- validates that only the minimal necessary projection columns are transferred
 -- between jobs.
 SELECT
-  l_partkey, o_orderkey, count(*)
+	l_partkey, o_orderkey, count(*)
 FROM
-  lineitem, part, orders, customer
+	lineitem, part, orders, customer
 WHERE
-  l_orderkey = o_orderkey AND
-  l_partkey = p_partkey AND
-  c_custkey = o_custkey AND
+	l_orderkey = o_orderkey AND
+	l_partkey = p_partkey AND
+	c_custkey = o_custkey AND
         (l_quantity > 5.0 OR l_extendedprice > 1200.0) AND
         p_size > 8 AND o_totalprice > 10.0 AND
         c_acctbal < 5000.0 AND l_partkey < 1000
 GROUP BY
-  l_partkey, o_orderkey
+	l_partkey, o_orderkey
 ORDER BY
-  l_partkey, o_orderkey;
+	l_partkey, o_orderkey;
+DEBUG:  StartTransactionCommand
 DEBUG:  join prunable for intervals [1,1509] and [8997,14946]
 DEBUG:  join prunable for intervals [1509,4964] and [8997,14946]
 DEBUG:  join prunable for intervals [2951,4455] and [8997,14946]
@@ -112,6 +120,7 @@ DEBUG:  completed cleanup query for job 2
 DEBUG:  completed cleanup query for job 2
 DEBUG:  completed cleanup query for job 1
 DEBUG:  completed cleanup query for job 1
+DEBUG:  CommitTransactionCommand
  l_partkey | o_orderkey | count 
 -----------+------------+-------
         18 |      12005 |     1
@@ -146,16 +155,17 @@ DEBUG:  completed cleanup query for job 1
 (29 rows)
 
 SELECT
-  l_partkey, o_orderkey, count(*)
+	l_partkey, o_orderkey, count(*)
 FROM
-  lineitem, orders
+	lineitem, orders
 WHERE
-  l_suppkey = o_shippriority AND
+	l_suppkey = o_shippriority AND
         l_quantity < 5.0 AND o_totalprice <> 4.0
 GROUP BY
-  l_partkey, o_orderkey
+	l_partkey, o_orderkey
 ORDER BY
-  l_partkey, o_orderkey;
+	l_partkey, o_orderkey;
+DEBUG:  StartTransactionCommand
 DEBUG:  generated sql query for task 1
 DETAIL:  query string: "SELECT l_partkey, l_suppkey FROM lineitem_290000 lineitem WHERE (l_quantity < 5.0)"
 DEBUG:  generated sql query for task 2
@@ -232,10 +242,13 @@ DEBUG:  completed cleanup query for job 4
 DEBUG:  completed cleanup query for job 4
 DEBUG:  completed cleanup query for job 5
 DEBUG:  completed cleanup query for job 5
+DEBUG:  CommitTransactionCommand
  l_partkey | o_orderkey | count 
 -----------+------------+-------
 (0 rows)
 
 -- Reset client logging level to its previous value
 SET client_min_messages TO NOTICE;
+DEBUG:  StartTransactionCommand
+DEBUG:  ProcessUtility
 COMMIT;
