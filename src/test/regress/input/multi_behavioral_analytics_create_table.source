@@ -5,7 +5,7 @@
 SET citus.next_shard_id TO 1400000;
 ALTER SEQUENCE pg_catalog.pg_dist_jobid_seq RESTART 1400000;
 SET citus.shard_replication_factor = 1;
-SET citus.shard_count = 4;
+SET citus.shard_count = 32;
 
 CREATE SCHEMA with_basics;
 SET search_path TO 'with_basics';
@@ -19,6 +19,20 @@ SELECT create_distributed_table('events_table', 'user_id');
 COPY users_table FROM '@abs_srcdir@/data/users_table.data' WITH CSV;
 COPY events_table FROM '@abs_srcdir@/data/events_table.data' WITH CSV;
 
+SET citus.shard_count = 96;
+CREATE SCHEMA subquery_and_ctes;
+SET search_path TO subquery_and_ctes;
+
+CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('users_table', 'user_id');
+
+CREATE TABLE events_table (user_id int, time timestamp, event_type int, value_2 int, value_3 float, value_4 bigint);
+SELECT create_distributed_table('events_table', 'user_id');
+
+COPY users_table FROM '@abs_srcdir@/data/users_table.data' WITH CSV;
+COPY events_table FROM '@abs_srcdir@/data/events_table.data' WITH CSV;
+
+SET citus.shard_count TO DEFAULT;
 SET search_path TO DEFAULT;
 
 CREATE TABLE users_table (user_id int, time timestamp, value_1 int, value_2 int, value_3 float, value_4 bigint);
