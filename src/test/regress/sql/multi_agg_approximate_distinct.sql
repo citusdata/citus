@@ -76,8 +76,7 @@ CREATE TABLE test_count_distinct_schema.nation_hash(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_count_distinct_schema.nation_hash', 4, 2);
+SELECT create_distributed_table('test_count_distinct_schema.nation_hash', 'n_nationkey', 'hash');
 
 \copy test_count_distinct_schema.nation_hash FROM STDIN with delimiter '|';
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai

@@ -8,9 +8,9 @@ CREATE TABLE multi_append_table_to_shard_right
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_append_table_to_shard_right', 'right_number', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -19,26 +19,22 @@ CREATE TABLE multi_append_table_to_shard_left
 	left_number INTEGER not null,
 	left_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE multi_append_table_to_shard_right_hash
 (
 	right_number INTEGER not null,
 	right_text TEXT not null
 );
-SELECT master_create_distributed_table('multi_append_table_to_shard_right_hash', 'right_number', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('multi_append_table_to_shard_right_hash', 1, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('multi_append_table_to_shard_right_hash', 'right_number', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

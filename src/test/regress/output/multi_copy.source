@@ -824,14 +824,14 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560171 |          1 | localhost |    57637
   560171 |          1 | localhost |    57638
-  560172 |          1 | localhost |    57638
+  560171 |          1 | localhost |    57637
   560172 |          1 | localhost |    57637
-  560173 |          1 | localhost |    57637
+  560172 |          1 | localhost |    57638
   560173 |          1 | localhost |    57638
-  560174 |          1 | localhost |    57638
+  560173 |          1 | localhost |    57637
   560174 |          1 | localhost |    57637
+  560174 |          1 | localhost |    57638
 (8 rows)
 
 -- create a reference table
@@ -856,14 +856,14 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560176 |          1 | localhost |    57638
   560176 |          1 | localhost |    57637
-  560177 |          1 | localhost |    57637
+  560176 |          1 | localhost |    57638
   560177 |          1 | localhost |    57638
-  560178 |          1 | localhost |    57638
+  560177 |          1 | localhost |    57637
   560178 |          1 | localhost |    57637
-  560179 |          1 | localhost |    57637
+  560178 |          1 | localhost |    57638
   560179 |          1 | localhost |    57638
+  560179 |          1 | localhost |    57637
 (8 rows)
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
@@ -895,14 +895,14 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560171 |          3 | localhost |    57637
   560171 |          1 | localhost |    57638
-  560172 |          1 | localhost |    57638
+  560171 |          3 | localhost |    57637
   560172 |          3 | localhost |    57637
-  560173 |          3 | localhost |    57637
+  560172 |          1 | localhost |    57638
   560173 |          1 | localhost |    57638
-  560174 |          1 | localhost |    57638
+  560173 |          3 | localhost |    57637
   560174 |          3 | localhost |    57637
+  560174 |          1 | localhost |    57638
 (8 rows)
 
 -- try to insert into a reference table copy should fail
@@ -941,12 +941,12 @@ SELECT shardid, shardstate, nodename, nodeport
 ---------+------------+-----------+----------
   560176 |          1 | localhost |    57637
   560176 |          1 | localhost |    57637
-  560177 |          1 | localhost |    57637
   560177 |          1 | localhost |    57638
-  560178 |          1 | localhost |    57638
+  560177 |          1 | localhost |    57637
   560178 |          1 | localhost |    57637
-  560179 |          1 | localhost |    57637
+  560178 |          1 | localhost |    57638
   560179 |          1 | localhost |    57638
+  560179 |          1 | localhost |    57637
 (8 rows)
 
 -- re-enable test_user on the first worker
@@ -991,14 +991,14 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash'::regclass order by placementid;
  shardid | shardstate | nodename  | nodeport 
 ---------+------------+-----------+----------
-  560180 |          1 | localhost |    57637
   560180 |          1 | localhost |    57638
-  560181 |          1 | localhost |    57638
+  560180 |          1 | localhost |    57637
   560181 |          1 | localhost |    57637
-  560182 |          1 | localhost |    57637
+  560181 |          1 | localhost |    57638
   560182 |          1 | localhost |    57638
-  560183 |          1 | localhost |    57638
+  560182 |          1 | localhost |    57637
   560183 |          1 | localhost |    57637
+  560183 |          1 | localhost |    57638
 (8 rows)
 
 DROP TABLE numbers_hash;

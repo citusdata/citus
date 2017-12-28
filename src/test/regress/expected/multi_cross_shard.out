@@ -28,8 +28,8 @@ SHOW citus.multi_task_query_log_level;
 SELECT * FROM multi_task_table;
  id |  name  
 ----+--------
-  1 | elem_1
   3 | elem_3
+  1 | elem_1
   2 | elem_2
 (3 rows)
 
@@ -40,8 +40,8 @@ NOTICE:  multi-task query about to be executed
 HINT:  Queries are split to multiple tasks if they have to be split into several queries on the workers.
  id |  name  
 ----+--------
-  1 | elem_1
   3 | elem_3
+  1 | elem_1
   2 | elem_2
 (3 rows)
 
@@ -104,9 +104,9 @@ SET citus.multi_task_query_log_level to DEFAULT;
 SELECT * FROM summary_table;
  id | order_sum 
 ----+-----------
-  1 |        35
-  1 |        35
   3 |        50
+  1 |        35
+  1 |        35
   2 |        40
 (4 rows)
 
@@ -128,9 +128,9 @@ SET citus.multi_task_query_log_level to DEFAULT;
 SELECT * FROM summary_table;
  id | order_sum 
 ----+-----------
-  1 |        35
-  1 |        35
   3 |        50
+  1 |        35
+  1 |        35
   2 |        40
 (4 rows)
 
