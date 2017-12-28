@@ -224,7 +224,7 @@ MultiLogicalPlanCreate(Query *originalQuery, Query *queryTree,
 static bool
 ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 {
-	List *whereClauseList = NIL;
+	List *qualifierList = NIL;
 
 	/*
 	 * We check the existence of subqueries in FROM clause on the modified query
@@ -260,8 +260,8 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery)
 	 * Some unsupported join clauses in logical planner
 	 * may be supported by subquery pushdown planner.
 	 */
-	whereClauseList = WhereClauseList(rewrittenQuery->jointree);
-	if (DeferErrorIfUnsupportedClause(whereClauseList) != NULL)
+	qualifierList = QualifierList(rewrittenQuery->jointree);
+	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
 	{
 		return true;
 	}

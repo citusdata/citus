@@ -279,6 +279,59 @@ WHERE
 ORDER BY l_orderkey DESC
 LIMIT 10;
 
+-- outer joins on reference tables with functions works
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+FROM events_table t1
+LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+LIMIT 5;
+
+-- outer joins on reference tables with simple expressions should work
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+FROM events_table t1
+LEFT JOIN users_reference_table t2 ON t1.user_id > t2.user_id
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+LIMIT 5;
+
+-- outer joins on distributed tables with simple expressions should not work
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+FROM events_table t1
+LEFT JOIN users_table t2 ON t1.user_id > t2.user_id
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+LIMIT 5;
+
+-- outer joins on reference tables with expressions should work
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+FROM events_table t1
+LEFT JOIN users_reference_table t2 ON t1.user_id = (CASE WHEN t2.user_id > 3 THEN 3 ELSE t2.user_id END)
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+LIMIT 5;
+
+-- outer joins on distributed tables and reference tables with expressions should work
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+ FROM 
+ users_table t0 LEFT JOIN
+ events_table t1  ON t0.user_id = t1.user_id
+ LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
+ ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ LIMIT 5;
+
+-- outer joins on distributed tables with expressions should not work
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+ FROM 
+ users_table t0 LEFT JOIN
+ events_table t1  ON t0.user_id = trunc(t1.user_id)
+ LEFT JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
+ ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+ LIMIT 5;
+
+-- inner joins on reference tables with functions works
+SELECT DISTINCT ON (t1.user_id) t1.user_id, t2.value_1, t2.value_2, t2.value_3
+FROM events_table t1
+JOIN users_reference_table t2 ON t1.user_id = trunc(t2.user_id)
+ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC 
+LIMIT 5;
+
 -- distinct queries work
 SELECT DISTINCT l_orderkey
 FROM
