@@ -3,7 +3,7 @@
 --
 -- Test checks whether constraints of distributed tables can be adjusted using
 -- the ALTER TABLE ... ADD CONSTRAINT ... command.
-
+SET citus.shard_count TO 32;
 SET citus.next_shard_id TO 1450000;
 SET citus.next_placement_id TO 1450000;
 
@@ -398,9 +398,10 @@ ROLLBACK;
 
 -- There should be no constraint on master and worker(s) 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
+
 \c - - - :worker_1_port
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450034'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
 
 \c - - - :master_port
 
@@ -414,14 +415,13 @@ ROLLBACK;
 
 -- There should be no constraint on master and worker(s) 
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='products'::regclass;
-
 \c - - - :worker_1_port
 
-SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450034'::regclass;
+SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.products_1450202'::regclass;
 
 \c - - - :master_port
-SET citus.next_shard_id TO 1450038;
-SET citus.next_placement_id TO 1450038;
+SET citus.next_shard_id TO 1450234;
+SET citus.next_placement_id TO 1450234;
 
 DROP TABLE products;
 

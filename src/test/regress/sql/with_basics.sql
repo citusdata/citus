@@ -1,7 +1,8 @@
 -- Test the basic CTE functionality and expected error messages
+SET search_path TO 'with_basics';
 
 CREATE TYPE xy AS (x int, y int);
-SELECT run_command_on_workers('CREATE TYPE xy AS (x int, y int)');
+SELECT run_command_on_workers('CREATE TYPE with_basics.xy AS (x int, y int)');
 
 -- CTEs in FROM should work
 WITH cte AS (
@@ -507,3 +508,4 @@ SELECT user_id, value_1 FROM cte_user_with_view ORDER BY 1, 2 LIMIT 10 OFFSET 2;
 
 DROP VIEW basic_view;
 DROP VIEW cte_view;
+DROP SCHEMA with_basics CASCADE;
