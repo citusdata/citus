@@ -327,6 +327,7 @@ extern List * TaskListDifference(const List *list1, const List *list2);
 extern List * TaskListUnion(const List *list1, const List *list2);
 extern List * AssignAnchorShardTaskList(List *taskList);
 extern List * FirstReplicaAssignTaskList(List *taskList);
+extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 
 
 #endif   /* MULTI_PHYSICAL_PLANNER_H */
