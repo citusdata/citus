@@ -75,19 +75,19 @@ WHERE
    raw_events_first.user_id = raw_events_second.user_id;
  user_id 
 ---------
-       1
-       5
        3
        4
-       6
+       1
+       5
        2
+       6
 (6 rows)
 
 -- see that we get unique vialitons
 INSERT INTO raw_events_second  SELECT * FROM raw_events_first;
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300004"
 DETAIL:  Key (user_id, value_1)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57637
+CONTEXT:  while executing command on localhost:57638
 -- stable functions should be allowed
 INSERT INTO raw_events_second (user_id, time)
 SELECT
@@ -236,7 +236,7 @@ DEBUG:  distributed statement: INSERT INTO public.raw_events_second_13300007 AS 
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "raw_events_second_user_id_value_1_key_13300007"
 DETAIL:  Key (user_id, value_1)=(9, 90) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- now do some aggregations
 INSERT INTO agg_events 
 SELECT
@@ -266,7 +266,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_t
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- some subquery tests
 INSERT INTO agg_events 
             (value_1_agg, 
@@ -287,7 +287,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_t
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- subquery one more level depth 
 INSERT INTO agg_events 
             (value_4_agg, 
@@ -311,7 +311,7 @@ DEBUG:  distributed statement: INSERT INTO public.agg_events_13300011 AS citus_t
 DEBUG:  Plan is router executable
 ERROR:  duplicate key value violates unique constraint "agg_events_user_id_value_1_agg_key_13300008"
 DETAIL:  Key (user_id, value_1_agg)=(1, 10) already exists.
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 -- join between subqueries
 INSERT INTO agg_events
             (user_id)
@@ -1722,7 +1722,7 @@ BEGIN;
 ALTER TABLE reference_table ADD COLUMN z int;
 INSERT INTO raw_events_first (user_id)
 SELECT user_id FROM raw_events_second JOIN reference_table USING (user_id);
-ERROR:  cannot establish a new connection for placement 13300024, since DDL has been executed on a connection that is in use
+ERROR:  cannot establish a new connection for placement 13300025, since DDL has been executed on a connection that is in use
 ROLLBACK;
 -- Insert after copy is allowed
 BEGIN;
@@ -2189,14 +2189,14 @@ TRUNCATE raw_events_first;
 BEGIN;
 INSERT INTO raw_events_first (user_id, value_1)
 SELECT s, s FROM generate_series(1, 5) s;
-SELECT user_id, value_1 FROM raw_events_first;
+SELECT user_id, value_1 FROM raw_events_first ORDER BY 1;
  user_id | value_1 
 ---------+---------
        1 |       1
-       5 |       5
+       2 |       2
        3 |       3
        4 |       4
-       2 |       2
+       5 |       5
 (5 rows)
 
 ROLLBACK;

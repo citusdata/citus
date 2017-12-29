@@ -18,11 +18,11 @@ INSERT INTO multi_task_table VALUES(3, 'elem_3');
 
 -- Shouldn't log anything when the log level is 'off'
 SHOW citus.multi_task_query_log_level;
-SELECT * FROM multi_task_table;
+SELECT * FROM multi_task_table ORDER BY 1;
 
 -- Get messages with the log level 'notice'
 SET citus.multi_task_query_log_level TO notice;
-SELECT * FROM multi_task_table;
+SELECT * FROM multi_task_table ORDER BY 1;
 SELECT AVG(id) AS avg_id FROM multi_task_table;
 
 -- Get messages with the log level 'error'
@@ -65,7 +65,7 @@ INSERT INTO summary_table SELECT id, SUM(order_count) FROM raw_table WHERE id = 
 
 -- Should have four rows (three rows from the query without where and the one from with where)
 SET citus.multi_task_query_log_level to DEFAULT;
-SELECT * FROM summary_table;
+SELECT * FROM summary_table ORDER BY 1,2;
 
 -- Set log-level to different levels inside the transaction
 BEGIN;
@@ -80,7 +80,7 @@ ROLLBACK;
 
 -- Should have only four rows since the transaction is rollbacked.
 SET citus.multi_task_query_log_level to DEFAULT;
-SELECT * FROM summary_table;
+SELECT * FROM summary_table ORDER BY 1,2;
 
 -- Test router-select query
 SET citus.multi_task_query_log_level TO notice;

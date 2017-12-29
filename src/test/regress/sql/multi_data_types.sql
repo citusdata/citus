@@ -64,10 +64,8 @@ CREATE TABLE composite_type_partitioned_table
 	id integer,
 	col test_composite_type
 );
-
-SELECT master_create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
-
-SELECT master_create_worker_shards('composite_type_partitioned_table', 4, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('composite_type_partitioned_table', 'col', 'hash');
 
 -- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
 INSERT INTO composite_type_partitioned_table VALUES  (1, '(1, 2)'::test_composite_type);
@@ -91,9 +89,7 @@ CREATE TABLE bugs (
     status bug_status
 );
 
-SELECT master_create_distributed_table('bugs', 'status', 'hash');
-
-SELECT master_create_worker_shards('bugs', 4, 1);
+SELECT create_distributed_table('bugs', 'status', 'hash');
 
 -- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
 INSERT INTO bugs VALUES  (1, 'new');
@@ -115,8 +111,7 @@ CREATE TABLE varchar_hash_partitioned_table
     name varchar
 );
 
-SELECT master_create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
-SELECT master_create_worker_shards('varchar_hash_partitioned_table', 4, 1);
+SELECT create_distributed_table('varchar_hash_partitioned_table', 'name', 'hash');
 
 -- execute INSERT, SELECT and UPDATE queries on composite_type_partitioned_table   
 INSERT INTO varchar_hash_partitioned_table VALUES  (1, 'Jason');

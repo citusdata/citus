@@ -117,6 +117,8 @@ SELECT count(DISTINCT l_orderkey) as distinct_order_count, l_quantity FROM linei
 
 -- Check that approximate count(distinct) works at a table in a schema other than public
 -- create necessary objects
+SET citus.next_shard_id TO 2000000;
+SET citus.next_placement_id TO 2000000;
 CREATE SCHEMA test_count_distinct_schema;
 CREATE TABLE test_count_distinct_schema.nation_hash(
     n_nationkey integer not null,

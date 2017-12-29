@@ -25,24 +25,24 @@ SHOW citus.multi_task_query_log_level;
  off
 (1 row)
 
-SELECT * FROM multi_task_table;
+SELECT * FROM multi_task_table ORDER BY 1;
  id |  name  
 ----+--------
-  3 | elem_3
   1 | elem_1
   2 | elem_2
+  3 | elem_3
 (3 rows)
 
 -- Get messages with the log level 'notice'
 SET citus.multi_task_query_log_level TO notice;
-SELECT * FROM multi_task_table;
+SELECT * FROM multi_task_table ORDER BY 1;
 NOTICE:  multi-task query about to be executed
 HINT:  Queries are split to multiple tasks if they have to be split into several queries on the workers.
  id |  name  
 ----+--------
-  3 | elem_3
   1 | elem_1
   2 | elem_2
+  3 | elem_3
 (3 rows)
 
 SELECT AVG(id) AS avg_id FROM multi_task_table;
@@ -101,13 +101,13 @@ HINT:  Queries are split to multiple tasks if they have to be split into several
 INSERT INTO summary_table SELECT id, SUM(order_count) FROM raw_table WHERE id = 1 GROUP BY id;
 -- Should have four rows (three rows from the query without where and the one from with where)
 SET citus.multi_task_query_log_level to DEFAULT;
-SELECT * FROM summary_table;
+SELECT * FROM summary_table ORDER BY 1,2;
  id | order_sum 
 ----+-----------
-  3 |        50
   1 |        35
   1 |        35
   2 |        40
+  3 |        50
 (4 rows)
 
 -- Set log-level to different levels inside the transaction
@@ -125,13 +125,13 @@ HINT:  Queries are split to multiple tasks if they have to be split into several
 ROLLBACK;
 -- Should have only four rows since the transaction is rollbacked.
 SET citus.multi_task_query_log_level to DEFAULT;
-SELECT * FROM summary_table;
+SELECT * FROM summary_table ORDER BY 1,2;
  id | order_sum 
 ----+-----------
-  3 |        50
   1 |        35
   1 |        35
   2 |        40
+  3 |        50
 (4 rows)
 
 -- Test router-select query
