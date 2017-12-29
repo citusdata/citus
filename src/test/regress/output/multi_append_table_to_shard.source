@@ -157,7 +157,7 @@ FROM
 WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 SELECT * FROM multi_append_table_to_shard_date;
@@ -174,7 +174,7 @@ FROM
 WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 SELECT * FROM multi_append_table_to_shard_date;
@@ -194,7 +194,7 @@ FROM
 WHERE	'multi_append_table_to_shard_date'::regclass::oid = logicalrelid;
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 ROLLBACK;

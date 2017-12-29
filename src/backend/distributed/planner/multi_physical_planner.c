@@ -2237,6 +2237,17 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
 	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
 
+	if (firstListShardCount != secondListShardCount)
+	{
+		return false;
+	}
+
+	/* if there are not any shards just return true */
+	if (firstListShardCount == 0)
+	{
+		return true;
+	}
+
 	Assert(comparisonFunction != NULL);
 
 	/*
@@ -2245,17 +2256,6 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	 */
 	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
 		firstTableCache->colocationId == secondTableCache->colocationId)
-	{
-		return true;
-	}
-
-	if (firstListShardCount != secondListShardCount)
-	{
-		return false;
-	}
-
-	/* if there are not any shards just return true */
-	if (firstListShardCount == 0)
 	{
 		return true;
 	}

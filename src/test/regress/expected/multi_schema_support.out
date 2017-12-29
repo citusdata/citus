@@ -35,7 +35,7 @@ SELECT master_create_empty_shard('test_schema_support.nation_append');
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -66,7 +66,7 @@ SELECT master_create_empty_shard('test_schema_support."nation._''append"');
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -81,7 +81,7 @@ SET search_path TO test_schema_support;
 SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard
@@ -95,7 +95,7 @@ SELECT COUNT(*) FROM nation_append;
 SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 -- verify table actually appended to shard

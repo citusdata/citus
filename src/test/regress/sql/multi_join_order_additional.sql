@@ -64,15 +64,15 @@ CREATE TABLE customer_hash (
 SELECT master_create_distributed_table('customer_hash', 'c_custkey', 'hash');
 SELECT master_create_worker_shards('customer_hash', 2, 1);
 
--- The following query checks that we can correctly handle self-joins
-
-EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
-	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
-
 -- Update configuration to treat lineitem and orders tables as large
 
 SET citus.large_table_shard_count TO 2;
 SET client_min_messages TO LOG;
+
+-- The following query checks that we can correctly handle self-joins
+
+EXPLAIN SELECT l1.l_quantity FROM lineitem l1, lineitem l2
+	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
 
 -- The following queries check that we correctly handle joins and OR clauses. In
 -- particular, these queries check that we factorize out OR clauses if possible,

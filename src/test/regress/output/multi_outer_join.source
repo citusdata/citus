@@ -74,8 +74,8 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_third b ON (l_custkey = t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(t_custkey), max(t_custkey)
 FROM
@@ -191,8 +191,8 @@ SELECT
 	min(r_custkey), max(r_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- Reverse right join should be same as left join
 SELECT
 	min(l_custkey), max(l_custkey)
@@ -564,8 +564,8 @@ SELECT
 FROM
 	multi_outer_join_left l1
 	FULL JOIN multi_outer_join_third t1 ON (l1.l_custkey = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner join  + single shard left join should work
 SELECT
 	l_custkey, r_custkey, t_custkey
@@ -637,8 +637,8 @@ FROM
 	multi_outer_join_third t1
 	INNER JOIN multi_outer_join_left l1 ON (l1.l_custkey = t1.t_custkey)
 	LEFT JOIN multi_outer_join_right r1 ON (l1.l_custkey  = r1.r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- inner (local) join  + 2 shards left (dual partition) join should error out
 SELECT
 	l_custkey, t_custkey, r_custkey
@@ -759,20 +759,20 @@ SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a LEFT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a RIGHT JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT
 	min(l_custkey), max(l_custkey)
 FROM
 	multi_outer_join_left a FULL JOIN multi_outer_join_right b ON (l_custkey = r_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 SELECT 
 	t_custkey
 FROM   
@@ -780,8 +780,8 @@ FROM
 	LEFT OUTER JOIN multi_outer_join_left l1 ON (l1.l_custkey = r1.r_custkey)) AS
     test(c_custkey, c_nationkey)
     INNER JOIN multi_outer_join_third t1 ON (test.c_custkey = t1.t_custkey);
-ERROR:  cannot perform distributed planning on this query
-DETAIL:  Shards of relations in outer join queries must have 1-to-1 shard partitioning
+ERROR:  cannot run outer join query if join is not on the partition column
+DETAIL:  Outer joins requiring repartitioning are not supported.
 -- simple test to ensure anti-joins work with hash-partitioned tables
 CREATE TABLE left_values(val int);
 SELECT master_create_distributed_table('left_values', 'val', 'hash');
