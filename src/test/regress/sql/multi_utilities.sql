@@ -5,10 +5,11 @@ SET citus.next_shard_id TO 990000;
 -- ===================================================================
 -- test utility statement functionality
 -- ===================================================================
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE sharded_table ( name text, id bigint );
-SELECT master_create_distributed_table('sharded_table', 'id', 'hash');
-SELECT master_create_worker_shards('sharded_table', 2, 1);
+SELECT create_distributed_table('sharded_table', 'id', 'hash');
 
 -- COPY out is supported with distributed tables
 COPY sharded_table TO STDOUT;
@@ -95,9 +96,10 @@ DROP TABLE sharded_table;
 -- VACUUM tests
 
 -- create a table with a single shard (for convenience)
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE dustbunnies (id integer, name text, age integer);
-SELECT master_create_distributed_table('dustbunnies', 'id', 'hash');
-SELECT master_create_worker_shards('dustbunnies', 1, 2);
+SELECT create_distributed_table('dustbunnies', 'id', 'hash');
 
 -- add some data to the distributed table
 \copy dustbunnies (id, name) from stdin with csv

@@ -104,15 +104,14 @@ COMMIT;
 -- ===================================================================
 -- Tests for replication factor > 1
 -- ===================================================================
-
+SET citus.shard_count TO 2;
 CREATE TABLE researchers (
   id bigint NOT NULL,
   lab_id int NOT NULL,
   name text NOT NULL
 );
 
-SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
-SELECT master_create_worker_shards('researchers', 2, 2);
+SELECT create_distributed_table('researchers', 'lab_id', 'hash');
 
 -- Basic rollback and release
 BEGIN;
