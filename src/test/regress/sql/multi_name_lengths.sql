@@ -5,6 +5,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
 
 SET citus.multi_shard_commit_protocol = '2pc';
+SET citus.shard_count TO 2;
 
 -- Verify that a table name > 56 characters gets hashed properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
@@ -16,7 +17,8 @@ SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345
 \c - - - :worker_1_port
 \dt too_long_*
 \c - - - :master_port
-
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 -- Verify that the UDF works and rejects bad arguments.
 SELECT shard_name(NULL, 666666);
 SELECT shard_name(0, 666666);
@@ -34,8 +36,7 @@ CREATE TABLE name_lengths (
 	constraint constraint_a UNIQUE (col1)
 	);
 
-SELECT master_create_distributed_table('name_lengths', 'col1', 'hash');
-SELECT master_create_worker_shards('name_lengths', '2', '2');
+SELECT create_distributed_table('name_lengths', 'col1', 'hash');
 
 -- Verify that we CAN add columns with "too-long names", because
 -- the columns' names are not extended in the corresponding shard tables.
@@ -84,14 +85,15 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890123456789
 
 -- Verify that distributed tables with too-long names 
 -- for CHECK constraints are no trouble.
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE sneaky_name_lengths (
 	col1 integer not null,
         col2 integer not null,
         int_col_12345678901234567890123456789012345678901234567890 integer not null,
         CHECK (int_col_12345678901234567890123456789012345678901234567890 > 100)
         );
-SELECT master_create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
-SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
+SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 DROP TABLE sneaky_name_lengths CASCADE;
 
 CREATE TABLE sneaky_name_lengths (
@@ -110,6 +112,8 @@ SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
 \di public.sneaky*225006
 SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.sneaky_name_lengths_225006'::regclass;
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 
 DROP TABLE sneaky_name_lengths CASCADE;
 
@@ -120,12 +124,13 @@ CREATE TABLE sneaky_name_lengths (
         int_col_12345678901234567890123456789012345678901234567890 integer not null,
         constraint unique_12345678901234567890123456789012345678901234567890 UNIQUE (col1)
         );
-SELECT master_create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
-SELECT master_create_worker_shards('sneaky_name_lengths', '2', '2');
+SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 
 \c - - - :worker_1_port
 \di unique*225008
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 
 DROP TABLE sneaky_name_lengths CASCADE;
 
@@ -134,12 +139,13 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 2250000000000;
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
-SELECT master_create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
-SELECT master_create_worker_shards('too_long_12345678901234567890123456789012345678901234567890', '2', '2');
+SELECT create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
 
 \c - - - :worker_1_port
 \dt *225000000000*
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 2;
 
 DROP TABLE too_long_12345678901234567890123456789012345678901234567890 CASCADE;
 
@@ -147,8 +153,7 @@ DROP TABLE too_long_12345678901234567890123456789012345678901234567890 CASCADE;
 CREATE TABLE U&"elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D" UESCAPE '!' (
         col1 integer not null PRIMARY KEY,
         col2 integer not null);
-SELECT master_create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
-SELECT master_create_worker_shards(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', '2', '2');
+SELECT create_distributed_table(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!', 'col1', 'hash');
 
 -- Verify that quoting is used in shard_name
 SELECT shard_name(U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass, min(shardid))
@@ -159,14 +164,15 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
 \dt public.elephant_*
 \di public.elephant_*
 \c - - - :master_port
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
 
 -- Verify that shard_name UDF supports schemas
 CREATE SCHEMA multi_name_lengths;
 CREATE TABLE multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890 (
         col1 integer not null,
         col2 integer not null);
-SELECT master_create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
-SELECT master_create_worker_shards('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 2, 1);
+SELECT create_distributed_table('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
 
 SELECT shard_name('multi_name_lengths.too_long_12345678901234567890123456789012345678901234567890'::regclass, min(shardid))
 FROM pg_dist_shard

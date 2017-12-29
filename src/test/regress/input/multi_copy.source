@@ -4,7 +4,7 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
-
+SET citus.shard_count TO 64;
 
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
@@ -124,9 +124,7 @@ CREATE TABLE customer_with_default(
         c_name varchar(25) not null,
         c_time timestamp default now());
 
-SELECT master_create_distributed_table('customer_with_default', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('customer_with_default', 64, 1);
+SELECT create_distributed_table('customer_with_default', 'c_custkey', 'hash');
 
 -- Test with default values for now() function
 COPY customer_with_default (c_custkey, c_name) FROM STDIN
@@ -178,7 +176,7 @@ CREATE TABLE customer_copy_range (
         c_comment varchar(117),
 		primary key (c_custkey));
 
-SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
+SELECT create_distributed_table('customer_copy_range', 'c_custkey', 'range');
 
 -- Test COPY into empty range-partitioned table
 COPY customer_copy_range FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
@@ -231,7 +229,7 @@ CREATE TABLE customer_copy_append (
         c_acctbal decimal(15,2),
         c_mktsegment char(10),
         c_comment varchar(117));
-SELECT master_create_distributed_table('customer_copy_append', 'c_custkey', 'append');
+SELECT create_distributed_table('customer_copy_append', 'c_custkey', 'append');
 
 -- Test syntax error
 COPY customer_copy_append(c_custkey, c_name) FROM STDIN WITH (FORMAT 'csv');
@@ -290,7 +288,7 @@ CREATE TABLE lineitem_copy_append (
         l_shipinstruct char(25) not null,
         l_shipmode char(10) not null,
         l_comment varchar(44) not null);
-SELECT master_create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
 
 -- Test multiple shard creation
 SET citus.shard_max_size TO '256kB';
@@ -320,7 +318,7 @@ LIMIT
 
 -- Ensure that copy from worker node of table with serial column fails
 CREATE TABLE customer_worker_copy_append_seq (id integer, seq serial);
-SELECT master_create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
+SELECT create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
 
 -- Connect to the first worker node
 \c - - - 57637
@@ -345,7 +343,7 @@ CREATE TABLE customer_worker_copy_append (
 
 CREATE INDEX ON customer_worker_copy_append (c_name);
 
-SELECT master_create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
+SELECT create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
 
 -- Connect to the first worker node
 \c - - - 57637
@@ -380,7 +378,7 @@ CREATE TABLE append.customer_copy (
         c_mktsegment char(10),
         c_comment varchar(117));
 
-SELECT master_create_distributed_table('append.customer_copy', 'c_custkey', 'append');
+SELECT create_distributed_table('append.customer_copy', 'c_custkey', 'append');
 
 -- Test copy from the master node
 COPY append.customer_copy FROM '@abs_srcdir@/data/customer.1.data' with (delimiter '|');
@@ -397,13 +395,13 @@ COPY append.customer_copy FROM '@abs_srcdir@/data/customer.2.data' with (delimit
 SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM append.customer_copy;
 
 -- Test with table name which contains special character
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE "customer_with_special_\\_character"(
         c_custkey integer,
         c_name varchar(25) not null);
 
-SELECT master_create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('"customer_with_special_\\_character"', 4, 1);
+SELECT create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
 
 COPY "customer_with_special_\\_character" (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
@@ -419,9 +417,7 @@ CREATE TABLE "1_customer"(
         c_custkey integer,
         c_name varchar(25) not null);
 
-SELECT master_create_distributed_table('"1_customer"', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('"1_customer"', 4, 1);
+SELECT create_distributed_table('"1_customer"', 'c_custkey', 'hash');
 
 COPY "1_customer" (c_custkey, c_name) FROM STDIN
 WITH (FORMAT 'csv');
@@ -480,8 +476,7 @@ CREATE TABLE packed_numbers_hash (
         packed_numbers number_pack[]
 );
 
-SELECT master_create_distributed_table('packed_numbers_hash', 'id', 'hash');
-SELECT master_create_worker_shards('packed_numbers_hash', 4, 1);
+SELECT create_distributed_table('packed_numbers_hash', 'id', 'hash');
 COPY (SELECT 1, ARRAY[ROW(42, 42), ROW(42, 42)]) TO '/tmp/copy_test_array_of_composite';
 COPY packed_numbers_hash FROM '/tmp/copy_test_array_of_composite';
 
@@ -495,8 +490,7 @@ CREATE TABLE super_packed_numbers_hash (
         super_packed_number super_number_pack
 );
 
-SELECT master_create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
-SELECT master_create_worker_shards('super_packed_numbers_hash', 4, 1);
+SELECT create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
 COPY (SELECT 1, ROW(ROW(42, 42), ROW(42, 42))) TO '/tmp/copy_test_composite_of_composite';
 COPY super_packed_numbers_hash FROM '/tmp/copy_test_composite_of_composite';
 
@@ -509,7 +503,7 @@ CREATE TABLE packed_numbers_append (
         packed_numbers number_pack[]
 );
 
-SELECT master_create_distributed_table('packed_numbers_append', 'id', 'append');
+SELECT create_distributed_table('packed_numbers_append', 'id', 'append');
 COPY packed_numbers_append FROM '/tmp/copy_test_array_of_composite';
 
 -- Verify data is actually copied
@@ -522,7 +516,7 @@ CREATE TABLE super_packed_numbers_append (
         super_packed_number super_number_pack
 );
 
-SELECT master_create_distributed_table('super_packed_numbers_append', 'id', 'append');
+SELECT create_distributed_table('super_packed_numbers_append', 'id', 'append');
 COPY super_packed_numbers_append FROM '/tmp/copy_test_composite_of_composite';
 
 -- Verify data is actually copied
@@ -536,7 +530,7 @@ CREATE TABLE composite_partition_column_table(
         composite_column number_pack
 );
 
-SELECT master_create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
+SELECT create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
 
 \COPY composite_partition_column_table FROM STDIN WITH (FORMAT 'csv');
 1,"(1,1)"
@@ -546,7 +540,7 @@ SELECT master_create_distributed_table('composite_partition_column_table', 'comp
 
 -- Test copy on append distributed tables do not create shards on removed workers
 CREATE TABLE numbers_append (a int, b int);
-SELECT master_create_distributed_table('numbers_append', 'a', 'append');
+SELECT create_distributed_table('numbers_append', 'a', 'append');
 
 -- no shards is created yet
 SELECT shardid, nodename, nodeport

@@ -27,17 +27,19 @@ CREATE TABLE insufficient_shards ( LIKE limit_orders );
 CREATE TABLE range_partitioned ( LIKE limit_orders );
 CREATE TABLE append_partitioned ( LIKE limit_orders );
 
-SELECT master_create_distributed_table('limit_orders', 'id', 'hash');
-SELECT master_create_distributed_table('multiple_hash', 'category', 'hash');
-SELECT master_create_distributed_table('insufficient_shards', 'id', 'hash');
-SELECT master_create_distributed_table('range_partitioned', 'id', 'range');
-SELECT master_create_distributed_table('append_partitioned', 'id', 'append');
+SET citus.shard_count TO 2;
 
-SELECT master_create_worker_shards('limit_orders', 2, 2);
-SELECT master_create_worker_shards('multiple_hash', 2, 2);
+SELECT create_distributed_table('limit_orders', 'id', 'hash');
+SELECT create_distributed_table('multiple_hash', 'category', 'hash');
 
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
 -- make a single shard that covers no partition values
-SELECT master_create_worker_shards('insufficient_shards', 1, 1);
+SELECT create_distributed_table('insufficient_shards', 'id', 'hash');
+
+SELECT create_distributed_table('range_partitioned', 'id', 'range');
+SELECT create_distributed_table('append_partitioned', 'id', 'append');
+
 UPDATE pg_dist_shard SET shardminvalue = 0, shardmaxvalue = 0
 WHERE logicalrelid = 'insufficient_shards'::regclass;
 
@@ -418,8 +420,8 @@ SELECT * FROM multiple_hash WHERE category = '2' ORDER BY category, data;
 -- verify interaction of default values, SERIAL, and RETURNING
 \set QUIET on
 CREATE TABLE app_analytics_events (id serial, app_id integer, name text);
-SELECT master_create_distributed_table('app_analytics_events', 'app_id', 'hash');
-SELECT master_create_worker_shards('app_analytics_events', 4, 1);
+SET citus.shard_count TO 4;
+SELECT create_distributed_table('app_analytics_events', 'app_id', 'hash');
 
 INSERT INTO app_analytics_events VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
 INSERT INTO app_analytics_events (app_id, name) VALUES (102, 'Wayz') RETURNING id;

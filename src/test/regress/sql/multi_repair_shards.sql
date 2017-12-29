@@ -15,10 +15,10 @@ CREATE INDEX ON customer_engagements (created_at);
 CREATE INDEX ON customer_engagements (event_data);
 
 -- distribute the table
-SELECT master_create_distributed_table('customer_engagements', 'id', 'hash');
-
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
 -- create a single shard on the first worker
-SELECT master_create_worker_shards('customer_engagements', 1, 2);
+SELECT create_distributed_table('customer_engagements', 'id', 'hash');
 
 -- ingest some data for the tests
 INSERT INTO customer_engagements VALUES (1, '01-01-2015', 'first event');
@@ -92,10 +92,10 @@ CREATE FOREIGN TABLE remote_engagements (
 ) SERVER fake_fdw_server;
 
 -- distribute the table
-SELECT master_create_distributed_table('remote_engagements', 'id', 'hash');
-
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 2;
 -- create a single shard on the first worker
-SELECT master_create_worker_shards('remote_engagements', 1, 2);
+SELECT create_distributed_table('remote_engagements', 'id', 'hash');
 
 -- get the newshardid
 SELECT shardid as remotenewshardid FROM pg_dist_shard WHERE logicalrelid = 'remote_engagements'::regclass

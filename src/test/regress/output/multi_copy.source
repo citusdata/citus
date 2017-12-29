@@ -2,6 +2,7 @@
 -- MULTI_COPY
 --
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 560000;
+SET citus.shard_count TO 64;
 -- Create a new hash-partitioned table into which to COPY
 CREATE TABLE customer_copy_hash (
         c_custkey integer,
@@ -150,15 +151,9 @@ CREATE TABLE customer_with_default(
         c_custkey integer,
         c_name varchar(25) not null,
         c_time timestamp default now());
-SELECT master_create_distributed_table('customer_with_default', 'c_custkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('customer_with_default', 64, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('customer_with_default', 'c_custkey', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -211,9 +206,9 @@ CREATE TABLE customer_copy_range (
         c_mktsegment char(10),
         c_comment varchar(117),
 		primary key (c_custkey));
-SELECT master_create_distributed_table('customer_copy_range', 'c_custkey', 'range');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('customer_copy_range', 'c_custkey', 'range');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -296,9 +291,9 @@ CREATE TABLE customer_copy_append (
         c_acctbal decimal(15,2),
         c_mktsegment char(10),
         c_comment varchar(117));
-SELECT master_create_distributed_table('customer_copy_append', 'c_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('customer_copy_append', 'c_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -386,9 +381,9 @@ CREATE TABLE lineitem_copy_append (
         l_shipinstruct char(25) not null,
         l_shipmode char(10) not null,
         l_comment varchar(44) not null);
-SELECT master_create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('lineitem_copy_append', 'l_orderkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -428,9 +423,9 @@ LIMIT
 
 -- Ensure that copy from worker node of table with serial column fails
 CREATE TABLE customer_worker_copy_append_seq (id integer, seq serial);
-SELECT master_create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('customer_worker_copy_append_seq', 'id', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -453,12 +448,12 @@ CREATE TABLE customer_worker_copy_append (
         c_comment varchar(117),
                 primary key (c_custkey));
 CREATE INDEX ON customer_worker_copy_append (c_name);
-SELECT master_create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
+SELECT create_distributed_table('customer_worker_copy_append', 'c_custkey', 'append');
 WARNING:  table "customer_worker_copy_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
- master_create_distributed_table 
----------------------------------
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -496,9 +491,9 @@ CREATE TABLE append.customer_copy (
         c_acctbal decimal(15,2),
         c_mktsegment char(10),
         c_comment varchar(117));
-SELECT master_create_distributed_table('append.customer_copy', 'c_custkey', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('append.customer_copy', 'c_custkey', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -517,18 +512,14 @@ SELECT min(c_custkey), max(c_custkey), avg(c_acctbal), count(*) FROM append.cust
 (1 row)
 
 -- Test with table name which contains special character
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE "customer_with_special_\\_character"(
         c_custkey integer,
         c_name varchar(25) not null);
-SELECT master_create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('"customer_with_special_\\_character"', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('"customer_with_special_\\_character"', 'c_custkey', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -545,15 +536,9 @@ SELECT count(*) FROM "customer_with_special_\\_character";
 CREATE TABLE "1_customer"(
         c_custkey integer,
         c_name varchar(25) not null);
-SELECT master_create_distributed_table('"1_customer"', 'c_custkey', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('"1_customer"', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('"1_customer"', 'c_custkey', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -602,15 +587,9 @@ CREATE TABLE packed_numbers_hash (
         id integer,
         packed_numbers number_pack[]
 );
-SELECT master_create_distributed_table('packed_numbers_hash', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('packed_numbers_hash', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('packed_numbers_hash', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -628,15 +607,9 @@ CREATE TABLE super_packed_numbers_hash (
         id integer,
         super_packed_number super_number_pack
 );
-SELECT master_create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
- master_create_distributed_table 
----------------------------------
- 
-(1 row)
-
-SELECT master_create_worker_shards('super_packed_numbers_hash', 4, 1);
- master_create_worker_shards 
------------------------------
+SELECT create_distributed_table('super_packed_numbers_hash', 'id', 'hash');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -654,9 +627,9 @@ CREATE TABLE packed_numbers_append (
         id integer,
         packed_numbers number_pack[]
 );
-SELECT master_create_distributed_table('packed_numbers_append', 'id', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('packed_numbers_append', 'id', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -673,9 +646,9 @@ CREATE TABLE super_packed_numbers_append (
         id integer,
         super_packed_number super_number_pack
 );
-SELECT master_create_distributed_table('super_packed_numbers_append', 'id', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('super_packed_numbers_append', 'id', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -692,9 +665,9 @@ CREATE TABLE composite_partition_column_table(
         id integer,
         composite_column number_pack
 );
-SELECT master_create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('composite_partition_column_table', 'composite_column', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 
@@ -710,9 +683,9 @@ DETAIL:  Setting shard statistics to NULL
 ERROR:  failure on connection marked as essential: localhost:57637
 -- Test copy on append distributed tables do not create shards on removed workers
 CREATE TABLE numbers_append (a int, b int);
-SELECT master_create_distributed_table('numbers_append', 'a', 'append');
- master_create_distributed_table 
----------------------------------
+SELECT create_distributed_table('numbers_append', 'a', 'append');
+ create_distributed_table 
+--------------------------
  
 (1 row)
 

@@ -38,7 +38,7 @@ CREATE TABLE varchar_partitioned_table
 (
 	varchar_column varchar(100)
 );
-SELECT master_create_distributed_table('varchar_partitioned_table', 'varchar_column', 'append');
+SELECT create_distributed_table('varchar_partitioned_table', 'varchar_column', 'append');
 
 -- Create logical shards and shard placements with shardid 100,101
 
@@ -67,7 +67,7 @@ CREATE TABLE array_partitioned_table
 (
 	array_column text[]
 );
-SELECT master_create_distributed_table('array_partitioned_table', 'array_column', 'append');
+SELECT create_distributed_table('array_partitioned_table', 'array_column', 'append');
 SET client_min_messages TO DEBUG2;
 
 -- Create logical shard with shardid 102, 103
@@ -105,7 +105,7 @@ CREATE TABLE composite_partitioned_table
 (
 	composite_column composite_type
 );
-SELECT master_create_distributed_table('composite_partitioned_table', 'composite_column', 'append');
+SELECT create_distributed_table('composite_partitioned_table', 'composite_column', 'append');
 SET client_min_messages TO DEBUG2;
 
 -- Create logical shard with shardid 104, 105

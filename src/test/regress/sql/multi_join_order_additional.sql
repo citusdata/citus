@@ -10,6 +10,8 @@ SET citus.next_shard_id TO 650000;
 SET citus.explain_distributed_queries TO off;
 SET citus.log_multi_join_order TO TRUE;
 SET citus.task_executor_type = 'task-tracker'; -- can't explain all queries otherwise
+SET citus.shard_count TO 2;
+SET citus.shard_replication_factor TO 1;
 SET client_min_messages TO DEBUG2;
 
 -- Create new table definitions for use in testing in distributed planning and
@@ -33,8 +35,7 @@ CREATE TABLE lineitem_hash (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
-SELECT master_create_worker_shards('lineitem_hash', 2, 1);
+SELECT create_distributed_table('lineitem_hash', 'l_orderkey', 'hash');
 
 CREATE INDEX lineitem_hash_time_index ON lineitem_hash (l_shipdate);
 
@@ -49,8 +50,7 @@ CREATE TABLE orders_hash (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders_hash', 'o_orderkey', 'hash');
-SELECT master_create_worker_shards('orders_hash', 2, 1);
+SELECT create_distributed_table('orders_hash', 'o_orderkey', 'hash');
 
 CREATE TABLE customer_hash (
 	c_custkey integer not null,
@@ -61,8 +61,7 @@ CREATE TABLE customer_hash (
 	c_acctbal decimal(15,2) not null,
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_hash', 'c_custkey', 'hash');
-SELECT master_create_worker_shards('customer_hash', 2, 1);
+SELECT create_distributed_table('customer_hash', 'c_custkey', 'hash');
 
 -- The following query checks that we can correctly handle self-joins
 

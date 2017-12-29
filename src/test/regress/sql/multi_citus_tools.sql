@@ -219,8 +219,7 @@ DROP TABLE check_placements CASCADE;
 
 -- make sure run_on_all_colocated_placements correctly detects colocation
 CREATE TABLE check_colocated (key int);
-SELECT master_create_distributed_table('check_colocated', 'key', 'hash');
-SELECT master_create_worker_shards('check_colocated', 5, 2);
+SELECT create_distributed_table('check_colocated', 'key', 'hash');
 
 SET citus.shard_count TO 4;
 CREATE TABLE second_table (key int);

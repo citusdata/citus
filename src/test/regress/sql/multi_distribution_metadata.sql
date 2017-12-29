@@ -60,10 +60,7 @@ CREATE TABLE events_hash (
 	id bigint,
 	name text
 );
-SELECT master_create_distributed_table('events_hash', 'name', 'hash');
-
--- create worker shards
-SELECT master_create_worker_shards('events_hash', 4, 2);
+SELECT create_distributed_table('events_hash', 'name', 'hash');
 
 -- set shardstate of one replication from each shard to 0 (invalid value)
 UPDATE pg_dist_placement SET shardstate = 0 WHERE shardid BETWEEN 540000 AND 540003
