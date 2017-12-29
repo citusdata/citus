@@ -10,7 +10,10 @@
 
 #include "postgres.h"
 
+#ifdef HAVE_POLL_H
 #include <poll.h>
+#endif
+
 
 #include "libpq-fe.h"
 
@@ -449,8 +452,11 @@ FinishConnectionEstablishment(MultiConnection *connection)
 		/* Loop, to handle poll() being interrupted by signals (EINTR) */
 		while (true)
 		{
-			struct pollfd pollFileDescriptor;
 			int pollResult = 0;
+
+			/* we use poll(2) if available, otherwise select(2) */
+#ifdef HAVE_POLL
+			struct pollfd pollFileDescriptor;
 
 			pollFileDescriptor.fd = PQsocket(connection->pgConn);
 			if (pollmode == PGRES_POLLING_READING)
@@ -469,6 +475,31 @@ FinishConnectionEstablishment(MultiConnection *connection)
 			 * poll() after signal arrival.
 			 */
 			pollResult = poll(&pollFileDescriptor, 1, checkIntervalMS);
+#else /* !HAVE_POLL */
+			fd_set readFileDescriptorSet;
+			fd_set writeFileDescriptorSet;
+			fd_set exceptionFileDescriptorSet;
+			int selectTimeoutUS = checkIntervalMS * 1000;
+			struct timeval selectTimeout = { 0, selectTimeoutUS };
+			int selectFileDescriptor = PQsocket(connection->pgConn);
+
+			FD_ZERO(&readFileDescriptorSet);
+			FD_ZERO(&writeFileDescriptorSet);
+			FD_ZERO(&exceptionFileDescriptorSet);
+
+			if (pollmode == PGRES_POLLING_READING)
+			{
+				FD_SET(selectFileDescriptor, &readFileDescriptorSet);
+			}
+			else if (pollmode == PGRES_POLLING_WRITING)
+			{
+				FD_SET(selectFileDescriptor, &writeFileDescriptorSet);
+			}
+
+			pollResult = (select) (selectFileDescriptor + 1, &readFileDescriptorSet,
+								   &writeFileDescriptorSet, &exceptionFileDescriptorSet,
+								   &selectTimeout);
+#endif /* HAVE_POLL */
 
 			if (pollResult == 0)
 			{
