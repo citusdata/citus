@@ -45,6 +45,11 @@ CREATE TABLE multi_outer_join_third
 );
 SELECT master_create_distributed_table('multi_outer_join_third', 't_custkey', 'append');
 
+-- Manually colocate tables multi_outer_join_left, multi_outer_join_right and multi_outer_join_third
+UPDATE pg_dist_partition SET colocationid = 100001 WHERE logicalrelid = 'multi_outer_join_right'::regclass 
+												      OR logicalrelid = 'multi_outer_join_left'::regclass
+												      OR logicalrelid = 'multi_outer_join_third'::regclass;
+
 -- Make sure we do not crash if both tables have no shards
 SELECT
 	min(l_custkey), max(l_custkey)

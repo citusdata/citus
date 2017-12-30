@@ -73,6 +73,6 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- Set minimum and maximum values for two shards back to their original values
 
 UPDATE pg_dist_shard SET shardminvalue = '1' WHERE shardid = 290000;
-UPDATE pg_dist_shard SET shardmaxvalue = '4964' WHERE shardid = 290001;
+UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 290001;
 
 SET client_min_messages TO NOTICE;

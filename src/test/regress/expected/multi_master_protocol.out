@@ -7,7 +7,7 @@ SELECT part_storage_type, part_key, part_replica_count, part_max_size,
 	   part_placement_policy FROM master_get_table_metadata('lineitem');
  part_storage_type |  part_key  | part_replica_count | part_max_size | part_placement_policy 
 -------------------+------------+--------------------+---------------+-----------------------
- t                 | l_orderkey |                  2 |        307200 |                     2
+ t                 | l_orderkey |                  2 |       1536000 |                     2
 (1 row)
 
 SELECT * FROM master_get_table_ddl_events('lineitem');

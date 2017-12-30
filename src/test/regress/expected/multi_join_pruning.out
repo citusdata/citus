@@ -10,14 +10,8 @@ SET client_min_messages TO DEBUG2;
 SET citus.large_table_shard_count TO 2;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  join prunable for intervals [1,1509] and [8997,14946]
-DEBUG:  join prunable for intervals [1509,2951] and [8997,14946]
-DEBUG:  join prunable for intervals [2951,4455] and [8997,14946]
-DEBUG:  join prunable for intervals [4480,5986] and [8997,14946]
-DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
-DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
-DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
-DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
+DEBUG:  join prunable for intervals [1,5986] and [8997,14946]
+DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  36086 | 3.0076679446574429
@@ -25,10 +19,7 @@ DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
-DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
-DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
-DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
-DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
+DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
   sum  |        avg         
 -------+--------------------
  17996 | 3.0194630872483221
@@ -48,10 +39,6 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 -- out all the shards, and leave us with an empty task list.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-DEBUG:  join prunable for intervals [8997,10560] and [1,5986]
-DEBUG:  join prunable for intervals [10560,12036] and [1,5986]
-DEBUG:  join prunable for intervals [12036,13473] and [1,5986]
-DEBUG:  join prunable for intervals [13473,14947] and [1,5986]
  sum | avg 
 -----+-----
      |    

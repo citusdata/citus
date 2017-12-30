@@ -374,7 +374,7 @@ LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
                                                          ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ERROR:  column "null_column" contains null values
-CONTEXT:  while executing command on localhost:57638
+CONTEXT:  while executing command on localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
 -- Verify that we error out on non-column RENAME statements
@@ -733,7 +733,7 @@ SELECT master_create_worker_shards('test_ab', 8, 2);
 INSERT INTO test_ab VALUES (2, 10);
 INSERT INTO test_ab VALUES (2, 11);
 CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
-ERROR:  could not create unique index "temp_unique_index_1_220022"
+ERROR:  could not create unique index "temp_unique_index_1_220011"
 DETAIL:  Key (a)=(2) is duplicated.
 CONTEXT:  while executing command on localhost:57638
 SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
@@ -883,7 +883,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
     END;
 $up$ LANGUAGE plpgsql;
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220028
+BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 \c - - - :master_port
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
@@ -927,7 +927,7 @@ SET citus.enable_ddl_propagation to true;
 SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
  master_apply_delete_command 
 -----------------------------
-                          14
+                           3
 (1 row)
 
 DROP TABLE lineitem_alter;
@@ -937,7 +937,7 @@ DROP TABLE lineitem_alter;
 SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%';
         relname        
 -----------------------
- lineitem_alter_220009
+ lineitem_alter_220002
 (1 row)
 
 \c - - - :master_port

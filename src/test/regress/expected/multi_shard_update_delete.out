@@ -185,7 +185,7 @@ SELECT master_create_empty_shard('test_append_table');
 SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
@@ -197,7 +197,7 @@ SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
 SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table', 'localhost', :master_port);
  master_append_table_to_shard 
 ------------------------------
-                    0.0266667
+                   0.00533333
 (1 row)
 
 UPDATE test_append_table SET col_2 = 5;

@@ -127,7 +127,6 @@ static Job * BuildJobTreeTaskList(Job *jobTree,
 static List * SubquerySqlTaskList(Job *job,
 								  PlannerRestrictionContext *plannerRestrictionContext);
 static void ErrorIfUnsupportedShardDistribution(Query *query);
-static bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
 								ShardInterval *firstInterval,
 								ShardInterval *secondInterval);
@@ -2224,7 +2223,7 @@ ErrorIfUnsupportedShardDistribution(Query *query)
  * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
  * partitioning.
  */
-static bool
+bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
 	bool coPartitionedTables = true;

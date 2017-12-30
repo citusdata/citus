@@ -42,6 +42,10 @@ CREATE TABLE orders (
 	PRIMARY KEY(o_orderkey) );
 SELECT master_create_distributed_table('orders', 'o_orderkey', 'append');
 
+-- Manually colocate tables lineitem and orders
+UPDATE pg_dist_partition SET colocationid = 100000 WHERE logicalrelid = 'orders'::regclass 
+												      OR logicalrelid = 'lineitem'::regclass;
+
 CREATE TABLE customer (
 	c_custkey integer not null,
 	c_name varchar(25) not null,

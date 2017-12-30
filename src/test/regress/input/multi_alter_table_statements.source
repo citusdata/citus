@@ -437,7 +437,7 @@ CREATE FUNCTION update_value() RETURNS trigger AS $up$
 $up$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_value
-BEFORE INSERT ON trigger_table_220028
+BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
 
 \c - - - :master_port
