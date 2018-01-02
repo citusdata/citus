@@ -924,15 +924,11 @@ MultiClientWait(WaitInfo *waitInfo)
 		{
 			/*
 			 * Signals that arrive can interrupt our poll(). In that case just
-			 * check for interrupts, and try again. Every other error is
-			 * unexpected and treated as such.
+			 * return. Every other error is unexpected and treated as such.
 			 */
 			if (errno == EAGAIN || errno == EINTR)
 			{
-				CHECK_FOR_INTERRUPTS();
-
-				/* maximum wait starts at max again, but that's ok, it's just a stopgap */
-				continue;
+				return;
 			}
 			else
 			{

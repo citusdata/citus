@@ -319,6 +319,40 @@ FROM
      ) as bar  
 WHERE foo.user_id = bar.user_id;
 
+-- We error-out when there's an error in execution of the query. By repeating it
+-- multiple times, we increase the chance of this test failing before PR #1903.
+SET client_min_messages TO ERROR;
+DO $$
+DECLARE
+	errors_received INTEGER;
+BEGIN
+errors_received := 0;
+FOR i IN 1..3 LOOP
+	BEGIN
+		WITH cte as (
+			SELECT
+				user_id, value_2
+			from
+				events_table
+		)
+		SELECT * FROM users_table where value_2 < (
+			SELECT
+				min(cte.value_2)
+			FROM
+				cte
+			WHERE
+				users_table.user_id=cte.user_id
+			GROUP BY
+				user_id, cte.value_2);
+	EXCEPTION WHEN OTHERS THEN
+		IF SQLERRM LIKE 'failed to execute task%' THEN
+			errors_received := errors_received + 1;
+		END IF;
+	END;
+END LOOP;
+RAISE '(%/3) failed to execute one of the tasks', errors_received;
+END;
+$$;
 
 SET client_min_messages TO DEFAULT;
 
