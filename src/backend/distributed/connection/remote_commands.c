@@ -182,7 +182,8 @@ NonblockingForgetResults(MultiConnection *connection)
 		}
 
 		result = PQgetResult(pgConn);
-		if (PQresultStatus(result) == PGRES_COPY_IN)
+		if (PQresultStatus(result) == PGRES_COPY_IN ||
+			PQresultStatus(result) == PGRES_COPY_OUT)
 		{
 			/* in copy, can't reliably recover without blocking */
 			return false;
