@@ -387,7 +387,7 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 
 		case EXEC_TASK_FAILED:
 		{
-			bool raiseError = true;
+			bool raiseError = false;
 
 			/*
 			 * On task failure, we close the connection. We also reset our execution
@@ -397,12 +397,15 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 			 */
 			int32 connectionId = connectionIdArray[currentIndex];
 			MultiConnection *connection = MultiClientGetConnection(connectionId);
+			bool isCritical = connection->remoteTransaction.transactionCritical;
 
 			/*
-			 * If this connection was previously marked as critical (e.g. it was used
-			 * to perform a DDL command), then throw an error. Otherwise, mark it
-			 * as failed and continue executing the query.
+			 * Mark the connection as failed in case it was already used to perform
+			 * writes. We do not error out here, because the abort handler currently
+			 * cannot handle connections with COPY (SELECT ...) TO STDOUT commands
+			 * in progress.
 			 */
+			raiseError = false;
 			MarkRemoteTransactionFailed(connection, raiseError);
 
 			MultiClientDisconnect(connectionId);
@@ -411,8 +414,16 @@ ManageTaskExecution(Task *task, TaskExecution *taskExecution,
 
 			taskStatusArray[currentIndex] = EXEC_TASK_CONNECT_START;
 
-			/* try next worker node */
-			AdjustStateForFailure(taskExecution);
+			if (isCritical)
+			{
+				/* cannot recover when error occurs in a critical transaction */
+				taskExecution->criticalErrorOccurred = true;
+			}
+			else
+			{
+				/* try next worker node */
+				AdjustStateForFailure(taskExecution);
+			}
 
 			/*
 			 * Add a delay, to avoid potentially excerbating problems by
