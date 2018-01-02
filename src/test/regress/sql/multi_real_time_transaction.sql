@@ -176,4 +176,46 @@ DELETE FROM test_table where id = 1 or id = 3;
 SELECT * FROM co_test_table;
 ROLLBACK;
 
+-- Test cancelling behaviour. See https://github.com/citusdata/citus/pull/1905.
+-- Repeating it multiple times to increase the chance of failure before PR #1905.
+SET client_min_messages TO ERROR;
+alter system set deadlock_timeout TO '1ms';
+SELECT pg_reload_conf();
+
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+BEGIN;
+SELECT id, pg_advisory_lock(15) FROM test_table;
+ROLLBACK;
+
+SET client_min_messages TO DEFAULT;
+alter system set deadlock_timeout TO DEFAULT;
+SELECT pg_reload_conf();
+
+
 DROP SCHEMA multi_real_time_transaction CASCADE;
