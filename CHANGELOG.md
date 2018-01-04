@@ -1,3 +1,9 @@
+### citus v7.1.2 (January 4, 2018) ###
+
+* Fixes a bug that could cause assigning wrong IDs to transactions
+
+* Increases `COPY` throughput
+
 ### citus v7.1.1 (December 1, 2017) ###
 
 * Fixes a bug that could prevent pushing down subqueries with reference tables
