@@ -377,9 +377,7 @@ ERROR:  column "null_column" contains null values
 CONTEXT:  while executing command on localhost:57638
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
--- Verify that we error out on non-column RENAME statements
-ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
-ERROR:  renaming distributed tables is currently unsupported
+-- Verify that we error out on RENAME CONSTRAINT statement
 ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
 -- Verify that IF EXISTS works as expected with RENAME statements
@@ -784,9 +782,71 @@ ORDER BY attnum;
 (30 rows)
 
 \c - - - :master_port
+-- verify that we can rename distributed tables
+SHOW citus.enable_ddl_propagation;
+ citus.enable_ddl_propagation 
+------------------------------
+ on
+(1 row)
+
+ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
+-- verify rename is performed
+SELECT relname FROM pg_class WHERE relname = 'lineitem_renamed';
+     relname      
+------------------
+ lineitem_renamed
+(1 row)
+
+-- show rename worked on one worker, too
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY relname;
+         relname         
+-------------------------
+ lineitem_renamed_220000
+ lineitem_renamed_220001
+ lineitem_renamed_220002
+ lineitem_renamed_220003
+ lineitem_renamed_220004
+ lineitem_renamed_220005
+ lineitem_renamed_220006
+ lineitem_renamed_220007
+ lineitem_renamed_220008
+ lineitem_renamed_220010
+ lineitem_renamed_220011
+ lineitem_renamed_220012
+ lineitem_renamed_220013
+ lineitem_renamed_220014
+(14 rows)
+
+\c - - - :master_port
+-- revert it to original name
+ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
+-- show rename worked on one worker, too
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
+        relname        
+-----------------------
+ lineitem_alter_220000
+ lineitem_alter_220001
+ lineitem_alter_220002
+ lineitem_alter_220003
+ lineitem_alter_220004
+ lineitem_alter_220005
+ lineitem_alter_220006
+ lineitem_alter_220007
+ lineitem_alter_220008
+ lineitem_alter_220009
+ lineitem_alter_220010
+ lineitem_alter_220011
+ lineitem_alter_220012
+ lineitem_alter_220013
+ lineitem_alter_220014
+(15 rows)
+
+\c - - - :master_port
 -- verify that we don't intercept DDL commands if propagation is turned off
 SET citus.enable_ddl_propagation to false;
--- table rename statement can be performed now
+-- table rename statement can be performed on the coordinator only now
 ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 -- verify rename is performed
 SELECT relname FROM pg_class WHERE relname = 'lineitem_alter' or relname = 'lineitem_renamed';
