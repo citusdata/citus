@@ -1382,12 +1382,13 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.referen
 (0 rows)
 
 \c - - - :master_port
--- as we expect, renaming and setting WITH OIDS does not work for reference tables
-ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
-ERROR:  renaming distributed tables is currently unsupported
+-- as we expect, setting WITH OIDS does not work for reference tables
 ALTER TABLE reference_table_ddl SET WITH OIDS;
 ERROR:  alter table command is currently unsupported
 DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+-- now test the renaming of the table, and back to the expected name
+ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
+ALTER TABLE reference_table_ddl_test RENAME TO reference_table_ddl;
 -- now test reference tables against some helper UDFs that Citus provides
 -- cannot delete / drop shards from a reference table
 SELECT master_apply_delete_command('DELETE FROM reference_table_ddl');

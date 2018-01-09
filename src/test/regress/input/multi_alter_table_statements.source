@@ -148,9 +148,8 @@ ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 
--- Verify that we error out on non-column RENAME statements
+-- Verify that we error out on RENAME CONSTRAINT statement
 
-ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
 ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 
 -- Verify that IF EXISTS works as expected with RENAME statements

@@ -394,6 +394,29 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 				AppendShardIdToName(oldRelationName, shardId);
 				AppendShardIdToName(newRelationName, shardId);
+
+				/*
+				 * PostgreSQL creates array types for each ordinary table, with
+				 * the same name plus a prefix of '_'.
+				 *
+				 * ALTER TABLE ... RENAME TO ... also renames the underlying
+				 * array type, and the DDL is run in parallel connections over
+				 * all the placements and shards at once. Concurrent access
+				 * here deadlocks.
+				 *
+				 * Let's provide an easier to understand error message here
+				 * than the deadlock one.
+				 *
+				 * See also https://github.com/citusdata/citus/issues/1664
+				 */
+				if (strlen(*newRelationName) >= (NAMEDATALEN - 1))
+				{
+					ereport(ERROR,
+							(errcode(ERRCODE_NAME_TOO_LONG),
+							 errmsg(
+								 "distributed identifier must be less than %d characters",
+								 NAMEDATALEN - 1)));
+				}
 			}
 			else if (objectType == OBJECT_COLUMN || objectType == OBJECT_TRIGGER)
 			{
@@ -644,7 +667,6 @@ AppendShardIdToName(char **name, uint64 shardId)
 	{
 		snprintf(extendedName, NAMEDATALEN, "%s%s", (*name), shardIdAndSeparator);
 	}
-
 	/*
 	 * Otherwise, we need to truncate the name further to accommodate
 	 * a sufficient hash value. The resulting name will avoid collision

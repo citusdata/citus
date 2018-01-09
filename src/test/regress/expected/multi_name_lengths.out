@@ -113,7 +113,8 @@ SELECT "Constraint", "Definition" FROM table_checks WHERE relid='public.name_len
 \c - - - :master_port
 -- Placeholders for RENAME operations
 ALTER TABLE name_lengths RENAME TO name_len_12345678901234567890123456789012345678901234567890;
-ERROR:  renaming distributed tables is currently unsupported
+ERROR:  distributed identifier must be less than 63 characters
+CONTEXT:  while executing command on localhost:57638
 ALTER TABLE name_lengths RENAME CONSTRAINT unique_12345678901234567890123456789012345678901234567890 TO unique2_12345678901234567890123456789012345678901234567890;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
 -- Verify that CREATE INDEX on already distributed table has proper shard names.

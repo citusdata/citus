@@ -377,9 +377,7 @@ ERROR:  column "null_column" contains null values
 CONTEXT:  while executing command on localhost:57638
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
 ERROR:  invalid input syntax for integer: "a"
--- Verify that we error out on non-column RENAME statements
-ALTER TABLE lineitem_alter RENAME TO lineitem_renamed;
-ERROR:  renaming distributed tables is currently unsupported
+-- Verify that we error out on RENAME CONSTRAINT statement
 ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
 -- Verify that IF EXISTS works as expected with RENAME statements
