@@ -839,70 +839,72 @@ SELECT logicalrelid FROM pg_dist_shard WHERE logicalrelid::regclass::text LIKE '
 
 
 -- now test DDL changes
-CREATE TABLE reference_table_ddl (value_1 int, value_2 float, value_3 text, value_4 timestamp);
-SELECT create_reference_table('reference_table_ddl');
+CREATE TABLE reference_schema.reference_table_ddl (value_1 int, value_2 float, value_3 text, value_4 timestamp);
+SELECT create_reference_table('reference_schema.reference_table_ddl');
 
 -- CREATE & DROP index and check the workers
-CREATE INDEX reference_index_1 ON reference_table_ddl(value_1);
-CREATE INDEX reference_index_2 ON reference_table_ddl(value_2, value_3);
+CREATE INDEX reference_index_1 ON reference_schema.reference_table_ddl(value_1);
+CREATE INDEX reference_index_2 ON reference_schema.reference_table_ddl(value_2, value_3);
 
 -- should be able to create/drop UNIQUE index on a reference table
-CREATE UNIQUE INDEX reference_index_3 ON reference_table_ddl(value_1);
+CREATE UNIQUE INDEX reference_index_3 ON reference_schema.reference_table_ddl(value_1);
 
 -- should be able to add a column
-ALTER TABLE reference_table_ddl ADD COLUMN value_5 INTEGER;
-ALTER TABLE reference_table_ddl ALTER COLUMN value_5 SET DATA TYPE FLOAT;
+ALTER TABLE reference_schema.reference_table_ddl ADD COLUMN value_5 INTEGER;
+ALTER TABLE reference_schema.reference_table_ddl ALTER COLUMN value_5 SET DATA TYPE FLOAT;
 
-ALTER TABLE reference_table_ddl DROP COLUMN value_1;
-ALTER TABLE reference_table_ddl ALTER COLUMN value_2 SET DEFAULT 25.0;
-ALTER TABLE reference_table_ddl ALTER COLUMN value_3 SET NOT NULL;
+ALTER TABLE reference_schema.reference_table_ddl DROP COLUMN value_1;
+ALTER TABLE reference_schema.reference_table_ddl ALTER COLUMN value_2 SET DEFAULT 25.0;
+ALTER TABLE reference_schema.reference_table_ddl ALTER COLUMN value_3 SET NOT NULL;
 
 -- see that Citus applied all DDLs to the table
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl'::regclass;
-\d reference_index_2
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl'::regclass;
+\d reference_schema.reference_index_2
 
 -- also to the shard placements
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
-\d reference_index_2_1250019
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
+\d reference_schema.reference_index_2_1250019
 \c - - - :master_port
-DROP INDEX reference_index_2;
+DROP INDEX reference_schema.reference_index_2;
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.reference_table_ddl_1250019'::regclass;
-\di reference_index_2*
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
+\di reference_schema.reference_index_2*
 \c - - - :master_port
 
 -- as we expect, setting WITH OIDS does not work for reference tables
-ALTER TABLE reference_table_ddl SET WITH OIDS;
+ALTER TABLE reference_schema.reference_table_ddl SET WITH OIDS;
 
 -- now test the renaming of the table, and back to the expected name
-ALTER TABLE reference_table_ddl RENAME TO reference_table_ddl_test;
-ALTER TABLE reference_table_ddl_test RENAME TO reference_table_ddl;
+ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
+ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_ddl;
 
 -- now test reference tables against some helper UDFs that Citus provides
 
 -- cannot delete / drop shards from a reference table
-SELECT master_apply_delete_command('DELETE FROM reference_table_ddl');
+SELECT master_apply_delete_command('DELETE FROM reference_schema.reference_table_ddl');
 
 -- cannot add shards
-SELECT master_create_empty_shard('reference_table_ddl');
+SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 
 -- master_modify_multiple_shards works, but, does it make sense to use at all?
-INSERT INTO reference_table_ddl (value_2, value_3) VALUES (7, 'aa');
-SELECT master_modify_multiple_shards('DELETE FROM reference_table_ddl WHERE value_2 = 7');
-INSERT INTO reference_table_ddl (value_2, value_3) VALUES (7, 'bb');
-SELECT master_modify_multiple_shards('DELETE FROM reference_table_ddl');
+INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'aa');
+SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl WHERE value_2 = 7');
+INSERT INTO reference_schema.reference_table_ddl (value_2, value_3) VALUES (7, 'bb');
+SELECT master_modify_multiple_shards('DELETE FROM reference_schema.reference_table_ddl');
 
 -- get/update the statistics
 SELECT part_storage_type, part_key, part_replica_count, part_max_size,
-           part_placement_policy FROM master_get_table_metadata('reference_table_ddl');
-SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_table_ddl'::regclass \gset
+           part_placement_policy
+  FROM master_get_table_metadata('reference_schema.reference_table_ddl');
+
+SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset
 SELECT master_update_shard_statistics(:a_shard_id);
 
 CREATE TABLE append_reference_tmp_table (id INT);
 SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
 
-SELECT master_get_table_ddl_events('reference_table_ddl');
+SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 
 -- in reality, we wouldn't need to repair any reference table shard placements
 -- however, the test could be relevant for other purposes
@@ -1010,5 +1012,5 @@ ROLLBACK;
 
 -- clean up tables
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third, 
-		   reference_table_test_fourth, reference_table_ddl, reference_table_composite;
+		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite;
 DROP SCHEMA reference_schema CASCADE;
