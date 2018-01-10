@@ -1,4 +1,4 @@
-### citus v7.1.2 (January 4, 2018) ###
+xxx### citus v7.1.2 (January 4, 2018) ###
 
 * Fixes a bug that could cause assigning wrong IDs to transactions
 
