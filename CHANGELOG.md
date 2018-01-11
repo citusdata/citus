@@ -1,3 +1,7 @@
+### citus v6.2.5 (January 11, 2018) ###
+
+* Fixes a bug that could crash the coordinator while reporting a remote error
+
 ### citus v7.1.2 (January 4, 2018) ###
 
 * Fixes a bug that could cause assigning wrong IDs to transactions
