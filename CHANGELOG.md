@@ -1,3 +1,7 @@
+### citus v6.2.5 (January 11, 2018) ###
+
+* Fixes a bug that could crash the coordinator while reporting a remote error
+
 ### citus v6.2.4 (September 28, 2017) ###
 
 * Updates task-tracker to limit file access
