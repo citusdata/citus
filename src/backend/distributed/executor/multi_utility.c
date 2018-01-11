@@ -2740,12 +2740,7 @@ ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
 {
 	Assert(IsAlterTableRenameStmt(renameStmt));
 
-	if (renameStmt->renameType == OBJECT_TABLE)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("renaming distributed tables is currently unsupported")));
-	}
-	else if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
+	if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("renaming constraints belonging to distributed tables is "
