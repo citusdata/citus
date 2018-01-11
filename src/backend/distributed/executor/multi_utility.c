@@ -155,6 +155,7 @@ static void ErrorIfUnsupportedForeignConstraint(Relation relation,
 static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
+static bool IsIndexRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
@@ -1371,11 +1372,17 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 static List *
 PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 {
-	Oid relationId = InvalidOid;
+	Oid objectRelationId = InvalidOid; /* SQL Object OID */
+	Oid tableRelationId = InvalidOid; /* Relation OID, maybe not the same. */
 	bool isDistributedRelation = false;
 	DDLJob *ddlJob = NULL;
 
-	if (!IsAlterTableRenameStmt(renameStmt))
+	/*
+	 * We only support some of the PostgreSQL supported RENAME statements, and
+	 * our list include only renaming table and index (related) objects.
+	 */
+	if (!IsAlterTableRenameStmt(renameStmt) &&
+		!IsIndexRenameStmt(renameStmt))
 	{
 		return NIL;
 	}
@@ -1385,32 +1392,70 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
 	 * three statements have identical lock levels, we just use a single statement.
 	 */
-	relationId = RangeVarGetRelid(renameStmt->relation, AccessExclusiveLock,
-								  renameStmt->missing_ok);
+	objectRelationId = RangeVarGetRelid(renameStmt->relation,
+										AccessExclusiveLock,
+										renameStmt->missing_ok);
 
 	/*
 	 * If the table does not exist, don't do anything here to allow PostgreSQL
 	 * to throw the appropriate error or notice message later.
 	 */
-	if (!OidIsValid(relationId))
+	if (!OidIsValid(objectRelationId))
 	{
 		return NIL;
 	}
 
 	/* we have no planning to do unless the table is distributed */
-	isDistributedRelation = IsDistributedTable(relationId);
+	switch (renameStmt->renameType)
+	{
+		case OBJECT_TABLE:
+		case OBJECT_COLUMN:
+		case OBJECT_TABCONSTRAINT:
+		{
+			/* the target object is our tableRelationId. */
+			tableRelationId = objectRelationId;
+			break;
+		}
+
+		case OBJECT_INDEX:
+		{
+			/*
+			 * here, objRelationId points to the index relation entry, and we
+			 * are interested into the entry of the table on which the index is
+			 * defined.
+			 */
+			tableRelationId = IndexGetRelation(objectRelationId, false);
+			break;
+		}
+
+		default:
+
+			/*
+			 * Nodes that are not supported by Citus: we pass-through to the
+			 * main PostgreSQL executor. Any Citus-supported RenameStmt
+			 * renameType must appear above in the switch, explicitly.
+			 */
+			return NIL;
+	}
+
+	isDistributedRelation = IsDistributedTable(tableRelationId);
 	if (!isDistributedRelation)
 	{
 		return NIL;
 	}
 
+	/*
+	 * We might ERROR out on some commands, but only for Citus tables where
+	 * isDistributedRelation is true. That's why this test comes this late in
+	 * the function.
+	 */
 	ErrorIfUnsupportedRenameStmt(renameStmt);
 
 	ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = relationId;
+	ddlJob->targetRelationId = tableRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = renameCommand;
-	ddlJob->taskList = DDLTaskList(relationId, renameCommand);
+	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
 
 	return list_make1(ddlJob);
 }
@@ -2733,14 +2778,14 @@ OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
  * ErrorIfDistributedRenameStmt errors out if the corresponding rename statement
  * operates on any part of a distributed table other than a column.
  *
- * Note: This function handles only those rename statements which operate on tables.
+ * Note: This function handles RenameStmt applied to relations handed by Citus.
+ * At the moment of writing this comment, it could be either tables or indexes.
  */
 static void
 ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
 {
-	Assert(IsAlterTableRenameStmt(renameStmt));
-
-	if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
+	if (IsAlterTableRenameStmt(renameStmt) &&
+		renameStmt->renameType == OBJECT_TABCONSTRAINT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("renaming constraints belonging to distributed tables is "
@@ -2857,6 +2902,26 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 	}
 
 	return isAlterTableRenameStmt;
+}
+
+
+/*
+ * IsIndexRenameStmt returns whether the passed-in RenameStmt is the following
+ * form:
+ *
+ *   - ALTER INDEX RENAME
+ */
+static bool
+IsIndexRenameStmt(RenameStmt *renameStmt)
+{
+	bool isIndexRenameStmt = false;
+
+	if (renameStmt->renameType == OBJECT_INDEX)
+	{
+		isIndexRenameStmt = true;
+	}
+
+	return isIndexRenameStmt;
 }
 
 

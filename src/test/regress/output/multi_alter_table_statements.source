@@ -844,6 +844,40 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relna
 (15 rows)
 
 \c - - - :master_port
+-- verify that we can rename indexes on distributed tables
+CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
+ALTER INDEX temp_index_1 RENAME TO idx_lineitem_linenumber;
+-- verify rename is performed
+SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
+         relname         
+-------------------------
+ idx_lineitem_linenumber
+(1 row)
+
+-- show rename worked on one worker, too
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%%' ORDER BY relname;
+            relname             
+--------------------------------
+ idx_lineitem_linenumber_220000
+ idx_lineitem_linenumber_220001
+ idx_lineitem_linenumber_220002
+ idx_lineitem_linenumber_220003
+ idx_lineitem_linenumber_220004
+ idx_lineitem_linenumber_220005
+ idx_lineitem_linenumber_220006
+ idx_lineitem_linenumber_220007
+ idx_lineitem_linenumber_220008
+ idx_lineitem_linenumber_220010
+ idx_lineitem_linenumber_220011
+ idx_lineitem_linenumber_220012
+ idx_lineitem_linenumber_220013
+ idx_lineitem_linenumber_220014
+(14 rows)
+
+\c - - - :master_port
+-- now get rid of the index
+DROP INDEX idx_lineitem_linenumber;
 -- verify that we don't intercept DDL commands if propagation is turned off
 SET citus.enable_ddl_propagation to false;
 -- table rename statement can be performed on the coordinator only now
