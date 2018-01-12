@@ -569,3 +569,16 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' OR
 
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
+
+-- verify that we can add indexes with new storage options
+CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
+
+-- show the index and its storage options on coordinator, then workers
+SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+\c - - - :master_port
+
+-- get rid of the index
+DROP INDEX another_index;

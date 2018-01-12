@@ -1197,3 +1197,25 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' OR
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
 ERROR:  alter index ... set tablespace ... is currently unsupported
 DETAIL:  Only RENAME TO, SET (), and RESET () are supported.
+-- verify that we can add indexes with new storage options
+CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
+-- show the index and its storage options on coordinator, then workers
+SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
+    relname    |   reloptions    
+---------------+-----------------
+ another_index | {fillfactor=50}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+       relname        |   reloptions    
+----------------------+-----------------
+ another_index_220033 | {fillfactor=50}
+ another_index_220034 | {fillfactor=50}
+ another_index_220035 | {fillfactor=50}
+ another_index_220036 | {fillfactor=50}
+(4 rows)
+
+\c - - - :master_port
+-- get rid of the index
+DROP INDEX another_index;

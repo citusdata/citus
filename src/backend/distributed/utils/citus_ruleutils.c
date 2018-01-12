@@ -63,6 +63,8 @@
 
 
 static void AppendOptionListToString(StringInfo stringData, List *options);
+static void AppendStorageParametersToString(StringInfo stringBuffer,
+											List *optionList);
 static const char * convert_aclright_to_string(int aclright);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
@@ -755,11 +757,7 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 
 	appendStringInfoString(buffer, ") ");
 
-	if (indexStmt->options != NIL)
-	{
-		appendStringInfoString(buffer, "WITH ");
-		AppendOptionListToString(buffer, indexStmt->options);
-	}
+	AppendStorageParametersToString(buffer, indexStmt->options);
 
 	if (indexStmt->whereClause != NULL)
 	{
@@ -1018,6 +1016,44 @@ AppendOptionListToString(StringInfo stringBuffer, List *optionList)
 
 		appendStringInfo(stringBuffer, ")");
 	}
+}
+
+
+/*
+ * AppendStorageParametersToString converts the storage parameter list to its
+ * textual format, and appends this text to the given string buffer.
+ */
+static void
+AppendStorageParametersToString(StringInfo stringBuffer, List *optionList)
+{
+	ListCell *optionCell = NULL;
+	bool firstOptionPrinted = false;
+
+	if (optionList == NIL)
+	{
+		return;
+	}
+
+	appendStringInfo(stringBuffer, " WITH (");
+
+	foreach(optionCell, optionList)
+	{
+		DefElem *option = (DefElem *) lfirst(optionCell);
+		char *optionName = option->defname;
+		char *optionValue = defGetString(option);
+
+		if (firstOptionPrinted)
+		{
+			appendStringInfo(stringBuffer, ", ");
+		}
+		firstOptionPrinted = true;
+
+		appendStringInfo(stringBuffer, "%s = %s ",
+						 quote_identifier(optionName),
+						 quote_literal_cstr(optionValue));
+	}
+
+	appendStringInfo(stringBuffer, ")");
 }
 
 
