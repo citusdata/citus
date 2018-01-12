@@ -1,3 +1,9 @@
+### citus v7.3.0 (January 12, 2018) ###
+
+* Support for renaming a distributed table
+
+* Try the scripts
+
 ### citus v6.2.5 (January 11, 2018) ###
 
 * Fixes a bug that could crash the coordinator while reporting a remote error
