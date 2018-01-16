@@ -1,3 +1,59 @@
+### citus v7.2.0 (January 16, 2018) ###
+
+* Support for renaming a distributed table
+
+* Fixes a bug that could cause real-time executor to get stuck on cancellation
+
+* Adds support for set operations (UNION, INTERSECT, ...)
+
+* Log more remote commands when citus.log_remote_commands is set
+
+* Improves support for router-executor queries
+
+* Fixes a bug that could decrease insert performance
+
+* dds support for subqueries that require merge step
+
+* Fixes a bug that could cause assigning wrong IDs to transactions
+
+* Adds support for count(distinct) in queries with a subquery
+
+* Relax the locking for DDL commands on partitioned tables
+
+* Improves support for subqueries in the WHERE clause
+
+* Increases `COPY` throughput
+
+* Adds support for CTEs
+
+* Enables pushing down queries that contain only recurring tuples and `GROUP BY`
+
+* Fixes a bug that could cause an assert failure with ANALYZE statements
+
+* Adds support for querying local tables in CTEs and subqueries
+
+* Fixes a bug that could allow pushing down wrong set operations in subqueries
+
+* Fixes an issue which would cause a deadlock in create_distributed_table
+
+* Adds infrastructure for storing intermediate distributed query results
+
+* Relaxes the locking on COPY with replication
+
+* Improves support for queries with unions containing filters
+
+* Improves support for queries with unions containing joins
+
+* Fixes a bug that could confuse user about `ANALYZE` usage
+
+* Load-balance queries that read from 0 shards
+
+* dds support for non-equijoins when there is already an equijoin for subquery
+
+* dds support for more SQL coverage in subqueries for reference tables
+
+* ixes a bug that could lead to false positive distributed deadlock detections
+
 ### citus v6.2.5 (January 11, 2018) ###
 
 * Fixes a bug that could crash the coordinator while reporting a remote error
