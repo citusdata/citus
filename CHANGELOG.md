@@ -1,3 +1,67 @@
+### citus v7.2.0 (January 16, 2018) ###
+
+* Adds support for CTEs
+
+* Adds support for subqueries that require merge step
+
+* Adds support for set operations (UNION, INTERSECT, ...)
+
+* Adds support for querying local tables in CTEs and subqueries
+
+* Adds support for more SQL coverage in subqueries for reference tables
+
+* Adds support for count(distinct) in queries with a subquery
+
+* Adds support for non-equijoins when there is already an equijoin for queries
+
+* Adds support for non-equijoins when there is already an equijoin for subquery
+
+* Adds support for real-time executor to run in transaction blocks
+
+* Adds infrastructure for storing intermediate distributed query results
+
+* Adds a new GUC named `enable_repartition_joins` for auto executor switch
+
+* Adds support for limiting the intermediate result size
+
+* Improves support for queries with unions containing filters
+
+* Improves support for queries with unions containing joins
+
+* Improves support for subqueries in the `WHERE` clause
+
+* Increases `COPY` throughput
+
+* Enables pushing down queries containing only recurring tuples and `GROUP BY`
+
+* Load-balance queries that read from 0 shards
+
+* Improves support for using functions in subqueries
+
+* Fixes a bug that could cause real-time executor to crash during cancellation
+
+* Fixes a bug that could cause real-time executor to get stuck on cancellation
+
+* Fixes a bug that could block modification queries unnecessarily
+
+* Fixes a bug that could cause assigning wrong IDs to transactions
+
+* Fixes a bug that could cause an assert failure with `ANALYZE` statements
+
+* Fixes a bug that could allow pushing down wrong set operations in subqueries
+
+* Fixes a bug that could cause a deadlock in create_distributed_table
+
+* Fixes a bug that could confuse user about `ANALYZE` usage
+
+* Fixes a bug that could lead to false positive distributed deadlock detections
+
+* Relaxes the locking for DDL commands on partitioned tables
+
+* Relaxes the locking on `COPY` with replication
+
+* Logs more remote commands when citus.log_remote_commands is set
+
 ### citus v6.2.5 (January 11, 2018) ###
 
 * Fixes a bug that could crash the coordinator while reporting a remote error
