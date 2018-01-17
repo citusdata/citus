@@ -22,7 +22,8 @@ CREATE TABLE lineitem_alter (
 	l_shipinstruct char(25) not null,
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null
-	);
+	)
+  WITH ( fillfactor = 80 );
 SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
  master_create_distributed_table 
 ---------------------------------
@@ -30,6 +31,24 @@ SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append')
 (1 row)
 
 \copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- verify that the storage options made it to the table definitions
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+    relname     |   reloptions    
+----------------+-----------------
+ lineitem_alter | {fillfactor=80}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
+        relname        |   reloptions    
+-----------------------+-----------------
+ lineitem_alter_220000 | {fillfactor=80}
+ lineitem_alter_220001 | {fillfactor=80}
+ lineitem_alter_220002 | {fillfactor=80}
+ lineitem_alter_220003 | {fillfactor=80}
+(4 rows)
+
+\c - - - :master_port
 -- Verify that we can add columns
 ALTER TABLE lineitem_alter ADD COLUMN float_column FLOAT;
 ALTER TABLE lineitem_alter ADD COLUMN date_column DATE;
@@ -328,7 +347,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
 ALTER TABLE lineitem_alter ADD COLUMN int_column3 INTEGER,
 	ALTER COLUMN int_column1 SET STATISTICS 10;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP COLUMN int_column1, DROP COLUMN int_column2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
      Column      |         Type          | Modifiers 
@@ -360,12 +379,12 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 -- Verify that we error out on unsupported statement types
 ALTER TABLE lineitem_alter ALTER COLUMN l_orderkey SET STATISTICS 100;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 ALTER TABLE lineitem_alter DROP CONSTRAINT IF EXISTS non_existent_contraint;
 NOTICE:  constraint "non_existent_contraint" of relation "lineitem_alter" does not exist, skipping
 ALTER TABLE lineitem_alter SET WITHOUT OIDS;
 ERROR:  alter table command is currently unsupported
-DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, ATTACH|DETACH PARTITION and TYPE subcommands are supported.
+DETAIL:  Only ADD|DROP COLUMN, SET|DROP NOT NULL, SET|DROP DEFAULT, ADD|DROP CONSTRAINT, SET (), RESET (), ATTACH|DETACH PARTITION and TYPE subcommands are supported.
 -- Verify that we error out in case of postgres errors on supported statement
 -- types
 ALTER TABLE lineitem_alter ADD COLUMN new_column non_existent_type;
@@ -823,7 +842,7 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_renamed%'  ORDER BY re
 ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
         relname        
 -----------------------
  lineitem_alter_220000
@@ -835,13 +854,69 @@ SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relna
  lineitem_alter_220006
  lineitem_alter_220007
  lineitem_alter_220008
- lineitem_alter_220009
  lineitem_alter_220010
  lineitem_alter_220011
  lineitem_alter_220012
  lineitem_alter_220013
  lineitem_alter_220014
-(15 rows)
+(14 rows)
+
+\c - - - :master_port
+-- verify that we can set and reset storage parameters
+ALTER TABLE lineitem_alter SET(fillfactor=40);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+    relname     |   reloptions    
+----------------+-----------------
+ lineitem_alter | {fillfactor=40}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+        relname        |   reloptions    
+-----------------------+-----------------
+ lineitem_alter_220000 | {fillfactor=40}
+ lineitem_alter_220001 | {fillfactor=40}
+ lineitem_alter_220002 | {fillfactor=40}
+ lineitem_alter_220003 | {fillfactor=40}
+ lineitem_alter_220004 | {fillfactor=40}
+ lineitem_alter_220005 | {fillfactor=40}
+ lineitem_alter_220006 | {fillfactor=40}
+ lineitem_alter_220007 | {fillfactor=40}
+ lineitem_alter_220008 | {fillfactor=40}
+ lineitem_alter_220010 | {fillfactor=40}
+ lineitem_alter_220011 | {fillfactor=40}
+ lineitem_alter_220012 | {fillfactor=40}
+ lineitem_alter_220013 | {fillfactor=40}
+ lineitem_alter_220014 | {fillfactor=40}
+(14 rows)
+
+\c - - - :master_port
+ALTER TABLE lineitem_alter RESET(fillfactor);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+    relname     | reloptions 
+----------------+------------
+ lineitem_alter | 
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+        relname        | reloptions 
+-----------------------+------------
+ lineitem_alter_220000 | 
+ lineitem_alter_220001 | 
+ lineitem_alter_220002 | 
+ lineitem_alter_220003 | 
+ lineitem_alter_220004 | 
+ lineitem_alter_220005 | 
+ lineitem_alter_220006 | 
+ lineitem_alter_220007 | 
+ lineitem_alter_220008 | 
+ lineitem_alter_220010 | 
+ lineitem_alter_220011 | 
+ lineitem_alter_220012 | 
+ lineitem_alter_220013 | 
+ lineitem_alter_220014 | 
+(14 rows)
 
 \c - - - :master_port
 -- verify that we can rename indexes on distributed tables
@@ -856,7 +931,7 @@ SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%%' ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER BY relname;
             relname             
 --------------------------------
  idx_lineitem_linenumber_220000
@@ -1055,3 +1130,70 @@ SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 (0 rows)
 
 \c - - - :master_port
+-- Test WITH options on a normal simple hash-distributed table
+CREATE TABLE hash_dist(id bigint primary key, f1 text) WITH (fillfactor=40);
+SELECT create_distributed_table('hash_dist','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+-- verify that the storage options made it to the table definitions
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
+  relname  |   reloptions    
+-----------+-----------------
+ hash_dist | {fillfactor=40}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+     relname      |   reloptions    
+------------------+-----------------
+ hash_dist_220033 | {fillfactor=40}
+ hash_dist_220034 | {fillfactor=40}
+ hash_dist_220035 | {fillfactor=40}
+ hash_dist_220036 | {fillfactor=40}
+(4 rows)
+
+\c - - - :master_port
+-- verify that we can set and reset index storage parameters
+ALTER INDEX hash_dist_pkey SET(fillfactor=40);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
+    relname     |   reloptions    
+----------------+-----------------
+ hash_dist_pkey | {fillfactor=40}
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+        relname        |   reloptions    
+-----------------------+-----------------
+ hash_dist_pkey_220033 | {fillfactor=40}
+ hash_dist_pkey_220034 | {fillfactor=40}
+ hash_dist_pkey_220035 | {fillfactor=40}
+ hash_dist_pkey_220036 | {fillfactor=40}
+(4 rows)
+
+\c - - - :master_port
+ALTER INDEX hash_dist_pkey RESET(fillfactor);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
+    relname     | reloptions 
+----------------+------------
+ hash_dist_pkey | 
+(1 row)
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+        relname        | reloptions 
+-----------------------+------------
+ hash_dist_pkey_220033 | 
+ hash_dist_pkey_220034 | 
+ hash_dist_pkey_220035 | 
+ hash_dist_pkey_220036 | 
+(4 rows)
+
+\c - - - :master_port
+-- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
+ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
+ERROR:  alter index ... set tablespace ... is currently unsupported
+DETAIL:  Only RENAME TO, SET (), and RESET () are supported.
