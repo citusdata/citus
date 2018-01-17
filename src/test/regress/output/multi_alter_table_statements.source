@@ -1021,3 +1021,30 @@ SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 (0 rows)
 
 \c - - - :master_port
+-- Test alter table SET, RESET
+CREATE TABLE test_set_reset(id int);
+SELECT create_distributed_table('test_set_reset','id');
+ create_distributed_table 
+--------------------------
+ 
+(1 row)
+
+ALTER TABLE test_set_reset SET (autovacuum_vacuum_threshold = 50, autovacuum_analyze_scale_factor = 0.005);
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname = 'test_set_reset_220033';
+        relname        |                               reloptions                               
+-----------------------+------------------------------------------------------------------------
+ test_set_reset_220033 | {autovacuum_vacuum_threshold=50,autovacuum_analyze_scale_factor=0.005}
+(1 row)
+
+\c - - - :master_port
+ALTER TABLE test_set_reset RESET (autovacuum_vacuum_threshold);
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname = 'test_set_reset_220033';
+        relname        |               reloptions                
+-----------------------+-----------------------------------------
+ test_set_reset_220033 | {autovacuum_analyze_scale_factor=0.005}
+(1 row)
+
+\c - - - :master_port
+DROP TABLE test_set_reset;
