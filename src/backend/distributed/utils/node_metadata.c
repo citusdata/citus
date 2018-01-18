@@ -501,11 +501,10 @@ static void
 UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 {
 	const bool indexOK = true;
-	const int scanKeyCount = 1;
 
 	Relation pgDistNode = NULL;
 	TupleDesc tupleDescriptor = NULL;
-	ScanKeyData scanKey[scanKeyCount];
+	ScanKeyData scanKey[1];
 	SysScanDesc scanDescriptor = NULL;
 	HeapTuple heapTuple = NULL;
 	Datum values[Natts_pg_dist_node];
@@ -519,7 +518,7 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodeId));
 
 	scanDescriptor = systable_beginscan(pgDistNode, DistNodeNodeIdIndexId(), indexOK,
-										NULL, scanKeyCount, scanKey);
+										NULL, 1, scanKey);
 
 	heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
