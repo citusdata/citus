@@ -41,7 +41,7 @@ bool LogDistributedDeadlockDetection = false;
 
 
 static bool CheckDeadlockForTransactionNode(TransactionNode *startingTransactionNode,
-											TransactionNode **transactionNodeStack,
+											int maxStackDepth,
 											List **deadlockPath);
 static void PrependOutgoingNodesToQueue(TransactionNode *queuedTransactionNode,
 										int currentStackDepth,
@@ -134,7 +134,6 @@ CheckForDistributedDeadlocks(void)
 	{
 		bool deadlockFound = false;
 		List *deadlockPath = NIL;
-		TransactionNode *transactionNodeStack[edgeCount + 1];
 
 		/* we're only interested in finding deadlocks originating from this node */
 		if (transactionNode->transactionId.initiatorNodeIdentifier != localGroupId)
@@ -145,7 +144,7 @@ CheckForDistributedDeadlocks(void)
 		ResetVisitedFields(adjacencyLists);
 
 		deadlockFound = CheckDeadlockForTransactionNode(transactionNode,
-														transactionNodeStack,
+														edgeCount,
 														&deadlockPath);
 		if (deadlockFound)
 		{
@@ -230,11 +229,12 @@ CheckForDistributedDeadlocks(void)
  */
 static bool
 CheckDeadlockForTransactionNode(TransactionNode *startingTransactionNode,
-								TransactionNode **transactionNodeStack,
+								int maxStackDepth,
 								List **deadlockPath)
 {
 	List *toBeVisitedNodes = NIL;
 	int currentStackDepth = 0;
+	TransactionNode *transactionNodeStack[maxStackDepth];
 
 	/*
 	 * We keep transactionNodeStack to keep track of the deadlock paths. At this point,
