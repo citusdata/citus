@@ -26,9 +26,17 @@ CREATE TABLE lineitem_alter (
 	l_shipinstruct char(25) not null,
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null
-	);
+	)
+  WITH ( fillfactor = 80 );
 SELECT master_create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
 \copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+
+-- verify that the storage options made it to the table definitions
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
+\c - - - :master_port
 
 -- Verify that we can add columns
 
@@ -372,8 +380,38 @@ ALTER TABLE lineitem_renamed RENAME TO lineitem_alter;
 
 -- show rename worked on one worker, too
 \c - - - :worker_1_port
-SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' ORDER BY relname;
+SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
 \c - - - :master_port
+
+-- verify that we can set and reset storage parameters
+ALTER TABLE lineitem_alter SET(fillfactor=40);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%' AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+\c - - - :master_port
+
+ALTER TABLE lineitem_alter RESET(fillfactor);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'lineitem_alter%'  AND relname <> 'lineitem_alter_220009' /* failed copy trails */ ORDER BY relname;
+\c - - - :master_port
+
+-- verify that we can rename indexes on distributed tables
+CREATE INDEX temp_index_1 ON lineitem_alter(l_linenumber);
+ALTER INDEX temp_index_1 RENAME TO idx_lineitem_linenumber;
+
+-- verify rename is performed
+SELECT relname FROM pg_class WHERE relname = 'idx_lineitem_linenumber';
+
+-- show rename worked on one worker, too
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'idx_lineitem_linenumber%' ORDER BY relname;
+\c - - - :master_port
+
+-- now get rid of the index
+DROP INDEX idx_lineitem_linenumber;
 
 -- verify that we don't intercept DDL commands if propagation is turned off
 SET citus.enable_ddl_propagation to false;
@@ -502,3 +540,45 @@ END;
 \c - - - :worker_1_port
 SELECT relname FROM pg_class WHERE relname LIKE 'test_table_1%';
 \c - - - :master_port
+
+-- Test WITH options on a normal simple hash-distributed table
+CREATE TABLE hash_dist(id bigint primary key, f1 text) WITH (fillfactor=40);
+SELECT create_distributed_table('hash_dist','id');
+
+-- verify that the storage options made it to the table definitions
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+\c - - - :master_port
+
+-- verify that we can set and reset index storage parameters
+ALTER INDEX hash_dist_pkey SET(fillfactor=40);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+\c - - - :master_port
+
+ALTER INDEX hash_dist_pkey RESET(fillfactor);
+SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+\c - - - :master_port
+
+-- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
+ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
+
+-- verify that we can add indexes with new storage options
+CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
+
+-- show the index and its storage options on coordinator, then workers
+SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
+
+\c - - - :worker_1_port
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+\c - - - :master_port
+
+-- get rid of the index
+DROP INDEX another_index;

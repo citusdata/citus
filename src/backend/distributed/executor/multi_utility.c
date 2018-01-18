@@ -139,6 +139,7 @@ static void ErrorIfUnstableCreateOrAlterExtensionStmt(Node *parsetree);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
 static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
+static void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement);
 static void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 static void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
@@ -155,6 +156,7 @@ static void ErrorIfUnsupportedForeignConstraint(Relation relation,
 static char * ExtractNewExtensionVersion(Node *parsetree);
 static void CreateLocalTable(RangeVar *relation, char *nodeName, int32 nodePort);
 static bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
+static bool IsIndexRenameStmt(RenameStmt *renameStmt);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 										 AlterTableCmd *command);
 static void ExecuteDistributedDDLJob(DDLJob *ddlJob);
@@ -365,7 +367,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (alterTableStmt->relkind == OBJECT_TABLE)
+			if (alterTableStmt->relkind == OBJECT_TABLE ||
+				alterTableStmt->relkind == OBJECT_INDEX)
 			{
 				ddlJobs = PlanAlterTableStmt(alterTableStmt, queryString);
 			}
@@ -1237,6 +1240,7 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 	LOCKMODE lockmode = 0;
 	Oid leftRelationId = InvalidOid;
 	Oid rightRelationId = InvalidOid;
+	char leftRelationKind;
 	bool isDistributedRelation = false;
 	List *commandList = NIL;
 	ListCell *commandCell = NULL;
@@ -1254,13 +1258,38 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 		return NIL;
 	}
 
+	/*
+	 * AlterTableStmt applies also to INDEX relations, and we have support for
+	 * SET/SET storage parameters in Citus, so we might have to check for
+	 * another relation here.
+	 */
+	leftRelationKind = get_rel_relkind(leftRelationId);
+	if (leftRelationKind == RELKIND_INDEX)
+	{
+		leftRelationId = IndexGetRelation(leftRelationId, false);
+	}
+
 	isDistributedRelation = IsDistributedTable(leftRelationId);
 	if (!isDistributedRelation)
 	{
 		return NIL;
 	}
 
-	ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+	/*
+	 * The PostgreSQL parser dispatches several commands into the node type
+	 * AlterTableStmt, from ALTER INDEX to ALTER SEQUENCE or ALTER VIEW. Here
+	 * we have a special implementation for ALTER INDEX, and a specific error
+	 * message in case of unsupported sub-command.
+	 */
+	if (leftRelationKind == RELKIND_INDEX)
+	{
+		ErrorIfUnsupportedAlterIndexStmt(alterTableStatement);
+	}
+	else
+	{
+		/* this function also accepts more than just RELKIND_RELATION... */
+		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
+	}
 
 	/*
 	 * We check if there is a ADD FOREIGN CONSTRAINT command in sub commands list.
@@ -1371,11 +1400,17 @@ PlanAlterTableStmt(AlterTableStmt *alterTableStatement, const char *alterTableCo
 static List *
 PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 {
-	Oid relationId = InvalidOid;
+	Oid objectRelationId = InvalidOid; /* SQL Object OID */
+	Oid tableRelationId = InvalidOid; /* Relation OID, maybe not the same. */
 	bool isDistributedRelation = false;
 	DDLJob *ddlJob = NULL;
 
-	if (!IsAlterTableRenameStmt(renameStmt))
+	/*
+	 * We only support some of the PostgreSQL supported RENAME statements, and
+	 * our list include only renaming table and index (related) objects.
+	 */
+	if (!IsAlterTableRenameStmt(renameStmt) &&
+		!IsIndexRenameStmt(renameStmt))
 	{
 		return NIL;
 	}
@@ -1385,32 +1420,70 @@ PlanRenameStmt(RenameStmt *renameStmt, const char *renameCommand)
 	 * RenameRelation(), renameatt() and RenameConstraint(). However, since all
 	 * three statements have identical lock levels, we just use a single statement.
 	 */
-	relationId = RangeVarGetRelid(renameStmt->relation, AccessExclusiveLock,
-								  renameStmt->missing_ok);
+	objectRelationId = RangeVarGetRelid(renameStmt->relation,
+										AccessExclusiveLock,
+										renameStmt->missing_ok);
 
 	/*
 	 * If the table does not exist, don't do anything here to allow PostgreSQL
 	 * to throw the appropriate error or notice message later.
 	 */
-	if (!OidIsValid(relationId))
+	if (!OidIsValid(objectRelationId))
 	{
 		return NIL;
 	}
 
 	/* we have no planning to do unless the table is distributed */
-	isDistributedRelation = IsDistributedTable(relationId);
+	switch (renameStmt->renameType)
+	{
+		case OBJECT_TABLE:
+		case OBJECT_COLUMN:
+		case OBJECT_TABCONSTRAINT:
+		{
+			/* the target object is our tableRelationId. */
+			tableRelationId = objectRelationId;
+			break;
+		}
+
+		case OBJECT_INDEX:
+		{
+			/*
+			 * here, objRelationId points to the index relation entry, and we
+			 * are interested into the entry of the table on which the index is
+			 * defined.
+			 */
+			tableRelationId = IndexGetRelation(objectRelationId, false);
+			break;
+		}
+
+		default:
+
+			/*
+			 * Nodes that are not supported by Citus: we pass-through to the
+			 * main PostgreSQL executor. Any Citus-supported RenameStmt
+			 * renameType must appear above in the switch, explicitly.
+			 */
+			return NIL;
+	}
+
+	isDistributedRelation = IsDistributedTable(tableRelationId);
 	if (!isDistributedRelation)
 	{
 		return NIL;
 	}
 
+	/*
+	 * We might ERROR out on some commands, but only for Citus tables where
+	 * isDistributedRelation is true. That's why this test comes this late in
+	 * the function.
+	 */
 	ErrorIfUnsupportedRenameStmt(renameStmt);
 
 	ddlJob = palloc0(sizeof(DDLJob));
-	ddlJob->targetRelationId = relationId;
+	ddlJob->targetRelationId = tableRelationId;
 	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = renameCommand;
-	ddlJob->taskList = DDLTaskList(relationId, renameCommand);
+	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
 
 	return list_make1(ddlJob);
 }
@@ -1966,9 +2039,9 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
 
 
 /*
- * ErrorIfUnsupportedAlterTableStmt checks if the corresponding alter table statement
- * is supported for distributed tables and errors out if it is not. Currently,
- * only the following commands are supported.
+ * ErrorIfUnsupportedAlterTableStmt checks if the corresponding alter table
+ * statement is supported for distributed tables and errors out if it is not.
+ * Currently, only the following commands are supported.
  *
  * ALTER TABLE ADD|DROP COLUMN
  * ALTER TABLE ALTER COLUMN SET DATA TYPE
@@ -1976,6 +2049,8 @@ ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
  * ALTER TABLE SET|DROP DEFAULT
  * ALTER TABLE ADD|DROP CONSTRAINT
  * ALTER TABLE REPLICA IDENTITY
+ * ALTER TABLE SET ()
+ * ALTER TABLE RESET ()
  */
 static void
 ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
@@ -2125,14 +2200,71 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+			case AT_SetRelOptions:  /* SET (...) */
+			case AT_ResetRelOptions:    /* RESET (...) */
+			case AT_ReplaceRelOptions:  /* replace entire option list */
+			{
+				/* this command is supported by Citus */
+				break;
+			}
+
 			default:
 			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("alter table command is currently unsupported"),
-								errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
-										  "SET|DROP DEFAULT, ADD|DROP CONSTRAINT, "
-										  "ATTACH|DETACH PARTITION and TYPE subcommands "
-										  "are supported.")));
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("alter table command is currently unsupported"),
+						 errdetail("Only ADD|DROP COLUMN, SET|DROP NOT NULL, "
+								   "SET|DROP DEFAULT, ADD|DROP CONSTRAINT, "
+								   "SET (), RESET (), "
+								   "ATTACH|DETACH PARTITION and TYPE subcommands "
+								   "are supported.")));
+			}
+		}
+	}
+}
+
+
+/*
+ * ErrorIfUnsupportedAlterIndexStmt checks if the corresponding alter index
+ * statement is supported for distributed tables and errors out if it is not.
+ * Currently, only the following commands are supported.
+ *
+ * ALTER INDEX SET ()
+ * ALTER INDEX RESET ()
+ */
+static void
+ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
+{
+	List *commandList = alterTableStatement->cmds;
+	ListCell *commandCell = NULL;
+
+	/* error out if any of the subcommands are unsupported */
+	foreach(commandCell, commandList)
+	{
+		AlterTableCmd *command = (AlterTableCmd *) lfirst(commandCell);
+		AlterTableType alterTableType = command->subtype;
+
+		switch (alterTableType)
+		{
+			case AT_SetRelOptions:  /* SET (...) */
+			case AT_ResetRelOptions:    /* RESET (...) */
+			case AT_ReplaceRelOptions:  /* replace entire option list */
+			{
+				/* this command is supported by Citus */
+				break;
+			}
+
+			/* unsupported create index statements */
+			case AT_SetTableSpace:
+			default:
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						 errmsg("alter index ... set tablespace ... "
+								"is currently unsupported"),
+						 errdetail("Only RENAME TO, SET (), and RESET () "
+								   "are supported.")));
+				return; /* keep compiler happy */
 			}
 		}
 	}
@@ -2733,14 +2865,14 @@ OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId)
  * ErrorIfDistributedRenameStmt errors out if the corresponding rename statement
  * operates on any part of a distributed table other than a column.
  *
- * Note: This function handles only those rename statements which operate on tables.
+ * Note: This function handles RenameStmt applied to relations handed by Citus.
+ * At the moment of writing this comment, it could be either tables or indexes.
  */
 static void
 ErrorIfUnsupportedRenameStmt(RenameStmt *renameStmt)
 {
-	Assert(IsAlterTableRenameStmt(renameStmt));
-
-	if (renameStmt->renameType == OBJECT_TABCONSTRAINT)
+	if (IsAlterTableRenameStmt(renameStmt) &&
+		renameStmt->renameType == OBJECT_TABCONSTRAINT)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("renaming constraints belonging to distributed tables is "
@@ -2857,6 +2989,26 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 	}
 
 	return isAlterTableRenameStmt;
+}
+
+
+/*
+ * IsIndexRenameStmt returns whether the passed-in RenameStmt is the following
+ * form:
+ *
+ *   - ALTER INDEX RENAME
+ */
+static bool
+IsIndexRenameStmt(RenameStmt *renameStmt)
+{
+	bool isIndexRenameStmt = false;
+
+	if (renameStmt->renameType == OBJECT_INDEX)
+	{
+		isIndexRenameStmt = true;
+	}
+
+	return isIndexRenameStmt;
 }
 
 
